@@ -1,0 +1,8 @@
+networkx
+faker
+pytest
+pytest-cov
+pytest-benchmark
+pytest-mock
+pylint
+black
