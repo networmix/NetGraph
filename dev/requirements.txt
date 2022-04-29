@@ -1,5 +1,7 @@
 networkx
 faker
+build
+twine
 pytest
 pytest-cov
 pytest-benchmark

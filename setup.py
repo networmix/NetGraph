@@ -1,18 +1,24 @@
 from setuptools import setup, find_packages
 
 
-with open("README.md", encoding="utf8") as f:
-    readme = f.read()
-
-with open("LICENSE", encoding="utf8") as f:
-    lic = f.read()
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setup(
-    name="NetGraph",
-    version="0.1.0",
-    description="Simple graph library for network modeling and analysis.",
-    long_description=readme,
-    license=lic,
-    packages=find_packages(exclude=("tests", "docs")),
-    tests_require=['pytest'],
+    name="ngraph",
+    version="0.0.1",
+    author="Andrey Golovanov",
+    description="A simple library for network modeling and analysis.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/networmix/netgraph",
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    package_dir={"": "ngraph"},
+    packages=find_packages(where=("ngraph")),
+    python_requires=">=3.6",
+    tests_require=["pytest"],
 )
