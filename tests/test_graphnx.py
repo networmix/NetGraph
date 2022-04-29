@@ -2,7 +2,7 @@ from pprint import pprint
 
 import networkx as nx
 
-from netgraph.graphnx import MultiDiGraphNX
+from ngraph.graphnx import MultiDiGraphNX
 
 
 def test_graphnx_init_1():

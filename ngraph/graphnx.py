@@ -1,5 +1,5 @@
 from typing import Any, Dict, Hashable
-from netgraph.graph import MultiDiGraph
+from ngraph.graph import MultiDiGraph
 
 
 class MultiDiGraphNX(MultiDiGraph):

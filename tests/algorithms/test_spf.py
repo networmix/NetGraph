@@ -1,6 +1,6 @@
 # pylint: disable=protected-access,invalid-name
-from netgraph.graph import MultiDiGraph
-from netgraph.algorithms.spf import spf
+from ngraph.graph import MultiDiGraph
+from ngraph.algorithms.spf import spf
 
 
 def test_spf_1():

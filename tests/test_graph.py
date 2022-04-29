@@ -1,5 +1,5 @@
 # pylint: disable=protected-access,invalid-name
-from netgraph.graph import MultiDiGraph
+from ngraph.graph import MultiDiGraph
 
 
 def test_graph_init_1():

@@ -1,7 +1,7 @@
 from heapq import heappop, heappush
 from typing import Tuple, List, Dict, Callable
 
-from netgraph.graph import MultiDiGraph
+from ngraph.graph import MultiDiGraph
 
 
 DEFAULT_COST_ATTRIBUTE = "metric"
@@ -48,8 +48,7 @@ def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
 def spf(
     graph: MultiDiGraph,
     src_node: str,
-    min_cost_edges_func: Callable = min_cost_edges_func_fabric(
-        DEFAULT_COST_ATTRIBUTE),
+    min_cost_edges_func: Callable = min_cost_edges_func_fabric(DEFAULT_COST_ATTRIBUTE),
 ) -> Tuple[Dict, Dict]:
     """
     Implementation of the Dijkstra's Shortest Path First algorithm for finding shortest paths in the graph.
@@ -77,8 +76,7 @@ def spf(
 
         # iterate over all the neighbors of the node we're looking at
         for neighbor_id in graph.get_adj_out()[node_id]:
-            min_edge_cost, edges_list = min_cost_edges_func(
-                graph, node_id, neighbor_id)
+            min_edge_cost, edges_list = min_cost_edges_func(graph, node_id, neighbor_id)
 
             src_to_neigh_cost = src_to_node_cost + min_edge_cost
 

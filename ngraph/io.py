@@ -1,6 +1,6 @@
 from typing import Dict, Iterable, List, Optional
 
-from netgraph.graph import MultiDiGraph
+from ngraph.graph import MultiDiGraph
 
 
 def graph_to_node_link(graph: MultiDiGraph) -> Dict:
