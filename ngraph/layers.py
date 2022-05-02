@@ -8,6 +8,8 @@ from ngraph.graphnx import MultiDiGraphNX
 from ngraph.datastore import DataStore, DataStoreDataClass
 from ngraph.geo_helpers import airport_iata_coords, distance
 
+import pandas as pd
+
 
 class LayerType(IntEnum):
     """
@@ -21,6 +23,7 @@ class LayerType(IntEnum):
 class Node(DataStoreDataClass):
     index: ClassVar[List[str]] = ["name"]
     name: str
+    disabled: bool = False
 
 
 @dataclass
@@ -29,6 +32,7 @@ class Edge(DataStoreDataClass):
     id: int = field(init=False)
     node_a: str
     node_z: str
+    disabled: bool = False
 
 
 class Layer(ABC):
@@ -58,24 +62,39 @@ class Layer(ABC):
         return LAYER_TYPES[layer_type](layer_type, layer_name)
 
     def update_graph(self):
-        for node in self.nodes_ds:
-            node: Node
-            self.graph.add_node(node.name, **node._asdict())
+        for node_ntuple in self.nodes_ds:
+            if not node_ntuple.disabled:
+                self.graph.add_node(node_ntuple.name, **node_ntuple._asdict())
 
-        for edge in self.edges_ds:
-            edge: Edge
-            self.graph.add_edge(edge.node_a, edge.node_z, edge.id, **node._asdict())
+        for edge_ntuple in self.edges_ds:
+            if (
+                edge_ntuple.node_a in self.graph
+                and edge_ntuple.node_z in self.graph
+                and not edge_ntuple.disabled
+            ):
+                self.graph.add_edge(
+                    edge_ntuple.node_a,
+                    edge_ntuple.node_z,
+                    edge_ntuple.id,
+                    **edge_ntuple._asdict(),
+                )
+                self.graph.add_edge(
+                    edge_ntuple.node_z,
+                    edge_ntuple.node_a,
+                    ~edge_ntuple.id,
+                    **edge_ntuple._asdict(),
+                )
 
 
 @dataclass
 class InfraLocation(Node):
-    latlon: Optional[Tuple[float]] = None
+    latlon: Optional[Tuple[float, float]] = None
     airport_code: Optional[str] = None
 
 
 @dataclass
 class InfraConnection(Edge):
-    distance_geo: Optional[float] = field(init=False, default=None)
+    distance_geo: Optional[float] = None
 
 
 class InfraLayer(Layer):
@@ -89,32 +108,38 @@ class InfraLayer(Layer):
         self.nodes_ds: DataStore = DataStore(InfraLocation)
         self.edges_ds: DataStore = DataStore(InfraConnection)
 
-    def update_graph(self):
-        for node in self.nodes_ds:
-            node: Node
-            self.graph.add_node(node.name, **node._asdict())
+    def update_edges_distance_geo(self) -> None:
+        for edge_tuple in self.edges_ds:
+            latlon_a = self.nodes_ds[edge_tuple.node_a].latlon
+            latlon_z = self.nodes_ds[edge_tuple.node_z].latlon
+            if latlon_a is None or latlon_z is None:
+                continue
 
-        for edge in self.edges_ds:
-            edge: Edge
-            print(edge)
-            self.graph.add_edge(edge.node_a, edge.node_z, edge.id, **edge._asdict())
-            self.graph.add_edge(edge.node_z, edge.node_a, ~edge.id, **edge._asdict())
+            self.edges_ds.update_data(
+                edge_tuple.id,
+                "distance_geo",
+                distance(
+                    *latlon_a,
+                    *latlon_z,
+                ),
+            )
 
-    def update_edge_distance_geo(self, edge: InfraConnection) -> None:
-        node_a: InfraLocation = self.nodes_ds[edge.node_a]
-        node_z: InfraLocation = self.nodes_ds[edge.node_z]
-
-        for node in [node_a, node_z]:
-            if node.latlon is None:
-                if node.airport_code is None:
+    def update_nodes_latlon(self) -> None:
+        for node_tuple in self.nodes_ds:
+            if node_tuple.latlon is None:
+                if node_tuple.airport_code is None:
                     return
                 else:
-                    node.latlon = airport_iata_coords(node.airport_code)
-                    print(node, node.latlon)
-                    self.nodes_ds.update_data(node_a.name, "latlon", node.latlon)
-        self.edges_ds.update_data(
-            edge.id, "distance_geo", distance(*node_a.latlon, *node_z.latlon)
-        )
+                    latlon = airport_iata_coords(node_tuple.airport_code)
+                    self.nodes_ds.update_data(node_tuple.name, "latlon", latlon)
+
+    def get_node_geo_distance(
+        self, node_a: InfraLocation, node_z: InfraLocation
+    ) -> float:
+        for node in [node_a, node_z]:
+            if node.latlon is None:
+                raise RuntimeError(f"{node} has no latlon tuple defined!")
+        return distance(*node_a.latlon, *node_z.latlon)
 
     def add_node(self, node: InfraLocation) -> None:
         self.nodes_ds.add(node)
@@ -128,6 +153,29 @@ class InfraLayer(Layer):
         edge.id = id
         self.edges_ds.add(edge)
         self.update_graph()
+
+    def get_closest_nodes(self, node_name: str, n: int) -> pd.DataFrame:
+        if node_name not in self.nodes_ds:
+            raise RuntimeError(f"Unknown node {node_name}")
+
+        self.update_nodes_latlon()
+        if (latlon_a := self.nodes_ds[node_name].latlon) is None:
+            raise RuntimeError(f"Unknown latlon for {node_name}")
+        else:
+            df_list = []
+            for node_tuple in self.nodes_ds:
+                if node_tuple.name == node_name:
+                    continue
+                entry = node_tuple._asdict()
+                entry["distance_geo"] = distance(*latlon_a, *node_tuple.latlon)
+                df_list.append(entry)
+            return (
+                pd.DataFrame(
+                    df_list,
+                )
+                .sort_values(by=["distance_geo"])
+                .set_index("name", drop=False)[:n]
+            )
 
 
 LAYER_TYPES: Dict[LayerType, Type[Layer]] = {LayerType.INFRA: InfraLayer}
