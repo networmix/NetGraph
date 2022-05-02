@@ -1,4 +1,6 @@
-from typing import Dict, Hashable
+from __future__ import annotations
+from pickle import dumps, loads
+from typing import Dict, Hashable, Iterator, Optional
 
 
 class MultiDiGraph:
@@ -21,16 +23,16 @@ class MultiDiGraph:
         adj_in: dictionary for incoming adjacencies (predecessors, in other words, adjacent source nodes)
     """
 
-    def __init__(self, **attr: Dict):
+    def __init__(self, **attr: Dict) -> None:
         self._graph = attr  # dictionary for graph attributes
         self._nodes = {}  # dictionary for nodes
         self._edges = {}  # dictionary for edges
         self._adj_out = {}  # dictionary for outgoing adjacencies (successors)
         self._adj_in = {}  # dictionary for incoming adjacencies (predecessors)
 
-        self._next_edge_id = 1  # the index for the next added edge
+        self._next_edge_id = 0  # the index for the next added edge
 
-    def __contains__(self, node_id):
+    def __contains__(self, node_id) -> bool:
         """
         Enables expressions like "node" in graph
         Returns:
@@ -38,19 +40,29 @@ class MultiDiGraph:
         """
         return node_id in self._nodes
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         """
         Making MultiDiGraph objects iterable by their nodes
         """
         return iter(self._nodes.keys())
 
-    def __len__(self):
+    def __len__(self) -> int:
         """
         Return the number of nodes as the length of the graph.
         Returns:
             The number of nodes in the graph.
         """
         return len(self._nodes)
+
+    def copy(self) -> MultiDiGraph:
+        """
+        Make a deep copy of the graph and return it.
+        Pickle is used for performance reasons.
+
+        Returns:
+            MultiDiGraph - copy of the graph.
+        """
+        return loads(dumps(self))
 
     def get_next_edge_id(self) -> int:
         next_edge_id = self._next_edge_id
@@ -71,7 +83,11 @@ class MultiDiGraph:
             self._adj_in[node_to_add] = {}
 
     def add_edge(
-        self, src_node: Hashable, dst_node: Hashable, edge_id: int = 0, **attr: Dict
+        self,
+        src_node: Hashable,
+        dst_node: Hashable,
+        edge_id: Optional[int] = None,
+        **attr: Dict,
     ) -> None:
         """
         Add a single edge between src_node and dst_node with optional attributes.
@@ -84,11 +100,8 @@ class MultiDiGraph:
             edge_id: optional unique edge id.
             attr: optional node attributes in a form of keyword arguments (k=v pairs).
         """
-        if edge_id == 0:
+        if edge_id is None:
             edge_id = self.get_next_edge_id()
-
-        if edge_id not in self._edges:
-            self._edges[edge_id] = (src_node, dst_node, edge_id, attr)
 
         if src_node not in self._nodes:
             self.add_node(src_node)
@@ -96,11 +109,12 @@ class MultiDiGraph:
         if dst_node not in self._nodes:
             self.add_node(dst_node)
 
+        self._edges[edge_id] = (src_node, dst_node, edge_id, attr)
         self._adj_out[src_node].setdefault(dst_node, {})[edge_id] = attr
         self._adj_in[dst_node].setdefault(src_node, {})[edge_id] = attr
 
     def remove_edge(
-        self, src_node: Hashable, dst_node: Hashable, edge_id: int = 0
+        self, src_node: Hashable, dst_node: Hashable, edge_id: Optional[int] = None
     ) -> None:
         """
         Remove an edge between src_node and dst_node.
@@ -116,7 +130,7 @@ class MultiDiGraph:
         if src_node not in self._nodes or dst_node not in self._nodes:
             return
 
-        if edge_id != 0:
+        if edge_id is not None:
             if edge_id not in self._edges:
                 return
 

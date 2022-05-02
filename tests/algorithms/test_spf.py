@@ -11,7 +11,7 @@ def test_spf_1():
 
     costs, prev = spf(g, "A")
     assert costs == {"A": 0, "B": 10, "C": 20, "D": 30}
-    assert prev == {"A": {}, "B": {"A": [1]}, "C": {"B": [2]}, "D": {"C": [3]}}
+    assert prev == {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}, "D": {"C": [2]}}
 
 
 def test_spf_2():
@@ -25,7 +25,7 @@ def test_spf_2():
     costs, prev = spf(g, "A")
 
     assert costs == {"A": 0, "B": 10, "C": 10, "D": 10}
-    assert prev == {"A": {}, "B": {"A": [1]}, "C": {"A": [2]}, "D": {"A": [3]}}
+    assert prev == {"A": {}, "B": {"A": [0]}, "C": {"A": [1]}, "D": {"A": [2]}}
 
 
 def test_spf_3():
@@ -52,7 +52,7 @@ def test_spf_3():
     costs, prev = spf(g, "A")
 
     assert costs == {"A": 0, "B": 10, "C": 10, "D": 10}
-    assert prev == {"A": {}, "B": {"A": [3]}, "C": {"A": [5]}, "D": {"A": [9]}}
+    assert prev == {"A": {}, "B": {"A": [2]}, "C": {"A": [4]}, "D": {"A": [8]}}
 
 
 def test_spf_4():
@@ -81,7 +81,7 @@ def test_spf_4():
     assert costs == {"A": 0, "B": 10, "C": 10, "D": 20}
     assert prev == {
         "A": {},
-        "B": {"A": [3]},
-        "C": {"A": [5, 7]},
-        "D": {"A": [9], "B": [11], "C": [13]},
+        "B": {"A": [2]},
+        "C": {"A": [4, 6]},
+        "D": {"A": [8], "B": [10], "C": [12]},
     }

@@ -78,7 +78,7 @@ def edgelist_to_graph(
         graph.add_edge(
             src_node=line_dict[source],
             dst_node=line_dict[target],
-            edge_id=line_dict.get(key, 0),
+            edge_id=line_dict.get(key, None),
             **attr_dict
         )
 

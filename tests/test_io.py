@@ -28,49 +28,49 @@ def test_graph_to_node_link_1():
             {
                 "source": 0,
                 "target": 1,
-                "key": 1,
+                "key": 0,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 1,
                 "target": 0,
-                "key": 2,
+                "key": 1,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 0,
                 "target": 1,
+                "key": 2,
+                "attr": {"test_attr": "TEST_edge1b"},
+            },
+            {
+                "source": 1,
+                "target": 0,
                 "key": 3,
                 "attr": {"test_attr": "TEST_edge1b"},
             },
             {
                 "source": 1,
-                "target": 0,
-                "key": 4,
-                "attr": {"test_attr": "TEST_edge1b"},
-            },
-            {
-                "source": 1,
                 "target": 2,
-                "key": 5,
+                "key": 4,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 1,
-                "key": 6,
+                "key": 5,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 0,
-                "key": 7,
+                "key": 6,
                 "attr": {"test_attr": "TEST_edge3"},
             },
             {
                 "source": 0,
                 "target": 2,
-                "key": 8,
+                "key": 7,
                 "attr": {"test_attr": "TEST_edge3"},
             },
         ],
@@ -90,49 +90,49 @@ def test_node_link_to_graph_1():
             {
                 "source": 0,
                 "target": 1,
-                "key": 1,
+                "key": 0,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 1,
                 "target": 0,
-                "key": 2,
+                "key": 1,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 0,
                 "target": 1,
+                "key": 2,
+                "attr": {"test_attr": "TEST_edge1b"},
+            },
+            {
+                "source": 1,
+                "target": 0,
                 "key": 3,
                 "attr": {"test_attr": "TEST_edge1b"},
             },
             {
                 "source": 1,
-                "target": 0,
-                "key": 4,
-                "attr": {"test_attr": "TEST_edge1b"},
-            },
-            {
-                "source": 1,
                 "target": 2,
-                "key": 5,
+                "key": 4,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 1,
-                "key": 6,
+                "key": 5,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 0,
-                "key": 7,
+                "key": 6,
                 "attr": {"test_attr": "TEST_edge3"},
             },
             {
                 "source": 0,
                 "target": 2,
-                "key": 8,
+                "key": 7,
                 "attr": {"test_attr": "TEST_edge3"},
             },
         ],
@@ -143,14 +143,14 @@ def test_node_link_to_graph_1():
     assert "B" in g
     assert "C" in g
 
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge1a"})
-    assert g._edges[2] == ("B", "A", 2, {"test_attr": "TEST_edge1a"})
-    assert g._edges[3] == ("A", "B", 3, {"test_attr": "TEST_edge1b"})
-    assert g._edges[4] == ("B", "A", 4, {"test_attr": "TEST_edge1b"})
-    assert g._edges[5] == ("B", "C", 5, {"test_attr": "TEST_edge2"})
-    assert g._edges[6] == ("C", "B", 6, {"test_attr": "TEST_edge2"})
-    assert g._edges[7] == ("C", "A", 7, {"test_attr": "TEST_edge3"})
-    assert g._edges[8] == ("A", "C", 8, {"test_attr": "TEST_edge3"})
+    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
+    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
+    assert g._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
+    assert g._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
+    assert g._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
+    assert g._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
+    assert g._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
+    assert g._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
 
 
 def test_node_link_1():
@@ -165,49 +165,49 @@ def test_node_link_1():
             {
                 "source": 0,
                 "target": 1,
-                "key": 1,
+                "key": 0,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 1,
                 "target": 0,
-                "key": 2,
+                "key": 1,
                 "attr": {"test_attr": "TEST_edge1a"},
             },
             {
                 "source": 0,
                 "target": 1,
+                "key": 2,
+                "attr": {"test_attr": "TEST_edge1b"},
+            },
+            {
+                "source": 1,
+                "target": 0,
                 "key": 3,
                 "attr": {"test_attr": "TEST_edge1b"},
             },
             {
                 "source": 1,
-                "target": 0,
-                "key": 4,
-                "attr": {"test_attr": "TEST_edge1b"},
-            },
-            {
-                "source": 1,
                 "target": 2,
-                "key": 5,
+                "key": 4,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 1,
-                "key": 6,
+                "key": 5,
                 "attr": {"test_attr": "TEST_edge2"},
             },
             {
                 "source": 2,
                 "target": 0,
-                "key": 7,
+                "key": 6,
                 "attr": {"test_attr": "TEST_edge3"},
             },
             {
                 "source": 0,
                 "target": 2,
-                "key": 8,
+                "key": 7,
                 "attr": {"test_attr": "TEST_edge3"},
             },
         ],
@@ -234,11 +234,11 @@ def test_edgelist_to_graph_1():
     assert "B" in g
     assert "C" in g
 
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge1a"})
-    assert g._edges[2] == ("B", "A", 2, {"test_attr": "TEST_edge1a"})
-    assert g._edges[3] == ("A", "B", 3, {"test_attr": "TEST_edge1b"})
-    assert g._edges[4] == ("B", "A", 4, {"test_attr": "TEST_edge1b"})
-    assert g._edges[5] == ("B", "C", 5, {"test_attr": "TEST_edge2"})
-    assert g._edges[6] == ("C", "B", 6, {"test_attr": "TEST_edge2"})
-    assert g._edges[7] == ("C", "A", 7, {"test_attr": "TEST_edge3"})
-    assert g._edges[8] == ("A", "C", 8, {"test_attr": "TEST_edge3"})
+    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
+    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
+    assert g._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
+    assert g._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
+    assert g._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
+    assert g._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
+    assert g._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
+    assert g._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})

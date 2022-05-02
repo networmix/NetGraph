@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ngraph",
-    version="0.0.2",
+    version="0.0.3",
     author="Andrey Golovanov",
     description="A simple library for network modeling and analysis.",
     long_description=long_description,
@@ -19,6 +19,6 @@ setup(
     ],
     package_dir={"": "ngraph"},
     packages=find_packages(where=("ngraph")),
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     tests_require=["pytest"],
 )
