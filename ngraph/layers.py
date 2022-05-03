@@ -17,6 +17,8 @@ class LayerType(IntEnum):
     """
 
     INFRA = 1
+    OPTICAL = 2
+    IP = 3
 
 
 @dataclass
@@ -33,6 +35,28 @@ class Edge(DataStoreDataClass):
     node_a: str
     node_z: str
     disabled: bool = False
+
+
+@dataclass
+class InfraLocation(Node):
+    latlon: Optional[Tuple[float, float]] = None
+    airport_code: Optional[str] = None
+
+
+@dataclass
+class InfraConnection(Edge):
+    distance_geo: Optional[float] = None
+
+
+@dataclass
+class IPDevice(Node):
+    infra_location: Optional[str] = None
+
+
+@dataclass
+class IPConnection(Edge):
+    capacity: float = 100
+    metric: int = 1
 
 
 class Layer(ABC):
@@ -84,17 +108,6 @@ class Layer(ABC):
                     ~edge_ntuple.id,
                     **edge_ntuple._asdict(),
                 )
-
-
-@dataclass
-class InfraLocation(Node):
-    latlon: Optional[Tuple[float, float]] = None
-    airport_code: Optional[str] = None
-
-
-@dataclass
-class InfraConnection(Edge):
-    distance_geo: Optional[float] = None
 
 
 class InfraLayer(Layer):
@@ -178,4 +191,32 @@ class InfraLayer(Layer):
             )
 
 
-LAYER_TYPES: Dict[LayerType, Type[Layer]] = {LayerType.INFRA: InfraLayer}
+class IPLayer(Layer):
+    def __init__(
+        self,
+        layer_type: LayerType,
+        layer_name: str,
+        graph: Optional[MultiDiGraphNX] = None,
+    ):
+        super().__init__(layer_type, layer_name, graph)
+        self.nodes_ds: DataStore = DataStore(IPDevice)
+        self.edges_ds: DataStore = DataStore(IPConnection)
+
+    def add_node(self, node: IPDevice) -> None:
+        self.nodes_ds.add(node)
+        self.update_graph()
+
+    def add_edge(self, edge: IPConnection) -> None:
+        if edge.node_a not in self.nodes_ds or edge.node_z not in self.nodes_ds:
+            raise RuntimeError(f"Can't add edge {edge}. Unknown location.")
+
+        id = 0 if self.edges_ds.df.empty else self.edges_ds.df.index.max() + 1
+        edge.id = id
+        self.edges_ds.add(edge)
+        self.update_graph()
+
+
+LAYER_TYPES: Dict[LayerType, Type[Layer]] = {
+    LayerType.INFRA: InfraLayer,
+    LayerType.IP: IPLayer,
+}

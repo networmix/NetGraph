@@ -1,5 +1,14 @@
 import io
-from ngraph.layers import Layer, InfraLayer, LayerType, InfraLocation, InfraConnection
+from ngraph.layers import (
+    Layer,
+    InfraLayer,
+    LayerType,
+    InfraLocation,
+    InfraConnection,
+    IPLayer,
+    IPDevice,
+    IPConnection,
+)
 from ngraph.io import graph_to_node_link
 
 
@@ -155,3 +164,30 @@ class TestInfraLayer:
             "ftw": 31.49,
             "ewr": 2204.79,
         }
+
+
+class TestIPLayer:
+    def test_init(self):
+        Layer.create_layer(LayerType.IP)
+
+    def test_add_node_1(self):
+        node1 = IPDevice("bb01", infra_location="sjc")
+        node2 = IPDevice("bb02", infra_location="ewr")
+        layer = Layer.create_layer(LayerType.IP)
+
+        layer.add_node(node1)
+        layer.add_node(node2)
+
+        assert layer.nodes_ds[node1.get_index()] == node1
+
+    def test_add_edge_1(self):
+        node1 = IPDevice("bb01", infra_location="sjc")
+        node2 = IPDevice("bb02", infra_location="ewr")
+        edge1 = IPConnection("bb01", "bb02")
+        layer: InfraLayer = Layer.create_layer(LayerType.IP)
+
+        layer.add_node(node1)
+        layer.add_node(node2)
+        layer.add_edge(edge1)
+
+        assert layer.edges_ds[edge1.get_index()] == edge1

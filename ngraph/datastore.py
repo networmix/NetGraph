@@ -19,9 +19,7 @@ class DataStoreDataClass(Protocol):
         }
 
     def get_index(self) -> Any:
-        if len(self.index) > 1:
-            return [getattr(self, idx_field) for idx_field in self.index]
-        return getattr(self, self.index[0])
+        return tuple(getattr(self, idx_field) for idx_field in self.index)
 
 
 class DataStore:
