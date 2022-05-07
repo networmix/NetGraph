@@ -266,3 +266,34 @@ def test_graph_copy_1():
     assert j._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
     assert j._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
     assert j._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
+
+
+def test_graph_filter_1():
+    """
+    Expectations:
+        method copy() returns a deep copy of the graph
+    """
+    g = MultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    g.add_node("C")
+    g.add_edge("A", "B", test_attr="TEST_edge1a")
+    g.add_edge("B", "A", test_attr="TEST_edge1a")
+    g.add_edge("A", "B", test_attr="TEST_edge1b")
+    g.add_edge("B", "A", test_attr="TEST_edge1b")
+    g.add_edge("B", "C", test_attr="TEST_edge2")
+    g.add_edge("C", "B", test_attr="TEST_edge2")
+    g.add_edge("B", "C", test_attr="TEST_edgeTWO")
+    g.add_edge("C", "B", test_attr="TEST_edgeTWO")
+    g.add_edge("C", "A", test_attr="TEST_edge3")
+    g.add_edge("A", "C", test_attr="TEST_edge3")
+
+    assert "A" not in g.filter(
+        node_filter=lambda node_id, node_attr: "A" not in node_id
+    )
+    d = g.filter(
+        node_filter=lambda node_id, node_attr: "A" not in node_id,
+        edge_filter=lambda edge_id, edge_tuple: "2" not in edge_tuple[3]["test_attr"],
+    )
+    assert d._edges == {6: ('B', 'C', 6, {'test_attr': 'TEST_edgeTWO'}), 7: ('C', 'B', 7, {'test_attr': 'TEST_edgeTWO'})}
+    assert d._nodes == {'B': {}, 'C': {}}

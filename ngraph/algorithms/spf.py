@@ -1,5 +1,5 @@
 from heapq import heappop, heappush
-from typing import Tuple, List, Dict, Callable
+from typing import Any, Hashable, Set, Tuple, List, Dict, Callable, Generator
 
 from ngraph.graph import MultiDiGraph
 
@@ -17,7 +17,7 @@ def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
     """
 
     def get_min_cost_edges_func(
-        graph: MultiDiGraph, src_node: str, dst_node: str
+        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable
     ) -> Tuple[int, List[str]]:
         """
         Returns the min-cost edges between a pair of adjacent nodes in a graph.
@@ -47,7 +47,7 @@ def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
 
 def spf(
     graph: MultiDiGraph,
-    src_node: str,
+    src_node: Hashable,
     min_cost_edges_func: Callable = min_cost_edges_func_fabric(DEFAULT_COST_ATTRIBUTE),
 ) -> Tuple[Dict, Dict]:
     """
@@ -58,13 +58,13 @@ def spf(
         src_node: source node identifier.
     Returns:
         costs: a dict with destination nodes mapped into the cost of the shortest path to that destination
-        prev: a dict with nodes mapped into their previous (preceeding) nodes and edge list
+        pred: a dict with nodes mapped into their preceeding nodes (predecessors) and edges
     """
 
     # Initialization
     min_pq = []  # min-priority queue
     costs = {src_node: 0}  # source node has has zero cost to itself
-    prev = {src_node: {}}  # source node has no preceeding nodes
+    pred = {src_node: {}}  # source node has no preceeding nodes
 
     heappush(
         min_pq, (0, src_node)
@@ -83,11 +83,46 @@ def spf(
             if neighbor_id not in costs or src_to_neigh_cost < costs[neighbor_id]:
                 # have not seen this neighbor yet or better path found
                 costs[neighbor_id] = src_to_neigh_cost
-                prev[neighbor_id] = {node_id: edges_list}
+                pred[neighbor_id] = {node_id: edges_list}
                 heappush(min_pq, (src_to_neigh_cost, neighbor_id))
 
             elif costs[neighbor_id] == src_to_neigh_cost:
                 # have met this neighbor, but new equal cost path found
-                prev[neighbor_id][node_id] = edges_list
+                pred[neighbor_id][node_id] = edges_list
 
-    return costs, prev
+    return costs, pred
+
+
+def resolve_paths_to_nodes_edges(
+    src_nodes: Set[Hashable], dst_node: Hashable, pred: Dict[Any, Dict[Any, List[int]]]
+) -> Generator[Tuple, None, None]:
+    if dst_node not in pred:
+        raise RuntimeError(
+            f"Destination {dst_node} cannot be reached" f"from any of the given sources"
+        )
+    pred = {
+        node: [(nbr, nbr_edges) for nbr, nbr_edges in nbrs_dict.items()]
+        for node, nbrs_dict in pred.items()
+    }
+    seen = {dst_node}
+    stack = [[(dst_node, []), 0]]
+    top = 0
+    while top >= 0:
+        node_edges, nbr_idx = stack[top]
+        if node_edges[0] in src_nodes:
+            yield tuple(node_edges for node_edges, _ in reversed(stack[: top + 1]))
+        if len(pred[node_edges[0]]) > nbr_idx:
+            stack[top][1] = nbr_idx + 1
+            next_node_edges = pred[node_edges[0]][nbr_idx]
+            if next_node_edges[0] in seen:
+                continue
+            else:
+                seen.add(next_node_edges[0])
+            top += 1
+            if top == len(stack):
+                stack.append([next_node_edges, 0])
+            else:
+                stack[top][:] = [next_node_edges, 0]
+        else:
+            seen.discard(node_edges[0])
+            top -= 1

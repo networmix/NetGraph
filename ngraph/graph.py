@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pickle import dumps, loads
-from typing import Dict, Hashable, Iterator, Optional
+from typing import Any, Callable, Dict, Hashable, Iterator, Optional
 
 
 class MultiDiGraph:
@@ -191,7 +191,7 @@ class MultiDiGraph:
         """
         return self._adj_in
 
-    def get_graph(self) -> Dict:
+    def get_attr(self) -> Dict:
         """
         Get a dictionary with all graph attributes.
         Returns:
@@ -216,3 +216,19 @@ class MultiDiGraph:
             A dict with all edge_ids maped into their attributes.
         """
         return self._edges
+
+    def filter(
+        self,
+        node_filter: Callable[[Any, Dict], bool] = lambda node_id, node_attr: True,
+        edge_filter: Callable[[Any, Dict], bool] = lambda edge_id, edge_tuple: True,
+    ) -> MultiDiGraph:
+        graph = self.copy()
+
+        for node_id, node_attr in self.get_nodes().items():
+            if not node_filter(node_id, node_attr):
+                graph.remove_node(node_id)
+
+        for edge_id, edge_tuple in self.get_edges().items():
+            if not edge_filter(edge_id, edge_tuple):
+                graph.remove_edge(edge_tuple[0], edge_tuple[1], edge_tuple[2])
+        return graph
