@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, ClassVar
 from ngraph.graphnx import MultiDiGraphNX
 from ngraph.datastore import DataStore, DataStoreDataClass
 from ngraph.geo_helpers import airport_iata_coords, distance
+from ngraph.algorithms.flow import edmonds_karp
 
 import pandas as pd
 
@@ -214,6 +215,24 @@ class IPLayer(Layer):
         edge.id = id
         self.edges_ds.add(edge)
         self.update_graph()
+
+    def get_max_flows(self, shortest_path: bool = False) -> pd.DataFrame:
+        residual_graph = self.graph.copy()
+        flow_matrix = {}
+        for node_row_a in self.nodes_ds:
+            flow_matrix.setdefault(node_row_a.name, {})
+            for node_row_z in self.nodes_ds:
+                if node_row_a.name == node_row_z.name:
+                    flow_matrix[node_row_a.name][node_row_z.name] = None
+                    continue
+                flow_matrix[node_row_a.name][node_row_z.name], _ = edmonds_karp(
+                    self.graph,
+                    node_row_a.name,
+                    node_row_z.name,
+                    residual_graph=residual_graph,
+                    shortest_path=shortest_path,
+                )
+        return pd.DataFrame(flow_matrix)
 
 
 LAYER_TYPES: Dict[LayerType, Type[Layer]] = {

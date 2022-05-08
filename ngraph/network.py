@@ -6,11 +6,12 @@ from ngraph.layers import InfraLayer, IPLayer, Layer, LayerType
 
 
 @dataclass
-class Demand(DataStoreDataClass):
+class IPDemand(DataStoreDataClass):
     index: ClassVar[List[str]] = ["src", "dst", "traffic_class"]
     src: str
     dst: str
     traffic_class: str
+    demand: float
 
 
 class Net:

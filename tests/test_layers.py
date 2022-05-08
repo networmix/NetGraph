@@ -191,3 +191,101 @@ class TestIPLayer:
         layer.add_edge(edge1)
 
         assert layer.edges_ds[edge1.get_index()] == edge1
+
+    def test_get_max_flows_bfs_1(self):
+        nodes = [
+            IPDevice("bb01.sjc", infra_location="sjc"),
+            IPDevice("bb02.sjc", infra_location="sjc"),
+            IPDevice("bb01.ewr", infra_location="ewr"),
+            IPDevice("bb02.ewr", infra_location="ewr"),
+        ]
+
+        edges = [
+            IPConnection("bb01.sjc", "bb01.ewr"),
+            IPConnection("bb02.sjc", "bb01.ewr"),
+            IPConnection("bb01.sjc", "bb02.ewr"),
+            IPConnection("bb02.sjc", "bb02.ewr"),
+        ]
+        layer: IPLayer = Layer.create_layer(LayerType.IP)
+
+        for node in nodes:
+            layer.add_node(node)
+
+        for edge in edges:
+            layer.add_edge(edge)
+
+        assert layer.get_max_flows(shortest_path=False).fillna(0).to_dict() == {
+            "bb01.sjc": {
+                "bb02.sjc": 200.0,
+                "bb01.ewr": 200.0,
+                "bb02.ewr": 200.0,
+                "bb01.sjc": 0.0,
+            },
+            "bb02.sjc": {
+                "bb02.sjc": 0.0,
+                "bb01.ewr": 200.0,
+                "bb02.ewr": 200.0,
+                "bb01.sjc": 200.0,
+            },
+            "bb01.ewr": {
+                "bb02.sjc": 200.0,
+                "bb01.ewr": 0.0,
+                "bb02.ewr": 200.0,
+                "bb01.sjc": 200.0,
+            },
+            "bb02.ewr": {
+                "bb02.sjc": 200.0,
+                "bb01.ewr": 200.0,
+                "bb02.ewr": 0.0,
+                "bb01.sjc": 200.0,
+            },
+        }
+
+    def test_get_max_flows_spf_1(self):
+        nodes = [
+            IPDevice("bb01.sjc", infra_location="sjc"),
+            IPDevice("bb02.sjc", infra_location="sjc"),
+            IPDevice("bb01.ewr", infra_location="ewr"),
+            IPDevice("bb02.ewr", infra_location="ewr"),
+        ]
+
+        edges = [
+            IPConnection("bb01.sjc", "bb01.ewr"),
+            IPConnection("bb02.sjc", "bb01.ewr"),
+            IPConnection("bb01.sjc", "bb02.ewr"),
+            IPConnection("bb02.sjc", "bb02.ewr"),
+        ]
+        layer: IPLayer = Layer.create_layer(LayerType.IP)
+
+        for node in nodes:
+            layer.add_node(node)
+
+        for edge in edges:
+            layer.add_edge(edge)
+
+        assert layer.get_max_flows(shortest_path=True).fillna(0).to_dict() == {
+            "bb01.sjc": {
+                "bb01.sjc": 0.0,
+                "bb02.sjc": 200.0,
+                "bb01.ewr": 100.0,
+                "bb02.ewr": 100.0,
+            },
+            "bb02.sjc": {
+                "bb01.sjc": 200.0,
+                "bb02.sjc": 0.0,
+                "bb01.ewr": 100.0,
+                "bb02.ewr": 100.0,
+            },
+            "bb01.ewr": {
+                "bb01.sjc": 100.0,
+                "bb02.sjc": 100.0,
+                "bb01.ewr": 0.0,
+                "bb02.ewr": 200.0,
+            },
+            "bb02.ewr": {
+                "bb01.sjc": 100.0,
+                "bb02.sjc": 100.0,
+                "bb01.ewr": 200.0,
+                "bb02.ewr": 0.0,
+            },
+        }
