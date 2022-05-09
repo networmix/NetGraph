@@ -1,6 +1,71 @@
-from typing import Dict, Hashable, List, Optional, Tuple
+from email.generator import Generator
+from typing import Any, Dict, Hashable, List, Optional, Tuple
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms import spf, bfs, common
+
+
+def place_flow(
+    residual_graph: MultiDiGraph,
+    path: Tuple,
+    flow: float = float("inf"),
+    flow_index: Optional[str] = None,
+    capacity_attr: str = "capacity",
+    flow_attr: str = "flow",
+    flows_attr: str = "flows",
+) -> Tuple[float, float]:
+    """
+    Place flow along the given path from source to destinaton.
+    """
+    # Determine the path residual capacity.
+    R_edges = residual_graph.get_edges()
+    R_nodes = residual_graph.get_nodes()
+    path_element_capacities = []
+    max_flow = flow
+    for node_id, edge_list in path[:-1]:
+        remaining_capacity = 0
+        for edge_id in edge_list:
+            remaining_capacity += (
+                R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
+            )
+        max_flow = min(max_flow, remaining_capacity)
+        path_element_capacities.append(remaining_capacity)
+
+    # Place flow along the path.
+    for node_edge_list, remaining_capacity in zip(path, path_element_capacities):
+        node_id, edge_list = node_edge_list
+        R_nodes[node_id][flow_attr] = max_flow
+        R_nodes[node_id][flows_attr][flow_index] = (path[0][0], path[-1][0], max_flow)
+        for edge_id in edge_list:
+            R_edges[edge_id][3][flow_attr] += (
+                R_edges[edge_id][3][capacity_attr] / remaining_capacity * max_flow
+            )
+            R_edges[edge_id][3][flows_attr][flow_index] = (
+                path[0][0],
+                path[-1][0],
+                max_flow,
+            )
+    residual_flow = flow - max_flow if flow != float("inf") else float("inf")
+    return max_flow, residual_flow
+
+
+def init_residual_graph(
+    residual_graph: MultiDiGraph,
+    flow_attr: str = "flow",
+    flows_attr: str = "flows",
+    reset_residual_graph: bool = True,
+) -> MultiDiGraph:
+    for edge_tuple in residual_graph.get_edges().values():
+        edge_tuple[3].setdefault(flow_attr, 0)
+        if reset_residual_graph:
+            edge_tuple[3][flow_attr] = 0
+        edge_tuple[3].setdefault(flows_attr, {})
+
+    for node_dict in residual_graph.get_nodes().values():
+        node_dict.setdefault(flow_attr, 0)
+        if reset_residual_graph:
+            node_dict[flow_attr] = 0
+        node_dict.setdefault(flows_attr, {})
+    return residual_graph
 
 
 def edmonds_karp(
@@ -12,11 +77,18 @@ def edmonds_karp(
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
+    flows_attr: str = "flows",
     shortest_path: bool = False,
+    reset_residual_graph: bool = True,
 ) -> Tuple[float, MultiDiGraph]:
     residual_graph = residual_graph if residual_graph is not None else graph.copy()
-    for edge_tuple in residual_graph.get_edges().values():
-        edge_tuple[3][flow_attr] = 0
+    init_residual_graph(
+        residual_graph,
+        flow_attr=flow_attr,
+        flows_attr=flows_attr,
+        reset_residual_graph=reset_residual_graph,
+    )
+
     max_flow = edmonds_karp_core(
         residual_graph,
         src_node,
@@ -43,38 +115,6 @@ def edmonds_karp_core(
     """
     Implementation of the Edmonds-Karp algorithm.
     """
-
-    R_edges = residual_graph.get_edges()
-    inf = float("inf")
-
-    def augment(path):
-        """
-        Augment flow along a path from source to destinaton.
-        """
-        # Determine the path residual capacity.
-        edge_list_capacities = []
-        flow = inf
-        for _, edge_list in path[:-1]:
-            remaining_edge_list_capacity = 0
-            for edge_id in edge_list:
-                remaining_edge_list_capacity += (
-                    R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
-                )
-            flow = min(flow, remaining_edge_list_capacity)
-            edge_list_capacities.append(remaining_edge_list_capacity)
-
-        # Augment flow along the path.
-        for node_edge_list, remaining_edge_list_capacity in zip(
-            path, edge_list_capacities
-        ):
-            _, edge_list = node_edge_list
-            for edge_id in edge_list:
-                R_edges[edge_id][3][flow_attr] += (
-                    R_edges[edge_id][3][capacity_attr]
-                    / remaining_edge_list_capacity
-                    * flow
-                )
-        return flow
 
     def edge_selection_bfs(
         graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
@@ -107,14 +147,14 @@ def edmonds_karp_core(
 
         return min_cost, edge_list
 
-    def get_bfs_path_iter():
+    def get_bfs_path_iter() -> Optional[Generator]:
         _, pred = bfs.bfs(
             residual_graph, src_node=src_node, edge_selection_func=edge_selection_bfs
         )
         if dst_node in pred:
             return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
 
-    def get_spf_path_iter():
+    def get_spf_path_iter() -> Optional[Generator]:
         _, pred = spf.spf(
             residual_graph, src_node=src_node, edge_selection_func=edge_selection_spf
         )
@@ -123,11 +163,14 @@ def edmonds_karp_core(
 
     get_path_iter = get_bfs_path_iter if not shortest_path else get_spf_path_iter
     flow_value = 0
-    while flow_value < cutoff:
+    while True:
         if (path_iter := get_path_iter()) is None:
             break
         for path in path_iter:
-            flow_value += augment(path)
-        if shortest_path:
+            placed_flow, _ = place_flow(
+                residual_graph, path, capacity_attr=capacity_attr, flow_attr=flow_attr
+            )
+            flow_value += placed_flow
+        if shortest_path or cutoff <= flow_value:
             break
     return flow_value
