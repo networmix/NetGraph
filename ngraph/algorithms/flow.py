@@ -37,6 +37,8 @@ def place_flow(
                 R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
             )
         max_flow = min(max_flow, remaining_capacity)
+        if not remaining_capacity:
+            return 0, flow
         path_element_capacities.append(remaining_capacity)
 
     # Place flow along the path.
