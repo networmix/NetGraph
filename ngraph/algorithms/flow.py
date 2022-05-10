@@ -1,7 +1,16 @@
-from email.generator import Generator
-from typing import Any, Dict, Hashable, List, Optional, Tuple
+from enum import IntEnum
+from typing import Any, Dict, Hashable, List, Optional, Tuple, Generator
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms import spf, bfs, common
+
+
+class PathAlgType(IntEnum):
+    """
+    Types of path finding algorithms
+    """
+
+    SPF = 1
+    BFS = 2
 
 
 def place_flow(
@@ -45,7 +54,7 @@ def place_flow(
                 max_flow,
             )
     residual_flow = flow - max_flow if flow != float("inf") else float("inf")
-    return max_flow, residual_flow
+    return max_flow, max(residual_flow, 0)
 
 
 def init_residual_graph(
@@ -73,12 +82,14 @@ def edmonds_karp(
     src_node: Hashable,
     dst_node: Hashable,
     cutoff: float = float("inf"),
+    flow_index: Optional[str] = None,
     residual_graph: Optional[MultiDiGraph] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     shortest_path: bool = False,
+    path_alg: PathAlgType = PathAlgType.SPF,
     reset_residual_graph: bool = True,
 ) -> Tuple[float, MultiDiGraph]:
     residual_graph = residual_graph if residual_graph is not None else graph.copy()
@@ -94,10 +105,12 @@ def edmonds_karp(
         src_node,
         dst_node,
         cutoff,
+        flow_index,
         cost_attr,
         capacity_attr,
         flow_attr,
         shortest_path,
+        path_alg,
     )
     return max_flow, residual_graph
 
@@ -107,10 +120,12 @@ def edmonds_karp_core(
     src_node: Hashable,
     dst_node: Hashable,
     cutoff: float,
+    flow_index: Optional[str] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     shortest_path: bool = False,
+    path_alg: PathAlgType = PathAlgType.SPF,
 ) -> float:
     """
     Implementation of the Edmonds-Karp algorithm.
@@ -161,16 +176,29 @@ def edmonds_karp_core(
         if dst_node in pred:
             return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
 
-    get_path_iter = get_bfs_path_iter if not shortest_path else get_spf_path_iter
+    PATH_ALG_SEL = {
+        PathAlgType.SPF: get_spf_path_iter,
+        PathAlgType.BFS: get_bfs_path_iter,
+    }
+
+    get_path_iter = PATH_ALG_SEL[path_alg]
     flow_value = 0
+    flow_to_place = cutoff
     while True:
         if (path_iter := get_path_iter()) is None:
             break
         for path in path_iter:
-            placed_flow, _ = place_flow(
-                residual_graph, path, capacity_attr=capacity_attr, flow_attr=flow_attr
+            placed_flow, flow_to_place = place_flow(
+                residual_graph,
+                path,
+                flow=flow_to_place,
+                flow_index=flow_index,
+                capacity_attr=capacity_attr,
+                flow_attr=flow_attr,
             )
             flow_value += placed_flow
-        if shortest_path or cutoff <= flow_value:
+            if not flow_to_place:
+                break
+        if shortest_path or not flow_to_place:
             break
     return flow_value
