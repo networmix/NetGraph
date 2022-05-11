@@ -13,50 +13,172 @@ class PathAlgType(IntEnum):
     BFS = 2
 
 
+class FlowPlacement(IntEnum):
+    # load balancing across parallel edges proportional to remaining capacity
+    PROPORTIONAL = 1
+    # use edge with max remaining capacity, no load balancing across parallel edges
+    MAX_SINGLE_FLOW = 2
+    # equal load balancing across parallel edges
+    MAX_BALANCED_FLOW = 3
+
+
+from typing import NamedTuple
+
+
+class PathElementCapacity(NamedTuple):
+    total_cap: float
+    max_edge_cap: float
+    min_edge_cap: float
+    max_edge_cap_id: int
+    min_edge_cap_id: int
+    total_rem_cap: float
+    max_edge_rem_cap: float
+    min_edge_rem_cap: float
+    max_edge_rem_cap_id: int
+    min_edge_rem_cap_id: int
+    edge_count: int
+
+
+class PathCapacity(NamedTuple):
+    max_flow: float
+    max_single_flow: float
+    max_balanced_flow: float
+
+
+def calc_path_capacity(
+    residual_graph: MultiDiGraph,
+    path: Tuple,
+    capacity_attr: str = "capacity",
+    flow_attr: str = "flow",
+) -> Tuple[PathCapacity, List[PathElementCapacity]]:
+    """
+    Determine capacity of a given path.
+    """
+    R_edges = residual_graph.get_edges()
+    path_element_capacities: List[PathElementCapacity] = []
+    max_flow = float("inf")
+    max_single_flow = float("inf")
+    max_balanced_flow = float("inf")
+
+    for node_id, edge_list in path[:-1]:
+        edge_cap_list = [R_edges[edge_id][3][capacity_attr] for edge_id in edge_list]
+        edge_rem_cap_list = [
+            R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
+            for edge_id in edge_list
+        ]
+
+        total_cap = sum(edge_cap_list)
+        max_edge_cap = max(edge_cap_list)
+        min_edge_cap = min(edge_cap_list)
+        max_edge_cap_id = edge_cap_list.index(max_edge_cap)
+        min_edge_cap_id = edge_cap_list.index(min_edge_cap)
+        total_rem_cap = sum(edge_rem_cap_list)
+        max_edge_rem_cap = max(edge_rem_cap_list)
+        min_edge_rem_cap = min(edge_rem_cap_list)
+        max_edge_rem_cap_id = edge_rem_cap_list.index(max_edge_rem_cap)
+        min_edge_rem_cap_id = edge_rem_cap_list.index(min_edge_rem_cap)
+        edge_count = len(edge_cap_list)
+
+        path_element_capacities.append(
+            PathElementCapacity(
+                total_cap,
+                max_edge_cap,
+                min_edge_cap,
+                max_edge_cap_id,
+                min_edge_cap_id,
+                total_rem_cap,
+                max_edge_rem_cap,
+                min_edge_rem_cap,
+                max_edge_rem_cap_id,
+                min_edge_rem_cap_id,
+                edge_count,
+            )
+        )
+
+        max_flow = min(max_flow, total_rem_cap)
+        max_single_flow = min(max_flow, max_edge_rem_cap)
+        max_balanced_flow = min(max_flow, min_edge_rem_cap * edge_count)
+    return (
+        PathCapacity(max_flow, max_single_flow, max_balanced_flow),
+        path_element_capacities,
+    )
+
+
 def place_flow(
     residual_graph: MultiDiGraph,
     path: Tuple,
     flow: float = float("inf"),
-    flow_index: Optional[str] = None,
+    flow_index: Optional[Any] = None,
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     flows_attr: str = "flows",
+    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
 ) -> Tuple[float, float]:
     """
     Place flow along the given path from source to destinaton.
     """
-    # Determine the path residual capacity.
+    # Determine remaining path capacity
+    path_capacity, path_element_capacities = calc_path_capacity(
+        residual_graph, path, capacity_attr, flow_attr
+    )
+
+    # Place flow along the path
+    if flow_placement == FlowPlacement.PROPORTIONAL:
+        max_flow = path_capacity.max_flow
+    elif flow_placement == FlowPlacement.MAX_SINGLE_FLOW:
+        max_flow = path_capacity.max_single_flow
+    elif flow_placement == FlowPlacement.MAX_BALANCED_FLOW:
+        max_flow = path_capacity.max_balanced_flow
+    else:
+        raise RuntimeError(f"Unknown flow_placement {flow_placement}")
+
+    remaining_flow = max(flow - max_flow if flow != float("inf") else float("inf"), 0)
+    placed_flow = min(max_flow, flow)
+    if not placed_flow > 0:
+        return 0, flow
+
+    flow_src = path[0][0]
+    flow_dst = path[-1][0]
+    flow_index = flow_index if flow_index is not None else (flow_src, flow_dst)
     R_edges = residual_graph.get_edges()
     R_nodes = residual_graph.get_nodes()
-    path_element_capacities = []
-    max_flow = flow
-    for node_id, edge_list in path[:-1]:
-        remaining_capacity = 0
-        for edge_id in edge_list:
-            remaining_capacity += (
-                R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
-            )
-        max_flow = min(max_flow, remaining_capacity)
-        if not remaining_capacity:
-            return 0, flow
-        path_element_capacities.append(remaining_capacity)
-
-    # Place flow along the path.
-    for node_edge_list, remaining_capacity in zip(path, path_element_capacities):
+    for node_edge_list, path_element_cap in zip(path, path_element_capacities):
         node_id, edge_list = node_edge_list
-        R_nodes[node_id][flow_attr] = max_flow
-        R_nodes[node_id][flows_attr][flow_index] = (path[0][0], path[-1][0], max_flow)
+        R_nodes[node_id][flow_attr] = placed_flow
+        R_nodes[node_id][flows_attr][flow_index] = (
+            flow_src,
+            flow_dst,
+            placed_flow,
+        )
         for edge_id in edge_list:
-            R_edges[edge_id][3][flow_attr] += (
-                R_edges[edge_id][3][capacity_attr] / remaining_capacity * max_flow
-            )
-            R_edges[edge_id][3][flows_attr][flow_index] = (
-                path[0][0],
-                path[-1][0],
-                max_flow,
-            )
-    residual_flow = flow - max_flow if flow != float("inf") else float("inf")
-    return max_flow, max(residual_flow, 0)
+            if flow_placement == FlowPlacement.PROPORTIONAL:
+                flow_fraction = (
+                    placed_flow
+                    / path_element_cap.total_rem_cap
+                    * (
+                        R_edges[edge_id][3][capacity_attr]
+                        - R_edges[edge_id][3][flow_attr]
+                    )
+                )
+            elif flow_placement == FlowPlacement.MAX_SINGLE_FLOW:
+                flow_fraction = (
+                    placed_flow
+                    if edge_id == path_element_cap.max_edge_rem_cap_id
+                    else 0
+                )
+
+            elif flow_placement == FlowPlacement.MAX_BALANCED_FLOW:
+                flow_fraction = (
+                    path_element_cap.min_edge_rem_cap * path_element_cap.edge_count
+                )
+            if flow_fraction:
+                R_edges[edge_id][3][flow_attr] += flow_fraction
+                R_edges[edge_id][3][flows_attr][flow_index] = (
+                    flow_src,
+                    flow_dst,
+                    flow_fraction,
+                )
+    return placed_flow, remaining_flow
 
 
 def init_residual_graph(
@@ -79,7 +201,7 @@ def init_residual_graph(
     return residual_graph
 
 
-def edmonds_karp(
+def calc_max_flow(
     graph: MultiDiGraph,
     src_node: Hashable,
     dst_node: Hashable,
@@ -91,7 +213,8 @@ def edmonds_karp(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     shortest_path: bool = False,
-    path_alg: PathAlgType = PathAlgType.SPF,
+    path_alg: PathAlgType = PathAlgType.BFS,
+    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     reset_residual_graph: bool = True,
 ) -> Tuple[float, MultiDiGraph]:
     residual_graph = residual_graph if residual_graph is not None else graph.copy()
@@ -107,12 +230,12 @@ def edmonds_karp(
         src_node,
         dst_node,
         cutoff,
-        flow_index,
         cost_attr,
         capacity_attr,
         flow_attr,
         shortest_path,
         path_alg,
+        flow_placement,
     )
     return max_flow, residual_graph
 
@@ -122,12 +245,12 @@ def edmonds_karp_core(
     src_node: Hashable,
     dst_node: Hashable,
     cutoff: float,
-    flow_index: Optional[str] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     shortest_path: bool = False,
-    path_alg: PathAlgType = PathAlgType.SPF,
+    path_alg: PathAlgType = PathAlgType.BFS,
+    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
 ) -> float:
     """
     Implementation of the Edmonds-Karp algorithm.
@@ -186,6 +309,7 @@ def edmonds_karp_core(
     get_path_iter = PATH_ALG_SEL[path_alg]
     flow_value = 0
     flow_to_place = cutoff
+    flow_idx = 0
     while True:
         if (path_iter := get_path_iter()) is None:
             break
@@ -194,11 +318,13 @@ def edmonds_karp_core(
                 residual_graph,
                 path,
                 flow=flow_to_place,
-                flow_index=flow_index,
+                flow_index=flow_idx,
                 capacity_attr=capacity_attr,
                 flow_attr=flow_attr,
+                flow_placement=flow_placement,
             )
             flow_value += placed_flow
+            flow_idx += 1
             if not flow_to_place:
                 break
         if shortest_path or not flow_to_place:

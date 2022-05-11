@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type, ClassVar
 from ngraph.graphnx import MultiDiGraphNX
 from ngraph.datastore import DataStore, DataStoreDataClass
 from ngraph.geo_helpers import airport_iata_coords, distance
-from ngraph.algorithms.flow import edmonds_karp
+from ngraph.algorithms.flow import FlowPlacement, PathAlgType, calc_max_flow
 
 import pandas as pd
 
@@ -225,12 +225,14 @@ class IPLayer(Layer):
                 if node_row_a.name == node_row_z.name:
                     flow_matrix[node_row_a.name][node_row_z.name] = None
                     continue
-                flow_matrix[node_row_a.name][node_row_z.name], _ = edmonds_karp(
+                flow_matrix[node_row_a.name][node_row_z.name], _ = calc_max_flow(
                     self.graph,
                     node_row_a.name,
                     node_row_z.name,
                     residual_graph=residual_graph,
                     shortest_path=shortest_path,
+                    path_alg=PathAlgType.SPF,
+                    flow_placement=FlowPlacement.MAX_BALANCED_FLOW,
                 )
         return pd.DataFrame(flow_matrix)
 
