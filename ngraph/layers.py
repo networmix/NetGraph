@@ -230,9 +230,9 @@ class IPLayer(Layer):
                     node_row_a.name,
                     node_row_z.name,
                     residual_graph=residual_graph,
-                    shortest_path=shortest_path,
+                    shortest_path_balanced=shortest_path,
                     path_alg=PathAlgType.SPF,
-                    flow_placement=FlowPlacement.MAX_BALANCED_FLOW,
+                    flow_placement=FlowPlacement.PROPORTIONAL,
                 )
         return pd.DataFrame(flow_matrix)
 

@@ -51,11 +51,11 @@ def resolve_paths_to_nodes_edges(
     if dst_node not in pred:
         return
     pred = {
-        node: [(nbr, nbr_edges) for nbr, nbr_edges in nbrs_dict.items()]
+        node: [(nbr, tuple(nbr_edges)) for nbr, nbr_edges in nbrs_dict.items()]
         for node, nbrs_dict in pred.items()
     }
     seen = {dst_node}
-    stack = [[(dst_node, []), 0]]
+    stack = [[(dst_node, tuple()), 0]]
     top = 0
     while top >= 0:
         node_edges, nbr_idx = stack[top]

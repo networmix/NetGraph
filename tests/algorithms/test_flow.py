@@ -1,14 +1,18 @@
 # pylint: disable=protected-access,invalid-name
+from algorithms.common import resolve_paths_to_nodes_edges
+from algorithms.spf import spf
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms.flow import (
     FlowPlacement,
     PathAlgType,
+    calc_capacity_balanced,
     init_residual_graph,
     calc_path_capacity,
     place_flow,
     calc_max_flow,
     PathCapacity,
     PathElementCapacity,
+    place_flow_balanced,
 )
 
 
@@ -359,3 +363,168 @@ def test_calc_max_flow_proportional_3():
 
     max_flow, _ = calc_max_flow(g, "A", "D", flow_placement=FlowPlacement.PROPORTIONAL)
     assert max_flow == 6
+
+
+def test_calc_capacity_balanced_1():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("A", "E", metric=1, capacity=3)
+    g.add_edge("E", "C", metric=1, capacity=2)
+    g.add_edge("A", "D", metric=3, capacity=1)
+
+    _, pred = spf(g, "A")
+    path_iter = resolve_paths_to_nodes_edges("A", "D", pred)
+    r = init_residual_graph(g)
+    assert calc_capacity_balanced(r, path_iter) == (2, 11)
+
+
+def test_place_flow_balanced_1():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("A", "E", metric=1, capacity=3)
+    g.add_edge("E", "C", metric=1, capacity=2)
+    g.add_edge("A", "D", metric=3, capacity=1)
+
+    r = init_residual_graph(g)
+    assert place_flow_balanced(r, "A", "D") == (2, float("inf"))
+    assert r.get_edges() == {
+        0: (
+            "A",
+            "B",
+            0,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        1: (
+            "A",
+            "B",
+            1,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        2: (
+            "A",
+            "B",
+            2,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        3: (
+            "B",
+            "C",
+            3,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        4: (
+            "B",
+            "C",
+            4,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        5: (
+            "B",
+            "C",
+            5,
+            {
+                "capacity": 10,
+                "flow": 0.5454545454545455,
+                "flows": {("A", "D"): ("A", "D", 0.5454545454545455)},
+                "metric": 1,
+            },
+        ),
+        6: (
+            "C",
+            "D",
+            6,
+            {
+                "capacity": 1,
+                "flow": 1.8181818181818183,
+                "flows": {("A", "D"): ("A", "D", 0.18181818181818182)},
+                "metric": 1,
+            },
+        ),
+        7: (
+            "A",
+            "E",
+            7,
+            {
+                "capacity": 3,
+                "flow": 0.18181818181818182,
+                "flows": {("A", "D"): ("A", "D", 0.18181818181818182)},
+                "metric": 1,
+            },
+        ),
+        8: (
+            "E",
+            "C",
+            8,
+            {
+                "capacity": 2,
+                "flow": 0.18181818181818182,
+                "flows": {("A", "D"): ("A", "D", 0.18181818181818182)},
+                "metric": 1,
+            },
+        ),
+        9: (
+            "A",
+            "D",
+            9,
+            {
+                "capacity": 1,
+                "flow": 0.18181818181818182,
+                "flows": {("A", "D"): ("A", "D", 0.18181818181818182)},
+                "metric": 3,
+            },
+        ),
+    }
+
+
+def test_place_flow_balanced_2():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("A", "B", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("B", "C", metric=1, capacity=10)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("A", "E", metric=1, capacity=3)
+    g.add_edge("E", "C", metric=1, capacity=2)
+    g.add_edge("A", "D", metric=3, capacity=1)
+
+    r = init_residual_graph(g)
+    assert place_flow_balanced(r, "A", "D", 3) == (2, 1)

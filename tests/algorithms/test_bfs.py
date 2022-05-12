@@ -123,8 +123,8 @@ def test_resolve_paths_from_predecessors_1():
     costs, pred = bfs(g, "A")
 
     assert list(resolve_paths_to_nodes_edges("A", "D", pred)) == [
-        (("A", [8]), ("D", [])),
-        (("A", [2]), ("B", [10]), ("D", [])),
-        (("A", [4, 6]), ("C", [12]), ("D", [])),
+        (("A", (8,)), ("D", tuple())),
+        (("A", (2,)), ("B", (10,)), ("D", tuple())),
+        (("A", (4, 6)), ("C", (12,)), ("D", tuple())),
     ]
     assert list(resolve_paths_to_nodes_edges("A", "E", pred)) == []
