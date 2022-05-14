@@ -1,6 +1,9 @@
+from collections import deque
+from dataclasses import dataclass, field
 from enum import IntEnum
 import math
-from typing import Any, Dict, Hashable, List, Optional, Tuple, Generator
+from typing import Any, Dict, Hashable, List, Optional, Set, Tuple, Generator
+
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms import spf, bfs, common
 
@@ -26,7 +29,19 @@ class FlowPlacement(IntEnum):
 from typing import NamedTuple
 
 
+@dataclass
+class NodeCapacity:
+    node_id: Hashable
+    edges: Set[int] = field(default_factory=set)
+    edges_max_flow: Dict[Tuple[int], float] = field(default_factory=dict)
+    max_balanced_flow: float = 0
+    downstream_nodes: Dict[Tuple[int], Set[Hashable]] = field(default_factory=dict)
+    flow_fraction: float = 0
+
+
 class PathElementCapacity(NamedTuple):
+    node_id: Hashable
+    edges: Tuple[int]
     total_cap: float
     max_edge_cap: float
     min_edge_cap: float
@@ -71,17 +86,19 @@ def calc_path_capacity(
         total_cap = sum(edge_cap_list)
         max_edge_cap = max(edge_cap_list)
         min_edge_cap = min(edge_cap_list)
-        max_edge_cap_id = edge_cap_list.index(max_edge_cap)
-        min_edge_cap_id = edge_cap_list.index(min_edge_cap)
+        max_edge_cap_id = edge_tuple[edge_cap_list.index(max_edge_cap)]
+        min_edge_cap_id = edge_tuple[edge_cap_list.index(min_edge_cap)]
         total_rem_cap = sum(edge_rem_cap_list)
         max_edge_rem_cap = max(edge_rem_cap_list)
         min_edge_rem_cap = min(edge_rem_cap_list)
-        max_edge_rem_cap_id = edge_rem_cap_list.index(max_edge_rem_cap)
-        min_edge_rem_cap_id = edge_rem_cap_list.index(min_edge_rem_cap)
+        max_edge_rem_cap_id = edge_tuple[edge_rem_cap_list.index(max_edge_rem_cap)]
+        min_edge_rem_cap_id = edge_tuple[edge_rem_cap_list.index(min_edge_rem_cap)]
         edge_count = len(edge_cap_list)
 
         path_element_capacities.append(
             PathElementCapacity(
+                node_id,
+                edge_tuple,
                 total_cap,
                 max_edge_cap,
                 min_edge_cap,
@@ -107,26 +124,78 @@ def calc_path_capacity(
 
 def calc_capacity_balanced(
     residual_graph: MultiDiGraph,
-    path_iter: Generator,
+    src_node: Hashable,
+    dst_node: Hashable,
+    pred: Dict,
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
-) -> Tuple[float, int]:
-    total_subflow_count = 0
-    total_cap = 0
-    for flow_idx, path in enumerate(path_iter):
-        path_subflow_count = math.prod([len(edges) for _, edges in path[:-1]])
-        total_subflow_count += path_subflow_count
-        placed_flow, _ = place_flow(
-            residual_graph,
-            path,
-            float("inf"),
-            flow_idx,
-            capacity_attr,
-            flow_attr,
-            flow_placement=FlowPlacement.MAX_BALANCED_FLOW,
-        )
-        total_cap += placed_flow
-    return total_cap, total_subflow_count
+) -> Tuple[float, Dict[Hashable, NodeCapacity]]:
+    R_edges = residual_graph.get_edges()
+    node_capacities: Dict[Hashable, NodeCapacity] = {}
+    succ: Dict[Hashable, Dict[Hashable, Tuple[int]]] = {}
+
+    # Find node capacities and build successors
+    queue = deque([dst_node])
+    while queue:
+        node = queue.popleft()
+        for prev_hop, edge_list in pred[node].items():
+            edge_tuple = tuple(edge_list)
+            succ.setdefault(prev_hop, {})[node] = edge_tuple
+            edge_cap_list = [
+                R_edges[edge_id][3][capacity_attr] for edge_id in edge_tuple
+            ]
+            edge_rem_cap_list = [
+                R_edges[edge_id][3][capacity_attr] - R_edges[edge_id][3][flow_attr]
+                for edge_id in edge_tuple
+            ]
+
+            max_balanced_flow = min(edge_rem_cap_list) * len(edge_cap_list)
+            if node in node_capacities:
+                max_balanced_flow = min(
+                    max_balanced_flow, node_capacities[node].max_balanced_flow
+                )
+
+            prev_hop_node_cap = (
+                node_capacities[prev_hop]
+                if prev_hop in node_capacities
+                else NodeCapacity(prev_hop)
+            )
+            prev_hop_node_cap.downstream_nodes.setdefault(edge_tuple, set()).add(node)
+            if node in node_capacities:
+                for node_set in node_capacities[node].downstream_nodes.values():
+                    prev_hop_node_cap.downstream_nodes[edge_tuple].update(node_set)
+            prev_hop_node_cap.edges_max_flow[edge_tuple] = max_balanced_flow
+            prev_hop_node_cap.edges.update(edge_tuple)
+            prev_hop_node_cap.max_balanced_flow = min(
+                [
+                    edges_max_flow / len(edge_tuple)
+                    for edge_tuple, edges_max_flow in prev_hop_node_cap.edges_max_flow.items()
+                ]
+            ) * len(prev_hop_node_cap.edges)
+            node_capacities[prev_hop] = prev_hop_node_cap
+            if prev_hop != src_node:
+                queue.append(prev_hop)
+
+    # Place a flow of 1.0 and see how it balances
+    queue = deque([(src_node, 1)])
+    while queue:
+        node, flow_fraction = queue.popleft()
+        node_capacities[node].flow_fraction += flow_fraction
+        for next_hop, edge_tuple in succ[node].items():
+            if next_hop != dst_node:
+                next_hop_flow_fraction = (
+                    flow_fraction / len(node_capacities[node].edges) * len(edge_tuple)
+                )
+                queue.append((next_hop, next_hop_flow_fraction))
+    return (
+        min(
+            [
+                node.max_balanced_flow / node.flow_fraction
+                for node in node_capacities.values()
+            ]
+        ),
+        node_capacities,
+    )
 
 
 def place_flow_balanced(
@@ -141,40 +210,34 @@ def place_flow_balanced(
 ) -> Tuple[float, float]:
 
     _, pred = spf.spf(residual_graph, src_node)
-    tmp_residual_graph = init_residual_graph(residual_graph.copy())
-    max_flow, total_subflow_count = calc_capacity_balanced(
-        tmp_residual_graph,
-        common.resolve_paths_to_nodes_edges(src_node, dst_node, pred),
-        capacity_attr,
-        flow_attr,
+    max_flow, node_capacities = calc_capacity_balanced(
+        residual_graph, src_node, dst_node, pred, capacity_attr, flow_attr
     )
     flow_index = flow_index if flow_index is not None else (src_node, dst_node)
-    path_iter = common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
+
     R_edges = residual_graph.get_edges()
     R_nodes = residual_graph.get_nodes()
 
     placed_flow = min(max_flow, flow)
     remaining_flow = max(flow - max_flow if flow != float("inf") else float("inf"), 0)
 
-    for path in path_iter:
-        path_subflow_count = math.prod([len(edges) for _, edges in path[:-1]])
-        placed_subflows = placed_flow / total_subflow_count * path_subflow_count
-        for node_edge_tuple in path[:-1]:
-            node_id, edge_tuple = node_edge_tuple
-            R_nodes[node_id][flow_attr] = placed_subflows
-            R_nodes[node_id][flows_attr][flow_index] = (
+    for node, node_cap in node_capacities.items():
+        node_res = R_nodes[node]
+        node_res[flow_attr] = node_cap.flow_fraction * placed_flow
+        node_res[flows_attr][flow_index] = (
+            src_node,
+            dst_node,
+            placed_flow,
+        )
+        edge_subflow = node_cap.flow_fraction * placed_flow / len(node_cap.edges)
+        for edge_id in node_cap.edges:
+            R_edges[edge_id][3][flow_attr] = edge_subflow
+            R_edges[edge_id][3][flows_attr][flow_index] = (
                 src_node,
                 dst_node,
-                placed_subflows,
+                edge_subflow,
             )
-            subflow_fraction = placed_subflows / len(edge_tuple)
-            for edge_id in edge_tuple:
-                R_edges[edge_id][3][flow_attr] += subflow_fraction
-                R_edges[edge_id][3][flows_attr][flow_index] = (
-                    src_node,
-                    dst_node,
-                    subflow_fraction,
-                )
+
     return placed_flow, remaining_flow
 
 
