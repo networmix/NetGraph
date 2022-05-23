@@ -1,21 +1,45 @@
+from enum import IntEnum
 from typing import Any, Hashable, Optional, Set, Tuple, List, Dict, Callable, Generator
 
 from ngraph.graph import MultiDiGraph
 
 
-DEFAULT_COST_ATTRIBUTE = "metric"
+class EdgeFind(IntEnum):
+    """
+    Edge finding criteria
+    """
+
+    MIN_CAP = 1
+    MIN_CAP_REMAINING = 2
+    MAX_CAP = 3
+    MAX_CAP_REMAINING = 4
 
 
-def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
+class EdgeSelect(IntEnum):
+    """
+    Edge selection criteria
+    """
+
+    ALL_MIN_COST = 1
+    ALL_MIN_COST_WITH_CAP_REMAINING = 2
+    ALL_ANY_COST_WITH_CAP_REMAINING = 3
+
+
+def edge_select_fabric(
+    edge_select: EdgeSelect,
+    cost_attr: str = "metric",
+    capacity_attr: str = "capacity",
+    flow_attr: str = "flow",
+) -> Callable:
     """
     Fabric producing a function to find the min-cost edges between a pair of adjacent nodes in a graph.
     Args:
-        attr_to_use: name of the integer attribute that will be used to determine the cost.
+        cost_attr: name of the integer attribute that will be used to determine the cost.
     Returns:
         get_min_cost_edges_func: a callable function
     """
 
-    def get_min_cost_edges_func(
+    def get_min_cost_edges(
         graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
     ) -> Tuple[int, List[int]]:
         """
@@ -32,7 +56,7 @@ def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
-            cost = edge_attributes[attr_to_use]
+            cost = edge_attributes[cost_attr]
 
             if min_cost is None or cost < min_cost:
                 min_cost = cost
@@ -42,7 +66,77 @@ def min_cost_edges_func_fabric(attr_to_use: str) -> Callable:
 
         return min_cost, edge_list
 
-    return get_min_cost_edges_func
+    def get_edges_with_cap(
+        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
+    ) -> Tuple[int, List[int]]:
+        edge_list = []
+        min_cost = None
+        for edge_id, edge_attributes in edges.items():
+            if edge_attributes[flow_attr] < edge_attributes[capacity_attr]:
+                cost = edge_attributes[cost_attr]
+
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                edge_list.append(edge_id)
+        return min_cost, edge_list
+
+    def get_min_cost_edges_with_cap_rem(
+        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
+    ) -> Tuple[int, List[int]]:
+        edge_list = []
+        min_cost = None
+        for edge_id, edge_attributes in edges.items():
+            if edge_attributes[flow_attr] < edge_attributes[capacity_attr]:
+                cost = edge_attributes[cost_attr]
+
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    edge_list = [edge_id]
+                elif cost == min_cost:
+                    edge_list.append(edge_id)
+        return min_cost, edge_list
+
+    if edge_select == EdgeSelect.ALL_MIN_COST:
+        return get_min_cost_edges
+    elif edge_select == EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING:
+        return get_min_cost_edges_with_cap_rem
+    elif edge_select == EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING:
+        return get_edges_with_cap
+
+
+def edge_find_fabric(
+    edge_find: EdgeFind,
+    cost_attr: str = "metric",
+    capacity_attr: str = "capacity",
+    flow_attr: str = "flow",
+) -> Callable:
+    """
+    Fabric producing a function to find required edges
+    """
+
+    def get_min_cap_edges(
+        flow_graph: MultiDiGraph,
+    ) -> Tuple:
+        min_cap_edges = []
+        min_cap = float("inf")
+        for edge_tuple in flow_graph.get_edges().values():
+            edge_attr = edge_tuple[3]
+            if (
+                cap := get_cap_func(edge_attr[capacity_attr], edge_attr[flow_attr])
+            ) < min_cap:
+                min_cap = cap
+                min_cap_edges = [edge_tuple]
+            elif cap == min_cap:
+                min_cap_edges.append(edge_tuple)
+        return min_cap, min_cap_edges
+
+    if edge_find == EdgeFind.MIN_CAP:
+        get_cap_func: Callable[[float, float], float] = lambda cap, _: cap
+        return get_min_cap_edges
+
+    elif edge_find == EdgeFind.MIN_CAP_REMAINING:
+        get_cap_func: Callable[[float, float], float] = lambda cap, flow: cap - flow
+        return get_min_cap_edges
 
 
 def resolve_paths_to_nodes_edges(

@@ -4,7 +4,7 @@ from dataclasses import fields
 from typing import Any, Dict, Iterator, List, Protocol, Type
 
 import pandas as pd
-from dacite import from_dict
+from dacite import from_dict, Config
 
 
 class DataStoreDataClass(Protocol):
@@ -45,7 +45,9 @@ class DataStore:
 
     def __getitem__(self, index: Any) -> DataStoreDataClass:
         return from_dict(
-            data_class=self._record_type, data=self.df.loc[index].to_dict()
+            data_class=self._record_type,
+            data=self.df.loc[index].to_dict(),
+            config=Config(type_hooks=getattr(self._record_type, "type_hooks", {})),
         )
 
     def add(self, data_obj: DataStoreDataClass) -> None:
@@ -56,3 +58,7 @@ class DataStore:
 
     def get_data(self, index: Any, column: str) -> Any:
         return self.df.at[index, column]
+
+    def query_iter(self, expr: str) -> Iterator:
+        df = self.df.query(expr)
+        return df.itertuples(index=False, name=self._record_type.__name__)

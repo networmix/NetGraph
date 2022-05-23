@@ -90,6 +90,7 @@ class TestInfraLayer:
                     "id": 0,
                     "node_a": "sjc",
                     "node_z": "ewr",
+                    "type": 1,
                     "disabled": False,
                     "distance_geo": None,
                 }
@@ -101,6 +102,7 @@ class TestInfraLayer:
                     "id": 0,
                     "node_a": "sjc",
                     "node_z": "ewr",
+                    "type": 1,
                     "disabled": False,
                     "distance_geo": None,
                 }

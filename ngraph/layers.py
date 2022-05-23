@@ -2,12 +2,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from enum import IntEnum
-from typing import Any, Dict, List, Optional, Tuple, Type, ClassVar
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, ClassVar
 
 from ngraph.graphnx import MultiDiGraphNX
 from ngraph.datastore import DataStore, DataStoreDataClass
 from ngraph.geo_helpers import airport_iata_coords, distance
-from ngraph.algorithms.flow import FlowPlacement, PathAlgType, calc_max_flow
+from ngraph.algorithms.flow import EdgeFlowPlacement, PathAlg, calc_max_flow
 
 import pandas as pd
 
@@ -22,40 +22,68 @@ class LayerType(IntEnum):
     IP = 3
 
 
+class NodeType(IntEnum):
+    """
+    Types of nodes
+    """
+
+    INFRA = 1
+    OPTICAL = 2
+    IP = 3
+
+
+class EdgeType(IntEnum):
+    """
+    Types of edges
+    """
+
+    INFRA = 1
+    OPTICAL = 2
+    IP = 3
+
+
 @dataclass
 class Node(DataStoreDataClass):
     index: ClassVar[List[str]] = ["name"]
+    type_hooks: ClassVar[Dict[Type, Callable]] = {NodeType: NodeType}
     name: str
+    type: NodeType
     disabled: bool = False
 
 
 @dataclass
 class Edge(DataStoreDataClass):
     index: ClassVar[List[str]] = ["id"]
+    type_hooks: ClassVar[Dict[Type, Callable]] = {EdgeType: EdgeType}
     id: int = field(init=False)
     node_a: str
     node_z: str
+    type: EdgeType
     disabled: bool = False
 
 
 @dataclass
 class InfraLocation(Node):
+    type: NodeType = field(init=False, default=NodeType.INFRA)
     latlon: Optional[Tuple[float, float]] = None
     airport_code: Optional[str] = None
 
 
 @dataclass
 class InfraConnection(Edge):
+    type: EdgeType = field(init=False, default=EdgeType.INFRA)
     distance_geo: Optional[float] = None
 
 
 @dataclass
 class IPDevice(Node):
+    type: NodeType = field(init=False, default=NodeType.IP)
     infra_location: Optional[str] = None
 
 
 @dataclass
 class IPConnection(Edge):
+    type: EdgeType = field(init=False, default=EdgeType.IP)
     capacity: float = 100
     metric: int = 1
 
@@ -216,23 +244,29 @@ class IPLayer(Layer):
         self.edges_ds.add(edge)
         self.update_graph()
 
-    def get_max_flows(self, shortest_path: bool = False) -> pd.DataFrame:
-        residual_graph = self.graph.copy()
+    def get_max_flows(
+        self, expr: Optional[str] = None, shortest_path: bool = False
+    ) -> pd.DataFrame:
+        flow_graph = self.graph.copy()
         flow_matrix = {}
-        for node_row_a in self.nodes_ds:
+        nodes_a_iter = self.nodes_ds.query_iter(expr) if expr else self.nodes_ds
+        for node_row_a in nodes_a_iter:
             flow_matrix.setdefault(node_row_a.name, {})
-            for node_row_z in self.nodes_ds:
+            for node_row_z in self.nodes_ds.query_iter(expr) if expr else self.nodes_ds:
                 if node_row_a.name == node_row_z.name:
                     flow_matrix[node_row_a.name][node_row_z.name] = None
                     continue
-                flow_matrix[node_row_a.name][node_row_z.name], _ = calc_max_flow(
-                    self.graph,
-                    node_row_a.name,
-                    node_row_z.name,
-                    residual_graph=residual_graph,
-                    shortest_path_balanced=shortest_path,
-                    path_alg=PathAlgType.SPF,
-                    flow_placement=FlowPlacement.PROPORTIONAL,
+                flow_matrix[node_row_a.name][node_row_z.name] = round(
+                    calc_max_flow(
+                        self.graph,
+                        node_row_a.name,
+                        node_row_z.name,
+                        flow_graph=flow_graph,
+                        shortest_path_balanced=shortest_path,
+                        path_alg=PathAlg.SPF,
+                        flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+                    )[0],
+                    2,
                 )
         return pd.DataFrame(flow_matrix)
 

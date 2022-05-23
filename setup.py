@@ -17,8 +17,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    package_dir={"": "ngraph"},
-    packages=find_packages(where=("ngraph")),
+    packages=find_packages(exclude=("tests", "dev", "examples")),
     python_requires=">=3.8",
     tests_require=["pytest"],
 )
