@@ -5,6 +5,7 @@ from ngraph.algorithms.spf import spf
 from ngraph.algorithms.flow import (
     EdgeFlowPlacement,
     Flow,
+    FlowPolicy,
     FlowRouting,
     NodeCapacity,
     PathAlg,
@@ -193,7 +194,6 @@ class Test_Flow_SPF_Proportional:
             path_alg=PathAlg.SPF,
         )
         assert max_flow == 2
-        print(res_g.get_edges())
         assert res_g.get_edges() == {
             0: ("A", "B", 0, {"metric": 11, "capacity": 2, "flow": 0, "flows": {}}),
             1: (
@@ -204,7 +204,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 2,
                     "flow": 2.0,
-                    "flows": {0: ("A", "D", 1.0), 1: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0, ("A", "D", 1): 1.0},
                 },
             ),
             2: (
@@ -215,7 +215,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 0.5), 1: ("A", "D", 0.5)},
+                    "flows": {("A", "D", 0): 0.5, ("A", "D", 1): 0.5},
                 },
             ),
             3: (
@@ -226,7 +226,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 0.5), 1: ("A", "D", 0.5)},
+                    "flows": {("A", "D", 0): 0.5, ("A", "D", 1): 0.5},
                 },
             ),
             4: (
@@ -237,7 +237,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 20,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {1: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 1): 1.0},
                 },
             ),
             5: (
@@ -248,7 +248,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
         }
@@ -302,7 +302,6 @@ class Test_Flow_SPF_Proportional:
             g, "A", "D", flow_placement=EdgeFlowPlacement.PROPORTIONAL
         )
         assert max_flow == 2
-        print(res_g.get_edges())
         assert res_g.get_edges() == {
             0: (
                 "A",
@@ -312,7 +311,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 11,
                     "capacity": 2,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             1: (
@@ -323,7 +322,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 2,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             2: (
@@ -334,7 +333,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             3: (
@@ -345,7 +344,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             4: (
@@ -356,7 +355,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 20,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             5: (
@@ -367,7 +366,7 @@ class Test_Flow_SPF_Proportional:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
         }
@@ -404,7 +403,7 @@ class Test_Flow_SPF_Proportional_BestOnly:
                     "metric": 10,
                     "capacity": 2,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
             2: (
@@ -415,7 +414,7 @@ class Test_Flow_SPF_Proportional_BestOnly:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 0.5,
-                    "flows": {0: ("A", "D", 0.5)},
+                    "flows": {("A", "D", 0): 0.5},
                 },
             ),
             3: (
@@ -426,7 +425,7 @@ class Test_Flow_SPF_Proportional_BestOnly:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 0.5,
-                    "flows": {0: ("A", "D", 0.5)},
+                    "flows": {("A", "D", 0): 0.5},
                 },
             ),
             4: ("C", "D", 4, {"metric": 20, "capacity": 1, "flow": 0, "flows": {}}),
@@ -438,7 +437,7 @@ class Test_Flow_SPF_Proportional_BestOnly:
                     "metric": 10,
                     "capacity": 1,
                     "flow": 1.0,
-                    "flows": {0: ("A", "D", 1.0)},
+                    "flows": {("A", "D", 0): 1.0},
                 },
             ),
         }
@@ -636,16 +635,185 @@ class Test_Place_Flows:
 
         r = init_flow_graph(g)
 
-        placed, _ = place_flows(
+        flows, _ = place_flows(
             r,
             flows=[Flow("A", "D", 1, "1"), Flow("A", "D", 3, "2")],
-            flow_routing=FlowRouting.SHORTEST_PATHS_EQUAL_BALANCED,
+            flow_policy=FlowPolicy(
+                flow_routing=FlowRouting.SHORTEST_PATHS_EQUAL_BALANCED
+            ),
         )
-        print(placed)
-        import pprint
 
-        pprint.pprint(r.get_edges())
-        raise
+        assert sum(flow.placed_flow for flow in flows) == 2.5
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 10,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35,
+                    },
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "A",
+                "B",
+                1,
+                {
+                    "capacity": 10,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35,
+                    },
+                    "metric": 1,
+                },
+            ),
+            2: (
+                "A",
+                "B",
+                2,
+                {
+                    "capacity": 10,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35,
+                    },
+                    "metric": 1,
+                },
+            ),
+            3: (
+                "B",
+                "C",
+                3,
+                {
+                    "capacity": 10,
+                    "flow": 0.5000000000000001,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35000000000000003,
+                    },
+                    "metric": 1,
+                },
+            ),
+            4: (
+                "B",
+                "C",
+                4,
+                {
+                    "capacity": 10,
+                    "flow": 0.5000000000000001,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35000000000000003,
+                    },
+                    "metric": 1,
+                },
+            ),
+            5: (
+                "B",
+                "C",
+                5,
+                {
+                    "capacity": 10,
+                    "flow": 0.5000000000000001,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35000000000000003,
+                    },
+                    "metric": 1,
+                },
+            ),
+            6: (
+                "C",
+                "D",
+                6,
+                {
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {
+                        ("A", "D", "1"): 0.30000000000000004,
+                        ("A", "D", "2"): 0.7000000000000001,
+                    },
+                    "metric": 2,
+                },
+            ),
+            7: (
+                "A",
+                "E",
+                7,
+                {
+                    "capacity": 3,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35,
+                    },
+                    "metric": 1,
+                },
+            ),
+            8: (
+                "E",
+                "C",
+                8,
+                {
+                    "capacity": 2,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35000000000000003,
+                    },
+                    "metric": 1,
+                },
+            ),
+            9: (
+                "A",
+                "D",
+                9,
+                {
+                    "capacity": 2,
+                    "flow": 0.5,
+                    "flows": {
+                        ("A", "D", "1"): 0.15000000000000002,
+                        ("A", "D", "2"): 0.35,
+                    },
+                    "metric": 4,
+                },
+            ),
+            10: (
+                "C",
+                "F",
+                10,
+                {
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {
+                        ("A", "D", "1"): 0.30000000000000004,
+                        ("A", "D", "2"): 0.7000000000000001,
+                    },
+                    "metric": 1,
+                },
+            ),
+            11: (
+                "F",
+                "D",
+                11,
+                {
+                    "capacity": 2,
+                    "flow": 1.0,
+                    "flows": {
+                        ("A", "D", "1"): 0.30000000000000004,
+                        ("A", "D", "2"): 0.7000000000000001,
+                    },
+                    "metric": 1,
+                },
+            ),
+        }
 
     def test_place_flows_2(self):
         g = MultiDiGraph()
@@ -665,13 +833,286 @@ class Test_Place_Flows:
 
         r = init_flow_graph(g)
 
-        placed, _ = place_flows(
+        flows, _ = place_flows(
             r,
             flows=[Flow("A", "D", 1, "1"), Flow("A", "D", 3, "2")],
-            flow_routing=FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy=FlowPolicy(
+                flow_routing=FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+            ),
         )
-        print(placed)
-        import pprint
 
-        pprint.pprint(r.get_edges())
-        raise
+        assert sum(flow.placed_flow for flow in flows) == 4
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "A",
+                "B",
+                1,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            2: (
+                "A",
+                "B",
+                2,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            3: (
+                "B",
+                "C",
+                3,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            4: (
+                "B",
+                "C",
+                4,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            5: (
+                "B",
+                "C",
+                5,
+                {
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {
+                        ("A", "D", "1"): 0.16666666666666666,
+                        ("A", "D", "2"): 0.5,
+                    },
+                    "metric": 1,
+                },
+            ),
+            6: (
+                "C",
+                "D",
+                6,
+                {
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "1"): 0.25, ("A", "D", "2"): 0.75},
+                    "metric": 2,
+                },
+            ),
+            7: ("A", "E", 7, {"capacity": 3, "flow": 0, "flows": {}, "metric": 1}),
+            8: ("E", "C", 8, {"capacity": 2, "flow": 0, "flows": {}, "metric": 1}),
+            9: (
+                "A",
+                "D",
+                9,
+                {
+                    "capacity": 2,
+                    "flow": 2.0,
+                    "flows": {("A", "D", "1"): 0.5, ("A", "D", "2"): 1.5},
+                    "metric": 4,
+                },
+            ),
+            10: (
+                "C",
+                "F",
+                10,
+                {
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "1"): 0.25, ("A", "D", "2"): 0.75},
+                    "metric": 1,
+                },
+            ),
+            11: (
+                "F",
+                "D",
+                11,
+                {
+                    "capacity": 2,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "1"): 0.25, ("A", "D", "2"): 0.75},
+                    "metric": 1,
+                },
+            ),
+        }
+
+    def test_place_flows_3(self):
+        g = MultiDiGraph()
+
+        g.add_edge("A", "B", metric=1, capacity=10)
+        g.add_edge("A", "B", metric=1, capacity=10)
+        g.add_edge("A", "B", metric=1, capacity=10)
+        g.add_edge("B", "C", metric=1, capacity=10)
+        g.add_edge("B", "C", metric=1, capacity=10)
+        g.add_edge("B", "C", metric=1, capacity=10)
+        g.add_edge("C", "D", metric=2, capacity=1)
+        g.add_edge("A", "E", metric=1, capacity=3)
+        g.add_edge("E", "C", metric=1, capacity=2)
+        g.add_edge("A", "D", metric=4, capacity=2)
+        g.add_edge("C", "F", metric=1, capacity=1)
+        g.add_edge("F", "D", metric=1, capacity=2)
+
+        r = init_flow_graph(g)
+
+        flows, _ = place_flows(
+            r,
+            flows=[Flow("A", "D", 1, "1"), Flow("A", "D", float("inf"), "2")],
+            flow_policy=FlowPolicy(
+                flow_routing=FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+            ),
+        )
+        print(r.get_edges())
+        assert sum(flow.placed_flow for flow in flows) == 4
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            1: (
+                "A",
+                "B",
+                1,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            2: (
+                "A",
+                "B",
+                2,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            3: (
+                "B",
+                "C",
+                3,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            4: (
+                "B",
+                "C",
+                4,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            5: (
+                "B",
+                "C",
+                5,
+                {
+                    "metric": 1,
+                    "capacity": 10,
+                    "flow": 0.6666666666666666,
+                    "flows": {("A", "D", "2"): 0.6666666666666666},
+                },
+            ),
+            6: (
+                "C",
+                "D",
+                6,
+                {
+                    "metric": 2,
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "2"): 1.0},
+                },
+            ),
+            7: ("A", "E", 7, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            8: ("E", "C", 8, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+            9: (
+                "A",
+                "D",
+                9,
+                {
+                    "metric": 4,
+                    "capacity": 2,
+                    "flow": 2.0,
+                    "flows": {("A", "D", "2"): 2.0},
+                },
+            ),
+            10: (
+                "C",
+                "F",
+                10,
+                {
+                    "metric": 1,
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "2"): 1.0},
+                },
+            ),
+            11: (
+                "F",
+                "D",
+                11,
+                {
+                    "metric": 1,
+                    "capacity": 2,
+                    "flow": 1.0,
+                    "flows": {("A", "D", "2"): 1.0},
+                },
+            ),
+        }

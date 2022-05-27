@@ -42,6 +42,11 @@ class FlowRouting(IntEnum):
 
 
 @dataclass
+class FlowPolicy:
+    flow_routing: FlowRouting
+
+
+@dataclass
 class NodeCapacity:
     node_id: Hashable
     edges: Set[int] = field(default_factory=set)
@@ -479,7 +484,7 @@ def edmonds_karp_core(
 def place_flows(
     flow_graph: MultiDiGraph,
     flows: List[Flow],
-    flow_routing: FlowRouting,
+    flow_policy: FlowPolicy,
 ) -> Tuple[List[Flow], MultiDiGraph]:
 
     total_to_place = sum(flow.flow - flow.placed_flow for flow in flows)
@@ -489,16 +494,20 @@ def place_flows(
         )[0]
         / total_to_place
     )
-    if flow_routing == FlowRouting.SHORTEST_PATHS_EQUAL_BALANCED:
+    if flow_policy.flow_routing == FlowRouting.SHORTEST_PATHS_EQUAL_BALANCED:
         while True:
             placed = 0
             for flow in flows:
-                if (to_place := flow.flow - flow.placed_flow) > 0:
+                if (
+                    to_place := min(
+                        flow.flow - flow.placed_flow, flow.flow * flow_fraction
+                    )
+                ) > 0:
                     placed_flow, _ = place_flow_balanced(
                         flow_graph,
                         flow.src_id,
                         flow.dst_id,
-                        min(to_place, flow.flow * flow_fraction),
+                        to_place,
                         flow.label,
                     )
                     flow.placed_flow += placed_flow
@@ -507,7 +516,7 @@ def place_flows(
                 break
         return flows, flow_graph
 
-    elif flow_routing == FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED:
+    elif flow_policy.flow_routing == FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED:
         get_path_iter = get_spf_path_iter
         edge_select_func = common.edge_select_fabric(
             edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
@@ -516,19 +525,25 @@ def place_flows(
 
             placed = 0
             for flow in flows:
-                if (to_place := flow.flow - flow.placed_flow) > 0:
+                if (
+                    to_place := min(
+                        flow.flow - flow.placed_flow, flow.flow * flow_fraction
+                    )
+                ) > 0:
                     if path_iter := get_path_iter(
                         flow_graph, flow.src_id, flow.dst_id, edge_select_func
                     ):
                         for path in path_iter:
-                            placed_flow, _ = place_flow(
-                                flow_graph,
-                                path,
-                                min(to_place, flow.flow * flow_fraction),
-                                flow.label,
-                            )
-                        flow.placed_flow += placed_flow
-                        placed += placed_flow
+                            if to_place:
+                                placed_flow, _ = place_flow(
+                                    flow_graph,
+                                    path,
+                                    to_place,
+                                    flow.label,
+                                )
+                                to_place -= placed_flow
+                                flow.placed_flow += placed_flow
+                                placed += placed_flow
             if not placed:
                 break
         return flows, flow_graph
