@@ -23,10 +23,12 @@ class EdgeSelect(IntEnum):
     ALL_MIN_COST = 1
     ALL_MIN_COST_WITH_CAP_REMAINING = 2
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
+    USER_DEFINED = 99
 
 
 def edge_select_fabric(
     edge_select: EdgeSelect,
+    edge_select_func: Optional[Callable] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
@@ -102,6 +104,8 @@ def edge_select_fabric(
         return get_min_cost_edges_with_cap_rem
     elif edge_select == EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING:
         return get_edges_with_cap
+    elif edge_select == EdgeSelect.USER_DEFINED:
+        return edge_select_func
 
 
 def edge_find_fabric(

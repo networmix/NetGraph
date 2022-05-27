@@ -7,7 +7,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, ClassVar
 from ngraph.graphnx import MultiDiGraphNX
 from ngraph.datastore import DataStore, DataStoreDataClass
 from ngraph.geo_helpers import airport_iata_coords, distance
-from ngraph.algorithms.flow import EdgeFlowPlacement, PathAlg, calc_max_flow
+from ngraph.algorithms.flow import (
+    FlowPolicyConfig,
+    calc_max_flow,
+    init_flow_graph,
+)
 
 import pandas as pd
 
@@ -245,11 +249,16 @@ class IPLayer(Layer):
         self.update_graph()
 
     def get_max_flows(
-        self, expr: Optional[str] = None, shortest_path: bool = False
+        self, expr: Optional[str] = None, source_routing: bool = True
     ) -> pd.DataFrame:
-        flow_graph = self.graph.copy()
+        flow_graph = init_flow_graph(self.graph.copy())
         flow_matrix = {}
         nodes_a_iter = self.nodes_ds.query_iter(expr) if expr else self.nodes_ds
+        flow_policy_config = (
+            FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+            if source_routing
+            else FlowPolicyConfig.SHORTEST_PATHS_BALANCED_NODE_BY_NODE
+        )
         for node_row_a in nodes_a_iter:
             flow_matrix.setdefault(node_row_a.name, {})
             for node_row_z in self.nodes_ds.query_iter(expr) if expr else self.nodes_ds:
@@ -258,13 +267,12 @@ class IPLayer(Layer):
                     continue
                 flow_matrix[node_row_a.name][node_row_z.name] = round(
                     calc_max_flow(
-                        self.graph,
+                        flow_graph,
                         node_row_a.name,
                         node_row_z.name,
-                        flow_graph=flow_graph,
-                        shortest_path_balanced=shortest_path,
-                        path_alg=PathAlg.SPF,
-                        flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+                        flow_policy_config=flow_policy_config,
+                        inplace_flow_graph=True,
+                        reset_flow_graph=True,
                     )[0],
                     2,
                 )

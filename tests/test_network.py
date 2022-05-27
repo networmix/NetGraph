@@ -86,7 +86,7 @@ class TestNetwork:
 
         print(
             net.ip_layer.get_max_flows(
-                expr="name.str.contains('dc')", shortest_path=True
+                expr="name.str.contains('dc')", source_routing=False
             )
         )
         # print(net.infra_layer.edges_ds.df)

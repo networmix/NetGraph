@@ -216,7 +216,7 @@ class TestIPLayer:
         for edge in edges:
             layer.add_edge(edge)
 
-        assert layer.get_max_flows(shortest_path=False).fillna(0).to_dict() == {
+        assert layer.get_max_flows(source_routing=True).fillna(0).to_dict() == {
             "bb01.sjc": {
                 "bb02.sjc": 200.0,
                 "bb01.ewr": 200.0,
@@ -265,7 +265,7 @@ class TestIPLayer:
         for edge in edges:
             layer.add_edge(edge)
 
-        assert layer.get_max_flows(shortest_path=True).fillna(0).to_dict() == {
+        assert layer.get_max_flows(source_routing=False).fillna(0).to_dict() == {
             "bb01.sjc": {
                 "bb01.sjc": 0.0,
                 "bb02.sjc": 200.0,

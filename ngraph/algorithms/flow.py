@@ -1,3 +1,5 @@
+from __future__ import annotations
+from itertools import repeat
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
@@ -37,13 +39,102 @@ class EdgeFlowPlacement(IntEnum):
 
 
 class FlowRouting(IntEnum):
-    SHORTEST_PATHS_EQUAL_BALANCED = 1
+    NODE_BY_NODE = 1
+    SOURCE_ROUTED = 2
+
+
+class FlowPolicyConfig(IntEnum):
+    SHORTEST_PATHS_BALANCED_NODE_BY_NODE = 1
     ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED = 2
+    SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED = 3
 
 
 @dataclass
 class FlowPolicy:
     flow_routing: FlowRouting
+    path_alg: PathAlg
+    edge_flow_placement: EdgeFlowPlacement
+    edge_select: common.EdgeSelect
+
+    def get_path_iter(
+        self,
+        flow_graph: MultiDiGraph,
+        src_node: Hashable,
+        dst_node: Hashable,
+    ) -> Optional[Generator]:
+        edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
+        if self.path_alg == PathAlg.BFS:
+            _, pred = bfs.bfs(
+                flow_graph, src_node=src_node, edge_select_func=edge_select_func
+            )
+            if dst_node in pred:
+                return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
+        elif self.path_alg == PathAlg.SPF:
+            _, pred = spf.spf(
+                flow_graph, src_node=src_node, edge_select_func=edge_select_func
+            )
+            if dst_node in pred:
+                return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
+
+
+@dataclass
+class Flow:
+    src_node: Hashable
+    dst_node: Hashable
+    flow: float
+    flow_policy: FlowPolicy
+    label: Optional[Any] = None
+    placed_flow: float = 0
+
+    def place_flow(
+        self,
+        flow_graph: MultiDiGraph,
+        path: Optional[Tuple] = None,
+        max_fraction: float = 1,
+    ) -> Tuple[float, float]:
+        to_place = min(self.flow - self.placed_flow, self.flow * max_fraction)
+        if path:
+            placed_flow, to_place = place_flow(
+                flow_graph,
+                path,
+                to_place,
+                self.label,
+                edge_flow_placement=self.flow_policy.edge_flow_placement,
+            )
+            self.placed_flow += placed_flow
+            return placed_flow, self.flow - self.placed_flow
+
+        if self.flow_policy.flow_routing == FlowRouting.NODE_BY_NODE:
+            placed_flow, to_place = place_flow_balanced(
+                flow_graph,
+                self.src_node,
+                self.dst_node,
+                to_place,
+                self.label,
+            )
+            self.placed_flow += placed_flow
+            return placed_flow, self.flow - self.placed_flow
+
+        if self.flow_policy.flow_routing == FlowRouting.SOURCE_ROUTED:
+            total_placed = 0
+            if path_iter := self.flow_policy.get_path_iter(
+                flow_graph,
+                self.src_node,
+                self.dst_node,
+            ):
+                for path in path_iter:
+                    if to_place > 0:
+                        placed_flow, to_place = place_flow(
+                            flow_graph,
+                            path,
+                            to_place,
+                            self.label,
+                        )
+                        total_placed += placed_flow
+                    else:
+                        break
+            self.placed_flow += total_placed
+            return total_placed, self.flow - self.placed_flow
 
 
 @dataclass
@@ -54,15 +145,6 @@ class NodeCapacity:
     max_balanced_flow: float = 0
     downstream_nodes: Dict[Tuple[int], Set[Hashable]] = field(default_factory=dict)
     flow_fraction: float = 0
-
-
-@dataclass
-class Flow:
-    src_id: Hashable
-    dst_id: Hashable
-    flow: float
-    label: Optional[Any] = None
-    placed_flow: float = 0
 
 
 class PathElementCapacity(NamedTuple):
@@ -85,28 +167,6 @@ class PathCapacity(NamedTuple):
     max_flow: float
     max_single_flow: float
     max_balanced_flow: float
-
-
-def get_bfs_path_iter(
-    flow_graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
-    edge_select_func: Callable,
-) -> Optional[Generator]:
-    _, pred = bfs.bfs(flow_graph, src_node=src_node, edge_select_func=edge_select_func)
-    if dst_node in pred:
-        return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
-
-
-def get_spf_path_iter(
-    flow_graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
-    edge_select_func: Callable,
-) -> Optional[Generator]:
-    _, pred = spf.spf(flow_graph, src_node=src_node, edge_select_func=edge_select_func)
-    if dst_node in pred:
-        return common.resolve_paths_to_nodes_edges(src_node, dst_node, pred)
 
 
 def calc_path_capacity(
@@ -291,7 +351,7 @@ def place_flow(
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     flows_attr: str = "flows",
-    flow_placement: EdgeFlowPlacement = EdgeFlowPlacement.PROPORTIONAL,
+    edge_flow_placement: EdgeFlowPlacement = EdgeFlowPlacement.PROPORTIONAL,
 ) -> Tuple[float, float]:
     """
     Place flow along the given path from source to destinaton.
@@ -302,14 +362,14 @@ def place_flow(
     )
 
     # Place flow along the path
-    if flow_placement == EdgeFlowPlacement.PROPORTIONAL:
+    if edge_flow_placement == EdgeFlowPlacement.PROPORTIONAL:
         max_flow = path_capacity.max_flow
-    elif flow_placement == EdgeFlowPlacement.MAX_SINGLE_FLOW:
+    elif edge_flow_placement == EdgeFlowPlacement.MAX_SINGLE_FLOW:
         max_flow = path_capacity.max_single_flow
-    elif flow_placement == EdgeFlowPlacement.EQUAL_BALANCED:
+    elif edge_flow_placement == EdgeFlowPlacement.EQUAL_BALANCED:
         max_flow = path_capacity.max_balanced_flow
     else:
-        raise RuntimeError(f"Unknown flow_placement {flow_placement}")
+        raise RuntimeError(f"Unknown flow_placement {edge_flow_placement}")
 
     remaining_flow = max(flow - max_flow if flow != float("inf") else float("inf"), 0)
     placed_flow = min(max_flow, flow)
@@ -327,7 +387,7 @@ def place_flow(
         R_nodes[node_id][flows_attr].setdefault(flow_index, 0)
         R_nodes[node_id][flows_attr][flow_index] += placed_flow
         for edge_id in edge_tuple:
-            if flow_placement == EdgeFlowPlacement.PROPORTIONAL:
+            if edge_flow_placement == EdgeFlowPlacement.PROPORTIONAL:
                 flow_fraction = (
                     placed_flow
                     / path_element_cap.total_rem_cap
@@ -336,14 +396,14 @@ def place_flow(
                         - R_edges[edge_id][3][flow_attr]
                     )
                 )
-            elif flow_placement == EdgeFlowPlacement.MAX_SINGLE_FLOW:
+            elif edge_flow_placement == EdgeFlowPlacement.MAX_SINGLE_FLOW:
                 flow_fraction = (
                     placed_flow
                     if edge_id == path_element_cap.max_edge_rem_cap_id
                     else 0
                 )
 
-            elif flow_placement == EdgeFlowPlacement.EQUAL_BALANCED:
+            elif edge_flow_placement == EdgeFlowPlacement.EQUAL_BALANCED:
                 flow_fraction = (
                     path_element_cap.min_edge_rem_cap * path_element_cap.edge_count
                 )
@@ -379,112 +439,29 @@ def calc_max_flow(
     graph: MultiDiGraph,
     src_node: Hashable,
     dst_node: Hashable,
-    cutoff: float = float("inf"),
-    flow_graph: Optional[MultiDiGraph] = None,
-    cost_attr: str = "metric",
-    capacity_attr: str = "capacity",
-    flow_attr: str = "flow",
-    flows_attr: str = "flows",
-    shortest_path: bool = False,
-    shortest_path_balanced: bool = False,
-    path_alg: PathAlg = PathAlg.BFS,
-    flow_placement: EdgeFlowPlacement = EdgeFlowPlacement.PROPORTIONAL,
-    reset_flow_graph: bool = True,
+    flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+    flow_policy: Optional[FlowPolicy] = None,
+    flow_label: Optional[Any] = None,
+    inplace_flow_graph: bool = False,
+    reset_flow_graph: bool = False,
 ) -> Tuple[float, MultiDiGraph]:
-    flow_graph = flow_graph if flow_graph is not None else graph.copy()
-    init_flow_graph(
-        flow_graph,
-        flow_attr=flow_attr,
-        flows_attr=flows_attr,
+
+    flow_graph = init_flow_graph(
+        graph if inplace_flow_graph else graph.copy(),
+        flow_attr="flow",
+        flows_attr="flows",
         reset_flow_graph=reset_flow_graph,
     )
 
-    if shortest_path_balanced:
-        max_flow, _ = place_flow_balanced(
-            flow_graph,
-            src_node,
-            dst_node,
-            flow=float("inf"),
-            flow_label=0,
-            capacity_attr=capacity_attr,
-            flow_attr=flow_attr,
-            flows_attr=flows_attr,
-        )
-        return max_flow, flow_graph
-
-    max_flow = edmonds_karp_core(
-        flow_graph,
-        src_node,
-        dst_node,
-        cutoff,
-        cost_attr,
-        capacity_attr,
-        flow_attr,
-        shortest_path,
-        path_alg,
-        flow_placement,
-    )
-    return max_flow, flow_graph
-
-
-def edmonds_karp_core(
-    flow_graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
-    cutoff: float,
-    cost_attr: str = "metric",
-    capacity_attr: str = "capacity",
-    flow_attr: str = "flow",
-    shortest_path: bool = False,
-    path_alg: PathAlg = PathAlg.BFS,
-    flow_placement: EdgeFlowPlacement = EdgeFlowPlacement.PROPORTIONAL,
-) -> float:
-    """
-    Implementation of the Edmonds-Karp algorithm.
-    """
-
-    if path_alg == PathAlg.SPF:
-        get_path_iter = get_spf_path_iter
-        edge_select_func = common.edge_select_fabric(
-            edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
-        )
-    else:
-        get_path_iter = get_bfs_path_iter
-        edge_select_func = common.edge_select_fabric(
-            edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING
-        )
-
-    flow_value = 0
-    flow_to_place = cutoff
-    flow_idx = 0
-    while True:
-        if (
-            path_iter := get_path_iter(flow_graph, src_node, dst_node, edge_select_func)
-        ) is None:
-            break
-        for path in path_iter:
-            placed_flow, flow_to_place = place_flow(
-                flow_graph,
-                path,
-                flow=flow_to_place,
-                flow_label=flow_idx,
-                capacity_attr=capacity_attr,
-                flow_attr=flow_attr,
-                flow_placement=flow_placement,
-            )
-            flow_value += placed_flow
-            flow_idx += 1
-            if not flow_to_place:
-                break
-        if shortest_path or not flow_to_place:
-            break
-    return flow_value
+    flow_policy = flow_policy if flow_policy else FLOW_POLICY_MAP[flow_policy_config]
+    flow = Flow(src_node, dst_node, float("inf"), flow_policy, flow_label)
+    place_flows(flow_graph, flows=[flow])
+    return flow.placed_flow, flow_graph
 
 
 def place_flows(
     flow_graph: MultiDiGraph,
     flows: List[Flow],
-    flow_policy: FlowPolicy,
 ) -> Tuple[List[Flow], MultiDiGraph]:
 
     total_to_place = sum(flow.flow - flow.placed_flow for flow in flows)
@@ -494,56 +471,32 @@ def place_flows(
         )[0]
         / total_to_place
     )
-    if flow_policy.flow_routing == FlowRouting.SHORTEST_PATHS_EQUAL_BALANCED:
-        while True:
-            placed = 0
-            for flow in flows:
-                if (
-                    to_place := min(
-                        flow.flow - flow.placed_flow, flow.flow * flow_fraction
-                    )
-                ) > 0:
-                    placed_flow, _ = place_flow_balanced(
-                        flow_graph,
-                        flow.src_id,
-                        flow.dst_id,
-                        to_place,
-                        flow.label,
-                    )
-                    flow.placed_flow += placed_flow
-                    placed += placed_flow
-            if not placed:
-                break
-        return flows, flow_graph
+    queue = deque(flows)
+    while queue:
+        flow = queue.popleft()
+        placed_flow, to_place = flow.place_flow(flow_graph, max_fraction=flow_fraction)
+        if to_place > 0 and placed_flow > 0:
+            queue.append(flow)
+    return flows, flow_graph
 
-    elif flow_policy.flow_routing == FlowRouting.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED:
-        get_path_iter = get_spf_path_iter
-        edge_select_func = common.edge_select_fabric(
-            edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
-        )
-        while True:
 
-            placed = 0
-            for flow in flows:
-                if (
-                    to_place := min(
-                        flow.flow - flow.placed_flow, flow.flow * flow_fraction
-                    )
-                ) > 0:
-                    if path_iter := get_path_iter(
-                        flow_graph, flow.src_id, flow.dst_id, edge_select_func
-                    ):
-                        for path in path_iter:
-                            if to_place:
-                                placed_flow, _ = place_flow(
-                                    flow_graph,
-                                    path,
-                                    to_place,
-                                    flow.label,
-                                )
-                                to_place -= placed_flow
-                                flow.placed_flow += placed_flow
-                                placed += placed_flow
-            if not placed:
-                break
-        return flows, flow_graph
+FLOW_POLICY_MAP = {
+    FlowPolicyConfig.SHORTEST_PATHS_BALANCED_NODE_BY_NODE: FlowPolicy(
+        flow_routing=FlowRouting.NODE_BY_NODE,
+        path_alg=PathAlg.SPF,
+        edge_flow_placement=EdgeFlowPlacement.EQUAL_BALANCED,
+        edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+    ),
+    FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
+        flow_routing=FlowRouting.SOURCE_ROUTED,
+        path_alg=PathAlg.BFS,
+        edge_flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+        edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+    ),
+    FlowPolicyConfig.SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
+        flow_routing=FlowRouting.SOURCE_ROUTED,
+        path_alg=PathAlg.SPF,
+        edge_flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+        edge_select=common.EdgeSelect.ALL_MIN_COST,
+    ),
+}
