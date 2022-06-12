@@ -4,15 +4,16 @@ from typing import Any, Hashable, Optional, Set, Tuple, List, Dict, Callable, Ge
 from ngraph.graph import MultiDiGraph
 
 
+MIN_CAP = 2 ** (-12)
+
+
 class EdgeFind(IntEnum):
     """
     Edge finding criteria
     """
 
     MIN_CAP = 1
-    MIN_CAP_REMAINING = 2
-    MAX_CAP = 3
-    MAX_CAP_REMAINING = 4
+    MIN_CAP_REMAINING_NON_ZERO = 2
 
 
 class EdgeSelect(IntEnum):
@@ -74,7 +75,7 @@ def edge_select_fabric(
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
-            if edge_attributes[flow_attr] < edge_attributes[capacity_attr]:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
                 cost = edge_attributes[cost_attr]
 
                 if min_cost is None or cost < min_cost:
@@ -88,7 +89,7 @@ def edge_select_fabric(
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
-            if edge_attributes[flow_attr] < edge_attributes[capacity_attr]:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
                 cost = edge_attributes[cost_attr]
 
                 if min_cost is None or cost < min_cost:
@@ -125,6 +126,8 @@ def edge_find_fabric(
         min_cap = float("inf")
         for edge_tuple in flow_graph.get_edges().values():
             edge_attr = edge_tuple[3]
+            if not edge_filter(edge_attr):
+                continue
             if (
                 cap := get_cap_func(edge_attr[capacity_attr], edge_attr[flow_attr])
             ) < min_cap:
@@ -135,10 +138,15 @@ def edge_find_fabric(
         return min_cap, min_cap_edges
 
     if edge_find == EdgeFind.MIN_CAP:
+        edge_filter: Callable[[Dict], bool] = lambda edge_attr: True
         get_cap_func: Callable[[float, float], float] = lambda cap, _: cap
         return get_min_cap_edges
 
-    elif edge_find == EdgeFind.MIN_CAP_REMAINING:
+    elif edge_find == EdgeFind.MIN_CAP_REMAINING_NON_ZERO:
+        edge_filter: Callable[[Dict], bool] = (
+            lambda edge_attr: (edge_attr[capacity_attr] - edge_attr[flow_attr])
+            > MIN_CAP
+        )
         get_cap_func: Callable[[float, float], float] = lambda cap, flow: cap - flow
         return get_min_cap_edges
 

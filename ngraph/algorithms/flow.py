@@ -20,6 +20,9 @@ from ngraph.graph import MultiDiGraph
 from ngraph.algorithms import spf, bfs, common
 
 
+MIN_FLOW = 2 ** (-12)
+
+
 class PathAlg(IntEnum):
     """
     Types of path finding algorithms
@@ -45,8 +48,10 @@ class FlowRouting(IntEnum):
 
 class FlowPolicyConfig(IntEnum):
     SHORTEST_PATHS_BALANCED_NODE_BY_NODE = 1
-    ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED = 2
-    SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED = 3
+    ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED = 2
+    ALL_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED = 3
+    SHORTEST_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED = 4
+    ALL_PATHS_BFS_MAX_SINGLE_FLOW_SOURCE_ROUTED = 5
 
 
 @dataclass
@@ -89,20 +94,27 @@ class Flow:
     def place_flow(
         self,
         flow_graph: MultiDiGraph,
-        path: Optional[Tuple] = None,
+        paths: Optional[List[Tuple]] = None,
         max_fraction: float = 1,
     ) -> Tuple[float, float]:
-        to_place = min(self.flow - self.placed_flow, self.flow * max_fraction)
-        if path:
-            placed_flow, to_place = place_flow(
-                flow_graph,
-                path,
-                to_place,
-                self.label,
-                edge_flow_placement=self.flow_policy.edge_flow_placement,
-            )
-            self.placed_flow += placed_flow
-            return placed_flow, self.flow - self.placed_flow
+        if (self.flow - self.placed_flow) < MIN_FLOW:
+            return 0, 0
+
+        if max_fraction > 0:
+            to_place = min(self.flow - self.placed_flow, self.flow * max_fraction)
+        else:
+            to_place = self.flow if self.flow == float("inf") else 0
+        if paths:
+            for path in paths:
+                placed_flow, to_place = place_flow(
+                    flow_graph,
+                    path,
+                    to_place,
+                    self.label,
+                    edge_flow_placement=self.flow_policy.edge_flow_placement,
+                )
+                self.placed_flow += placed_flow
+                return placed_flow, self.flow - self.placed_flow
 
         if self.flow_policy.flow_routing == FlowRouting.NODE_BY_NODE:
             placed_flow, to_place = place_flow_balanced(
@@ -328,6 +340,8 @@ def place_flow_balanced(
 
     placed_flow = min(max_flow, flow)
     remaining_flow = max(flow - max_flow if flow != float("inf") else float("inf"), 0)
+    if not placed_flow > 0:
+        return 0, flow
 
     for node, node_cap in node_capacities.items():
         node_res = R_nodes[node]
@@ -423,15 +437,17 @@ def init_flow_graph(
 ) -> MultiDiGraph:
     for edge_tuple in flow_graph.get_edges().values():
         edge_tuple[3].setdefault(flow_attr, 0)
+        edge_tuple[3].setdefault(flows_attr, {})
         if reset_flow_graph:
             edge_tuple[3][flow_attr] = 0
-        edge_tuple[3].setdefault(flows_attr, {})
+            edge_tuple[3][flows_attr] = {}
 
     for node_dict in flow_graph.get_nodes().values():
         node_dict.setdefault(flow_attr, 0)
+        node_dict.setdefault(flows_attr, {})
         if reset_flow_graph:
             node_dict[flow_attr] = 0
-        node_dict.setdefault(flows_attr, {})
+            node_dict[flows_attr] = {}
     return flow_graph
 
 
@@ -439,7 +455,7 @@ def calc_max_flow(
     graph: MultiDiGraph,
     src_node: Hashable,
     dst_node: Hashable,
-    flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+    flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
     flow_policy: Optional[FlowPolicy] = None,
     flow_label: Optional[Any] = None,
     inplace_flow_graph: bool = False,
@@ -465,12 +481,12 @@ def place_flows(
 ) -> Tuple[List[Flow], MultiDiGraph]:
 
     total_to_place = sum(flow.flow - flow.placed_flow for flow in flows)
-    flow_fraction = (
-        common.edge_find_fabric(edge_find=common.EdgeFind.MIN_CAP_REMAINING)(
-            flow_graph
-        )[0]
-        / total_to_place
-    )
+    min_cap_rem, edges = common.edge_find_fabric(
+        edge_find=common.EdgeFind.MIN_CAP_REMAINING_NON_ZERO
+    )(flow_graph)
+    if not edges:
+        return flows, flow_graph
+    flow_fraction = min_cap_rem / total_to_place
     queue = deque(flows)
     while queue:
         flow = queue.popleft()
@@ -480,6 +496,27 @@ def place_flows(
     return flows, flow_graph
 
 
+def place_max_flows(
+    flow_graph: MultiDiGraph,
+    src_node_filter: Callable = lambda src_node: True,
+    dst_node_filter: Callable = lambda dst_node: True,
+    flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
+    flow_policy: Optional[FlowPolicy] = None,
+) -> Tuple[List[Flow], MultiDiGraph]:
+    flow_policy = flow_policy if flow_policy else FLOW_POLICY_MAP[flow_policy_config]
+    flows = []
+    for src_node in flow_graph:
+        if src_node_filter(src_node):
+            for dst_node in flow_graph:
+                if dst_node_filter(dst_node) and src_node != dst_node:
+                    max_flow, _ = calc_max_flow(
+                        flow_graph, src_node, dst_node, flow_policy=flow_policy
+                    )
+                    flow = Flow(src_node, dst_node, max_flow, flow_policy=flow_policy)
+                    flows.append(flow)
+    return place_flows(flow_graph, flows)
+
+
 FLOW_POLICY_MAP = {
     FlowPolicyConfig.SHORTEST_PATHS_BALANCED_NODE_BY_NODE: FlowPolicy(
         flow_routing=FlowRouting.NODE_BY_NODE,
@@ -487,16 +524,28 @@ FLOW_POLICY_MAP = {
         edge_flow_placement=EdgeFlowPlacement.EQUAL_BALANCED,
         edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
     ),
-    FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
+    FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
         flow_routing=FlowRouting.SOURCE_ROUTED,
         path_alg=PathAlg.BFS,
         edge_flow_placement=EdgeFlowPlacement.PROPORTIONAL,
         edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
     ),
-    FlowPolicyConfig.SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
+    FlowPolicyConfig.ALL_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
         flow_routing=FlowRouting.SOURCE_ROUTED,
         path_alg=PathAlg.SPF,
         edge_flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+        edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+    ),
+    FlowPolicyConfig.SHORTEST_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED: FlowPolicy(
+        flow_routing=FlowRouting.SOURCE_ROUTED,
+        path_alg=PathAlg.SPF,
+        edge_flow_placement=EdgeFlowPlacement.PROPORTIONAL,
+        edge_select=common.EdgeSelect.ALL_MIN_COST,
+    ),
+    FlowPolicyConfig.ALL_PATHS_BFS_MAX_SINGLE_FLOW_SOURCE_ROUTED: FlowPolicy(
+        flow_routing=FlowRouting.SOURCE_ROUTED,
+        path_alg=PathAlg.BFS,
+        edge_flow_placement=EdgeFlowPlacement.MAX_SINGLE_FLOW,
         edge_select=common.EdgeSelect.ALL_MIN_COST,
     ),
 }

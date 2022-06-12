@@ -4,6 +4,7 @@ from ngraph.algorithms.common import resolve_paths_to_nodes_edges
 from ngraph.algorithms.spf import spf
 from ngraph.algorithms.flow import (
     FLOW_POLICY_MAP,
+    MIN_FLOW,
     EdgeFlowPlacement,
     Flow,
     FlowPolicy,
@@ -14,6 +15,7 @@ from ngraph.algorithms.flow import (
     calc_capacity_balanced,
     init_flow_graph,
     calc_path_capacity,
+    place_max_flows,
     place_flow,
     calc_max_flow,
     PathCapacity,
@@ -152,13 +154,44 @@ class TestPlaceFlow:
         g.add_edge("C2", "D", metric=1, capacity=1)
 
         r = init_flow_graph(g.copy())
+        r_before = r.copy()
+        placed_flow, remaining_flow = place_flow(
+            r, (("A", [0]), ("B", [1]), ("C1", [3]), ("D", [])), 0
+        )
+        assert placed_flow == 0
+        assert remaining_flow == 0
+        assert r_before.get_edges() == r.get_edges()
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
+
+    def test_place_flow_2(self):
+        g = MultiDiGraph()
+        g.add_edge("A", "B", metric=1, capacity=1)
+
+        g.add_edge("B", "C1", metric=1, capacity=1)
+        g.add_edge("B", "C2", metric=2, capacity=1)
+
+        g.add_edge("C1", "D", metric=1, capacity=1)
+        g.add_edge("C2", "D", metric=1, capacity=1)
+
+        r = init_flow_graph(g.copy())
         placed_flow, remaining_flow = place_flow(
             r, (("A", [0]), ("B", [1]), ("C1", [3]), ("D", []))
         )
         assert placed_flow == 1
         assert remaining_flow == float("inf")
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
 
-    def test_place_flow_2(self):
+    def test_place_flow_3(self):
         g = MultiDiGraph()
         g.add_edge("A", "B", metric=1, capacity=2)
 
@@ -181,6 +214,12 @@ class TestPlaceFlow:
         )
         assert placed_flow == 0
         assert remaining_flow == float("inf")
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
 
 
 class TestPlaceFlowBalanced:
@@ -291,6 +330,29 @@ class TestPlaceFlowBalanced:
 
     def test_place_flow_balanced_1(self):
         g = MultiDiGraph()
+        g.add_edge("A", "B", metric=1, capacity=1)
+
+        g.add_edge("B", "C1", metric=1, capacity=1)
+        g.add_edge("B", "C2", metric=2, capacity=1)
+
+        g.add_edge("C1", "D", metric=1, capacity=1)
+        g.add_edge("C2", "D", metric=1, capacity=1)
+
+        r = init_flow_graph(g.copy())
+        r_before = r.copy()
+        placed_flow, remaining_flow = place_flow_balanced(r, "A", "D", 0)
+        assert placed_flow == 0
+        assert remaining_flow == 0
+        assert r_before.get_edges() == r.get_edges()
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
+
+    def test_place_flow_balanced_2(self):
+        g = MultiDiGraph()
         g.add_edge("A", "B", metric=1, capacity=10)
         g.add_edge("A", "B", metric=1, capacity=10)
         g.add_edge("A", "B", metric=1, capacity=10)
@@ -309,8 +371,14 @@ class TestPlaceFlowBalanced:
         placed_flow, remaining_flow = place_flow_balanced(r, "A", "D", 10)
         assert placed_flow == 2.5
         assert remaining_flow == 7.5
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
 
-    def test_place_flow_balanced_2(self):
+    def test_place_flow_balanced_3(self):
         g = MultiDiGraph()
         g.add_edge("A", "B", metric=1, capacity=10)
         g.add_edge("A", "B", metric=1, capacity=10)
@@ -330,6 +398,12 @@ class TestPlaceFlowBalanced:
         placed_flow, remaining_flow = place_flow_balanced(r, "A", "D")
         assert placed_flow == 2.5
         assert remaining_flow == float("inf")
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
+            )
+            == False
+        )
 
 
 class TestCalcMaxFlow:
@@ -344,13 +418,15 @@ class TestCalcMaxFlow:
         g.add_edge("C", "D", metric=20, capacity=1)
         g.add_edge("C", "D", metric=10, capacity=1)
 
+        g_before = g.copy()
         max_flow, res_g = calc_max_flow(
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
         )
 
+        assert g_before.get_edges() == g.get_edges()
         assert max_flow == 2
         assert res_g.get_edges() == {
             0: (
@@ -420,6 +496,13 @@ class TestCalcMaxFlow:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_max_flow_2(self):
         g = MultiDiGraph()
@@ -433,13 +516,20 @@ class TestCalcMaxFlow:
         g.add_edge("B", "D", metric=10, capacity=1)
         g.add_edge("C", "D", metric=10, capacity=1)
 
-        max_flow, _ = calc_max_flow(
+        max_flow, res_g = calc_max_flow(
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
         )
         assert max_flow == 3
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_max_flow_3(self):
         g = MultiDiGraph()
@@ -453,13 +543,20 @@ class TestCalcMaxFlow:
         g.add_edge("B", "D", metric=10, capacity=1)
         g.add_edge("C", "D", metric=10, capacity=5)
 
-        max_flow, _ = calc_max_flow(
+        max_flow, res_g = calc_max_flow(
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
         )
         assert max_flow == 6
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_max_flow_4(self):
         g = MultiDiGraph()
@@ -476,7 +573,7 @@ class TestCalcMaxFlow:
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
         )
 
         assert max_flow == 2
@@ -548,6 +645,72 @@ class TestCalcMaxFlow:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
+
+    def test_max_flow_5(self):
+        g = MultiDiGraph()
+        g.add_edge("A", "B", metric=11, capacity=2)
+        g.add_edge("A", "B", metric=10, capacity=2)
+
+        g.add_edge("B", "C", metric=10, capacity=1)
+        g.add_edge("B", "C", metric=10, capacity=1)
+
+        g.add_edge("C", "D", metric=20, capacity=1)
+        g.add_edge("C", "D", metric=10, capacity=1)
+
+        r = init_flow_graph(g)
+        place_flow_balanced(r, "A", "D", 0.5)
+        max_flow, res_g = calc_max_flow(
+            r,
+            "A",
+            "D",
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
+        )
+
+        assert max_flow == 1.5
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
+
+    def test_max_flow_6(self):
+        g = MultiDiGraph()
+        g.add_edge("A", "B", metric=11, capacity=2)
+        g.add_edge("A", "B", metric=10, capacity=2)
+
+        g.add_edge("B", "C", metric=10, capacity=1)
+        g.add_edge("B", "C", metric=10, capacity=1)
+
+        g.add_edge("C", "D", metric=20, capacity=1)
+        g.add_edge("C", "D", metric=10, capacity=1)
+
+        r = init_flow_graph(g)
+        place_flow_balanced(r, "A", "D", 0.5)
+        max_flow, res_g = calc_max_flow(
+            r,
+            "A",
+            "D",
+            flow_policy_config=FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED,
+            reset_flow_graph=True,
+        )
+
+        assert max_flow == 2
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_max_flow_best_path_only_1(self):
         g = MultiDiGraph()
@@ -564,7 +727,7 @@ class TestCalcMaxFlow:
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED,
             flow_label=0,
         )
         assert max_flow == 1
@@ -616,6 +779,13 @@ class TestCalcMaxFlow:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_max_flow_best_path_only_2(self):
         g = MultiDiGraph()
@@ -635,10 +805,17 @@ class TestCalcMaxFlow:
             g,
             "A",
             "D",
-            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_PROPORTIONAL_SOURCE_ROUTED,
+            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_SPF_PROPORTIONAL_SOURCE_ROUTED,
             flow_label=0,
         )
         assert max_flow == 3
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
 
 class TestPlaceFlows:
@@ -660,7 +837,7 @@ class TestPlaceFlows:
 
         r = init_flow_graph(g)
 
-        flows, _ = place_flows(
+        flows, res_g = place_flows(
             r,
             flows=[
                 Flow(
@@ -855,6 +1032,13 @@ class TestPlaceFlows:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_place_flows_2(self):
         g = MultiDiGraph()
@@ -874,7 +1058,7 @@ class TestPlaceFlows:
 
         r = init_flow_graph(g)
 
-        flows, _ = place_flows(
+        flows, res_g = place_flows(
             r,
             flows=[
                 Flow(
@@ -882,7 +1066,7 @@ class TestPlaceFlows:
                     "D",
                     1,
                     FLOW_POLICY_MAP[
-                        FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+                        FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED
                     ],
                     "1",
                 ),
@@ -891,7 +1075,7 @@ class TestPlaceFlows:
                     "D",
                     3,
                     FLOW_POLICY_MAP[
-                        FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+                        FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED
                     ],
                     "2",
                 ),
@@ -1031,6 +1215,13 @@ class TestPlaceFlows:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
 
     def test_place_flows_3(self):
         g = MultiDiGraph()
@@ -1050,7 +1241,7 @@ class TestPlaceFlows:
 
         r = init_flow_graph(g)
 
-        flows, _ = place_flows(
+        flows, res_g = place_flows(
             r,
             flows=[
                 Flow(
@@ -1058,7 +1249,7 @@ class TestPlaceFlows:
                     "D",
                     1,
                     FLOW_POLICY_MAP[
-                        FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+                        FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED
                     ],
                     "1",
                 ),
@@ -1067,7 +1258,7 @@ class TestPlaceFlows:
                     "D",
                     float("inf"),
                     FLOW_POLICY_MAP[
-                        FlowPolicyConfig.ALL_PATHS_PROPORTIONAL_SOURCE_ROUTED
+                        FlowPolicyConfig.ALL_PATHS_BFS_PROPORTIONAL_SOURCE_ROUTED
                     ],
                     "2",
                 ),
@@ -1189,3 +1380,322 @@ class TestPlaceFlows:
                 },
             ),
         }
+        assert (
+            any(
+                edge[3]["flow"] > edge[3]["capacity"]
+                for edge in res_g.get_edges().values()
+            )
+            == False
+        )
+
+    def test_place_all_max_flows_1(self):
+        g = MultiDiGraph()
+
+        g.add_edge("A", "B", metric=1, capacity=100)
+        g.add_edge("B", "A", metric=1, capacity=100)
+
+        r = init_flow_graph(g)
+
+        flows, res_g = place_max_flows(r)
+
+        assert sum(flow.placed_flow for flow in flows) == 200
+        assert (
+            all(
+                (edge[3]["capacity"] - edge[3]["flow"]) < MIN_FLOW
+                for edge in res_g.get_edges().values()
+            )
+            == True
+        )
+        assert res_g.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 100,
+                    "flow": 100.0,
+                    "flows": {("A", "B", None): 100.0},
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "B",
+                "A",
+                1,
+                {
+                    "capacity": 100,
+                    "flow": 100.0,
+                    "flows": {("B", "A", None): 100.0},
+                    "metric": 1,
+                },
+            ),
+        }
+
+    def test_place_all_max_flows_2(self):
+        g = MultiDiGraph()
+
+        g.add_edge("A", "B", metric=1, capacity=100)
+        g.add_edge("B", "A", metric=1, capacity=100)
+
+        g.add_edge("A", "C", metric=1, capacity=100)
+        g.add_edge("C", "A", metric=1, capacity=100)
+
+        r = init_flow_graph(g)
+
+        flows, res_g = place_max_flows(r)
+
+        assert round(sum(flow.placed_flow for flow in flows)) == 300
+        assert (
+            all(
+                (edge[3]["capacity"] - edge[3]["flow"]) < MIN_FLOW
+                for edge in res_g.get_edges().values()
+            )
+            == True
+        )
+        assert res_g.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999997,
+                    "flows": {
+                        ("A", "B", None): 49.99999999999999,
+                        ("C", "B", None): 49.99999999999999,
+                    },
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "B",
+                "A",
+                1,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999997,
+                    "flows": {
+                        ("B", "A", None): 49.99999999999999,
+                        ("B", "C", None): 49.99999999999999,
+                    },
+                    "metric": 1,
+                },
+            ),
+            2: (
+                "A",
+                "C",
+                2,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999997,
+                    "flows": {
+                        ("A", "C", None): 49.99999999999999,
+                        ("B", "C", None): 49.99999999999999,
+                    },
+                    "metric": 1,
+                },
+            ),
+            3: (
+                "C",
+                "A",
+                3,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999997,
+                    "flows": {
+                        ("C", "A", None): 49.99999999999999,
+                        ("C", "B", None): 49.99999999999999,
+                    },
+                    "metric": 1,
+                },
+            ),
+        }
+
+    def test_place_all_max_flows_3(self):
+        g = MultiDiGraph()
+
+        g.add_edge("A", "B", metric=1, capacity=100)
+        g.add_edge("B", "A", metric=1, capacity=100)
+
+        g.add_edge("C", "D", metric=1, capacity=100)
+        g.add_edge("D", "C", metric=1, capacity=100)
+
+        g.add_edge("A", "D", metric=1, capacity=100)
+        g.add_edge("D", "A", metric=1, capacity=100)
+
+        g.add_edge("C", "B", metric=1, capacity=100)
+        g.add_edge("B", "C", metric=1, capacity=100)
+
+        r = init_flow_graph(g)
+
+        flows, res_g = place_max_flows(r)
+
+        assert round(sum(flow.placed_flow for flow in flows)) == 600
+        assert (
+            all(
+                (edge[3]["capacity"] - edge[3]["flow"]) < MIN_FLOW
+                for edge in res_g.get_edges().values()
+            )
+            == True
+        )
+        assert res_g.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("A", "B", None): 49.999999999999986,
+                        ("A", "C", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "B",
+                "A",
+                1,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("B", "A", None): 49.999999999999986,
+                        ("B", "D", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            2: (
+                "C",
+                "D",
+                2,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("C", "A", None): 49.999999999999986,
+                        ("C", "D", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            3: (
+                "D",
+                "C",
+                3,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("D", "B", None): 49.999999999999986,
+                        ("D", "C", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            4: (
+                "A",
+                "D",
+                4,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("A", "D", None): 49.999999999999986,
+                        ("B", "D", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            5: (
+                "D",
+                "A",
+                5,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("C", "A", None): 49.999999999999986,
+                        ("D", "A", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            6: (
+                "C",
+                "B",
+                6,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("C", "B", None): 49.999999999999986,
+                        ("D", "B", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+            7: (
+                "B",
+                "C",
+                7,
+                {
+                    "capacity": 100,
+                    "flow": 99.99999999999996,
+                    "flows": {
+                        ("A", "C", None): 49.999999999999986,
+                        ("B", "C", None): 49.999999999999986,
+                    },
+                    "metric": 1,
+                },
+            ),
+        }
+
+    def test_place_all_max_flows_4(self):
+        g = MultiDiGraph()
+
+        g.add_edge("A", "B", metric=1, capacity=100)
+        g.add_edge("B", "A", metric=1, capacity=100)
+
+        g.add_edge("C", "D", metric=1, capacity=100)
+        g.add_edge("D", "C", metric=1, capacity=100)
+
+        g.add_edge("A", "D", metric=1, capacity=100)
+        g.add_edge("D", "A", metric=1, capacity=100)
+
+        g.add_edge("C", "B", metric=1, capacity=100)
+        g.add_edge("B", "C", metric=1, capacity=100)
+
+        r = init_flow_graph(g)
+
+        flows, res_g = place_flows(
+            r,
+            flows=[
+                Flow(
+                    "A",
+                    "D",
+                    100,
+                    FLOW_POLICY_MAP[
+                        FlowPolicyConfig.ALL_PATHS_BFS_MAX_SINGLE_FLOW_SOURCE_ROUTED
+                    ],
+                    "1",
+                )
+            ],
+        )
+
+        all_flows, res_g = place_max_flows(res_g)
+        import pprint
+
+        pprint.pprint(res_g.get_edges())
+        pprint.pprint(all_flows)
+        raise
+        assert sum(flow.placed_flow for flow in flows) == 1
+        assert (
+            all(
+                (edge[3]["capacity"] - edge[3]["flow"]) < MIN_FLOW
+                for edge in res_g.get_edges().values()
+            )
+            == True
+        )

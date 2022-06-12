@@ -1,7 +1,4 @@
 networkx
-pyyaml
-pandas
-dacite
 faker
 build
 twine
