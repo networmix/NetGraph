@@ -27,6 +27,28 @@ class EdgeSelect(IntEnum):
     USER_DEFINED = 99
 
 
+def init_flow_graph(
+    flow_graph: MultiDiGraph,
+    flow_attr: str = "flow",
+    flows_attr: str = "flows",
+    reset_flow_graph: bool = True,
+) -> MultiDiGraph:
+    for edge_tuple in flow_graph.get_edges().values():
+        edge_tuple[3].setdefault(flow_attr, 0)
+        edge_tuple[3].setdefault(flows_attr, {})
+        if reset_flow_graph:
+            edge_tuple[3][flow_attr] = 0
+            edge_tuple[3][flows_attr] = {}
+
+    for node_dict in flow_graph.get_nodes().values():
+        node_dict.setdefault(flow_attr, 0)
+        node_dict.setdefault(flows_attr, {})
+        if reset_flow_graph:
+            node_dict[flow_attr] = 0
+            node_dict[flows_attr] = {}
+    return flow_graph
+
+
 def edge_select_fabric(
     edge_select: EdgeSelect,
     edge_select_func: Optional[Callable] = None,
