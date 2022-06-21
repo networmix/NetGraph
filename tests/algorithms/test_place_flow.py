@@ -60,16 +60,12 @@ def graph_2():
 
 
 @pytest.fixture
-def graph_square():
+def graph_square_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "A", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("C", "B", metric=1, capacity=1)
-    g.add_edge("C", "D", metric=1, capacity=1)
-    g.add_edge("D", "C", metric=1, capacity=1)
-    g.add_edge("D", "A", metric=1, capacity=1)
-    g.add_edge("A", "D", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=2, capacity=2)
+    g.add_edge("D", "C", metric=2, capacity=2)
     return g
 
 
