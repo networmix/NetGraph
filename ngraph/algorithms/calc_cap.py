@@ -8,7 +8,7 @@ from typing import (
     Tuple,
     NamedTuple,
 )
-from ngraph.algorithms.common import EdgeSelect, init_flow_graph
+from ngraph.algorithms.common import EdgeSelect, edge_select_fabric, init_flow_graph
 from ngraph.algorithms.spf import spf
 from ngraph.algorithms.bfs import bfs
 
@@ -177,10 +177,18 @@ def calc_max_flow(
     )
 
     if shortest_path:
-        pred, _ = spf(graph, src_node, edge_select_func=EdgeSelect.ALL_MIN_COST)
+        _, pred = spf(
+            flow_graph,
+            src_node,
+            edge_select_func=edge_select_fabric(EdgeSelect.ALL_MIN_COST),
+        )
     else:
-        pred, _ = bfs(
-            graph, src_node, edge_select_func=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING
+        _, pred = bfs(
+            flow_graph,
+            src_node,
+            edge_select_func=edge_select_fabric(
+                EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING
+            ),
         )
     max_flow, _ = calc_graph_cap(
         flow_graph, src_node, dst_node, pred, capacity_attr, flow_attr

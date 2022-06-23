@@ -1,21 +1,13 @@
 from __future__ import annotations
-from itertools import repeat
-from collections import deque
-from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import (
     Any,
-    Callable,
-    Dict,
     Hashable,
     List,
     Optional,
     Set,
     Tuple,
-    Generator,
-    NamedTuple,
 )
-from ngraph.algorithms.calc_cap import calc_graph_cap
 from ngraph.algorithms.place_flow import FlowPlacement, place_flow_on_graph
 
 from ngraph.graph import MultiDiGraph

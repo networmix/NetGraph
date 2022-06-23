@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Any, Hashable, Optional, Set, Tuple, List, Dict, Callable, Generator
+from typing import Any, Hashable, Optional, Tuple, List, Dict, Callable, Generator
 
 from ngraph.graph import MultiDiGraph
 
