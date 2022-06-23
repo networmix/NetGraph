@@ -1,4 +1,0 @@
-networkx
-pyyaml
-pandas
-dacite

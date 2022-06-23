@@ -40,6 +40,13 @@ class MultiDiGraph:
         """
         return node_id in self._nodes
 
+    def __getitem__(self, node: Hashable) -> Dict:
+        """
+        Making MultiDiGraph objects subscriptable.
+        Returns {dst_node: edge_id: {**edge_attr}}
+        """
+        return self._adj_out[node]
+
     def __iter__(self) -> Iterator:
         """
         Making MultiDiGraph objects iterable by their nodes

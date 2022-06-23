@@ -8,7 +8,7 @@ setup(
     name="ngraph",
     version="0.0.3",
     author="Andrey Golovanov",
-    description="A simple library for network modeling and analysis.",
+    description="A library helping with network modeling and analysis.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/networmix/netgraph",
@@ -17,8 +17,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    package_dir={"": "ngraph"},
-    packages=find_packages(where=("ngraph")),
+    packages=find_packages(exclude=("tests", "dev", "examples")),
     python_requires=">=3.8",
     tests_require=["pytest"],
 )

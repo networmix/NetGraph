@@ -2,13 +2,13 @@ from typing import Callable, Dict, Hashable, Tuple
 from collections import deque
 
 from ngraph.graph import MultiDiGraph
-from ngraph.algorithms.common import min_cost_edges_func_fabric, DEFAULT_COST_ATTRIBUTE
+from ngraph.algorithms.common import edge_select_fabric, EdgeSelect
 
 
 def bfs(
     graph: MultiDiGraph,
     src_node: Hashable,
-    edge_selection_func: Callable = min_cost_edges_func_fabric(DEFAULT_COST_ATTRIBUTE),
+    edge_select_func: Callable = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
 ) -> Tuple[Dict, Dict]:
     """
     Breadth-first search.
@@ -22,7 +22,7 @@ def bfs(
         src_to_node_cost, node_id = queue.popleft()
         visited_nodes.add(node_id)
         for neighbor_id, edges in G_succ[node_id].items():
-            min_edge_cost, edges_list = edge_selection_func(
+            min_edge_cost, edges_list = edge_select_func(
                 graph, node_id, neighbor_id, edges
             )
 
