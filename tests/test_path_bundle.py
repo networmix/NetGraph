@@ -75,3 +75,13 @@ class TestPathBundle:
         assert paths[0].cost == 2
         assert paths[0].edges == {0, 1, 2, 3}
         assert paths[0].nodes == {"A", "B", "C"}
+
+    def test_path_bundle_4(self):
+        path_bundle = PathBundle.from_path(
+            Path((("A", (0,)), ("B", (1,)), ("C", ())), 2)
+        )
+        assert path_bundle.pred == {
+            "A": {},
+            "C": {"B": [1]},
+            "B": {"A": [0]},
+        }

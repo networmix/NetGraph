@@ -1,7 +1,8 @@
+from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from email.generator import Generator
-from typing import Dict, Hashable, Optional, Set, Tuple, Union
+from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union
 
 from ngraph.algorithms.common import resolve_to_paths
 
@@ -17,6 +18,12 @@ class Path:
         for node_edges in self.path_tuple:
             self.nodes.add(node_edges[0])
             self.edges.update(node_edges[1])
+
+    def __getitem__(self, idx: int) -> Tuple:
+        return self.path_tuple[idx]
+
+    def __iter__(self) -> Iterator:
+        return iter(self.path_tuple)
 
 
 class PathBundle:
@@ -43,6 +50,19 @@ class PathBundle:
                 self.edges.update(edges_list)
                 if prev_node != src_node:
                     queue.append(prev_node)
+
+    @classmethod
+    def from_path(
+        cls,
+        path: Path,
+    ) -> PathBundle:
+
+        pred = {path[0][0]: {}}
+        for node_edges_1, node_edges_2 in zip(path[1:], path[:-1]):
+            pred.setdefault(node_edges_1[0], {})[node_edges_2[0]] = list(
+                node_edges_2[1]
+            )
+        return PathBundle(path[0][0], path[-1][0], pred, path.cost)
 
     def resolve_to_paths(self, resolve_parallel_edges: bool = False) -> Generator:
         for path_tuple in resolve_to_paths(
