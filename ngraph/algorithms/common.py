@@ -1,4 +1,5 @@
 from enum import IntEnum
+from itertools import product
 from typing import Any, Hashable, Optional, Tuple, List, Dict, Callable, Generator
 
 from ngraph.graph import MultiDiGraph
@@ -173,8 +174,11 @@ def edge_find_fabric(
         return get_min_cap_edges
 
 
-def resolve_paths_to_nodes_edges(
-    src_node: Hashable, dst_node: Hashable, pred: Dict[Any, Dict[Any, List[int]]]
+def resolve_to_paths(
+    src_node: Hashable,
+    dst_node: Hashable,
+    pred: Dict[Any, Dict[Any, List[int]]],
+    resolve_parallel_edges: bool = False,
 ) -> Optional[Generator[Tuple, None, None]]:
     if dst_node not in pred:
         return
@@ -184,23 +188,41 @@ def resolve_paths_to_nodes_edges(
     }
     seen = {dst_node}
     stack = [[(dst_node, tuple()), 0]]
-    top = 0
-    while top >= 0:
-        node_edges, nbr_idx = stack[top]
+    top_pointer = 0
+    while top_pointer >= 0:
+        node_edges, nbr_idx = stack[top_pointer]
         if node_edges[0] == src_node:
-            yield tuple(node_edges for node_edges, _ in reversed(stack[: top + 1]))
+            node_edges_path = tuple(
+                node_edges for node_edges, _ in reversed(stack[: top_pointer + 1])
+            )
+            if not resolve_parallel_edges:
+                yield node_edges_path
+            else:
+                for edge_seq in product(
+                    *[range(len(node_edges[1])) for node_edges in node_edges_path[:-1]]
+                ):
+                    yield tuple(
+                        (
+                            node_edges[0],
+                            (node_edges[1][edge_seq[idx]],)
+                            if len(edge_seq) > idx
+                            else tuple(),
+                        )
+                        for idx, node_edges in enumerate(node_edges_path)
+                    )
+
         if len(pred[node_edges[0]]) > nbr_idx:
-            stack[top][1] = nbr_idx + 1
+            stack[top_pointer][1] = nbr_idx + 1
             next_node_edges = pred[node_edges[0]][nbr_idx]
             if next_node_edges[0] in seen:
                 continue
             else:
                 seen.add(next_node_edges[0])
-            top += 1
-            if top == len(stack):
+            top_pointer += 1
+            if top_pointer == len(stack):
                 stack.append([next_node_edges, 0])
             else:
-                stack[top][:] = [next_node_edges, 0]
+                stack[top_pointer][:] = [next_node_edges, 0]
         else:
             seen.discard(node_edges[0])
-            top -= 1
+            top_pointer -= 1

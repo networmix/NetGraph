@@ -65,12 +65,41 @@ class FlowPolicy:
                     path_func = bfs.bfs
                 elif self.path_alg == PathAlg.SPF:
                     path_func = spf.spf
-                _, pred = path_func(
+                cost, pred = path_func(
                     flow_graph, src_node=src_node, edge_select_func=edge_select_func
                 )
                 if dst_node in pred:
-                    yield PathBundle(src_node, dst_node, pred)
+                    yield PathBundle(src_node, dst_node, pred, cost[dst_node])
                 return
+
+    def get_all_path_bundles(
+        self,
+        flow_graph: MultiDiGraph,
+        src_node: Hashable,
+        dst_node: Hashable,
+    ) -> List[PathBundle]:
+        if self.path_bundle_list:
+            return self.path_bundle_list
+
+        exclude_edges = set()
+        path_bundle_list = []
+        while True:
+            edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
+            if self.path_alg == PathAlg.BFS:
+                path_func = bfs.bfs
+            elif self.path_alg == PathAlg.SPF:
+                path_func = spf.spf
+            cost, pred = path_func(
+                flow_graph, src_node=src_node, edge_select_func=edge_select_func
+            )
+            if dst_node not in pred:
+                return path_bundle_list
+            path_bundle = PathBundle(src_node, dst_node, pred, cost[dst_node])
+            path_bundle_list.append(path_bundle)
+            exclude_edges.update(path_bundle.edges)
+            flow_graph = flow_graph.filter(
+                edge_filter=lambda edge_id, _: edge_id not in exclude_edges
+            )
 
 
 class Demand:

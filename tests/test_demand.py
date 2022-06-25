@@ -5,6 +5,7 @@ from ngraph.algorithms.place_flow import FlowPlacement
 
 from ngraph.graph import MultiDiGraph
 from ngraph.demand import Demand, FlowPolicy, PathAlg
+from ngraph.path_bundle import PathBundle
 
 
 @pytest.fixture
@@ -55,6 +56,75 @@ def graph_square_2():
     g.add_edge("A", "D", metric=1, capacity=2)
     g.add_edge("D", "C", metric=1, capacity=2)
     return g
+
+
+class TestFlowPolicy:
+    def test_flow_policy_1(self):
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+        )
+        assert flow_policy
+
+    def test_flow_policy_2(self, graph_square_1):
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+        )
+        r = init_flow_graph(graph_square_1)
+        path_bundle: PathBundle = next(flow_policy.get_path_bundle(r, "A", "C"))
+        assert path_bundle.pred == {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}
+        assert path_bundle.edges == {0, 1}
+        assert path_bundle.nodes == {"A", "B", "C"}
+
+    def test_flow_policy_3(self, graph_square_2):
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+        )
+        r = init_flow_graph(graph_square_2)
+        path_bundle: PathBundle = next(flow_policy.get_path_bundle(r, "A", "C"))
+        assert path_bundle.pred == {
+            "A": {},
+            "C": {"B": [1], "D": [3]},
+            "B": {"A": [0]},
+            "D": {"A": [2]},
+        }
+        assert path_bundle.edges == {0, 1, 2, 3}
+        assert path_bundle.nodes == {"A", "B", "C", "D"}
+
+    def test_flow_policy_get_all_path_bundles_1(self, graph_square_1):
+        EXPECTED = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
+                "edges": {0, 1},
+                "nodes": {"B", "A", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}},
+                "edges": {2, 3},
+                "nodes": {"D", "A", "C"},
+            },
+        ]
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+        )
+        r = init_flow_graph(graph_square_1)
+        path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "C")
+        for idx, path_bundle in enumerate(path_bundle_list):
+            vars(path_bundle) == EXPECTED[idx]
 
 
 class TestDemand:

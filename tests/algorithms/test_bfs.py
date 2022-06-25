@@ -1,7 +1,7 @@
 # pylint: disable=protected-access,invalid-name
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms.bfs import bfs
-from ngraph.algorithms.common import resolve_paths_to_nodes_edges
+from ngraph.algorithms.common import resolve_to_paths
 
 
 def test_bfs_1():
@@ -122,9 +122,9 @@ def test_resolve_paths_from_predecessors_1():
 
     costs, pred = bfs(g, "A")
 
-    assert list(resolve_paths_to_nodes_edges("A", "D", pred)) == [
+    assert list(resolve_to_paths("A", "D", pred)) == [
         (("A", (8,)), ("D", tuple())),
         (("A", (2,)), ("B", (10,)), ("D", tuple())),
         (("A", (4, 6)), ("C", (12,)), ("D", tuple())),
     ]
-    assert list(resolve_paths_to_nodes_edges("A", "E", pred)) == []
+    assert list(resolve_to_paths("A", "E", pred)) == []
