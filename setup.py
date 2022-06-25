@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ngraph",
-    version="0.0.3",
+    version="0.0.4",
     author="Andrey Golovanov",
     description="A library helping with network modeling and analysis.",
     long_description=long_description,
