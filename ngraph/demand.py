@@ -122,6 +122,9 @@ class Demand:
         self.nodes: Set = set()
         self.edges: Set = set()
 
+    def __repr__(self) -> str:
+        return f"Demand(src_node={self.src_node}, dst_node={self.dst_node}, volume={self.volume}, label={self.label}, placed_flow={self.placed_flow})"
+
     def place(
         self,
         flow_graph: MultiDiGraph,
@@ -133,10 +136,14 @@ class Demand:
             to_place = self.volume if self.volume == float("inf") else 0
 
         placed_flow = 0
-        while path_bundle := next(
-            self.flow_policy.get_path_bundle(flow_graph, self.src_node, self.dst_node),
-            None,
-        ):
+        while (
+            path_bundle := next(
+                self.flow_policy.get_path_bundle(
+                    flow_graph, self.src_node, self.dst_node
+                ),
+                None,
+            )
+        ) and to_place >= MIN_FLOW:
             flow_placement_meta = place_flow_on_graph(
                 flow_graph,
                 self.src_node,
@@ -150,10 +157,10 @@ class Demand:
             to_place = flow_placement_meta.remaining_flow
             self.nodes.update(flow_placement_meta.nodes)
             self.edges.update(flow_placement_meta.edges)
-            self.placed_flow += placed_flow
 
             if to_place < MIN_FLOW or flow_placement_meta.placed_flow < MIN_FLOW:
                 break
+        self.placed_flow += placed_flow
         return placed_flow, to_place
 
 

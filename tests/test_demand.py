@@ -4,7 +4,7 @@ from ngraph.algorithms.common import EdgeSelect, init_flow_graph
 from ngraph.algorithms.place_flow import FlowPlacement
 
 from ngraph.graph import MultiDiGraph
-from ngraph.demand import Demand, FlowPolicy, PathAlg
+from ngraph.demand import FLOW_POLICY_MAP, Demand, FlowPolicy, FlowPolicyConfig, PathAlg
 from ngraph.path_bundle import PathBundle
 
 
@@ -55,6 +55,18 @@ def graph_square_2():
     g.add_edge("B", "C", metric=1, capacity=1)
     g.add_edge("A", "D", metric=1, capacity=2)
     g.add_edge("D", "C", metric=1, capacity=2)
+    return g
+
+
+@pytest.fixture
+def triangle_1():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=15, label="1")
+    g.add_edge("B", "A", metric=1, capacity=15, label="1")
+    g.add_edge("B", "C", metric=1, capacity=15, label="2")
+    g.add_edge("C", "B", metric=1, capacity=15, label="2")
+    g.add_edge("A", "C", metric=1, capacity=5, label="3")
+    g.add_edge("C", "A", metric=1, capacity=5, label="3")
     return g
 
 
@@ -239,3 +251,145 @@ class TestDemand:
         placed_flow, remaining_flow = d.place(r)
         assert placed_flow == 2
         assert remaining_flow == float("inf")
+
+    def test_demand_place_5(self, triangle_1):
+        r = init_flow_graph(triangle_1)
+
+        demands = [
+            Demand(
+                "A",
+                "B",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_1",
+            ),
+            Demand(
+                "B",
+                "A",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_1",
+            ),
+            Demand(
+                "B",
+                "C",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_2",
+            ),
+            Demand(
+                "C",
+                "B",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_2",
+            ),
+            Demand(
+                "A",
+                "C",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_3",
+            ),
+            Demand(
+                "C",
+                "A",
+                10,
+                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                label="Demand_3",
+            ),
+        ]
+
+        for demand in demands:
+            demand.place(r)
+
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "capacity": 15,
+                    "flow": 15.0,
+                    "flows": {
+                        ("A", "B", "Demand_1"): 10.0,
+                        ("A", "C", "Demand_3"): 5.0,
+                    },
+                    "label": "1",
+                    "metric": 1,
+                },
+            ),
+            1: (
+                "B",
+                "A",
+                1,
+                {
+                    "capacity": 15,
+                    "flow": 15.0,
+                    "flows": {
+                        ("B", "A", "Demand_1"): 10.0,
+                        ("C", "A", "Demand_3"): 5.0,
+                    },
+                    "label": "1",
+                    "metric": 1,
+                },
+            ),
+            2: (
+                "B",
+                "C",
+                2,
+                {
+                    "capacity": 15,
+                    "flow": 15.0,
+                    "flows": {
+                        ("A", "C", "Demand_3"): 5.0,
+                        ("B", "C", "Demand_2"): 10.0,
+                    },
+                    "label": "2",
+                    "metric": 1,
+                },
+            ),
+            3: (
+                "C",
+                "B",
+                3,
+                {
+                    "capacity": 15,
+                    "flow": 15.0,
+                    "flows": {
+                        ("C", "A", "Demand_3"): 5.0,
+                        ("C", "B", "Demand_2"): 10.0,
+                    },
+                    "label": "2",
+                    "metric": 1,
+                },
+            ),
+            4: (
+                "A",
+                "C",
+                4,
+                {
+                    "capacity": 5,
+                    "flow": 5.0,
+                    "flows": {("A", "C", "Demand_3"): 5.0},
+                    "label": "3",
+                    "metric": 1,
+                },
+            ),
+            5: (
+                "C",
+                "A",
+                5,
+                {
+                    "capacity": 5,
+                    "flow": 5.0,
+                    "flows": {("C", "A", "Demand_3"): 5.0},
+                    "label": "3",
+                    "metric": 1,
+                },
+            ),
+        }
+
+        for demand in demands:
+            print(demand)
+            assert demand.placed_flow == 10
