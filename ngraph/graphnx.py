@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Generator
 from ngraph.graph import MultiDiGraph
 
 
@@ -13,3 +13,7 @@ class MultiDiGraphNX(MultiDiGraph):
 
     def is_directed(self) -> bool:
         return True
+
+    def edges(self) -> Generator:
+        for edge_tuple in self.get_edges().values():
+            yield edge_tuple[0], edge_tuple[1]
