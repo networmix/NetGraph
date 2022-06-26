@@ -15,5 +15,9 @@ class MultiDiGraphNX(MultiDiGraph):
         return True
 
     def edges(self) -> Generator:
-        for edge_tuple in self.get_edges().values():
+        for edge_tuple in self._edges.values():
             yield edge_tuple[0], edge_tuple[1]
+
+    def nodes(self) -> Generator:
+        for node in self._nodes:
+            yield node
