@@ -108,7 +108,7 @@ class Demand:
         src_node: Hashable,
         dst_node: Hashable,
         volume: float,
-        flow_policy: FlowPolicy,
+        flow_policy: Optional[FlowPolicy] = None,
         label: Optional[Any] = None,
     ):
         self.src_node: Hashable = src_node
@@ -130,6 +130,9 @@ class Demand:
         flow_graph: MultiDiGraph,
         max_fraction: float = 1,
     ) -> Tuple[float, float]:
+        if not self.flow_policy:
+            raise RuntimeError("flow_policy is not set")
+
         if max_fraction > 0:
             to_place = min(self.volume - self.placed_flow, self.volume * max_fraction)
         else:
@@ -160,6 +163,36 @@ class Demand:
 
             if to_place < MIN_FLOW or flow_placement_meta.placed_flow < MIN_FLOW:
                 break
+        self.placed_flow += placed_flow
+        return placed_flow, to_place
+
+    def place_path_bundle(
+        self,
+        flow_graph: MultiDiGraph,
+        path_bundle: PathBundle,
+        flow_placement: FlowPlacement,
+        max_fraction: float = 1,
+    ) -> Tuple[float, float]:
+        if max_fraction > 0:
+            to_place = min(self.volume - self.placed_flow, self.volume * max_fraction)
+        else:
+            to_place = self.volume if self.volume == float("inf") else 0
+
+        placed_flow = 0
+        if to_place >= MIN_FLOW:
+            flow_placement_meta = place_flow_on_graph(
+                flow_graph,
+                self.src_node,
+                self.dst_node,
+                path_bundle.pred,
+                to_place,
+                self.flow_index,
+                flow_placement,
+            )
+            placed_flow += flow_placement_meta.placed_flow
+            to_place = flow_placement_meta.remaining_flow
+            self.nodes.update(flow_placement_meta.nodes)
+            self.edges.update(flow_placement_meta.edges)
         self.placed_flow += placed_flow
         return placed_flow, to_place
 
