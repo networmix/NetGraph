@@ -1,18 +1,18 @@
 from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
-from email.generator import Generator
-from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union
+from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union, Generator
 
 from ngraph.algorithms.common import resolve_to_paths
+from ngraph.graph import MultiDiGraph
 
 
 @dataclass
 class Path:
     path_tuple: Tuple
     cost: Optional[Union[int, float]] = None
-    edges: Set = field(init=False, default_factory=set)
-    nodes: Set = field(init=False, default_factory=set)
+    edges: Set = field(init=False, default_factory=set, repr=False)
+    nodes: Set = field(init=False, default_factory=set, repr=False)
 
     def __post_init__(self):
         for node_edges in self.path_tuple:
@@ -64,11 +64,19 @@ class PathBundle:
             )
         return PathBundle(path[0][0], path[-1][0], pred, path.cost)
 
-    def resolve_to_paths(self, resolve_parallel_edges: bool = False) -> Generator:
+    def resolve_to_paths(self, keep_parallel_edges: bool = True) -> Generator:
         for path_tuple in resolve_to_paths(
             self.src_node,
             self.dst_node,
             self.pred,
-            resolve_parallel_edges=resolve_parallel_edges,
+            keep_parallel_edges=keep_parallel_edges,
         ):
             yield Path(path_tuple, self.cost)
+
+    def resolve_edges(self, graph: MultiDiGraph) -> None:
+        new_pred = {}
+        for dst_node in self.pred:
+            new_pred.setdefault(dst_node, {})
+            for src_node in self.pred[dst_node]:
+                new_pred[dst_node][src_node] = list(graph[src_node][dst_node].keys())
+        self.pred = new_pred

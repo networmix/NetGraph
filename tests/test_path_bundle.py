@@ -1,7 +1,21 @@
 # pylint: disable=protected-access,invalid-name
+import pytest
 from typing import List
+from ngraph.graph import MultiDiGraph
 
 from ngraph.path_bundle import Path, PathBundle
+
+
+@pytest.fixture
+def triangle_1():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=15, label="1")
+    g.add_edge("B", "A", metric=1, capacity=15, label="1")
+    g.add_edge("B", "C", metric=1, capacity=15, label="2")
+    g.add_edge("C", "B", metric=1, capacity=15, label="2")
+    g.add_edge("A", "C", metric=1, capacity=5, label="3")
+    g.add_edge("C", "A", metric=1, capacity=5, label="3")
+    return g
 
 
 class TestPathBundle:
@@ -45,7 +59,7 @@ class TestPathBundle:
         ]
 
         assert [
-            path for path in path_bundle.resolve_to_paths(resolve_parallel_edges=True)
+            path for path in path_bundle.resolve_to_paths(keep_parallel_edges=False)
         ] == [
             Path((("A", (0,)), ("B", (1,)), ("C", ())), 2),
             Path((("A", (0,)), ("B", (5,)), ("C", ())), 2),
@@ -69,9 +83,10 @@ class TestPathBundle:
         )
 
         paths: List[Path] = [
-            path for path in path_bundle.resolve_to_paths(resolve_parallel_edges=False)
+            path for path in path_bundle.resolve_to_paths(keep_parallel_edges=True)
         ]
 
+        assert len(paths) == 1
         assert paths[0].cost == 2
         assert paths[0].edges == {0, 1, 2, 3}
         assert paths[0].nodes == {"A", "B", "C"}
@@ -83,5 +98,34 @@ class TestPathBundle:
         assert path_bundle.pred == {
             "A": {},
             "C": {"B": [1]},
+            "B": {"A": [0]},
+        }
+
+    def test_path_bundle_5(self, triangle_1):
+        path_bundle = PathBundle(
+            "A",
+            "C",
+            {
+                "A": {},
+                "C": {"B": []},
+                "B": {"A": []},
+            },
+            2,
+        )
+
+        path_bundle.resolve_edges(triangle_1)
+
+        assert path_bundle.pred == {
+            "A": {},
+            "C": {"B": [2]},
+            "B": {"A": [0]},
+        }
+
+    def test_path_bundle_6(self, triangle_1):
+        path_bundle = PathBundle.from_path(Path((("A", ()), ("B", ()), ("C", ())), 2))
+        path_bundle.resolve_edges(triangle_1)
+        assert path_bundle.pred == {
+            "A": {},
+            "C": {"B": [2]},
             "B": {"A": [0]},
         }

@@ -391,5 +391,4 @@ class TestDemand:
         }
 
         for demand in demands:
-            print(demand)
             assert demand.placed_flow == 10

@@ -178,7 +178,7 @@ def resolve_to_paths(
     src_node: Hashable,
     dst_node: Hashable,
     pred: Dict[Any, Dict[Any, List[int]]],
-    resolve_parallel_edges: bool = False,
+    keep_parallel_edges: bool = True,
 ) -> Optional[Generator[Tuple, None, None]]:
     if dst_node not in pred:
         return
@@ -195,7 +195,7 @@ def resolve_to_paths(
             node_edges_path = tuple(
                 node_edges for node_edges, _ in reversed(stack[: top_pointer + 1])
             )
-            if not resolve_parallel_edges:
+            if keep_parallel_edges:
                 yield node_edges_path
             else:
                 for edge_seq in product(
