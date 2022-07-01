@@ -2,7 +2,6 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import (
     Any,
-    Hashable,
     Iterator,
     List,
     Optional,
@@ -11,7 +10,7 @@ from typing import (
 )
 from ngraph.algorithms.place_flow import FlowPlacement, place_flow_on_graph
 
-from ngraph.graph import MultiDiGraph
+from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 from ngraph.algorithms import spf, bfs, common
 from ngraph.path_bundle import PathBundle
 
@@ -40,18 +39,18 @@ class FlowPolicy:
         path_alg: PathAlg,
         flow_placement: FlowPlacement,
         edge_select: common.EdgeSelect,
-        path_bundle_list: Optional[List[PathBundle]] = None,
+        multipath: bool,
     ):
         self.path_alg: PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
         self.edge_select: common.EdgeSelect = edge_select
-        self.path_bundle_list: Optional[List[PathBundle]] = path_bundle_list
+        self.multipath: bool = multipath
 
     def get_path_bundle(
         self,
         flow_graph: MultiDiGraph,
-        src_node: Hashable,
-        dst_node: Hashable,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
     ) -> Optional[PathBundle]:
         edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
         if self.path_alg == PathAlg.BFS:
@@ -59,7 +58,10 @@ class FlowPolicy:
         elif self.path_alg == PathAlg.SPF:
             path_func = spf.spf
         cost, pred = path_func(
-            flow_graph, src_node=src_node, edge_select_func=edge_select_func
+            flow_graph,
+            src_node=src_node,
+            edge_select_func=edge_select_func,
+            multipath=self.multipath,
         )
         if dst_node in pred:
             return PathBundle(src_node, dst_node, pred, cost[dst_node])
@@ -67,30 +69,22 @@ class FlowPolicy:
     def get_path_bundle_iter(
         self,
         flow_graph: MultiDiGraph,
-        src_node: Hashable,
-        dst_node: Hashable,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
     ) -> Optional[Iterator[PathBundle]]:
-        if self.path_bundle_list:
-            while True:
-                for path_bundle in self.path_bundle_list:
-                    yield path_bundle
-        else:
-            while True:
-                if not (
-                    path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
-                ):
-                    return
-                yield path_bundle
+        while True:
+            if not (
+                path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
+            ):
+                return
+            yield path_bundle
 
     def get_all_path_bundles(
         self,
         flow_graph: MultiDiGraph,
-        src_node: Hashable,
-        dst_node: Hashable,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
     ) -> List[PathBundle]:
-        if self.path_bundle_list:
-            return self.path_bundle_list
-
         exclude_edges = set()
         path_bundle_list = []
         while True:
@@ -108,22 +102,22 @@ class FlowPolicy:
 class Demand:
     def __init__(
         self,
-        src_node: Hashable,
-        dst_node: Hashable,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
         volume: float,
         flow_policy: Optional[FlowPolicy] = None,
         label: Optional[Any] = None,
     ):
-        self.src_node: Hashable = src_node
-        self.dst_node: Hashable = dst_node
+        self.src_node: SrcNodeID = src_node
+        self.dst_node: DstNodeID = dst_node
         self.volume: float = volume
         self.flow_policy = flow_policy
         self.label: Optional[Any] = label
 
         self.flow_index: Tuple = (self.src_node, self.dst_node, label)
         self.placed_flow: float = 0
-        self.nodes: Set = set()
-        self.edges: Set = set()
+        self.nodes: Set[NodeID] = set()
+        self.edges: Set[EdgeID] = set()
 
     def __repr__(self) -> str:
         return f"Demand(src_node={self.src_node}, dst_node={self.dst_node}, volume={self.volume}, label={self.label}, placed_flow={self.placed_flow})"
@@ -205,15 +199,18 @@ FLOW_POLICY_MAP = {
         path_alg=PathAlg.SPF,
         flow_placement=FlowPlacement.EQUAL_BALANCED,
         edge_select=common.EdgeSelect.ALL_MIN_COST,
+        multipath=True,
     ),
     FlowPolicyConfig.SHORTEST_PATHS_PROPORTIONAL: FlowPolicy(
         path_alg=PathAlg.SPF,
         flow_placement=FlowPlacement.PROPORTIONAL,
         edge_select=common.EdgeSelect.ALL_MIN_COST,
+        multipath=True,
     ),
     FlowPolicyConfig.ALL_PATHS_PROPORTIONAL: FlowPolicy(
         path_alg=PathAlg.SPF,
         flow_placement=FlowPlacement.PROPORTIONAL,
         edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+        multipath=True,
     ),
 }

@@ -9,6 +9,7 @@ def bfs(
     graph: MultiDiGraph,
     src_node: Hashable,
     edge_select_func: Callable = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
+    multipath: bool = True,
 ) -> Tuple[Dict, Dict]:
     """
     Breadth-first search.
@@ -32,7 +33,11 @@ def bfs(
                 if neighbor_id not in costs or src_to_neigh_cost < costs[neighbor_id]:
                     # the first or better path found, updating minimal path cost
                     costs[neighbor_id] = src_to_neigh_cost
-                pred.setdefault(neighbor_id, {})[node_id] = edges_list
+                    pred.setdefault(neighbor_id, {})[node_id] = edges_list
+
+                elif multipath:
+                    pred[neighbor_id][node_id] = edges_list
+
                 if neighbor_id not in visited_nodes:
                     queue.append((src_to_neigh_cost, neighbor_id))
     return costs, pred

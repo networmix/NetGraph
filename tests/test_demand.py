@@ -2,7 +2,6 @@
 import pytest
 from ngraph.algorithms.common import EdgeSelect, init_flow_graph
 from ngraph.algorithms.place_flow import FlowPlacement
-
 from ngraph.graph import MultiDiGraph
 from ngraph.demand import FLOW_POLICY_MAP, Demand, FlowPolicy, FlowPolicyConfig, PathAlg
 from ngraph.path_bundle import PathBundle
@@ -78,6 +77,7 @@ class TestFlowPolicy:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         assert flow_policy
 
@@ -86,6 +86,7 @@ class TestFlowPolicy:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         r = init_flow_graph(square_1)
         path_bundle: PathBundle = next(flow_policy.get_path_bundle_iter(r, "A", "C"))
@@ -98,6 +99,7 @@ class TestFlowPolicy:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         r = init_flow_graph(square_2)
         path_bundle: PathBundle = next(flow_policy.get_path_bundle_iter(r, "A", "C"))
@@ -134,6 +136,7 @@ class TestFlowPolicy:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         r = init_flow_graph(square_1)
         path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "C")
@@ -147,6 +150,7 @@ class TestDemand:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         assert Demand("A", "C", float("inf"), flow_policy)
 
@@ -157,6 +161,7 @@ class TestDemand:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
 
@@ -231,6 +236,7 @@ class TestDemand:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_MIN_COST,
+            multipath=True,
         )
         d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
 
@@ -245,6 +251,7 @@ class TestDemand:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
         )
         d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
 
@@ -259,6 +266,7 @@ class TestDemand:
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             edge_select=EdgeSelect.ALL_MIN_COST,
+            multipath=True,
         )
         d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
 

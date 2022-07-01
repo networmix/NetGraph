@@ -6,9 +6,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ngraph",
-    version="0.1.0",
+    version="0.1.1",
     author="Andrey Golovanov",
-    description="A library helping with network modeling and analysis.",
+    description="A graph library for network modeling and capacity analysis.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/networmix/netgraph",
