@@ -1,18 +1,18 @@
 from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Set, Tuple
 
-from ngraph.algorithms.common import resolve_to_paths
-from ngraph.graph import MultiDiGraph
+from ngraph.algorithms.common import Cost, PathTuple, resolve_to_paths
+from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 
 
 @dataclass
 class Path:
-    path_tuple: Tuple
-    cost: Optional[Union[int, float]] = None
-    edges: Set = field(init=False, default_factory=set, repr=False)
-    nodes: Set = field(init=False, default_factory=set, repr=False)
+    path_tuple: PathTuple
+    cost: Optional[Cost] = None
+    edges: Set[EdgeID] = field(init=False, default_factory=set, repr=False)
+    nodes: Set[NodeID] = field(init=False, default_factory=set, repr=False)
 
     def __post_init__(self):
         for node_edges in self.path_tuple:
@@ -29,15 +29,15 @@ class Path:
 class PathBundle:
     def __init__(
         self,
-        src_node: Hashable,
-        dst_node: Hashable,
-        pred: Dict,
-        cost: Optional[float] = None,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
+        cost: Optional[Cost] = None,
     ):
-        self.src_node: Hashable = src_node
-        self.dst_node: Hashable = dst_node
-        self.cost: Optional[float] = cost
-        self.pred: Dict = {src_node: {}}
+        self.src_node: SrcNodeID = src_node
+        self.dst_node: DstNodeID = dst_node
+        self.cost: Optional[Cost] = cost
+        self.pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]] = {src_node: {}}
         self.edges: Set = set()
         self.nodes: Set = set([src_node])
 

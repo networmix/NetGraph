@@ -19,5 +19,5 @@ setup(
     ],
     packages=find_packages(exclude=("tests", "dev", "examples")),
     python_requires=">=3.8",
-    tests_require=["pytest"],
+    tests_require=["pytest", "networkx"],
 )
