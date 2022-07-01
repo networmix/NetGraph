@@ -4,12 +4,13 @@ from enum import IntEnum
 from typing import (
     Dict,
     Hashable,
+    List,
     Optional,
     Set,
 )
 
 from ngraph.algorithms.calc_cap import calc_graph_cap
-from ngraph.graph import MultiDiGraph
+from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 
 
 class FlowPlacement(IntEnum):
@@ -23,15 +24,15 @@ class FlowPlacement(IntEnum):
 class FlowPlacementMeta:
     placed_flow: float
     remaining_flow: float
-    nodes: Set[int] = field(default_factory=set)
-    edges: Set[int] = field(default_factory=set)
+    nodes: Set[NodeID] = field(default_factory=set)
+    edges: Set[EdgeID] = field(default_factory=set)
 
 
 def place_flow_on_graph(
     flow_graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
-    pred: Dict,
+    src_node: SrcNodeID,
+    dst_node: DstNodeID,
+    pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
     flow: float = float("inf"),
     flow_index: Optional[Hashable] = None,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,

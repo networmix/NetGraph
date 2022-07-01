@@ -1,6 +1,6 @@
 from enum import IntEnum
 from itertools import product
-from typing import Hashable, Optional, Tuple, List, Dict, Callable, Generator, Union
+from typing import Iterator, Optional, Tuple, List, Dict, Callable, Union
 
 from ngraph.graph import (
     AttrDict,
@@ -191,7 +191,7 @@ def resolve_to_paths(
     dst_node: DstNodeID,
     pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
     split_parallel_edges: bool = False,
-) -> Optional[Generator[PathTuple, None, None]]:
+) -> Optional[Iterator[PathTuple]]:
     """
     Resolve a directed acyclic graph of predecessors into individual paths between
     src_node and dst_node.
@@ -207,7 +207,7 @@ def resolve_to_paths(
     """
     if dst_node not in pred:
         return
-    pred = {
+    pred: Dict[DstNodeID, List[Tuple[SrcNodeID, Tuple[EdgeID]]]] = {
         node: [(nbr, tuple(nbr_edges)) for nbr, nbr_edges in nbrs_dict.items()]
         for node, nbrs_dict in pred.items()
     }

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union, Generator
+from typing import Dict, Hashable, Iterator, Optional, Set, Tuple, Union
 
 from ngraph.algorithms.common import resolve_to_paths
 from ngraph.graph import MultiDiGraph
@@ -64,7 +64,7 @@ class PathBundle:
             )
         return PathBundle(path[0][0], path[-1][0], pred, path.cost)
 
-    def resolve_to_paths(self, split_parallel_edges: bool = False) -> Generator:
+    def resolve_to_paths(self, split_parallel_edges: bool = False) -> Iterator[Path]:
         for path_tuple in resolve_to_paths(
             self.src_node,
             self.dst_node,

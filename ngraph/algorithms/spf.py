@@ -1,16 +1,19 @@
 from heapq import heappop, heappush
-from typing import Hashable, Tuple, Dict, Callable
+from typing import List, Tuple, Dict, Callable
 
-from ngraph.graph import MultiDiGraph
-from ngraph.algorithms.common import edge_select_fabric, EdgeSelect
+from ngraph.graph import AttrDict, DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
+from ngraph.algorithms.common import Cost, edge_select_fabric, EdgeSelect
 
 
 def spf(
     graph: MultiDiGraph,
-    src_node: Hashable,
-    edge_select_func: Callable = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
+    src_node: NodeID,
+    edge_select_func: Callable[
+        [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+        Tuple[Cost, List[EdgeID]],
+    ] = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
     multipath: bool = True,
-) -> Tuple[Dict, Dict]:
+) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
     """
     Implementation of the Dijkstra's Shortest Path First algorithm for finding shortest paths in the graph.
     Implemented using a min-priority queue.
@@ -27,8 +30,10 @@ def spf(
     # Initialization
     outgoing_adjacencies = graph.get_adj_out()
     min_pq = []  # min-priority queue
-    costs = {src_node: 0}  # source node has has zero cost to itself
-    pred = {src_node: {}}  # source node has no preceeding nodes
+    costs: Dict[NodeID, Cost] = {src_node: 0}  # source node has has zero cost to itself
+    pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {
+        src_node: {}
+    }  # source node has no preceeding nodes
 
     heappush(
         min_pq, (0, src_node)

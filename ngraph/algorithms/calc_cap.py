@@ -3,7 +3,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import (
     Dict,
-    Hashable,
+    List,
     Set,
     Tuple,
     NamedTuple,
@@ -12,18 +12,18 @@ from ngraph.algorithms.common import EdgeSelect, edge_select_fabric, init_flow_g
 from ngraph.algorithms.spf import spf
 from ngraph.algorithms.bfs import bfs
 
-from ngraph.graph import MultiDiGraph
+from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 
 
 @dataclass
 class NodeCapacity:
-    node_id: Hashable
-    edges: Set[int] = field(default_factory=set)
-    edges_max_flow: Dict[Tuple[int], MaxFlow] = field(default_factory=dict)
+    node_id: NodeID
+    edges: Set[EdgeID] = field(default_factory=set)
+    edges_max_flow: Dict[Tuple[EdgeID], MaxFlow] = field(default_factory=dict)
     max_balanced_flow: float = 0
     max_single_flow: float = 0
     max_total_flow: float = 0
-    downstream_nodes: Dict[Tuple[int], Set[Hashable]] = field(default_factory=dict)
+    downstream_nodes: Dict[Tuple[EdgeID], Set[NodeID]] = field(default_factory=dict)
     flow_fraction_balanced: float = 0
     flow_fraction_total: float = 0
 
@@ -36,19 +36,19 @@ class MaxFlow(NamedTuple):
 
 def calc_graph_cap(
     flow_graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
-    pred: Dict,
+    src_node: SrcNodeID,
+    dst_node: DstNodeID,
+    pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
-) -> Tuple[MaxFlow, Dict[Hashable, NodeCapacity]]:
+) -> Tuple[MaxFlow, Dict[NodeID, NodeCapacity]]:
     """
     Calculate capacity between src_node and dst_node in a flow graph
     using all the paths encoded in the dict of predecessors
     """
     edges = flow_graph.get_edges()
-    node_capacities: Dict[Hashable, NodeCapacity] = {}
-    succ: Dict[Hashable, Dict[Hashable, Tuple[int]]] = {}
+    node_capacities: Dict[NodeID, NodeCapacity] = {}
+    succ: Dict[SrcNodeID, Dict[DstNodeID, Tuple[EdgeID]]] = {}
 
     # Find node capacities and build successors
     # BFS from the dst to src across the pred
@@ -160,8 +160,8 @@ def calc_graph_cap(
 
 def calc_max_flow(
     graph: MultiDiGraph,
-    src_node: Hashable,
-    dst_node: Hashable,
+    src_node: SrcNodeID,
+    dst_node: DstNodeID,
     shortest_path: bool = False,
     reset_flow_graph: bool = False,
     capacity_attr: str = "capacity",

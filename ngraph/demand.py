@@ -2,8 +2,8 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import (
     Any,
-    Generator,
     Hashable,
+    Iterator,
     List,
     Optional,
     Set,
@@ -69,7 +69,7 @@ class FlowPolicy:
         flow_graph: MultiDiGraph,
         src_node: Hashable,
         dst_node: Hashable,
-    ) -> Optional[Generator]:
+    ) -> Optional[Iterator[PathBundle]]:
         if self.path_bundle_list:
             while True:
                 for path_bundle in self.path_bundle_list:

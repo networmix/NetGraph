@@ -1,4 +1,6 @@
 # pylint: disable=protected-access,invalid-name
+import networkx as nx
+
 from ngraph.graph import MultiDiGraph
 
 
@@ -10,8 +12,8 @@ def test_graph_add_node_1():
     g = MultiDiGraph()
     g.add_node("A")
     assert "A" in g._nodes
-    assert "A" in g._adj_in
-    assert "A" in g._adj_out
+    assert "A" in g._pred
+    assert "A" in g._succ
 
 
 def test_graph_add_node_2():
@@ -53,10 +55,10 @@ def test_graph_add_edge_1():
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge"})
-    assert "B" in g._adj_out["A"]
-    assert "A" in g._adj_in["B"]
-    assert g._adj_out["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
-    assert g._adj_in["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
+    assert "B" in g._succ["A"]
+    assert "A" in g._pred["B"]
+    assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
+    assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
 
 
 def test_graph_add_edge_2():
@@ -67,10 +69,10 @@ def test_graph_add_edge_2():
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge"})
-    assert "B" in g._adj_out["A"]
-    assert "A" in g._adj_in["B"]
-    assert g._adj_out["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
-    assert g._adj_in["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
+    assert "B" in g._succ["A"]
+    assert "A" in g._pred["B"]
+    assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
+    assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
 
 
 def test_graph_add_edge_3():
@@ -81,13 +83,13 @@ def test_graph_add_edge_3():
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
     assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert "B" in g._adj_out["A"]
-    assert "A" in g._adj_in["B"]
-    assert g._adj_out["A"]["B"] == {
+    assert "B" in g._succ["A"]
+    assert "A" in g._pred["B"]
+    assert g._succ["A"]["B"] == {
         0: {"test_attr": "TEST_edge1"},
         1: {"test_attr": "TEST_edge2"},
     }
-    assert g._adj_in["B"]["A"] == {
+    assert g._pred["B"]["A"] == {
         0: {"test_attr": "TEST_edge1"},
         1: {"test_attr": "TEST_edge2"},
     }
@@ -107,21 +109,21 @@ def test_graph_remove_edge_1():
     assert g._edges[1] == ("A", "B", 1, {})
     assert g._edges[2] == ("B", "A", 2, {})
 
-    assert g._adj_out["A"]["B"] == {0: {}, 1: {}}
-    assert g._adj_in["B"]["A"] == {0: {}, 1: {}}
+    assert g._succ["A"]["B"] == {0: {}, 1: {}}
+    assert g._pred["B"]["A"] == {0: {}, 1: {}}
 
-    assert g._adj_out["B"]["A"] == {2: {}}
-    assert g._adj_in["A"]["B"] == {2: {}}
+    assert g._succ["B"]["A"] == {2: {}}
+    assert g._pred["A"]["B"] == {2: {}}
 
     g.remove_edge("A", "B")
 
     assert 0 not in g._edges
     assert 1 not in g._edges
     assert 2 in g._edges
-    assert g._adj_out["A"] == {}
-    assert g._adj_in["B"] == {}
-    assert g._adj_out["B"]["A"] == {2: {}}
-    assert g._adj_in["A"]["B"] == {2: {}}
+    assert g._succ["A"] == {}
+    assert g._pred["B"] == {}
+    assert g._succ["B"]["A"] == {2: {}}
+    assert g._pred["A"]["B"] == {2: {}}
 
 
 def test_graph_remove_edge_2():
@@ -137,29 +139,29 @@ def test_graph_remove_edge_2():
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._adj_out["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g._adj_in["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
 
     g.remove_edge("A", "C")
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._adj_out["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g._adj_in["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
 
     g.remove_edge("A", "B", edge_id=10)
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._adj_out["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g._adj_in["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
+    assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
 
     g.remove_edge("A", "B", edge_id=0)
     assert "A" in g
     assert "B" in g
     assert 0 not in g._edges
-    assert g._adj_out["A"] == {}
-    assert g._adj_in["B"] == {}
+    assert g._succ["A"] == {}
+    assert g._pred["B"] == {}
 
 
 def test_graph_remove_node_1():
@@ -203,8 +205,8 @@ def test_graph_remove_node_1():
 
     g.remove_node("C")
     assert len(g._nodes) == 0
-    assert len(g._adj_out) == 0
-    assert len(g._adj_in) == 0
+    assert len(g._succ) == 0
+    assert len(g._pred) == 0
 
 
 def test_graph_copy_1():
@@ -251,8 +253,8 @@ def test_graph_copy_1():
 
     g.remove_node("C")
     assert len(g._nodes) == 0
-    assert len(g._adj_out) == 0
-    assert len(g._adj_in) == 0
+    assert len(g._succ) == 0
+    assert len(g._pred) == 0
 
     assert "A" in j
     assert "B" in j
@@ -295,5 +297,27 @@ def test_graph_filter_1():
         node_filter=lambda node_id, node_attr: "A" not in node_id,
         edge_filter=lambda edge_id, edge_tuple: "2" not in edge_tuple[3]["test_attr"],
     )
-    assert d._edges == {6: ('B', 'C', 6, {'test_attr': 'TEST_edgeTWO'}), 7: ('C', 'B', 7, {'test_attr': 'TEST_edgeTWO'})}
-    assert d._nodes == {'B': {}, 'C': {}}
+    assert d._edges == {
+        6: ("B", "C", 6, {"test_attr": "TEST_edgeTWO"}),
+        7: ("C", "B", 7, {"test_attr": "TEST_edgeTWO"}),
+    }
+    assert d._nodes == {"B": {}, "C": {}}
+
+
+def test_networkx_all_shortest_paths_1():
+    graph = MultiDiGraph()
+    graph.add_edge("A", "B", weight=10)
+    graph.add_edge("A", "BB", weight=10)
+    graph.add_edge("B", "C", weight=4)
+    graph.add_edge("BB", "C", weight=12)
+    graph.add_edge("BB", "C", weight=5)
+    graph.add_edge("BB", "C", weight=4)
+
+    assert list(
+        nx.all_shortest_paths(
+            graph,
+            "A",
+            "C",
+            weight=lambda u, v, attrs: min(attr["weight"] for attr in attrs.values()),
+        )
+    ) == [["A", "B", "C"], ["A", "BB", "C"]]
