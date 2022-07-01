@@ -20,6 +20,8 @@ def line_1():
     g.add_edge("C", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=3)
     g.add_edge("C", "B", metric=1, capacity=3)
+    g.add_edge("B", "C", metric=2, capacity=7)
+    g.add_edge("C", "B", metric=2, capacity=7)
     return g
 
 
@@ -127,6 +129,8 @@ class TestPlaceFlowGraph:
                 },
             ),
             5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
         assert flow_placement_meta.nodes == {"A", "C", "B"}
         assert flow_placement_meta.edges == {0, 2, 4}
@@ -201,6 +205,8 @@ class TestPlaceFlowGraph:
                 },
             ),
             5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_prop_3(self, graph_1):
@@ -483,6 +489,8 @@ class TestPlaceFlowGraph:
                 },
             ),
             5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_balanced_2(self, line_1):
@@ -555,6 +563,8 @@ class TestPlaceFlowGraph:
                 },
             ),
             5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_balanced_3(self, graph_2):

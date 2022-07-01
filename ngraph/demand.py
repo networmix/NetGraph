@@ -2,6 +2,7 @@ from __future__ import annotations
 from enum import IntEnum
 from typing import (
     Any,
+    Generator,
     Hashable,
     List,
     Optional,
@@ -52,25 +53,34 @@ class FlowPolicy:
         src_node: Hashable,
         dst_node: Hashable,
     ) -> Optional[PathBundle]:
+        edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
+        if self.path_alg == PathAlg.BFS:
+            path_func = bfs.bfs
+        elif self.path_alg == PathAlg.SPF:
+            path_func = spf.spf
+        cost, pred = path_func(
+            flow_graph, src_node=src_node, edge_select_func=edge_select_func
+        )
+        if dst_node in pred:
+            return PathBundle(src_node, dst_node, pred, cost[dst_node])
+
+    def get_path_bundle_iter(
+        self,
+        flow_graph: MultiDiGraph,
+        src_node: Hashable,
+        dst_node: Hashable,
+    ) -> Optional[Generator]:
         if self.path_bundle_list:
             while True:
                 for path_bundle in self.path_bundle_list:
                     yield path_bundle
         else:
             while True:
-                edge_select_func = common.edge_select_fabric(
-                    edge_select=self.edge_select
-                )
-                if self.path_alg == PathAlg.BFS:
-                    path_func = bfs.bfs
-                elif self.path_alg == PathAlg.SPF:
-                    path_func = spf.spf
-                cost, pred = path_func(
-                    flow_graph, src_node=src_node, edge_select_func=edge_select_func
-                )
-                if dst_node in pred:
-                    yield PathBundle(src_node, dst_node, pred, cost[dst_node])
-                return
+                if not (
+                    path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
+                ):
+                    return
+                yield path_bundle
 
     def get_all_path_bundles(
         self,
@@ -84,17 +94,10 @@ class FlowPolicy:
         exclude_edges = set()
         path_bundle_list = []
         while True:
-            edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
-            if self.path_alg == PathAlg.BFS:
-                path_func = bfs.bfs
-            elif self.path_alg == PathAlg.SPF:
-                path_func = spf.spf
-            cost, pred = path_func(
-                flow_graph, src_node=src_node, edge_select_func=edge_select_func
-            )
-            if dst_node not in pred:
+            if not (
+                path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
+            ):
                 return path_bundle_list
-            path_bundle = PathBundle(src_node, dst_node, pred, cost[dst_node])
             path_bundle_list.append(path_bundle)
             exclude_edges.update(path_bundle.edges)
             flow_graph = flow_graph.filter(
@@ -141,7 +144,7 @@ class Demand:
         placed_flow = 0
         while (
             path_bundle := next(
-                self.flow_policy.get_path_bundle(
+                self.flow_policy.get_path_bundle_iter(
                     flow_graph, self.src_node, self.dst_node
                 ),
                 None,

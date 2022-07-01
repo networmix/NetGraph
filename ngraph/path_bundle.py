@@ -64,12 +64,12 @@ class PathBundle:
             )
         return PathBundle(path[0][0], path[-1][0], pred, path.cost)
 
-    def resolve_to_paths(self, keep_parallel_edges: bool = True) -> Generator:
+    def resolve_to_paths(self, split_parallel_edges: bool = False) -> Generator:
         for path_tuple in resolve_to_paths(
             self.src_node,
             self.dst_node,
             self.pred,
-            keep_parallel_edges=keep_parallel_edges,
+            split_parallel_edges,
         ):
             yield Path(path_tuple, self.cost)
 

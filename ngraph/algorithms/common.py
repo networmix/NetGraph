@@ -1,20 +1,21 @@
 from enum import IntEnum
 from itertools import product
-from typing import Any, Hashable, Optional, Tuple, List, Dict, Callable, Generator
+from typing import Hashable, Optional, Tuple, List, Dict, Callable, Generator, Union
 
-from ngraph.graph import MultiDiGraph
+from ngraph.graph import (
+    AttrDict,
+    DstNodeID,
+    EdgeID,
+    MultiDiGraph,
+    NodeID,
+    SrcNodeID,
+)
 
 
+Cost = Union[int, float]
+PathElement = Tuple[NodeID, Tuple[EdgeID]]
+PathTuple = Tuple[PathElement]
 MIN_CAP = 2 ** (-12)
-
-
-class EdgeFind(IntEnum):
-    """
-    Edge finding criteria
-    """
-
-    MIN_CAP = 1
-    MIN_CAP_REMAINING_NON_ZERO = 2
 
 
 class EdgeSelect(IntEnum):
@@ -25,6 +26,7 @@ class EdgeSelect(IntEnum):
     ALL_MIN_COST = 1
     ALL_MIN_COST_WITH_CAP_REMAINING = 2
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
+    SINGLE_MIN_COST = 4
     USER_DEFINED = 99
 
 
@@ -52,24 +54,40 @@ def init_flow_graph(
 
 def edge_select_fabric(
     edge_select: EdgeSelect,
-    edge_select_func: Optional[Callable] = None,
+    edge_select_func: Optional[
+        Callable[
+            [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+            Tuple[Cost, List[EdgeID]],
+        ]
+    ] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
-) -> Callable:
+) -> Callable[
+    [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+    Tuple[Cost, List[EdgeID]],
+]:
     """
-    Fabric producing a function to find the min-cost edges between a pair of adjacent nodes in a graph.
+    Fabric producing a function to select edges between a pair of adjacent nodes in a graph.
+
     Args:
+        edge_select: EdgeSelect enum with selection criteria
+        edge_select_func: Optional user-defined function
         cost_attr: name of the integer attribute that will be used to determine the cost.
+        capacity_attr:
+        flow_attr:
     Returns:
-        get_min_cost_edges_func: a callable function
+        get_min_cost_edges_func: a callable function returning a list of selected edges
     """
 
-    def get_min_cost_edges(
-        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
-    ) -> Tuple[int, List[int]]:
+    def get_all_min_cost_edges(
+        graph: MultiDiGraph,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        edges: Dict[EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
         """
-        Returns the min-cost edges between a pair of adjacent nodes in a graph.
+        Returns all min-cost edges between a pair of adjacent nodes in a graph.
         Args:
             graph: MultiDiGraph object.
             src_node: node_id of the source node.
@@ -92,9 +110,40 @@ def edge_select_fabric(
 
         return min_cost, edge_list
 
-    def get_edges_with_cap(
-        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
-    ) -> Tuple[int, List[int]]:
+    def get_single_min_cost_edge(
+        graph: MultiDiGraph,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        edges: Dict[EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
+        """
+        Returns a list containing a single min-cost edge between a pair of adjacent nodes in a graph.
+        Args:
+            graph: MultiDiGraph object.
+            src_node: node_id of the source node.
+            dst_node: node_id of the destination node.
+            edges: dict {edge_id: {edge_attr}}
+        Returns:
+            min_cost: minimal cost of the edge between src_node and dst_node
+            edge_list: a list with the edge_id of the min_cost edge
+        """
+        edge_list = []
+        min_cost = None
+        for edge_id, edge_attributes in edges.items():
+            cost = edge_attributes[cost_attr]
+
+            if min_cost is None or cost < min_cost:
+                min_cost = cost
+                edge_list = [edge_id]
+
+        return min_cost, edge_list
+
+    def get_all_edges_with_cap_remaining(
+        graph: MultiDiGraph,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        edges: Dict[EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
@@ -106,9 +155,12 @@ def edge_select_fabric(
                 edge_list.append(edge_id)
         return min_cost, edge_list
 
-    def get_min_cost_edges_with_cap_rem(
-        graph: MultiDiGraph, src_node: Hashable, dst_node: Hashable, edges: Dict
-    ) -> Tuple[int, List[int]]:
+    def get_all_min_cost_edges_with_cap_remaining(
+        graph: MultiDiGraph,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        edges: Dict[EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
@@ -123,63 +175,36 @@ def edge_select_fabric(
         return min_cost, edge_list
 
     if edge_select == EdgeSelect.ALL_MIN_COST:
-        return get_min_cost_edges
+        return get_all_min_cost_edges
+    elif edge_select == EdgeSelect.SINGLE_MIN_COST:
+        return get_single_min_cost_edge
     elif edge_select == EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING:
-        return get_min_cost_edges_with_cap_rem
+        return get_all_min_cost_edges_with_cap_remaining
     elif edge_select == EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING:
-        return get_edges_with_cap
+        return get_all_edges_with_cap_remaining
     elif edge_select == EdgeSelect.USER_DEFINED:
         return edge_select_func
 
 
-def edge_find_fabric(
-    edge_find: EdgeFind,
-    cost_attr: str = "metric",
-    capacity_attr: str = "capacity",
-    flow_attr: str = "flow",
-) -> Callable:
-    """
-    Fabric producing a function to find required edges
-    """
-
-    def get_min_cap_edges(
-        flow_graph: MultiDiGraph,
-    ) -> Tuple:
-        min_cap_edges = []
-        min_cap = float("inf")
-        for edge_tuple in flow_graph.get_edges().values():
-            edge_attr = edge_tuple[3]
-            if not edge_filter(edge_attr):
-                continue
-            if (
-                cap := get_cap_func(edge_attr[capacity_attr], edge_attr[flow_attr])
-            ) < min_cap:
-                min_cap = cap
-                min_cap_edges = [edge_tuple]
-            elif cap == min_cap:
-                min_cap_edges.append(edge_tuple)
-        return min_cap, min_cap_edges
-
-    if edge_find == EdgeFind.MIN_CAP:
-        edge_filter: Callable[[Dict], bool] = lambda edge_attr: True
-        get_cap_func: Callable[[float, float], float] = lambda cap, _: cap
-        return get_min_cap_edges
-
-    elif edge_find == EdgeFind.MIN_CAP_REMAINING_NON_ZERO:
-        edge_filter: Callable[[Dict], bool] = (
-            lambda edge_attr: (edge_attr[capacity_attr] - edge_attr[flow_attr])
-            > MIN_CAP
-        )
-        get_cap_func: Callable[[float, float], float] = lambda cap, flow: cap - flow
-        return get_min_cap_edges
-
-
 def resolve_to_paths(
-    src_node: Hashable,
-    dst_node: Hashable,
-    pred: Dict[Any, Dict[Any, List[int]]],
-    keep_parallel_edges: bool = True,
-) -> Optional[Generator[Tuple, None, None]]:
+    src_node: SrcNodeID,
+    dst_node: DstNodeID,
+    pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
+    split_parallel_edges: bool = False,
+) -> Optional[Generator[PathTuple, None, None]]:
+    """
+    Resolve a directed acyclic graph of predecessors into individual paths between
+    src_node and dst_node.
+
+    Args:
+        src_node: node_id of the source node.
+        dst_node: node_id of the destination node.
+        pred: predecessors encoded as {dst_node: {src_node: [edge_ids]}}
+        split_parallel_edges: if True split parallel edges into separate paths
+    Returns:
+        An iterator iterating over all paths between src_node and dst_node.
+        A path is a tuple of tuples: ((node_id, (edge_ids)), (node_id, (edge_ids))...)
+    """
     if dst_node not in pred:
         return
     pred = {
@@ -195,7 +220,7 @@ def resolve_to_paths(
             node_edges_path = tuple(
                 node_edges for node_edges, _ in reversed(stack[: top_pointer + 1])
             )
-            if keep_parallel_edges:
+            if not split_parallel_edges:
                 yield node_edges_path
             else:
                 for edge_seq in product(

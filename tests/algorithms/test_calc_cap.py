@@ -21,6 +21,8 @@ def line_1():
     g.add_edge("C", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=3)
     g.add_edge("C", "B", metric=1, capacity=3)
+    g.add_edge("B", "C", metric=2, capacity=7)
+    g.add_edge("C", "B", metric=2, capacity=7)
     return g
 
 
@@ -69,52 +71,6 @@ def graph_square_1():
     g.add_edge("D", "C", metric=2, capacity=2)
     g.add_edge("A", "C", metric=3, capacity=3)
     return g
-
-
-class TestBasics:
-    def test_init_flow_graph_1(self):
-        g = MultiDiGraph()
-        g.add_edge("A", "B", metric=1, capacity=1)
-        g.add_edge("B", "A", metric=1, capacity=1)
-        g.add_edge("B", "C", metric=1, capacity=1)
-        g.add_edge("C", "B", metric=1, capacity=1)
-
-        r = init_flow_graph(g)
-        assert r.get_edges() == {
-            0: ("A", "B", 0, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            2: ("B", "C", 2, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-        }
-
-        r["A"]["B"][0]["flow"] = 10
-        r["A"]["B"][0]["flows"] = {("A", "B", 0, None): 10}
-        init_flow_graph(r, reset_flow_graph=False)
-
-        assert r.get_edges() == {
-            0: (
-                "A",
-                "B",
-                0,
-                {
-                    "metric": 1,
-                    "capacity": 1,
-                    "flow": 10,
-                    "flows": {("A", "B", 0, None): 10},
-                },
-            ),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            2: ("B", "C", 2, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-        }
-
-        init_flow_graph(r)
-        assert r.get_edges() == {
-            0: ("A", "B", 0, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            2: ("B", "C", 2, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
-        }
 
 
 class TestGraphCapacity:

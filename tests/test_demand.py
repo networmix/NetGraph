@@ -17,6 +17,8 @@ def line_1():
     g.add_edge("C", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=3)
     g.add_edge("C", "B", metric=1, capacity=3)
+    g.add_edge("B", "C", metric=2, capacity=7)
+    g.add_edge("C", "B", metric=2, capacity=7)
     return g
 
 
@@ -39,7 +41,7 @@ def graph_1():
 
 
 @pytest.fixture
-def graph_square_1():
+def square_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=1)
@@ -49,7 +51,7 @@ def graph_square_1():
 
 
 @pytest.fixture
-def graph_square_2():
+def square_2():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=1)
@@ -79,26 +81,26 @@ class TestFlowPolicy:
         )
         assert flow_policy
 
-    def test_flow_policy_2(self, graph_square_1):
+    def test_flow_policy_2(self, square_1):
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         )
-        r = init_flow_graph(graph_square_1)
-        path_bundle: PathBundle = next(flow_policy.get_path_bundle(r, "A", "C"))
+        r = init_flow_graph(square_1)
+        path_bundle: PathBundle = next(flow_policy.get_path_bundle_iter(r, "A", "C"))
         assert path_bundle.pred == {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}
         assert path_bundle.edges == {0, 1}
         assert path_bundle.nodes == {"A", "B", "C"}
 
-    def test_flow_policy_3(self, graph_square_2):
+    def test_flow_policy_3(self, square_2):
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         )
-        r = init_flow_graph(graph_square_2)
-        path_bundle: PathBundle = next(flow_policy.get_path_bundle(r, "A", "C"))
+        r = init_flow_graph(square_2)
+        path_bundle: PathBundle = next(flow_policy.get_path_bundle_iter(r, "A", "C"))
         assert path_bundle.pred == {
             "A": {},
             "C": {"B": [1], "D": [3]},
@@ -108,7 +110,7 @@ class TestFlowPolicy:
         assert path_bundle.edges == {0, 1, 2, 3}
         assert path_bundle.nodes == {"A", "B", "C", "D"}
 
-    def test_flow_policy_get_all_path_bundles_1(self, graph_square_1):
+    def test_flow_policy_get_all_path_bundles_1(self, square_1):
         EXPECTED = [
             {
                 "src_node": "A",
@@ -133,7 +135,7 @@ class TestFlowPolicy:
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         )
-        r = init_flow_graph(graph_square_1)
+        r = init_flow_graph(square_1)
         path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "C")
         for idx, path_bundle in enumerate(path_bundle_list):
             vars(path_bundle) == EXPECTED[idx]
@@ -160,11 +162,11 @@ class TestDemand:
 
         placed_flow, remaining_flow = d.place(r)
 
-        assert placed_flow == 4
+        assert placed_flow == 5
         assert remaining_flow == float("inf")
         assert d.placed_flow == placed_flow
         assert d.nodes == {"A", "B", "C"}
-        assert d.edges == {0, 2, 4}
+        assert d.edges == {0, 2, 4, 6}
         assert (
             any(
                 edge[3]["flow"] > edge[3]["capacity"] for edge in r.get_edges().values()
@@ -179,8 +181,8 @@ class TestDemand:
                 {
                     "metric": 1,
                     "capacity": 5,
-                    "flow": 4.0,
-                    "flows": {("A", "C", "TEST"): 4.0},
+                    "flow": 5.0,
+                    "flows": {("A", "C", "TEST"): 5.0},
                 },
             ),
             1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
@@ -191,8 +193,8 @@ class TestDemand:
                 {
                     "metric": 1,
                     "capacity": 1,
-                    "flow": 1.0,
-                    "flows": {("A", "C", "TEST"): 1.0},
+                    "flow": 0.45454545454545453,
+                    "flows": {("A", "C", "TEST"): 0.45454545454545453},
                 },
             ),
             3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
@@ -203,15 +205,27 @@ class TestDemand:
                 {
                     "metric": 1,
                     "capacity": 3,
-                    "flow": 3.0,
-                    "flows": {("A", "C", "TEST"): 3.0},
+                    "flow": 1.3636363636363635,
+                    "flows": {("A", "C", "TEST"): 1.3636363636363635},
                 },
             ),
             5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: (
+                "B",
+                "C",
+                6,
+                {
+                    "metric": 2,
+                    "capacity": 7,
+                    "flow": 3.1818181818181817,
+                    "flows": {("A", "C", "TEST"): 3.1818181818181817},
+                },
+            ),
+            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
-    def test_demand_place_2(self, graph_square_1):
-        r = init_flow_graph(graph_square_1)
+    def test_demand_place_2(self, square_1):
+        r = init_flow_graph(square_1)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -224,8 +238,8 @@ class TestDemand:
         assert placed_flow == 1
         assert remaining_flow == float("inf")
 
-    def test_demand_place_3(self, graph_square_1):
-        r = init_flow_graph(graph_square_1)
+    def test_demand_place_3(self, square_1):
+        r = init_flow_graph(square_1)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -238,8 +252,8 @@ class TestDemand:
         assert placed_flow == 3
         assert remaining_flow == float("inf")
 
-    def test_demand_place_4(self, graph_square_2):
-        r = init_flow_graph(graph_square_2)
+    def test_demand_place_4(self, square_2):
+        r = init_flow_graph(square_2)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,

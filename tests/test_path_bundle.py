@@ -59,7 +59,7 @@ class TestPathBundle:
         ]
 
         assert [
-            path for path in path_bundle.resolve_to_paths(keep_parallel_edges=False)
+            path for path in path_bundle.resolve_to_paths(split_parallel_edges=True)
         ] == [
             Path((("A", (0,)), ("B", (1,)), ("C", ())), 2),
             Path((("A", (0,)), ("B", (5,)), ("C", ())), 2),
@@ -83,7 +83,7 @@ class TestPathBundle:
         )
 
         paths: List[Path] = [
-            path for path in path_bundle.resolve_to_paths(keep_parallel_edges=True)
+            path for path in path_bundle.resolve_to_paths(split_parallel_edges=False)
         ]
 
         assert len(paths) == 1

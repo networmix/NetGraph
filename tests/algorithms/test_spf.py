@@ -1,119 +1,108 @@
 # pylint: disable=protected-access,invalid-name
+import pytest
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms.spf import spf
-from ngraph.algorithms.common import resolve_to_paths
+from ngraph.algorithms.common import EdgeSelect, edge_select_fabric
 
 
-def test_spf_1():
+@pytest.fixture
+def line_1():
     g = MultiDiGraph()
-    g.add_edge("A", "B", metric=10)
-    g.add_edge("B", "C", metric=10)
-    g.add_edge("C", "D", metric=10)
+    g.add_edge("A", "B", metric=1, capacity=5)
+    g.add_edge("B", "A", metric=1, capacity=5)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("C", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=3)
+    g.add_edge("C", "B", metric=1, capacity=3)
+    g.add_edge("B", "C", metric=2, capacity=7)
+    g.add_edge("C", "B", metric=2, capacity=7)
+    return g
 
-    costs, pred = spf(g, "A")
-    assert costs == {"A": 0, "B": 10, "C": 20, "D": 30}
-    assert pred == {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}, "D": {"C": [2]}}
 
-
-def test_spf_2():
+@pytest.fixture
+def square_1():
     g = MultiDiGraph()
-    g.add_edge("A", "B", metric=10)
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("A", "D", metric=10)
-    g.add_edge("B", "D", metric=10)
-    g.add_edge("C", "D", metric=10)
-
-    costs, pred = spf(g, "A")
-
-    assert costs == {"A": 0, "B": 10, "C": 10, "D": 10}
-    assert pred == {"A": {}, "B": {"A": [0]}, "C": {"A": [1]}, "D": {"A": [2]}}
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=2, capacity=2)
+    g.add_edge("D", "C", metric=2, capacity=2)
+    return g
 
 
-def test_spf_3():
+@pytest.fixture
+def square_2():
     g = MultiDiGraph()
-    g.add_edge("A", "B", metric=11)
-    g.add_edge("B", "A", metric=11)
-    g.add_edge("A", "B", metric=10)
-    g.add_edge("B", "A", metric=10)
-
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("C", "A", metric=10)
-    g.add_edge("A", "C", metric=11)
-    g.add_edge("C", "A", metric=11)
-
-    g.add_edge("A", "D", metric=10)
-    g.add_edge("D", "A", metric=10)
-
-    g.add_edge("B", "D", metric=10)
-    g.add_edge("D", "B", metric=10)
-
-    g.add_edge("C", "D", metric=10)
-    g.add_edge("D", "C", metric=10)
-
-    costs, pred = spf(g, "A")
-
-    assert costs == {"A": 0, "B": 10, "C": 10, "D": 10}
-    assert pred == {"A": {}, "B": {"A": [2]}, "C": {"A": [4]}, "D": {"A": [8]}}
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=1, capacity=2)
+    g.add_edge("D", "C", metric=1, capacity=2)
+    return g
 
 
-def test_spf_4():
+@pytest.fixture
+def graph_1():
     g = MultiDiGraph()
-    g.add_edge("A", "B", metric=11)
-    g.add_edge("B", "A", metric=11)
-    g.add_edge("A", "B", metric=10)
-    g.add_edge("B", "A", metric=10)
-
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("C", "A", metric=10)
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("C", "A", metric=10)
-
-    g.add_edge("A", "D", metric=20)
-    g.add_edge("D", "A", metric=20)
-
-    g.add_edge("B", "D", metric=10)
-    g.add_edge("D", "B", metric=10)
-
-    g.add_edge("C", "D", metric=10)
-    g.add_edge("D", "C", metric=10)
-
-    costs, pred = spf(g, "A")
-
-    assert costs == {"A": 0, "B": 10, "C": 10, "D": 20}
-    assert pred == {
-        "A": {},
-        "B": {"A": [2]},
-        "C": {"A": [4, 6]},
-        "D": {"A": [8], "B": [10], "C": [12]},
-    }
+    g.add_edge("A", "B", metric=1, capacity=2)
+    g.add_edge("A", "B", metric=1, capacity=4)
+    g.add_edge("A", "B", metric=1, capacity=6)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=2)
+    g.add_edge("B", "C", metric=1, capacity=3)
+    g.add_edge("C", "D", metric=2, capacity=3)
+    g.add_edge("A", "E", metric=1, capacity=5)
+    g.add_edge("E", "C", metric=1, capacity=4)
+    g.add_edge("A", "D", metric=4, capacity=2)
+    g.add_edge("C", "F", metric=1, capacity=1)
+    g.add_edge("F", "D", metric=1, capacity=2)
+    return g
 
 
-def test_resolve_paths_from_predecessors_1():
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=11)
-    g.add_edge("B", "A", metric=11)
-    g.add_edge("A", "B", metric=10)
-    g.add_edge("B", "A", metric=10)
+class TestSPF:
+    def test_spf_1(self, line_1):
+        costs, pred = spf(line_1, "A")
+        assert costs == {"A": 0, "B": 1, "C": 2}
+        assert pred == {"A": {}, "B": {"A": [0]}, "C": {"B": [2, 4]}}
 
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("C", "A", metric=10)
-    g.add_edge("A", "C", metric=10)
-    g.add_edge("C", "A", metric=10)
+    def test_spf_2(self, square_1):
+        costs, pred = spf(square_1, "A")
+        assert costs == {"A": 0, "B": 1, "D": 2, "C": 2}
+        assert pred == {"A": {}, "B": {"A": [0]}, "D": {"A": [2]}, "C": {"B": [1]}}
 
-    g.add_edge("A", "D", metric=20)
-    g.add_edge("D", "A", metric=20)
+    def test_spf_3(self, square_2):
+        costs, pred = spf(square_2, "A")
+        assert costs == {"A": 0, "B": 1, "D": 1, "C": 2}
+        assert pred == {
+            "A": {},
+            "B": {"A": [0]},
+            "D": {"A": [2]},
+            "C": {"B": [1], "D": [3]},
+        }
 
-    g.add_edge("B", "D", metric=10)
-    g.add_edge("D", "B", metric=10)
+    def test_spf_4(self, graph_1):
+        costs, pred = spf(graph_1, "A")
+        assert costs == {"A": 0, "B": 1, "E": 1, "D": 4, "C": 2, "F": 3}
+        assert pred == {
+            "A": {},
+            "B": {"A": [0, 1, 2]},
+            "E": {"A": [7]},
+            "D": {"A": [9], "C": [6], "F": [11]},
+            "C": {"B": [3, 4, 5], "E": [8]},
+            "F": {"C": [10]},
+        }
 
-    g.add_edge("C", "D", metric=10)
-    g.add_edge("D", "C", metric=10)
-
-    costs, pred = spf(g, "A")
-
-    assert list(resolve_to_paths("A", "D", pred)) == [
-        (("A", (8,)), ("D", tuple())),
-        (("A", (2,)), ("B", (10,)), ("D", tuple())),
-        (("A", (4, 6)), ("C", (12,)), ("D", tuple())),
-    ]
-    assert list(resolve_to_paths("A", "E", pred)) == []
+    def test_spf_5(self, graph_1):
+        costs, pred = spf(
+            graph_1,
+            "A",
+            edge_select_func=edge_select_fabric(EdgeSelect.SINGLE_MIN_COST),
+            multipath=False,
+        )
+        assert costs == {"A": 0, "B": 1, "E": 1, "D": 4, "C": 2, "F": 3}
+        assert pred == {
+            "A": {},
+            "B": {"A": [0]},
+            "E": {"A": [7]},
+            "D": {"A": [9]},
+            "C": {"B": [3]},
+            "F": {"C": [10]},
+        }
