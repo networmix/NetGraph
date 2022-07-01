@@ -17,6 +17,7 @@ Besides, it provides a number of path finding and capacity calculation functions
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.calc_cap import calc_max_flow
 
+
     # Create a graph
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
@@ -38,6 +39,7 @@ Besides, it provides a number of path finding and capacity calculation functions
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.calc_cap import calc_max_flow
 
+
     # Create a graph
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
@@ -52,4 +54,165 @@ Besides, it provides a number of path finding and capacity calculation functions
     assert max_flow.max_total_flow == 1.0
     assert max_flow.max_single_flow == 1.0
     assert max_flow.max_balanced_flow == 1.0
+    ```
+### Place traffic demands on a graph
+- Place traffic demands leveraging all possible paths in a graph
+    ```python
+    from ngraph.graph import MultiDiGraph
+    from ngraph.algorithms.common import init_flow_graph
+    from ngraph.demand import FlowPolicyConfig, FLOW_POLICY_MAP, Demand
+
+
+    # Create a graph
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=15, label="1")
+    g.add_edge("B", "A", metric=1, capacity=15, label="1")
+    g.add_edge("B", "C", metric=1, capacity=15, label="2")
+    g.add_edge("C", "B", metric=1, capacity=15, label="2")
+    g.add_edge("A", "C", metric=1, capacity=5, label="3")
+    g.add_edge("C", "A", metric=1, capacity=5, label="3")
+
+    # Initialize a flow graph
+    r = init_flow_graph(g)
+
+    # Create traffic demands
+    demands = [
+        Demand(
+            "A",
+            "B",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_1",
+        ),
+        Demand(
+            "B",
+            "A",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_1",
+        ),
+        Demand(
+            "B",
+            "C",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_2",
+        ),
+        Demand(
+            "C",
+            "B",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_2",
+        ),
+        Demand(
+            "A",
+            "C",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_3",
+        ),
+        Demand(
+            "C",
+            "A",
+            10,
+            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            label="D_3",
+        ),
+        ]
+
+    # Place traffic demands onto the flow graph
+    for demand in demands:
+        demand.place(r)
+
+    # We can verify that all demands were placed as expected 
+    for demand in demands:
+        assert demand.placed_flow == 10
+
+    assert r.get_edges() == {
+        0: (
+            "A",
+            "B",
+            0,
+            {
+                "capacity": 15,
+                "flow": 15.0,
+                "flows": {
+                    ("A", "B", "D_1"): 10.0,
+                    ("A", "C", "D_3"): 5.0,
+                },
+                "label": "1",
+                "metric": 1,
+            },
+        ),
+        1: (
+            "B",
+            "A",
+            1,
+            {
+                "capacity": 15,
+                "flow": 15.0,
+                "flows": {
+                    ("B", "A", "D_1"): 10.0,
+                    ("C", "A", "D_3"): 5.0,
+                },
+                "label": "1",
+                "metric": 1,
+            },
+        ),
+        2: (
+            "B",
+            "C",
+            2,
+            {
+                "capacity": 15,
+                "flow": 15.0,
+                "flows": {
+                    ("A", "C", "D_3"): 5.0,
+                    ("B", "C", "D_2"): 10.0,
+                },
+                "label": "2",
+                "metric": 1,
+            },
+        ),
+        3: (
+            "C",
+            "B",
+            3,
+            {
+                "capacity": 15,
+                "flow": 15.0,
+                "flows": {
+                    ("C", "A", "D_3"): 5.0,
+                    ("C", "B", "D_2"): 10.0,
+                },
+                "label": "2",
+                "metric": 1,
+            },
+        ),
+        4: (
+            "A",
+            "C",
+            4,
+            {
+                "capacity": 5,
+                "flow": 5.0,
+                "flows": {("A", "C", "D_3"): 5.0},
+                "label": "3",
+                "metric": 1,
+            },
+        ),
+        5: (
+            "C",
+            "A",
+            5,
+            {
+                "capacity": 5,
+                "flow": 5.0,
+                "flows": {("C", "A", "D_3"): 5.0},
+                "label": "3",
+                "metric": 1,
+            },
+        ),
+    }
     ```
