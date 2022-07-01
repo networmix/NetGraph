@@ -11,24 +11,45 @@ Besides, it provides a number of path finding and capacity calculation functions
 
 ## Use Case Examples
 ### Calculate MaxFlow in a graph
+- Calculate MaxFlow across all possible paths between the source and destination nodes
+    ```python
+    # Required imports
+    from ngraph.graph import MultiDiGraph
+    from ngraph.algorithms.calc_cap import calc_max_flow
 
-```python
-# Required imports
-from ngraph.graph import MultiDiGraph
-from ngraph.algorithms.calc_cap import calc_max_flow, MaxFlow
+    # Create a graph
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=2, capacity=2)
+    g.add_edge("D", "C", metric=2, capacity=2)
 
-# Create a graph
-g = MultiDiGraph()
-g.add_edge("A", "B", metric=1, capacity=1)
-g.add_edge("B", "C", metric=1, capacity=1)
-g.add_edge("A", "D", metric=1, capacity=2)
-g.add_edge("D", "C", metric=1, capacity=2)
+    # Calculate MaxFlow between the source and destination nodes
+    max_flow = calc_max_flow(g, "A", "C")
 
-# Calculate MaxFlow between the source and destination nodes
-max_flow = calc_max_flow(g, "A", "C")
+    # We can verify that the result is as expected
+    assert max_flow.max_total_flow == 3.0
+    assert max_flow.max_single_flow == 2.0
+    assert max_flow.max_balanced_flow == 2.0
+    ```
+- Calculate MaxFlow leveraging only the shortest paths between the source and destination nodes
+    ```python
+    # Required imports
+    from ngraph.graph import MultiDiGraph
+    from ngraph.algorithms.calc_cap import calc_max_flow
 
-# We can verify that the result is as expected
-assert max_flow == MaxFlow(
-    max_total_flow=3.0, max_single_flow=2.0, max_balanced_flow=2.0
-)
-```
+    # Create a graph
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=2, capacity=2)
+    g.add_edge("D", "C", metric=2, capacity=2)
+
+    # Calculate MaxFlow between the source and destination nodes
+    max_flow = calc_max_flow(g, "A", "C", shortest_path=True)
+
+    # We can verify that the result is as expected
+    assert max_flow.max_total_flow == 1.0
+    assert max_flow.max_single_flow == 1.0
+    assert max_flow.max_balanced_flow == 1.0
+    ```
