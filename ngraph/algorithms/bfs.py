@@ -33,7 +33,11 @@ def bfs(
                 if neighbor_id not in costs or src_to_neigh_cost < costs[neighbor_id]:
                     # the first or better path found, updating minimal path cost
                     costs[neighbor_id] = src_to_neigh_cost
-                    pred.setdefault(neighbor_id, {})[node_id] = edges_list
+
+                    if not multipath:
+                        pred[neighbor_id] = {node_id: edges_list}
+                    else:
+                        pred.setdefault(neighbor_id, {})[node_id] = edges_list
 
                 elif multipath:
                     pred[neighbor_id][node_id] = edges_list

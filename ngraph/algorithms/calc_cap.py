@@ -1,5 +1,6 @@
 from __future__ import annotations
-from collections import deque
+from collections import defaultdict, deque
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import (
     Dict,
@@ -64,6 +65,7 @@ def calc_graph_cap(
                 if prev_hop in node_capacities
                 else NodeCapacity(prev_hop)
             )
+            prev_hop_node_cap_copy = deepcopy(prev_hop_node_cap)
             prev_hop_node_cap.downstream_nodes.setdefault(edge_tuple, set()).add(node)
             prev_hop_node_cap.edges.update(edge_tuple)
 
@@ -111,13 +113,15 @@ def calc_graph_cap(
                     for edges_max_flow in prev_hop_node_cap.edges_max_flow.values()
                 ]
             )
-            node_capacities[prev_hop] = prev_hop_node_cap
-            if prev_hop != src_node:
-                queue.append(prev_hop)
+            if prev_hop_node_cap != prev_hop_node_cap_copy:
+                node_capacities[prev_hop] = prev_hop_node_cap
+                if prev_hop != src_node:
+                    queue.append(prev_hop)
 
     # Place a flow of 1.0 and see how it balances
     # BFS from the src to dst across the succ
     queue = deque([(src_node, 1, 1)])
+    split_horizon = defaultdict(set)
     while queue:
         node, flow_fraction_total, flow_fraction_balanced = queue.popleft()
         node_capacities[node].flow_fraction_total += flow_fraction_total
@@ -136,13 +140,15 @@ def calc_graph_cap(
                     / len(node_capacities[node].edges)
                     * len(edge_tuple)
                 )
-                queue.append(
-                    (
-                        next_hop,
-                        next_hop_flow_fraction_total,
-                        next_hop_flow_fraction_balanced,
+                if node not in split_horizon[next_hop]:
+                    queue.append(
+                        (
+                            next_hop,
+                            next_hop_flow_fraction_total,
+                            next_hop_flow_fraction_balanced,
+                        )
                     )
-                )
+                split_horizon[next_hop].add(node)
 
     max_balanced_flow = min(
         [

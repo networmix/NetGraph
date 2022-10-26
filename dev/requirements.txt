@@ -4,7 +4,7 @@ build
 twine
 pytest
 pytest-cov
-pytest-benchmark
+# pytest-benchmark
 pytest-mock
 pylint
 black
