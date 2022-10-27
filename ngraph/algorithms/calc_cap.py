@@ -1,6 +1,5 @@
 from __future__ import annotations
-from collections import defaultdict, deque
-from copy import deepcopy
+from collections import deque
 from dataclasses import dataclass, field
 from typing import (
     Dict,
@@ -9,10 +8,6 @@ from typing import (
     Tuple,
     NamedTuple,
 )
-from ngraph.algorithms.common import EdgeSelect, edge_select_fabric, init_flow_graph
-from ngraph.algorithms.spf import spf
-from ngraph.algorithms.bfs import bfs
-
 from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 
 
@@ -65,7 +60,6 @@ def calc_graph_cap(
                 if prev_hop in node_capacities
                 else NodeCapacity(prev_hop)
             )
-            prev_hop_node_cap_copy = deepcopy(prev_hop_node_cap)
             prev_hop_node_cap.downstream_nodes.setdefault(edge_tuple, set()).add(node)
             prev_hop_node_cap.edges.update(edge_tuple)
 
@@ -113,15 +107,13 @@ def calc_graph_cap(
                     for edges_max_flow in prev_hop_node_cap.edges_max_flow.values()
                 ]
             )
-            if prev_hop_node_cap != prev_hop_node_cap_copy:
-                node_capacities[prev_hop] = prev_hop_node_cap
-                if prev_hop != src_node:
-                    queue.append(prev_hop)
+            node_capacities[prev_hop] = prev_hop_node_cap
+            if prev_hop != src_node:
+                queue.append(prev_hop)
 
     # Place a flow of 1.0 and see how it balances
     # BFS from the src to dst across the succ
     queue = deque([(src_node, 1, 1)])
-    split_horizon = defaultdict(set)
     while queue:
         node, flow_fraction_total, flow_fraction_balanced = queue.popleft()
         node_capacities[node].flow_fraction_total += flow_fraction_total
@@ -140,15 +132,13 @@ def calc_graph_cap(
                     / len(node_capacities[node].edges)
                     * len(edge_tuple)
                 )
-                if node not in split_horizon[next_hop]:
-                    queue.append(
-                        (
-                            next_hop,
-                            next_hop_flow_fraction_total,
-                            next_hop_flow_fraction_balanced,
-                        )
+                queue.append(
+                    (
+                        next_hop,
+                        next_hop_flow_fraction_total,
+                        next_hop_flow_fraction_balanced,
                     )
-                split_horizon[next_hop].add(node)
+                )
 
     max_balanced_flow = min(
         [
@@ -162,41 +152,3 @@ def calc_graph_cap(
         max_balanced_flow,
     )
     return max_flow, node_capacities
-
-
-def calc_max_flow(
-    graph: MultiDiGraph,
-    src_node: SrcNodeID,
-    dst_node: DstNodeID,
-    shortest_path: bool = False,
-    reset_flow_graph: bool = False,
-    capacity_attr: str = "capacity",
-    flow_attr: str = "flow",
-    flows_attr: str = "flows",
-) -> MaxFlow:
-
-    flow_graph = init_flow_graph(
-        graph.copy(),
-        flow_attr,
-        flows_attr,
-        reset_flow_graph,
-    )
-
-    if shortest_path:
-        _, pred = spf(
-            flow_graph,
-            src_node,
-            edge_select_func=edge_select_fabric(EdgeSelect.ALL_MIN_COST),
-        )
-    else:
-        _, pred = bfs(
-            flow_graph,
-            src_node,
-            edge_select_func=edge_select_fabric(
-                EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING
-            ),
-        )
-    max_flow, _ = calc_graph_cap(
-        flow_graph, src_node, dst_node, pred, capacity_attr, flow_attr
-    )
-    return max_flow

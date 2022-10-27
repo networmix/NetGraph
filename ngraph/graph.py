@@ -266,3 +266,10 @@ class MultiDiGraph:
     def nodes(self) -> Iterator[NodeID]:
         for node in self._nodes:
             yield node
+
+    def neighbors(self, node) -> Iterator[NodeID]:
+        """
+        Returns an iterator over neighbors of a given node.
+        Compatibility with NetworkX.
+        """
+        return iter(self._adj[node])

@@ -1,6 +1,5 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
-from ngraph.algorithms.bfs import bfs
 
 from ngraph.graph import MultiDiGraph
 from ngraph.algorithms.common import init_flow_graph
@@ -9,7 +8,6 @@ from ngraph.algorithms.calc_cap import (
     MaxFlow,
     NodeCapacity,
     calc_graph_cap,
-    calc_max_flow,
 )
 
 
@@ -123,8 +121,8 @@ class TestGraphCapacity:
                 max_single_flow=3,
                 max_total_flow=10,
                 downstream_nodes={
-                    (0, 1, 2): {"D", "F", "C", "B"},
-                    (7,): {"D", "E", "F", "C"},
+                    (0, 1, 2): {"C", "F", "B", "D"},
+                    (7,): {"C", "F", "E", "D"},
                     (9,): {"D"},
                 },
                 flow_fraction_balanced=1,
@@ -141,7 +139,7 @@ class TestGraphCapacity:
                 max_balanced_flow=2.0,
                 max_single_flow=3,
                 max_total_flow=4,
-                downstream_nodes={(3, 4, 5): {"D", "F", "C"}},
+                downstream_nodes={(3, 4, 5): {"C", "F", "D"}},
                 flow_fraction_balanced=0.6000000000000001,
                 flow_fraction_total=0.4,
             ),
@@ -174,7 +172,7 @@ class TestGraphCapacity:
                 max_balanced_flow=2.0,
                 max_single_flow=3,
                 max_total_flow=4,
-                downstream_nodes={(8,): {"D", "F", "C"}},
+                downstream_nodes={(8,): {"C", "F", "D"}},
                 flow_fraction_balanced=0.2,
                 flow_fraction_total=0.4,
             ),
@@ -190,8 +188,8 @@ class TestGraphCapacity:
                 max_single_flow=2,
                 max_total_flow=2,
                 downstream_nodes={(11,): {"D"}},
-                flow_fraction_balanced=0.30000000000000004,
-                flow_fraction_total=0.1,
+                flow_fraction_balanced=0.4,
+                flow_fraction_total=0.2,
             ),
         }
 
@@ -211,27 +209,4 @@ class TestGraphCapacity:
         max_flow, node_cap = calc_graph_cap(r, "A", "C", pred)
         assert max_flow == MaxFlow(
             max_total_flow=2, max_single_flow=1, max_balanced_flow=2
-        )
-
-    def test_calc_graph_capacity_5(self, graph_square_2):
-        _, pred = bfs(graph_square_2, "A")
-        r = init_flow_graph(graph_square_2)
-
-        max_flow, node_cap = calc_graph_cap(r, "A", "C", pred)
-        assert max_flow == MaxFlow(
-            max_total_flow=3, max_single_flow=2, max_balanced_flow=2
-        )
-
-
-class TestMaxFlow:
-    def test_max_flow_1(self, graph_square_1):
-        max_flow = calc_max_flow(graph_square_1, "A", "C")
-        assert max_flow == MaxFlow(
-            max_total_flow=6, max_single_flow=3, max_balanced_flow=3.0
-        )
-
-    def test_max_flow_2(self, graph_square_1):
-        max_flow = calc_max_flow(graph_square_1, "A", "C", shortest_path=True)
-        assert max_flow == MaxFlow(
-            max_total_flow=1, max_single_flow=1, max_balanced_flow=1
         )
