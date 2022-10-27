@@ -39,8 +39,17 @@ def calc_max_flow(
 
     else:
         max_total_flow = 0
+        max_single_flow = max_flow.max_single_flow
+        flow_graph_orig = flow_graph.copy()
+
         while dst_node in pred:
+            max_flow_local, _ = calc_graph_cap(
+                flow_graph_orig, src_node, dst_node, pred, capacity_attr, flow_attr
+            )
+
+            max_single_flow = max(max_single_flow, max_flow_local.max_single_flow)
             flow_meta = place_flow_on_graph(flow_graph, src_node, dst_node, pred)
+
             max_total_flow += flow_meta.placed_flow
             _, pred = spf(
                 flow_graph,
@@ -49,6 +58,4 @@ def calc_max_flow(
                     EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
                 ),
             )
-        return MaxFlow(
-            max_total_flow, max_flow.max_single_flow, max_flow.max_balanced_flow
-        )
+        return MaxFlow(max_total_flow, max_single_flow, max_flow.max_balanced_flow)
