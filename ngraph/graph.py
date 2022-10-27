@@ -46,6 +46,8 @@ class MultiDiGraph:
 
         self._next_edge_id: EdgeID = 0  # the index for the next added edge
 
+        self._adj = self._succ  # alias for compatibility with NetworkX
+
     def __contains__(self, node: NodeID) -> bool:
         """
         Enables expressions like "node" in graph
@@ -264,3 +266,10 @@ class MultiDiGraph:
     def nodes(self) -> Iterator[NodeID]:
         for node in self._nodes:
             yield node
+
+    def neighbors(self, node) -> Iterator[NodeID]:
+        """
+        Returns an iterator over neighbors of a given node.
+        Compatibility with NetworkX.
+        """
+        return iter(self._adj[node])

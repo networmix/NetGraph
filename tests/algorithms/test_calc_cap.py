@@ -8,7 +8,6 @@ from ngraph.algorithms.calc_cap import (
     MaxFlow,
     NodeCapacity,
     calc_graph_cap,
-    calc_max_flow,
 )
 
 
@@ -73,6 +72,18 @@ def graph_square_1():
     return g
 
 
+@pytest.fixture
+def graph_square_2():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=2)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=1, capacity=1)
+    g.add_edge("D", "C", metric=1, capacity=2)
+    g.add_edge("B", "D", metric=1, capacity=2)
+    g.add_edge("D", "B", metric=1, capacity=2)
+    return g
+
+
 class TestGraphCapacity:
     def test_calc_graph_capacity_1(self, line_1):
         _, pred = spf(line_1, "A")
@@ -96,26 +107,41 @@ class TestGraphCapacity:
                 node_id="A",
                 edges={0, 1, 2, 7, 9},
                 edges_max_flow={
-                    (9,): MaxFlow(
-                        max_total_flow=2, max_single_flow=2, max_balanced_flow=2
-                    ),
                     (0, 1, 2): MaxFlow(
                         max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
                     ),
                     (7,): MaxFlow(
                         max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
                     ),
+                    (9,): MaxFlow(
+                        max_total_flow=2, max_single_flow=2, max_balanced_flow=2
+                    ),
                 },
                 max_balanced_flow=3.333333333333333,
                 max_single_flow=3,
                 max_total_flow=10,
                 downstream_nodes={
+                    (0, 1, 2): {"C", "F", "B", "D"},
+                    (7,): {"C", "F", "E", "D"},
                     (9,): {"D"},
-                    (0, 1, 2): {"B", "C", "D", "F"},
-                    (7,): {"E", "C", "D", "F"},
                 },
                 flow_fraction_balanced=1,
                 flow_fraction_total=1,
+            ),
+            "B": NodeCapacity(
+                node_id="B",
+                edges={3, 4, 5},
+                edges_max_flow={
+                    (3, 4, 5): MaxFlow(
+                        max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
+                    )
+                },
+                max_balanced_flow=2.0,
+                max_single_flow=3,
+                max_total_flow=4,
+                downstream_nodes={(3, 4, 5): {"C", "F", "D"}},
+                flow_fraction_balanced=0.6000000000000001,
+                flow_fraction_total=0.4,
             ),
             "C": NodeCapacity(
                 node_id="C",
@@ -131,9 +157,24 @@ class TestGraphCapacity:
                 max_balanced_flow=2.0,
                 max_single_flow=3,
                 max_total_flow=4,
-                downstream_nodes={(6,): {"D"}, (10,): {"D", "F"}},
+                downstream_nodes={(6,): {"D"}, (10,): {"F", "D"}},
                 flow_fraction_balanced=0.8,
                 flow_fraction_total=0.8,
+            ),
+            "E": NodeCapacity(
+                node_id="E",
+                edges={8},
+                edges_max_flow={
+                    (8,): MaxFlow(
+                        max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
+                    )
+                },
+                max_balanced_flow=2.0,
+                max_single_flow=3,
+                max_total_flow=4,
+                downstream_nodes={(8,): {"C", "F", "D"}},
+                flow_fraction_balanced=0.2,
+                flow_fraction_total=0.4,
             ),
             "F": NodeCapacity(
                 node_id="F",
@@ -150,36 +191,6 @@ class TestGraphCapacity:
                 flow_fraction_balanced=0.4,
                 flow_fraction_total=0.2,
             ),
-            "B": NodeCapacity(
-                node_id="B",
-                edges={3, 4, 5},
-                edges_max_flow={
-                    (3, 4, 5): MaxFlow(
-                        max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
-                    )
-                },
-                max_balanced_flow=2.0,
-                max_single_flow=3,
-                max_total_flow=4,
-                downstream_nodes={(3, 4, 5): {"C", "D", "F"}},
-                flow_fraction_balanced=0.6000000000000001,
-                flow_fraction_total=0.4,
-            ),
-            "E": NodeCapacity(
-                node_id="E",
-                edges={8},
-                edges_max_flow={
-                    (8,): MaxFlow(
-                        max_total_flow=4, max_single_flow=3, max_balanced_flow=2.0
-                    )
-                },
-                max_balanced_flow=2.0,
-                max_single_flow=3,
-                max_total_flow=4,
-                downstream_nodes={(8,): {"C", "D", "F"}},
-                flow_fraction_balanced=0.2,
-                flow_fraction_total=0.4,
-            ),
         }
 
     def test_calc_graph_capacity_3(self, graph_2):
@@ -191,16 +202,11 @@ class TestGraphCapacity:
             max_total_flow=10, max_single_flow=3, max_balanced_flow=0
         )
 
+    def test_calc_graph_capacity_4(self, graph_square_2):
+        _, pred = spf(graph_square_2, "A")
+        r = init_flow_graph(graph_square_2)
 
-class TestMaxFlow:
-    def test_max_flow_1(self, graph_square_1):
-        max_flow = calc_max_flow(graph_square_1, "A", "C")
+        max_flow, node_cap = calc_graph_cap(r, "A", "C", pred)
         assert max_flow == MaxFlow(
-            max_total_flow=6, max_single_flow=3, max_balanced_flow=3.0
-        )
-
-    def test_max_flow_2(self, graph_square_1):
-        max_flow = calc_max_flow(graph_square_1, "A", "C", shortest_path=True)
-        assert max_flow == MaxFlow(
-            max_total_flow=1, max_single_flow=1, max_balanced_flow=1
+            max_total_flow=2, max_single_flow=1, max_balanced_flow=2
         )

@@ -1,6 +1,6 @@
 # Dockerfile for my PythonBuildEnv docker container
 
-FROM python:3
+FROM python:3.10
 
 # The WORKDIR instruction sets the working directory for any RUN, CMD, ENTRYPOINT,
 # COPY and ADD instructions that follow it in the Dockerfile.

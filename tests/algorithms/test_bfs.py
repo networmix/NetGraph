@@ -57,7 +57,6 @@ def test_bfs_3():
 
     costs, pred = bfs(g, "A")
 
-    print(pred)
     assert costs == {"A": 0, "B": 10, "C": 10, "D": 10}
     assert pred == {
         "A": {},
@@ -99,6 +98,42 @@ def test_bfs_4():
     }
 
 
+def test_bfs_5():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1)
+    g.add_edge("B", "C", metric=1)
+    g.add_edge("A", "C", metric=1)
+    g.add_edge("C", "B", metric=1)
+    g.add_edge("B", "D", metric=3)
+    g.add_edge("C", "D", metric=3)
+
+    costs, pred = bfs(g, "A", multipath=False)
+
+    print(pred)
+    assert costs == {"A": 0, "B": 1, "C": 1, "D": 4}
+    assert pred == {"A": {}, "B": {"A": [0]}, "C": {"A": [2]}, "D": {"B": [4]}}
+
+
+def test_bfs_6():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1)
+    g.add_edge("B", "C", metric=1)
+    g.add_edge("A", "C", metric=1)
+    g.add_edge("C", "B", metric=1)
+    g.add_edge("B", "D", metric=3)
+    g.add_edge("C", "D", metric=3)
+
+    costs, pred = bfs(g, "A")
+
+    assert costs == {"A": 0, "B": 1, "C": 1, "D": 4}
+    assert pred == {
+        "A": {},
+        "B": {"A": [0], "C": [3]},
+        "C": {"A": [2], "B": [1]},
+        "D": {"B": [4], "C": [5]},
+    }
+
+
 def test_resolve_paths_from_predecessors_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=11)
@@ -128,3 +163,22 @@ def test_resolve_paths_from_predecessors_1():
         (("A", (4, 6)), ("C", (12,)), ("D", tuple())),
     ]
     assert list(resolve_to_paths("A", "E", pred)) == []
+
+
+def test_resolve_paths_from_predecessors_2():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1)
+    g.add_edge("B", "C", metric=1)
+    g.add_edge("A", "C", metric=1)
+    g.add_edge("C", "B", metric=1)
+    g.add_edge("B", "D", metric=3)
+    g.add_edge("C", "D", metric=3)
+
+    costs, pred = bfs(g, "A")
+
+    assert list(resolve_to_paths("A", "D", pred)) == [
+        (("A", (0,)), ("B", (4,)), ("D", ())),
+        (("A", (2,)), ("C", (3,)), ("B", (4,)), ("D", ())),
+        (("A", (2,)), ("C", (5,)), ("D", ())),
+        (("A", (0,)), ("B", (1,)), ("C", (5,)), ("D", ())),
+    ]
