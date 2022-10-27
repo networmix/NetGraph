@@ -23,8 +23,8 @@ class TestMaxFlow:
     def test_max_flow_1(self, graph_square_1):
         max_flow = calc_max_flow(graph_square_1, "A", "C")
         assert max_flow == MaxFlow(
-            max_total_flow=6, max_single_flow=1, max_balanced_flow=1
-        )  # TODO: max_single_flow should be 3 here.
+            max_total_flow=6, max_single_flow=3, max_balanced_flow=1
+        )
 
     def test_max_flow_2(self, graph_square_1):
         max_flow = calc_max_flow(graph_square_1, "A", "C", shortest_path=True)
