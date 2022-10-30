@@ -27,6 +27,7 @@ class EdgeSelect(IntEnum):
     ALL_MIN_COST_WITH_CAP_REMAINING = 2
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
     SINGLE_MIN_COST = 4
+    SINGLE_MIN_COST_WITH_CAP_REMAINING = 5
     USER_DEFINED = 99
 
 
@@ -184,6 +185,23 @@ def edge_select_fabric(
                     edge_list.append(edge_id)
         return min_cost, edge_list
 
+    def get_single_min_cost_edge_with_cap_remaining(
+        graph: MultiDiGraph,
+        src_node: SrcNodeID,
+        dst_node: DstNodeID,
+        edges: Dict[EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
+        edge_list = []
+        min_cost = None
+        for edge_id, edge_attributes in edges.items():
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
+                cost = edge_attributes[cost_attr]
+
+                if min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    edge_list = [edge_id]
+        return min_cost, edge_list
+
     if edge_select == EdgeSelect.ALL_MIN_COST:
         return get_all_min_cost_edges
     elif edge_select == EdgeSelect.SINGLE_MIN_COST:
@@ -192,6 +210,8 @@ def edge_select_fabric(
         return get_all_min_cost_edges_with_cap_remaining
     elif edge_select == EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING:
         return get_all_edges_with_cap_remaining
+    elif edge_select == EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING:
+        return get_single_min_cost_edge_with_cap_remaining
     elif edge_select == EdgeSelect.USER_DEFINED:
         return edge_select_func
 
