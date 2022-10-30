@@ -9,7 +9,6 @@ from typing import (
     Tuple,
 )
 from ngraph.algorithms.place_flow import FlowPlacement, place_flow_on_graph
-
 from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 from ngraph.algorithms import spf, bfs, common
 from ngraph.path_bundle import PathBundle
@@ -31,6 +30,7 @@ class FlowPolicyConfig(IntEnum):
     SHORTEST_PATHS_BALANCED = 1
     SHORTEST_PATHS_PROPORTIONAL = 2
     ALL_PATHS_PROPORTIONAL = 3
+    LSP_16_BALANCED = 4
 
 
 class FlowPolicy:
@@ -40,18 +40,28 @@ class FlowPolicy:
         flow_placement: FlowPlacement,
         edge_select: common.EdgeSelect,
         multipath: bool,
+        path_bundle_limit: int = 0,
     ):
         self.path_alg: PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
         self.edge_select: common.EdgeSelect = edge_select
         self.multipath: bool = multipath
+        self.path_bundle_limit: int = path_bundle_limit
+        self.path_bundle_count: int = 0
 
     def get_path_bundle(
         self,
         flow_graph: MultiDiGraph,
         src_node: SrcNodeID,
         dst_node: DstNodeID,
+        min_flow: Optional[float] = None,
     ) -> Optional[PathBundle]:
+        if min_flow:
+            flow_graph = flow_graph.filter(
+                edge_filter=common.edge_filter_fabric(
+                    edge_filter=common.EdgeFilter.CAP_REMAINING, filter_value=min_flow
+                )
+            )
         edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
         if self.path_alg == PathAlg.BFS:
             path_func = bfs.bfs
@@ -71,12 +81,19 @@ class FlowPolicy:
         flow_graph: MultiDiGraph,
         src_node: SrcNodeID,
         dst_node: DstNodeID,
+        min_flow: Optional[float] = None,
     ) -> Optional[Iterator[PathBundle]]:
         while True:
-            if not (
-                path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
+            if (
+                self.path_bundle_limit
+                and self.path_bundle_count >= self.path_bundle_limit
+            ) or not (
+                path_bundle := self.get_path_bundle(
+                    flow_graph, src_node, dst_node, min_flow
+                )
             ):
                 return
+            self.path_bundle_count += 1
             yield path_bundle
 
     def get_all_path_bundles(
@@ -84,15 +101,22 @@ class FlowPolicy:
         flow_graph: MultiDiGraph,
         src_node: SrcNodeID,
         dst_node: DstNodeID,
+        min_flow: Optional[float] = None,
     ) -> List[PathBundle]:
         exclude_edges = set()
         path_bundle_list = []
+        path_bundle_count = 0
         while True:
-            if not (
-                path_bundle := self.get_path_bundle(flow_graph, src_node, dst_node)
+            if (
+                self.path_bundle_limit and path_bundle_count >= self.path_bundle_limit
+            ) or not (
+                path_bundle := self.get_path_bundle(
+                    flow_graph, src_node, dst_node, min_flow
+                )
             ):
                 return path_bundle_list
             path_bundle_list.append(path_bundle)
+            path_bundle_count += 1
             exclude_edges.update(path_bundle.edges)
             flow_graph = flow_graph.filter(
                 edge_filter=lambda edge_id, _: edge_id not in exclude_edges
@@ -126,6 +150,7 @@ class Demand:
         self,
         flow_graph: MultiDiGraph,
         max_fraction: float = 1,
+        atomic: bool = False,
     ) -> Tuple[float, float]:
         if not self.flow_policy:
             raise RuntimeError("flow_policy is not set")
@@ -134,12 +159,12 @@ class Demand:
             to_place = min(self.volume - self.placed_flow, self.volume * max_fraction)
         else:
             to_place = self.volume if self.volume == float("inf") else 0
-
+        min_flow = to_place if atomic else None
         placed_flow = 0
         while (
             path_bundle := next(
                 self.flow_policy.get_path_bundle_iter(
-                    flow_graph, self.src_node, self.dst_node
+                    flow_graph, self.src_node, self.dst_node, min_flow=min_flow
                 ),
                 None,
             )
@@ -212,5 +237,12 @@ FLOW_POLICY_MAP = {
         flow_placement=FlowPlacement.PROPORTIONAL,
         edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         multipath=True,
+    ),
+    FlowPolicyConfig.LSP_16_BALANCED: FlowPolicy(
+        path_alg=PathAlg.SPF,
+        flow_placement=FlowPlacement.EQUAL_BALANCED,
+        edge_select=common.EdgeSelect.SINGLE_MIN_COST,
+        multipath=False,
+        path_bundle_limit=16,
     ),
 }
