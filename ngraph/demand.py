@@ -175,7 +175,7 @@ class Demand:
         while (
             path_bundle := next(
                 self.flow_policy.get_path_bundle_iter(
-                    flow_graph, self.src_node, self.dst_node, min_flow=min_flow
+                    flow_graph.copy(), self.src_node, self.dst_node, min_flow=min_flow
                 ),
                 None,
             )
