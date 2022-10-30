@@ -1,6 +1,6 @@
 from enum import IntEnum
 from itertools import product
-from typing import Iterator, Optional, Tuple, List, Dict, Callable, Union
+from typing import Any, Iterator, Optional, Tuple, List, Dict, Callable, Union
 
 from ngraph.graph import (
     AttrDict,
@@ -27,6 +27,15 @@ class EdgeSelect(IntEnum):
     ALL_MIN_COST_WITH_CAP_REMAINING = 2
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
     SINGLE_MIN_COST = 4
+    USER_DEFINED = 99
+
+
+class EdgeFilter(IntEnum):
+    """
+    Edge filtering criteria
+    """
+
+    CAP_REMAINING = 1
     USER_DEFINED = 99
 
 
@@ -184,6 +193,42 @@ def edge_select_fabric(
         return get_all_edges_with_cap_remaining
     elif edge_select == EdgeSelect.USER_DEFINED:
         return edge_select_func
+
+
+def edge_filter_fabric(
+    edge_filter: EdgeFilter,
+    filter_value: Optional[Any] = None,
+    edge_filter_func: Optional[Callable[[Tuple[EdgeID, AttrDict]], bool]] = None,
+    cost_attr: str = "metric",
+    capacity_attr: str = "capacity",
+    flow_attr: str = "flow",
+) -> Callable[[Tuple[EdgeID, AttrDict]], bool]:
+    """
+    Fabric producing a function to filter edges out from a graph.
+
+    Args:
+        edge_filter: EdgeFilter enum with filter criteria
+        edge_filter_func: Optional user-defined function
+        cost_attr: name of the cost attribute
+        capacity_attr: name of the capacity attribute
+        flow_attr: name of the flow attribute
+    Returns:
+        edge_filter_func: a callable function returning a boolean (False - remove a given edge)
+    """
+
+    def edges_with_cap_remaining(
+        edge_id: EdgeID,
+        edge_tuple: Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
+        edge_attributes = edge_tuple[-1]
+        return (
+            edge_attributes[capacity_attr] - edge_attributes[flow_attr] >= filter_value
+        )
+
+    if edge_filter == EdgeFilter.CAP_REMAINING:
+        return edges_with_cap_remaining
+    elif edge_filter == EdgeSelect.USER_DEFINED:
+        return edge_filter_func
 
 
 def resolve_to_paths(
