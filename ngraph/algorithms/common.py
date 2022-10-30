@@ -36,6 +36,7 @@ class EdgeFilter(IntEnum):
     """
 
     CAP_REMAINING = 1
+    COST_LT = 2
     USER_DEFINED = 99
 
 
@@ -225,9 +226,18 @@ def edge_filter_fabric(
             edge_attributes[capacity_attr] - edge_attributes[flow_attr] >= filter_value
         )
 
+    def edges_with_cost_lt(
+        edge_id: EdgeID,
+        edge_tuple: Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict],
+    ) -> Tuple[Cost, List[int]]:
+        edge_attributes = edge_tuple[-1]
+        return edge_attributes[cost_attr] < filter_value
+
     if edge_filter == EdgeFilter.CAP_REMAINING:
         return edges_with_cap_remaining
-    elif edge_filter == EdgeSelect.USER_DEFINED:
+    elif edge_filter == EdgeFilter.COST_LT:
+        return edges_with_cost_lt
+    elif edge_filter == EdgeFilter.USER_DEFINED:
         return edge_filter_func
 
 

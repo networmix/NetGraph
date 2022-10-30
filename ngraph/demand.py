@@ -219,6 +219,7 @@ class Demand:
         return placed_flow, to_place
 
 
+# TODO: Replace with fabric to avoid accidential object re-use
 FLOW_POLICY_MAP = {
     FlowPolicyConfig.SHORTEST_PATHS_BALANCED: FlowPolicy(
         path_alg=PathAlg.SPF,
@@ -238,11 +239,11 @@ FLOW_POLICY_MAP = {
         edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         multipath=True,
     ),
-    FlowPolicyConfig.LSP_16_BALANCED: FlowPolicy(
-        path_alg=PathAlg.SPF,
-        flow_placement=FlowPlacement.EQUAL_BALANCED,
-        edge_select=common.EdgeSelect.SINGLE_MIN_COST,
-        multipath=False,
-        path_bundle_limit=16,
-    ),
+    # FlowPolicyConfig.LSP_16_BALANCED: FlowPolicy(
+    #     path_alg=PathAlg.SPF,
+    #     flow_placement=FlowPlacement.EQUAL_BALANCED,
+    #     edge_select=common.EdgeSelect.SINGLE_MIN_COST,
+    #     multipath=False,
+    #     path_bundle_limit=16,
+    # ),
 }
