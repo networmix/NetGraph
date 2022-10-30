@@ -41,12 +41,16 @@ class FlowPolicy:
         edge_select: common.EdgeSelect,
         multipath: bool,
         path_bundle_limit: int = 0,
+        edge_filter: Optional[common.EdgeFilter] = None,
+        filter_value: Optional[Any] = None,
     ):
         self.path_alg: PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
         self.edge_select: common.EdgeSelect = edge_select
         self.multipath: bool = multipath
         self.path_bundle_limit: int = path_bundle_limit
+        self.edge_filter: Optional[common.EdgeFilter] = edge_filter
+        self.filter_value: Optional[Any] = filter_value
         self.path_bundle_count: int = 0
 
     def get_path_bundle(
@@ -56,6 +60,13 @@ class FlowPolicy:
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
     ) -> Optional[PathBundle]:
+        if self.edge_filter:
+            flow_graph = flow_graph.filter(
+                edge_filter=common.edge_filter_fabric(
+                    edge_filter=self.edge_filter,
+                    filter_value=self.filter_value,
+                )
+            )
         if min_flow:
             flow_graph = flow_graph.filter(
                 edge_filter=common.edge_filter_fabric(

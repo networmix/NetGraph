@@ -2,7 +2,7 @@
 from itertools import islice
 from typing import List
 import pytest
-from ngraph.algorithms.common import EdgeSelect, init_flow_graph
+from ngraph.algorithms.common import EdgeFilter, EdgeSelect, init_flow_graph
 from ngraph.algorithms.place_flow import FlowPlacement
 from ngraph.graph import MultiDiGraph
 from ngraph.demand import FLOW_POLICY_MAP, Demand, FlowPolicy, FlowPolicyConfig, PathAlg
@@ -150,6 +150,82 @@ class TestFlowPolicy:
         for idx, path_bundle in enumerate(path_bundle_list):
             assert vars(path_bundle) == EXPECTED[idx]
         assert len(set(path_bundle_list)) == len(EXPECTED)
+
+    def test_flow_policy_5(self, line_1):
+        EXPECTED = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [2, 4]}, "B": {"A": [0]}},
+                "edges": {0, 2, 4},
+                "nodes": {"B", "C", "A"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [2, 4]}, "B": {"A": [0]}},
+                "edges": {0, 2, 4},
+                "nodes": {"B", "C", "A"},
+            },
+        ]
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            edge_filter=EdgeFilter.COST_LT,
+            filter_value=2,
+            multipath=True,
+            path_bundle_limit=2,
+        )
+        r = init_flow_graph(line_1)
+
+        path_bundle_list: List[PathBundle] = list(
+            islice(flow_policy.get_path_bundle_iter(r, "A", "C"), 4)
+        )
+
+        assert len(set(path_bundle_list)) == len(EXPECTED)
+        for idx, path_bundle in enumerate(path_bundle_list):
+            assert vars(path_bundle) == EXPECTED[idx]
+
+    def test_flow_policy_6(self, line_1):
+        EXPECTED = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [2, 4, 6]}, "B": {"A": [0]}},
+                "edges": {0, 2, 4, 6},
+                "nodes": {"C", "B", "A"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [2, 4, 6]}, "B": {"A": [0]}},
+                "edges": {0, 2, 4, 6},
+                "nodes": {"C", "B", "A"},
+            },
+        ]
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
+            path_bundle_limit=2,
+        )
+        r = init_flow_graph(line_1)
+
+        path_bundle_list: List[PathBundle] = list(
+            islice(flow_policy.get_path_bundle_iter(r, "A", "C"), 4)
+        )
+
+        assert len(set(path_bundle_list)) == len(EXPECTED)
+        for idx, path_bundle in enumerate(path_bundle_list):
+            assert vars(path_bundle) == EXPECTED[idx]
 
     def test_flow_policy_get_all_path_bundles_1(self, square_1):
         EXPECTED = [
