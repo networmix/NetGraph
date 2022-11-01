@@ -562,7 +562,7 @@ class TestDemand:
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
-            edge_select=EdgeSelect.SINGLE_MIN_COST,
+            edge_select=EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING,
             multipath=False,
             path_bundle_limit=2,
         )

@@ -65,6 +65,7 @@ def init_flow_graph(
 
 def edge_select_fabric(
     edge_select: EdgeSelect,
+    select_value: Optional[Any] = None,
     edge_select_func: Optional[
         Callable[
             [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
@@ -157,8 +158,9 @@ def edge_select_fabric(
     ) -> Tuple[Cost, List[int]]:
         edge_list = []
         min_cost = None
+        min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if min_cost is None or cost < min_cost:
@@ -174,8 +176,9 @@ def edge_select_fabric(
     ) -> Tuple[Cost, List[int]]:
         edge_list = []
         min_cost = None
+        min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if min_cost is None or cost < min_cost:
@@ -193,8 +196,9 @@ def edge_select_fabric(
     ) -> Tuple[Cost, List[int]]:
         edge_list = []
         min_cost = None
+        min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > MIN_CAP:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if min_cost is None or cost < min_cost:

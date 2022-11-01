@@ -68,12 +68,19 @@ class FlowPolicy:
                 )
             )
         if min_flow:
-            flow_graph = flow_graph.filter(
-                edge_filter=common.edge_filter_fabric(
-                    edge_filter=common.EdgeFilter.CAP_REMAINING, filter_value=min_flow
+            if self.edge_select not in [
+                common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+                common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+                common.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING,
+            ]:
+                raise RuntimeError(
+                    "min_flow can be used only with capacity-aware edge selectors"
                 )
+            edge_select_func = common.edge_select_fabric(
+                edge_select=self.edge_select, select_value=min_flow
             )
-        edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
+        else:
+            edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
         if self.path_alg == PathAlg.BFS:
             path_func = bfs.bfs
         elif self.path_alg == PathAlg.SPF:
@@ -175,7 +182,7 @@ class Demand:
         while (
             path_bundle := next(
                 self.flow_policy.get_path_bundle_iter(
-                    flow_graph.copy(), self.src_node, self.dst_node, min_flow=min_flow
+                    flow_graph, self.src_node, self.dst_node, min_flow=min_flow
                 ),
                 None,
             )
