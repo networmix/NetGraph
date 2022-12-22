@@ -42,6 +42,30 @@ def graph_1():
 
 
 @pytest.fixture
+def graph_2():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "B1", metric=2, capacity=2)
+    g.add_edge("B1", "C", metric=2, capacity=2)
+    g.add_edge("A", "B2", metric=3, capacity=3)
+    g.add_edge("B2", "C", metric=3, capacity=3)
+    return g
+
+
+@pytest.fixture
+def graph_3():
+    g = MultiDiGraph()
+    g.add_edge("A", "B1", metric=1, capacity=1)
+    g.add_edge("B1", "C", metric=1, capacity=1)
+    g.add_edge("A", "B2", metric=1, capacity=1)
+    g.add_edge("B2", "C", metric=1, capacity=1)
+    g.add_edge("B1", "B2", metric=1, capacity=1)
+    g.add_edge("B2", "B1", metric=1, capacity=1)
+    return g
+
+
+@pytest.fixture
 def square_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=1)
@@ -151,7 +175,7 @@ class TestFlowPolicy:
 
         for idx, path_bundle in enumerate(path_bundle_list):
             assert vars(path_bundle) == EXPECTED[idx]
-        assert len(set(path_bundle_list)) == len(EXPECTED)
+        assert len(path_bundle_list) == len(EXPECTED)
 
     def test_flow_policy_5(self, line_1):
         EXPECTED = [
@@ -190,7 +214,7 @@ class TestFlowPolicy:
             islice(flow_policy.get_path_bundle_iter(r, "A", "C"), 4)
         )
 
-        assert len(set(path_bundle_list)) == len(EXPECTED)
+        assert len(path_bundle_list) == len(EXPECTED)
         for idx, path_bundle in enumerate(path_bundle_list):
             assert vars(path_bundle) == EXPECTED[idx]
 
@@ -229,7 +253,7 @@ class TestFlowPolicy:
             islice(flow_policy.get_path_bundle_iter(r, "A", "C"), 4)
         )
 
-        assert len(set(path_bundle_list)) == len(EXPECTED)
+        assert len(path_bundle_list) == len(EXPECTED)
         for idx, path_bundle in enumerate(path_bundle_list):
             assert vars(path_bundle) == EXPECTED[idx]
 
@@ -305,6 +329,107 @@ class TestFlowPolicy:
         r = init_flow_graph(square_1)
         path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "E")
         assert path_bundle_list == EXPECTED  # expected empty list
+
+    def test_flow_policy_get_all_path_bundles_4(self, graph_2):
+        EXPECTED = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
+                "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"B1": [3]}, "B1": {"A": [2]}},
+                "edges": {2, 3},
+                "edge_tuples": {(2,), (3,)},
+                "nodes": {"A", "B1", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 6,
+                "pred": {"A": {}, "C": {"B2": [5]}, "B2": {"A": [4]}},
+                "edges": {4, 5},
+                "edge_tuples": {(4,), (5,)},
+                "nodes": {"A", "B2", "C"},
+            },
+        ]
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        r = init_flow_graph(graph_2)
+        path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "C")
+        for idx, path_bundle in enumerate(path_bundle_list):
+            assert vars(path_bundle) == EXPECTED[idx]
+        assert len(path_bundle_list) == len(EXPECTED)
+
+    def test_flow_policy_get_all_path_bundles_4(self, graph_3):
+        EXPECTED = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {
+                    "A": {},
+                    "C": {"B1": [1], "B2": [3]},
+                    "B1": {"A": [0]},
+                    "B2": {"A": [2]},
+                },
+                "edges": {0, 1, 2, 3},
+                "edge_tuples": {(0,), (1,), (2,), (3,)},
+                "nodes": {"B2", "C", "A", "B1"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {
+                    "A": {},
+                    "C": {"B1": [1]},
+                    "B1": {"B2": [5]},
+                    "B2": {"A": [2]},
+                },
+                "edges": {1, 2, 5},
+                "edge_tuples": {(1,), (2,), (5,)},
+                "nodes": {"B2", "C", "A", "B1"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {
+                    "A": {},
+                    "C": {"B2": [3]},
+                    "B2": {"B1": [4]},
+                    "B1": {"A": [0]},
+                },
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
+                "nodes": {"B2", "C", "A", "B1"},
+            },
+        ]
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        r = init_flow_graph(graph_3)
+        path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "C")
+        for idx, path_bundle in enumerate(path_bundle_list):
+            assert vars(path_bundle) == EXPECTED[idx]
+        assert len(path_bundle_list) == len(EXPECTED)
 
 
 class TestDemand:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 from enum import IntEnum
+from itertools import combinations
 from heapq import heappush
 from typing import (
     Any,
@@ -60,7 +61,7 @@ class FlowPolicy:
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
-        exclude_edges: Optional[Set[EdgeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
     ) -> Optional[PathBundle]:
         if min_flow:
             if self.edge_select not in [
@@ -76,14 +77,14 @@ class FlowPolicy:
                 select_value=min_flow,
                 edge_filter=self.edge_filter,
                 filter_value=self.filter_value,
-                excluded_edges=exclude_edges,
+                excluded_edges=excluded_edges,
             )
         else:
             edge_select_func = common.edge_select_fabric(
                 edge_select=self.edge_select,
                 edge_filter=self.edge_filter,
                 filter_value=self.filter_value,
-                excluded_edges=exclude_edges,
+                excluded_edges=excluded_edges,
             )
 
         if self.path_alg == PathAlg.BFS:
@@ -106,6 +107,7 @@ class FlowPolicy:
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
     ) -> Optional[Iterator[PathBundle]]:
         while True:
             if (
@@ -113,7 +115,7 @@ class FlowPolicy:
                 and self.path_bundle_count >= self.path_bundle_limit
             ) or not (
                 path_bundle := self.get_path_bundle(
-                    flow_graph, src_node, dst_node, min_flow
+                    flow_graph, src_node, dst_node, min_flow, excluded_edges
                 )
             ):
                 return
@@ -126,46 +128,56 @@ class FlowPolicy:
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
     ) -> List[PathBundle]:
         """
         This function returns all path bundles from src_node to dst_node. It uses Yen's k-shortest paths algorithm.
         """
-        exclude_edges = set()
+        excluded_edges = excluded_edges or set()
         path_bundle_list = []
         path_bundle_count = 0
-        path_bundle_costs = set()
+        path_bundle_set = set()
         path_bundle = self.get_path_bundle(
-            flow_graph, src_node, dst_node, min_flow, exclude_edges
+            flow_graph, src_node, dst_node, min_flow, excluded_edges
         )
         if not path_bundle:
             return path_bundle_list
 
-        heappush(path_bundle_list, path_bundle)
-        path_bundle_costs.add(path_bundle.cost)
+        heappush(path_bundle_list, (path_bundle, excluded_edges))
+        path_bundle_set.add(path_bundle)
         path_bundle_count += 1
 
         while True:
             if self.path_bundle_limit and path_bundle_count >= self.path_bundle_limit:
                 break
 
-            for edge_tuple in path_bundle.edge_tuples:
-                exclude_edges_tmp = exclude_edges.copy()
-                exclude_edges_tmp.update(edge_tuple)
-                path_bundle_tmp = self.get_path_bundle(
-                    flow_graph, src_node, dst_node, min_flow, exclude_edges_tmp
-                )
+            for combination_size in range(1, len(path_bundle.edge_tuples)):
+                for edge_tuple_combination in combinations(
+                    path_bundle.edge_tuples, combination_size
+                ):
+                    excluded_edges_tmp = excluded_edges.copy()
+                    for edge_tuple in edge_tuple_combination:
+                        excluded_edges_tmp.update(edge_tuple)
+                    path_bundle_tmp = self.get_path_bundle(
+                        flow_graph, src_node, dst_node, min_flow, excluded_edges_tmp
+                    )
 
-                if path_bundle_tmp and path_bundle_tmp.cost not in path_bundle_costs:
-                    heappush(path_bundle_list, path_bundle_tmp)
-                    path_bundle_costs.add(path_bundle_tmp.cost)
+                    if (
+                        path_bundle_tmp
+                        and not path_bundle.contains(path_bundle_tmp)
+                        and path_bundle_tmp not in path_bundle_set
+                    ):
+                        heappush(
+                            path_bundle_list, (path_bundle_tmp, excluded_edges_tmp)
+                        )
+                        path_bundle_set.add(path_bundle_tmp)
 
             if len(path_bundle_list) > path_bundle_count:
-                path_bundle = path_bundle_list[path_bundle_count]
+                path_bundle, excluded_edges = path_bundle_list[path_bundle_count]
                 path_bundle_count += 1
             else:
                 break
-
-        return path_bundle_list[:path_bundle_count]
+        return [path_bundle for path_bundle, _ in path_bundle_list[:path_bundle_count]]
 
 
 class Demand:

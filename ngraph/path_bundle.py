@@ -30,6 +30,12 @@ class Path:
     def __lt__(self, other: Path):
         return self.cost < other.cost
 
+    def __eq__(self, other: Path):
+        return self.path_tuple == other.path_tuple
+
+    def __hash__(self) -> int:
+        return hash((self.path_tuple, self.cost))
+
 
 class PathBundle:
     def __init__(
@@ -61,6 +67,19 @@ class PathBundle:
     def __lt__(self, other: PathBundle):
         return self.cost < other.cost
 
+    def __eq__(self, other: PathBundle):
+        return (self.src_node, self.dst_node, self.cost, tuple(sorted(self.edges))) == (
+            other.src_node,
+            other.dst_node,
+            other.cost,
+            tuple(sorted(other.edges)),
+        )
+
+    def __hash__(self) -> int:
+        return hash(
+            (self.src_node, self.dst_node, self.cost, tuple(sorted(self.edges)))
+        )
+
     @classmethod
     def from_path(
         cls,
@@ -90,3 +109,6 @@ class PathBundle:
             for src_node in self.pred[dst_node]:
                 new_pred[dst_node][src_node] = list(graph[src_node][dst_node].keys())
         self.pred = new_pred
+
+    def contains(self, other: PathBundle) -> bool:
+        return self.edges.issuperset(other.edges)
