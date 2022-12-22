@@ -1,6 +1,6 @@
 from enum import IntEnum
 from itertools import product
-from typing import Any, Iterator, Optional, Tuple, List, Dict, Callable, Union
+from typing import Any, Iterator, Optional, Set, Tuple, List, Dict, Callable, Union
 
 from ngraph.graph import (
     AttrDict,
@@ -72,6 +72,10 @@ def edge_select_fabric(
             Tuple[Cost, List[EdgeID]],
         ]
     ] = None,
+    edge_filter: Optional[EdgeFilter] = None,
+    filter_value: Optional[Any] = None,
+    edge_filter_func: Optional[Callable[[Tuple[EdgeID, AttrDict]], bool]] = None,
+    excluded_edges: Optional[Set[EdgeID]] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
@@ -112,6 +116,10 @@ def edge_select_fabric(
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
             cost = edge_attributes[cost_attr]
 
             if min_cost is None or cost < min_cost:
@@ -142,6 +150,10 @@ def edge_select_fabric(
         edge_list = []
         min_cost = None
         for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
             cost = edge_attributes[cost_attr]
 
             if min_cost is None or cost < min_cost:
@@ -160,6 +172,10 @@ def edge_select_fabric(
         min_cost = None
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
@@ -178,6 +194,10 @@ def edge_select_fabric(
         min_cost = None
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
@@ -198,6 +218,10 @@ def edge_select_fabric(
         min_cost = None
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
@@ -207,17 +231,45 @@ def edge_select_fabric(
         return min_cost, edge_list
 
     if edge_select == EdgeSelect.ALL_MIN_COST:
-        return get_all_min_cost_edges
+        ret = get_all_min_cost_edges
     elif edge_select == EdgeSelect.SINGLE_MIN_COST:
-        return get_single_min_cost_edge
+        ret = get_single_min_cost_edge
     elif edge_select == EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING:
-        return get_all_min_cost_edges_with_cap_remaining
+        ret = get_all_min_cost_edges_with_cap_remaining
     elif edge_select == EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING:
-        return get_all_edges_with_cap_remaining
+        ret = get_all_edges_with_cap_remaining
     elif edge_select == EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING:
-        return get_single_min_cost_edge_with_cap_remaining
+        ret = get_single_min_cost_edge_with_cap_remaining
     elif edge_select == EdgeSelect.USER_DEFINED:
-        return edge_select_func
+        ret = edge_select_func
+
+    if edge_filter:
+        edge_filter_instance = edge_filter_fabric(
+            edge_filter,
+            filter_value,
+            edge_filter_func,
+            cost_attr,
+            capacity_attr,
+            flow_attr,
+        )
+
+        def prefiltered_ret(
+            graph: MultiDiGraph,
+            src_node: SrcNodeID,
+            dst_node: DstNodeID,
+            edges: Dict[EdgeID, AttrDict],
+        ) -> Tuple[Cost, List[int]]:
+            edges = {
+                edge_id: edge_attributes
+                for edge_id, edge_attributes in edges.items()
+                if edge_filter_instance(
+                    edge_id, (src_node, dst_node, edge_id, edge_attributes)
+                )
+            }
+            return ret(graph, src_node, dst_node, edges)
+
+        return prefiltered_ret
+    return ret
 
 
 def edge_filter_fabric(
@@ -227,7 +279,7 @@ def edge_filter_fabric(
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
-) -> Callable[[Tuple[EdgeID, AttrDict]], bool]:
+) -> Callable[[Tuple[EdgeID, Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict]]], bool]:
     """
     Fabric producing a function to filter edges out from a graph.
 

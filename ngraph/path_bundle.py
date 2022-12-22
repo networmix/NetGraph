@@ -10,20 +10,25 @@ from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
 @dataclass
 class Path:
     path_tuple: PathTuple
-    cost: Optional[Cost] = None
+    cost: Cost
     edges: Set[EdgeID] = field(init=False, default_factory=set, repr=False)
     nodes: Set[NodeID] = field(init=False, default_factory=set, repr=False)
+    edge_tuples: Set[Tuple[EdgeID]] = field(init=False, default_factory=set, repr=False)
 
     def __post_init__(self):
         for node_edges in self.path_tuple:
             self.nodes.add(node_edges[0])
             self.edges.update(node_edges[1])
+            self.edge_tuples.add(tuple(node_edges[1]))
 
     def __getitem__(self, idx: int) -> Tuple:
         return self.path_tuple[idx]
 
     def __iter__(self) -> Iterator:
         return iter(self.path_tuple)
+
+    def __lt__(self, other: Path):
+        return self.cost < other.cost
 
 
 class PathBundle:
@@ -32,14 +37,15 @@ class PathBundle:
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
-        cost: Optional[Cost] = None,
+        cost: Cost,
     ):
         self.src_node: SrcNodeID = src_node
         self.dst_node: DstNodeID = dst_node
         self.cost: Optional[Cost] = cost
         self.pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]] = {src_node: {}}
-        self.edges: Set = set()
-        self.nodes: Set = set([src_node])
+        self.edges: Set[EdgeID] = set()
+        self.edge_tuples: Set[Tuple[EdgeID]] = set()
+        self.nodes: Set[NodeID] = set([src_node])
 
         queue = deque([dst_node])
         while queue:
@@ -48,8 +54,12 @@ class PathBundle:
             for prev_node, edges_list in pred[node].items():
                 self.pred.setdefault(node, {})[prev_node] = edges_list
                 self.edges.update(edges_list)
+                self.edge_tuples.add(tuple(edges_list))
                 if prev_node != src_node:
                     queue.append(prev_node)
+
+    def __lt__(self, other: PathBundle):
+        return self.cost < other.cost
 
     @classmethod
     def from_path(

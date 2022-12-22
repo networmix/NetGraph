@@ -1,5 +1,6 @@
 from __future__ import annotations
 from enum import IntEnum
+from heapq import heappush
 from typing import (
     Any,
     Iterator,
@@ -59,14 +60,8 @@ class FlowPolicy:
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
+        exclude_edges: Optional[Set[EdgeID]] = None,
     ) -> Optional[PathBundle]:
-        if self.edge_filter:
-            flow_graph = flow_graph.filter(
-                edge_filter=common.edge_filter_fabric(
-                    edge_filter=self.edge_filter,
-                    filter_value=self.filter_value,
-                )
-            )
         if min_flow:
             if self.edge_select not in [
                 common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
@@ -77,14 +72,25 @@ class FlowPolicy:
                     "min_flow can be used only with capacity-aware edge selectors"
                 )
             edge_select_func = common.edge_select_fabric(
-                edge_select=self.edge_select, select_value=min_flow
+                edge_select=self.edge_select,
+                select_value=min_flow,
+                edge_filter=self.edge_filter,
+                filter_value=self.filter_value,
+                excluded_edges=exclude_edges,
             )
         else:
-            edge_select_func = common.edge_select_fabric(edge_select=self.edge_select)
+            edge_select_func = common.edge_select_fabric(
+                edge_select=self.edge_select,
+                edge_filter=self.edge_filter,
+                filter_value=self.filter_value,
+                excluded_edges=exclude_edges,
+            )
+
         if self.path_alg == PathAlg.BFS:
             path_func = bfs.bfs
         elif self.path_alg == PathAlg.SPF:
             path_func = spf.spf
+
         cost, pred = path_func(
             flow_graph,
             src_node=src_node,
@@ -121,24 +127,45 @@ class FlowPolicy:
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
     ) -> List[PathBundle]:
+        """
+        This function returns all path bundles from src_node to dst_node. It uses Yen's k-shortest paths algorithm.
+        """
         exclude_edges = set()
         path_bundle_list = []
         path_bundle_count = 0
+        path_bundle_costs = set()
+        path_bundle = self.get_path_bundle(
+            flow_graph, src_node, dst_node, min_flow, exclude_edges
+        )
+        if not path_bundle:
+            return path_bundle_list
+
+        heappush(path_bundle_list, path_bundle)
+        path_bundle_costs.add(path_bundle.cost)
+        path_bundle_count += 1
+
         while True:
-            if (
-                self.path_bundle_limit and path_bundle_count >= self.path_bundle_limit
-            ) or not (
-                path_bundle := self.get_path_bundle(
-                    flow_graph, src_node, dst_node, min_flow
+            if self.path_bundle_limit and path_bundle_count >= self.path_bundle_limit:
+                break
+
+            for edge_tuple in path_bundle.edge_tuples:
+                exclude_edges_tmp = exclude_edges.copy()
+                exclude_edges_tmp.update(edge_tuple)
+                path_bundle_tmp = self.get_path_bundle(
+                    flow_graph, src_node, dst_node, min_flow, exclude_edges_tmp
                 )
-            ):
-                return path_bundle_list
-            path_bundle_list.append(path_bundle)
-            path_bundle_count += 1
-            exclude_edges.update(path_bundle.edges)
-            flow_graph = flow_graph.filter(
-                edge_filter=lambda edge_id, _: edge_id not in exclude_edges
-            )
+
+                if path_bundle_tmp and path_bundle_tmp.cost not in path_bundle_costs:
+                    heappush(path_bundle_list, path_bundle_tmp)
+                    path_bundle_costs.add(path_bundle_tmp.cost)
+
+            if len(path_bundle_list) > path_bundle_count:
+                path_bundle = path_bundle_list[path_bundle_count]
+                path_bundle_count += 1
+            else:
+                break
+
+        return path_bundle_list[:path_bundle_count]
 
 
 class Demand:

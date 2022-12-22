@@ -122,6 +122,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
                 "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
                 "nodes": {"B", "C", "A"},
             },
             {
@@ -130,6 +131,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
                 "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
                 "nodes": {"B", "C", "A"},
             },
         ]
@@ -159,6 +161,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [2, 4]}, "B": {"A": [0]}},
                 "edges": {0, 2, 4},
+                "edge_tuples": {(0,), (2, 4)},
                 "nodes": {"B", "C", "A"},
             },
             {
@@ -167,6 +170,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [2, 4]}, "B": {"A": [0]}},
                 "edges": {0, 2, 4},
+                "edge_tuples": {(0,), (2, 4)},
                 "nodes": {"B", "C", "A"},
             },
         ]
@@ -198,6 +202,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [2, 4, 6]}, "B": {"A": [0]}},
                 "edges": {0, 2, 4, 6},
+                "edge_tuples": {(0,), (2, 4, 6)},
                 "nodes": {"C", "B", "A"},
             },
             {
@@ -206,6 +211,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [2, 4, 6]}, "B": {"A": [0]}},
                 "edges": {0, 2, 4, 6},
+                "edge_tuples": {(0,), (2, 4, 6)},
                 "nodes": {"C", "B", "A"},
             },
         ]
@@ -235,7 +241,8 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
                 "edges": {0, 1},
-                "nodes": {"B", "A", "C"},
+                "edge_tuples": {(0,), (1,)},
+                "nodes": {"A", "C", "B"},
             },
             {
                 "src_node": "A",
@@ -243,10 +250,10 @@ class TestFlowPolicy:
                 "cost": 4,
                 "pred": {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}},
                 "edges": {2, 3},
-                "nodes": {"D", "A", "C"},
+                "edge_tuples": {(2,), (3,)},
+                "nodes": {"A", "D", "C"},
             },
         ]
-
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
@@ -267,6 +274,7 @@ class TestFlowPolicy:
                 "cost": 2,
                 "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
                 "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
                 "nodes": {"B", "A", "C"},
             },
         ]
@@ -283,6 +291,20 @@ class TestFlowPolicy:
         for idx, path_bundle in enumerate(path_bundle_list):
             assert vars(path_bundle) == EXPECTED[idx]
         assert len(path_bundle_list) == len(EXPECTED)
+
+    def test_flow_policy_get_all_path_bundles_3(self, square_1):
+        EXPECTED = []
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+            multipath=True,
+            path_bundle_limit=10,
+        )
+        r = init_flow_graph(square_1)
+        path_bundle_list = flow_policy.get_all_path_bundles(r, "A", "E")
+        assert path_bundle_list == EXPECTED  # expected empty list
 
 
 class TestDemand:
