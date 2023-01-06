@@ -38,7 +38,7 @@ class Path:
         return self.cost < other.cost
 
     def __eq__(self, other: Path):
-        return self.path_tuple == other.path_tuple
+        return self.path_tuple == other.path_tuple and self.cost == other.cost
 
     def __hash__(self) -> int:
         return hash((self.path_tuple, self.cost))
