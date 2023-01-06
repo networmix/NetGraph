@@ -86,6 +86,33 @@ def square_2():
 
 
 @pytest.fixture
+def square_3():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=100)
+    g.add_edge("B", "C", metric=1, capacity=125)
+    g.add_edge("A", "D", metric=1, capacity=75)
+    g.add_edge("D", "C", metric=1, capacity=50)
+    g.add_edge("B", "D", metric=1, capacity=50)
+    g.add_edge("D", "B", metric=1, capacity=50)
+    return g
+
+
+@pytest.fixture
+def square_4():
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=100)
+    g.add_edge("B", "C", metric=1, capacity=125)
+    g.add_edge("A", "D", metric=1, capacity=75)
+    g.add_edge("D", "C", metric=1, capacity=50)
+    g.add_edge("B", "D", metric=1, capacity=50)
+    g.add_edge("D", "B", metric=1, capacity=50)
+    g.add_edge("A", "B", metric=2, capacity=200)
+    g.add_edge("B", "D", metric=2, capacity=200)
+    g.add_edge("D", "C", metric=2, capacity=200)
+    return g
+
+
+@pytest.fixture
 def triangle_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=15, label="1")
@@ -373,7 +400,7 @@ class TestFlowPolicy:
             assert vars(path_bundle) == EXPECTED[idx]
         assert len(path_bundle_list) == len(EXPECTED)
 
-    def test_flow_policy_get_all_path_bundles_4(self, graph_3):
+    def test_flow_policy_get_all_path_bundles_5(self, graph_3):
         EXPECTED = [
             {
                 "src_node": "A",
@@ -395,12 +422,12 @@ class TestFlowPolicy:
                 "cost": 3,
                 "pred": {
                     "A": {},
-                    "C": {"B1": [1]},
-                    "B1": {"B2": [5]},
-                    "B2": {"A": [2]},
+                    "C": {"B2": [3]},
+                    "B2": {"B1": [4]},
+                    "B1": {"A": [0]},
                 },
-                "edges": {1, 2, 5},
-                "edge_tuples": {(1,), (2,), (5,)},
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
                 "nodes": {"B2", "C", "A", "B1"},
             },
             {
@@ -409,12 +436,12 @@ class TestFlowPolicy:
                 "cost": 3,
                 "pred": {
                     "A": {},
-                    "C": {"B2": [3]},
-                    "B2": {"B1": [4]},
-                    "B1": {"A": [0]},
+                    "C": {"B1": [1]},
+                    "B1": {"B2": [5]},
+                    "B2": {"A": [2]},
                 },
-                "edges": {0, 3, 4},
-                "edge_tuples": {(0,), (3,), (4,)},
+                "edges": {1, 2, 5},
+                "edge_tuples": {(1,), (2,), (5,)},
                 "nodes": {"B2", "C", "A", "B1"},
             },
         ]
@@ -722,3 +749,419 @@ class TestDemand:
         placed_flow, remaining_flow = d.place(r, max_fraction=1 / 2, atomic=True)
         assert placed_flow == 0
         assert remaining_flow == 1.5
+
+    def test_demand_get_all_path_bundles_1(self, square_3):
+        EXP = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {
+                    "A": {},
+                    "C": {"B": [1], "D": [3]},
+                    "B": {"A": [0]},
+                    "D": {"A": [2]},
+                },
+                "edges": {0, 1, 2, 3},
+                "edge_tuples": {(0,), (1,), (2,), (3,)},
+                "nodes": {"D", "C", "A", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
+                "nodes": {"D", "C", "A", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"D": [5]}, "D": {"A": [2]}},
+                "edges": {1, 2, 5},
+                "edge_tuples": {(1,), (2,), (5,)},
+                "nodes": {"D", "C", "A", "B"},
+            },
+        ]
+
+        r = init_flow_graph(square_3)
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        d = Demand("A", "C", 175, flow_policy, label="TEST")
+
+        path_bundles = d.get_all_path_bundles(r)
+        for idx, path_bundle in enumerate(path_bundles):
+            assert vars(path_bundle) == EXP[idx]
+        assert len(path_bundles) == len(EXP)
+
+    def test_demand_get_all_path_bundles_2(self, square_4):
+        EXP = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {
+                    "A": {},
+                    "C": {"B": [1], "D": [3]},
+                    "B": {"A": [0]},
+                    "D": {"A": [2]},
+                },
+                "edges": {0, 1, 2, 3},
+                "edge_tuples": {(0,), (1,), (2,), (3,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [6]}},
+                "edges": {1, 6},
+                "edge_tuples": {(6,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {
+                    "A": {},
+                    "C": {"D": [8], "B": [1]},
+                    "D": {"A": [2]},
+                    "B": {"D": [5]},
+                },
+                "edges": {8, 1, 2, 5},
+                "edge_tuples": {(1,), (8,), (2,), (5,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [7]}, "B": {"A": [0]}},
+                "edges": {0, 3, 7},
+                "edge_tuples": {(0,), (7,), (3,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [6]}},
+                "edges": {3, 4, 6},
+                "edge_tuples": {(6,), (3,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {8, 0, 4},
+                "edge_tuples": {(0,), (8,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [7]}, "B": {"A": [6]}},
+                "edges": {3, 6, 7},
+                "edge_tuples": {(6,), (7,), (3,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [7]}, "B": {"A": [0]}},
+                "edges": {8, 0, 7},
+                "edge_tuples": {(0,), (7,), (8,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [4]}, "B": {"A": [6]}},
+                "edges": {8, 4, 6},
+                "edge_tuples": {(6,), (8,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 6,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [7]}, "B": {"A": [6]}},
+                "edges": {8, 6, 7},
+                "edge_tuples": {(6,), (7,), (8,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+        ]
+
+        r = init_flow_graph(square_4)
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        d = Demand("A", "C", 275, flow_policy, label="TEST")
+
+        path_bundles = d.get_all_path_bundles(r)
+        for idx, path_bundle in enumerate(path_bundles):
+            assert vars(path_bundle) == EXP[idx]
+        assert len(path_bundles) == len(EXP)
+
+    def test_demand_get_all_path_bundles_3(self, square_4):
+        EXP = EXP = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
+                "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}},
+                "edges": {2, 3},
+                "edge_tuples": {(2,), (3,)},
+                "nodes": {"A", "D", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [6]}},
+                "edges": {1, 6},
+                "edge_tuples": {(6,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"A": [2]}},
+                "edges": {8, 2},
+                "edge_tuples": {(8,), (2,)},
+                "nodes": {"A", "D", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"D": [5]}, "D": {"A": [2]}},
+                "edges": {1, 2, 5},
+                "edge_tuples": {(1,), (2,), (5,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [6]}},
+                "edges": {3, 4, 6},
+                "edge_tuples": {(6,), (3,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [7]}, "B": {"A": [0]}},
+                "edges": {0, 3, 7},
+                "edge_tuples": {(0,), (7,), (3,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {8, 0, 4},
+                "edge_tuples": {(0,), (8,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [7]}, "B": {"A": [6]}},
+                "edges": {3, 6, 7},
+                "edge_tuples": {(6,), (7,), (3,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [4]}, "B": {"A": [6]}},
+                "edges": {8, 4, 6},
+                "edge_tuples": {(6,), (8,), (4,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 5,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [7]}, "B": {"A": [0]}},
+                "edges": {8, 0, 7},
+                "edge_tuples": {(0,), (7,), (8,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 6,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [7]}, "B": {"A": [6]}},
+                "edges": {8, 6, 7},
+                "edge_tuples": {(6,), (7,), (8,)},
+                "nodes": {"A", "D", "C", "B"},
+            },
+        ]
+
+        r = init_flow_graph(square_4)
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=False,
+        )
+        d = Demand("A", "C", 175, flow_policy, label="TEST")
+
+        path_bundles = d.get_all_path_bundles(r)
+        for idx, path_bundle in enumerate(path_bundles):
+            assert vars(path_bundle) == EXP[idx]
+        assert len(path_bundles) == len(EXP)
+
+    def test_demand_get_all_path_bundles_4(self, square_4):
+        EXP = [
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}},
+                "edges": {0, 1},
+                "edge_tuples": {(0,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 2,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}},
+                "edges": {2, 3},
+                "edge_tuples": {(2,), (3,)},
+                "nodes": {"D", "A", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {0, 3, 4},
+                "edge_tuples": {(0,), (3,), (4,)},
+                "nodes": {"D", "A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"A": [6]}},
+                "edges": {1, 6},
+                "edge_tuples": {(6,), (1,)},
+                "nodes": {"A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"A": [2]}},
+                "edges": {8, 2},
+                "edge_tuples": {(8,), (2,)},
+                "nodes": {"D", "A", "C"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 3,
+                "pred": {"A": {}, "C": {"B": [1]}, "B": {"D": [5]}, "D": {"A": [2]}},
+                "edges": {1, 2, 5},
+                "edge_tuples": {(1,), (2,), (5,)},
+                "nodes": {"D", "A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [4]}, "B": {"A": [6]}},
+                "edges": {3, 4, 6},
+                "edge_tuples": {(6,), (3,), (4,)},
+                "nodes": {"D", "A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [3]}, "D": {"B": [7]}, "B": {"A": [0]}},
+                "edges": {0, 3, 7},
+                "edge_tuples": {(0,), (7,), (3,)},
+                "nodes": {"D", "A", "C", "B"},
+            },
+            {
+                "src_node": "A",
+                "dst_node": "C",
+                "cost": 4,
+                "pred": {"A": {}, "C": {"D": [8]}, "D": {"B": [4]}, "B": {"A": [0]}},
+                "edges": {8, 0, 4},
+                "edge_tuples": {(0,), (8,), (4,)},
+                "nodes": {"D", "A", "C", "B"},
+            },
+        ]
+
+        r = init_flow_graph(square_4)
+
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=False,
+            max_path_cost_factor=2,
+        )
+        d = Demand("A", "C", 275, flow_policy, label="TEST")
+
+        path_bundles = d.get_all_path_bundles(r)
+        for idx, path_bundle in enumerate(path_bundles):
+            assert vars(path_bundle) == EXP[idx]
+        assert len(path_bundles) == len(EXP)

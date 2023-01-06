@@ -76,6 +76,7 @@ def edge_select_fabric(
     filter_value: Optional[Any] = None,
     edge_filter_func: Optional[Callable[[Tuple[EdgeID, AttrDict]], bool]] = None,
     excluded_edges: Optional[Set[EdgeID]] = None,
+    excluded_nodes: Optional[Set[NodeID]] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
@@ -113,8 +114,11 @@ def edge_select_fabric(
             min_cost: minimal cost of the edge between src_node and dst_node
             edge_list: list of all edge_ids with the min_cost
         """
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
         edge_list = []
-        min_cost = None
+        min_cost = float("inf")
         for edge_id, edge_attributes in edges.items():
             if excluded_edges:
                 if edge_id in excluded_edges:
@@ -122,7 +126,7 @@ def edge_select_fabric(
 
             cost = edge_attributes[cost_attr]
 
-            if min_cost is None or cost < min_cost:
+            if cost < min_cost:
                 min_cost = cost
                 edge_list = [edge_id]
             elif cost == min_cost:
@@ -147,8 +151,11 @@ def edge_select_fabric(
             min_cost: minimal cost of the edge between src_node and dst_node
             edge_list: a list with the edge_id of the min_cost edge
         """
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
         edge_list = []
-        min_cost = None
+        min_cost = float("inf")
         for edge_id, edge_attributes in edges.items():
             if excluded_edges:
                 if edge_id in excluded_edges:
@@ -156,7 +163,7 @@ def edge_select_fabric(
 
             cost = edge_attributes[cost_attr]
 
-            if min_cost is None or cost < min_cost:
+            if cost < min_cost:
                 min_cost = cost
                 edge_list = [edge_id]
 
@@ -168,8 +175,11 @@ def edge_select_fabric(
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
     ) -> Tuple[Cost, List[int]]:
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
         edge_list = []
-        min_cost = None
+        min_cost = float("inf")
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
             if excluded_edges:
@@ -179,7 +189,7 @@ def edge_select_fabric(
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
-                if min_cost is None or cost < min_cost:
+                if cost < min_cost:
                     min_cost = cost
                 edge_list.append(edge_id)
         return min_cost, edge_list
@@ -190,8 +200,11 @@ def edge_select_fabric(
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
     ) -> Tuple[Cost, List[int]]:
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
         edge_list = []
-        min_cost = None
+        min_cost = float("inf")
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
             if excluded_edges:
@@ -201,7 +214,7 @@ def edge_select_fabric(
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
-                if min_cost is None or cost < min_cost:
+                if cost < min_cost:
                     min_cost = cost
                     edge_list = [edge_id]
                 elif cost == min_cost:
@@ -214,8 +227,11 @@ def edge_select_fabric(
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
     ) -> Tuple[Cost, List[int]]:
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
         edge_list = []
-        min_cost = None
+        min_cost = float("inf")
         min_cap = select_value if select_value is not None else MIN_CAP
         for edge_id, edge_attributes in edges.items():
             if excluded_edges:
@@ -225,7 +241,7 @@ def edge_select_fabric(
             if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
                 cost = edge_attributes[cost_attr]
 
-                if min_cost is None or cost < min_cost:
+                if cost < min_cost:
                     min_cost = cost
                     edge_list = [edge_id]
         return min_cost, edge_list
@@ -242,6 +258,8 @@ def edge_select_fabric(
         ret = get_single_min_cost_edge_with_cap_remaining
     elif edge_select == EdgeSelect.USER_DEFINED:
         ret = edge_select_func
+    else:
+        raise ValueError(f"Unknown edge_select value {edge_select}")
 
     if edge_filter:
         edge_filter_instance = edge_filter_fabric(

@@ -4,6 +4,7 @@ from typing import List
 from ngraph.graph import MultiDiGraph
 
 from ngraph.path_bundle import Path, PathBundle
+from ngraph.algorithms.common import EdgeSelect
 
 
 @pytest.fixture
@@ -100,32 +101,45 @@ class TestPathBundle:
             "C": {"B": [1]},
             "B": {"A": [0]},
         }
+        assert path_bundle.cost == 2
 
     def test_path_bundle_5(self, triangle_1):
-        path_bundle = PathBundle(
-            "A",
-            "C",
-            {
-                "A": {},
-                "C": {"B": []},
-                "B": {"A": []},
-            },
-            2,
+        path_bundle = PathBundle.from_path(
+            Path((("A", ()), ("B", ()), ("C", ())), 2),
+            resolve_edges=True,
+            graph=triangle_1,
+            edge_select=EdgeSelect.ALL_MIN_COST,
         )
-
-        path_bundle.resolve_edges(triangle_1)
-
         assert path_bundle.pred == {
             "A": {},
             "C": {"B": [2]},
             "B": {"A": [0]},
         }
+        assert path_bundle.cost == 2
 
-    def test_path_bundle_6(self, triangle_1):
-        path_bundle = PathBundle.from_path(Path((("A", ()), ("B", ()), ("C", ())), 2))
-        path_bundle.resolve_edges(triangle_1)
-        assert path_bundle.pred == {
+    def test_get_sub_bundle_1(self, triangle_1):
+        path_bundle = PathBundle.from_path(
+            Path((("A", ()), ("B", ()), ("C", ())), 2),
+            resolve_edges=True,
+            graph=triangle_1,
+            edge_select=EdgeSelect.ALL_MIN_COST,
+        )
+        sub_bundle = path_bundle.get_sub_path_bundle("B", triangle_1)
+        assert sub_bundle.pred == {
             "A": {},
-            "C": {"B": [2]},
             "B": {"A": [0]},
         }
+        assert sub_bundle.cost == 1
+
+    def test_get_sub_bundle_2(self, triangle_1):
+        path_bundle = PathBundle.from_path(
+            Path((("A", ()), ("B", ()), ("C", ())), 2),
+            resolve_edges=True,
+            graph=triangle_1,
+            edge_select=EdgeSelect.ALL_MIN_COST,
+        )
+        sub_bundle = path_bundle.get_sub_path_bundle("A", triangle_1)
+        assert sub_bundle.pred == {
+            "A": {},
+        }
+        assert sub_bundle.cost == 0

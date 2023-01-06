@@ -1,9 +1,9 @@
 from __future__ import annotations
 from enum import IntEnum
-from itertools import combinations
-from heapq import heappush
+from heapq import heappop, heappush
 from typing import (
     Any,
+    Dict,
     Iterator,
     List,
     Optional,
@@ -45,6 +45,8 @@ class FlowPolicy:
         path_bundle_limit: int = 0,
         edge_filter: Optional[common.EdgeFilter] = None,
         filter_value: Optional[Any] = None,
+        max_path_cost: Optional[common.Cost] = None,
+        max_path_cost_factor: Optional[float] = None,
     ):
         self.path_alg: PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
@@ -53,7 +55,10 @@ class FlowPolicy:
         self.path_bundle_limit: int = path_bundle_limit
         self.edge_filter: Optional[common.EdgeFilter] = edge_filter
         self.filter_value: Optional[Any] = filter_value
+        self.max_path_cost: Optional[common.Cost] = max_path_cost
+        self.max_path_cost_factor: Optional[float] = max_path_cost_factor
         self.path_bundle_count: int = 0
+        self.best_path_cost: Optional[common.Cost] = None
 
     def get_path_bundle(
         self,
@@ -62,6 +67,7 @@ class FlowPolicy:
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Optional[PathBundle]:
         if min_flow:
             if self.edge_select not in [
@@ -78,6 +84,7 @@ class FlowPolicy:
                 edge_filter=self.edge_filter,
                 filter_value=self.filter_value,
                 excluded_edges=excluded_edges,
+                excluded_nodes=excluded_nodes,
             )
         else:
             edge_select_func = common.edge_select_fabric(
@@ -85,6 +92,7 @@ class FlowPolicy:
                 edge_filter=self.edge_filter,
                 filter_value=self.filter_value,
                 excluded_edges=excluded_edges,
+                excluded_nodes=excluded_nodes,
             )
 
         if self.path_alg == PathAlg.BFS:
@@ -98,8 +106,19 @@ class FlowPolicy:
             edge_select_func=edge_select_func,
             multipath=self.multipath,
         )
+
         if dst_node in pred:
-            return PathBundle(src_node, dst_node, pred, cost[dst_node])
+            dst_cost = cost[dst_node]
+            if self.best_path_cost is None:
+                self.best_path_cost = dst_cost
+            if self.max_path_cost or self.max_path_cost_factor:
+                max_path_cost_factor = self.max_path_cost_factor or 1
+                max_path_cost = self.max_path_cost or float("inf")
+                if dst_cost > min(
+                    max_path_cost, self.best_path_cost * max_path_cost_factor
+                ):
+                    return
+            return PathBundle(src_node, dst_node, pred, dst_cost)
 
     def get_path_bundle_iter(
         self,
@@ -108,6 +127,7 @@ class FlowPolicy:
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Optional[Iterator[PathBundle]]:
         while True:
             if (
@@ -115,7 +135,12 @@ class FlowPolicy:
                 and self.path_bundle_count >= self.path_bundle_limit
             ) or not (
                 path_bundle := self.get_path_bundle(
-                    flow_graph, src_node, dst_node, min_flow, excluded_edges
+                    flow_graph,
+                    src_node,
+                    dst_node,
+                    min_flow,
+                    excluded_edges,
+                    excluded_nodes,
                 )
             ):
                 return
@@ -129,55 +154,90 @@ class FlowPolicy:
         dst_node: DstNodeID,
         min_flow: Optional[float] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> List[PathBundle]:
         """
-        This function returns all path bundles from src_node to dst_node. It uses Yen's k-shortest paths algorithm.
+        This function returns all path bundles from src_node to dst_node.
+        It uses Yen's k-shortest paths algorithm. Multipath is not supported.
         """
         excluded_edges = excluded_edges or set()
-        path_bundle_list = []
-        path_bundle_count = 0
-        path_bundle_set = set()
+        excluded_nodes = excluded_nodes or set()
+        path_bundle_list: List[PathBundle] = []  # container A - shortest paths
+        path_bundle_queue: List[PathBundle] = []  # container B - candidate paths
+        path_bundle_dict: Dict[PathBundle, Set[EdgeID]] = {}  # path deduplication
+
         path_bundle = self.get_path_bundle(
-            flow_graph, src_node, dst_node, min_flow, excluded_edges
+            flow_graph, src_node, dst_node, min_flow, excluded_edges, excluded_nodes
         )
         if not path_bundle:
             return path_bundle_list
 
-        heappush(path_bundle_list, (path_bundle, excluded_edges))
-        path_bundle_set.add(path_bundle)
-        path_bundle_count += 1
+        path_bundle_list.append(path_bundle)
 
         while True:
-            if self.path_bundle_limit and path_bundle_count >= self.path_bundle_limit:
+            if (
+                self.path_bundle_limit
+                and len(path_bundle_list) >= self.path_bundle_limit
+            ):
                 break
 
-            for combination_size in range(1, len(path_bundle.edge_tuples)):
-                for edge_tuple_combination in combinations(
-                    path_bundle.edge_tuples, combination_size
-                ):
+            for path in path_bundle_list[-1].resolve_to_paths():
+                for idx, spur_tuple in enumerate(path[:-1]):
+                    # iterate over "spur" nodes along the path
                     excluded_edges_tmp = excluded_edges.copy()
-                    for edge_tuple in edge_tuple_combination:
-                        excluded_edges_tmp.update(edge_tuple)
-                    path_bundle_tmp = self.get_path_bundle(
-                        flow_graph, src_node, dst_node, min_flow, excluded_edges_tmp
+                    excluded_nodes_tmp = excluded_nodes.copy()
+                    spur_node = spur_tuple[0]
+                    root_edge_seq = path.edges_seq[
+                        :idx
+                    ]  # edges from the source to the spur
+                    root_path_bundle = path_bundle_list[-1].get_sub_path_bundle(
+                        spur_node, flow_graph
                     )
 
-                    if (
-                        path_bundle_tmp
-                        and not path_bundle.contains(path_bundle_tmp)
-                        and path_bundle_tmp not in path_bundle_set
-                    ):
-                        heappush(
-                            path_bundle_list, (path_bundle_tmp, excluded_edges_tmp)
-                        )
-                        path_bundle_set.add(path_bundle_tmp)
+                    # remove the edges of the spur node that were used in the previous paths
+                    # also remove all the nodes that are on the current root path up to the spur node (loop avoidance)
+                    for pb in path_bundle_list:
+                        for p in pb.resolve_to_paths():
+                            if (
+                                p.nodes_seq[idx] == spur_node
+                                and p.edges_seq[:idx] == root_edge_seq
+                            ):
+                                excluded_edges_tmp.update(p.edges_seq[idx])
+                                excluded_nodes_tmp.update(p.nodes_seq[:idx])
 
-            if len(path_bundle_list) > path_bundle_count:
-                path_bundle, excluded_edges = path_bundle_list[path_bundle_count]
-                path_bundle_count += 1
-            else:
+                    # calculate the shortest path from the spur node to the destination
+                    spur_path_bundle = self.get_path_bundle(
+                        flow_graph,
+                        spur_node,
+                        dst_node,
+                        min_flow,
+                        excluded_edges_tmp,
+                        excluded_nodes_tmp,
+                    )
+
+                    if spur_path_bundle:
+                        if self.max_path_cost or self.max_path_cost_factor:
+                            max_path_cost_factor = self.max_path_cost_factor or 1
+                            max_path_cost = self.max_path_cost or float("inf")
+                            if root_path_bundle.cost + spur_path_bundle.cost > min(
+                                max_path_cost,
+                                self.best_path_cost * max_path_cost_factor,
+                            ):
+                                continue
+                        total_path_bundle = root_path_bundle.add(spur_path_bundle)
+
+                        if total_path_bundle not in path_bundle_dict:
+                            path_bundle_dict[total_path_bundle] = excluded_edges_tmp
+                            heappush(path_bundle_queue, total_path_bundle)
+
+            if not path_bundle_queue:
                 break
-        return [path_bundle for path_bundle, _ in path_bundle_list[:path_bundle_count]]
+
+            # add the shortest candidate path from container B to the container A
+            path_bundle = heappop(path_bundle_queue)
+            path_bundle_list.append(path_bundle)
+
+        return path_bundle_list
 
 
 class Demand:
@@ -245,6 +305,20 @@ class Demand:
         self.placed_flow += placed_flow
         return placed_flow, to_place
 
+    def get_all_path_bundles(
+        self, flow_graph: MultiDiGraph, excluded_edges: Optional[Set[EdgeID]] = None
+    ) -> List[PathBundle]:
+        """This function returns all path bundles from src_node to dst_node. It uses Yen's k-shortest paths algorithm."""
+        if not self.flow_policy:
+            raise RuntimeError("flow_policy is not set")
+
+        return self.flow_policy.get_all_path_bundles(
+            flow_graph,
+            self.src_node,
+            self.dst_node,
+            excluded_edges=excluded_edges,
+        )
+
     def place_path_bundle(
         self,
         flow_graph: MultiDiGraph,
@@ -296,11 +370,4 @@ FLOW_POLICY_MAP = {
         edge_select=common.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
         multipath=True,
     ),
-    # FlowPolicyConfig.LSP_16_BALANCED: FlowPolicy(
-    #     path_alg=PathAlg.SPF,
-    #     flow_placement=FlowPlacement.EQUAL_BALANCED,
-    #     edge_select=common.EdgeSelect.SINGLE_MIN_COST,
-    #     multipath=False,
-    #     path_bundle_limit=16,
-    # ),
 }
