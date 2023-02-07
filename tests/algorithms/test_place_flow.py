@@ -5,6 +5,7 @@ from ngraph.algorithms.place_flow import (
     FlowPlacement,
     FlowPlacementMeta,
     place_flow_on_graph,
+    remove_flow_from_graph,
 )
 
 from ngraph.graph import MultiDiGraph
@@ -71,7 +72,7 @@ def graph_square_1():
     return g
 
 
-class TestPlaceFlowGraph:
+class TestPlaceFlowOnGraph:
     def test_place_flow_on_graph_prop_1(self, line_1):
         _, pred = spf(line_1, "A")
         r = init_flow_graph(line_1)
@@ -346,7 +347,6 @@ class TestPlaceFlowGraph:
             )
             == False
         )
-        print(r.get_edges())
         assert r.get_edges() == {
             0: (
                 "A",
@@ -600,6 +600,288 @@ class TestPlaceFlowGraph:
             6: ("C", "D", 6, {"metric": 2, "capacity": 3, "flow": 0, "flows": {}}),
             7: ("A", "E", 7, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
             8: ("E", "C", 8, {"metric": 1, "capacity": 4, "flow": 0, "flows": {}}),
+            9: ("A", "D", 9, {"metric": 4, "capacity": 2, "flow": 0, "flows": {}}),
+            10: ("C", "F", 10, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            11: ("F", "D", 11, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+        }
+
+
+class TestRemoveFlowFromGraph:
+    def test_remove_flow_from_graph(self, graph_2):
+        _, pred = spf(graph_2, "A")
+        r = init_flow_graph(graph_2)
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "C",
+            pred,
+            10,
+            flow_index=("A", "C", None),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+        assert flow_placement_meta.placed_flow == 10
+        assert flow_placement_meta.remaining_flow == 0
+
+        remove_flow_from_graph(r)
+        assert r.get_edges() == {
+            0: ("A", "B", 0, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+            1: ("A", "B", 1, {"metric": 1, "capacity": 0, "flow": 0, "flows": {}}),
+            2: ("A", "B", 2, {"metric": 1, "capacity": 6, "flow": 0, "flows": {}}),
+            3: ("B", "C", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            4: ("B", "C", 4, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+            5: ("B", "C", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("C", "D", 6, {"metric": 2, "capacity": 3, "flow": 0, "flows": {}}),
+            7: ("A", "E", 7, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            8: ("E", "C", 8, {"metric": 1, "capacity": 4, "flow": 0, "flows": {}}),
+            9: ("A", "D", 9, {"metric": 4, "capacity": 2, "flow": 0, "flows": {}}),
+            10: ("C", "F", 10, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            11: ("F", "D", 11, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+        }
+
+    def test_remove_flow_from_graph_2(self, graph_2):
+        _, pred = spf(graph_2, "A")
+        r = init_flow_graph(graph_2)
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "C",
+            pred,
+            10,
+            flow_index=("A", "C", None),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+        assert flow_placement_meta.placed_flow == 10
+        assert flow_placement_meta.remaining_flow == 0
+
+        remove_flow_from_graph(r, flow_index=("A", "C", None))
+        assert r.get_edges() == {
+            0: ("A", "B", 0, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+            1: ("A", "B", 1, {"metric": 1, "capacity": 0, "flow": 0, "flows": {}}),
+            2: ("A", "B", 2, {"metric": 1, "capacity": 6, "flow": 0, "flows": {}}),
+            3: ("B", "C", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            4: ("B", "C", 4, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+            5: ("B", "C", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("C", "D", 6, {"metric": 2, "capacity": 3, "flow": 0, "flows": {}}),
+            7: ("A", "E", 7, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            8: ("E", "C", 8, {"metric": 1, "capacity": 4, "flow": 0, "flows": {}}),
+            9: ("A", "D", 9, {"metric": 4, "capacity": 2, "flow": 0, "flows": {}}),
+            10: ("C", "F", 10, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            11: ("F", "D", 11, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+        }
+
+    def test_remove_flow_from_graph_3(self, graph_2):
+        _, pred = spf(graph_2, "A")
+        r = init_flow_graph(graph_2)
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "C",
+            pred,
+            10,
+            flow_index=("A", "C", None),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+        assert flow_placement_meta.placed_flow == 10
+        assert flow_placement_meta.remaining_flow == 0
+
+        remove_flow_from_graph(r, flow_index=("A", "C", "non_existing_flow"))
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "metric": 1,
+                    "capacity": 2,
+                    "flow": 1.5384615384615385,
+                    "flows": {("A", "C", None): 1.5384615384615385},
+                },
+            ),
+            1: ("A", "B", 1, {"metric": 1, "capacity": 0, "flow": 0, "flows": {}}),
+            2: (
+                "A",
+                "B",
+                2,
+                {
+                    "metric": 1,
+                    "capacity": 6,
+                    "flow": 4.615384615384616,
+                    "flows": {("A", "C", None): 4.615384615384616},
+                },
+            ),
+            3: (
+                "B",
+                "C",
+                3,
+                {
+                    "metric": 1,
+                    "capacity": 1,
+                    "flow": 1.0,
+                    "flows": {("A", "C", None): 1.0},
+                },
+            ),
+            4: (
+                "B",
+                "C",
+                4,
+                {
+                    "metric": 1,
+                    "capacity": 2,
+                    "flow": 2.0,
+                    "flows": {("A", "C", None): 2.0},
+                },
+            ),
+            5: (
+                "B",
+                "C",
+                5,
+                {
+                    "metric": 1,
+                    "capacity": 3,
+                    "flow": 3.0,
+                    "flows": {("A", "C", None): 3.0},
+                },
+            ),
+            6: ("C", "D", 6, {"metric": 2, "capacity": 3, "flow": 0, "flows": {}}),
+            7: (
+                "A",
+                "E",
+                7,
+                {
+                    "metric": 1,
+                    "capacity": 5,
+                    "flow": 3.8461538461538463,
+                    "flows": {("A", "C", None): 3.8461538461538463},
+                },
+            ),
+            8: (
+                "E",
+                "C",
+                8,
+                {
+                    "metric": 1,
+                    "capacity": 4,
+                    "flow": 4.0,
+                    "flows": {("A", "C", None): 4.0},
+                },
+            ),
+            9: ("A", "D", 9, {"metric": 4, "capacity": 2, "flow": 0, "flows": {}}),
+            10: ("C", "F", 10, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            11: ("F", "D", 11, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),
+        }
+
+    def test_remove_flow_from_graph_4(self, graph_2):
+        _, pred = spf(graph_2, "A")
+        r = init_flow_graph(graph_2)
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "C",
+            pred,
+            5,
+            flow_index=("A", "C", "flow_1"),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+        assert flow_placement_meta.placed_flow == 5
+        assert flow_placement_meta.remaining_flow == 0
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "C",
+            pred,
+            5,
+            flow_index=("A", "C", "flow_2"),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+        assert flow_placement_meta.placed_flow == 5
+        assert flow_placement_meta.remaining_flow == 0
+
+        remove_flow_from_graph(r, flow_index=("A", "C", "flow_1"))
+        assert r.get_edges() == {
+            0: (
+                "A",
+                "B",
+                0,
+                {
+                    "metric": 1,
+                    "capacity": 2,
+                    "flow": 0.7692307692307693,
+                    "flows": {("A", "C", "flow_2"): 0.7692307692307693},
+                },
+            ),
+            1: ("A", "B", 1, {"metric": 1, "capacity": 0, "flow": 0, "flows": {}}),
+            2: (
+                "A",
+                "B",
+                2,
+                {
+                    "metric": 1,
+                    "capacity": 6,
+                    "flow": 2.307692307692307,
+                    "flows": {("A", "C", "flow_2"): 2.3076923076923075},
+                },
+            ),
+            3: (
+                "B",
+                "C",
+                3,
+                {
+                    "metric": 1,
+                    "capacity": 1,
+                    "flow": 0.5,
+                    "flows": {("A", "C", "flow_2"): 0.5},
+                },
+            ),
+            4: (
+                "B",
+                "C",
+                4,
+                {
+                    "metric": 1,
+                    "capacity": 2,
+                    "flow": 1.0,
+                    "flows": {("A", "C", "flow_2"): 1.0},
+                },
+            ),
+            5: (
+                "B",
+                "C",
+                5,
+                {
+                    "metric": 1,
+                    "capacity": 3,
+                    "flow": 1.5,
+                    "flows": {("A", "C", "flow_2"): 1.5},
+                },
+            ),
+            6: ("C", "D", 6, {"metric": 2, "capacity": 3, "flow": 0, "flows": {}}),
+            7: (
+                "A",
+                "E",
+                7,
+                {
+                    "metric": 1,
+                    "capacity": 5,
+                    "flow": 1.9230769230769227,
+                    "flows": {("A", "C", "flow_2"): 1.923076923076923},
+                },
+            ),
+            8: (
+                "E",
+                "C",
+                8,
+                {
+                    "metric": 1,
+                    "capacity": 4,
+                    "flow": 2.0,
+                    "flows": {("A", "C", "flow_2"): 2.0},
+                },
+            ),
             9: ("A", "D", 9, {"metric": 4, "capacity": 2, "flow": 0, "flows": {}}),
             10: ("C", "F", 10, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
             11: ("F", "D", 11, {"metric": 1, "capacity": 2, "flow": 0, "flows": {}}),

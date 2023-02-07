@@ -10,14 +10,8 @@ from typing import (
 )
 
 from ngraph.algorithms.calc_cap import calc_graph_cap
+from ngraph.algorithms.common import FlowPlacement
 from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
-
-
-class FlowPlacement(IntEnum):
-    # load balancing proportional to remaining capacity
-    PROPORTIONAL = 1
-    # equal load balancing
-    EQUAL_BALANCED = 2
 
 
 @dataclass
@@ -113,3 +107,23 @@ def place_flow_on_graph(
 
     flow_placement_meta.nodes.add(dst_node)
     return flow_placement_meta
+
+
+def remove_flow_from_graph(
+    flow_graph: MultiDiGraph,
+    flow_index: Optional[Hashable] = None,
+    flow_attr: str = "flow",
+    flows_attr: str = "flows",
+):
+    edges_to_clear = set()
+    for edge_id, edge_tuple in flow_graph.get_edges().items():
+        edge_attr = edge_tuple[3]
+
+        if flow_index and flow_index in edge_attr[flows_attr]:
+            # Remove flow with given index from edge
+            edge_attr[flow_attr] -= edge_attr[flows_attr][flow_index]
+            del edge_attr[flows_attr][flow_index]
+        elif not flow_index:
+            # Remove all flows from edge
+            edge_attr[flow_attr] = 0
+            edge_attr[flows_attr] = {}

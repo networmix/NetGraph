@@ -191,7 +191,6 @@ class TestResolvePaths:
     def test_resolve_paths_from_predecessors_4(self, square_2):
         _, pred = spf(square_2, "A")
 
-        print(list(resolve_to_paths("A", "C", pred)))
         assert list(resolve_to_paths("A", "C", pred)) == [
             (("A", (0,)), ("B", (1,)), ("C", ())),
             (("A", (2,)), ("D", (3,)), ("C", ())),

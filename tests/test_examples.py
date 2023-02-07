@@ -1,28 +1,4 @@
-# NetGraph
-
-- [Introduction](#introduction)
-- [Use Case Examples](#use-case-examples)
-  - [Calculate MaxFlow in a graph](#calculate-maxflow-in-a-graph)
-  - [Place traffic demands on a graph](#place-traffic-demands-on-a-graph)
-  - [Perform basic capacity analysis](#perform-basic-capacity-analysis)
-
----
-
-## Introduction
-This library is developed to help with network modeling and capacity analysis use-cases. The graph implementation in this library is largely compatible with [NetworkX](https://networkx.org/) while making edges first-class entities. Making edges explicitly addressable is important in traffic engineering applications.
-
-The lib provides the following main primitives:
-- [MultiDiGraph](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/graph.py#L14)
-- [Demand](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/demand.py#L108)
-- [FlowPolicy](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/demand.py#L37)
-
-Besides, it provides a number of path finding and capacity calculation functions that can be used independently.
-
----
-## Use Case Examples
-### Calculate MaxFlow in a graph
-- Calculate MaxFlow across all possible paths between the source and destination nodes
-    ```python
+def test_example_1():
     # Required imports
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.max_flow import calc_max_flow
@@ -63,9 +39,9 @@ Besides, it provides a number of path finding and capacity calculation functions
     assert max_flow.max_single_flow == 3.0
     assert max_flow.max_balanced_flow == 2.0
     # Note that max_balanced_flow considers shortests paths only
-    ```
-- Calculate MaxFlow leveraging only the shortest paths between the source and destination nodes
-    ```python
+
+
+def test_example_2():
     # Required imports
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.max_flow import calc_max_flow
@@ -106,10 +82,9 @@ Besides, it provides a number of path finding and capacity calculation functions
     assert max_flow.max_single_flow == 2.0
     assert max_flow.max_balanced_flow == 2.0
     # Note that max_balanced_flow considers shortests paths only
-    ```
-### Place traffic demands on a graph
-- Place traffic demands leveraging all possible paths in a graph
-    ```python
+
+
+def test_example_3():
     # Required imports
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.common import init_flow_graph
@@ -289,16 +264,14 @@ Besides, it provides a number of path finding and capacity calculation functions
             },
         ),
     }
-    ```
 
-### Perform basic capacity analysis
-- Place traffic demands and analyze the results
-    ```python
+
+def test_example_4():
+    # Required imports
     from ngraph.graph import MultiDiGraph
     from ngraph.algorithms.common import init_flow_graph
-    from ngraph.demand import FlowPolicyConfig, FLOW_POLICY_MAP, Demand
+    from ngraph.demand import FlowPolicyConfig, Demand
     from ngraph.analyser import Analyser
-
 
     # Create a graph
     # Metric:
@@ -331,49 +304,49 @@ Besides, it provides a number of path finding and capacity calculation functions
 
     # Create traffic demands
     demands = [
-        Demand(
+        Demand.create(
             "A",
             "B",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_1",
         ),
-        Demand(
+        Demand.create(
             "B",
             "A",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_1",
         ),
-        Demand(
+        Demand.create(
             "B",
             "C",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_2",
         ),
-        Demand(
+        Demand.create(
             "C",
             "B",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_2",
         ),
-        Demand(
+        Demand.create(
             "A",
             "C",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_3",
         ),
-        Demand(
+        Demand.create(
             "C",
             "A",
             10,
-            FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
             label="D_3",
         ),
-        ]
+    ]
 
     # Place traffic demands onto the flow graph
     for demand in demands:
@@ -393,4 +366,3 @@ Besides, it provides a number of path finding and capacity calculation functions
     assert analyser.graph_data.total_capacity == 70.0
     assert analyser.graph_data.total_flow == 70.0
     assert analyser.graph_data.avg_capacity_utilization == 1.0
-    ```

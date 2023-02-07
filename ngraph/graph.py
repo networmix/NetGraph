@@ -240,6 +240,14 @@ class MultiDiGraph:
         """
         return self._edges
 
+    def get_edge_attr(self, edge_id: EdgeID) -> AttrDict:
+        """
+        Get a dictionary with all edge attributes.
+        Returns:
+            A dict with all edge attributes.
+        """
+        return self._edges[edge_id][3]
+
     def filter(
         self,
         node_filter: Callable[[NodeID, Dict], bool] = lambda node_id, node_attr: True,

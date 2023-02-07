@@ -4,20 +4,11 @@ import pytest
 
 from ngraph.algorithms.common import init_flow_graph
 from ngraph.analyser import Analyser
-from ngraph.demand import FLOW_POLICY_MAP, Demand, FlowPolicyConfig
-from ngraph.graph import MultiDiGraph
+from ngraph.demand import Demand
+from ngraph.flow import FlowPolicyConfig, get_flow_policy
 
 
-@pytest.fixture
-def triangle_1():
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=15, label="1")
-    g.add_edge("B", "A", metric=1, capacity=15, label="1")
-    g.add_edge("B", "C", metric=1, capacity=15, label="2")
-    g.add_edge("C", "B", metric=1, capacity=15, label="2")
-    g.add_edge("A", "C", metric=1, capacity=5, label="3")
-    g.add_edge("C", "A", metric=1, capacity=5, label="3")
-    return g
+from .sample_graphs import *
 
 
 class TestAnalyser:
@@ -29,42 +20,42 @@ class TestAnalyser:
                 "A",
                 "B",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_1",
             ),
             Demand(
                 "B",
                 "A",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_1",
             ),
             Demand(
                 "B",
                 "C",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_2",
             ),
             Demand(
                 "C",
                 "B",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_2",
             ),
             Demand(
                 "A",
                 "C",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_3",
             ),
             Demand(
                 "C",
                 "A",
                 10,
-                FLOW_POLICY_MAP[FlowPolicyConfig.ALL_PATHS_PROPORTIONAL],
+                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
                 label="Demand_3",
             ),
         ]

@@ -64,13 +64,12 @@ class Analyser:
         edges = self.graph.get_edges()
         demand_data = DemandData()
         demand_data.total_volume = demand.volume
-        demand_data.placed_demand = demand.placed_flow
-        demand_data.unsatisfied_demand = demand.volume - demand.placed_flow
-        for edge_id in demand.edges:
-            edge_attr = edges[edge_id][3]
-            demand_data.total_edge_cost_flow_product += (
-                edge_attr[self.cost_attr]
-                * edge_attr[self.flows_attr][demand.flow_index]
-            )
+        demand_data.placed_demand = demand.placed_demand
+        demand_data.unsatisfied_demand = demand.volume - demand.placed_demand
 
+        flow_policy = demand.flow_policy
+        for flow in flow_policy.flows.values():
+            demand_data.total_edge_cost_flow_product += (
+                flow.path_bundle.cost * flow.placed_flow
+            )
         return demand_data

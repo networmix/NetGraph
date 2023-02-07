@@ -15,7 +15,24 @@ from ngraph.graph import (
 Cost = Union[int, float]
 PathElement = Tuple[NodeID, Tuple[EdgeID]]
 PathTuple = Tuple[PathElement]
-MIN_CAP = 2 ** (-12)
+MIN_CAP = 2 ** (-12)  # capacity below which we consider it zero
+MIN_FLOW = 2 ** (-12)  # flow below which we consider it zero
+
+
+class PathAlg(IntEnum):
+    """
+    Types of path finding algorithms
+    """
+
+    SPF = 1
+    KSP_YENS = 2
+
+
+class FlowPlacement(IntEnum):
+    # load balancing proportional to remaining capacity
+    PROPORTIONAL = 1
+    # equal load balancing
+    EQUAL_BALANCED = 2
 
 
 class EdgeSelect(IntEnum):
@@ -102,6 +119,8 @@ def edge_select_fabric(
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
     ) -> Tuple[Cost, List[int]]:
         """
         Returns all min-cost edges between a pair of adjacent nodes in a graph.
@@ -139,6 +158,8 @@ def edge_select_fabric(
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
     ) -> Tuple[Cost, List[int]]:
         """
         Returns a list containing a single min-cost edge between a pair of adjacent nodes in a graph.
@@ -174,6 +195,8 @@ def edge_select_fabric(
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
     ) -> Tuple[Cost, List[int]]:
         if excluded_nodes:
             if dst_node in excluded_nodes:
@@ -186,7 +209,7 @@ def edge_select_fabric(
                 if edge_id in excluded_edges:
                     continue
 
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) >= min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if cost < min_cost:
@@ -199,6 +222,8 @@ def edge_select_fabric(
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
     ) -> Tuple[Cost, List[int]]:
         if excluded_nodes:
             if dst_node in excluded_nodes:
@@ -211,7 +236,7 @@ def edge_select_fabric(
                 if edge_id in excluded_edges:
                     continue
 
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) >= min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if cost < min_cost:
@@ -226,6 +251,8 @@ def edge_select_fabric(
         src_node: SrcNodeID,
         dst_node: DstNodeID,
         edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
     ) -> Tuple[Cost, List[int]]:
         if excluded_nodes:
             if dst_node in excluded_nodes:
@@ -238,7 +265,7 @@ def edge_select_fabric(
                 if edge_id in excluded_edges:
                     continue
 
-            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) > min_cap:
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) >= min_cap:
                 cost = edge_attributes[cost_attr]
 
                 if cost < min_cost:
@@ -276,6 +303,8 @@ def edge_select_fabric(
             src_node: SrcNodeID,
             dst_node: DstNodeID,
             edges: Dict[EdgeID, AttrDict],
+            excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+            excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
         ) -> Tuple[Cost, List[int]]:
             edges = {
                 edge_id: edge_attributes
@@ -284,7 +313,7 @@ def edge_select_fabric(
                     edge_id, (src_node, dst_node, edge_id, edge_attributes)
                 )
             }
-            return ret(graph, src_node, dst_node, edges)
+            return ret(graph, src_node, dst_node, edges, excluded_edges, excluded_nodes)
 
         return prefiltered_ret
     return ret
@@ -340,7 +369,7 @@ def resolve_to_paths(
     dst_node: DstNodeID,
     pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
     split_parallel_edges: bool = False,
-) -> Optional[Iterator[PathTuple]]:
+) -> Iterator[PathTuple]:
     """
     Resolve a directed acyclic graph of predecessors into individual paths between
     src_node and dst_node.

@@ -71,6 +71,8 @@ class Path:
 
 
 class PathBundle:
+    """PathBundle is a loopfree collection of equal-cost paths between two nodes."""
+
     def __init__(
         self,
         src_node: SrcNodeID,
