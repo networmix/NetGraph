@@ -1,7 +1,7 @@
 # NetGraph
 🚧 Work in progress! 🚧
 
-![Python-test](https://github.com/networmix/NetSim/workflows/Python-test/badge.svg?branch=main)
+![Python-test](https://github.com/networmix/NetGraph/workflows/Python-test/badge.svg?branch=main)
 
 - [Introduction](#introduction)
 - [Use Case Examples](#use-case-examples)
