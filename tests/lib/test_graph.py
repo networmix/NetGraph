@@ -1,4 +1,5 @@
 # pylint: disable=protected-access,invalid-name
+import pytest
 import networkx as nx
 
 from ngraph.lib.graph import MultiDiGraph
@@ -152,7 +153,9 @@ def test_graph_remove_edge_2():
     assert g._succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
     assert g._pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
 
-    g.remove_edge("A", "B", edge_id=10)
+    with pytest.raises(ValueError):
+        g.remove_edge("A", "B", edge_id=10)  # edge_id does not exist
+
     assert "A" in g
     assert "B" in g
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
@@ -163,6 +166,82 @@ def test_graph_remove_edge_2():
     assert "A" in g
     assert "B" in g
     assert 0 not in g._edges
+    assert g._succ["A"] == {}
+    assert g._pred["B"] == {}
+
+
+def test_graph_remove_edge_3():
+    """
+    Expectations:
+        Method remove_edge removes only the edge with the given id if it exists
+        If the last edge removed - clean-up _adj_in and _adj_out accordingly
+    """
+    g = MultiDiGraph()
+    g.add_edge("A", "B", test_attr="TEST_edge1")
+    g.add_edge("A", "B", test_attr="TEST_edge2")
+    assert "A" in g
+    assert "B" in g
+    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
+    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
+    assert g._succ["A"]["B"] == {
+        0: {"test_attr": "TEST_edge1"},
+        1: {"test_attr": "TEST_edge2"},
+    }
+    assert g._pred["B"]["A"] == {
+        0: {"test_attr": "TEST_edge1"},
+        1: {"test_attr": "TEST_edge2"},
+    }
+
+    g.remove_edge("A", "B", edge_id=0)
+    assert "A" in g
+    assert "B" in g
+    assert 0 not in g._edges
+    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
+    assert g._succ["A"]["B"] == {1: {"test_attr": "TEST_edge2"}}
+    assert g._pred["B"]["A"] == {1: {"test_attr": "TEST_edge2"}}
+
+    g.remove_edge("A", "B", edge_id=1)
+    assert "A" in g
+    assert "B" in g
+    assert g._edges == {}
+    assert g._succ["A"] == {}
+    assert g._pred["B"] == {}
+
+
+def test_graph_remove_edge_by_id():
+    """
+    Expectations:
+        Method remove_edge_by_id removes only the edge with the given id if it exists
+        If the last edge removed - clean-up _adj_in and _adj_out accordingly
+    """
+    g = MultiDiGraph()
+    g.add_edge("A", "B", test_attr="TEST_edge1")
+    g.add_edge("A", "B", test_attr="TEST_edge2")
+    assert "A" in g
+    assert "B" in g
+    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
+    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
+    assert g._succ["A"]["B"] == {
+        0: {"test_attr": "TEST_edge1"},
+        1: {"test_attr": "TEST_edge2"},
+    }
+    assert g._pred["B"]["A"] == {
+        0: {"test_attr": "TEST_edge1"},
+        1: {"test_attr": "TEST_edge2"},
+    }
+
+    g.remove_edge_by_id(0)
+    assert "A" in g
+    assert "B" in g
+    assert 0 not in g._edges
+    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
+    assert g._succ["A"]["B"] == {1: {"test_attr": "TEST_edge2"}}
+    assert g._pred["B"]["A"] == {1: {"test_attr": "TEST_edge2"}}
+
+    g.remove_edge_by_id(1)
+    assert "A" in g
+    assert "B" in g
+    assert g._edges == {}
     assert g._succ["A"] == {}
     assert g._pred["B"] == {}
 

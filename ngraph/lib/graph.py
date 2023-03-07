@@ -85,7 +85,7 @@ class MultiDiGraph:
         """
         return loads(dumps(self))
 
-    def get_next_edge_id(self) -> EdgeID:
+    def _get_next_edge_id(self) -> EdgeID:
         next_edge_id = self._next_edge_id
         self._next_edge_id += 1
         return next_edge_id
@@ -122,7 +122,7 @@ class MultiDiGraph:
             attr: optional node attributes in a form of keyword arguments (k=v pairs).
         """
         if edge_id is None:
-            edge_id = self.get_next_edge_id()
+            edge_id = self._get_next_edge_id()
 
         if src_node not in self._nodes:
             self.add_node(src_node)
@@ -153,19 +153,32 @@ class MultiDiGraph:
             return
 
         if edge_id is not None:
-            if edge_id not in self._edges:
-                return
-
-            del self._edges[edge_id]
-            del self._succ[src_node][dst_node][edge_id]
-            del self._pred[dst_node][src_node][edge_id]
-            if not self._succ[src_node][dst_node]:
-                del self._succ[src_node][dst_node]
-                del self._pred[dst_node][src_node]
+            if edge_id not in self._succ[src_node][dst_node]:
+                raise ValueError(
+                    f"Edge with id {edge_id} does not exist between {src_node} and {dst_node}."
+                )
+            self.remove_edge_by_id(edge_id)
 
         else:
             for _edge_id in self._succ[src_node][dst_node]:
                 del self._edges[_edge_id]
+            del self._succ[src_node][dst_node]
+            del self._pred[dst_node][src_node]
+
+    def remove_edge_by_id(self, edge_id: EdgeID) -> None:
+        """
+        Remove an edge by its id.
+        Args:
+            edge_id: edge identifier.
+        """
+        if edge_id not in self._edges:
+            raise ValueError(f"Edge with id {edge_id} does not exist.")
+
+        src_node, dst_node, _, _ = self._edges[edge_id]
+        del self._edges[edge_id]
+        del self._succ[src_node][dst_node][edge_id]
+        del self._pred[dst_node][src_node][edge_id]
+        if not self._succ[src_node][dst_node]:
             del self._succ[src_node][dst_node]
             del self._pred[dst_node][src_node]
 

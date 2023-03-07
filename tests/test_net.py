@@ -187,12 +187,14 @@ def test_net_1(bb_net_1):
             link_id=19,
         ),
     }
+
     assert net.graph.get_edges() == {
         0: (
             "bb.lon1",
             "bb.ams1",
             0,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [0, 1],
                 "flow": 0,
@@ -208,6 +210,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             1,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [0, 1],
                 "flow": 0,
@@ -223,6 +226,7 @@ def test_net_1(bb_net_1):
             "bb.ams2",
             2,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [2, 3],
                 "flow": 0,
@@ -238,6 +242,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             3,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [2, 3],
                 "flow": 0,
@@ -253,6 +258,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             4,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [4, 5],
                 "flow": 0,
@@ -268,6 +274,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             5,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [4, 5],
                 "flow": 0,
@@ -283,6 +290,7 @@ def test_net_1(bb_net_1):
             "bb.ams2",
             6,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [6, 7],
                 "flow": 0,
@@ -298,6 +306,7 @@ def test_net_1(bb_net_1):
             "bb.ams1",
             7,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [6, 7],
                 "flow": 0,
@@ -313,6 +322,7 @@ def test_net_1(bb_net_1):
             "bb.fra1",
             8,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [8, 9],
                 "flow": 0,
@@ -328,6 +338,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             9,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [8, 9],
                 "flow": 0,
@@ -343,6 +354,7 @@ def test_net_1(bb_net_1):
             "bb.fra2",
             10,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [10, 11],
                 "flow": 0,
@@ -358,6 +370,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             11,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [10, 11],
                 "flow": 0,
@@ -373,6 +386,7 @@ def test_net_1(bb_net_1):
             "bb.fra2",
             12,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [12, 13],
                 "flow": 0,
@@ -388,6 +402,7 @@ def test_net_1(bb_net_1):
             "bb.fra1",
             13,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [12, 13],
                 "flow": 0,
@@ -403,6 +418,7 @@ def test_net_1(bb_net_1):
             "bb.par1",
             14,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [14, 15],
                 "flow": 0,
@@ -418,6 +434,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             15,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [14, 15],
                 "flow": 0,
@@ -433,6 +450,7 @@ def test_net_1(bb_net_1):
             "bb.par2",
             16,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [16, 17],
                 "flow": 0,
@@ -448,6 +466,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             17,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [16, 17],
                 "flow": 0,
@@ -463,6 +482,7 @@ def test_net_1(bb_net_1):
             "bb.par2",
             18,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [18, 19],
                 "flow": 0,
@@ -478,6 +498,7 @@ def test_net_1(bb_net_1):
             "bb.par1",
             19,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [18, 19],
                 "flow": 0,
@@ -493,6 +514,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             20,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [20, 21],
                 "flow": 0,
@@ -508,6 +530,7 @@ def test_net_1(bb_net_1):
             "dc1.lon",
             21,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [20, 21],
                 "flow": 0,
@@ -523,6 +546,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             22,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [22, 23],
                 "flow": 0,
@@ -538,6 +562,7 @@ def test_net_1(bb_net_1):
             "dc1.lon",
             23,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [22, 23],
                 "flow": 0,
@@ -553,6 +578,7 @@ def test_net_1(bb_net_1):
             "bb.fra1",
             24,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [24, 25],
                 "flow": 0,
@@ -568,6 +594,7 @@ def test_net_1(bb_net_1):
             "dc1.fra",
             25,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [24, 25],
                 "flow": 0,
@@ -583,6 +610,7 @@ def test_net_1(bb_net_1):
             "bb.fra2",
             26,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [26, 27],
                 "flow": 0,
@@ -598,6 +626,7 @@ def test_net_1(bb_net_1):
             "dc1.fra",
             27,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [26, 27],
                 "flow": 0,
@@ -613,6 +642,7 @@ def test_net_1(bb_net_1):
             "bb.par1",
             28,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [28, 29],
                 "flow": 0,
@@ -628,6 +658,7 @@ def test_net_1(bb_net_1):
             "dc1.par",
             29,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [28, 29],
                 "flow": 0,
@@ -643,6 +674,7 @@ def test_net_1(bb_net_1):
             "bb.par2",
             30,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [30, 31],
                 "flow": 0,
@@ -658,6 +690,7 @@ def test_net_1(bb_net_1):
             "dc1.par",
             31,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [30, 31],
                 "flow": 0,
@@ -673,6 +706,7 @@ def test_net_1(bb_net_1):
             "bb.lon1",
             32,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [32, 33],
                 "flow": 0,
@@ -688,6 +722,7 @@ def test_net_1(bb_net_1):
             "pop1.lon",
             33,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [32, 33],
                 "flow": 0,
@@ -703,6 +738,7 @@ def test_net_1(bb_net_1):
             "bb.lon2",
             34,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [34, 35],
                 "flow": 0,
@@ -718,6 +754,7 @@ def test_net_1(bb_net_1):
             "pop1.lon",
             35,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [34, 35],
                 "flow": 0,
@@ -733,6 +770,7 @@ def test_net_1(bb_net_1):
             "bb.ams1",
             36,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [36, 37],
                 "flow": 0,
@@ -748,6 +786,7 @@ def test_net_1(bb_net_1):
             "pop1.ams",
             37,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [36, 37],
                 "flow": 0,
@@ -763,6 +802,7 @@ def test_net_1(bb_net_1):
             "bb.ams2",
             38,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [38, 39],
                 "flow": 0,
@@ -778,6 +818,7 @@ def test_net_1(bb_net_1):
             "pop1.ams",
             39,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [38, 39],
                 "flow": 0,
@@ -789,3 +830,98 @@ def test_net_1(bb_net_1):
             },
         ),
     }
+
+
+def test_net_add_remove_virtual_nodes_1(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    net.create_virtnode("fra")
+
+    with pytest.raises(ValueError):
+        net.create_virtnode("fra")
+
+    assert "fra" in net.virtnodes
+    assert "fra" not in net.nodes
+    assert "fra" in net.graph
+
+    net.remove_virtnode("fra")
+
+    assert "fra" not in net.virtnodes
+    assert "fra" not in net.nodes
+    assert "fra" not in net.graph
+
+
+def test_net_add_remove_virtual_nodes_2(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    with pytest.raises(ValueError):
+        net.remove_virtnode("fra")
+
+    with pytest.raises(ValueError):
+        net.remove_virtnode("bb.fra1")
+
+
+def test_net_add_remove_virtual_nodes_3(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    with pytest.raises(ValueError):
+        net.create_virtlink("fra", "bb.fra1")
+
+
+def test_net_add_remove_virtual_links_1(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    net.create_virtnode("fra")
+
+    assert "fra" in net.virtnodes
+    assert "fra" not in net.nodes
+    assert "fra" in net.graph
+
+    virtlink_id = net.create_virtlink("fra", "bb.fra1")
+    assert virtlink_id in net.virtlinks
+    assert virtlink_id not in net.links
+    assert net.graph["fra"]["bb.fra1"] == {
+        -1: {"virtual": True, "metric": 0, "capacity": float("inf")}
+    }
+
+    virtlink_id = net.create_virtlink("bb.fra1", "fra")
+    assert virtlink_id in net.virtlinks
+    assert virtlink_id not in net.links
+    assert net.graph["bb.fra1"]["fra"] == {
+        -2: {"virtual": True, "metric": 0, "capacity": float("inf")}
+    }
+
+
+def test_net_add_remove_virtual_links_2(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    net.create_virtnode("fra")
+    virtlink_id1 = net.create_virtlink("fra", "bb.fra1")
+    virtlink_id2 = net.create_virtlink("bb.fra1", "fra")
+
+    net.remove_virtlink(virtlink_id1)
+    assert virtlink_id1 not in net.virtlinks
+    assert "bb.fra1" not in net.graph["fra"]
+
+    net.remove_virtnode("fra")
+    assert virtlink_id2 not in net.virtlinks
+    assert "fra" not in net.graph["bb.fra1"]
+    assert "fra" not in net.virtnodes
+
+    with pytest.raises(ValueError):
+        net.remove_virtlink(virtlink_id2)
