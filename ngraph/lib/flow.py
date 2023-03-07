@@ -1,15 +1,31 @@
 from __future__ import annotations
 from enum import IntEnum
 from collections import deque
-from typing import Any, Dict, Hashable, Iterator, List, Optional, Set, Tuple, NamedTuple
-from ngraph.algorithms.place_flow import (
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    NamedTuple,
+)
+from ngraph.lib.place_flow import (
     FlowPlacement,
     place_flow_on_graph,
     remove_flow_from_graph,
 )
-from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
-from ngraph.algorithms import spf, common
-from ngraph.path_bundle import PathBundle
+from ngraph.lib.graph import (
+    AttrDict,
+    NodeID,
+    EdgeID,
+    MultiDiGraph,
+)
+from ngraph.lib import spf, common
+from ngraph.lib.path_bundle import PathBundle
 
 
 class FlowPolicyConfig(IntEnum):
@@ -21,9 +37,9 @@ class FlowPolicyConfig(IntEnum):
 
 
 class FlowIndex(NamedTuple):
-    src_node: SrcNodeID
-    dst_node: DstNodeID
-    label: Hashable
+    src_node: NodeID
+    dst_node: NodeID
+    flow_class: int
     flow_id: int
 
 
@@ -45,6 +61,14 @@ class FlowPolicy:
         max_path_cost: Optional[common.Cost] = None,
         max_path_cost_factor: Optional[float] = None,
         static_paths: Optional[List[PathBundle]] = None,
+        edge_select_func: Optional[
+            Callable[
+                [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
+                Tuple[common.Cost, List[EdgeID]],
+            ]
+        ] = None,
+        edge_select_value: Optional[Any] = None,
+        reoptimize_flows_on_each_placement: bool = False,
     ):
         self.path_alg: common.PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
@@ -57,6 +81,16 @@ class FlowPolicy:
         self.max_path_cost: Optional[common.Cost] = max_path_cost
         self.max_path_cost_factor: Optional[float] = max_path_cost_factor
         self.static_paths: Optional[List[PathBundle]] = static_paths
+        self.edge_select_func: Optional[
+            Callable[
+                [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
+                Tuple[common.Cost, List[EdgeID]],
+            ]
+        ] = edge_select_func
+        self.edge_select_value: Optional[Any] = edge_select_value
+        self.reoptimize_flows_on_each_placement: bool = (
+            reoptimize_flows_on_each_placement
+        )
 
         self.flows: Dict[Tuple, Flow] = {}
         self.best_path_cost: Optional[common.Cost] = None
@@ -88,15 +122,19 @@ class FlowPolicy:
         return next_flow_id
 
     def _build_flow_index(
-        self, src_node: SrcNodeID, dst_node: DstNodeID, label: Hashable, flow_id: int
+        self,
+        src_node: NodeID,
+        dst_node: NodeID,
+        flow_class: int,
+        flow_id: int,
     ) -> Tuple:
-        return FlowIndex(src_node, dst_node, label, flow_id)
+        return FlowIndex(src_node, dst_node, flow_class, flow_id)
 
     def _get_path_bundle(
         self,
         flow_graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         min_flow: Optional[float] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
@@ -104,11 +142,12 @@ class FlowPolicy:
 
         edge_select_func = common.edge_select_fabric(
             edge_select=self.edge_select,
-            select_value=min_flow,
+            select_value=min_flow or self.edge_select_value,
             edge_filter=self.edge_filter,
             filter_value=self.filter_value,
             excluded_edges=excluded_edges,
             excluded_nodes=excluded_nodes,
+            edge_select_func=self.edge_select_func,
         )
 
         if self.path_alg == common.PathAlg.SPF:
@@ -139,9 +178,9 @@ class FlowPolicy:
     def _create_flow(
         self,
         flow_graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
-        label: Hashable,
+        src_node: NodeID,
+        dst_node: NodeID,
+        flow_class: int,
         min_flow: Optional[float] = None,
         path_bundle: Optional[PathBundle] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
@@ -158,7 +197,7 @@ class FlowPolicy:
         if not path_bundle:
             return
         flow_index = self._build_flow_index(
-            src_node, dst_node, label, self._get_next_flow_id()
+            src_node, dst_node, flow_class, self._get_next_flow_id()
         )
         flow = Flow(path_bundle, flow_index)
         self.flows[flow_index] = flow
@@ -167,9 +206,9 @@ class FlowPolicy:
     def _create_flows(
         self,
         flow_graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
-        label: Hashable,
+        src_node: NodeID,
+        dst_node: NodeID,
+        flow_class: int,
         min_flow: Optional[float] = None,
     ) -> None:
         if self.static_paths:
@@ -179,7 +218,12 @@ class FlowPolicy:
                     and path_bundle.dst_node == dst_node
                 ):
                     self._create_flow(
-                        flow_graph, src_node, dst_node, label, min_flow, path_bundle
+                        flow_graph,
+                        src_node,
+                        dst_node,
+                        flow_class,
+                        min_flow,
+                        path_bundle,
                     )
                 else:
                     raise ValueError(
@@ -187,7 +231,7 @@ class FlowPolicy:
                     )
         else:
             for _ in range(self.min_flow_count):
-                self._create_flow(flow_graph, src_node, dst_node, label, min_flow)
+                self._create_flow(flow_graph, src_node, dst_node, flow_class, min_flow)
 
     def _delete_flow(self, flow_graph: MultiDiGraph, flow_index: FlowIndex) -> None:
         flow = self.flows.pop(flow_index)
@@ -208,7 +252,7 @@ class FlowPolicy:
             flow.excluded_edges,
             flow.excluded_nodes,
         )
-        if not path_bundle or path_bundle == flow.path_bundle:
+        if not path_bundle or path_bundle.edges == flow.path_bundle.edges:
             # Could not find a path with enough capacity, so we restore the old flow
             flow.place_flow(flow_graph, flow_volume, self.flow_placement)
             return
@@ -222,15 +266,15 @@ class FlowPolicy:
     def place_demand(
         self,
         flow_graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
-        label: Hashable,
+        src_node: NodeID,
+        dst_node: NodeID,
+        flow_class: int,
         volume: float,
         target_flow_volume: Optional[float] = None,
         min_flow: Optional[float] = None,
     ) -> Tuple:
         if not self.flows:
-            self._create_flows(flow_graph, src_node, dst_node, label, min_flow)
+            self._create_flows(flow_graph, src_node, dst_node, flow_class, min_flow)
 
         flow_queue = deque(self.flows.values())
         target_flow_volume = target_flow_volume or volume
@@ -250,7 +294,9 @@ class FlowPolicy:
             ):
                 if not self.max_flow_count or len(self.flows) < self.max_flow_count:
                     # create new flow if it is possible
-                    new_flow = self._create_flow(flow_graph, src_node, dst_node, label)
+                    new_flow = self._create_flow(
+                        flow_graph, src_node, dst_node, flow_class
+                    )
                 else:
                     # try to reoptimize the current flow
                     new_flow = self._reoptimize_flow(
@@ -271,17 +317,20 @@ class FlowPolicy:
                 for flow in self.flows.values()
             ):
                 total_placed_flow, excess_flow = self.rebalance_demand(
-                    flow_graph, src_node, dst_node, label, target_flow_volume
+                    flow_graph, src_node, dst_node, flow_class, target_flow_volume
                 )
                 volume += excess_flow
+        if self.reoptimize_flows_on_each_placement:
+            for flow in self.flows.values():
+                self._reoptimize_flow(flow_graph, flow.flow_index)
         return total_placed_flow, volume
 
     def rebalance_demand(
         self,
         flow_graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
-        label: Hashable,
+        src_node: NodeID,
+        dst_node: NodeID,
+        flow_class: int,
         target_flow_volume: float,
     ) -> Tuple:
         # Rebalance demand across flows to make them close to target
@@ -291,7 +340,7 @@ class FlowPolicy:
             flow_graph,
             src_node,
             dst_node,
-            label,
+            flow_class,
             volume,
             target_flow_volume,
         )
@@ -320,8 +369,8 @@ class Flow:
         self.flow_index: Hashable = flow_index
         self.excluded_edges: Set[EdgeID] = excluded_edges or set()
         self.excluded_nodes: Set[NodeID] = excluded_nodes or set()
-        self.src_node: SrcNodeID = path_bundle.src_node
-        self.dst_node: DstNodeID = path_bundle.dst_node
+        self.src_node: NodeID = path_bundle.src_node
+        self.dst_node: NodeID = path_bundle.dst_node
         self.placed_flow: float = 0
 
     def __str__(self) -> str:
@@ -383,23 +432,25 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             multipath=False,
         )
     elif flow_policy_config == FlowPolicyConfig.TE_ECMP_UP_TO_256_LSP:
-        """TE with 16 LSPs, e.g. 16 parallel MPLS LSPs with ECMP flow placement."""
+        """TE with up to 256 LSPs with ECMP flow placement."""
         return FlowPolicy(
             path_alg=common.PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
-            edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            edge_select=common.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED,
             multipath=False,
             max_flow_count=256,
+            reoptimize_flows_on_each_placement=True,
         )
     elif flow_policy_config == FlowPolicyConfig.TE_ECMP_16_LSP:
         """TE with 16 LSPs, e.g. 16 parallel MPLS LSPs with ECMP flow placement."""
         return FlowPolicy(
             path_alg=common.PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
-            edge_select=common.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            edge_select=common.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED,
             multipath=False,
             min_flow_count=16,
             max_flow_count=16,
+            reoptimize_flows_on_each_placement=True,
         )
     else:
         raise ValueError(f"Unknown flow policy config: {flow_policy_config}")

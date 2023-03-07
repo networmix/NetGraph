@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
-from ngraph.graph import MultiDiGraph
-from ngraph.demand import Demand
+from ngraph.lib.flow import FlowPolicy
+from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.demand import Demand
 
 
 @dataclass(init=False)
@@ -25,14 +26,14 @@ class Analyser:
     def __init__(
         self,
         graph: MultiDiGraph,
-        demands: List[Demand],
+        demand_policy_map: Dict[Demand, FlowPolicy],
         cost_attr: str = "metric",
         cap_attr: str = "capacity",
         flow_attr: str = "flow",
         flows_attr: str = "flows",
     ):
         self.graph = graph
-        self.demands = demands
+        self.demand_policy_map = demand_policy_map
         self.demand_data: Dict[Demand, DemandData] = {}
         self.graph_data: GraphData = GraphData()
         self.cost_attr = cost_attr
@@ -41,8 +42,8 @@ class Analyser:
         self.flows_attr = flows_attr
 
     def analyse(self) -> None:
-        for demand in self.demands:
-            self.demand_data[demand] = self._analyse_demand(demand)
+        for demand, flow_policy in self.demand_policy_map.items():
+            self.demand_data[demand] = self._analyse_demand(demand, flow_policy)
         self._analyse_graph()
 
     def _analyse_graph(self):
@@ -60,14 +61,13 @@ class Analyser:
                 self.graph_data.total_flow / self.graph_data.total_capacity
             )
 
-    def _analyse_demand(self, demand: Demand) -> DemandData:
+    def _analyse_demand(self, demand: Demand, flow_policy: FlowPolicy) -> DemandData:
         edges = self.graph.get_edges()
         demand_data = DemandData()
         demand_data.total_volume = demand.volume
         demand_data.placed_demand = demand.placed_demand
         demand_data.unsatisfied_demand = demand.volume - demand.placed_demand
 
-        flow_policy = demand.flow_policy
         for flow in flow_policy.flows.values():
             demand_data.total_edge_cost_flow_product += (
                 flow.path_bundle.cost * flow.placed_flow

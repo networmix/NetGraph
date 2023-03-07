@@ -2,80 +2,67 @@
 from dataclasses import asdict
 import pytest
 
-from ngraph.algorithms.common import init_flow_graph
+from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.common import init_flow_graph
+from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
 from ngraph.analyser import Analyser
-from ngraph.demand import Demand
-from ngraph.flow import FlowPolicyConfig, get_flow_policy
 
 
-from .sample_graphs import *
+from .sample_data.sample_graphs import *
 
 
 class TestAnalyser:
-    def test_demand_analyser_1(self, triangle_1):
-        r = init_flow_graph(triangle_1)
+    def test_demand_analyser_1(self, triangle1):
+        r = init_flow_graph(triangle1)
 
         demands = [
             Demand(
                 "A",
                 "B",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_1",
             ),
             Demand(
                 "B",
                 "A",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_1",
             ),
             Demand(
                 "B",
                 "C",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_2",
             ),
             Demand(
                 "C",
                 "B",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_2",
             ),
             Demand(
                 "A",
                 "C",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_3",
             ),
             Demand(
                 "C",
                 "A",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_3",
             ),
         ]
 
+        demand_policy_map = {}
         for demand in demands:
-            demand.place(r)
+            flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+            demand_policy_map[demand] = flow_policy
+            demand.place(r, flow_policy)
 
-        analyser = Analyser(r, demands)
+        analyser = Analyser(r, demand_policy_map)
         analyser.analyse()
 
-        assert asdict(analyser.demand_data[demands[0]]) == {
-            "total_edge_cost_flow_product": 10.0,
-            "total_volume": 10,
-            "placed_demand": 10,
-            "unsatisfied_demand": 0,
-        }
+        assert analyser.demand_data[demands[0]].total_edge_cost_flow_product == 10.0
+        assert analyser.demand_data[demands[0]].total_volume == 10.0
+        assert analyser.demand_data[demands[0]].placed_demand == 10.0
+        assert analyser.demand_data[demands[0]].unsatisfied_demand == 0
 
-        assert asdict(analyser.graph_data) == {
-            "total_edge_cost_volume_product": 70.0,
-            "total_capacity": 70,
-            "total_flow": 70.0,
-            "avg_capacity_utilization": 1.0,
-        }
+        assert analyser.graph_data.total_edge_cost_volume_product == 70.0
+        assert analyser.graph_data.total_capacity == 70.0
+        assert analyser.graph_data.total_flow == 70.0
+        assert analyser.graph_data.avg_capacity_utilization == 1.0

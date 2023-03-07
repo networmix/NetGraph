@@ -1,38 +1,37 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
-from ngraph.algorithms.common import (
+from ngraph.lib.common import (
     EdgeSelect,
     init_flow_graph,
     PathAlg,
     FlowPlacement,
 )
-from ngraph.demand import Demand
-from ngraph.flow import FlowPolicy, FlowPolicyConfig, get_flow_policy, FlowIndex
+from ngraph.lib.demand import Demand
+from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig, get_flow_policy, FlowIndex
 
-from .sample_graphs import *
+from ..sample_data.sample_graphs import *
 
 
 class TestDemand:
     def test_demand_1(self):
+        assert Demand("A", "C", float("inf"))
+
+    def test_demand_2(self):
+        assert Demand("A", "C", float("inf"), demand_class=99) > Demand(
+            "A", "C", float("inf"), demand_class=0
+        )
+
+    def test_demand_place_1(self, line1):
+        r = init_flow_graph(line1)
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
             multipath=True,
         )
-        assert Demand("A", "C", float("inf"), flow_policy)
+        d = Demand("A", "C", float("inf"), demand_class=99)
 
-    def test_demand_place_1(self, line_1):
-        r = init_flow_graph(line_1)
-        flow_policy = FlowPolicy(
-            path_alg=PathAlg.SPF,
-            flow_placement=FlowPlacement.PROPORTIONAL,
-            edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
-            multipath=True,
-        )
-        d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
-
-        placed_demand, remaining_demand = d.place(r)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
 
         assert placed_demand == 5
         assert remaining_demand == float("inf")
@@ -53,7 +52,7 @@ class TestDemand:
                     "flow": 5.0,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="C", label="TEST", flow_id=0
+                            src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 5.0
                     },
                     "metric": 1,
@@ -69,7 +68,7 @@ class TestDemand:
                     "flow": 0.45454545454545453,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="C", label="TEST", flow_id=0
+                            src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 0.45454545454545453
                     },
                     "metric": 1,
@@ -85,7 +84,7 @@ class TestDemand:
                     "flow": 1.3636363636363635,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="C", label="TEST", flow_id=0
+                            src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 1.3636363636363635
                     },
                     "metric": 1,
@@ -101,7 +100,7 @@ class TestDemand:
                     "flow": 3.1818181818181817,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="C", label="TEST", flow_id=0
+                            src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 3.1818181818181817
                     },
                     "metric": 2,
@@ -110,8 +109,8 @@ class TestDemand:
             7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "metric": 2}),
         }
 
-    def test_demand_place_2(self, square_1):
-        r = init_flow_graph(square_1)
+    def test_demand_place_2(self, square1):
+        r = init_flow_graph(square1)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -120,14 +119,14 @@ class TestDemand:
             multipath=True,
             max_path_cost_factor=1,
         )
-        d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
+        d = Demand("A", "C", float("inf"), demand_class=99)
 
-        placed_demand, remaining_demand = d.place(r)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
         assert placed_demand == 1
         assert remaining_demand == float("inf")
 
-    def test_demand_place_3(self, square_1):
-        r = init_flow_graph(square_1)
+    def test_demand_place_3(self, square1):
+        r = init_flow_graph(square1)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -135,14 +134,14 @@ class TestDemand:
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
             multipath=True,
         )
-        d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
+        d = Demand("A", "C", float("inf"), demand_class=99)
 
-        placed_demand, remaining_demand = d.place(r)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
         assert placed_demand == 3
         assert remaining_demand == float("inf")
 
-    def test_demand_place_4(self, square_2):
-        r = init_flow_graph(square_2)
+    def test_demand_place_4(self, square2):
+        r = init_flow_graph(square2)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -151,62 +150,57 @@ class TestDemand:
             multipath=True,
             max_flow_count=1,
         )
-        d = Demand("A", "C", float("inf"), flow_policy, label="TEST")
+        d = Demand("A", "C", float("inf"), demand_class=99)
 
-        placed_demand, remaining_demand = d.place(r)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
         assert placed_demand == 2
         assert remaining_demand == float("inf")
 
-    def test_demand_place_5(self, triangle_1):
-        r = init_flow_graph(triangle_1)
+    def test_demand_place_5(self, triangle1):
+        r = init_flow_graph(triangle1)
 
         demands = [
             Demand(
                 "A",
                 "B",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_1",
+                demand_class=42,
             ),
             Demand(
                 "B",
                 "A",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_1",
+                demand_class=42,
             ),
             Demand(
                 "B",
                 "C",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_2",
+                demand_class=42,
             ),
             Demand(
                 "C",
                 "B",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_2",
+                demand_class=42,
             ),
             Demand(
                 "A",
                 "C",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_3",
+                demand_class=42,
             ),
             Demand(
                 "C",
                 "A",
                 10,
-                get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
-                label="Demand_3",
+                demand_class=42,
             ),
         ]
 
         for demand in demands:
-            demand.place(r)
+            flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+            demand.place(r, flow_policy)
 
         assert r.get_edges() == {
             0: (
@@ -220,10 +214,16 @@ class TestDemand:
                     "flow": 15.0,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="B", label="Demand_1", flow_id=0
+                            src_node="A",
+                            dst_node="B",
+                            flow_class=42,
+                            flow_id=0,
                         ): 10.0,
                         FlowIndex(
-                            src_node="A", dst_node="C", label="Demand_3", flow_id=1
+                            src_node="A",
+                            dst_node="C",
+                            flow_class=42,
+                            flow_id=1,
                         ): 5.0,
                     },
                 },
@@ -239,10 +239,16 @@ class TestDemand:
                     "flow": 15.0,
                     "flows": {
                         FlowIndex(
-                            src_node="B", dst_node="A", label="Demand_1", flow_id=0
+                            src_node="B",
+                            dst_node="A",
+                            flow_class=42,
+                            flow_id=0,
                         ): 10.0,
                         FlowIndex(
-                            src_node="C", dst_node="A", label="Demand_3", flow_id=1
+                            src_node="C",
+                            dst_node="A",
+                            flow_class=42,
+                            flow_id=1,
                         ): 5.0,
                     },
                 },
@@ -258,10 +264,16 @@ class TestDemand:
                     "flow": 15.0,
                     "flows": {
                         FlowIndex(
-                            src_node="B", dst_node="C", label="Demand_2", flow_id=0
+                            src_node="B",
+                            dst_node="C",
+                            flow_class=42,
+                            flow_id=0,
                         ): 10.0,
                         FlowIndex(
-                            src_node="A", dst_node="C", label="Demand_3", flow_id=1
+                            src_node="A",
+                            dst_node="C",
+                            flow_class=42,
+                            flow_id=1,
                         ): 5.0,
                     },
                 },
@@ -277,10 +289,16 @@ class TestDemand:
                     "flow": 15.0,
                     "flows": {
                         FlowIndex(
-                            src_node="C", dst_node="B", label="Demand_2", flow_id=0
+                            src_node="C",
+                            dst_node="B",
+                            flow_class=42,
+                            flow_id=0,
                         ): 10.0,
                         FlowIndex(
-                            src_node="C", dst_node="A", label="Demand_3", flow_id=1
+                            src_node="C",
+                            dst_node="A",
+                            flow_class=42,
+                            flow_id=1,
                         ): 5.0,
                     },
                 },
@@ -296,7 +314,10 @@ class TestDemand:
                     "flow": 5.0,
                     "flows": {
                         FlowIndex(
-                            src_node="A", dst_node="C", label="Demand_3", flow_id=0
+                            src_node="A",
+                            dst_node="C",
+                            flow_class=42,
+                            flow_id=0,
                         ): 5.0
                     },
                 },
@@ -312,7 +333,10 @@ class TestDemand:
                     "flow": 5.0,
                     "flows": {
                         FlowIndex(
-                            src_node="C", dst_node="A", label="Demand_3", flow_id=0
+                            src_node="C",
+                            dst_node="A",
+                            flow_class=42,
+                            flow_id=0,
                         ): 5.0
                     },
                 },
@@ -322,8 +346,8 @@ class TestDemand:
         for demand in demands:
             assert demand.placed_demand == 10
 
-    def test_demand_place_6(self, square_2):
-        r = init_flow_graph(square_2)
+    def test_demand_place_6(self, square2):
+        r = init_flow_graph(square2)
 
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -332,66 +356,70 @@ class TestDemand:
             multipath=False,
             max_flow_count=2,
         )
-        d = Demand("A", "C", 3, flow_policy, label="TEST")
+        d = Demand("A", "C", 3, demand_class=99)
 
-        placed_demand, remaining_demand = d.place(r, max_fraction=1 / 2)
+        placed_demand, remaining_demand = d.place(r, flow_policy, max_fraction=1 / 2)
         assert placed_demand == 1.5
         assert remaining_demand == 0
 
-        placed_demand, remaining_demand = d.place(r, max_fraction=1 / 2)
+        placed_demand, remaining_demand = d.place(r, flow_policy, max_fraction=1 / 2)
         assert placed_demand == 0.5
         assert remaining_demand == 1
 
-    def test_demand_place_7(self, square_2):
-        r = init_flow_graph(square_2)
+    def test_demand_place_7(self, square2):
+        r = init_flow_graph(square2)
 
-        d = Demand.create(
-            "A", "C", 3, flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM, label="TEST"
-        )
-        placed_demand, remaining_demand = d.place(r)
-        assert placed_demand == 3
-        assert remaining_demand == 0
-
-    def test_demand_place_8(self, square_2):
-        r = init_flow_graph(square_2)
-
-        d = Demand.create(
+        d = Demand(
             "A",
             "C",
             3,
-            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
-            label="TEST",
+            demand_class=99,
         )
-        placed_demand, remaining_demand = d.place(r)
+        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
+        assert placed_demand == 3
+        assert remaining_demand == 0
+
+    def test_demand_place_8(self, square2):
+        r = init_flow_graph(square2)
+
+        d = Demand(
+            "A",
+            "C",
+            3,
+            demand_class=99,
+        )
+        flow_policy = get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
         assert placed_demand == 2
         assert remaining_demand == 1
 
-    def test_demand_place_9(self, graph_1):
-        r = init_flow_graph(graph_1)
+    def test_demand_place_9(self, graph3):
+        r = init_flow_graph(graph3)
 
-        d = Demand.create(
+        d = Demand(
             "A",
             "D",
             float("inf"),
-            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
-            label="TEST",
+            demand_class=99,
         )
-        placed_demand, remaining_demand = d.place(r)
+        flow_policy = get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
 
         assert placed_demand == 2.5
         assert remaining_demand == float("inf")
 
-    def test_demand_place_10(self, graph_1):
-        r = init_flow_graph(graph_1)
+    def test_demand_place_10(self, graph3):
+        r = init_flow_graph(graph3)
 
-        d = Demand.create(
+        d = Demand(
             "A",
             "D",
             float("inf"),
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="TEST",
+            demand_class=99,
         )
-        placed_demand, remaining_demand = d.place(r)
+        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+        placed_demand, remaining_demand = d.place(r, flow_policy)
 
         assert placed_demand == 6
         assert remaining_demand == float("inf")

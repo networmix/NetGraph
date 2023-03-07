@@ -1,8 +1,13 @@
 from heapq import heappop, heappush
 from typing import Iterator, List, Optional, Set, Tuple, Dict, Callable
 
-from ngraph.graph import AttrDict, DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
-from ngraph.algorithms.common import (
+from ngraph.lib.graph import (
+    AttrDict,
+    NodeID,
+    EdgeID,
+    MultiDiGraph,
+)
+from ngraph.lib.common import (
     Cost,
     edge_select_fabric,
     EdgeSelect,
@@ -14,7 +19,7 @@ def spf(
     graph: MultiDiGraph,
     src_node: NodeID,
     edge_select_func: Callable[
-        [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+        [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
         Tuple[Cost, List[EdgeID]],
     ] = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
     multipath: bool = True,
@@ -77,10 +82,10 @@ def spf(
 
 def ksp(
     graph: MultiDiGraph,
-    src_node: SrcNodeID,
-    dst_node: DstNodeID,
+    src_node: NodeID,
+    dst_node: NodeID,
     edge_select_func: Callable[
-        [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+        [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
         Tuple[Cost, List[EdgeID]],
     ] = edge_select_fabric(EdgeSelect.ALL_MIN_COST),
     max_k: Optional[int] = None,

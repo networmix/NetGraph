@@ -1,7 +1,7 @@
 # pylint: disable=protected-access,invalid-name
 import networkx as nx
 
-from ngraph.graph import MultiDiGraph
+from ngraph.lib.graph import MultiDiGraph
 
 
 def test_graph_init_1():
@@ -51,9 +51,10 @@ def test_graph_iter_1():
 
 def test_graph_add_edge_1():
     g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge")
+    edge_id = g.add_edge("A", "B", test_attr="TEST_edge")
     assert "A" in g
     assert "B" in g
+    assert edge_id == 0
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge"})
     assert "B" in g._succ["A"]
     assert "A" in g._pred["B"]
@@ -77,10 +78,12 @@ def test_graph_add_edge_2():
 
 def test_graph_add_edge_3():
     g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge1")
-    g.add_edge("A", "B", test_attr="TEST_edge2")
+    edge1_id = g.add_edge("A", "B", test_attr="TEST_edge1")
+    edge2_id = g.add_edge("A", "B", test_attr="TEST_edge2")
     assert "A" in g
     assert "B" in g
+    assert edge1_id == 0
+    assert edge2_id == 1
     assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
     assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
     assert "B" in g._succ["A"]
@@ -321,3 +324,21 @@ def test_networkx_all_shortest_paths_1():
             weight=lambda u, v, attrs: min(attr["weight"] for attr in attrs.values()),
         )
     ) == [["A", "B", "C"], ["A", "BB", "C"]]
+
+
+def test_get_edge_attr():
+    graph = MultiDiGraph()
+    edge1_id = graph.add_edge("A", "B", metric=10)
+    edge2_id = graph.add_edge("A", "B", metric=20)
+
+    assert graph.get_edge_attr(edge1_id) == {"metric": 10}
+    assert graph.get_edge_attr(edge2_id) == {"metric": 20}
+
+
+def test_get_node_attr():
+    graph = MultiDiGraph()
+    graph.add_node("A", site="ABC")
+    graph.add_node("B", site="XYZ")
+
+    assert graph.get_node_attr("A") == {"site": "ABC"}
+    assert graph.get_node_attr("B") == {"site": "XYZ"}
