@@ -26,6 +26,7 @@ def test_solver_1(problem_1):
             "bb.ams1",
             0,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [0, 1],
                 "flow": 0,
@@ -41,6 +42,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             1,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [0, 1],
                 "flow": 0,
@@ -56,6 +58,7 @@ def test_solver_1(problem_1):
             "bb.ams2",
             2,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [2, 3],
                 "flow": 0,
@@ -71,6 +74,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             3,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [2, 3],
                 "flow": 0,
@@ -86,6 +90,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             4,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [4, 5],
                 "flow": 0,
@@ -101,6 +106,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             5,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [4, 5],
                 "flow": 0,
@@ -116,6 +122,7 @@ def test_solver_1(problem_1):
             "bb.ams2",
             6,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [6, 7],
                 "flow": 0,
@@ -131,6 +138,7 @@ def test_solver_1(problem_1):
             "bb.ams1",
             7,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [6, 7],
                 "flow": 0,
@@ -146,6 +154,7 @@ def test_solver_1(problem_1):
             "bb.fra1",
             8,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [8, 9],
                 "flow": 106.25,
@@ -213,6 +222,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             9,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [8, 9],
                 "flow": 106.25,
@@ -280,6 +290,7 @@ def test_solver_1(problem_1):
             "bb.fra2",
             10,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [10, 11],
                 "flow": 93.75,
@@ -341,6 +352,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             11,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [10, 11],
                 "flow": 93.75,
@@ -402,6 +414,7 @@ def test_solver_1(problem_1):
             "bb.fra2",
             12,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [12, 13],
                 "flow": 0,
@@ -417,6 +430,7 @@ def test_solver_1(problem_1):
             "bb.fra1",
             13,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [12, 13],
                 "flow": 0,
@@ -432,6 +446,7 @@ def test_solver_1(problem_1):
             "bb.par1",
             14,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [14, 15],
                 "flow": 100.0,
@@ -496,6 +511,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             15,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [14, 15],
                 "flow": 106.25,
@@ -563,6 +579,7 @@ def test_solver_1(problem_1):
             "bb.par2",
             16,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [16, 17],
                 "flow": 100.0,
@@ -627,6 +644,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             17,
             {
+                "bidirectional": True,
                 "capacity": 1200,
                 "edges": [16, 17],
                 "flow": 93.75,
@@ -688,6 +706,7 @@ def test_solver_1(problem_1):
             "bb.par2",
             18,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [18, 19],
                 "flow": 0,
@@ -703,6 +722,7 @@ def test_solver_1(problem_1):
             "bb.par1",
             19,
             {
+                "bidirectional": True,
                 "capacity": 1500,
                 "edges": [18, 19],
                 "flow": 0,
@@ -718,6 +738,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             20,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [20, 21],
                 "flow": 206.25,
@@ -833,6 +854,7 @@ def test_solver_1(problem_1):
             "dc1.lon",
             21,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [20, 21],
                 "flow": 212.5,
@@ -951,6 +973,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             22,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [22, 23],
                 "flow": 193.75,
@@ -1060,6 +1083,7 @@ def test_solver_1(problem_1):
             "dc1.lon",
             23,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [22, 23],
                 "flow": 187.5,
@@ -1166,6 +1190,7 @@ def test_solver_1(problem_1):
             "bb.fra1",
             24,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [24, 25],
                 "flow": 106.25,
@@ -1233,6 +1258,7 @@ def test_solver_1(problem_1):
             "dc1.fra",
             25,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [24, 25],
                 "flow": 106.25,
@@ -1300,6 +1326,7 @@ def test_solver_1(problem_1):
             "bb.fra2",
             26,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [26, 27],
                 "flow": 93.75,
@@ -1361,6 +1388,7 @@ def test_solver_1(problem_1):
             "dc1.fra",
             27,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [26, 27],
                 "flow": 93.75,
@@ -1422,6 +1450,7 @@ def test_solver_1(problem_1):
             "bb.par1",
             28,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [28, 29],
                 "flow": 106.25,
@@ -1489,6 +1518,7 @@ def test_solver_1(problem_1):
             "dc1.par",
             29,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [28, 29],
                 "flow": 100.0,
@@ -1553,6 +1583,7 @@ def test_solver_1(problem_1):
             "bb.par2",
             30,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [30, 31],
                 "flow": 93.75,
@@ -1614,6 +1645,7 @@ def test_solver_1(problem_1):
             "dc1.par",
             31,
             {
+                "bidirectional": True,
                 "capacity": 400,
                 "edges": [30, 31],
                 "flow": 100.0,
@@ -1678,6 +1710,7 @@ def test_solver_1(problem_1):
             "bb.lon1",
             32,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [32, 33],
                 "flow": 0,
@@ -1693,6 +1726,7 @@ def test_solver_1(problem_1):
             "pop1.lon",
             33,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [32, 33],
                 "flow": 0,
@@ -1708,6 +1742,7 @@ def test_solver_1(problem_1):
             "bb.lon2",
             34,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [34, 35],
                 "flow": 0,
@@ -1723,6 +1758,7 @@ def test_solver_1(problem_1):
             "pop1.lon",
             35,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [34, 35],
                 "flow": 0,
@@ -1738,6 +1774,7 @@ def test_solver_1(problem_1):
             "bb.ams1",
             36,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [36, 37],
                 "flow": 0,
@@ -1753,6 +1790,7 @@ def test_solver_1(problem_1):
             "pop1.ams",
             37,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [36, 37],
                 "flow": 0,
@@ -1768,6 +1806,7 @@ def test_solver_1(problem_1):
             "bb.ams2",
             38,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [38, 39],
                 "flow": 0,
@@ -1783,6 +1822,7 @@ def test_solver_1(problem_1):
             "pop1.ams",
             39,
             {
+                "bidirectional": True,
                 "capacity": 200,
                 "edges": [38, 39],
                 "flow": 0,
