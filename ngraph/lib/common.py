@@ -2,13 +2,11 @@ from enum import IntEnum
 from itertools import product
 from typing import Any, Iterator, Optional, Set, Tuple, List, Dict, Callable, Union
 
-from ngraph.graph import (
+from ngraph.lib.graph import (
     AttrDict,
-    DstNodeID,
+    NodeID,
     EdgeID,
     MultiDiGraph,
-    NodeID,
-    SrcNodeID,
 )
 
 
@@ -45,6 +43,7 @@ class EdgeSelect(IntEnum):
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
     SINGLE_MIN_COST = 4
     SINGLE_MIN_COST_WITH_CAP_REMAINING = 5
+    SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED = 6
     USER_DEFINED = 99
 
 
@@ -85,7 +84,7 @@ def edge_select_fabric(
     select_value: Optional[Any] = None,
     edge_select_func: Optional[
         Callable[
-            [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+            [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
             Tuple[Cost, List[EdgeID]],
         ]
     ] = None,
@@ -98,7 +97,7 @@ def edge_select_fabric(
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
 ) -> Callable[
-    [MultiDiGraph, SrcNodeID, DstNodeID, Dict[EdgeID, AttrDict]],
+    [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
     Tuple[Cost, List[EdgeID]],
 ]:
     """
@@ -116,8 +115,8 @@ def edge_select_fabric(
 
     def get_all_min_cost_edges(
         graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         edges: Dict[EdgeID, AttrDict],
         excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
         excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -155,8 +154,8 @@ def edge_select_fabric(
 
     def get_single_min_cost_edge(
         graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         edges: Dict[EdgeID, AttrDict],
         excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
         excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -192,8 +191,8 @@ def edge_select_fabric(
 
     def get_all_edges_with_cap_remaining(
         graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         edges: Dict[EdgeID, AttrDict],
         excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
         excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -219,8 +218,8 @@ def edge_select_fabric(
 
     def get_all_min_cost_edges_with_cap_remaining(
         graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         edges: Dict[EdgeID, AttrDict],
         excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
         excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -248,8 +247,8 @@ def edge_select_fabric(
 
     def get_single_min_cost_edge_with_cap_remaining(
         graph: MultiDiGraph,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
+        src_node: NodeID,
+        dst_node: NodeID,
         edges: Dict[EdgeID, AttrDict],
         excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
         excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -273,6 +272,35 @@ def edge_select_fabric(
                     edge_list = [edge_id]
         return min_cost, edge_list
 
+    def get_single_min_cost_edge_with_cap_remaining_load_factored(
+        graph: MultiDiGraph,
+        src_node: NodeID,
+        dst_node: NodeID,
+        edges: Dict[EdgeID, AttrDict],
+        excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
+        excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
+    ) -> Tuple[Cost, List[int]]:
+        if excluded_nodes:
+            if dst_node in excluded_nodes:
+                return float("inf"), []
+        edge_list = []
+        min_cost = float("inf")
+        min_cap = select_value if select_value is not None else MIN_CAP
+        for edge_id, edge_attributes in edges.items():
+            if excluded_edges:
+                if edge_id in excluded_edges:
+                    continue
+
+            if (edge_attributes[capacity_attr] - edge_attributes[flow_attr]) >= min_cap:
+                cost = edge_attributes[cost_attr] * 100 + round(
+                    edge_attributes[flow_attr] / edge_attributes[capacity_attr] * 10
+                )
+
+                if cost < min_cost:
+                    min_cost = cost
+                    edge_list = [edge_id]
+        return min_cost, edge_list
+
     if edge_select == EdgeSelect.ALL_MIN_COST:
         ret = get_all_min_cost_edges
     elif edge_select == EdgeSelect.SINGLE_MIN_COST:
@@ -283,6 +311,8 @@ def edge_select_fabric(
         ret = get_all_edges_with_cap_remaining
     elif edge_select == EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING:
         ret = get_single_min_cost_edge_with_cap_remaining
+    elif edge_select == EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED:
+        ret = get_single_min_cost_edge_with_cap_remaining_load_factored
     elif edge_select == EdgeSelect.USER_DEFINED:
         ret = edge_select_func
     else:
@@ -300,8 +330,8 @@ def edge_select_fabric(
 
         def prefiltered_ret(
             graph: MultiDiGraph,
-            src_node: SrcNodeID,
-            dst_node: DstNodeID,
+            src_node: NodeID,
+            dst_node: NodeID,
             edges: Dict[EdgeID, AttrDict],
             excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
             excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
@@ -326,7 +356,7 @@ def edge_filter_fabric(
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
-) -> Callable[[Tuple[EdgeID, Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict]]], bool]:
+) -> Callable[[Tuple[EdgeID, Tuple[NodeID, NodeID, EdgeID, AttrDict]]], bool]:
     """
     Fabric producing a function to filter edges out from a graph.
 
@@ -342,7 +372,7 @@ def edge_filter_fabric(
 
     def edges_with_cap_remaining(
         edge_id: EdgeID,
-        edge_tuple: Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict],
+        edge_tuple: Tuple[NodeID, NodeID, EdgeID, AttrDict],
     ) -> Tuple[Cost, List[int]]:
         edge_attributes = edge_tuple[-1]
         return (
@@ -351,7 +381,7 @@ def edge_filter_fabric(
 
     def edges_with_cost_lt(
         edge_id: EdgeID,
-        edge_tuple: Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict],
+        edge_tuple: Tuple[NodeID, NodeID, EdgeID, AttrDict],
     ) -> Tuple[Cost, List[int]]:
         edge_attributes = edge_tuple[-1]
         return edge_attributes[cost_attr] < filter_value
@@ -365,9 +395,9 @@ def edge_filter_fabric(
 
 
 def resolve_to_paths(
-    src_node: SrcNodeID,
-    dst_node: DstNodeID,
-    pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
+    src_node: NodeID,
+    dst_node: NodeID,
+    pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]],
     split_parallel_edges: bool = False,
 ) -> Iterator[PathTuple]:
     """
@@ -385,7 +415,7 @@ def resolve_to_paths(
     """
     if dst_node not in pred:
         return
-    pred: Dict[DstNodeID, List[Tuple[SrcNodeID, Tuple[EdgeID]]]] = {
+    pred: Dict[NodeID, List[Tuple[NodeID, Tuple[EdgeID]]]] = {
         node: [(nbr, tuple(nbr_edges)) for nbr, nbr_edges in nbrs_dict.items()]
         for node, nbrs_dict in pred.items()
     }

@@ -1,83 +1,20 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
-from ngraph.graph import MultiDiGraph
-from ngraph.algorithms.spf import spf
-from ngraph.algorithms.common import (
+from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.spf import spf
+from ngraph.lib.common import (
     EdgeSelect,
     edge_select_fabric,
     init_flow_graph,
     resolve_to_paths,
 )
-
-
-@pytest.fixture
-def line_1() -> MultiDiGraph:
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=5)
-    g.add_edge("B", "A", metric=1, capacity=5)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("C", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=3)
-    g.add_edge("C", "B", metric=1, capacity=3)
-    g.add_edge("B", "C", metric=2, capacity=7)
-    g.add_edge("C", "B", metric=2, capacity=7)
-    return g
-
-
-@pytest.fixture
-def square_1() -> MultiDiGraph:
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "D", metric=2, capacity=2)
-    g.add_edge("D", "C", metric=2, capacity=2)
-    return g
-
-
-@pytest.fixture
-def square_2() -> MultiDiGraph:
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "D", metric=1, capacity=2)
-    g.add_edge("D", "C", metric=1, capacity=2)
-    return g
-
-
-@pytest.fixture
-def square_3() -> MultiDiGraph:
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=2, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "D", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=2)
-    g.add_edge("D", "C", metric=1, capacity=2)
-    return g
-
-
-@pytest.fixture
-def graph_1() -> MultiDiGraph:
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("A", "B", metric=1, capacity=4)
-    g.add_edge("A", "B", metric=1, capacity=6)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=3)
-    g.add_edge("C", "D", metric=2, capacity=3)
-    g.add_edge("A", "E", metric=1, capacity=5)
-    g.add_edge("E", "C", metric=1, capacity=4)
-    g.add_edge("A", "D", metric=4, capacity=2)
-    g.add_edge("C", "F", metric=1, capacity=1)
-    g.add_edge("F", "D", metric=1, capacity=2)
-    return g
+from ..sample_data.sample_graphs import *
 
 
 class TestInitFlowGraph:
-    def test_init_flow_graph_1(self, line_1):
+    def test_init_flow_graph_1(self, line1):
 
-        r = init_flow_graph(line_1)
+        r = init_flow_graph(line1)
         assert r.get_edges() == {
             0: ("A", "B", 0, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
             1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
@@ -128,76 +65,76 @@ class TestInitFlowGraph:
 
 
 class TestEdgeSelect:
-    def test_edge_select_fabric_1(self, square_3):
-        edges = square_3["A"]["B"]
+    def test_edge_select_fabric_1(self, square3):
+        edges = square3["A"]["B"]
         func = edge_select_fabric(EdgeSelect.ALL_MIN_COST)
 
-        assert func(graph_1, "A", "B", edges) == (1, [0])
+        assert func(graph3, "A", "B", edges) == (1, [0])
 
-    def test_edge_select_fabric_2(self, graph_1):
-        edges = graph_1["A"]["B"]
+    def test_edge_select_fabric_2(self, graph3):
+        edges = graph3["A"]["B"]
         func = edge_select_fabric(EdgeSelect.ALL_MIN_COST)
 
-        assert func(graph_1, "A", "B", edges) == (1, [0, 1, 2])
+        assert func(graph3, "A", "B", edges) == (1, [0, 1, 2])
 
-    def test_edge_select_fabric_3(self, graph_1):
-        edges = graph_1["A"]["B"]
+    def test_edge_select_fabric_3(self, graph3):
+        edges = graph3["A"]["B"]
         func = edge_select_fabric(EdgeSelect.SINGLE_MIN_COST)
 
-        assert func(graph_1, "A", "B", edges) == (1, [0])
+        assert func(graph3, "A", "B", edges) == (1, [0])
 
-    def test_edge_select_fabric_4(self, graph_1):
-        edges = graph_1["A"]["B"]
+    def test_edge_select_fabric_4(self, graph3):
+        edges = graph3["A"]["B"]
         user_def_func = lambda graph, src_node, dst_node, edges: (1, list(edges.keys()))
         func = edge_select_fabric(
             EdgeSelect.USER_DEFINED, edge_select_func=user_def_func
         )
-        assert func(graph_1, "A", "B", edges) == (1, [0, 1, 2])
+        assert func(graph3, "A", "B", edges) == (1, [0, 1, 2])
 
-    def test_edge_select_fabric_5(self, line_1):
-        line_1 = init_flow_graph(line_1)
-        edges = line_1["B"]["C"]
+    def test_edge_select_fabric_5(self, line1):
+        line1 = init_flow_graph(line1)
+        edges = line1["B"]["C"]
         func = edge_select_fabric(EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING)
 
-        assert func(square_3, "B", "C", edges) == (1, [2, 4])
+        assert func(square3, "B", "C", edges) == (1, [2, 4])
 
-    def test_edge_select_fabric_6(self, square_3):
-        square_3 = init_flow_graph(square_3)
-        edges = square_3["A"]["B"]
+    def test_edge_select_fabric_6(self, graph3):
+        graph3 = init_flow_graph(graph3)
+        edges = graph3["A"]["B"]
         func = edge_select_fabric(EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING)
 
-        assert func(square_3, "A", "B", edges) == (1, [0, 1])
+        assert func(graph3, "A", "B", edges) == (1, [0, 1, 2])
 
 
 class TestResolvePaths:
-    def test_resolve_paths_from_predecessors_1(self, line_1):
-        _, pred = spf(line_1, "A")
+    def test_resolve_paths_from_predecessors_1(self, line1):
+        _, pred = spf(line1, "A")
 
         assert list(resolve_to_paths("A", "C", pred)) == [
             (("A", (0,)), ("B", (2, 4)), ("C", ()))
         ]
 
-    def test_resolve_paths_from_predecessors_2(self, line_1):
-        _, pred = spf(line_1, "A")
+    def test_resolve_paths_from_predecessors_2(self, line1):
+        _, pred = spf(line1, "A")
         assert list(resolve_to_paths("A", "D", pred)) == []
 
-    def test_resolve_paths_from_predecessors_3(self, square_1):
-        _, pred = spf(square_1, "A")
+    def test_resolve_paths_from_predecessors_3(self, square1):
+        _, pred = spf(square1, "A")
 
         assert list(resolve_to_paths("A", "C", pred)) == [
             (("A", (0,)), ("B", (1,)), ("C", ()))
         ]
 
-    def test_resolve_paths_from_predecessors_4(self, square_2):
-        _, pred = spf(square_2, "A")
+    def test_resolve_paths_from_predecessors_4(self, square2):
+        _, pred = spf(square2, "A")
 
         assert list(resolve_to_paths("A", "C", pred)) == [
             (("A", (0,)), ("B", (1,)), ("C", ())),
             (("A", (2,)), ("D", (3,)), ("C", ())),
         ]
 
-    def test_resolve_paths_from_predecessors_5(self, graph_1):
-        _, pred = spf(graph_1, "A")
+    def test_resolve_paths_from_predecessors_5(self, graph3):
+        _, pred = spf(graph3, "A")
 
         assert list(resolve_to_paths("A", "D", pred)) == [
             (("A", (9,)), ("D", ())),
@@ -207,8 +144,8 @@ class TestResolvePaths:
             (("A", (7,)), ("E", (8,)), ("C", (10,)), ("F", (11,)), ("D", ())),
         ]
 
-    def test_resolve_paths_from_predecessors_6(self, graph_1):
-        _, pred = spf(graph_1, "A")
+    def test_resolve_paths_from_predecessors_6(self, graph3):
+        _, pred = spf(graph3, "A")
 
         assert list(resolve_to_paths("A", "D", pred, split_parallel_edges=True)) == [
             (("A", (9,)), ("D", ())),

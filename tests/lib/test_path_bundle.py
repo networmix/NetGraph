@@ -1,14 +1,14 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
 from typing import List
-from ngraph.graph import MultiDiGraph
+from ngraph.lib.graph import MultiDiGraph
 
-from ngraph.path_bundle import Path, PathBundle
-from ngraph.algorithms.common import EdgeSelect
+from ngraph.lib.path_bundle import Path, PathBundle
+from ngraph.lib.common import EdgeSelect
 
 
 @pytest.fixture
-def triangle_1():
+def triangle1():
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=15, label="1")
     g.add_edge("B", "A", metric=1, capacity=15, label="1")
@@ -103,11 +103,11 @@ class TestPathBundle:
         }
         assert path_bundle.cost == 2
 
-    def test_path_bundle_5(self, triangle_1):
+    def test_path_bundle_5(self, triangle1):
         path_bundle = PathBundle.from_path(
             Path((("A", ()), ("B", ()), ("C", ())), 2),
             resolve_edges=True,
-            graph=triangle_1,
+            graph=triangle1,
             edge_select=EdgeSelect.ALL_MIN_COST,
         )
         assert path_bundle.pred == {
@@ -117,28 +117,28 @@ class TestPathBundle:
         }
         assert path_bundle.cost == 2
 
-    def test_get_sub_bundle_1(self, triangle_1):
+    def test_get_sub_bundle_1(self, triangle1):
         path_bundle = PathBundle.from_path(
             Path((("A", ()), ("B", ()), ("C", ())), 2),
             resolve_edges=True,
-            graph=triangle_1,
+            graph=triangle1,
             edge_select=EdgeSelect.ALL_MIN_COST,
         )
-        sub_bundle = path_bundle.get_sub_path_bundle("B", triangle_1)
+        sub_bundle = path_bundle.get_sub_path_bundle("B", triangle1)
         assert sub_bundle.pred == {
             "A": {},
             "B": {"A": [0]},
         }
         assert sub_bundle.cost == 1
 
-    def test_get_sub_bundle_2(self, triangle_1):
+    def test_get_sub_bundle_2(self, triangle1):
         path_bundle = PathBundle.from_path(
             Path((("A", ()), ("B", ()), ("C", ())), 2),
             resolve_edges=True,
-            graph=triangle_1,
+            graph=triangle1,
             edge_select=EdgeSelect.ALL_MIN_COST,
         )
-        sub_bundle = path_bundle.get_sub_path_bundle("A", triangle_1)
+        sub_bundle = path_bundle.get_sub_path_bundle("A", triangle1)
         assert sub_bundle.pred == {
             "A": {},
         }

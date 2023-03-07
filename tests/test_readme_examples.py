@@ -1,7 +1,7 @@
 def test_example_1():
     # Required imports
-    from ngraph.graph import MultiDiGraph
-    from ngraph.algorithms.max_flow import calc_max_flow
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.max_flow import calc_max_flow
 
     # Create a graph with parallel edges
     # Metric:
@@ -35,16 +35,13 @@ def test_example_1():
     max_flow = calc_max_flow(g, "A", "C")
 
     # We can verify that the result is as expected
-    assert max_flow.max_total_flow == 6.0
-    assert max_flow.max_single_flow == 3.0
-    assert max_flow.max_balanced_flow == 2.0
-    # Note that max_balanced_flow considers shortests paths only
+    assert max_flow == 6.0
 
 
 def test_example_2():
     # Required imports
-    from ngraph.graph import MultiDiGraph
-    from ngraph.algorithms.max_flow import calc_max_flow
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.max_flow import calc_max_flow
 
     # Create a graph with parallel edges
     # Metric:
@@ -75,21 +72,63 @@ def test_example_2():
     g.add_edge("D", "C", metric=2, capacity=3)
 
     # Calculate MaxFlow between the source and destination nodes
+    # Flows will be placed only on the shortest paths
     max_flow = calc_max_flow(g, "A", "C", shortest_path=True)
 
     # We can verify that the result is as expected
-    assert max_flow.max_total_flow == 3.0
-    assert max_flow.max_single_flow == 2.0
-    assert max_flow.max_balanced_flow == 2.0
-    # Note that max_balanced_flow considers shortests paths only
+    assert max_flow == 3.0
 
 
 def test_example_3():
     # Required imports
-    from ngraph.graph import MultiDiGraph
-    from ngraph.algorithms.common import init_flow_graph
-    from ngraph.demand import FlowPolicyConfig, Demand
-    from ngraph.flow import FlowIndex
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.max_flow import calc_max_flow
+    from ngraph.lib.common import FlowPlacement
+
+    # Create a graph with parallel edges
+    # Metric:
+    #      [1,1]      [1,1]
+    #   ┌────────►B─────────┐
+    #   │                   │
+    #   │                   ▼
+    #   A                   C
+    #   │                   ▲
+    #   │   [2]        [2]  │
+    #   └────────►D─────────┘
+    #
+    # Capacity:
+    #      [1,2]      [1,2]
+    #   ┌────────►B─────────┐
+    #   │                   │
+    #   │                   ▼
+    #   A                   C
+    #   │                   ▲
+    #   │   [3]        [3]  │
+    #   └────────►D─────────┘
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "B", metric=1, capacity=2)
+    g.add_edge("B", "C", metric=1, capacity=2)
+    g.add_edge("A", "D", metric=2, capacity=3)
+    g.add_edge("D", "C", metric=2, capacity=3)
+
+    # Calculate MaxFlow between the source and destination nodes
+    # Flows will be equally balanced across the shortest paths
+    max_flow = calc_max_flow(
+        g, "A", "C", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
+    )
+
+    # We can verify that the result is as expected
+    assert max_flow == 2.0
+
+
+def test_example_4():
+    # Required imports
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.common import init_flow_graph
+    from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
+    from ngraph.lib.flow import FlowIndex
 
     # Create a graph
     # Metric:
@@ -122,57 +161,30 @@ def test_example_3():
 
     # Create traffic demands
     demands = [
-        Demand.create(
-            "A",
-            "B",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_1",
-        ),
-        Demand.create(
-            "B",
-            "A",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_1",
-        ),
-        Demand.create(
-            "B",
-            "C",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_2",
-        ),
-        Demand.create(
-            "C",
-            "B",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_2",
-        ),
-        Demand.create(
+        Demand(
             "A",
             "C",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_3",
+            20,
         ),
-        Demand.create(
+        Demand(
             "C",
             "A",
-            10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_3",
+            20,
         ),
     ]
 
     # Place traffic demands onto the flow graph
     for demand in demands:
-        demand.place(r)
+        # Create a flow policy with required parameters or
+        # use one of the predefined policies from FlowPolicyConfig
+        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+
+        # Place demand using the flow policy
+        demand.place(r, flow_policy)
 
     # We can verify that all demands were placed as expected
     for demand in demands:
-        assert demand.placed_demand == 10
+        assert demand.placed_demand == 20
 
     assert r.get_edges() == {
         0: (
@@ -183,8 +195,7 @@ def test_example_3():
                 "capacity": 15,
                 "flow": 15.0,
                 "flows": {
-                    FlowIndex(src_node="A", dst_node="B", label="D_1", flow_id=0): 10.0,
-                    FlowIndex(src_node="A", dst_node="C", label="D_3", flow_id=1): 5.0,
+                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=1): 15.0
                 },
                 "label": "1",
                 "metric": 1,
@@ -198,8 +209,7 @@ def test_example_3():
                 "capacity": 15,
                 "flow": 15.0,
                 "flows": {
-                    FlowIndex(src_node="B", dst_node="A", label="D_1", flow_id=0): 10.0,
-                    FlowIndex(src_node="C", dst_node="A", label="D_3", flow_id=1): 5.0,
+                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=1): 15.0
                 },
                 "label": "1",
                 "metric": 1,
@@ -213,8 +223,7 @@ def test_example_3():
                 "capacity": 15,
                 "flow": 15.0,
                 "flows": {
-                    FlowIndex(src_node="A", dst_node="C", label="D_3", flow_id=1): 5.0,
-                    FlowIndex(src_node="B", dst_node="C", label="D_2", flow_id=0): 10.0,
+                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=1): 15.0
                 },
                 "label": "2",
                 "metric": 1,
@@ -228,8 +237,7 @@ def test_example_3():
                 "capacity": 15,
                 "flow": 15.0,
                 "flows": {
-                    FlowIndex(src_node="C", dst_node="A", label="D_3", flow_id=1): 5.0,
-                    FlowIndex(src_node="C", dst_node="B", label="D_2", flow_id=0): 10.0,
+                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=1): 15.0
                 },
                 "label": "2",
                 "metric": 1,
@@ -243,7 +251,7 @@ def test_example_3():
                 "capacity": 5,
                 "flow": 5.0,
                 "flows": {
-                    FlowIndex(src_node="A", dst_node="C", label="D_3", flow_id=0): 5.0
+                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=0): 5.0
                 },
                 "label": "3",
                 "metric": 1,
@@ -257,7 +265,7 @@ def test_example_3():
                 "capacity": 5,
                 "flow": 5.0,
                 "flows": {
-                    FlowIndex(src_node="C", dst_node="A", label="D_3", flow_id=0): 5.0
+                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=0): 5.0
                 },
                 "label": "3",
                 "metric": 1,
@@ -266,11 +274,11 @@ def test_example_3():
     }
 
 
-def test_example_4():
+def test_example_5():
     # Required imports
-    from ngraph.graph import MultiDiGraph
-    from ngraph.algorithms.common import init_flow_graph
-    from ngraph.demand import FlowPolicyConfig, Demand
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.common import init_flow_graph
+    from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
     from ngraph.analyser import Analyser
 
     # Create a graph
@@ -304,56 +312,53 @@ def test_example_4():
 
     # Create traffic demands
     demands = [
-        Demand.create(
+        Demand(
             "A",
             "B",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_1",
         ),
-        Demand.create(
+        Demand(
             "B",
             "A",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_1",
         ),
-        Demand.create(
+        Demand(
             "B",
             "C",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_2",
         ),
-        Demand.create(
+        Demand(
             "C",
             "B",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_2",
         ),
-        Demand.create(
+        Demand(
             "A",
             "C",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_3",
         ),
-        Demand.create(
+        Demand(
             "C",
             "A",
             10,
-            flow_policy_config=FlowPolicyConfig.TE_UCMP_UNLIM,
-            label="D_3",
         ),
     ]
 
     # Place traffic demands onto the flow graph
+    demand_policy_map = {}
     for demand in demands:
-        demand.place(r)
+        # Create a flow policy with required parameters or
+        # use one of the predefined policies from FlowPolicyConfig
+        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+
+        # Create demand->flow_policy mapping
+        demand_policy_map[demand] = flow_policy
+
+        # Place demand using the flow policy
+        demand.place(r, flow_policy)
 
     # Analayze graph and demands
-    analyser = Analyser(r, demands)
+    analyser = Analyser(r, demand_policy_map)
     analyser.analyse()
 
     # We can check the analysis results

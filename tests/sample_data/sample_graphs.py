@@ -1,9 +1,10 @@
 import pytest
-from ngraph.graph import MultiDiGraph
+
+from ngraph.lib.graph import MultiDiGraph
 
 
 @pytest.fixture
-def line_1():
+def line1():
     # Metric:
     #      [1]      [1,1,2]
     #  A◄───────►B◄───────►C
@@ -25,7 +26,7 @@ def line_1():
 
 
 @pytest.fixture
-def triangle_1():
+def triangle1():
     # Metric:
     #     [1]        [1]
     #   ┌──────►B◄──────┐
@@ -41,7 +42,7 @@ def triangle_1():
     #   │               │
     #   │               │
     #   │               │
-    #   ▼     [15]      ▼
+    #   ▼      [5]      ▼
     #   A◄─────────────►C
 
     g = MultiDiGraph()
@@ -55,7 +56,7 @@ def triangle_1():
 
 
 @pytest.fixture
-def square_1():
+def square1():
     # Metric:
     #       [1]        [1]
     #   ┌────────►B─────────┐
@@ -85,7 +86,7 @@ def square_1():
 
 
 @pytest.fixture
-def square_2():
+def square2():
     # Metric:
     #       [1]        [1]
     #   ┌────────►B─────────┐
@@ -114,7 +115,7 @@ def square_2():
 
 
 @pytest.fixture
-def square_3():
+def square3():
     # Metric:
     #       [1]        [1]
     #   ┌────────►B─────────┐
@@ -122,7 +123,7 @@ def square_3():
     #   │         │         ▼
     #   A         │[1]      C
     #   │         │         ▲
-    #   │   [2]   ▼    [2]  │
+    #   │   [1]   ▼    [1]  │
     #   └────────►D─────────┘
     #
     # Capacity:
@@ -146,7 +147,7 @@ def square_3():
 
 
 @pytest.fixture
-def square_4():
+def square4():
     # Metric:
     #      [1,2]      [1]
     #   ┌────────►B──────────┐
@@ -158,13 +159,13 @@ def square_4():
     #   └────────►D──────────┘
     #
     # Capacity:
-    #     [100]       [125]
+    #    [100,200]    [125]
     #   ┌────────►B──────────┐
     #   │         │▲         │
     #   │         ││         ▼
-    #   A         ││[50]     C
+    #   A         ││[50,200] C
     #   │         ││         ▲
-    #   │  [75]   ▼▼   [50]  │
+    #   │  [75]   ▼▼ [50,200]│
     #   └────────►D──────────┘
     g = MultiDiGraph()
     g.add_edge("A", "B", metric=1, capacity=100)
@@ -180,7 +181,105 @@ def square_4():
 
 
 @pytest.fixture
-def graph_1():
+def square5():
+    # Metric:
+    #      [1]        [1]
+    #  ┌────────►B─────────┐
+    #  │         ▲         │
+    #  │         │         ▼
+    #  A         │[1]      D
+    #  │         │         ▲
+    #  │   [1]   ▼    [1]  │
+    #  └────────►C─────────┘
+    #
+    # Capacity:
+    #      [1]        [1]
+    #  ┌────────►B─────────┐
+    #  │         ▲         │
+    #  │         │         ▼
+    #  A         │[1]      D
+    #  │         │         ▲
+    #  │   [1]   ▼    [1]  │
+    #  └────────►C─────────┘
+
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("A", "C", metric=1, capacity=1)
+    g.add_edge("B", "D", metric=1, capacity=1)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("C", "B", metric=1, capacity=1)
+    return g
+
+
+@pytest.fixture
+def graph1():
+    # Metric:
+    #      [1]        [1]
+    #  ┌────────►B─────────┐
+    #  │         ▲         │
+    #  │         │         ▼   [1]
+    #  A         │[1]      D────────►E
+    #  │         │         ▲
+    #  │   [1]   ▼    [1]  │
+    #  └────────►C─────────┘
+    #
+    # Capacity:
+    #      [1]        [1]
+    #  ┌────────►B─────────┐
+    #  │         ▲         │
+    #  │         │         ▼   [1]
+    #  A         │[1]      D────────►E
+    #  │         │         ▲
+    #  │   [1]   ▼    [1]  │
+    #  └────────►C─────────┘
+
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("A", "C", metric=1, capacity=1)
+    g.add_edge("B", "D", metric=1, capacity=1)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("C", "B", metric=1, capacity=1)
+    g.add_edge("D", "E", metric=1, capacity=1)
+    return g
+
+
+@pytest.fixture
+def graph2():
+    # Metric:
+    #            [1]        [1]
+    #        ┌────────►C─────────┐
+    #        │         ▲         │
+    #   [1]  │         │         ▼
+    # A─────►B         │[1]      E
+    #        │         │         ▲
+    #        │   [1]   ▼    [1]  │
+    #        └────────►D─────────┘
+    #
+    # Capacity:
+    #            [1]        [1]
+    #        ┌────────►C─────────┐
+    #        │         ▲         │
+    #   [1]  │         │         ▼
+    # A─────►B         │[1]      E
+    #        │         │         ▲
+    #        │   [1]   ▼    [1]  │
+    #        └────────►D─────────┘
+
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("B", "D", metric=1, capacity=1)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("D", "C", metric=1, capacity=1)
+    g.add_edge("C", "E", metric=1, capacity=1)
+    g.add_edge("D", "E", metric=1, capacity=1)
+    return g
+
+
+@pytest.fixture
+def graph3():
     # Metric:
     #  ┌────────►E─────────┐
     #  │ [1]        [1]    │
@@ -226,7 +325,7 @@ def graph_1():
 
 
 @pytest.fixture
-def graph_2():
+def graph4():
     # Metric:
     #     [1]        [1]
     #  ┌────────►B─────────┐
@@ -258,32 +357,27 @@ def graph_2():
 
 
 @pytest.fixture
-def graph_3():
-    # Metric:
-    #      [1]        [1]
-    #  ┌────────►B1────────┐
-    #  │         ▲         │
-    #  │         │         ▼
-    #  A         │[1]      C
-    #  │         │         ▲
-    #  │   [3]   ▼    [3]  │
-    #  └────────►B2────────┘
-    #
-    # Capacity:
-    #      [1]        [1]
-    #  ┌────────►B1────────┐
-    #  │         ▲         │
-    #  │         │         ▼
-    #  A         │[1]      C
-    #  │         │         ▲
-    #  │   [1]   ▼    [1]  │
-    #  └────────►B2────────┘
-
+def graph5():
+    """Fully connected graph with 5 nodes"""
     g = MultiDiGraph()
-    g.add_edge("A", "B1", metric=1, capacity=1)
-    g.add_edge("B1", "C", metric=1, capacity=1)
-    g.add_edge("A", "B2", metric=1, capacity=1)
-    g.add_edge("B2", "C", metric=1, capacity=1)
-    g.add_edge("B1", "B2", metric=1, capacity=1)
-    g.add_edge("B2", "B1", metric=1, capacity=1)
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("A", "C", metric=1, capacity=1)
+    g.add_edge("A", "D", metric=1, capacity=1)
+    g.add_edge("A", "E", metric=1, capacity=1)
+    g.add_edge("B", "A", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("B", "D", metric=1, capacity=1)
+    g.add_edge("B", "E", metric=1, capacity=1)
+    g.add_edge("C", "A", metric=1, capacity=1)
+    g.add_edge("C", "B", metric=1, capacity=1)
+    g.add_edge("C", "D", metric=1, capacity=1)
+    g.add_edge("C", "E", metric=1, capacity=1)
+    g.add_edge("D", "A", metric=1, capacity=1)
+    g.add_edge("D", "B", metric=1, capacity=1)
+    g.add_edge("D", "C", metric=1, capacity=1)
+    g.add_edge("D", "E", metric=1, capacity=1)
+    g.add_edge("E", "A", metric=1, capacity=1)
+    g.add_edge("E", "B", metric=1, capacity=1)
+    g.add_edge("E", "C", metric=1, capacity=1)
+    g.add_edge("E", "D", metric=1, capacity=1)
     return g

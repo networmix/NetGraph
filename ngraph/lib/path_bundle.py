@@ -4,14 +4,14 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
-from ngraph.algorithms.common import (
+from ngraph.lib.common import (
     Cost,
     PathTuple,
     resolve_to_paths,
     edge_select_fabric,
     EdgeSelect,
 )
-from ngraph.graph import DstNodeID, EdgeID, MultiDiGraph, NodeID, SrcNodeID
+from ngraph.lib.graph import EdgeID, MultiDiGraph, NodeID
 
 
 @dataclass
@@ -75,15 +75,15 @@ class PathBundle:
 
     def __init__(
         self,
-        src_node: SrcNodeID,
-        dst_node: DstNodeID,
-        pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]],
+        src_node: NodeID,
+        dst_node: NodeID,
+        pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]],
         cost: Cost,
     ):
-        self.src_node: SrcNodeID = src_node
-        self.dst_node: DstNodeID = dst_node
+        self.src_node: NodeID = src_node
+        self.dst_node: NodeID = dst_node
         self.cost: Cost = cost
-        self.pred: Dict[DstNodeID, Dict[SrcNodeID, List[EdgeID]]] = {src_node: {}}
+        self.pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {src_node: {}}
         self.edges: Set[EdgeID] = set()
         self.edge_tuples: Set[Tuple[EdgeID]] = set()
         self.nodes: Set[NodeID] = set([src_node])
@@ -189,7 +189,7 @@ class PathBundle:
 
     def get_sub_path_bundle(
         self,
-        new_dst_node: DstNodeID,
+        new_dst_node: NodeID,
         graph: MultiDiGraph,
         cost_attr: str = "metric",
     ) -> PathBundle:

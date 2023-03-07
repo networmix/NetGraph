@@ -4,11 +4,9 @@ from typing import Any, Callable, Dict, Hashable, Iterator, Optional, Tuple
 
 
 NodeID = Hashable
-SrcNodeID = NodeID
-DstNodeID = NodeID
 EdgeID = int
 AttrDict = Dict[Hashable, Any]
-EdgeTuple = Tuple[SrcNodeID, DstNodeID, EdgeID, AttrDict]
+EdgeTuple = Tuple[NodeID, NodeID, EdgeID, AttrDict]
 
 
 class MultiDiGraph:
@@ -38,10 +36,10 @@ class MultiDiGraph:
         self._nodes: Dict[NodeID, AttrDict] = {}
         self._edges: Dict[EdgeID, EdgeTuple] = {}
         self._succ: Dict[
-            SrcNodeID, Dict[DstNodeID, Dict[EdgeID, AttrDict]]
+            NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]
         ] = {}  # dictionary for outgoing adjacencies (successors)
         self._pred: Dict[
-            DstNodeID, Dict[SrcNodeID, Dict[EdgeID, AttrDict]]
+            NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]
         ] = {}  # dictionary for incoming adjacencies (predecessors)
 
         self._next_edge_id: EdgeID = 0  # the index for the next added edge
@@ -111,7 +109,7 @@ class MultiDiGraph:
         dst_node: NodeID,
         edge_id: Optional[EdgeID] = None,
         **attr: AttrDict,
-    ) -> None:
+    ) -> EdgeID:
         """
         Add a single edge between src_node and dst_node with optional attributes.
         If optional edge_id is supplied, this method checks if an edge with such id already exists.
@@ -135,6 +133,7 @@ class MultiDiGraph:
         self._edges[edge_id] = (src_node, dst_node, edge_id, attr)
         self._succ[src_node].setdefault(dst_node, {})[edge_id] = attr
         self._pred[dst_node].setdefault(src_node, {})[edge_id] = attr
+        return edge_id
 
     def remove_edge(
         self, src_node: NodeID, dst_node: NodeID, edge_id: Optional[EdgeID] = None
@@ -188,7 +187,7 @@ class MultiDiGraph:
         del self._pred[node_to_remove]
         del self._nodes[node_to_remove]
 
-    def get_adj_out(self) -> Dict[SrcNodeID, Dict[DstNodeID, Dict[EdgeID, AttrDict]]]:
+    def get_adj_out(self) -> Dict[NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]]:
         """
         Get a dictionary with outgoing adjacencies (successors).
         The format is:
@@ -201,7 +200,7 @@ class MultiDiGraph:
         """
         return self._succ
 
-    def get_adj_in(self) -> Dict[DstNodeID, Dict[SrcNodeID, Dict[EdgeID, AttrDict]]]:
+    def get_adj_in(self) -> Dict[NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]]:
         """
         Get a dictionary with incoming adjacencies (predecessors).
         The format is:
@@ -240,6 +239,14 @@ class MultiDiGraph:
         """
         return self._edges
 
+    def get_node_attr(self, node_id: NodeID) -> AttrDict:
+        """
+        Get a dictionary with all node attributes.
+        Returns:
+            A dict with all node attributes.
+        """
+        return self._nodes[node_id]
+
     def get_edge_attr(self, edge_id: EdgeID) -> AttrDict:
         """
         Get a dictionary with all edge attributes.
@@ -267,7 +274,10 @@ class MultiDiGraph:
     def is_directed(self) -> bool:
         return True
 
-    def edges(self) -> Iterator[Tuple[SrcNodeID, DstNodeID]]:
+    def is_multigraph(self) -> bool:
+        return True
+
+    def edges(self) -> Iterator[Tuple[NodeID, NodeID]]:
         for edge_tuple in self._edges.values():
             yield edge_tuple[0], edge_tuple[1]
 

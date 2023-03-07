@@ -1,6 +1,6 @@
 # pylint: disable=protected-access,invalid-name
-from ngraph.io import graph_to_node_link, node_link_to_graph, edgelist_to_graph
-from ngraph.graph import MultiDiGraph
+from ngraph.lib.io import graph_to_node_link, node_link_to_graph, edgelist_to_graph
+from ngraph.lib.graph import MultiDiGraph
 
 
 def test_graph_to_node_link_1():
