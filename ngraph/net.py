@@ -5,6 +5,7 @@ from enum import IntEnum
 from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 from ngraph.lib import common
+from ngraph.lib.max_flow import calc_max_flow
 from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig
 from ngraph.lib.graph import EdgeID, MultiDiGraph, NodeID
 from ngraph.lib.demand import Demand
@@ -151,3 +152,35 @@ class Net:
             raise ValueError(f"Virtual link {virtlink_id} not found")
         self.virtlinks.remove(virtlink_id)
         self.graph.remove_edge_by_id(virtlink_id)
+
+    def remove_all_virtual(self) -> None:
+        for virtnode in list(self.virtnodes):
+            self.remove_virtnode(virtnode)
+
+    def max_flow(
+        self,
+        src_nodes: Iterable[NodeID],
+        dst_nodes: Iterable[NodeID],
+        shortest_path: bool = False,
+        flow_placement: common.FlowPlacement = common.FlowPlacement.PROPORTIONAL,
+    ) -> float:
+        """
+        Returns the maximum flow in the network between the given sources and destinations.
+        """
+
+        # Add virtual source and sink nodes
+        virt_src = "source"
+        virt_dst = "sink"
+        self.create_virtnode(virt_src)
+        for src_node in src_nodes:
+            self.create_virtlink(virt_src, src_node)
+        self.create_virtnode(virt_dst)
+        for dst_node in dst_nodes:
+            self.create_virtlink(dst_node, virt_dst)
+
+        max_flow = calc_max_flow(
+            self.graph, virt_src, virt_dst, flow_placement, shortest_path
+        )
+        self.remove_virtnode(virt_src)
+        self.remove_virtnode(virt_dst)
+        return max_flow

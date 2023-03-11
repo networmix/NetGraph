@@ -925,3 +925,42 @@ def test_net_add_remove_virtual_links_2(bb_net_1):
 
     with pytest.raises(ValueError):
         net.remove_virtlink(virtlink_id2)
+
+
+def test_net_remove_all_virtual(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    net.create_virtnode("fra")
+    virtlink_id1 = net.create_virtlink("fra", "bb.fra1")
+    virtlink_id2 = net.create_virtlink("bb.fra1", "fra")
+
+    net.remove_all_virtual()
+
+    assert net.virtlinks == set()
+    assert net.virtnodes == set()
+    assert "fra" not in net.graph
+
+
+def test_net_max_flow_1(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    max_flow = net.max_flow(["dc1.lon"], ["dc1.par"])
+    assert max_flow == 800
+
+
+def test_net_max_flow_2(bb_net_1):
+    NODES, LINKS = bb_net_1
+    net = Net()
+    net.add_nodes_from(NODES)
+    net.add_links_from(LINKS)
+
+    max_flow = net.max_flow(
+        ["bb.lon1", "bb.lon2", "bb.ams1", "bb.ams2"], ["bb.fra1", "bb.fra2"]
+    )
+    assert max_flow == 2400
