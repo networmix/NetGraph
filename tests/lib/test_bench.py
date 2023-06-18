@@ -97,9 +97,9 @@ def graph3_nx():
     return g
 
 
-def test_spf_bench_1(benchmark, graph3):
+def test_bench_ngraph_spf_1(benchmark, graph3):
     benchmark(spf, graph3, "A")
 
 
-def test_spf_bench_2(benchmark, graph3_nx):
+def test_bench_networkx_spf_1(benchmark, graph3_nx):
     benchmark(nx.dijkstra_predecessor_and_distance, graph3_nx, "A", weight="metric")

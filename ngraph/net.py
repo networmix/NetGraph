@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 from ngraph.lib import common
 from ngraph.lib.max_flow import calc_max_flow
-from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig
 from ngraph.lib.graph import EdgeID, MultiDiGraph, NodeID
 from ngraph.lib.demand import Demand
 
@@ -184,3 +184,6 @@ class Net:
         self.remove_virtnode(virt_src)
         self.remove_virtnode(virt_dst)
         return max_flow
+
+    def clear_flow_graph(self) -> None:
+        common.init_flow_graph(self.graph)

@@ -6,9 +6,9 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 from heapq import heappush, heappop
 
 from ngraph.lib import common
-from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig, get_flow_policy
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
 from ngraph.lib.graph import EdgeID, MultiDiGraph, NodeID
-from ngraph.lib.demand import Demand
+from ngraph.lib.demand import Demand, DemandStatus
 from ngraph.net import Net, Link, Node
 
 
@@ -27,6 +27,7 @@ class ConstraintType(IntEnum):
     """
 
     NON_TRANSIT = 1
+    CAPACITY = 2
 
 
 @dataclass
@@ -49,7 +50,6 @@ class Failure:
 
     entity_type: EntityType
     entity_id: Union[EdgeID, NodeID]
-    failure_probability: float
     failure_value: Optional[Any] = None
 
 
@@ -81,19 +81,28 @@ class Problem:
     constraints: List[Constraint] = field(default_factory=list)
     failures: List[Failure] = field(default_factory=list)
     solver_params: SolverParams = field(default_factory=SolverParams)
+    demand_policy_map: Dict[Demand, FlowPolicy] = field(default_factory=dict)
+    demand_status: DemandStatus = DemandStatus.UNKNOWN
 
 
 class Solver:
     def solve(self, problem: Problem):
         self.params = problem.solver_params
-        demand_policy_map = self._place_demands(
+        self._place_demands(
             problem.solver_params,
             problem.net,
             problem.demands,
             problem.constraints,
             problem.failures,
+            problem.demand_policy_map,
         )
-        return problem.net.graph, demand_policy_map
+        if all(demand.status == DemandStatus.PLACED for demand in problem.demands):
+            problem.demand_status = DemandStatus.PLACED
+        elif any(demand.status > DemandStatus.NOT_PLACED for demand in problem.demands):
+            problem.demand_status = DemandStatus.PARTIAL
+        else:
+            problem.demand_status = DemandStatus.NOT_PLACED
+        return problem
 
     def _place_demands(
         self,
@@ -102,17 +111,18 @@ class Solver:
         demands: List[Demand],
         constraints: List[Constraint],
         failures: List[Failure],
-    ) -> Dict[Demand, FlowPolicy]:
+        demand_policy_map: Dict[Demand, FlowPolicy],
+    ) -> None:
         graph = net.graph
-        demand_policy_map: Dict[Demand, FlowPolicy] = {}
 
         # Create a demand queue.
         demand_queue: List[Tuple[int, Demand]] = []
         for demand in demands:
-            flow_policy = get_flow_policy(
-                params.demand_placement_policy[demand.demand_class]
-            )
-            demand_policy_map[demand] = flow_policy
+            if demand not in demand_policy_map:
+                flow_policy = get_flow_policy(
+                    params.demand_placement_policy[demand.demand_class]
+                )
+                demand_policy_map[demand] = flow_policy
             heappush(demand_queue, (demand.demand_class, demand))
 
         while demand_queue:
@@ -126,5 +136,3 @@ class Solver:
             )
             if placed:
                 heappush(demand_queue, (demand.demand_class, demand))
-
-        return demand_policy_map

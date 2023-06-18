@@ -2,9 +2,10 @@
 from dataclasses import asdict
 import pytest
 
+from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
 from ngraph.lib.graph import MultiDiGraph
 from ngraph.lib.common import init_flow_graph
-from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
+from ngraph.lib.demand import Demand
 from ngraph.analyser import Analyser
 
 

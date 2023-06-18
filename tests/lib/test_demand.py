@@ -7,8 +7,8 @@ from ngraph.lib.common import (
     FlowPlacement,
 )
 from ngraph.lib.demand import Demand
-from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig, get_flow_policy, FlowIndex
-
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
+from ngraph.lib.flow import FlowIndex
 from ..sample_data.sample_graphs import *
 
 

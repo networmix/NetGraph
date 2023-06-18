@@ -14,7 +14,14 @@ from ngraph.lib.place_flow import FlowPlacement, place_flow_on_graph
 from ngraph.lib.graph import NodeID, EdgeID, MultiDiGraph
 from ngraph.lib import spf, common
 from ngraph.lib.path_bundle import PathBundle
-from ngraph.lib.flow import FlowPolicy, FlowPolicyConfig, get_flow_policy
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
+
+
+class DemandStatus(IntEnum):
+    UNKNOWN = 0
+    NOT_PLACED = 1
+    PARTIAL = 2
+    PLACED = 3
 
 
 class Demand:
@@ -41,6 +48,14 @@ class Demand:
     def __str__(self) -> str:
         return f"Demand(src_node={self.src_node}, dst_node={self.dst_node}, volume={self.volume}, demand_class={self.demand_class}, placed_demand={self.placed_demand})"
 
+    @property
+    def status(self):
+        if self.placed_demand < common.MIN_FLOW:
+            return DemandStatus.NOT_PLACED
+        elif self.volume - self.placed_demand < common.MIN_FLOW:
+            return DemandStatus.PLACED
+        return DemandStatus.PARTIAL
+
     def place(
         self,
         flow_graph: MultiDiGraph,
@@ -48,7 +63,6 @@ class Demand:
         max_fraction: float = 1,
         max_placement: Optional[float] = None,
     ) -> Tuple[float, float]:
-
         to_place = self.volume - self.placed_demand
 
         if max_placement is not None:

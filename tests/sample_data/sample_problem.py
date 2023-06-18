@@ -1,7 +1,7 @@
 import pytest
 
 from ngraph.net import Net, Link, Node
-from ngraph.solver import Problem
+from ngraph.solver import Problem, Constraint, Failure, ConstraintType, EntityType
 from ngraph.lib.demand import Demand
 
 
@@ -59,3 +59,10 @@ def problem_1():
     NET = Net()
     NET.add_nodes_from(NODES).add_links_from(LINKS)
     return Problem(NET, DEMANDS)
+
+
+@pytest.fixture
+def problem_1a(problem_1):
+    CONSTRAINTS = [Constraint(EntityType.NODE, "bb.lon1", ConstraintType.NON_TRANSIT)]
+    problem_1.constraints = CONSTRAINTS
+    return problem_1

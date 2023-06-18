@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
-from ngraph.lib.flow import FlowPolicy
+from ngraph.lib.flow_policy import FlowPolicy
 from ngraph.lib.graph import MultiDiGraph
 from ngraph.lib.demand import Demand
 

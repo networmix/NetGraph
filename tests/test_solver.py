@@ -1,8 +1,9 @@
 from typing import List
 import pytest
 
-from ngraph.lib.demand import Demand
-from ngraph.lib.flow import FlowIndex, FlowPolicy, FlowPolicyConfig
+from ngraph.lib.demand import Demand, DemandStatus
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig
+from ngraph.lib.flow import FlowIndex
 from ngraph.net import Net, Link, Node
 from ngraph.solver import (
     ConstraintType,
@@ -18,9 +19,9 @@ from .sample_data.sample_problem import *
 
 def test_solver_1(problem_1):
     solver = Solver()
-    graph, demand_policy_map = solver.solve(problem_1)
+    problem = solver.solve(problem_1)
 
-    assert graph.get_edges() == {
+    assert problem.net.graph.get_edges() == {
         0: (
             "bb.lon1",
             "bb.ams1",
@@ -1834,3 +1835,4 @@ def test_solver_1(problem_1):
             },
         ),
     }
+    assert problem.demand_status == DemandStatus.PLACED
