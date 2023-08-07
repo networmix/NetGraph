@@ -25,6 +25,9 @@ class CalculateCapacity:
         Dict[NodeID, int],
         Dict[NodeID, Dict[NodeID, float]],
     ]:
+        """
+        Initialize the data structures needed for Dinic's algorithm.
+        """
         edges = flow_graph.get_edges()
         succ: Dict[NodeID, Dict[NodeID, Tuple[EdgeID]]] = {}
         levels: Dict[NodeID, int] = {}
@@ -41,7 +44,7 @@ class CalculateCapacity:
             residual_cap_dict.setdefault(node, {})
             flow_dict.setdefault(node, {})
 
-            for adj_node, edge_list in pred[node].items():
+            for adj_node, edge_list in pred.get(node, {}).items():
                 edge_tuple = tuple(edge_list)
                 succ.setdefault(adj_node, {})[node] = edge_tuple
                 residual_cap_dict.setdefault(adj_node, {})
@@ -173,15 +176,21 @@ class CalculateCapacity:
         using a Dinic's algorithm.
         """
 
+        # Check if src_node and dst_node are in the graph
+        if src_node not in flow_graph or dst_node not in flow_graph:
+            raise ValueError(
+                f"Source node {src_node} or destination node {dst_node} not found in the graph."
+            )
+
         succ, levels, residual_cap_dict, flow_dict = cls._init(
             flow_graph, pred, dst_node, flow_placement, capacity_attr, flow_attr
         )
 
         if flow_placement == FlowPlacement.PROPORTIONAL:
             total_flow = 0
-            while (levels := cls._set_levels_bfs(dst_node, levels, residual_cap_dict))[
-                src_node
-            ] > 0:
+            while (
+                levels := cls._set_levels_bfs(dst_node, levels, residual_cap_dict)
+            ).get(src_node, 0) > 0:
                 tmp_flow = cls._push_flow_dfs(
                     dst_node,
                     src_node,

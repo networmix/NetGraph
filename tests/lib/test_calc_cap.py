@@ -10,6 +10,40 @@ from ..sample_data.sample_graphs import *
 
 
 class TestGraphCapacity:
+    def test_calc_graph_capacity_empty_graph(self):
+        r = init_flow_graph(MultiDiGraph())
+
+        # Expected an exception ValueError because the graph is empty
+        with pytest.raises(ValueError):
+            max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+                r, "A", "C", {}, flow_placement=FlowPlacement.PROPORTIONAL
+            )
+
+    def test_calc_graph_capacity_empty_pred(self):
+        g = MultiDiGraph()
+        g.add_edge("A", "B", capacity=1)
+        g.add_edge("B", "C", capacity=1)
+        r = init_flow_graph(g)
+
+        # Expected max_flow = 0 because the path is invalid
+        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+            r, "A", "C", {}, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow == 0
+
+    def test_calc_graph_capacity_no_cap(self):
+        g = MultiDiGraph()
+        g.add_edge("A", "B", capacity=0)
+        g.add_edge("B", "C", capacity=1)
+        r = init_flow_graph(g)
+        pred = {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}}
+
+        # Expected max_flow = 0 because there is no capacity along the path
+        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+            r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow == 0
+
     def test_calc_graph_capacity_line1(self, line1):
         _, pred = spf(line1, "A")
         r = init_flow_graph(line1)

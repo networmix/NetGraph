@@ -22,10 +22,10 @@ def calc_max_flow(
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
     flows_attr: str = "flows",
+    copy_graph: bool = True,
 ) -> float:
-
     flow_graph = init_flow_graph(
-        graph.copy(),
+        graph.copy() if copy_graph else graph,
         flow_attr,
         flows_attr,
         reset_flow_graph,

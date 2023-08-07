@@ -31,3 +31,11 @@ class TestMaxFlow:
     def test_max_flow_graph5_2(self, graph5):
         max_flow = calc_max_flow(graph5, "A", "B", shortest_path=True)
         assert max_flow == 1
+
+    def test_max_flow_graph_copy_disabled(self, graph5):
+        graph5_copy = graph5.copy()
+        max_flow1 = calc_max_flow(graph5_copy, "A", "B", copy_graph=False)
+        assert max_flow1 == 4
+
+        max_flow2 = calc_max_flow(graph5_copy, "A", "B", copy_graph=False)
+        assert max_flow2 == 0
