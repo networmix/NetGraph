@@ -1,4 +1,5 @@
 networkx
+geopy
 faker
 build
 twine

@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, Hashable, Iterator, Optional, Tuple
 
 
 NodeID = Hashable
-EdgeID = int
+EdgeID = Hashable
 AttrDict = Dict[Hashable, Any]
 EdgeTuple = Tuple[NodeID, NodeID, EdgeID, AttrDict]
 
