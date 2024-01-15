@@ -1,6 +1,8 @@
 networkx
+numpy
+pandas
+matplotlib
 geopy
-faker
 build
 twine
 pytest

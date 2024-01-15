@@ -42,7 +42,7 @@ def spf(
     # Initialization
     excluded_edges = excluded_edges or set()
     excluded_nodes = excluded_nodes or set()
-    outgoing_adjacencies = graph.get_adj_out()
+    outgoing_adjacencies = graph._adj
     min_pq = []  # min-priority queue
     costs: Dict[NodeID, Cost] = {src_node: 0}  # source node has has zero cost to itself
     pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {

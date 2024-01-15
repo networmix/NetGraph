@@ -13,7 +13,6 @@ from ..sample_data.sample_graphs import *
 
 class TestInitFlowGraph:
     def test_init_flow_graph_1(self, line1):
-
         r = init_flow_graph(line1)
         assert r.get_edges() == {
             0: ("A", "B", 0, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),

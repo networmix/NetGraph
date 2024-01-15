@@ -47,16 +47,6 @@ class EdgeSelect(IntEnum):
     USER_DEFINED = 99
 
 
-class EdgeFilter(IntEnum):
-    """
-    Edge filtering criteria
-    """
-
-    CAP_REMAINING = 1
-    COST_LT = 2
-    USER_DEFINED = 99
-
-
 def init_flow_graph(
     flow_graph: MultiDiGraph,
     flow_attr: str = "flow",
@@ -84,20 +74,31 @@ def edge_select_fabric(
     select_value: Optional[Any] = None,
     edge_select_func: Optional[
         Callable[
-            [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
+            [
+                MultiDiGraph,
+                NodeID,
+                NodeID,
+                Dict[EdgeID, AttrDict],
+                Optional[Set[EdgeID]],
+                Optional[Set[NodeID]],
+            ],
             Tuple[Cost, List[EdgeID]],
         ]
     ] = None,
-    edge_filter: Optional[EdgeFilter] = None,
-    filter_value: Optional[Any] = None,
-    edge_filter_func: Optional[Callable[[Tuple[EdgeID, AttrDict]], bool]] = None,
     excluded_edges: Optional[Set[EdgeID]] = None,
     excluded_nodes: Optional[Set[NodeID]] = None,
     cost_attr: str = "metric",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
 ) -> Callable[
-    [MultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
+    [
+        MultiDiGraph,
+        NodeID,
+        NodeID,
+        Dict[EdgeID, AttrDict],
+        Optional[Set[EdgeID]],
+        Optional[Set[NodeID]],
+    ],
     Tuple[Cost, List[EdgeID]],
 ]:
     """
@@ -318,80 +319,7 @@ def edge_select_fabric(
     else:
         raise ValueError(f"Unknown edge_select value {edge_select}")
 
-    if edge_filter:
-        edge_filter_instance = edge_filter_fabric(
-            edge_filter,
-            filter_value,
-            edge_filter_func,
-            cost_attr,
-            capacity_attr,
-            flow_attr,
-        )
-
-        def prefiltered_ret(
-            graph: MultiDiGraph,
-            src_node: NodeID,
-            dst_node: NodeID,
-            edges: Dict[EdgeID, AttrDict],
-            excluded_edges: Optional[Set[EdgeID]] = excluded_edges,
-            excluded_nodes: Optional[Set[NodeID]] = excluded_nodes,
-        ) -> Tuple[Cost, List[int]]:
-            edges = {
-                edge_id: edge_attributes
-                for edge_id, edge_attributes in edges.items()
-                if edge_filter_instance(
-                    edge_id, (src_node, dst_node, edge_id, edge_attributes)
-                )
-            }
-            return ret(graph, src_node, dst_node, edges, excluded_edges, excluded_nodes)
-
-        return prefiltered_ret
     return ret
-
-
-def edge_filter_fabric(
-    edge_filter: EdgeFilter,
-    filter_value: Optional[Any] = None,
-    edge_filter_func: Optional[Callable[[Tuple[EdgeID, AttrDict]], bool]] = None,
-    cost_attr: str = "metric",
-    capacity_attr: str = "capacity",
-    flow_attr: str = "flow",
-) -> Callable[[Tuple[EdgeID, Tuple[NodeID, NodeID, EdgeID, AttrDict]]], bool]:
-    """
-    Fabric producing a function to filter edges out from a graph.
-
-    Args:
-        edge_filter: EdgeFilter enum with filter criteria
-        edge_filter_func: Optional user-defined function
-        cost_attr: name of the cost attribute
-        capacity_attr: name of the capacity attribute
-        flow_attr: name of the flow attribute
-    Returns:
-        edge_filter_func: a callable function returning a boolean (False - remove a given edge)
-    """
-
-    def edges_with_cap_remaining(
-        edge_id: EdgeID,
-        edge_tuple: Tuple[NodeID, NodeID, EdgeID, AttrDict],
-    ) -> Tuple[Cost, List[int]]:
-        edge_attributes = edge_tuple[-1]
-        return (
-            edge_attributes[capacity_attr] - edge_attributes[flow_attr] >= filter_value
-        )
-
-    def edges_with_cost_lt(
-        edge_id: EdgeID,
-        edge_tuple: Tuple[NodeID, NodeID, EdgeID, AttrDict],
-    ) -> Tuple[Cost, List[int]]:
-        edge_attributes = edge_tuple[-1]
-        return edge_attributes[cost_attr] < filter_value
-
-    if edge_filter == EdgeFilter.CAP_REMAINING:
-        return edges_with_cap_remaining
-    elif edge_filter == EdgeFilter.COST_LT:
-        return edges_with_cost_lt
-    elif edge_filter == EdgeFilter.USER_DEFINED:
-        return edge_filter_func
 
 
 def resolve_to_paths(

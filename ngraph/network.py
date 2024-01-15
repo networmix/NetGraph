@@ -26,6 +26,8 @@ class Node:
             "total_link_capacity": 0,
             "non_transit": False,
             "transit_only": False,  # no local sinks/sources
+            "lat": 0,
+            "lon": 0,
         }
         self.update_attributes(**attributes)
         self.sub_nodes: Dict[str, "Node"] = {}  # Used if node_type is 'composite'
@@ -68,6 +70,7 @@ class Link:
             "plane_ids": [],
             "capacity": 0,
             "metric": 0,
+            "distance": 0,
         }
         self.update_attributes(**attributes)
 

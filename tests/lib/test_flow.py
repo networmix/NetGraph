@@ -1,6 +1,5 @@
 # pylint: disable=protected-access,invalid-name
 from ngraph.lib.common import (
-    EdgeFilter,
     EdgeSelect,
     init_flow_graph,
     PathAlg,

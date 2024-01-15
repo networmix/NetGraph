@@ -34,14 +34,13 @@ def place_flow_on_graph(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
 ) -> FlowPlacementMeta:
-
     # Calculate remaining capacity
     rem_cap, flow_dict = CalculateCapacity.calc_graph_cap(
         flow_graph, src_node, dst_node, pred, flow_placement, capacity_attr, flow_attr
     )
 
     edges = flow_graph.get_edges()
-    nodes = flow_graph.get_nodes()
+    nodes = flow_graph.nodes
 
     placed_flow = min(rem_cap, flow)
     remaining_flow = max(flow - rem_cap if flow != float("inf") else float("inf"), 0)
