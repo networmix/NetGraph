@@ -14,7 +14,7 @@ def graph_to_node_link(graph: MultiDiGraph) -> Dict:
     node_map = {node_id: num for num, node_id in enumerate(graph.get_nodes())}
 
     return {
-        "graph": {**graph.get_attr()},
+        "graph": {**graph.graph},
         "nodes": [
             {"id": node_id, "attr": {**graph.get_nodes()[node_id]}}
             for node_id in node_map

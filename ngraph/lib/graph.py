@@ -2,78 +2,40 @@ from __future__ import annotations
 from pickle import dumps, loads
 from typing import Any, Callable, Dict, Hashable, Iterator, Optional, Tuple
 
+import networkx as nx
+
 
 NodeID = Hashable
-EdgeID = int
+EdgeID = Hashable
 AttrDict = Dict[Hashable, Any]
 EdgeTuple = Tuple[NodeID, NodeID, EdgeID, AttrDict]
 
 
-class MultiDiGraph:
+class MultiDiGraph(nx.MultiDiGraph):
     """
-    This class implements a data structure representing a Directed Multigraph.
-    The intent is to keep this class largely compatible with NetworkX library while making edges first-class entities.
-    By definition, the edges of a directed graph are directed and there could be several parallel edges
-    between a pair of nodes (so it is a multigraph).
-    A graph consists of nodes and edges. Nodes are kept straight in a Python dictionary. Edges are adjacency-encoded,
-    and, at the same time, each edge has its own identity in a form of a unique index.
-    Nodes, edges and the graph itself can have associated attributes.
-    The adjacency structure is implemented with Python nested dictionaries:
-        {src_node: {dst_node: edge_id: {**edge_attr}}}
-    Edges are stored as tuples indexed by unique ids:
-        {edge_id: (src_node, dst_node, edge_id, {**edge_attr})}
-    Attributes:
-        _graph: dictionary for graph attributes
-        _nodes: dictionary for nodes
-        _edges: dictionary for edges
-        _succ: dictionary for outgoing adjacencies (successors, in other words, adjacent destination nodes)
-        _pred: dictionary for incoming adjacencies (predecessors, in other words, adjacent source nodes)
-        _next_edge_id: all edges are unique, hence it is the index for the next added edge
+    This class is a wrapper around NetworkX MultiDiGraph.
+    It makes edge ids unique and provides a convenient way to access edges by their ids.
     """
 
-    def __init__(self, **attr: AttrDict) -> None:
-        self._graph: AttrDict = attr
-        self._nodes: Dict[NodeID, AttrDict] = {}
+    def __init__(self, incoming_graph_data=None, multigraph_input=None, **attr) -> None:
+        super().__init__(incoming_graph_data, multigraph_input, **attr)
         self._edges: Dict[EdgeID, EdgeTuple] = {}
-        self._succ: Dict[
-            NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]
-        ] = {}  # dictionary for outgoing adjacencies (successors)
-        self._pred: Dict[
-            NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]
-        ] = {}  # dictionary for incoming adjacencies (predecessors)
-
         self._next_edge_id: EdgeID = 0  # the index for the next added edge
 
-        self._adj = self._succ  # alias for compatibility with NetworkX
-
-    def __contains__(self, node: NodeID) -> bool:
+    def new_edge_key(self, src_node: NodeID, dst_node: NodeID) -> EdgeID:
         """
-        Enables expressions like "node" in graph
+        Get a new unique edge id between src_node and dst_node.
+        Overriding this method is necessary because NetworkX
+        has a different default implementation of edge ids.
+        Args:
+            src_node: source node identifier.
+            dst_node: destination node identifier.
         Returns:
-            True if node_id is in the graph and False otherwise.
+            A new unique edge id.
         """
-        return node in self._nodes
-
-    def __getitem__(self, node: NodeID) -> Dict:
-        """
-        Making MultiDiGraph objects subscriptable.
-        Returns {dst_node: edge_id: {**edge_attr}}
-        """
-        return self._succ[node]
-
-    def __iter__(self) -> Iterator:
-        """
-        Making MultiDiGraph objects iterable by their nodes
-        """
-        return iter(self._nodes.keys())
-
-    def __len__(self) -> int:
-        """
-        Return the number of nodes as the length of the graph.
-        Returns:
-            The number of nodes in the graph.
-        """
-        return len(self._nodes)
+        next_edge_id = self._next_edge_id
+        self._next_edge_id += 1
+        return next_edge_id
 
     def copy(self) -> MultiDiGraph:
         """
@@ -84,24 +46,6 @@ class MultiDiGraph:
             MultiDiGraph - copy of the graph.
         """
         return loads(dumps(self))
-
-    def _get_next_edge_id(self) -> EdgeID:
-        next_edge_id = self._next_edge_id
-        self._next_edge_id += 1
-        return next_edge_id
-
-    def add_node(self, node_to_add: NodeID, **attr: AttrDict) -> None:
-        """
-        Add a single node with optional attributes. If the node is present - do nothing.
-        Args:
-            node_to_add: node identifier.
-                Can be any hashable Python object.
-            attr: optional node attributes in a form of keyword arguments (k=v pairs).
-        """
-        if node_to_add not in self._nodes:
-            self._nodes[node_to_add] = attr
-            self._succ[node_to_add] = {}
-            self._pred[node_to_add] = {}
 
     def add_edge(
         self,
@@ -121,18 +65,13 @@ class MultiDiGraph:
             edge_id: optional unique edge id.
             attr: optional node attributes in a form of keyword arguments (k=v pairs).
         """
-        if edge_id is None:
-            edge_id = self._get_next_edge_id()
-
-        if src_node not in self._nodes:
-            self.add_node(src_node)
-
-        if dst_node not in self._nodes:
-            self.add_node(dst_node)
-
-        self._edges[edge_id] = (src_node, dst_node, edge_id, attr)
-        self._succ[src_node].setdefault(dst_node, {})[edge_id] = attr
-        self._pred[dst_node].setdefault(src_node, {})[edge_id] = attr
+        edge_id = super().add_edge(src_node, dst_node, key=edge_id, **attr)
+        self._edges[edge_id] = (
+            src_node,
+            dst_node,
+            edge_id,
+            self[src_node][dst_node][edge_id],
+        )
         return edge_id
 
     def remove_edge(
@@ -149,21 +88,20 @@ class MultiDiGraph:
             dst_node: destination node identifier.
             edge_id: optional unique edge id.
         """
-        if src_node not in self._nodes or dst_node not in self._nodes:
+        if src_node not in self or dst_node not in self:
             return
 
         if edge_id is not None:
-            if edge_id not in self._succ[src_node][dst_node]:
+            if edge_id not in self.succ[src_node][dst_node]:
                 raise ValueError(
                     f"Edge with id {edge_id} does not exist between {src_node} and {dst_node}."
                 )
             self.remove_edge_by_id(edge_id)
 
         else:
-            for _edge_id in self._succ[src_node][dst_node]:
-                del self._edges[_edge_id]
-            del self._succ[src_node][dst_node]
-            del self._pred[dst_node][src_node]
+            for edge_id in tuple(self.succ[src_node][dst_node]):
+                del self._edges[edge_id]
+                super().remove_edge(src_node, dst_node)
 
     def remove_edge_by_id(self, edge_id: EdgeID) -> None:
         """
@@ -176,11 +114,7 @@ class MultiDiGraph:
 
         src_node, dst_node, _, _ = self._edges[edge_id]
         del self._edges[edge_id]
-        del self._succ[src_node][dst_node][edge_id]
-        del self._pred[dst_node][src_node][edge_id]
-        if not self._succ[src_node][dst_node]:
-            del self._succ[src_node][dst_node]
-            del self._pred[dst_node][src_node]
+        super().remove_edge(src_node, dst_node, key=edge_id)
 
     def remove_node(self, node_to_remove: NodeID) -> None:
         """
@@ -189,50 +123,14 @@ class MultiDiGraph:
         Args:
             node_to_remove: node identifier.
         """
-        if node_to_remove not in self._nodes:
+        if node_to_remove not in self:
             return
 
-        for remote_node in list(self._succ[node_to_remove].keys()):
+        for remote_node in list(self.succ[node_to_remove].keys()):
             self.remove_edge(node_to_remove, remote_node)
             self.remove_edge(remote_node, node_to_remove)
 
-        del self._succ[node_to_remove]
-        del self._pred[node_to_remove]
-        del self._nodes[node_to_remove]
-
-    def get_adj_out(self) -> Dict[NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]]:
-        """
-        Get a dictionary with outgoing adjacencies (successors).
-        The format is:
-        {src_node: {dst_node: edge_id: {**edge_attr}}}
-        Do not remove or add any adjacencies using this dictionary.
-        It will break the consistency of the graph object.
-        Use only respective graph methods for that purpose.
-        Returns:
-            A dict with all outgoing adjacencies.
-        """
-        return self._succ
-
-    def get_adj_in(self) -> Dict[NodeID, Dict[NodeID, Dict[EdgeID, AttrDict]]]:
-        """
-        Get a dictionary with incoming adjacencies (predecessors).
-        The format is:
-        {dst_node: {src_node: edge_id: {**edge_attr}}}
-        Do not remove or add any adjacencies using this dictionary.
-        It will break the consistency of the graph object.
-        Use only respective graph methods for that purpose.
-        Returns:
-            A dict with all incoming adjacencies.
-        """
-        return self._pred
-
-    def get_attr(self) -> AttrDict:
-        """
-        Get a dictionary with all graph attributes.
-        Returns:
-            A dict with all graph attributes.
-        """
-        return self._graph
+        super().remove_node(node_to_remove)
 
     def get_nodes(self) -> Dict[NodeID, AttrDict]:
         """
@@ -240,7 +138,7 @@ class MultiDiGraph:
         Returns:
             A dict with all node_ids maped into their attributes.
         """
-        return self._nodes
+        return {node_id: node_data for node_id, node_data in self.nodes.items()}
 
     def get_edges(self) -> Dict[EdgeID, EdgeTuple]:
         """
@@ -252,55 +150,10 @@ class MultiDiGraph:
         """
         return self._edges
 
-    def get_node_attr(self, node_id: NodeID) -> AttrDict:
-        """
-        Get a dictionary with all node attributes.
-        Returns:
-            A dict with all node attributes.
-        """
-        return self._nodes[node_id]
-
     def get_edge_attr(self, edge_id: EdgeID) -> AttrDict:
         """
-        Get a dictionary with all edge attributes.
+        Get a dictionary with all edge attributes by edge id.
         Returns:
             A dict with all edge attributes.
         """
         return self._edges[edge_id][3]
-
-    def filter(
-        self,
-        node_filter: Callable[[NodeID, Dict], bool] = lambda node_id, node_attr: True,
-        edge_filter: Callable[[NodeID, Tuple], bool] = lambda edge_id, edge_tuple: True,
-    ) -> MultiDiGraph:
-        graph = self.copy()
-
-        for node_id, node_attr in self.get_nodes().items():
-            if not node_filter(node_id, node_attr):
-                graph.remove_node(node_id)
-
-        for edge_id, edge_tuple in self.get_edges().items():
-            if not edge_filter(edge_id, edge_tuple):
-                graph.remove_edge(edge_tuple[0], edge_tuple[1], edge_tuple[2])
-        return graph
-
-    def is_directed(self) -> bool:
-        return True
-
-    def is_multigraph(self) -> bool:
-        return True
-
-    def edges(self) -> Iterator[Tuple[NodeID, NodeID]]:
-        for edge_tuple in self._edges.values():
-            yield edge_tuple[0], edge_tuple[1]
-
-    def nodes(self) -> Iterator[NodeID]:
-        for node in self._nodes:
-            yield node
-
-    def neighbors(self, node) -> Iterator[NodeID]:
-        """
-        Returns an iterator over neighbors of a given node.
-        Compatibility with NetworkX.
-        """
-        return iter(self._adj[node])

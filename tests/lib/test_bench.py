@@ -1,105 +1,60 @@
 # pylint: disable=protected-access,invalid-name
+import random
+
 import pytest
 from ngraph.lib.graph import MultiDiGraph
 from ngraph.lib.spf import spf
 import networkx as nx
 
 
-@pytest.fixture
-def graph3():
-    # Metric:
-    #  ┌────────►E─────────┐
-    #  │ [1]        [1]    │
-    #  │                   │
-    #  │                   ▼   [1]
-    #  A────────►B────────►C──────┐
-    #  │ [1,1,1]   [1,1,1] │      │
-    #  │                   │      ▼
-    #  │                   │[2]   F
-    #  │                   │      │
-    #  │                   │      │
-    #  │   [4]             ▼      │[1]
-    #  └──────────────────►D◄─────┘
-    #
-    # Capacity:
-    #  ┌────────►E─────────┐
-    #  │ [5]        [4]    │
-    #  │                   │
-    #  │                   ▼   [1]
-    #  A────────►B────────►C──────┐
-    #  │ [2,4,6]   [1,2,3] │      │
-    #  │                   │      ▼
-    #  │                   │[3]   F
-    #  │                   │      │
-    #  │                   │      │
-    #  │   [2]             ▼      │[2]
-    #  └──────────────────►D◄─────┘
+random.seed(0)
 
+
+def create_complex_graph(num_nodes, num_edges):
+    node_labels = [str(i) for i in range(num_nodes)]
+    edges = []
+
+    # Add edges until the desired number of edges is reached
+    edges_added = 0
+    while edges_added < num_edges / 4:
+        # Randomly select source and target nodes from the list of labels
+        src = random.choice(node_labels)
+        tgt = random.choice(node_labels)
+
+        # Add an edge with random metric and capacity
+        edges.append((src, tgt, random.randint(1, 10), random.randint(1, 5)))
+        edges.append((src, tgt, random.randint(1, 10), random.randint(1, 5)))
+        edges.append((src, tgt, random.randint(1, 10), random.randint(1, 5)))
+        edges.append((src, tgt, random.randint(1, 10), random.randint(1, 5)))
+        edges_added += 1
+
+    return node_labels, edges
+
+
+@pytest.fixture
+def graph1():
     g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("A", "B", metric=1, capacity=4)
-    g.add_edge("A", "B", metric=1, capacity=6)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=3)
-    g.add_edge("C", "D", metric=2, capacity=3)
-    g.add_edge("A", "E", metric=1, capacity=5)
-    g.add_edge("E", "C", metric=1, capacity=4)
-    g.add_edge("A", "D", metric=4, capacity=2)
-    g.add_edge("C", "F", metric=1, capacity=1)
-    g.add_edge("F", "D", metric=1, capacity=2)
-    return g
+    gnx = nx.MultiDiGraph()
+    node_labels, edges = create_complex_graph(100, 10000)
+    for node in node_labels:
+        g.add_node(node)
+        gnx.add_node(node)
+
+    for edge in edges:
+        g.add_edge(edge[0], edge[1], metric=edge[2], capacity=edge[3])
+        gnx.add_edge(edge[0], edge[1], metric=edge[2], capacity=edge[3])
+
+    return g, gnx
 
 
-@pytest.fixture
-def graph3_nx():
-    # Metric:
-    #  ┌────────►E─────────┐
-    #  │ [1]        [1]    │
-    #  │                   │
-    #  │                   ▼   [1]
-    #  A────────►B────────►C──────┐
-    #  │ [1,1,1]   [1,1,1] │      │
-    #  │                   │      ▼
-    #  │                   │[2]   F
-    #  │                   │      │
-    #  │                   │      │
-    #  │   [4]             ▼      │[1]
-    #  └──────────────────►D◄─────┘
-    #
-    # Capacity:
-    #  ┌────────►E─────────┐
-    #  │ [5]        [4]    │
-    #  │                   │
-    #  │                   ▼   [1]
-    #  A────────►B────────►C──────┐
-    #  │ [2,4,6]   [1,2,3] │      │
-    #  │                   │      ▼
-    #  │                   │[3]   F
-    #  │                   │      │
-    #  │                   │      │
-    #  │   [2]             ▼      │[2]
-    #  └──────────────────►D◄─────┘
-
-    g = nx.MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("A", "B", metric=1, capacity=4)
-    g.add_edge("A", "B", metric=1, capacity=6)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=3)
-    g.add_edge("C", "D", metric=2, capacity=3)
-    g.add_edge("A", "E", metric=1, capacity=5)
-    g.add_edge("E", "C", metric=1, capacity=4)
-    g.add_edge("A", "D", metric=4, capacity=2)
-    g.add_edge("C", "F", metric=1, capacity=1)
-    g.add_edge("F", "D", metric=1, capacity=2)
-    return g
+def test_bench_ngraph_spf_1(benchmark, graph1):
+    benchmark(spf, graph1[0], "0")
 
 
-def test_bench_ngraph_spf_1(benchmark, graph3):
-    benchmark(spf, graph3, "A")
-
-
-def test_bench_networkx_spf_1(benchmark, graph3_nx):
-    benchmark(nx.dijkstra_predecessor_and_distance, graph3_nx, "A", weight="metric")
+def test_bench_networkx_spf_1(benchmark, graph1):
+    benchmark(
+        nx.dijkstra_predecessor_and_distance,
+        graph1[1],
+        "0",
+        weight="metric",
+    )

@@ -50,8 +50,6 @@ class FlowPolicy:
         multipath: bool,
         min_flow_count: int = 1,
         max_flow_count: Optional[int] = None,
-        edge_filter: Optional[common.EdgeFilter] = None,
-        filter_value: Optional[Any] = None,
         max_path_cost: Optional[common.Cost] = None,
         max_path_cost_factor: Optional[float] = None,
         static_paths: Optional[List[PathBundle]] = None,
@@ -70,8 +68,6 @@ class FlowPolicy:
         self.multipath: bool = multipath
         self.min_flow_count: int = min_flow_count
         self.max_flow_count: Optional[int] = max_flow_count
-        self.edge_filter: Optional[common.EdgeFilter] = edge_filter
-        self.filter_value: Optional[Any] = filter_value
         self.max_path_cost: Optional[common.Cost] = max_path_cost
         self.max_path_cost_factor: Optional[float] = max_path_cost_factor
         self.static_paths: Optional[List[PathBundle]] = static_paths
@@ -136,8 +132,6 @@ class FlowPolicy:
         edge_select_func = common.edge_select_fabric(
             edge_select=self.edge_select,
             select_value=min_flow or self.edge_select_value,
-            edge_filter=self.edge_filter,
-            filter_value=self.filter_value,
             excluded_edges=excluded_edges,
             excluded_nodes=excluded_nodes,
             edge_select_func=self.edge_select_func,
@@ -153,6 +147,8 @@ class FlowPolicy:
             src_node=src_node,
             edge_select_func=edge_select_func,
             multipath=self.multipath,
+            excluded_edges=excluded_edges,
+            excluded_nodes=excluded_nodes,
         )
 
         if dst_node in pred:
