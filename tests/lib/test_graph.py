@@ -107,6 +107,24 @@ def test_graph_add_edge_3():
     }
 
 
+def test_graph_add_edges_from_1():
+    g = MultiDiGraph()
+    g.add_edges_from([("A", "B"), ("B", "C")])
+    assert "A" in g
+    assert "B" in g
+    assert "C" in g
+    assert g._edges[0] == ("A", "B", 0, {})
+    assert g._edges[1] == ("B", "C", 1, {})
+    assert "B" in g.succ["A"]
+    assert "A" in g.pred["B"]
+    assert "C" in g.succ["B"]
+    assert "B" in g.pred["C"]
+    assert g.succ["A"]["B"] == {0: {}}
+    assert g.pred["B"]["A"] == {0: {}}
+    assert g.succ["B"]["C"] == {1: {}}
+    assert g.pred["C"]["B"] == {1: {}}
+
+
 def test_modify_edge_1():
     g = MultiDiGraph()
     g.add_edge("A", "B", test_attr="TEST_edge")
