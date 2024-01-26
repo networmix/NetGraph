@@ -18,7 +18,11 @@ class MultiDiGraph(nx.MultiDiGraph):
     """
 
     def __init__(self, incoming_graph_data=None, multigraph_input=None, **attr) -> None:
-        super().__init__(incoming_graph_data, multigraph_input, **attr)
+        super().__init__(
+            incoming_graph_data=incoming_graph_data,
+            multigraph_input=multigraph_input,
+            **attr,
+        )
         self._edges: Dict[EdgeID, EdgeTuple] = {}
         self._next_edge_id: EdgeID = 0  # the index for the next added edge
 
