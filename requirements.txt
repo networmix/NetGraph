@@ -3,3 +3,15 @@ networkx
 numpy
 pandas
 matplotlib
+build
+twine
+pytest
+pytest-cov
+pytest-benchmark
+pytest-mock
+pylint
+black
+jupyter
+seaborn
+basemap-data-hires
+basemap
