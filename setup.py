@@ -18,6 +18,6 @@ setup(
         "Operating System :: OS Independent",
     ],
     packages=find_packages(exclude=("tests", "dev", "examples")),
-    python_requires=">=3.10",
+    python_requires=">=3.13",
     tests_require=["pytest", "networkx"],
 )

@@ -1,5 +1,5 @@
 # Use the official Python image from the Docker Hub
-FROM python:3.10
+FROM python:3.13
 
 # Add Tini, a minimal init system for containers
 ENV TINI_VERSION=v0.19.0
@@ -15,15 +15,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install system dependencies and remove the package list
 RUN apt-get update && \
     apt-get install -y \
-    libgeos-dev \
+        libgeos-dev \
+        libproj-dev \
+        libgdal-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip and setuptools
+RUN pip install --no-cache-dir --upgrade pip setuptools
 
 # Copy the requirements file into the container
 COPY requirements.txt ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Create a mount point for external volumes
 VOLUME /root/env
