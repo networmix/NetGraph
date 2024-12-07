@@ -1,29 +1,35 @@
+# Use the official Python image from the Docker Hub
 FROM python:3.10
 
-# Add Tini
-ENV TINI_VERSION v0.19.0
+# Add Tini, a minimal init system for containers
+ENV TINI_VERSION=v0.19.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
 RUN chmod +x /tini
 
-# The WORKDIR instruction sets the working directory for any RUN, CMD, ENTRYPOINT,
-# COPY and ADD instructions that follow it in the Dockerfile.
-# If the WORKDIR doesn’t exist, it will be created even if it’s not used
-# in any subsequent Dockerfile instruction.
+# Set the working directory inside the container
 WORKDIR /root/env
 
-# Prevent running interactive config
-ENV DEBIAN_FRONTEND noninteractive
+# Prevent running interactive config during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
+# Install system dependencies and remove the package list
+RUN apt-get update && \
+    apt-get install -y \
+    libgeos-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the requirements file into the container
 COPY requirements.txt ./
 
+# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-RUN pip install jupyter
-RUN pip install networkx
-RUN pip install pandas
-RUN pip install seaborn
-RUN pip install basemap-data-hires
-RUN pip install basemap
+# Create a mount point for external volumes
+VOLUME /root/env
 
+# Set the entrypoint to Tini
 ENTRYPOINT ["/tini", "-g", "--"]
+
+# Default command to run when the container starts
+CMD ["/bin/bash"]
