@@ -2,27 +2,57 @@
 
 set -e
 
-DEFAULT_IMAGE_TAG=ngraph
-IMAGE_TAG=${2:-$DEFAULT_IMAGE_TAG}
-DEFAULT_CONTAINER_NAME=ngraph_jupyter
-CONTAINER_NAME=${3:-$DEFAULT_CONTAINER_NAME}
-IMAGE_ID=$(docker images --format "{{.ID}}" "$IMAGE_TAG")
+DEFAULT_IMAGE_TAG="ngraph"
+DEFAULT_CONTAINER_NAME="ngraph_jupyter"
 
-USAGE="Usage: $0 COMMAND [IMAGE_TAG] [CONTAINER_NAME]\n"
-USAGE+="    COMMAND is what you expect the script to do:\n"
+# Initialize variables with default values
+IMAGE_TAG="$DEFAULT_IMAGE_TAG"
+CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+
+USAGE="Usage: $0 COMMAND [-i IMAGE_TAG] [-c CONTAINER_NAME]\n"
+USAGE+="    COMMAND is required:\n"
 USAGE+="        build - Builds an image from a Dockerfile.\n"
 USAGE+="        run - Runs a container and starts Jupyter.\n"
+USAGE+="        stop - Stops a running container.\n"
 USAGE+="        shell - Attaches to the shell of a running container.\n"
 USAGE+="        killall - Stops and removes all containers based on the image tag.\n"
 USAGE+="        forcecleanall - WARNING: Stops and removes all containers and images. This action cannot be undone.\n"
-USAGE+="    IMAGE_TAG is the optional Docker image tag (default: $DEFAULT_IMAGE_TAG).\n"
-USAGE+="    CONTAINER_NAME is the optional Docker container name (default: $DEFAULT_CONTAINER_NAME).\n"
+USAGE+="    -i IMAGE_TAG: Optional Docker image tag (default: $DEFAULT_IMAGE_TAG)\n"
+USAGE+="    -c CONTAINER_NAME: Optional Docker container name (default: $DEFAULT_CONTAINER_NAME)\n"
 
+# Check if at least one argument is provided
 if [[ $# -lt 1 ]]; then
     echo >&2 "ERROR: Must specify the command"
-    printf "$USAGE" >&2
+    printf "%b" "$USAGE" >&2
     exit 2
 fi
+
+# Extract the command
+COMMAND="$1"
+shift
+
+# Parse named parameters
+while getopts ":i:c:" opt; do
+  case "$opt" in
+    i)
+      IMAGE_TAG="$OPTARG"
+      ;;
+    c)
+      CONTAINER_NAME="$OPTARG"
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      printf "%b" "$USAGE" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      printf "%b" "$USAGE" >&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
 
 # MODHACK is a workaround for Docker on macOS
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -32,11 +62,9 @@ else
 fi
 
 function build {
-    echo "Building docker container with tag $IMAGE_TAG"
+    echo "Building Docker image with tag '$IMAGE_TAG'..."
     docker build . -t "$IMAGE_TAG"
-
-    IMAGE_ID=$(docker images --format "{{.ID}}" "$IMAGE_TAG")
-    echo "Container image ID: $IMAGE_ID"
+    echo "Docker image '$IMAGE_TAG' built successfully."
     return 0
 }
 
@@ -48,21 +76,21 @@ function run {
         exit 1
     fi
 
-    echo "Starting a container with the name $CONTAINER_NAME using $IMAGE_TAG image..."
+    echo "Starting a container with the name '$CONTAINER_NAME' using the image '$IMAGE_TAG'..."
 
     # Check if a container with the exact name exists
-    container_id=$(docker ps -aq -f name=^/${CONTAINER_NAME}$)
+    container_id=$(docker ps -aq -f "name=^/${CONTAINER_NAME}$")
 
     if [[ -n "$container_id" ]]; then
         # Stop the container if it's running
-        if docker ps -q -f name=^/${CONTAINER_NAME}$ > /dev/null; then
-            echo "Stopping existing container with the name $CONTAINER_NAME..."
+        if docker ps -q -f "name=^/${CONTAINER_NAME}$" > /dev/null; then
+            echo "Stopping existing container with the name '$CONTAINER_NAME'..."
             docker stop "$CONTAINER_NAME" > /dev/null
         fi
 
-        # Remove the container if it exists
-        if docker ps -aq -f name=^/${CONTAINER_NAME}$ > /dev/null; then
-            echo "Removing existing container with the name $CONTAINER_NAME..."
+        # Remove the container if it's stopped
+        if docker ps -aq -f status=exited -f "name=^/${CONTAINER_NAME}$" > /dev/null; then
+            echo "Removing stopped container with the name '$CONTAINER_NAME'..."
             docker rm "$CONTAINER_NAME" > /dev/null
         fi
     fi
@@ -72,34 +100,41 @@ function run {
         -v "$PWD":/root/env -p 8787:8787 $MODHACK \
         --entrypoint=/bin/bash --privileged --cap-add ALL "$IMAGE_TAG")
     docker start "$CONTAINER_ID"
-    echo "Started container with ID $CONTAINER_ID and name $CONTAINER_NAME"
+    echo "Started container with ID '$CONTAINER_ID' and name '$CONTAINER_NAME'"
 
     # Install the package inside the container
     docker exec -it "$CONTAINER_ID" pip install -e .
-    echo "Starting Jupyter in the container. Open http://127.0.0.1:8787/ in your browser."
+    echo "Package installed inside the container."
 
     # Start Jupyter Notebook
+    echo "Starting Jupyter in the container. Open http://127.0.0.1:8787/ in your browser."
     docker exec -it "$CONTAINER_ID" jupyter notebook --port=8787 \
         --no-browser --ip=0.0.0.0 --allow-root --NotebookApp.token='' /root/env/notebooks
     return 0
 }
 
+function stop {
+    echo "Stopping the container '$CONTAINER_NAME'..."
+    docker stop "$CONTAINER_NAME" > /dev/null || echo "Container '$CONTAINER_NAME' is not running."
+    return 0
+}
+
 function shell {
-    echo "Attaching to the shell of the running container $CONTAINER_NAME..."
+    echo "Attaching to the shell of the running container '$CONTAINER_NAME'..."
     docker exec -it "$CONTAINER_NAME" /bin/bash
     return 0
 }
 
 function killall {
-    echo "Stopping all running containers based on the image tag $IMAGE_TAG..."
+    echo "Stopping all running containers based on the image tag '$IMAGE_TAG'..."
     for container_id in $(docker ps -q --filter "ancestor=$IMAGE_TAG"); do
-        echo "Stopping container ID: $container_id"
+        echo "Stopping container ID: '$container_id'"
         docker kill "$container_id" > /dev/null
     done
 
-    echo "Removing all containers based on the image tag $IMAGE_TAG..."
+    echo "Removing all containers based on the image tag '$IMAGE_TAG'..."
     for container_id in $(docker ps -aq --filter "ancestor=$IMAGE_TAG"); do
-        echo "Removing container ID: $container_id"
+        echo "Removing container ID: '$container_id'"
         docker rm "$container_id" > /dev/null
     done
     return 0
@@ -107,7 +142,7 @@ function killall {
 
 function forcecleanall {
     echo "WARNING: This will stop and remove all containers and images. This action cannot be undone."
-    read -p "Are you sure you want to proceed? (Y/N): " confirm
+    read -rp "Are you sure you want to proceed? (Y/N): " confirm
     if [[ "$confirm" != [Yy] ]]; then
         echo "Aborting forcecleanall."
         return 1
@@ -115,19 +150,19 @@ function forcecleanall {
 
     echo "Stopping all running containers..."
     for container_id in $(docker container ls -q); do
-        echo "Stopping container ID: $container_id"
+        echo "Stopping container ID: '$container_id'"
         docker container kill "$container_id"
     done
 
     echo "Removing all containers..."
     for container_id in $(docker container ls -aq); do
-        echo "Removing container ID: $container_id"
+        echo "Removing container ID: '$container_id'"
         docker container rm "$container_id"
     done
 
     echo "Removing all images..."
     for image_id in $(docker images -q); do
-        echo "Removing image ID: $image_id"
+        echo "Removing image ID: '$image_id'"
         docker image rm --force "$image_id"
     done
 
@@ -135,7 +170,7 @@ function forcecleanall {
     return 0
 }
 
-case $1 in
+case "$COMMAND" in
     build)
         echo "Executing BUILD command..."
         build "$@"
@@ -143,6 +178,10 @@ case $1 in
     run)
         echo "Executing RUN command..."
         run "$@"
+        ;;
+    stop)
+        echo "Executing STOP command..."
+        stop "$@"
         ;;
     shell)
         echo "Executing SHELL command..."
@@ -157,8 +196,8 @@ case $1 in
         forcecleanall "$@"
         ;;
     *)
-        echo >&2 "ERROR: Unknown command $1"
-        printf "$USAGE" >&2
+        echo >&2 "ERROR: Unknown command '$COMMAND'"
+        printf "%b" "$USAGE" >&2
         exit 2
         ;;
 esac
