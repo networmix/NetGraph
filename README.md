@@ -2,9 +2,12 @@
 
 🚧 Work in progress! 🚧
 
-![Python-test](https://github.com/networmix/NetGraph/workflows/Python-test/badge.svg?branch=main)
+[![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
 - [Introduction](#introduction)
+- [Installation and Usage](#installation-and-usage)
+  - [Using the Docker Container with Jupyter Notebooks](#1-using-the-docker-container-with-jupyter-notebooks)
+  - [Using the Python Package](#2-using-the-python-package)
 - [Use Case Examples](#use-case-examples)
   - [Calculate MaxFlow in a graph](#calculate-maxflow-in-a-graph)
   - [Place traffic demands on a graph](#place-traffic-demands-on-a-graph)
@@ -51,7 +54,7 @@ NetGraph can be used in two ways:
     ./run.sh build
     ```
 
-3. Start the Jupyter Notebook server:
+3. Start the container with Jupyter Notebook server:
 
    ```bash
     ./run.sh start
