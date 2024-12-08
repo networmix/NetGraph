@@ -68,7 +68,7 @@ NetGraph can be used in two ways:
 
 5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks or create your own.
 
-Note: The Docker container will mount the `ngraph` directory to the container, so any changes made to the code in the `ngraph` directory will be reflected in the container and vice versa.
+Note: The Docker container will mount the `NetGraph` directory to the container, so any changes made to the code in the `NetGraph` directory will be reflected in the container and vice versa.
 
 The ngraph package is installed in the container in editable mode, so you can make changes to the code and see the changes reflected immediately in the Jupyter Notebook.
 
@@ -83,6 +83,8 @@ To exit the Jupyter Notebook server, press `Ctrl+C` in the terminal where the se
 **Prerequisites:**
 
 - Python 3.8 or higher installed on your machine.
+
+Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflicts with other Python packages. See [Python Virtual Environments](https://docs.python.org/3/library/venv.html) for more information.
 
 **Steps:**
 
