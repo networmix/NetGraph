@@ -4,21 +4,24 @@ set -e
 
 DEFAULT_IMAGE_TAG="ngraph"
 DEFAULT_CONTAINER_NAME="ngraph_jupyter"
+DEFAULT_PORT=8788
 
 # Initialize variables with default values
 IMAGE_TAG="$DEFAULT_IMAGE_TAG"
 CONTAINER_NAME="$DEFAULT_CONTAINER_NAME"
+PORT="$DEFAULT_PORT"
 
-USAGE="Usage: $0 COMMAND [-i IMAGE_TAG] [-c CONTAINER_NAME]\n"
+USAGE="Usage: $0 COMMAND [-i IMAGE_TAG] [-c CONTAINER_NAME] [-p PORT]\n"
 USAGE+="    COMMAND is required:\n"
 USAGE+="        build - Builds an image from a Dockerfile.\n"
-USAGE+="        run - Runs a container and starts Jupyter.\n"
+USAGE+="        run - Runs a container and starts JupyterLab.\n"
 USAGE+="        stop - Stops a running container.\n"
 USAGE+="        shell - Attaches to the shell of a running container.\n"
 USAGE+="        killall - Stops and removes all containers based on the image tag.\n"
 USAGE+="        forcecleanall - WARNING: Stops and removes all containers and images. This action cannot be undone.\n"
 USAGE+="    -i IMAGE_TAG: Optional Docker image tag (default: $DEFAULT_IMAGE_TAG)\n"
 USAGE+="    -c CONTAINER_NAME: Optional Docker container name (default: $DEFAULT_CONTAINER_NAME)\n"
+USAGE+="    -p PORT: Optional port for JupyterLab (default: $DEFAULT_PORT)\n"
 
 # Check if at least one argument is provided
 if [[ $# -lt 1 ]]; then
@@ -32,13 +35,16 @@ COMMAND="$1"
 shift
 
 # Parse named parameters
-while getopts ":i:c:" opt; do
+while getopts ":i:c:p:" opt; do
   case "$opt" in
     i)
       IMAGE_TAG="$OPTARG"
       ;;
     c)
       CONTAINER_NAME="$OPTARG"
+      ;;
+    p)
+      PORT="$OPTARG"
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -76,7 +82,7 @@ function run {
         exit 1
     fi
 
-    echo "Starting a container with the name '$CONTAINER_NAME' using the image '$IMAGE_TAG'..."
+    echo "Starting a container with the name '$CONTAINER_NAME' using the image '$IMAGE_TAG' on port '$PORT'..."
 
     # Check if a container with the exact name exists
     container_id=$(docker ps -aq -f "name=^/${CONTAINER_NAME}$")
@@ -97,7 +103,7 @@ function run {
 
     # Create and start a new container
     CONTAINER_ID=$(docker create -it --name "$CONTAINER_NAME" \
-        -v "$PWD":/root/env -p 8787:8787 $MODHACK \
+        -v "$PWD":/root/env -p "$PORT":$PORT $MODHACK \
         --entrypoint=/bin/bash --privileged --cap-add ALL "$IMAGE_TAG")
     docker start "$CONTAINER_ID"
     echo "Started container with ID '$CONTAINER_ID' and name '$CONTAINER_NAME'"
@@ -106,9 +112,9 @@ function run {
     docker exec -it "$CONTAINER_ID" pip install -e .
     echo "Package installed inside the container."
 
-    # Start Jupyter Notebook
-    echo "Starting Jupyter in the container. Open http://127.0.0.1:8787/ in your browser."
-    docker exec -it "$CONTAINER_ID" jupyter notebook --port=8787 \
+    # Start JupyterLab
+    echo "Starting JupyterLab in the container. Open http://127.0.0.1:$PORT/ in your browser."
+    docker exec -it "$CONTAINER_ID" jupyter lab --port=$PORT \
         --no-browser --ip=0.0.0.0 --allow-root --NotebookApp.token='' /root/env/notebooks
     return 0
 }

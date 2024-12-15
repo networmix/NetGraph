@@ -1,16 +1,1 @@
-geopy
 networkx
-numpy
-pandas
-matplotlib
-jupyter
-seaborn
-cartopy
-build
-twine
-pytest
-pytest-cov
-pytest-benchmark
-pytest-mock
-pylint
-black
