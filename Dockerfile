@@ -13,6 +13,9 @@ RUN apt-get update && \
         wget \
         unzip \
         git \
+        libgeos-dev \
+        libproj-dev \
+        libgdal-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
