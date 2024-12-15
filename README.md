@@ -43,34 +43,34 @@ NetGraph can be used in two ways:
 
 1. Clone the repository:
 
-     ```bash
-     git clone https://github.com/networmix/NetGraph
-     ```
+    ```bash
+    git clone https://github.com/networmix/NetGraph
+    ```
 
 2. Build the Docker image:
 
-     ```bash
-     cd NetGraph
-     ./run.sh build
-     ```
+    ```bash
+    cd NetGraph
+    ./run.sh build
+    ```
 
 3. Start the container with JupyterLab server:
 
-     ```bash
-     ./run.sh start
-     ```
+    ```bash
+    ./run.sh start
+    ```
 
 4. Open the JupyterLab URL in your browser:
 
-     ```bash
-     http://127.0.0.1:8788/
-     ```
+    ```bash
+    http://127.0.0.1:8788/
+    ```
 
 5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks or create your own.
 
 Note: Docker will mount the content of `NetGraph` directory into the `/root/env` directory inside container, so any changes made to the code in the `NetGraph` directory will be reflected in the container and vice versa.
 
-The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and see the changes reflected immediately in the JupyterLab.
+The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and see the changes reflected immediately in JupyterLab.
 
 To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server is running. To stop the remaining Docker container, run:
 
@@ -90,30 +90,30 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 
 1. Install the package using pip:
 
-     ```bash
-     pip install ngraph
-     ```
+    ```bash
+    pip install ngraph
+    ```
 
 2. Use the package in your Python code:
 
-     ```python
-     from ngraph.lib.graph import MultiDiGraph
-     from ngraph.lib.max_flow import calc_max_flow
+    ```python
+    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.max_flow import calc_max_flow
 
-     # Create a graph
-     g = MultiDiGraph()
-     g.add_edge("A", "B", metric=1, capacity=1)
-     g.add_edge("B", "C", metric=1, capacity=1)
-     g.add_edge("A", "B", metric=1, capacity=2)
-     g.add_edge("B", "C", metric=1, capacity=2)
-     g.add_edge("A", "D", metric=2, capacity=3)
-     g.add_edge("D", "C", metric=2, capacity=3)
+    # Create a graph
+    g = MultiDiGraph()
+    g.add_edge("A", "B", metric=1, capacity=1)
+    g.add_edge("B", "C", metric=1, capacity=1)
+    g.add_edge("A", "B", metric=1, capacity=2)
+    g.add_edge("B", "C", metric=1, capacity=2)
+    g.add_edge("A", "D", metric=2, capacity=3)
+    g.add_edge("D", "C", metric=2, capacity=3)
 
-     # Calculate MaxFlow between the source and destination nodes
-     max_flow = calc_max_flow(g, "A", "C")
+    # Calculate MaxFlow between the source and destination nodes
+    max_flow = calc_max_flow(g, "A", "C")
 
-     print(max_flow)
-     ```
+    print(max_flow)
+    ```
 
 ## Use Case Examples
 
