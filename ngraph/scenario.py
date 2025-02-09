@@ -120,7 +120,7 @@ class Scenario:
         network_data = data.get("network", {})
         network = cls._build_network(network_data)
 
-        # 2) Build the (new) multi-rule failure policy
+        # 2) Build the multi-rule failure policy
         fp_data = data.get("failure_policy", {})
         failure_policy = cls._build_failure_policy(fp_data)
 

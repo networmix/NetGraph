@@ -49,14 +49,13 @@ def test_scenario_1_build_graph() -> None:
         actual_edges == expected_nx_edges
     ), f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
 
-    # 7) Verify the traffic demands. In scenario_1.yaml, let's assume we have 4 demands.
-    #    Adjust this to match your actual scenario_1.yaml.
+    # 7) Verify the traffic demands.
     expected_demands = 4
     assert (
         len(scenario.traffic_demands) == expected_demands
     ), f"Expected {expected_demands} traffic demands."
 
-    # 8) Check the new multi-rule failure policy for "any single link".
+    # 8) Check the multi-rule failure policy for "any single link".
     #    This should have exactly 1 rule that picks exactly 1 link from all links.
     policy: FailurePolicy = scenario.failure_policy
     assert len(policy.rules) == 1, "Should only have 1 rule for 'anySingleLink'."
