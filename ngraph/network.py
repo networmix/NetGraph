@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 def new_base64_uuid() -> str:
     """
-    Generate a Base64-encoded UUID without padding (~22 characters).
+    Generate a Base64-encoded UUID without padding (a string with 22 characters).
     """
     return base64.urlsafe_b64encode(uuid.uuid4().bytes).decode("ascii").rstrip("=")
 
@@ -21,7 +21,12 @@ class Node:
     in the Network's node dictionary.
 
     :param name: The unique name of the node.
-    :param attrs: Optional extra metadata for the node.
+    :param attrs: Optional extra metadata for the node. For example:
+                  {
+                     "type": "node",          # auto-tagged upon add_node
+                     "coords": [lat, lon],    # user-provided
+                     "region": "west_coast"   # user-provided
+                  }
     """
 
     name: str
@@ -42,8 +47,13 @@ class Link:
     :param capacity: Link capacity (default 1.0).
     :param latency: Link latency (default 1.0).
     :param cost: Link cost (default 1.0).
-    :param attrs: Optional extra metadata for the link.
-    :param id: Auto-generated unique link identifier.
+    :param attrs: Optional extra metadata for the link. For example:
+                  {
+                     "type": "link",              # auto-tagged upon add_link
+                     "distance_km": 1500,         # user-provided
+                     "fiber_provider": "Lumen",   # user-provided
+                  }
+    :param id: Auto-generated unique link identifier, e.g. "SEA-DEN-abCdEf..."
     """
 
     source: str
@@ -67,13 +77,13 @@ class Network:
     """
     A container for network nodes and links.
 
-    Nodes are stored in a dictionary keyed by their unique names.
-    Links are stored in a dictionary keyed by their auto-generated IDs.
+    Nodes are stored in a dictionary keyed by their unique names (:attr:`Node.name`).
+    Links are stored in a dictionary keyed by their auto-generated IDs (:attr:`Link.id`).
     The 'attrs' dict allows extra network metadata.
 
-    :param nodes: Mapping from node name to Node.
-    :param links: Mapping from link id to Link.
-    :param attrs: Optional extra metadata for the network.
+    :param nodes: Mapping from node name -> Node object.
+    :param links: Mapping from link id -> Link object.
+    :param attrs: Optional extra metadata for the network itself.
     """
 
     nodes: Dict[str, Node] = field(default_factory=dict)
@@ -82,21 +92,33 @@ class Network:
 
     def add_node(self, node: Node) -> None:
         """
-        Add a node to the network, keyed by its name.
+        Add a node to the network, keyed by its :attr:`Node.name`.
+
+        This method also auto-tags the node with ``node.attrs["type"] = "node"``
+        if it's not already set.
 
         :param node: The Node to add.
+        :raises ValueError: If a node with the same name is already in the network.
         """
+        node.attrs.setdefault("type", "node")
+        if node.name in self.nodes:
+            raise ValueError(f"Node '{node.name}' already exists in the network.")
         self.nodes[node.name] = node
 
     def add_link(self, link: Link) -> None:
         """
-        Add a link to the network. Both source and target nodes must exist.
+        Add a link to the network, keyed by its auto-generated :attr:`Link.id`.
+
+        This method also auto-tags the link with ``link.attrs["type"] = "link"``
+        if it's not already set.
 
         :param link: The Link to add.
-        :raises ValueError: If the source or target node is not present.
+        :raises ValueError: If the source/target node is not present in the network.
         """
         if link.source not in self.nodes:
             raise ValueError(f"Source node '{link.source}' not found in network.")
         if link.target not in self.nodes:
             raise ValueError(f"Target node '{link.target}' not found in network.")
+
+        link.attrs.setdefault("type", "link")
         self.links[link.id] = link

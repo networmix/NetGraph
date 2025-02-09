@@ -1,176 +1,26 @@
 network:
+  name: "6-node-l3-us-backbone"
+  version: "1.0"
+
   nodes:
+    SEA:
+      coords: [47.6062, -122.3321]
+    SFO:
+      coords: [37.7749, -122.4194]
+    DEN:
+      coords: [39.7392, -104.9903]
+    DFW:
+      coords: [32.8998, -97.0403]
     JFK:
       coords: [40.641766, -73.780968]
-    LAX:
-      coords: [33.941589, -118.40853]
-    ORD:
-      coords: [41.974163, -87.907321]
-    IAH:
-      coords: [29.99022, -95.336783]
-    PHX:
-      coords: [33.437269, -112.007788]
-    PHL:
-      coords: [39.874395, -75.242423]
-    SAT:
-      coords: [29.424122, -98.493629]
-    SAN:
-      coords: [32.733801, -117.193304]
-    DFW:
-      coords: [32.899809, -97.040335]
-    SJC:
-      coords: [37.363947, -121.928938]
-    AUS:
-      coords: [30.197475, -97.666305]
-    JAX:
-      coords: [30.332184, -81.655651]
-    CMH:
-      coords: [39.961176, -82.998794]
-    IND:
-      coords: [39.768403, -86.158068]
-    CLT:
-      coords: [35.227087, -80.843127]
-    SFO:
-      coords: [37.774929, -122.419416]
-    SEA:
-      coords: [47.606209, -122.332071]
-    DEN:
-      coords: [39.739236, -104.990251]
     DCA:
       coords: [38.907192, -77.036871]
 
   links:
-    - source: JFK
-      target: PHL
-      capacity: 100
-      latency: 756
-      cost: 756
-      attrs:
-        distance_km: 151.19
-
-    - source: JFK
-      target: DCA
-      capacity: 100
-      latency: 1714
-      cost: 1714
-      attrs:
-        distance_km: 342.69
-
-    - source: LAX
-      target: SFO
-      capacity: 100
-      latency: 2720
-      cost: 2720
-      attrs:
-        distance_km: 543.95
-
-    - source: LAX
-      target: SAN
-      capacity: 100
-      latency: 893
-      cost: 893
-      attrs:
-        distance_km: 178.55
-
-    - source: ORD
-      target: IND
-      capacity: 100
-      latency: 1395
-      cost: 1395
-      attrs:
-        distance_km: 278.84
-
-    - source: ORD
-      target: CMH
-      capacity: 100
-      latency: 1386
-      cost: 1386
-      attrs:
-        distance_km: 277.17
-
-    - source: IAH
-      target: DFW
-      capacity: 100
-      latency: 1802
-      cost: 1802
-      attrs:
-        distance_km: 360.25
-
-    - source: IAH
-      target: AUS
-      capacity: 100
-      latency: 1133
-      cost: 1133
-      attrs:
-        distance_km: 226.53
-
-    - source: PHX
-      target: LAX
-      capacity: 100
-      latency: 2982
-      cost: 2982
-      attrs:
-        distance_km: 596.35
-
-    - source: SAT
-      target: AUS
-      capacity: 100
-      latency: 594
-      cost: 594
-      attrs:
-        distance_km: 118.69
-
-    - source: DFW
-      target: AUS
-      capacity: 100
-      latency: 1539
-      cost: 1539
-      attrs:
-        distance_km: 307.63
-
-    - source: SJC
-      target: SFO
-      capacity: 100
-      latency: 339
-      cost: 339
-      attrs:
-        distance_km: 67.79
-
-    - source: SJC
-      target: LAX
-      capacity: 100
-      latency: 2468
-      cost: 2468
-      attrs:
-        distance_km: 493.55
-
-    - source: CLT
-      target: DCA
-      capacity: 100
-      latency: 2654
-      cost: 2654
-      attrs:
-        distance_km: 530.64
-
+    # West -> Middle
     - source: SEA
-      target: SFO
-      capacity: 100
-      latency: 5460
-      cost: 5460
-      attrs:
-        distance_km: 1091.95
-
-    - source: DEN
-      target: PHX
-      capacity: 100
-      latency: 4761
-      cost: 4761
-      attrs:
-        distance_km: 952.16
-
-    - source: DEN
-      target: SEA
-      capacity: 100
+      target: DEN
+      capacity: 200
       latency: 6846
       cost: 6846
       attrs:
@@ -184,98 +34,98 @@ network:
       attrs:
         distance_km: 1550.77
 
+    - source: SEA
+      target: DFW
+      capacity: 200
+      latency: 9600
+      cost: 9600
+      attrs:
+        distance_km: 1920
+
+    - source: SFO
+      target: DFW
+      capacity: 200
+      latency: 10000
+      cost: 10000
+      attrs:
+        distance_km: 2000
+
+    # Middle <-> Middle (two parallel links to represent redundancy)
     - source: DEN
-      target: ORD
-      capacity: 300
+      target: DFW
+      capacity: 400
       latency: 7102
       cost: 7102
       attrs:
         distance_km: 1420.28
 
-    - source: PHX
+    - source: DEN
       target: DFW
-      capacity: 300
-      latency: 6900
-      cost: 6900
+      capacity: 400
+      latency: 7102
+      cost: 7102
       attrs:
-        distance_km: 1380
+        distance_km: 1420.28
 
-    - source: CMH
+    # Middle -> East
+    - source: DEN
       target: JFK
-      capacity: 100
-      latency: 3788
-      cost: 3788
+      capacity: 200
+      latency: 7500
+      cost: 7500
       attrs:
-        distance_km: 757.58
-
-    - source: IND
-      target: CLT
-      capacity: 100
-      latency: 3419
-      cost: 3419
-      attrs:
-        distance_km: 683.66
-
-    - source: IAH
-      target: JAX
-      capacity: 100
-      latency: 6746
-      cost: 6746
-      attrs:
-        distance_km: 1349.04
-
-    - source: SAT
-      target: AUS
-      capacity: 100
-      latency: 594
-      cost: 594
-      attrs:
-        distance_km: 118.69
-
-    - source: SAT
-      target: IAH
-      capacity: 100
-      latency: 1524
-      cost: 1524
-      attrs:
-        distance_km: 304.66
-
-    - source: JAX
-      target: CLT
-      capacity: 100
-      latency: 2671
-      cost: 2671
-      attrs:
-        distance_km: 534.2
-
-    - source: SAN
-      target: PHX
-      capacity: 100
-      latency: 2435
-      cost: 2435
-      attrs:
-        distance_km: 486.91
+        distance_km: 1500
 
     - source: DFW
-      target: IND
-      capacity: 100
-      latency: 6889
-      cost: 6889
+      target: DCA
+      capacity: 200
+      latency: 8000
+      cost: 8000
       attrs:
-        distance_km: 1377.67
+        distance_km: 1600
+
+    - source: DFW
+      target: JFK
+      capacity: 200
+      latency: 9500
+      cost: 9500
+      attrs:
+        distance_km: 1900
+
+    # East <-> East
+    - source: JFK
+      target: DCA
+      capacity: 100
+      latency: 1714
+      cost: 1714
+      attrs:
+        distance_km: 342.69
 
 failure_policy:
-  failure_probabilities:
-    node: 0.001
-    link: 0.002
+  name: "anySingleLink"
+  description: "Evaluate traffic routing under any single link failure."
+  rules:
+    - conditions:
+        - attr: "type"
+          operator: "=="
+          value: "link"
+      logic: "and"
+      rule_type: "choice"
+      count: 1
 
 traffic_demands:
-  - source: JFK
-    target: LAX
+  - source: SEA
+    target: JFK
     demand: 50
-  - source: SAN
-    target: SEA
-    demand: 30
+  - source: SFO
+    target: DCA
+    demand: 50
+  - source: SEA
+    target: DCA
+    demand: 50
+  - source: SFO
+    target: JFK
+    demand: 50
 
 workflow:
   - step_type: BuildGraph
