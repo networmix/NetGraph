@@ -1,12 +1,11 @@
 import pytest
 import yaml
-
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
 
 from ngraph.scenario import Scenario
 from ngraph.network import Network
-from ngraph.failure_policy import FailurePolicy
+from ngraph.failure_policy import FailurePolicy, FailureRule, FailureCondition
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.results import Results
 from ngraph.workflow.base import (
@@ -34,9 +33,10 @@ class DoSmth(WorkflowStep):
     def run(self, scenario: Scenario) -> None:
         """
         Perform a dummy operation for testing.
-        You might store something in scenario.results here if desired.
+        Store something in scenario.results using the step name as a key.
         """
-        pass
+        # We can use self.name as the "step_name"
+        scenario.results.put(self.name, "ran", True)
 
 
 @register_workflow_step("DoSmthElse")
@@ -49,17 +49,17 @@ class DoSmthElse(WorkflowStep):
     factor: float = 1.0
 
     def run(self, scenario: Scenario) -> None:
-        """
-        Perform another dummy operation for testing.
-        """
-        pass
+        scenario.results.put(self.name, "ran", True)
 
 
 @pytest.fixture
 def valid_scenario_yaml() -> str:
     """
-    Returns a valid YAML string for constructing a Scenario with a small
-    realistic network of three nodes and two links, plus two traffic demands.
+    Returns a YAML string for constructing a Scenario with:
+      - A small network of three nodes and two links
+      - A multi-rule failure policy
+      - Two traffic demands
+      - Two workflow steps
     """
     return """
 network:
@@ -85,9 +85,22 @@ network:
       cost: 4
       attrs: {}
 failure_policy:
-  failure_probabilities:
-    node: 0.01
-    link: 0.02
+  name: "multi_rule_example"
+  description: "Testing multi-rule approach."
+  rules:
+    - conditions:
+        - attr: "type"
+          operator: "=="
+          value: "node"
+      logic: "and"
+      rule_type: "choice"
+      count: 1
+    - conditions:
+        - attr: "type"
+          operator: "=="
+          value: "link"
+      logic: "and"
+      rule_type: "all"
 traffic_demands:
   - source: NodeA
     target: NodeB
@@ -121,9 +134,7 @@ network:
       target: NodeB
       capacity: 1
 failure_policy:
-  failure_probabilities:
-    node: 0.01
-    link: 0.02
+  rules: []
 traffic_demands:
   - source: NodeA
     target: NodeB
@@ -150,9 +161,7 @@ network:
       target: NodeB
       capacity: 1
 failure_policy:
-  failure_probabilities:
-    node: 0.01
-    link: 0.02
+  rules: []
 traffic_demands:
   - source: NodeA
     target: NodeB
@@ -181,9 +190,7 @@ network:
       capacity: 1
 traffic_demands: []
 failure_policy:
-  failure_probabilities:
-    node: 0.01
-    link: 0.02
+  rules: []
 workflow:
   - step_type: DoSmth
     name: StepWithExtra
@@ -197,7 +204,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     Tests that a Scenario can be correctly constructed from a valid YAML string.
     Ensures that:
       - Network has correct nodes and links
-      - FailurePolicy is set
+      - FailurePolicy is set with multiple rules
       - TrafficDemands are parsed
       - Workflow steps are instantiated
       - Results object is present
@@ -235,8 +242,33 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
 
     # Check failure policy
     assert isinstance(scenario.failure_policy, FailurePolicy)
-    assert scenario.failure_policy.failure_probabilities["node"] == 0.01
-    assert scenario.failure_policy.failure_probabilities["link"] == 0.02
+    assert len(scenario.failure_policy.rules) == 2, "Expected 2 rules in the policy."
+    # Check that the leftover fields in failure_policy (e.g. "name", "description")
+    # went into policy.attrs
+    assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
+    assert (
+        scenario.failure_policy.attrs.get("description")
+        == "Testing multi-rule approach."
+    )
+
+    # Rule1 => "choice", count=1, conditions => type == "node"
+    rule1 = scenario.failure_policy.rules[0]
+    assert rule1.rule_type == "choice"
+    assert rule1.count == 1
+    assert len(rule1.conditions) == 1
+    cond1 = rule1.conditions[0]
+    assert cond1.attr == "type"
+    assert cond1.operator == "=="
+    assert cond1.value == "node"
+
+    # Rule2 => "all", conditions => type == "link"
+    rule2 = scenario.failure_policy.rules[1]
+    assert rule2.rule_type == "all"
+    assert len(rule2.conditions) == 1
+    cond2 = rule2.conditions[0]
+    assert cond2.attr == "type"
+    assert cond2.operator == "=="
+    assert cond2.value == "link"
 
     # Check traffic demands
     assert len(scenario.traffic_demands) == 2
@@ -269,7 +301,12 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
 
     # Verify the step types come from the registry
     assert step1.__class__ == WORKFLOW_STEP_REGISTRY["DoSmth"]
+    assert step1.name == "Step1"
+    assert step1.some_param == 42
+
     assert step2.__class__ == WORKFLOW_STEP_REGISTRY["DoSmthElse"]
+    assert step2.name == "Step2"
+    assert step2.factor == 2.0
 
     # Check the scenario results store
     assert isinstance(scenario.results, Results)
@@ -278,16 +315,15 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
 def test_scenario_run(valid_scenario_yaml: str) -> None:
     """
     Tests that calling scenario.run() executes each workflow step in order
-    without errors. This verifies the new .run() method introduced in the Scenario class.
+    without errors. Steps may store data in scenario.results.
     """
     scenario = Scenario.from_yaml(valid_scenario_yaml)
-
-    # Just ensure it runs without raising exceptions
     scenario.run()
 
-    # For a thorough test, one might check scenario.results or other side effects
-    # inside the steps themselves. Here, we just verify the workflow runs successfully.
-    assert True
+    # The first step's name is "Step1" in the YAML:
+    assert scenario.results.get("Step1", "ran", default=False) is True
+    # The second step's name is "Step2" in the YAML:
+    assert scenario.results.get("Step2", "ran", default=False) is True
 
 
 def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> None:
