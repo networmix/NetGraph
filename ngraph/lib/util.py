@@ -1,12 +1,14 @@
 from typing import Optional
 import networkx as nx
 
-from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
-def to_digraph(graph: MultiDiGraph, edge_func=None, revertible=True) -> nx.DiGraph:
+def to_digraph(
+    graph: StrictMultiDiGraph, edge_func=None, revertible=True
+) -> nx.DiGraph:
     """
-    Convert a MultiDiGraph to a NetworkX DiGraph
+    Convert a StrictMultiDiGraph to a NetworkX DiGraph
     """
     nx_graph = nx.DiGraph()
     nx_graph.add_nodes_from(graph.get_nodes())
@@ -27,11 +29,11 @@ def to_digraph(graph: MultiDiGraph, edge_func=None, revertible=True) -> nx.DiGra
     return nx_graph
 
 
-def from_digraph(nx_graph: nx.DiGraph) -> MultiDiGraph:
+def from_digraph(nx_graph: nx.DiGraph) -> StrictMultiDiGraph:
     """
-    Convert a revertible NetworkX DiGraph to a MultiDiGraph
+    Convert a revertible NetworkX DiGraph to a StrictMultiDiGraph
     """
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_nodes_from(nx_graph.nodes)
 
     # restore original edges from the consolidated edge
@@ -43,9 +45,9 @@ def from_digraph(nx_graph: nx.DiGraph) -> MultiDiGraph:
     return graph
 
 
-def to_graph(graph: MultiDiGraph, edge_func=None, revertible=True) -> nx.Graph:
+def to_graph(graph: StrictMultiDiGraph, edge_func=None, revertible=True) -> nx.Graph:
     """
-    Convert a MultiDiGraph to a NetworkX Graph
+    Convert a StrictMultiDiGraph to a NetworkX Graph
     """
     nx_graph = nx.Graph()
     nx_graph.add_nodes_from(graph.get_nodes())
@@ -66,11 +68,11 @@ def to_graph(graph: MultiDiGraph, edge_func=None, revertible=True) -> nx.Graph:
     return nx_graph
 
 
-def from_graph(nx_graph: nx.Graph) -> MultiDiGraph:
+def from_graph(nx_graph: nx.Graph) -> StrictMultiDiGraph:
     """
-    Convert a revertible NetworkX Graph to a MultiDiGraph
+    Convert a revertible NetworkX Graph to a StrictMultiDiGraph
     """
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_nodes_from(nx_graph.nodes)
 
     # restore original edges from the consolidated edge

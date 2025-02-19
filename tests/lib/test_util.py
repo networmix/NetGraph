@@ -2,12 +2,12 @@ import pytest
 
 import networkx as nx
 
-from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.util import to_digraph, from_digraph, to_graph, from_graph
 
 
 def test_to_digraph_1():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1)
@@ -33,7 +33,7 @@ def test_to_digraph_1():
 
 
 def test_to_digraph_2():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1, metric=1, capacity=1)
@@ -121,7 +121,7 @@ def test_to_digraph_2():
 
 
 def test_to_digraph_non_revertible():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1)
@@ -173,7 +173,7 @@ def test_from_digraph():
 
 
 def test_to_graph_1():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1)
@@ -200,7 +200,7 @@ def test_to_graph_1():
 
 
 def test_to_graph_2():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1, metric=1, capacity=1)
@@ -282,7 +282,7 @@ def test_to_graph_2():
 
 
 def test_to_graph_non_revertible():
-    graph = MultiDiGraph()
+    graph = StrictMultiDiGraph()
     graph.add_node(1)
     graph.add_node(2)
     graph.add_edge(1, 2, 1)

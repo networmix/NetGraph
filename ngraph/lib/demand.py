@@ -10,9 +10,10 @@ from typing import (
     Tuple,
     Union,
 )
-from ngraph.lib.place_flow import FlowPlacement, place_flow_on_graph
-from ngraph.lib.graph import NodeID, EdgeID, MultiDiGraph
-from ngraph.lib import spf, common
+from ngraph.lib.algorithms import spf
+from ngraph.lib.algorithms.place_flow import FlowPlacement, place_flow_on_graph
+from ngraph.lib.graph import NodeID, EdgeID, StrictMultiDiGraph
+from ngraph.lib.algorithms import base
 from ngraph.lib.path_bundle import PathBundle
 from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
 
@@ -50,15 +51,15 @@ class Demand:
 
     @property
     def status(self):
-        if self.placed_demand < common.MIN_FLOW:
+        if self.placed_demand < base.MIN_FLOW:
             return DemandStatus.NOT_PLACED
-        elif self.volume - self.placed_demand < common.MIN_FLOW:
+        elif self.volume - self.placed_demand < base.MIN_FLOW:
             return DemandStatus.PLACED
         return DemandStatus.PARTIAL
 
     def place(
         self,
-        flow_graph: MultiDiGraph,
+        flow_graph: StrictMultiDiGraph,
         flow_policy: FlowPolicy,
         max_fraction: float = 1,
         max_placement: Optional[float] = None,

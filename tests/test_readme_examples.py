@@ -1,7 +1,7 @@
 def test_example_1():
     # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.max_flow import calc_max_flow
 
     # Create a graph with parallel edges
     # Metric:
@@ -23,13 +23,18 @@ def test_example_1():
     #   │                   ▲
     #   │   [3]        [3]  │
     #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+
+    g = StrictMultiDiGraph()
+    # Explicitly add nodes
+    for node in ["A", "B", "C", "D"]:
+        g.add_node(node)
+    # Add edges with explicit keys (0, 1, 2, ...)
+    g.add_edge("A", "B", key=0, metric=1, capacity=1)
+    g.add_edge("B", "C", key=1, metric=1, capacity=1)
+    g.add_edge("A", "B", key=2, metric=1, capacity=2)
+    g.add_edge("B", "C", key=3, metric=1, capacity=2)
+    g.add_edge("A", "D", key=4, metric=2, capacity=3)
+    g.add_edge("D", "C", key=5, metric=2, capacity=3)
 
     # Calculate MaxFlow between the source and destination nodes
     max_flow = calc_max_flow(g, "A", "C")
@@ -40,36 +45,22 @@ def test_example_1():
 
 def test_example_2():
     # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.max_flow import calc_max_flow
 
     # Create a graph with parallel edges
-    # Metric:
-    #      [1,1]      [1,1]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [2]        [2]  │
-    #   └────────►D─────────┘
-    #
-    # Capacity:
-    #      [1,2]      [1,2]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [3]        [3]  │
-    #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+    # Metric and Capacity same as in Example 1
+    g = StrictMultiDiGraph()
+    # Explicitly add nodes
+    for node in ["A", "B", "C", "D"]:
+        g.add_node(node)
+    # Add edges with explicit keys
+    g.add_edge("A", "B", key=0, metric=1, capacity=1)
+    g.add_edge("B", "C", key=1, metric=1, capacity=1)
+    g.add_edge("A", "B", key=2, metric=1, capacity=2)
+    g.add_edge("B", "C", key=3, metric=1, capacity=2)
+    g.add_edge("A", "D", key=4, metric=2, capacity=3)
+    g.add_edge("D", "C", key=5, metric=2, capacity=3)
 
     # Calculate MaxFlow between the source and destination nodes
     # Flows will be placed only on the shortest paths
@@ -81,37 +72,23 @@ def test_example_2():
 
 def test_example_3():
     # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
-    from ngraph.lib.common import FlowPlacement
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.max_flow import calc_max_flow
+    from ngraph.lib.algorithms.base import FlowPlacement
 
     # Create a graph with parallel edges
-    # Metric:
-    #      [1,1]      [1,1]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [2]        [2]  │
-    #   └────────►D─────────┘
-    #
-    # Capacity:
-    #      [1,2]      [1,2]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [3]        [3]  │
-    #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+    # Metric and Capacity same as in Example 1
+    g = StrictMultiDiGraph()
+    # Explicitly add nodes
+    for node in ["A", "B", "C", "D"]:
+        g.add_node(node)
+    # Add edges with explicit keys
+    g.add_edge("A", "B", key=0, metric=1, capacity=1)
+    g.add_edge("B", "C", key=1, metric=1, capacity=1)
+    g.add_edge("A", "B", key=2, metric=1, capacity=2)
+    g.add_edge("B", "C", key=3, metric=1, capacity=2)
+    g.add_edge("A", "D", key=4, metric=2, capacity=3)
+    g.add_edge("D", "C", key=5, metric=2, capacity=3)
 
     # Calculate MaxFlow between the source and destination nodes
     # Flows will be equally balanced across the shortest paths
@@ -125,8 +102,8 @@ def test_example_3():
 
 def test_example_4():
     # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.common import init_flow_graph
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.flow_init import init_flow_graph
     from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
     from ngraph.lib.flow import FlowIndex
 
@@ -148,44 +125,39 @@ def test_example_4():
     #   │               │
     #   ▼      [5]      ▼
     #   A◄─────────────►C
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=15, label="1")
-    g.add_edge("B", "A", metric=1, capacity=15, label="1")
-    g.add_edge("B", "C", metric=1, capacity=15, label="2")
-    g.add_edge("C", "B", metric=1, capacity=15, label="2")
-    g.add_edge("A", "C", metric=1, capacity=5, label="3")
-    g.add_edge("C", "A", metric=1, capacity=5, label="3")
+
+    g = StrictMultiDiGraph()
+    # Explicitly add nodes
+    for node in ["A", "B", "C"]:
+        g.add_node(node)
+    # Add edges with explicit keys
+    g.add_edge("A", "B", key=0, metric=1, capacity=15, label="1")
+    g.add_edge("B", "A", key=1, metric=1, capacity=15, label="1")
+    g.add_edge("B", "C", key=2, metric=1, capacity=15, label="2")
+    g.add_edge("C", "B", key=3, metric=1, capacity=15, label="2")
+    g.add_edge("A", "C", key=4, metric=1, capacity=5, label="3")
+    g.add_edge("C", "A", key=5, metric=1, capacity=5, label="3")
 
     # Initialize a flow graph
     r = init_flow_graph(g)
 
     # Create traffic demands
     demands = [
-        Demand(
-            "A",
-            "C",
-            20,
-        ),
-        Demand(
-            "C",
-            "A",
-            20,
-        ),
+        Demand("A", "C", 20),
+        Demand("C", "A", 20),
     ]
 
     # Place traffic demands onto the flow graph
     for demand in demands:
-        # Create a flow policy with required parameters or
-        # use one of the predefined policies from FlowPolicyConfig
+        # Create a flow policy or use a predefined one from FlowPolicyConfig
         flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-
-        # Place demand using the flow policy
         demand.place(r, flow_policy)
 
     # We can verify that all demands were placed as expected
     for demand in demands:
         assert demand.placed_demand == 20
 
+    # Verify the final state of edges in the flow graph
     assert r.get_edges() == {
         0: (
             "A",

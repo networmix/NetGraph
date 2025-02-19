@@ -1,503 +1,382 @@
-# pylint: disable=protected-access,invalid-name
 import pytest
 import networkx as nx
 
-from ngraph.lib.graph import MultiDiGraph
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
-def test_graph_init_1():
-    MultiDiGraph()
+def test_init_empty_graph():
+    """Ensure a newly initialized graph has no nodes or edges."""
+    g = StrictMultiDiGraph()
+    assert len(g) == 0  # No nodes
+    assert g.get_edges() == {}
+    assert g._edges == {}  # internal mapping is empty
 
 
-def test_graph_add_node_1():
-    g = MultiDiGraph()
+def test_add_node():
+    """Test adding a single node."""
+    g = StrictMultiDiGraph()
     g.add_node("A")
     assert "A" in g
+    assert g.get_nodes() == {"A": {}}
 
 
-def test_graph_add_node_2():
-    g = MultiDiGraph()
-    g.add_node("A", test_attr="TEST")
-    assert g.nodes["A"] == {"test_attr": "TEST"}
+def test_add_node_duplicate():
+    """Adding a node that already exists should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    with pytest.raises(ValueError, match="already exists"):
+        g.add_node("A")  # Duplicate node -> ValueError
 
 
-def test_modify_node_1():
-    g = MultiDiGraph()
-    g.add_node("A", test_attr="TEST")
-    assert g.nodes["A"] == {"test_attr": "TEST"}
-    g.nodes["A"]["test_attr"] = "TEST2"
-    assert g.nodes["A"] == {"test_attr": "TEST2"}
-    g.nodes["A"]["test_attr2"] = "TEST3"
-    assert g.nodes["A"] == {"test_attr": "TEST2", "test_attr2": "TEST3"}
+def test_remove_node_basic():
+    """Ensure node removal also cleans up node attributes and reduces graph size."""
+    g = StrictMultiDiGraph()
+    g.add_node("A", test_attr="NODE_A")
+    g.add_node("B")
+    assert len(g) == 2
+    assert g.get_nodes()["A"]["test_attr"] == "NODE_A"
+
+    g.remove_node("A")
+    assert "A" not in g
+    assert len(g) == 1
+    assert g.get_nodes() == {"B": {}}
+
+    # removing second node
+    g.remove_node("B")
+    assert len(g) == 0
 
 
-def test_graph_len_1():
-    g = MultiDiGraph()
+def test_remove_node_missing():
+    """Removing a non-existent node should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    with pytest.raises(ValueError, match="does not exist"):
+        g.remove_node("B")
+
+
+def test_add_edge_basic():
+    """Add an edge when both source and target nodes exist."""
+    g = StrictMultiDiGraph()
     g.add_node("A")
     g.add_node("B")
-    g.add_node("C")
-    assert len(g) == len(g.nodes)
 
+    e_id = g.add_edge("A", "B", weight=10)
+    assert e_id in g._edges
+    assert g.get_edge_attr(e_id) == {"weight": 10}
+    assert g._edges[e_id] == ("A", "B", e_id, {"weight": 10})
 
-def test_graph_contains_1():
-    g = MultiDiGraph()
-    nodes = set(["A", "B", "C"])
-    for node in nodes:
-        g.add_node(node)
-        assert node in g
-
-
-def test_graph_iter_1():
-    g = MultiDiGraph()
-    nodes = set(["A", "B", "C"])
-    res = set()
-    for node in nodes:
-        g.add_node(node)
-    for node in g:
-        res.add(node)
-    assert nodes == res
-
-
-def test_graph_add_edge_1():
-    g = MultiDiGraph()
-    edge_id = g.add_edge("A", "B", test_attr="TEST_edge")
-    assert "A" in g
-    assert "B" in g
-    assert edge_id == 0
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge"})
+    # Nx adjacency check
     assert "B" in g.succ["A"]
     assert "A" in g.pred["B"]
-    assert g.succ["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
-    assert g.pred["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
 
 
-def test_graph_add_edge_2():
-    g = MultiDiGraph()
-    g.add_node("A", test_attr="TEST_nodeA")
-    g.add_node("B", test_attr="TEST_nodeB")
-    g.add_edge("A", "B", test_attr="TEST_edge")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge"})
-    assert "B" in g.succ["A"]
-    assert "A" in g.pred["B"]
-    assert g.succ["A"]["B"] == {0: {"test_attr": "TEST_edge"}}
-    assert g.pred["B"]["A"] == {0: {"test_attr": "TEST_edge"}}
+def test_add_edge_with_custom_key():
+    """Add an edge with a user-supplied new key and confirm it is preserved."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+
+    custom_key = "my_custom_edge_id"
+    returned_key = g.add_edge("A", "B", key=custom_key, weight=999)
+
+    # Verify the returned key matches what we passed in
+    assert returned_key == custom_key
+
+    # Confirm the edge exists in the internal mapping
+    assert custom_key in g.get_edges()
+
+    # Check attributes
+    assert g.get_edge_attr(custom_key) == {"weight": 999}
 
 
-def test_graph_add_edge_3():
-    g = MultiDiGraph()
-    edge1_id = g.add_edge("A", "B", test_attr="TEST_edge1")
-    edge2_id = g.add_edge("A", "B", test_attr="TEST_edge2")
-    assert "A" in g
-    assert "B" in g
-    assert edge1_id == 0
-    assert edge2_id == 1
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert "B" in g.succ["A"]
-    assert "A" in g.pred["B"]
-    assert g.succ["A"]["B"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-    assert g.pred["B"]["A"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
+def test_add_edge_nonexistent_nodes():
+    """Adding an edge where either node doesn't exist should fail."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+
+    with pytest.raises(ValueError, match="Target node 'B' does not exist"):
+        g.add_edge("A", "B")
+
+    with pytest.raises(ValueError, match="Source node 'X' does not exist"):
+        g.add_edge("X", "A")
 
 
-def test_graph_add_edges_from_1():
-    g = MultiDiGraph()
-    g.add_edges_from([("A", "B"), ("B", "C")])
-    assert "A" in g
-    assert "B" in g
-    assert "C" in g
-    assert g._edges[0] == ("A", "B", 0, {})
-    assert g._edges[1] == ("B", "C", 1, {})
-    assert "B" in g.succ["A"]
-    assert "A" in g.pred["B"]
-    assert "C" in g.succ["B"]
-    assert "B" in g.pred["C"]
-    assert g.succ["A"]["B"] == {0: {}}
-    assert g.pred["B"]["A"] == {0: {}}
-    assert g.succ["B"]["C"] == {1: {}}
-    assert g.pred["C"]["B"] == {1: {}}
+def test_add_edge_duplicate_id():
+    """Forbid reusing an existing edge ID."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+
+    e1 = g.add_edge("A", "B")
+    # Attempt to add a second edge with the same key
+    with pytest.raises(ValueError, match="already exists"):
+        g.add_edge("A", "B", key=e1)
 
 
-def test_modify_edge_1():
-    g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge")
-    assert g["A"]["B"][0] == {"test_attr": "TEST_edge"}
-    g["A"]["B"][0]["test_attr"] = "TEST_edge2"
-    assert g["A"]["B"][0] == {"test_attr": "TEST_edge2"}
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge2"})
+def test_remove_edge_basic():
+    """Remove a specific edge by key, then remove all edges from u->v."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
 
+    e1 = g.add_edge("A", "B", label="E1")
+    e2 = g.add_edge("A", "B", label="E2")  # parallel edge
+    assert e1 in g.get_edges()
+    assert e2 in g.get_edges()
 
-def test_graph_remove_edge_1():
-    """
-    Expectations:
-        Method remove_edge removes all edges between given nodes (obeying direction)
-    """
-    g = MultiDiGraph()
-    g.add_edge("A", "B")
-    g.add_edge("A", "B")
-    g.add_edge("B", "A")
+    # Remove e1 by ID
+    g.remove_edge("A", "B", key=e1)
+    assert e1 not in g.get_edges()
+    assert e2 in g.get_edges()
 
-    assert g._edges[0] == ("A", "B", 0, {})
-    assert g._edges[1] == ("A", "B", 1, {})
-    assert g._edges[2] == ("B", "A", 2, {})
-
-    assert g.succ["A"]["B"] == {0: {}, 1: {}}
-    assert g.pred["B"]["A"] == {0: {}, 1: {}}
-
-    assert g.succ["B"]["A"] == {2: {}}
-    assert g.pred["A"]["B"] == {2: {}}
-
+    # Now remove the remaining edges from A->B
     g.remove_edge("A", "B")
-
-    assert 0 not in g._edges
-    assert 1 not in g._edges
-    assert 2 in g._edges
-    assert g.succ["A"] == {}
-    assert g.pred["B"] == {}
-    assert g.succ["B"]["A"] == {2: {}}
-    assert g.pred["A"]["B"] == {2: {}}
+    assert e2 not in g.get_edges()
+    assert "B" not in g.succ["A"]
 
 
-def test_graph_remove_edge_2():
+def test_remove_edge_wrong_pair_key():
     """
-    Expectations:
-        Method remove_edge does nothing if either src or dst node does not exist
-        Method remove_edge does nothing if the edge with given id does not exist
-        Method remove_edge removes only the edge with the given id if it exists
-        If the last edge removed - clean-up _adj_in and _adj_out accordingly
+    Ensure that if we try to remove an edge using the wrong (u, v) pair
+    while specifying key, we get a ValueError about mismatched src/dst.
     """
-    g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge1")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g.succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g.pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
-
-    g.remove_edge("A", "C")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g.succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g.pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
-
-    with pytest.raises(ValueError):
-        g.remove_edge("A", "B", edge_id=10)  # edge_id does not exist
-
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g.succ["A"]["B"] == {0: {"test_attr": "TEST_edge1"}}
-    assert g.pred["B"]["A"] == {0: {"test_attr": "TEST_edge1"}}
-
-    g.remove_edge("A", "B", edge_id=0)
-    assert "A" in g
-    assert "B" in g
-    assert 0 not in g._edges
-    assert g.succ["A"] == {}
-    assert g.pred["B"] == {}
-
-
-def test_graph_remove_edge_3():
-    """
-    Expectations:
-        Method remove_edge removes only the edge with the given id if it exists
-        If the last edge removed - clean-up _adj_in and _adj_out accordingly
-    """
-    g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge1")
-    g.add_edge("A", "B", test_attr="TEST_edge2")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert g.succ["A"]["B"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-    assert g.pred["B"]["A"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-
-    g.remove_edge("A", "B", edge_id=0)
-    assert "A" in g
-    assert "B" in g
-    assert 0 not in g._edges
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert g.succ["A"]["B"] == {1: {"test_attr": "TEST_edge2"}}
-    assert g.pred["B"]["A"] == {1: {"test_attr": "TEST_edge2"}}
-
-    g.remove_edge("A", "B", edge_id=1)
-    assert "A" in g
-    assert "B" in g
-    assert g._edges == {}
-    assert g.succ["A"] == {}
-    assert g.pred["B"] == {}
-
-
-def test_graph_remove_edge_by_id_1():
-    """
-    Expectations:
-        Method remove_edge_by_id removes only the edge with the given id if it exists
-        If the last edge removed - clean-up _adj_in and _adj_out accordingly
-    """
-    g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge1")
-    g.add_edge("A", "B", test_attr="TEST_edge2")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert g.succ["A"]["B"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-    assert g.pred["B"]["A"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-
-    g.remove_edge_by_id(0)
-    assert "A" in g
-    assert "B" in g
-    assert 0 not in g._edges
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert g.succ["A"]["B"] == {1: {"test_attr": "TEST_edge2"}}
-    assert g.pred["B"]["A"] == {1: {"test_attr": "TEST_edge2"}}
-
-    g.remove_edge_by_id(1)
-    assert "A" in g
-    assert "B" in g
-    assert g._edges == {}
-    assert g.succ["A"] == {}
-    assert g.pred["B"] == {}
-
-
-def test_graph_remove_edge_by_id_2():
-    """
-    try removing non-existent edge
-    """
-    g = MultiDiGraph()
-    g.add_edge("A", "B", test_attr="TEST_edge1")
-    g.add_edge("A", "B", test_attr="TEST_edge2")
-    assert "A" in g
-    assert "B" in g
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1"})
-    assert g._edges[1] == ("A", "B", 1, {"test_attr": "TEST_edge2"})
-    assert g.succ["A"]["B"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-    assert g.pred["B"]["A"] == {
-        0: {"test_attr": "TEST_edge1"},
-        1: {"test_attr": "TEST_edge2"},
-    }
-
-    with pytest.raises(ValueError):
-        g.remove_edge_by_id(2)  # edge_id does not exist
-
-
-def test_graph_remove_node_1():
-    """
-    Expectations:
-    """
-    g = MultiDiGraph()
+    g = StrictMultiDiGraph()
     g.add_node("A")
     g.add_node("B")
-    g.add_node("C")
-    g.add_edge("A", "B", test_attr="TEST_edge1a")
-    g.add_edge("B", "A", test_attr="TEST_edge1a")
-    g.add_edge("A", "B", test_attr="TEST_edge1b")
-    g.add_edge("B", "A", test_attr="TEST_edge1b")
-    g.add_edge("B", "C", test_attr="TEST_edge2")
-    g.add_edge("C", "B", test_attr="TEST_edge2")
-    g.add_edge("C", "A", test_attr="TEST_edge3")
-    g.add_edge("A", "C", test_attr="TEST_edge3")
+    e1 = g.add_edge("A", "B")
 
-    assert "A" in g
-    assert "B" in g
-    assert "C" in g
+    # Attempt remove edge using reversed node pair from the actual one
+    with pytest.raises(ValueError, match="is actually from A to B, not from B to A"):
+        g.remove_edge("B", "A", key=e1)
 
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
-    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
-    assert g._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
-    assert g._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
-    assert g._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
-    assert g._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
-    assert g._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
-    assert g._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
 
+def test_remove_edge_missing_nodes():
+    """Removing an edge should fail if source or target node doesn't exist."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    e1 = g.add_edge("A", "B")
+
+    with pytest.raises(ValueError, match="Source node 'X' does not exist"):
+        g.remove_edge("X", "B")
+
+    with pytest.raises(ValueError, match="Target node 'Y' does not exist"):
+        g.remove_edge("A", "Y")
+
+    # e1 is still present
+    assert e1 in g.get_edges()
+
+
+def test_remove_edge_nonexistent_id():
+    """Removing a specific edge that doesn't exist should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    e1 = g.add_edge("A", "B")
+    with pytest.raises(ValueError, match="No edge with id='999' found"):
+        g.remove_edge("A", "B", key="999")
+    assert e1 in g.get_edges()
+
+
+def test_remove_edge_no_edges():
+    """Removing all edges from A->B when none exist should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    with pytest.raises(ValueError, match="No edges from 'A' to 'B' to remove"):
+        g.remove_edge("A", "B")
+
+
+def test_remove_edge_by_id():
+    """Remove edges by their unique ID."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    e1 = g.add_edge("A", "B", label="E1")
+    e2 = g.add_edge("A", "B", label="E2")
+
+    g.remove_edge_by_id(e1)
+    assert e1 not in g.get_edges()
+    assert e2 in g.get_edges()
+
+    g.remove_edge_by_id(e2)
+    assert e2 not in g.get_edges()
+    assert "B" not in g.succ["A"]
+
+
+def test_remove_edge_by_id_missing():
+    """Removing an edge by ID that doesn't exist should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    g.add_edge("A", "B")
+
+    with pytest.raises(ValueError, match="Edge with id='999' not found"):
+        g.remove_edge_by_id("999")
+
+
+def test_copy_deep():
+    """Test the pickle-based deep copy logic."""
+    g = StrictMultiDiGraph()
+    g.add_node("A", nattr="NA")
+    g.add_node("B", nattr="NB")
+    e1 = g.add_edge("A", "B", label="E1", meta={"x": 123})
+    e2 = g.add_edge("B", "A", label="E2")
+
+    g2 = g.copy()  # pickle-based deep copy by default
+    # Ensure it's a distinct object
+    assert g2 is not g
+    # Structure check
+    assert set(g2.nodes) == {"A", "B"}
+    assert set(g2.get_edges()) == {e1, e2}
+
+    # Remove node from original
     g.remove_node("A")
-    assert "A" not in g
-    for edge in g._edges.values():
-        assert "A" not in edge
+    # The copy should remain unchanged
+    assert "A" in g2
+    assert e1 in g2.get_edges()
 
-    g.remove_node("B")
-    assert "B" not in g
-    assert len(g._edges) == 0
-
-    g.remove_node("C")
-    assert len(g.nodes) == 0
-    assert len(g.succ) == 0
-    assert len(g.pred) == 0
+    # Attributes carried over
+    assert g2.nodes["A"]["nattr"] == "NA"
+    assert g2.get_edge_attr(e1) == {"label": "E1", "meta": {"x": 123}}
 
 
-def test_graph_remove_node_2():
-    """
-    Remove non-existent node. Expect no changes.
-    """
-    g = MultiDiGraph()
+def test_copy_as_view():
+    """Test copying as a view rather than deep copy."""
+    g = StrictMultiDiGraph()
     g.add_node("A")
     g.add_node("B")
-    g.add_node("C")
-    g.add_edge("A", "B", test_attr="TEST_edge1a")
-    g.add_edge("B", "A", test_attr="TEST_edge1a")
-    g.add_edge("A", "B", test_attr="TEST_edge1b")
-    g.add_edge("B", "A", test_attr="TEST_edge1b")
-    g.add_edge("B", "C", test_attr="TEST_edge2")
-    g.add_edge("C", "B", test_attr="TEST_edge2")
-    g.add_edge("C", "A", test_attr="TEST_edge3")
-    g.add_edge("A", "C", test_attr="TEST_edge3")
+    e1 = g.add_edge("A", "B")
 
-    assert "A" in g
-    assert "B" in g
-    assert "C" in g
+    # as_view requires pickle=False
+    g_view = g.copy(as_view=True, pickle=False)
+    assert g_view is not g
 
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
-    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
-    assert g._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
-    assert g._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
-    assert g._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
-    assert g._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
-    assert g._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
-    assert g._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
-
-    g.remove_node("D")
-    assert "A" in g
-    assert "B" in g
-    assert "C" in g
-
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
-    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
+    # Because it's a view, changes to g should reflect in g_view
+    g.remove_edge_by_id(e1)
+    assert e1 not in g_view.get_edges()
 
 
-def test_graph_copy_1():
-    """
-    Expectations:
-        method copy() returns a deep copy of the graph
-    """
-    g = MultiDiGraph()
-    g.add_node("A")
-    g.add_node("B")
-    g.add_node("C")
-    g.add_edge("A", "B", test_attr="TEST_edge1a")
-    g.add_edge("B", "A", test_attr="TEST_edge1a")
-    g.add_edge("A", "B", test_attr="TEST_edge1b")
-    g.add_edge("B", "A", test_attr="TEST_edge1b")
-    g.add_edge("B", "C", test_attr="TEST_edge2")
-    g.add_edge("C", "B", test_attr="TEST_edge2")
-    g.add_edge("C", "A", test_attr="TEST_edge3")
-    g.add_edge("A", "C", test_attr="TEST_edge3")
+def test_get_nodes_and_edges():
+    """Check the convenience getters for nodes and edges."""
+    g = StrictMultiDiGraph()
+    g.add_node("A", color="red")
+    g.add_node("B", color="blue")
+    e1 = g.add_edge("A", "B", weight=10)
+    e2 = g.add_edge("B", "A", weight=20)
 
-    j = g.copy()
+    assert g.get_nodes() == {"A": {"color": "red"}, "B": {"color": "blue"}}
 
-    assert "A" in g
-    assert "B" in g
-    assert "C" in g
-
-    assert g._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
-    assert g._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
-    assert g._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
-    assert g._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
-    assert g._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
-    assert g._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
-    assert g._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
-    assert g._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
-
-    g.remove_node("A")
-    assert "A" not in g
-    for edge in g._edges.values():
-        assert "A" not in edge
-
-    g.remove_node("B")
-    assert "B" not in g
-    assert len(g._edges) == 0
-
-    g.remove_node("C")
-    assert len(g.nodes) == 0
-    assert len(g.succ) == 0
-    assert len(g.pred) == 0
-
-    assert "A" in j
-    assert "B" in j
-    assert "C" in j
-
-    assert j._edges[0] == ("A", "B", 0, {"test_attr": "TEST_edge1a"})
-    assert j._edges[1] == ("B", "A", 1, {"test_attr": "TEST_edge1a"})
-    assert j._edges[2] == ("A", "B", 2, {"test_attr": "TEST_edge1b"})
-    assert j._edges[3] == ("B", "A", 3, {"test_attr": "TEST_edge1b"})
-    assert j._edges[4] == ("B", "C", 4, {"test_attr": "TEST_edge2"})
-    assert j._edges[5] == ("C", "B", 5, {"test_attr": "TEST_edge2"})
-    assert j._edges[6] == ("C", "A", 6, {"test_attr": "TEST_edge3"})
-    assert j._edges[7] == ("A", "C", 7, {"test_attr": "TEST_edge3"})
-
-
-def test_networkx_all_shortest_paths_1():
-    graph = MultiDiGraph()
-    graph.add_edge("A", "B", weight=10)
-    graph.add_edge("A", "BB", weight=10)
-    graph.add_edge("B", "C", weight=4)
-    graph.add_edge("BB", "C", weight=12)
-    graph.add_edge("BB", "C", weight=5)
-    graph.add_edge("BB", "C", weight=4)
-
-    assert list(
-        nx.all_shortest_paths(
-            graph,
-            "A",
-            "C",
-            weight=lambda u, v, attrs: min(attr["weight"] for attr in attrs.values()),
-        )
-    ) == [["A", "B", "C"], ["A", "BB", "C"]]
-
-
-def test_get_nodes_1():
-    """
-    self._nodes[node_id] = attr
-    """
-    graph = MultiDiGraph()
-    graph.add_node("A", attr="TEST")
-    graph.add_node("B", attr="TEST")
-
-    assert graph.get_nodes() == {"A": {"attr": "TEST"}, "B": {"attr": "TEST"}}
-
-
-def test_get_edges_1():
-    """
-    self._edges[edge_id] = (src_node, dst_node, edge_id, attr)
-    """
-    graph = MultiDiGraph()
-    graph.add_edge("A", "B", metric=10)
-    graph.add_edge("A", "B", metric=20)
-
-    assert graph.get_edges() == {
-        0: ("A", "B", 0, {"metric": 10}),
-        1: ("A", "B", 1, {"metric": 20}),
-    }
+    edges = g.get_edges()
+    assert e1 in edges
+    assert e2 in edges
+    assert edges[e1] == ("A", "B", e1, {"weight": 10})
+    assert edges[e2] == ("B", "A", e2, {"weight": 20})
 
 
 def test_get_edge_attr():
-    graph = MultiDiGraph()
-    edge1_id = graph.add_edge("A", "B", metric=10)
-    edge2_id = graph.add_edge("A", "B", metric=20)
+    """Check retrieving attributes of a specific edge."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    e1 = g.add_edge("A", "B", cost=123)
+    assert g.get_edge_attr(e1) == {"cost": 123}
 
-    assert graph.get_edge_attr(edge1_id) == {"metric": 10}
-    assert graph.get_edge_attr(edge2_id) == {"metric": 20}
+
+def test_get_edge_attr_missing_key():
+    """Calling get_edge_attr with an unknown key should raise ValueError."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    g.add_edge("A", "B", cost=123)
+
+    with pytest.raises(ValueError, match="Edge with id='999' not found"):
+        g.get_edge_attr("999")
+
+
+def test_has_edge_by_id():
+    """Verify the has_edge_by_id method behavior."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+
+    # No edges yet, should return False
+    assert not g.has_edge_by_id("nonexistent_key")
+
+    # Add edge
+    e1 = g.add_edge("A", "B")
+    assert g.has_edge_by_id(e1) is True
+
+    # Remove edge
+    g.remove_edge_by_id(e1)
+    assert not g.has_edge_by_id(e1)
+
+
+def test_edges_between():
+    """Test listing all edge IDs from node u to node v."""
+    g = StrictMultiDiGraph()
+    for node in ["A", "B", "C"]:
+        g.add_node(node)
+
+    # No edges yet
+    assert g.edges_between("A", "B") == []
+
+    # Add a single edge A->B
+    e1 = g.add_edge("A", "B")
+    assert g.edges_between("A", "B") == [e1]
+    assert g.edges_between("B", "C") == []
+
+    # Add two parallel edges A->B
+    e2 = g.add_edge("A", "B")
+    edges_ab = g.edges_between("A", "B")
+    # order may vary, so compare as a set
+    assert set(edges_ab) == {e1, e2}
+
+    # Node 'X' does not exist in graph, or no edges from B->A
+    assert g.edges_between("B", "A") == []
+    assert g.edges_between("X", "B") == []
+
+
+def test_update_edge_attr():
+    """Check that update_edge_attr adds or changes attributes on an existing edge."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+
+    e1 = g.add_edge("A", "B", color="red")
+    assert g.get_edge_attr(e1) == {"color": "red"}
+
+    # Update with new attributes
+    g.update_edge_attr(e1, weight=10, color="blue")
+    assert g.get_edge_attr(e1) == {"color": "blue", "weight": 10}
+
+    # Attempt to update a non-existent edge
+    with pytest.raises(ValueError, match="Edge with id='fake_id' not found"):
+        g.update_edge_attr("fake_id", cost=999)
+
+
+def test_networkx_algorithm():
+    """Demonstrate that standard NetworkX algorithms function as expected."""
+    g = StrictMultiDiGraph()
+    for node in ["A", "B", "BB", "C"]:
+        g.add_node(node)
+    g.add_edge("A", "B", weight=10)
+    g.add_edge("A", "BB", weight=10)
+    g.add_edge("B", "C", weight=4)
+    g.add_edge("BB", "C", weight=12)
+    g.add_edge("BB", "C", weight=5)
+    g.add_edge("BB", "C", weight=4)
+
+    # Because we have multi-edges from BB->C, define cost as the min of any parallel edge's weight
+    all_sp = list(
+        nx.all_shortest_paths(
+            G=g,
+            source="A",
+            target="C",
+            weight=lambda u, v, multi_attrs: min(
+                d["weight"] for d in multi_attrs.values()
+            ),
+        )
+    )
+    # Expect two equally short paths: A->B->C (10+4=14) and A->BB->C (10+4=14)
+    assert sorted(all_sp) == sorted([["A", "B", "C"], ["A", "BB", "C"]])

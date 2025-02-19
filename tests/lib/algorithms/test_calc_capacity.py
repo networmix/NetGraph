@@ -1,45 +1,49 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
 
-from ngraph.lib.common import FlowPlacement, init_flow_graph
-from ngraph.lib.spf import spf
-from ngraph.lib.calc_cap import (
-    CalculateCapacity,
-)
-from ..sample_data.sample_graphs import *
+from ngraph.lib.algorithms.flow_init import init_flow_graph
+from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.algorithms.calc_capacity import calc_graph_capacity, FlowPlacement
+from tests.lib.algorithms.sample_graphs import *
 
 
 class TestGraphCapacity:
     def test_calc_graph_capacity_empty_graph(self):
-        r = init_flow_graph(MultiDiGraph())
+        r = init_flow_graph(StrictMultiDiGraph())
 
         # Expected an exception ValueError because the graph is empty
         with pytest.raises(ValueError):
-            max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+            max_flow, flow_dict = calc_graph_capacity(
                 r, "A", "C", {}, flow_placement=FlowPlacement.PROPORTIONAL
             )
 
     def test_calc_graph_capacity_empty_pred(self):
-        g = MultiDiGraph()
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_node("C")
         g.add_edge("A", "B", capacity=1)
         g.add_edge("B", "C", capacity=1)
         r = init_flow_graph(g)
 
         # Expected max_flow = 0 because the path is invalid
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", {}, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 0
 
     def test_calc_graph_capacity_no_cap(self):
-        g = MultiDiGraph()
-        g.add_edge("A", "B", capacity=0)
-        g.add_edge("B", "C", capacity=1)
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_node("C")
+        g.add_edge("A", "B", key=0, capacity=0)
+        g.add_edge("B", "C", key=1, capacity=1)
         r = init_flow_graph(g)
         pred = {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}}
 
         # Expected max_flow = 0 because there is no capacity along the path
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 0
@@ -48,7 +52,7 @@ class TestGraphCapacity:
         _, pred = spf(line1, "A")
         r = init_flow_graph(line1)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 4
@@ -58,7 +62,7 @@ class TestGraphCapacity:
             "C": {"B": -1.0},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 2
@@ -72,13 +76,13 @@ class TestGraphCapacity:
         _, pred = spf(triangle1, "A")
         r = init_flow_graph(triangle1)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 5
         assert flow_dict == {"A": {"C": 1.0}, "C": {"A": -1.0}}
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 5
@@ -88,7 +92,7 @@ class TestGraphCapacity:
         _, pred = spf(square1, "A")
         r = init_flow_graph(square1)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 1
@@ -98,7 +102,7 @@ class TestGraphCapacity:
             "A": {"B": 1.0},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 1
@@ -112,7 +116,7 @@ class TestGraphCapacity:
         _, pred = spf(square2, "A")
         r = init_flow_graph(square2)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 3
@@ -123,7 +127,7 @@ class TestGraphCapacity:
             "D": {"A": -0.6666666666666666, "C": 0.6666666666666666},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 2
@@ -139,7 +143,7 @@ class TestGraphCapacity:
         r = init_flow_graph(square2)
         r["A"]["B"][0]["flow"] = 1
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 2
@@ -150,7 +154,7 @@ class TestGraphCapacity:
             "D": {"A": -1.0, "C": 1.0},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 0
@@ -165,7 +169,7 @@ class TestGraphCapacity:
         _, pred = spf(square3, "A")
         r = init_flow_graph(square3)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 150
@@ -176,7 +180,7 @@ class TestGraphCapacity:
             "D": {"A": -0.3333333333333333, "C": 0.3333333333333333},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 100
@@ -191,7 +195,7 @@ class TestGraphCapacity:
         _, pred = spf(square4, "A")
         r = init_flow_graph(square4)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 150
@@ -202,7 +206,7 @@ class TestGraphCapacity:
             "D": {"A": -0.3333333333333333, "C": 0.3333333333333333},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "C", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 100
@@ -217,7 +221,7 @@ class TestGraphCapacity:
         _, pred = spf(square5, "A")
         r = init_flow_graph(square5)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "D", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 2
@@ -228,7 +232,7 @@ class TestGraphCapacity:
             "D": {"B": -0.5, "C": -0.5},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "D", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 2
@@ -243,7 +247,7 @@ class TestGraphCapacity:
         _, pred = spf(graph1, "A")
         r = init_flow_graph(graph1)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "E", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 1
@@ -255,7 +259,7 @@ class TestGraphCapacity:
             "E": {"D": -1.0},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "E", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 1
@@ -271,7 +275,7 @@ class TestGraphCapacity:
         _, pred = spf(graph3, "A")
         r = init_flow_graph(graph3)
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "D", pred, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow == 6
@@ -289,7 +293,7 @@ class TestGraphCapacity:
             "F": {"C": -0.16666666666666666, "D": 0.16666666666666666},
         }
 
-        max_flow, flow_dict = CalculateCapacity.calc_graph_cap(
+        max_flow, flow_dict = calc_graph_capacity(
             r, "A", "D", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
         assert max_flow == 2.5
