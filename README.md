@@ -6,12 +6,11 @@
 
 - [Introduction](#introduction)
 - [Installation and Usage](#installation-and-usage)
-    - [Using the Docker Container with JupyterLab](#1-using-the-docker-container-with-jupyter-notebooks)
+    - [Using the Docker Container with JupyterLab](#1-using-the-docker-container-with-jupyterlab)
     - [Using the Python Package](#2-using-the-python-package)
 - [Use Case Examples](#use-case-examples)
     - [Calculate MaxFlow in a graph](#calculate-maxflow-in-a-graph)
-    - [Place traffic demands on a graph](#place-traffic-demands-on-a-graph)
-    - [Perform basic capacity analysis](#perform-basic-capacity-analysis)
+    - [Traffic demands placement on a graph](#traffic-demands-placement-on-a-graph)
 
 ---
 
@@ -111,26 +110,23 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 2. Use the package in your Python code:
 
     ```python
-    from ngraph.lib.graph import StrictMultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
+      from ngraph.lib.graph import StrictMultiDiGraph
+      from ngraph.lib.algorithms.max_flow import calc_max_flow
 
-    # Create a graph
-    g = StrictMultiDiGraph()
-    g.add_node("A")
-    g.add_node("B")
-    g.add_node("C")
-    g.add_node("D")
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+      # Create a graph
+      g = StrictMultiDiGraph()
+      g.add_node("A")
+      g.add_node("B")
+      g.add_node("C")
+      g.add_edge("A", "B", metric=1, capacity=1)
+      g.add_edge("A", "B", metric=1, capacity=1)
+      g.add_edge("B", "C", metric=1, capacity=2)
+      g.add_edge("A", "C", metric=2, capacity=3)
 
-    # Calculate MaxFlow between the source and destination nodes
-    max_flow = calc_max_flow(g, "A", "C")
+      # Calculate MaxFlow between the source and destination nodes
+      max_flow = calc_max_flow(g, "A", "C")
 
-    print(max_flow)
+      print(max_flow)
     ```
 
 ## Use Case Examples
