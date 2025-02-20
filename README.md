@@ -17,15 +17,29 @@
 
 ## Introduction
 
-This library is developed to help with network modeling and capacity analysis use-cases. The graph implementation in this library is a wrapper around MultiDiGraph of [NetworkX](https://networkx.org/). Our implementation makes edges explicitly addressable which is important in traffic engineering applications.
+NetGraph is a tool for network modeling and analysis. It consists of two main parts:
+- A lower level library providing graph data structures and algorithms for network modeling and analysis.
+- A set of higher level abstractions like network and workflow that can comprise a complete network analysis scenario.
 
-The lib provides the following main primitives:
+The lower level lib provides the following main primitives:
 
-- [MultiDiGraph](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/graph.py#L14)
-- [Demand](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/demand.py#L108)
-- [FlowPolicy](https://github.com/networmix/NetGraph/blob/07abd775c17490a9ffe102f9f54a871ea9772a96/ngraph/demand.py#L37)
+- **StrictMultiDiGraph**  
+  Specialized multi-digraph with addressable edges and strict checks on duplicate nodes/edges.
 
-Besides, it provides a number of path finding and capacity calculation functions that can be used independently.
+- **Path**  
+  Represents a single path between two nodes in the graph.
+
+- **PathBundle**  
+  A collection of equal-cost paths between two nodes.
+
+- **Demand**  
+  Models a network demand from a source node to a destination node with a specified traffic volume.
+
+- **Flow**  
+  Represent placement of a Demand volume along one or more paths (via a PathBundle) in a graph.
+
+- **FlowPolicy**  
+  Governs how Demands are split into Flows, enforcing routing/TE constraints (e.g., shortest paths, multipath, capacity limits).
 
 ---
 
@@ -97,11 +111,15 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 2. Use the package in your Python code:
 
     ```python
-    from ngraph.lib.graph import MultiDiGraph
+    from ngraph.lib.graph import StrictMultiDiGraph
     from ngraph.lib.max_flow import calc_max_flow
 
     # Create a graph
-    g = MultiDiGraph()
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    g.add_node("C")
+    g.add_node("D")
     g.add_edge("A", "B", metric=1, capacity=1)
     g.add_edge("B", "C", metric=1, capacity=1)
     g.add_edge("A", "B", metric=1, capacity=2)
@@ -118,281 +136,119 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 ## Use Case Examples
 
 ### Calculate MaxFlow in a graph
+```python
+    """
+    Tests max flow calculations on a graph with parallel edges.
 
-- Calculate MaxFlow across all possible paths between the source and destination nodes
+    Graph topology (metrics/capacities):
 
-    ```python
-    # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
+                 [1,1] & [1,2]     [1,1] & [1,2]
+          A ──────────────────► B ─────────────► C
+          │                                      ▲
+          │    [2,3]                             │ [2,3]
+          └───────────────────► D ───────────────┘
 
-    # Create a graph with parallel edges
-    # Metric:
-    #      [1,1]      [1,1]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [2]        [2]  │
-    #   └────────►D─────────┘
-    #
-    # Capacity:
-    #      [1,2]      [1,2]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [3]        [3]  │
-    #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+    Edges:
+      - A→B: two parallel edges with (metric=1, capacity=1) and (metric=1, capacity=2)
+      - B→C: two parallel edges with (metric=1, capacity=1) and (metric=1, capacity=2)
+      - A→D: (metric=2, capacity=3)
+      - D→C: (metric=2, capacity=3)
 
-    # Calculate MaxFlow between the source and destination nodes
-    max_flow = calc_max_flow(g, "A", "C")
+    The test computes:
+      - The true maximum flow (expected flow: 6.0)
+      - The flow along the shortest paths (expected flow: 3.0)
+      - Flow placement using an equal-balanced strategy on the shortest paths (expected flow: 2.0)
+    """
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.max_flow import calc_max_flow
+    from ngraph.lib.algorithms.base import FlowPlacement
 
-    # We can verify that the result is as expected
-    assert max_flow == 6.0
-    ```
+    g = StrictMultiDiGraph()
+    for node in ("A", "B", "C", "D"):
+        g.add_node(node)
 
-- Calculate MaxFlow leveraging only the shortest paths between the source and destination nodes
+    # Create parallel edges between A→B and B→C
+    g.add_edge("A", "B", key=0, metric=1, capacity=1)
+    g.add_edge("A", "B", key=1, metric=1, capacity=2)
+    g.add_edge("B", "C", key=2, metric=1, capacity=1)
+    g.add_edge("B", "C", key=3, metric=1, capacity=2)
+    # Create an alternative path A→D→C
+    g.add_edge("A", "D", key=4, metric=2, capacity=3)
+    g.add_edge("D", "C", key=5, metric=2, capacity=3)
 
-    ```python
-    # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
+    # 1. The true maximum flow
+    max_flow_prop = calc_max_flow(g, "A", "C")
+    assert max_flow_prop == 6.0, f"Expected 6.0, got {max_flow_prop}"
 
-    # Create a graph with parallel edges
-    # Metric:
-    #      [1,1]      [1,1]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [2]        [2]  │
-    #   └────────►D─────────┘
-    #
-    # Capacity:
-    #      [1,2]      [1,2]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [3]        [3]  │
-    #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+    # 2. The flow along the shortest paths
+    max_flow_sp = calc_max_flow(g, "A", "C", shortest_path=True)
+    assert max_flow_sp == 3.0, f"Expected 3.0, got {max_flow_sp}"
 
-    # Calculate MaxFlow between the source and destination nodes
-    # Flows will be placed only on the shortest paths
-    max_flow = calc_max_flow(g, "A", "C", shortest_path=True)
+    # 3. Flow placement using an equal-balanced strategy on the shortest paths
+    max_flow_eq = calc_max_flow(
+        g, "A", "C", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
+    )
+    assert max_flow_eq == 2.0, f"Expected 2.0, got {max_flow_eq}"
 
-    # We can verify that the result is as expected
-    assert max_flow == 3.0
-    ```
+```
 
-- Calculate MaxFlow balancing flows equally across the shortest paths between the source and destination nodes
+### Traffic demands placement on a graph
+```python
+    """
+    Demonstrates traffic engineering by placing two bidirectional demands on a network.
 
-    ```python
-    # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.max_flow import calc_max_flow
-    from ngraph.lib.common import FlowPlacement
+    Graph topology (metrics/capacities):
 
-    # Create a graph with parallel edges
-    # Metric:
-    #      [1,1]      [1,1]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [2]        [2]  │
-    #   └────────►D─────────┘
-    #
-    # Capacity:
-    #      [1,2]      [1,2]
-    #   ┌────────►B─────────┐
-    #   │                   │
-    #   │                   ▼
-    #   A                   C
-    #   │                   ▲
-    #   │   [3]        [3]  │
-    #   └────────►D─────────┘
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=1)
-    g.add_edge("B", "C", metric=1, capacity=1)
-    g.add_edge("A", "B", metric=1, capacity=2)
-    g.add_edge("B", "C", metric=1, capacity=2)
-    g.add_edge("A", "D", metric=2, capacity=3)
-    g.add_edge("D", "C", metric=2, capacity=3)
+              [15]
+          A ─────── B
+           \      /
+        [5] \    / [15]
+             \  /
+              C
 
-    # Calculate MaxFlow between the source and destination nodes
-    # Flows will be equally balanced across the shortest paths
-    max_flow = calc_max_flow(
-            g, "A", "C", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
+    - Each link is bidirectional:
+         A↔B: capacity 15, B↔C: capacity 15, and A↔C: capacity 5.
+    - We place a demand of volume 20 from A→C and a second demand of volume 20 from C→A.
+    - Each demand uses its own FlowPolicy, so the policy's global flow accounting does not overlap.
+    - The test verifies that each demand is fully placed at 20 units.
+    """
+    from ngraph.lib.graph import StrictMultiDiGraph
+    from ngraph.lib.algorithms.flow_init import init_flow_graph
+    from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
+    from ngraph.lib.demand import Demand
+
+    # Build the graph.
+    g = StrictMultiDiGraph()
+    for node in ("A", "B", "C"):
+        g.add_node(node)
+
+    # Create bidirectional edges with distinct labels (for clarity).
+    g.add_edge("A", "B", key=0, metric=1, capacity=15, label="1")
+    g.add_edge("B", "A", key=1, metric=1, capacity=15, label="1")
+    g.add_edge("B", "C", key=2, metric=1, capacity=15, label="2")
+    g.add_edge("C", "B", key=3, metric=1, capacity=15, label="2")
+    g.add_edge("A", "C", key=4, metric=1, capacity=5, label="3")
+    g.add_edge("C", "A", key=5, metric=1, capacity=5, label="3")
+
+    # Initialize flow-related structures (e.g., to track placed flows in the graph).
+    flow_graph = init_flow_graph(g)
+
+    # Demand from A→C (volume 20).
+    demand_ac = Demand("A", "C", 20)
+    flow_policy_ac = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+    demand_ac.place(flow_graph, flow_policy_ac)
+    assert demand_ac.placed_demand == 20, (
+        f"Demand from {demand_ac.src_node} to {demand_ac.dst_node} "
+        f"expected to be fully placed."
     )
 
-    # We can verify that the result is as expected
-    assert max_flow == 2.0
-    ```
+    # Demand from C→A (volume 20), using a separate FlowPolicy instance.
+    demand_ca = Demand("C", "A", 20)
+    flow_policy_ca = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+    demand_ca.place(flow_graph, flow_policy_ca)
+    assert demand_ca.placed_demand == 20, (
+        f"Demand from {demand_ca.src_node} to {demand_ca.dst_node} "
+        f"expected to be fully placed."
+    )
 
-### Place traffic demands on a graph
-
-- Place traffic demands leveraging all possible paths in a graph
-
-    ```python
-    # Required imports
-    from ngraph.lib.graph import MultiDiGraph
-    from ngraph.lib.common import init_flow_graph
-    from ngraph.lib.demand import FlowPolicyConfig, Demand, get_flow_policy
-    from ngraph.lib.flow import FlowIndex
-
-    # Create a graph
-    # Metric:
-    #     [1]        [1]
-    #   ┌──────►B◄──────┐
-    #   │               │
-    #   │               │
-    #   │               │
-    #   ▼      [1]      ▼
-    #   A◄─────────────►C
-    #
-    # Capacity:
-    #     [15]      [15]
-    #   ┌──────►B◄──────┐
-    #   │               │
-    #   │               │
-    #   │               │
-    #   ▼      [5]      ▼
-    #   A◄─────────────►C
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=15, label="1")
-    g.add_edge("B", "A", metric=1, capacity=15, label="1")
-    g.add_edge("B", "C", metric=1, capacity=15, label="2")
-    g.add_edge("C", "B", metric=1, capacity=15, label="2")
-    g.add_edge("A", "C", metric=1, capacity=5, label="3")
-    g.add_edge("C", "A", metric=1, capacity=5, label="3")
-
-    # Initialize a flow graph
-    r = init_flow_graph(g)
-
-    # Create traffic demands
-    demands = [
-        Demand("A", "C", 20),
-        Demand("C", "A", 20),
-    ]
-
-    # Place traffic demands onto the flow graph
-    for demand in demands:
-        # Create a flow policy with required parameters or
-        # use one of the predefined policies from FlowPolicyConfig
-        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-
-        # Place demand using the flow policy
-        demand.place(r, flow_policy)
-
-    # We can verify that all demands were placed as expected
-    for demand in demands:
-        assert demand.placed_demand == 20
-
-    assert r.get_edges() == {
-        0: (
-            "A",
-            "B",
-            0,
-            {
-                "capacity": 15,
-                "flow": 15.0,
-                "flows": {
-                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=1): 15.0
-                },
-                "label": "1",
-                "metric": 1,
-            },
-        ),
-        1: (
-            "B",
-            "A",
-            1,
-            {
-                "capacity": 15,
-                "flow": 15.0,
-                "flows": {
-                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=1): 15.0
-                },
-                "label": "1",
-                "metric": 1,
-            },
-        ),
-        2: (
-            "B",
-            "C",
-            2,
-            {
-                "capacity": 15,
-                "flow": 15.0,
-                "flows": {
-                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=1): 15.0
-                },
-                "label": "2",
-                "metric": 1,
-            },
-        ),
-        3: (
-            "C",
-            "B",
-            3,
-            {
-                "capacity": 15,
-                "flow": 15.0,
-                "flows": {
-                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=1): 15.0
-                },
-                "label": "2",
-                "metric": 1,
-            },
-        ),
-        4: (
-            "A",
-            "C",
-            4,
-            {
-                "capacity": 5,
-                "flow": 5.0,
-                "flows": {
-                    FlowIndex(src_node="A", dst_node="C", flow_class=0, flow_id=0): 5.0
-                },
-                "label": "3",
-                "metric": 1,
-            },
-        ),
-        5: (
-            "C",
-            "A",
-            5,
-            {
-                "capacity": 5,
-                "flow": 5.0,
-                "flows": {
-                    FlowIndex(src_node="C", dst_node="A", flow_class=0, flow_id=0): 5.0
-                },
-                "label": "3",
-                "metric": 1,
-            },
-        ),
-    }
-    ```
+```

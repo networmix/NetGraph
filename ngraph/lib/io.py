@@ -1,48 +1,49 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Any
 
 from ngraph.lib.graph import StrictMultiDiGraph, NodeID
 
 
-def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict:
+def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict[str, Any]:
     """
-    Return a node-link representation of a StrictMultiDiGraph, suitable
-    for direct JSON serialization (e.g., for D3.js or Nx node-link formats).
+    Converts a StrictMultiDiGraph into a node-link dict representation.
 
-    The returned dict has this structure:
-    {
-      "graph": { ... top-level graph attributes ... },
-      "nodes": [
-        {"id": node_id, "attr": {... node attributes ...}},
-        ...
-      ],
-      "links": [
+    This representation is suitable for JSON serialization (e.g., for D3.js or Nx formats).
+
+    The returned dict has the following structure:
         {
-          "source": <indexed_node>,
-          "target": <indexed_node>,
-          "key": <edge_id>,
-          "attr": {... edge attributes ...}
-        },
-        ...
-      ]
-    }
+            "graph": { ... top-level graph attributes ... },
+            "nodes": [
+                {"id": node_id, "attr": { ... node attributes ... }},
+                ...
+            ],
+            "links": [
+                {
+                    "source": <indexed_node>,
+                    "target": <indexed_node>,
+                    "key": <edge_id>,
+                    "attr": { ... edge attributes ... }
+                },
+                ...
+            ]
+        }
 
-    :param graph: The StrictMultiDiGraph to convert.
-    :return: A dict with 'graph', 'nodes', and 'links' keys.
+    Args:
+        graph: The StrictMultiDiGraph to convert.
+
+    Returns:
+        A dict containing the 'graph' attributes, list of 'nodes', and list of 'links'.
     """
+    # Get nodes with their attributes and enforce a stable ordering.
     node_dict = graph.get_nodes()
-    node_list = list(node_dict.keys())  # stable ordering
+    node_list = list(node_dict.keys())
     node_map = {node_id: i for i, node_id in enumerate(node_list)}
 
     return {
         "graph": dict(graph.graph),
         "nodes": [
-            {
-                "id": node_id,
-                "attr": dict(node_dict[node_id]),
-            }
-            for node_id in node_list
+            {"id": node_id, "attr": dict(node_dict[node_id])} for node_id in node_list
         ],
         "links": [
             {
@@ -56,47 +57,46 @@ def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict:
     }
 
 
-def node_link_to_graph(data: Dict) -> StrictMultiDiGraph:
+def node_link_to_graph(data: Dict[str, Any]) -> StrictMultiDiGraph:
     """
-    Given a node-link representation (e.g. from `graph_to_node_link`),
-    reconstruct and return a StrictMultiDiGraph.
+    Reconstructs a StrictMultiDiGraph from its node-link dict representation.
 
-    Expected format in `data`:
-    {
-      "graph": {... Nx graph attributes ...},
-      "nodes": [
+    Expected input format:
         {
-          "id": <node_id>,
-          "attr": {... node attributes ...}
-        },
-        ...
-      ],
-      "links": [
-        {
-          "source": <indexed_node>,
-          "target": <indexed_node>,
-          "key": <edge_id>,
-          "attr": {... edge attributes ...}
-        },
-        ...
-      ]
-    }
+            "graph": { ... graph attributes ... },
+            "nodes": [
+                {"id": <node_id>, "attr": { ... node attributes ... }},
+                ...
+            ],
+            "links": [
+                {
+                    "source": <indexed_node>,
+                    "target": <indexed_node>,
+                    "key": <edge_id>,
+                    "attr": { ... edge attributes ... }
+                },
+                ...
+            ]
+        }
 
-    :param data: Dict representing the node-link structure.
-    :return: A newly constructed StrictMultiDiGraph with the same nodes/edges.
+    Args:
+        data: A dict representing the node-link structure.
+
+    Returns:
+        A StrictMultiDiGraph reconstructed from the provided data.
     """
-    # Create the graph with top-level 'graph' attributes
+    # Create the graph with the top-level attributes.
     graph_attrs = data.get("graph", {})
     graph = StrictMultiDiGraph(**graph_attrs)
 
+    # Build a mapping from integer indices to original node IDs.
     node_map: Dict[int, NodeID] = {}
-    # Re-add nodes, capturing integer indices -> node IDs
     for idx, node_obj in enumerate(data.get("nodes", [])):
         node_id = node_obj["id"]
         graph.add_node(node_id, **node_obj["attr"])
         node_map[idx] = node_id
 
-    # Re-add edges
+    # Add edges using the index mapping.
     for edge_obj in data.get("links", []):
         src_id = node_map[edge_obj["source"]]
         dst_id = node_map[edge_obj["target"]]
@@ -117,27 +117,30 @@ def edgelist_to_graph(
     key: str = "key",
 ) -> StrictMultiDiGraph:
     """
-    Build or update a StrictMultiDiGraph using lines from an edge list.
+    Builds or updates a StrictMultiDiGraph from an edge list.
 
-    Each line is split by `separator` into exactly `len(columns)` tokens,
-    then mapped into { columns[i]: token[i] }. The fields named by `source` and
-    `target` are the node IDs; if a `key` column is present, that token is used
-    as the edge ID; all other columns become edge attributes.
+    Each line in the input is split by the specified separator into tokens. These tokens
+    are mapped to column names provided in `columns`. The tokens corresponding to `source`
+    and `target` become the node IDs. If a `key` column exists, its token is used as the edge
+    ID; remaining tokens are added as edge attributes.
 
-    :param lines: Iterable of strings, each describing one edge.
-    :param columns: Column names, e.g. ["src", "dst", "cost"].
-    :param separator: Token separator for each line (default space).
-    :param graph: If provided, the existing StrictMultiDiGraph to modify; else create a new one.
-    :param source: Name of the column holding the source node ID.
-    :param target: Name of the column holding the target node ID.
-    :param key: Name of the column holding a custom edge ID (if any).
-    :return: The updated (or newly created) StrictMultiDiGraph.
+    Args:
+        lines: An iterable of strings, each representing one edge.
+        columns: A list of column names, e.g. ["src", "dst", "cost"].
+        separator: The separator used to split each line (default is a space).
+        graph: An existing StrictMultiDiGraph to update; if None, a new graph is created.
+        source: The column name for the source node ID.
+        target: The column name for the target node ID.
+        key: The column name for a custom edge ID (if present).
+
+    Returns:
+        The updated (or newly created) StrictMultiDiGraph.
     """
     if graph is None:
         graph = StrictMultiDiGraph()
 
     for line in lines:
-        # Only strip newlines, not all whitespace
+        # Remove only newline characters.
         line = line.rstrip("\r\n")
         tokens = line.split(separator)
         if len(tokens) != len(columns):
@@ -150,12 +153,12 @@ def edgelist_to_graph(
         dst_id = line_dict[target]
         edge_key = line_dict.get(key, None)
 
-        # Everything else is an attribute
+        # All tokens not corresponding to source, target, or key become edge attributes.
         attr_dict = {
             k: v for k, v in line_dict.items() if k not in (source, target, key)
         }
 
-        # Because StrictMultiDiGraph does not auto-create nodes
+        # Ensure nodes exist since StrictMultiDiGraph does not auto-create nodes.
         if src_id not in graph:
             graph.add_node(src_id)
         if dst_id not in graph:
@@ -175,45 +178,51 @@ def graph_to_edgelist(
     key_col: str = "key",
 ) -> List[str]:
     """
-    Convert a StrictMultiDiGraph into an edge-list text representation.
+    Converts a StrictMultiDiGraph into an edge-list text representation.
 
-    Each returned line has tokens for columns, joined by `separator`.
-    By default, the columns are:
-      [source_col, target_col, key_col] + sorted(edge_attribute_names)
+    Each line in the output represents one edge with tokens joined by the given separator.
+    By default, the output columns are:
+        [source_col, target_col, key_col] + sorted(edge_attribute_names)
 
-    If you pass an explicit `columns` list, that exact order is used
-    (and any missing columns are left blank in that line).
+    If an explicit list of columns is provided, those columns (in that order) are used,
+    and any missing values are output as an empty string.
 
-    :param graph: The StrictMultiDiGraph to export.
-    :param columns: Optional list of column names. If None, we auto-generate them.
-    :param separator: The string used to join column tokens (default space).
-    :param source_col: Name for the source node column (default "src").
-    :param target_col: Name for the target node column (default "dst").
-    :param key_col: Name for the edge key column (default "key").
-    :return: A list of lines, each describing one edge in column-based form.
+    Args:
+        graph: The StrictMultiDiGraph to export.
+        columns: Optional list of column names. If None, they are auto-generated.
+        separator: The string used to join tokens (default is a space).
+        source_col: The column name for the source node (default "src").
+        target_col: The column name for the target node (default "dst").
+        key_col: The column name for the edge key (default "key").
+
+    Returns:
+        A list of strings, each representing one edge in the specified column format.
     """
     edge_dicts: List[Dict[str, str]] = []
     all_attr_keys = set()
 
+    # Build a list of dicts for each edge.
     for edge_id, (src, dst, _, edge_attrs) in graph.get_edges().items():
+        # Use "is not None" to correctly handle edge keys such as 0.
+        key_val = str(edge_id) if edge_id is not None else ""
         row = {
             source_col: str(src),
             target_col: str(dst),
-            key_col: str(edge_id) if edge_id else "",
+            key_col: key_val,
         }
         for attr_key, attr_val in edge_attrs.items():
             row[attr_key] = str(attr_val)
             all_attr_keys.add(attr_key)
         edge_dicts.append(row)
 
-    # Auto-generate columns if not provided
+    # Auto-generate columns if not provided.
     if columns is None:
         sorted_attr_keys = sorted(all_attr_keys)
         columns = [source_col, target_col, key_col] + sorted_attr_keys
 
     lines: List[str] = []
     for row_dict in edge_dicts:
-        # For each column, output either the stored string or "" if absent
+        # For each specified column, output the corresponding value or an empty string if absent.
         tokens = [row_dict.get(col, "") for col in columns]
         lines.append(separator.join(tokens))
 

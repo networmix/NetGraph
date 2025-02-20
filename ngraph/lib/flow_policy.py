@@ -1,17 +1,13 @@
 from __future__ import annotations
-from enum import IntEnum
+
 from collections import deque
-from typing import Any, Callable, Dict, Optional, Set, Tuple
+from enum import IntEnum
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ngraph.lib.flow import Flow, FlowIndex
-from ngraph.lib.algorithms.place_flow import FlowPlacement
-from ngraph.lib.graph import (
-    AttrDict,
-    NodeID,
-    EdgeID,
-    StrictMultiDiGraph,
-)
 from ngraph.lib.algorithms import spf, base, edge_select
+from ngraph.lib.algorithms.place_flow import FlowPlacement
+from ngraph.lib.graph import AttrDict, NodeID, EdgeID, StrictMultiDiGraph
 from ngraph.lib.path_bundle import PathBundle
 
 
@@ -27,11 +23,11 @@ class FlowPolicyConfig(IntEnum):
 
 class FlowPolicy:
     """
-    Encapsulates logic for placing and managing flows (demands) on a network graph.
+    Manages the placement and management of flows (demands) on a network graph.
 
-    A FlowPolicy converts a demand into one or more Flow objects, subject
-    to capacity constraints and user-specified configuration (e.g., path
-    selection algorithm, flow placement method, etc.).
+    A FlowPolicy converts a demand into one or more Flow objects subject to capacity
+    constraints and user-specified configurations such as path selection algorithms
+    and flow placement methods.
     """
 
     def __init__(
@@ -41,87 +37,85 @@ class FlowPolicy:
         edge_select: base.EdgeSelect,
         multipath: bool,
         min_flow_count: int = 1,
-        max_flow_count: int | None = None,
-        max_path_cost: base.Cost | None = None,
-        max_path_cost_factor: float | None = None,
-        static_paths: list[PathBundle] | None = None,
-        edge_select_func: (
+        max_flow_count: Optional[int] = None,
+        max_path_cost: Optional[base.Cost] = None,
+        max_path_cost_factor: Optional[float] = None,
+        static_paths: Optional[List[PathBundle]] = None,
+        edge_select_func: Optional[
             Callable[
                 [StrictMultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
-                Tuple[base.Cost, list[EdgeID]],
+                Tuple[base.Cost, List[EdgeID]],
             ]
-            | None
-        ) = None,
-        edge_select_value: Any | None = None,
+        ] = None,
+        edge_select_value: Optional[Any] = None,
         reoptimize_flows_on_each_placement: bool = False,
     ) -> None:
         """
-        Initializes a FlowPolicy.
+        Initializes a FlowPolicy instance.
 
         Args:
             path_alg: The path algorithm to use (e.g., SPF).
-            flow_placement: The flow placement strategy (e.g., EQUAL_BALANCED, PROPORTIONAL).
-            edge_select: The edge selection mode (e.g., ALL_MIN_COST).
+            flow_placement: Strategy for placing flows (e.g., EQUAL_BALANCED, PROPORTIONAL).
+            edge_select: Mode for edge selection (e.g., ALL_MIN_COST).
             multipath: Whether to allow multiple parallel paths at the SPF stage.
-            min_flow_count: The minimum number of flows to create for a demand.
-            max_flow_count: The maximum number of flows allowable for a demand (if any).
-            max_path_cost: Absolute limit on allowable path cost.
-            max_path_cost_factor: Relative factor limit (multiplying the best path cost).
-            static_paths: If provided, flows will be forced onto these static paths.
+            min_flow_count: Minimum number of flows to create for a demand.
+            max_flow_count: Maximum number of flows allowable for a demand.
+            max_path_cost: Absolute cost limit for allowable paths.
+            max_path_cost_factor: Relative cost factor limit (multiplied by the best path cost).
+            static_paths: Predefined paths to force flows onto, if provided.
             edge_select_func: Custom function for edge selection, if needed.
-            edge_select_value: Additional parameter used by certain edge selection strategies.
-            reoptimize_flows_on_each_placement: If True, flows are re-run through the
-                path-finding logic on every placement to ensure a fresh solution.
+            edge_select_value: Additional parameter for certain edge selection strategies.
+            reoptimize_flows_on_each_placement: If True, re-run path optimization on every placement.
 
         Raises:
-            ValueError: If max_flow_count is set but does not match the number of static_paths.
-            ValueError: If flow_placement=EQUAL_BALANCED is used without a max_flow_count.
+            ValueError: If static_paths length does not match max_flow_count, or if
+                        EQUAL_BALANCED placement is used without a specified max_flow_count.
         """
         self.path_alg: base.PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
         self.edge_select: base.EdgeSelect = edge_select
         self.multipath: bool = multipath
         self.min_flow_count: int = min_flow_count
-        self.max_flow_count: int | None = max_flow_count
-        self.max_path_cost: base.Cost | None = max_path_cost
-        self.max_path_cost_factor: float | None = max_path_cost_factor
-        self.static_paths: list[PathBundle] | None = static_paths
+        self.max_flow_count: Optional[int] = max_flow_count
+        self.max_path_cost: Optional[base.Cost] = max_path_cost
+        self.max_path_cost_factor: Optional[float] = max_path_cost_factor
+        self.static_paths: Optional[List[PathBundle]] = static_paths
         self.edge_select_func = edge_select_func
-        self.edge_select_value: Any | None = edge_select_value
+        self.edge_select_value: Optional[Any] = edge_select_value
         self.reoptimize_flows_on_each_placement: bool = (
             reoptimize_flows_on_each_placement
         )
 
-        # All flows tracked by this policy.
+        # Dictionary to track all flows by their FlowIndex.
         self.flows: Dict[Tuple, Flow] = {}
 
-        # Track the best path cost found so far to enforce max_path_cost_factor.
-        self.best_path_cost: base.Cost | None = None
+        # Track the best path cost found to enforce maximum cost constraints.
+        self.best_path_cost: Optional[base.Cost] = None
 
         # Internal flow ID counter.
         self._next_flow_id: int = 0
 
-        # Validate static_paths vs. max_flow_count constraints
+        # Validate static_paths versus max_flow_count constraints.
         if static_paths:
             if max_flow_count is not None and len(static_paths) != max_flow_count:
                 raise ValueError(
                     "If set, max_flow_count must be equal to the number of static paths."
                 )
             self.max_flow_count = len(static_paths)
-        if flow_placement == FlowPlacement.EQUAL_BALANCED:
-            if self.max_flow_count is None:
-                raise ValueError(
-                    "max_flow_count must be set for EQUAL_BALANCED placement."
-                )
+        if (
+            flow_placement == FlowPlacement.EQUAL_BALANCED
+            and self.max_flow_count is None
+        ):
+            raise ValueError("max_flow_count must be set for EQUAL_BALANCED placement.")
 
     @property
     def flow_count(self) -> int:
-        """Number of flows currently tracked by this policy."""
+        """Returns the number of flows currently tracked by the policy."""
         return len(self.flows)
 
     @property
     def placed_demand(self) -> float:
-        """Sum of all placed flow volumes across all flows."""
+        """Returns the sum of all placed flow volumes across flows."""
         return sum(flow.placed_flow for flow in self.flows.values())
 
     def _get_next_flow_id(self) -> int:
@@ -129,7 +123,7 @@ class FlowPolicy:
         Retrieves and increments the internal flow ID counter.
 
         Returns:
-            An integer ID for the next new Flow.
+            The next available integer flow ID.
         """
         next_flow_id = self._next_flow_id
         self._next_flow_id += 1
@@ -143,16 +137,16 @@ class FlowPolicy:
         flow_id: int,
     ) -> FlowIndex:
         """
-        Builds a FlowIndex tuple, used as a dictionary key to track flows.
+        Constructs a FlowIndex tuple used as a dictionary key to track flows.
 
         Args:
-            src_node: The source node.
-            dst_node: The destination node.
-            flow_class: The flow class or type ID.
-            flow_id: Unique ID for this flow.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            flow_class: The flow class or type identifier.
+            flow_id: Unique identifier for this flow.
 
         Returns:
-            A FlowIndex object containing these parameters.
+            A FlowIndex instance containing the specified parameters.
         """
         return FlowIndex(src_node, dst_node, flow_class, flow_id)
 
@@ -161,27 +155,26 @@ class FlowPolicy:
         flow_graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
-        min_flow: float | None = None,
-        excluded_edges: Set[EdgeID] | None = None,
-        excluded_nodes: Set[NodeID] | None = None,
-    ) -> PathBundle | None:
+        min_flow: Optional[float] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
+    ) -> Optional[PathBundle]:
         """
-        Finds a path (or set of paths) from src_node to dst_node, optionally
-        excluding certain edges or nodes.
+        Finds a path or set of paths from src_node to dst_node, optionally excluding certain edges or nodes.
 
         Args:
-            flow_graph: The underlying network graph.
-            src_node: The source node.
-            dst_node: The destination node.
-            min_flow: A minimum flow threshold used by certain edge selection modes.
-            excluded_edges: A set of edges to exclude from path-finding.
-            excluded_nodes: A set of nodes to exclude from path-finding.
+            flow_graph: The network graph.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            min_flow: Minimum flow threshold for selection.
+            excluded_edges: Set of edges to exclude.
+            excluded_nodes: Set of nodes to exclude.
 
         Returns:
-            A PathBundle if a path is found and passes cost constraints; otherwise None.
+            A valid PathBundle if one is found and it satisfies cost constraints; otherwise, None.
 
         Raises:
-            ValueError: If the selected path_alg is not supported.
+            ValueError: If the selected path algorithm is not supported.
         """
         edge_select_func = edge_select.edge_select_fabric(
             edge_select=self.edge_select,
@@ -210,9 +203,9 @@ class FlowPolicy:
             if self.best_path_cost is None:
                 self.best_path_cost = dst_cost
 
-            # Enforce maximum path cost constraints
+            # Enforce maximum path cost constraints, if specified.
             if self.max_path_cost or self.max_path_cost_factor:
-                max_path_cost_factor = self.max_path_cost_factor or 1
+                max_path_cost_factor = self.max_path_cost_factor or 1.0
                 max_path_cost = self.max_path_cost or float("inf")
                 if dst_cost > min(
                     max_path_cost, self.best_path_cost * max_path_cost_factor
@@ -229,34 +222,29 @@ class FlowPolicy:
         src_node: NodeID,
         dst_node: NodeID,
         flow_class: int,
-        min_flow: float | None = None,
-        path_bundle: PathBundle | None = None,
-        excluded_edges: Set[EdgeID] | None = None,
-        excluded_nodes: Set[NodeID] | None = None,
-    ) -> Flow | None:
+        min_flow: Optional[float] = None,
+        path_bundle: Optional[PathBundle] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
+    ) -> Optional[Flow]:
         """
-        Creates a new Flow and registers it in self.flows.
+        Creates a new Flow and registers it within the policy.
 
         Args:
-            flow_graph: The underlying network graph.
-            src_node: The source node.
-            dst_node: The destination node.
-            flow_class: The flow class or type ID.
-            min_flow: A minimum flow threshold used by some path-finding modes.
-            path_bundle: Optionally, a precomputed path bundle to use.
-            excluded_edges: Edges excluded from path-finding.
-            excluded_nodes: Nodes excluded from path-finding.
+            flow_graph: The network graph.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            flow_class: The flow class or type identifier.
+            min_flow: Minimum flow threshold for path selection.
+            path_bundle: Optionally, a precomputed path bundle.
+            excluded_edges: Edges to exclude during path-finding.
+            excluded_nodes: Nodes to exclude during path-finding.
 
         Returns:
-            The newly created Flow, or None if no path bundle could be found.
+            The newly created Flow, or None if no valid path bundle is found.
         """
         path_bundle = path_bundle or self._get_path_bundle(
-            flow_graph,
-            src_node,
-            dst_node,
-            min_flow,
-            excluded_edges,
-            excluded_nodes,
+            flow_graph, src_node, dst_node, min_flow, excluded_edges, excluded_nodes
         )
         if not path_bundle:
             return None
@@ -274,22 +262,23 @@ class FlowPolicy:
         src_node: NodeID,
         dst_node: NodeID,
         flow_class: int,
-        min_flow: float | None = None,
+        min_flow: Optional[float] = None,
     ) -> None:
         """
-        Creates the initial set of flows for a new demand. If static_paths are defined,
-        they are used directly; otherwise, the minimum flow count is created via
-        path-finding.
+        Creates the initial set of flows for a new demand.
+
+        If static paths are defined, they are used directly; otherwise, flows
+        are created via path-finding.
 
         Args:
-            flow_graph: The underlying network graph.
-            src_node: The source node.
-            dst_node: The destination node.
-            flow_class: The flow class or type ID.
-            min_flow: A minimum flow threshold used by some path-finding modes.
+            flow_graph: The network graph.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            flow_class: The flow class or type identifier.
+            min_flow: Minimum flow threshold for path selection.
 
         Raises:
-            ValueError: If static_paths do not match the demanded source/destination.
+            ValueError: If the static paths do not match the demand's source/destination.
         """
         if self.static_paths:
             for path_bundle in self.static_paths:
@@ -317,14 +306,14 @@ class FlowPolicy:
         self, flow_graph: StrictMultiDiGraph, flow_index: FlowIndex
     ) -> None:
         """
-        Deletes a flow from the policy and removes it from the graph.
+        Deletes a flow from the policy and removes it from the network graph.
 
         Args:
-            flow_graph: The underlying network graph.
+            flow_graph: The network graph.
             flow_index: The key identifying the flow to delete.
 
         Raises:
-            KeyError: If the flow_index does not exist in self.flows.
+            KeyError: If the specified flow_index does not exist.
         """
         flow = self.flows.pop(flow_index)
         flow.remove_flow(flow_graph)
@@ -333,20 +322,19 @@ class FlowPolicy:
         self,
         flow_graph: StrictMultiDiGraph,
         flow_index: FlowIndex,
-        headroom: float = 0,
-    ) -> Flow | None:
+        headroom: float = 0.0,
+    ) -> Optional[Flow]:
         """
-        Removes and re-finds a path for an existing flow with additional volume headroom.
-
-        If no better path is found, reverts to the old path.
+        Re-optimizes an existing flow by finding a new path that can accommodate
+        additional volume headroom. If no better path is found, the original path is restored.
 
         Args:
-            flow_graph: The underlying network graph.
+            flow_graph: The network graph.
             flow_index: The key identifying the flow to re-optimize.
             headroom: Additional volume to accommodate on the new path.
 
         Returns:
-            The updated Flow if re-optimization was successful; otherwise None.
+            The updated Flow if re-optimization is successful; otherwise, None.
         """
         flow = self.flows[flow_index]
         flow_volume = flow.placed_flow
@@ -361,7 +349,7 @@ class FlowPolicy:
             flow.excluded_edges,
             flow.excluded_nodes,
         )
-        # If no suitable alternative path found, revert
+        # If no suitable alternative path is found, revert to the original path.
         if not path_bundle or path_bundle.edges == flow.path_bundle.edges:
             flow.place_flow(flow_graph, flow_volume, self.flow_placement)
             return None
@@ -380,26 +368,25 @@ class FlowPolicy:
         dst_node: NodeID,
         flow_class: int,
         volume: float,
-        target_flow_volume: float | None = None,
-        min_flow: float | None = None,
+        target_flow_volume: Optional[float] = None,
+        min_flow: Optional[float] = None,
     ) -> Tuple[float, float]:
         """
-        Places the given demand volume on the graph, splitting or creating flows
-        as needed. May also re-optimize flows if policy configuration allows.
+        Places the given demand volume on the network graph by splitting or creating flows as needed.
+        Optionally re-optimizes flows based on the policy configuration.
 
         Args:
-            flow_graph: The underlying network graph.
-            src_node: The source node.
-            dst_node: The destination node.
-            flow_class: The flow class or type ID.
-            volume: The volume of demand to place.
-            target_flow_volume: A target flow volume to aim for each flow.
-            min_flow: A minimum flow threshold for path selection.
+            flow_graph: The network graph.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            flow_class: The flow class or type identifier.
+            volume: The demand volume to place.
+            target_flow_volume: The target volume to aim for on each flow.
+            min_flow: Minimum flow threshold for path selection.
 
         Returns:
-            A tuple of (placed_flow, remaining_volume). placed_flow is the total
-            successfully placed across all flows, and remaining_volume is any
-            unplaced remainder.
+            A tuple (placed_flow, remaining_volume) where placed_flow is the total volume
+            successfully placed and remaining_volume is any unplaced volume.
         """
         if not self.flows:
             self._create_flows(flow_graph, src_node, dst_node, flow_class, min_flow)
@@ -407,11 +394,10 @@ class FlowPolicy:
         flow_queue = deque(self.flows.values())
         target_flow_volume = target_flow_volume or volume
 
-        total_placed_flow = 0
+        total_placed_flow = 0.0
         c = 0
 
-        # Guard against infinite loops; the logic should eventually exhaust either
-        # volume or flows, but we use c>10000 as a safety check.
+        # Safety check to prevent infinite loops.
         while volume >= base.MIN_FLOW and flow_queue:
             flow = flow_queue.popleft()
             placed_flow, _ = flow.place_flow(
@@ -420,11 +406,10 @@ class FlowPolicy:
             volume -= placed_flow
             total_placed_flow += placed_flow
 
-            # If the flow can still hold more volume, we attempt to create or re-optimize
+            # If the flow can accept more volume, attempt to create or re-optimize.
             if (
                 target_flow_volume - flow.placed_flow >= base.MIN_FLOW
-                and not self.static_paths
-            ):
+            ) and not self.static_paths:
                 if not self.max_flow_count or len(self.flows) < self.max_flow_count:
                     new_flow = self._create_flow(
                         flow_graph, src_node, dst_node, flow_class
@@ -438,10 +423,9 @@ class FlowPolicy:
 
             c += 1
             if c > 10000:
-                # Potential weak spot: artificial break condition in place of more robust loop logic
-                raise RuntimeError("Infinite loop detected")
+                raise RuntimeError("Infinite loop detected in place_demand.")
 
-        # For EQUAL_BALANCED, ensure flows are rebalanced to maintain equal volumes.
+        # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
         if self.flow_placement == FlowPlacement.EQUAL_BALANCED:
             target_flow_volume = self.placed_demand / len(self.flows)
             if any(
@@ -453,7 +437,7 @@ class FlowPolicy:
                 )
                 volume += excess_flow
 
-        # If configured, re-run optimization for all flows after placement
+        # Optionally re-run optimization for all flows after placement.
         if self.reoptimize_flows_on_each_placement:
             for flow in self.flows.values():
                 self._reoptimize_flow(flow_graph, flow.flow_index)
@@ -469,41 +453,32 @@ class FlowPolicy:
         target_flow_volume: float,
     ) -> Tuple[float, float]:
         """
-        Rebalances the demand across existing flows to make their volumes
-        closer to the target_flow_volume. Implementation removes all flows
-        and re-places the demand.
+        Rebalances the demand across existing flows so that their volumes are closer
+        to the target_flow_volume. This is achieved by removing all flows and re-placing the demand.
 
         Args:
-            flow_graph: The underlying network graph.
-            src_node: The source node.
-            dst_node: The destination node.
-            flow_class: The flow class or type ID.
-            target_flow_volume: The flow volume to aim for each flow (if possible).
+            flow_graph: The network graph.
+            src_node: The source node identifier.
+            dst_node: The destination node identifier.
+            flow_class: The flow class or type identifier.
+            target_flow_volume: The desired volume per flow.
 
         Returns:
-            A tuple of (placed_flow, remaining_volume) similar to place_demand().
+            A tuple (placed_flow, remaining_volume) similar to place_demand.
         """
         volume = self.placed_demand
         self.remove_demand(flow_graph)
         return self.place_demand(
-            flow_graph,
-            src_node,
-            dst_node,
-            flow_class,
-            volume,
-            target_flow_volume,
+            flow_graph, src_node, dst_node, flow_class, volume, target_flow_volume
         )
 
-    def remove_demand(
-        self,
-        flow_graph: StrictMultiDiGraph,
-    ) -> None:
+    def remove_demand(self, flow_graph: StrictMultiDiGraph) -> None:
         """
-        Zeroes out all flows from this policy in the underlying graph but does not
-        remove them from the policy's internal state. This allows for re-optimization.
+        Removes all flows from the network graph without clearing internal state.
+        This enables subsequent re-optimization of flows.
 
         Args:
-            flow_graph: The underlying network graph.
+            flow_graph: The network graph.
         """
         for flow in list(self.flows.values()):
             flow.remove_flow(flow_graph)
@@ -511,37 +486,37 @@ class FlowPolicy:
 
 def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
     """
-    Factory method to return a FlowPolicy instance based on a FlowPolicyConfig enum.
+    Factory method to create and return a FlowPolicy instance based on the provided configuration.
 
     Args:
-        flow_policy_config: One of the FlowPolicyConfig enum values.
+        flow_policy_config: A FlowPolicyConfig enum value specifying the desired policy.
 
     Returns:
-        A FlowPolicy pre-configured for the specified policy approach.
+        A pre-configured FlowPolicy instance corresponding to the specified configuration.
 
     Raises:
-        ValueError: If an unknown FlowPolicyConfig is provided.
+        ValueError: If an unknown FlowPolicyConfig value is provided.
     """
     if flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_ECMP:
-        # Hop-by-hop equal-cost balanced, e.g. IP forwarding with ECMP.
+        # Hop-by-hop equal-cost balanced routing (similar to IP forwarding with ECMP).
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             edge_select=base.EdgeSelect.ALL_MIN_COST,
             multipath=True,
-            max_flow_count=1,  # single flow following shortest paths
+            max_flow_count=1,  # Single flow following shortest paths.
         )
     elif flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_UCMP:
-        # Hop-by-hop with proportional flow placement, e.g. IP forwarding with per-hop UCMP.
+        # Hop-by-hop with proportional flow placement (e.g., per-hop UCMP).
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=base.EdgeSelect.ALL_MIN_COST,
             multipath=True,
-            max_flow_count=1,  # single flow following shortest paths
+            max_flow_count=1,  # Single flow following shortest paths.
         )
     elif flow_policy_config == FlowPolicyConfig.TE_UCMP_UNLIM:
-        # "Ideal" TE, e.g. multiple MPLS LSPs with UCMP flow placement.
+        # "Ideal" TE with multiple MPLS LSPs and UCMP flow placement.
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
@@ -549,7 +524,7 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             multipath=False,
         )
     elif flow_policy_config == FlowPolicyConfig.TE_ECMP_UP_TO_256_LSP:
-        # TE with up to 256 LSPs with ECMP flow placement.
+        # TE with up to 256 LSPs using ECMP flow placement.
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
@@ -559,7 +534,7 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             reoptimize_flows_on_each_placement=True,
         )
     elif flow_policy_config == FlowPolicyConfig.TE_ECMP_16_LSP:
-        # TE with 16 LSPs, e.g. 16 parallel MPLS LSPs with ECMP flow placement.
+        # TE with 16 LSPs using ECMP flow placement.
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.EQUAL_BALANCED,

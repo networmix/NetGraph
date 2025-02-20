@@ -1,4 +1,3 @@
-# pylint: disable=protected-access,invalid-name
 from ngraph.lib.algorithms.base import (
     EdgeSelect,
     PathAlg,
