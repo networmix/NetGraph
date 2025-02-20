@@ -1,21 +1,24 @@
-# pylint: disable=protected-access,invalid-name
 import pytest
-from typing import List
-from ngraph.lib.graph import MultiDiGraph
+from typing import List, Set
+from ngraph.lib.graph import StrictMultiDiGraph
 
 from ngraph.lib.path_bundle import Path, PathBundle
-from ngraph.lib.common import EdgeSelect
+from ngraph.lib.algorithms.base import EdgeSelect, Cost
 
 
 @pytest.fixture
 def triangle1():
-    g = MultiDiGraph()
-    g.add_edge("A", "B", metric=1, capacity=15, label="1")
-    g.add_edge("B", "A", metric=1, capacity=15, label="1")
-    g.add_edge("B", "C", metric=1, capacity=15, label="2")
-    g.add_edge("C", "B", metric=1, capacity=15, label="2")
-    g.add_edge("A", "C", metric=1, capacity=5, label="3")
-    g.add_edge("C", "A", metric=1, capacity=5, label="3")
+    """A small triangle graph for testing basic path operations."""
+    g = StrictMultiDiGraph()
+    g.add_node("A")
+    g.add_node("B")
+    g.add_node("C")
+    g.add_edge("A", "B", metric=1, capacity=15, key=0)
+    g.add_edge("B", "A", metric=1, capacity=15, key=1)
+    g.add_edge("B", "C", metric=1, capacity=15, key=2)
+    g.add_edge("C", "B", metric=1, capacity=15, key=3)
+    g.add_edge("A", "C", metric=1, capacity=5, key=4)
+    g.add_edge("C", "A", metric=1, capacity=5, key=5)
     return g
 
 
@@ -143,3 +146,114 @@ class TestPathBundle:
             "A": {},
         }
         assert sub_bundle.cost == 0
+
+    def test_add_method(self):
+        """Test concatenating two PathBundles with matching src/dst."""
+        pb1 = PathBundle(
+            "A",
+            "B",
+            {
+                "A": {},
+                "B": {"A": [0]},
+            },
+            cost=3,
+        )
+        pb2 = PathBundle(
+            "B",
+            "C",
+            {
+                "B": {},
+                "C": {"B": [1]},
+            },
+            cost=4,
+        )
+        new_pb = pb1.add(pb2)
+        # new_pb should be A->C with cost=7
+        assert new_pb.src_node == "A"
+        assert new_pb.dst_node == "C"
+        assert new_pb.cost == 7
+        assert new_pb.pred == {
+            "A": {},
+            "B": {"A": [0]},
+            "C": {"B": [1]},
+        }
+
+    def test_contains_subset_disjoint(self):
+        """Test contains, is_subset_of, and is_disjoint_from."""
+        pb_base = PathBundle(
+            "X",
+            "Z",
+            {
+                "X": {},
+                "Y": {"X": [1]},
+                "Z": {"Y": [2]},
+            },
+            cost=10,
+        )
+        pb_small = PathBundle(
+            "X",
+            "Z",
+            {
+                "X": {},
+                "Y": {"X": [1]},
+                "Z": {"Y": [2]},
+            },
+            cost=10,
+        )
+        # They have the same edges
+        assert pb_base.contains(pb_small) is True
+        assert pb_small.contains(pb_base) is True
+        assert pb_small.is_subset_of(pb_base) is True
+        assert pb_base.is_subset_of(pb_small) is True
+        assert pb_small.is_disjoint_from(pb_base) is False
+
+        # Now create a partial subset
+        pb_partial = PathBundle(
+            "X",
+            "Y",
+            {
+                "X": {},
+                "Y": {"X": [1]},
+            },
+            cost=5,
+        )
+        # pb_partial edges is {1} while pb_base edges is {1, 2}
+        assert pb_base.contains(pb_partial) is True
+        assert pb_partial.contains(pb_base) is False
+        assert pb_partial.is_subset_of(pb_base) is True
+        assert pb_base.is_subset_of(pb_partial) is False
+
+        # Now a disjoint
+        pb_disjoint = PathBundle(
+            "R",
+            "S",
+            {
+                "R": {},
+                "S": {"R": [9]},
+            },
+            cost=2,
+        )
+        assert pb_base.is_disjoint_from(pb_disjoint) is True
+        assert pb_disjoint.is_disjoint_from(pb_base) is True
+
+    def test_eq_lt_hash(self):
+        """Test equality, ordering (__lt__), and hashing."""
+        pb1 = PathBundle("A", "B", {"A": {}, "B": {"A": [11]}}, cost=5)
+        pb2 = PathBundle("A", "B", {"A": {}, "B": {"A": [11]}}, cost=5)
+        pb3 = PathBundle("A", "B", {"A": {}, "B": {"A": [11, 12]}}, cost=5)
+        pb4 = PathBundle("A", "B", {"A": {}, "B": {"A": [11]}}, cost=6)
+
+        # Equality check
+        assert pb1 == pb2
+        assert pb1 != pb3  # different set of edges
+        assert pb1 != pb4  # same edges but different cost
+
+        # Sorting check
+        assert (pb1 < pb4) is True  # cost 5 < cost 6
+        assert (pb4 < pb1) is False
+
+        # Hash check
+        s: Set[PathBundle] = {pb1, pb2, pb3, pb4}
+        # pb1 and pb2 have the same hash (equal objects).
+        # pb3 and pb4 differ.
+        assert len(s) == 3

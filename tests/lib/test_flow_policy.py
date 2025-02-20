@@ -1,16 +1,15 @@
-# pylint: disable=protected-access,invalid-name
-from ngraph.lib.common import (
+from ngraph.lib.algorithms.base import (
     EdgeSelect,
-    init_flow_graph,
     PathAlg,
     FlowPlacement,
+    MIN_FLOW,
 )
+from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.flow import Flow, FlowIndex
 from ngraph.lib.flow_policy import FlowPolicy
 from ngraph.lib.path_bundle import PathBundle
-from ngraph.lib.common import MIN_FLOW
 
-from ..sample_data.sample_graphs import *
+from .algorithms.sample_graphs import *
 
 
 class TestFlowPolicy:
@@ -688,3 +687,113 @@ class TestFlowPolicy:
             )
             <= MIN_FLOW  # TODO: why is this not strictly less?
         )
+
+    # Constructor Validation: EQUAL_BALANCED requires max_flow_count
+    def test_flow_policy_constructor_balanced_requires_max_flow(self):
+        with pytest.raises(
+            ValueError, match="max_flow_count must be set for EQUAL_BALANCED"
+        ):
+            FlowPolicy(
+                path_alg=PathAlg.SPF,
+                flow_placement=FlowPlacement.EQUAL_BALANCED,
+                edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+                multipath=False,
+            )
+
+    # Constructor Validation: static_paths length must match max_flow_count if provided
+    def test_flow_policy_constructor_static_paths_mismatch(self):
+        path_bundle = PathBundle(
+            "A", "C", {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}, cost=2
+        )
+        with pytest.raises(
+            ValueError, match="must be equal to the number of static paths"
+        ):
+            FlowPolicy(
+                path_alg=PathAlg.SPF,
+                flow_placement=FlowPlacement.EQUAL_BALANCED,
+                edge_select=EdgeSelect.ALL_MIN_COST,
+                multipath=True,
+                static_paths=[path_bundle],  # length=1
+                max_flow_count=2,  # mismatch
+            )
+
+    # Test remove_demand
+    # Ensures that removing demand clears flows from the graph but not from FlowPolicy.
+    def test_flow_policy_remove_demand(self, square1):
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        r = init_flow_graph(square1)
+        flow_policy.place_demand(r, "A", "C", "test_flow", 1)
+        assert len(flow_policy.flows) > 0
+        # Remove the demand entirely
+        flow_policy.remove_demand(r)
+
+        # Check that the flows are still in the policy but not in the graph
+        assert len(flow_policy.flows) > 0
+
+        # Check that edges in the graph are at zero flow
+        for _, _, _, attr in r.get_edges().values():
+            assert attr["flow"] == 0
+            assert attr["flows"] == {}
+
+    # Test delete_flow explicitly
+    # Verifies that _delete_flow removes only one flow and also raises KeyError if not present
+    def test_flow_policy_delete_flow(self, square1):
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+            min_flow_count=2,  # create at least 2 flows
+        )
+        r = init_flow_graph(square1)
+        flow_policy.place_demand(r, "A", "C", "test_flow", 2)
+        initial_count = len(flow_policy.flows)
+        # Pick any flow_index that was created
+        flow_index_to_delete = next(iter(flow_policy.flows.keys()))
+        flow_policy._delete_flow(r, flow_index_to_delete)
+        assert len(flow_policy.flows) == initial_count - 1
+
+        # Attempting to delete again should raise KeyError
+        with pytest.raises(KeyError):
+            flow_policy._delete_flow(r, flow_index_to_delete)
+
+    # Test reoptimize_flow: scenario where re-optimization succeeds or reverts
+    def test_flow_policy_reoptimize_flow(self, square1):
+        """
+        Creates a scenario where a flow can be re-optimized onto a different path
+        if capacity is exceeded, or reverts if no better path is found.
+        """
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+        r = init_flow_graph(square1)
+        # Place a small flow
+        placed_flow, remaining = flow_policy.place_demand(r, "A", "C", "test_flow", 1)
+        assert placed_flow == 1
+        # We'll pick the first flow index
+        flow_index_to_reopt = next(iter(flow_policy.flows.keys()))
+        # Reoptimize with additional "headroom" that might force a different path
+        new_flow = flow_policy._reoptimize_flow(r, flow_index_to_reopt, headroom=1)
+        # Because the alternative path has capacity=2, we expect re-optimization to succeed
+        assert new_flow is not None
+        # The old flow index still references the new flow
+        assert flow_policy.flows[flow_index_to_reopt] == new_flow
+
+        # Now try re-optimizing with very large headroom; no path should be found, so revert
+        flow_index_to_reopt2 = next(iter(flow_policy.flows.keys()))
+        flow_before_reopt = flow_policy.flows[flow_index_to_reopt2]
+        reverted_flow = flow_policy._reoptimize_flow(
+            r, flow_index_to_reopt2, headroom=10
+        )
+        # We expect a revert -> None returned
+        assert reverted_flow is None
+        # The flow in the dictionary should still be the same old flow
+        assert flow_policy.flows[flow_index_to_reopt2] == flow_before_reopt
