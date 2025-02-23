@@ -41,7 +41,6 @@ class BuildGraph(WorkflowStep):
                 key=link.id,
                 capacity=link.capacity,
                 cost=link.cost,
-                latency=link.latency,
                 **link.attrs,
             )
             # Reverse edge uses link.id + "_rev"
@@ -52,7 +51,6 @@ class BuildGraph(WorkflowStep):
                 key=reverse_id,
                 capacity=link.capacity,
                 cost=link.cost,
-                latency=link.latency,
                 **link.attrs,
             )
 

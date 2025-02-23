@@ -46,13 +46,12 @@ def test_node_creation_custom_attrs():
 
 def test_link_defaults_and_id_generation():
     """
-    A Link without custom parameters should default capacity/latency/cost to 1.0,
+    A Link without custom parameters should default capacity/cost to 1.0,
     have an empty attrs dict, and generate a unique ID like 'A-B-<uuid>'.
     """
     link = Link("A", "B")
 
     assert link.capacity == 1.0
-    assert link.latency == 1.0
     assert link.cost == 1.0
     assert link.attrs == {}
 
@@ -63,16 +62,15 @@ def test_link_defaults_and_id_generation():
 
 def test_link_custom_values():
     """
-    A Link can be created with custom capacity/latency/cost/attrs,
+    A Link can be created with custom capacity/cost/attrs,
     and the ID is generated automatically.
     """
     custom_attrs = {"color": "red"}
-    link = Link("X", "Y", capacity=2.0, latency=3.0, cost=4.0, attrs=custom_attrs)
+    link = Link("X", "Y", capacity=2.0, cost=4.0, attrs=custom_attrs)
 
     assert link.source == "X"
     assert link.target == "Y"
     assert link.capacity == 2.0
-    assert link.latency == 3.0
     assert link.cost == 4.0
     assert link.attrs == custom_attrs
     assert link.id.startswith("X-Y-")
