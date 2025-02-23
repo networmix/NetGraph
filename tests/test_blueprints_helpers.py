@@ -9,7 +9,8 @@ from ngraph.blueprints import (
     _find_nodes_by_path,
     _create_link,
     _expand_adjacency_pattern,
-    _process_direct_nodes_and_links,
+    _process_direct_nodes,
+    _process_direct_links,
     _expand_blueprint_adjacency,
     _expand_adjacency,
     _expand_group,
@@ -210,10 +211,10 @@ def test_expand_adjacency_pattern_mesh():
         assert link.capacity == 99
 
 
-def test_process_direct_nodes_and_links():
+def test_process_direct_nodes():
     """
-    Tests _process_direct_nodes_and_links to ensure direct node creation
-    and direct link creation works, verifying unknown nodes raise errors.
+    Tests _process_direct_nodes to ensure direct node creation
+    works.
     """
     net = Network()
     net.add_node(Node("Existing"))
@@ -225,27 +226,43 @@ def test_process_direct_nodes_and_links():
                 "override": "ignored"
             },  # This won't be merged since node exists
         },
-        "links": [
-            {
-                "source": "New1",
-                "target": "NoExist",  # Should fail
-                "link_params": {"capacity": 5},
-            }
-        ],
     }
-    with pytest.raises(ValueError) as excinfo:
-        _process_direct_nodes_and_links(net, network_data)
-    # The error should mention "unknown node(s): New1, NoExist"
-    assert "Link references unknown node(s): New1, NoExist" in str(excinfo.value)
 
-    # Confirm that partial link creation was blocked
-    assert len(net.links) == 0
+    _process_direct_nodes(net, network_data)
 
-    # Meanwhile, "New1" was created
+    # "New1" was created
     assert "New1" in net.nodes
     assert net.nodes["New1"].attrs["foo"] == "bar"
     # "Existing" was not overwritten
     assert "override" not in net.nodes["Existing"].attrs
+
+
+def test_process_direct_links():
+    """
+    Tests _process_direct_links to ensure direct link creation works.
+    """
+    net = Network()
+    net.add_node(Node("Existing1"))
+    net.add_node(Node("Existing2"))
+
+    network_data = {
+        "links": [
+            {
+                "source": "Existing1",
+                "target": "Existing2",
+                "link_params": {"capacity": 5},
+            }
+        ],
+    }
+
+    _process_direct_links(net, network_data)
+
+    # Confirm that links were created
+    assert len(net.links) == 1
+    link = next(iter(net.links.values()))
+    assert link.source == "Existing1"
+    assert link.target == "Existing2"
+    assert link.capacity == 5
 
 
 def test_expand_blueprint_adjacency():

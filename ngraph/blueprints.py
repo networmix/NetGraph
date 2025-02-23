@@ -51,8 +51,9 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
       3) Expand 'network["groups"]':
          - If a group references a blueprint, incorporate that blueprint's subgroups.
          - Otherwise, directly create nodes (e.g., node_count).
-      4) Expand adjacency definitions in 'network["adjacency"]'.
-      5) Process any direct node/link definitions.
+      4) Process any direct node definitions.
+      5) Expand adjacency definitions in 'network["adjacency"]'.
+      6) Process any direct link definitions.
 
     Args:
         data: The YAML-parsed dictionary containing optional "blueprints" + "network".
@@ -90,12 +91,15 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
             blueprint_expansion=False,
         )
 
-    # 4) Expand adjacency definitions
+    # 4) Process direct node definitions
+    _process_direct_nodes(ctx.network, network_data)
+
+    # 5) Expand adjacency definitions
     for adj_def in network_data.get("adjacency", []):
         _expand_adjacency(ctx, adj_def)
 
-    # 5) Process direct node/link definitions
-    _process_direct_nodes_and_links(ctx.network, network_data)
+    # 6) Process direct link definitions
+    _process_direct_links(ctx.network, network_data)
 
     return net
 
@@ -364,19 +368,19 @@ def _find_nodes_by_path(net: Network, path: str) -> List[Node]:
     return partial
 
 
-def _process_direct_nodes_and_links(net: Network, network_data: Dict[str, Any]) -> None:
-    """
-    Processes direct node definitions (network_data["nodes"]) and direct link definitions
-    (network_data["links"]).
-    """
-    # Direct node definitions
+def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
+    """Processes direct node definitions (network_data["nodes"])."""
     for node_name, node_attrs in network_data.get("nodes", {}).items():
         if node_name not in net.nodes:
             new_node = Node(name=node_name, attrs=node_attrs or {})
             new_node.attrs.setdefault("type", "node")
             net.add_node(new_node)
 
-    # Direct link definitions
+
+def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
+    """
+    Processes direct link definitions (network_data["links"]).
+    """
     existing_node_names = set(net.nodes.keys())
     for link_info in network_data.get("links", []):
         source = link_info["source"]

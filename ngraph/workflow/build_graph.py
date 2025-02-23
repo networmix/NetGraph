@@ -2,9 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import networkx as nx
-
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.lib.graph import StrictMultiDiGraph
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -26,7 +25,7 @@ class BuildGraph(WorkflowStep):
 
     def run(self, scenario: Scenario) -> None:
         # Create a MultiDiGraph to hold bidirectional edges
-        graph = nx.MultiDiGraph()
+        graph = StrictMultiDiGraph()
 
         # 1) Add nodes
         for node_name, node in scenario.network.nodes.items():

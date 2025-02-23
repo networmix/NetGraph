@@ -6,21 +6,22 @@ from ngraph.scenario import Scenario
 from ngraph.failure_policy import FailurePolicy
 
 
-def test_scenario_1_build_graph() -> None:
+def test_scenario_2_build_graph() -> None:
     """
-    Integration test that verifies we can parse scenario_1.yaml,
+    Integration test that verifies we can parse scenario_2.yaml,
     run the BuildGraph step, and produce a valid NetworkX MultiDiGraph.
+
     Checks:
-      - The expected number of nodes and links are correctly parsed.
+      - The expected number of expanded nodes and links (including blueprint subgroups).
+      - The presence of key expanded nodes (e.g., overridden spine nodes).
       - The traffic demands are loaded.
       - The multi-rule failure policy matches "anySingleLink".
     """
-
     # 1) Load the YAML file
-    scenario_path = Path(__file__).parent / "scenario_1.yaml"
+    scenario_path = Path(__file__).parent / "scenario_2.yaml"
     yaml_text = scenario_path.read_text()
 
-    # 2) Parse into a Scenario object
+    # 2) Parse into a Scenario object (this calls blueprint expansion)
     scenario = Scenario.from_yaml(yaml_text)
 
     # 3) Run the scenario's workflow (in this YAML, there's only "BuildGraph")
@@ -32,51 +33,68 @@ def test_scenario_1_build_graph() -> None:
         graph, StrictMultiDiGraph
     ), "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
 
-    # 5) Check the total number of nodes matches what's listed in scenario_1.yaml
-    #    For a 6-node scenario, we expect 6 nodes in the final Nx graph.
-    expected_nodes = 6
+    # 5) Verify total node count after blueprint expansion
+    #    city_cloud blueprint: (4 leaves + 6 spines + 4 edge_nodes) = 14
+    #    single_node blueprint: 1 node
+    #    plus 4 standalone global nodes (DEN, DFW, JFK, DCA)
+    #    => 14 + 1 + 4 = 19 total
+    expected_nodes = 19
     actual_nodes = len(graph.nodes)
     assert (
         actual_nodes == expected_nodes
     ), f"Expected {expected_nodes} nodes, found {actual_nodes}"
 
-    # 6) Each physical link from the YAML becomes 2 directed edges in MultiDiGraph.
-    #    If the YAML has 10 link definitions, we expect 2 * 10 = 20 directed edges.
-    expected_links = 10
+    # 6) Verify total physical links before direction is applied to Nx
+    #    - clos_2tier adjacency: 4 leaf * 6 spine = 24
+    #    - city_cloud adjacency: clos_instance/leaf(4) -> edge_nodes(4) => 16
+    #      => total within blueprint = 24 + 16 = 40
+    #    - top-level adjacency:
+    #         SFO(1) -> DEN(1) => 1
+    #         SFO(1) -> DFW(1) => 1
+    #         SEA/edge_nodes(4) -> DEN(1) => 4
+    #         SEA/edge_nodes(4) -> DFW(1) => 4
+    #      => 1 + 1 + 4 + 4 = 10
+    #    - sum so far = 40 + 10 = 50
+    #    - plus 6 direct link definitions => total physical links = 56
+    #    - each link becomes 2 directed edges in MultiDiGraph => 112 edges
+    expected_links = 56
     expected_nx_edges = expected_links * 2
     actual_edges = len(graph.edges)
     assert (
         actual_edges == expected_nx_edges
     ), f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
 
-    # 7) Verify the traffic demands.
+    # 7) Verify the traffic demands (should have 4)
     expected_demands = 4
     assert (
         len(scenario.traffic_demands) == expected_demands
     ), f"Expected {expected_demands} traffic demands."
 
-    # 8) Check the multi-rule failure policy for "any single link".
-    #    This should have exactly 1 rule that picks exactly 1 link from all links.
+    # 8) Check the single-rule failure policy "anySingleLink"
     policy: FailurePolicy = scenario.failure_policy
     assert len(policy.rules) == 1, "Should only have 1 rule for 'anySingleLink'."
 
     rule = policy.rules[0]
-    # - conditions: [ {attr: 'type', operator: '==', value: 'link'} ]
-    # - logic: 'and'
-    # - rule_type: 'choice'
-    # - count: 1
     assert len(rule.conditions) == 1, "Expected exactly 1 condition for matching links."
     cond = rule.conditions[0]
     assert cond.attr == "type"
     assert cond.operator == "=="
     assert cond.value == "link"
-
     assert rule.logic == "and"
     assert rule.rule_type == "choice"
     assert rule.count == 1
-
     assert policy.attrs.get("name") == "anySingleLink"
     assert (
         policy.attrs.get("description")
         == "Evaluate traffic routing under any single link failure."
     )
+
+    # 9) Check presence of key expanded nodes
+    #    For example: the overridden spine node "myspine-6" under "SEA/clos_instance/spine"
+    #    and the single node blueprint "SFO/single/single-1".
+    assert (
+        "SEA/clos_instance/spine/myspine-6" in scenario.network.nodes
+    ), "Missing expected overridden spine node (myspine-6) in expanded blueprint."
+    assert (
+        "SFO/single/single-1" in scenario.network.nodes
+    ), "Missing expected single-node blueprint expansion under SFO."

@@ -4,11 +4,12 @@ import yaml
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from ngraph.network import Network, Node, Link
+from ngraph.network import Network
 from ngraph.failure_policy import FailurePolicy, FailureRule, FailureCondition
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.results import Results
 from ngraph.workflow.base import WorkflowStep, WORKFLOW_STEP_REGISTRY
+from ngraph.blueprints import expand_network_dsl
 
 
 @dataclass(slots=True)
@@ -17,7 +18,7 @@ class Scenario:
     Represents a complete scenario for building and executing network workflows.
 
     This scenario includes:
-      - A network (nodes and links).
+      - A network (nodes and links), constructed via blueprint expansion.
       - A failure policy (one or more rules).
       - A set of traffic demands.
       - A list of workflow steps to execute.
@@ -55,19 +56,20 @@ class Scenario:
     @classmethod
     def from_yaml(cls, yaml_str: str) -> Scenario:
         """
-        Constructs a Scenario from a YAML string.
+        Constructs a Scenario from a YAML string, including blueprint expansion.
 
         Expected top-level YAML keys:
-          - network: Node/Link definitions (with optional name/version)
-          - failure_policy: Multi-rule policy
-          - traffic_demands: List of demands
+          - blueprints: Optional set of blueprint definitions
+          - network: Network DSL that references blueprints and/or direct nodes/links
+          - failure_policy: Multi-rule policy definition
+          - traffic_demands: List of demands (source, target, amount)
           - workflow: Steps to execute
 
         Args:
             yaml_str (str): The YAML string that defines the scenario.
 
         Returns:
-            Scenario: An initialized Scenario instance.
+            Scenario: An initialized Scenario instance with expanded network.
 
         Raises:
             ValueError: If the YAML is malformed or missing required sections.
@@ -76,9 +78,9 @@ class Scenario:
         if not isinstance(data, dict):
             raise ValueError("The provided YAML must map to a dictionary at top-level.")
 
-        # 1) Build the network
-        network_data = data.get("network", {})
-        network = cls._build_network(network_data)
+        # 1) Build the network using blueprint expansion logic
+        #    This handles both "blueprints" and "network" sections if present.
+        network = expand_network_dsl(data)
 
         # 2) Build the multi-rule failure policy
         fp_data = data.get("failure_policy", {})
@@ -100,73 +102,6 @@ class Scenario:
         )
 
     @staticmethod
-    def _build_network(network_data: Dict[str, Any]) -> Network:
-        """
-        Constructs a Network from a dictionary containing optional 'name',
-        'version', 'nodes', and 'links' (with nested link_params).
-
-        Example structure for network_data:
-            name: "6-node-l3-us-backbone"
-            version: "1.0"
-            nodes:
-              SEA: { coords: [47.6062, -122.3321] }
-              SFO: { coords: [37.7749, -122.4194] }
-            links:
-              - source: SEA
-                target: SFO
-                link_params:
-                  capacity: 200
-                  cost: 100
-                  attrs:
-                    distance_km: 1500
-
-        Args:
-            network_data (Dict[str, Any]): Dictionary with optional keys
-                'name', 'version', 'nodes', and 'links'.
-
-        Returns:
-            Network: A fully constructed network containing the parsed nodes
-            and links.
-
-        Raises:
-            ValueError: If a link references nodes not defined in the network.
-        """
-        net = Network()
-
-        # Store optional metadata in the network's attrs
-        if "name" in network_data:
-            net.attrs["name"] = network_data["name"]
-        if "version" in network_data:
-            net.attrs["version"] = network_data["version"]
-
-        # Add nodes
-        nodes_dict = network_data.get("nodes", {})
-        for node_name, node_attrs in nodes_dict.items():
-            net.add_node(Node(name=node_name, attrs=node_attrs or {}))
-
-        valid_node_names = set(nodes_dict.keys())
-
-        # Add links
-        links_data = network_data.get("links", [])
-        for link_info in links_data:
-            source = link_info["source"]
-            target = link_info["target"]
-            if source not in valid_node_names or target not in valid_node_names:
-                raise ValueError(f"Link references unknown node(s): {source}, {target}")
-
-            link_params = link_info.get("link_params", {})
-            link = Link(
-                source=source,
-                target=target,
-                capacity=link_params.get("capacity", 1.0),
-                cost=link_params.get("cost", 1.0),
-                attrs=link_params.get("attrs", {}),
-            )
-            net.add_link(link)
-
-        return net
-
-    @staticmethod
     def _build_failure_policy(fp_data: Dict[str, Any]) -> FailurePolicy:
         """
         Constructs a FailurePolicy from data that may specify multiple rules.
@@ -185,8 +120,7 @@ class Scenario:
                   count: 1
 
         Args:
-            fp_data (Dict[str, Any]): Dictionary for the 'failure_policy'
-                section of the YAML.
+            fp_data (Dict[str, Any]): Dictionary for the 'failure_policy' section.
 
         Returns:
             FailurePolicy: A policy containing a list of FailureRule objects.
@@ -214,7 +148,7 @@ class Scenario:
             )
             rules.append(rule)
 
-        # Put any additional keys (e.g., "name", "description") into policy.attrs
+        # Put any extra keys (like "name" or "description") into policy.attrs
         attrs = {k: v for k, v in fp_data.items() if k != "rules"}
 
         return FailurePolicy(rules=rules, attrs=attrs)
@@ -228,7 +162,7 @@ class Scenario:
 
         Each step dict must have a "step_type" referencing a registered workflow
         step in WORKFLOW_STEP_REGISTRY. Any additional keys are passed as init
-        arguments to the WorkflowStep subclass.
+        arguments to that WorkflowStep subclass.
 
         Example:
             workflow:
@@ -246,8 +180,7 @@ class Scenario:
             in the order provided.
 
         Raises:
-            ValueError: If a dict lacks "step_type" or references an unknown
-            type.
+            ValueError: If a dict lacks "step_type" or references an unknown type.
         """
         steps: List[WorkflowStep] = []
         for step_info in workflow_data:
@@ -261,7 +194,7 @@ class Scenario:
             if not step_cls:
                 raise ValueError(f"Unrecognized 'step_type': {step_type}")
 
-            # Remove 'step_type' so it doesn't clash with step_cls.__init__
+            # Remove 'step_type' so it doesn't conflict with step_cls.__init__
             step_args = {k: v for k, v in step_info.items() if k != "step_type"}
             steps.append(step_cls(**step_args))
         return steps
