@@ -35,7 +35,6 @@ class DoSmth(WorkflowStep):
         Perform a dummy operation for testing.
         Store something in scenario.results using the step name as a key.
         """
-        # We can use self.name as the "step_name"
         scenario.results.put(self.name, "ran", True)
 
 
@@ -74,16 +73,17 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      capacity: 10
-      latency: 2
-      cost: 5
-      attrs: {some_attr: some_value}
+      link_params:
+        capacity: 10
+        cost: 5
+        attrs:
+          some_attr: some_value
     - source: NodeB
       target: NodeC
-      capacity: 20
-      latency: 3
-      cost: 4
-      attrs: {}
+      link_params:
+        capacity: 20
+        cost: 4
+        attrs: {}
 failure_policy:
   name: "multi_rule_example"
   description: "Testing multi-rule approach."
@@ -132,7 +132,8 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      capacity: 1
+      link_params:
+        capacity: 1
 failure_policy:
   rules: []
 traffic_demands:
@@ -159,7 +160,8 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      capacity: 1
+      link_params:
+        capacity: 1
 failure_policy:
   rules: []
 traffic_demands:
@@ -187,7 +189,8 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      capacity: 1
+      link_params:
+        capacity: 1
 traffic_demands: []
 failure_policy:
   rules: []
@@ -213,7 +216,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
 
     # Check network
     assert isinstance(scenario.network, Network)
-    assert len(scenario.network.nodes) == 3  # We defined NodeA, NodeB, NodeC
+    assert len(scenario.network.nodes) == 3  # NodeA, NodeB, NodeC
     assert len(scenario.network.links) == 2  # NodeA->NodeB, NodeB->NodeC
 
     node_names = [node.name for node in scenario.network.nodes.values()]
@@ -230,21 +233,18 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert link_ab is not None, "Link from NodeA to NodeB was not found."
     assert link_ab.target == "NodeB"
     assert link_ab.capacity == 10
-    assert link_ab.latency == 2
     assert link_ab.cost == 5
     assert link_ab.attrs.get("some_attr") == "some_value"
 
     assert link_bc is not None, "Link from NodeB to NodeC was not found."
     assert link_bc.target == "NodeC"
     assert link_bc.capacity == 20
-    assert link_bc.latency == 3
     assert link_bc.cost == 4
 
     # Check failure policy
     assert isinstance(scenario.failure_policy, FailurePolicy)
     assert len(scenario.failure_policy.rules) == 2, "Expected 2 rules in the policy."
-    # Check that the leftover fields in failure_policy (e.g. "name", "description")
-    # went into policy.attrs
+    # leftover fields (e.g. name, description) in policy.attrs
     assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
     assert (
         scenario.failure_policy.attrs.get("description")

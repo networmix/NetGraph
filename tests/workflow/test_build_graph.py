@@ -19,13 +19,12 @@ class MockLink:
     A simple mock Link to simulate scenario.network.links[link_id].
     """
 
-    def __init__(self, link_id, source, target, capacity, cost, latency, attrs=None):
+    def __init__(self, link_id, source, target, capacity, cost, attrs=None):
         self.id = link_id
         self.source = source
         self.target = target
         self.capacity = capacity
         self.cost = cost
-        self.latency = latency
         self.attrs = attrs or {}
 
 
@@ -49,7 +48,6 @@ def mock_scenario():
             target="B",
             capacity=100,
             cost=5,
-            latency=10,
             attrs={"fiber": True},
         ),
         "L2": MockLink(
@@ -58,7 +56,6 @@ def mock_scenario():
             target="A",
             capacity=50,
             cost=2,
-            latency=5,
             attrs={"copper": True},
         ),
     }
@@ -112,7 +109,6 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     assert edge_data is not None, "Forward edge 'L1' should exist from A to B."
     assert edge_data["capacity"] == 100
     assert edge_data["cost"] == 5
-    assert edge_data["latency"] == 10
     assert "fiber" in edge_data
 
     # Check reverse edge from link 'L1'
@@ -137,4 +133,3 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     assert (
         rev_edge_data_l2["capacity"] == 50
     ), "Reverse edge should share the same capacity."
-    assert rev_edge_data_l2["latency"] == 5

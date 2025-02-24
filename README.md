@@ -191,7 +191,7 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 ### Traffic demands placement on a graph
 ```python
     """
-    Demonstrates traffic engineering by placing two bidirectional demands on a network.
+    Demonstrates traffic engineering by placing two demands on a network.
 
     Graph topology (metrics/capacities):
 
