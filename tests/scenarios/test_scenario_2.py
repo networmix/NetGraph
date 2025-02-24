@@ -9,7 +9,7 @@ from ngraph.failure_policy import FailurePolicy
 def test_scenario_2_build_graph() -> None:
     """
     Integration test that verifies we can parse scenario_2.yaml,
-    run the BuildGraph step, and produce a valid NetworkX MultiDiGraph.
+    run the BuildGraph step, and produce a valid StrictMultiDiGraph.
 
     Checks:
       - The expected number of expanded nodes and links (including blueprint subgroups).

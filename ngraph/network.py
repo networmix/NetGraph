@@ -66,7 +66,7 @@ class Link:
 
     def __post_init__(self) -> None:
         """Auto-generates a unique link ID by combining the source, target, and a random Base64-encoded UUID."""
-        self.id = f"{self.source}-{self.target}-{new_base64_uuid()}"
+        self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
 
 
 @dataclass(slots=True)

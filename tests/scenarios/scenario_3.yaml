@@ -1,0 +1,64 @@
+blueprints:
+  brick_2tier:
+    groups:
+      t1:
+        node_count: 4
+        name_template: t1-{node_num}
+      t2:
+        node_count: 4
+        name_template: t2-{node_num}
+
+    adjacency:
+      - source: /t1
+        target: /t2
+        pattern: mesh
+        link_params:
+          capacity: 1
+          cost: 1
+
+  3tier_clos:
+    groups:
+      b1:
+        use_blueprint: brick_2tier
+      b2:
+        use_blueprint: brick_2tier
+      spine:
+        node_count: 16
+        name_template: t3-{node_num}
+
+    adjacency:
+      - source: b1/t2
+        target: spine
+        pattern: one_to_one
+        link_params:
+          capacity: 1
+          cost: 1
+      - source: b2/t2
+        target: spine
+        pattern: one_to_one
+        link_params:
+          capacity: 1
+          cost: 1
+network:
+  name: "3tier_clos_network"
+  version: 1.0
+
+  groups:
+    my_clos1:
+      use_blueprint: 3tier_clos
+
+    my_clos2:
+      use_blueprint: 3tier_clos
+
+  adjacency:
+    - source: my_clos1/spine
+      target: my_clos2/spine
+      pattern: one_to_one
+      link_params:
+        capacity: 1
+        cost: 1
+
+
+workflow:
+  - step_type: BuildGraph
+    name: build_graph

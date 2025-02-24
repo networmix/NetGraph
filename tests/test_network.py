@@ -55,9 +55,9 @@ def test_link_defaults_and_id_generation():
     assert link.cost == 1.0
     assert link.attrs == {}
 
-    # ID should start with 'A-B-' and have a random suffix
-    assert link.id.startswith("A-B-")
-    assert len(link.id) > len("A-B-")
+    # ID should start with 'A|B|' and have a random suffix
+    assert link.id.startswith("A|B|")
+    assert len(link.id) > len("A|B|")
 
 
 def test_link_custom_values():
@@ -73,7 +73,7 @@ def test_link_custom_values():
     assert link.capacity == 2.0
     assert link.cost == 4.0
     assert link.attrs == custom_attrs
-    assert link.id.startswith("X-Y-")
+    assert link.id.startswith("X|Y|")
 
 
 def test_link_id_uniqueness():
