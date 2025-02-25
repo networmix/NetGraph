@@ -1,8 +1,9 @@
 import pytest
-import networkx as nx
 from unittest.mock import MagicMock
 
+from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.workflow.build_graph import BuildGraph
+from ngraph.network import Network
 
 
 class MockNode:
@@ -34,7 +35,7 @@ def mock_scenario():
     Provides a mock Scenario object for testing.
     """
     scenario = MagicMock()
-    scenario.network = MagicMock()
+    scenario.network = Network()
 
     # Sample data:
     scenario.network.nodes = {
@@ -68,7 +69,7 @@ def mock_scenario():
 
 def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     """
-    Ensure BuildGraph creates a MultiDiGraph, adds all nodes/edges,
+    Ensure BuildGraph creates a StrictMultiDiGraph, adds all nodes/edges,
     and stores it in scenario.results with the key (step_name, "graph").
     """
     step = BuildGraph(name="MyBuildStep")
@@ -80,19 +81,19 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
 
     # Extract the arguments from the .put call
     call_args = mock_scenario.results.put.call_args
-    # Should look like ("MyBuildStep", "graph", <MultiDiGraph>)
+    # Should look like ("MyBuildStep", "graph", <StrictMultiDiGraph>)
     assert call_args[0][0] == "MyBuildStep"
     assert call_args[0][1] == "graph"
     created_graph = call_args[0][2]
     assert isinstance(
-        created_graph, nx.MultiDiGraph
-    ), "Resulting object must be a MultiDiGraph."
+        created_graph, StrictMultiDiGraph
+    ), "Resulting object must be a StrictMultiDiGraph."
 
     # Verify the correct nodes were added
     assert set(created_graph.nodes()) == {
         "A",
         "B",
-    }, "MultiDiGraph should contain the correct node set."
+    }, "StrictMultiDiGraph should contain the correct node set."
     # Check node attributes
     assert created_graph.nodes["A"]["type"] == "router"
     assert created_graph.nodes["B"]["location"] == "rack2"

@@ -118,10 +118,10 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
       g.add_node("A")
       g.add_node("B")
       g.add_node("C")
-      g.add_edge("A", "B", metric=1, capacity=1)
-      g.add_edge("A", "B", metric=1, capacity=1)
-      g.add_edge("B", "C", metric=1, capacity=2)
-      g.add_edge("A", "C", metric=2, capacity=3)
+      g.add_edge("A", "B", cost=1, capacity=1)
+      g.add_edge("A", "B", cost=1, capacity=1)
+      g.add_edge("B", "C", cost=1, capacity=2)
+      g.add_edge("A", "C", cost=2, capacity=3)
 
       # Calculate MaxFlow between the source and destination nodes
       max_flow = calc_max_flow(g, "A", "C")
@@ -136,7 +136,7 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
     """
     Tests max flow calculations on a graph with parallel edges.
 
-    Graph topology (metrics/capacities):
+    Graph topology (costs/capacities):
 
                  [1,1] & [1,2]     [1,1] & [1,2]
           A ──────────────────► B ─────────────► C
@@ -145,10 +145,10 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
           └───────────────────► D ───────────────┘
 
     Edges:
-      - A→B: two parallel edges with (metric=1, capacity=1) and (metric=1, capacity=2)
-      - B→C: two parallel edges with (metric=1, capacity=1) and (metric=1, capacity=2)
-      - A→D: (metric=2, capacity=3)
-      - D→C: (metric=2, capacity=3)
+      - A→B: two parallel edges with (cost=1, capacity=1) and (cost=1, capacity=2)
+      - B→C: two parallel edges with (cost=1, capacity=1) and (cost=1, capacity=2)
+      - A→D: (cost=2, capacity=3)
+      - D→C: (cost=2, capacity=3)
 
     The test computes:
       - The true maximum flow (expected flow: 6.0)
@@ -164,13 +164,13 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
         g.add_node(node)
 
     # Create parallel edges between A→B and B→C
-    g.add_edge("A", "B", key=0, metric=1, capacity=1)
-    g.add_edge("A", "B", key=1, metric=1, capacity=2)
-    g.add_edge("B", "C", key=2, metric=1, capacity=1)
-    g.add_edge("B", "C", key=3, metric=1, capacity=2)
+    g.add_edge("A", "B", key=0, cost=1, capacity=1)
+    g.add_edge("A", "B", key=1, cost=1, capacity=2)
+    g.add_edge("B", "C", key=2, cost=1, capacity=1)
+    g.add_edge("B", "C", key=3, cost=1, capacity=2)
     # Create an alternative path A→D→C
-    g.add_edge("A", "D", key=4, metric=2, capacity=3)
-    g.add_edge("D", "C", key=5, metric=2, capacity=3)
+    g.add_edge("A", "D", key=4, cost=2, capacity=3)
+    g.add_edge("D", "C", key=5, cost=2, capacity=3)
 
     # 1. The true maximum flow
     max_flow_prop = calc_max_flow(g, "A", "C")
@@ -193,7 +193,7 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
     """
     Demonstrates traffic engineering by placing two demands on a network.
 
-    Graph topology (metrics/capacities):
+    Graph topology (costs/capacities):
 
               [15]
           A ─────── B
@@ -219,12 +219,12 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
         g.add_node(node)
 
     # Create bidirectional edges with distinct labels (for clarity).
-    g.add_edge("A", "B", key=0, metric=1, capacity=15, label="1")
-    g.add_edge("B", "A", key=1, metric=1, capacity=15, label="1")
-    g.add_edge("B", "C", key=2, metric=1, capacity=15, label="2")
-    g.add_edge("C", "B", key=3, metric=1, capacity=15, label="2")
-    g.add_edge("A", "C", key=4, metric=1, capacity=5, label="3")
-    g.add_edge("C", "A", key=5, metric=1, capacity=5, label="3")
+    g.add_edge("A", "B", key=0, cost=1, capacity=15, label="1")
+    g.add_edge("B", "A", key=1, cost=1, capacity=15, label="1")
+    g.add_edge("B", "C", key=2, cost=1, capacity=15, label="2")
+    g.add_edge("C", "B", key=3, cost=1, capacity=15, label="2")
+    g.add_edge("A", "C", key=4, cost=1, capacity=5, label="3")
+    g.add_edge("C", "A", key=5, cost=1, capacity=5, label="3")
 
     # Initialize flow-related structures (e.g., to track placed flows in the graph).
     flow_graph = init_flow_graph(g)

@@ -164,7 +164,7 @@ class TestMaxFlowEdgeCases:
         g = StrictMultiDiGraph()
         g.add_node("A")
         g.add_node("B")
-        g.add_edge("A", "B", capacity=0.0, metric=1)
+        g.add_edge("A", "B", capacity=0.0, cost=1)
         max_flow = calc_max_flow(g, "A", "B")
         assert max_flow == 0.0
 

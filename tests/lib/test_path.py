@@ -112,10 +112,10 @@ def test_get_sub_path_success():
     for node_id in ("A", "B", "C", "D"):
         g.add_node(node_id)
 
-    # Add edges with 'metric' attributes
-    eAB = g.add_edge("A", "B", cost=5, metric=5)
-    eBC = g.add_edge("B", "C", cost=7, metric=7)
-    eCD = g.add_edge("C", "D", cost=2, metric=2)
+    # Add edges with 'cost' attributes
+    eAB = g.add_edge("A", "B", cost=5)
+    eBC = g.add_edge("B", "C", cost=7)
+    eCD = g.add_edge("C", "D", cost=2)
 
     # Path is A->B->C->D
     path_tuple: PathTuple = (
@@ -127,7 +127,7 @@ def test_get_sub_path_success():
     p = Path(path_tuple, cost=14.0)
 
     # Subpath: A->B->C
-    sub_p = p.get_sub_path("C", g, cost_attr="metric")
+    sub_p = p.get_sub_path("C", g, cost_attr="cost")
     assert sub_p.dst_node == "C"
     # Check that the cost is sum of edges (A->B=5) + (B->C=7) = 12
     assert sub_p.cost == 12
@@ -157,7 +157,7 @@ def test_get_sub_path_empty_parallel_edges():
         g.add_node(n)
 
     # Add an edge between N1->N2
-    e12 = g.add_edge("N1", "N2", metric=10)
+    e12 = g.add_edge("N1", "N2", cost=10)
 
     # A path where the second to last step has an empty parallel edge set
     # just to confirm we skip cost addition for that step

@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 import base64
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, List
+
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
 def new_base64_uuid() -> str:
@@ -126,3 +128,76 @@ class Network:
 
         link.attrs.setdefault("type", "link")
         self.links[link.id] = link
+
+    def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
+        """
+        Creates a StrictMultiDiGraph representation of this Network.
+
+        Args:
+            add_reverse (bool): Add a reverse edge for each link
+            (default is True).
+
+        Returns:
+            StrictMultiDiGraph: The directed multigraph representation
+            of this network, including node and link attributes.
+        """
+        graph = StrictMultiDiGraph()
+
+        # Add nodes
+        for node_name, node in self.nodes.items():
+            graph.add_node(node_name, **node.attrs)
+
+        # Add edges
+        for link_id, link in self.links.items():
+            # Forward edge
+            graph.add_edge(
+                link.source,
+                link.target,
+                key=link.id,
+                capacity=link.capacity,
+                cost=link.cost,
+                **link.attrs,
+            )
+            if add_reverse:
+                reverse_id = f"{link.id}_rev"
+                graph.add_edge(
+                    link.target,
+                    link.source,
+                    key=reverse_id,
+                    capacity=link.capacity,
+                    cost=link.cost,
+                    **link.attrs,
+                )
+
+        return graph
+
+    def select_nodes_by_path(self, path: str) -> List[Node]:
+        """
+        Returns all nodes whose name is exactly 'path' or begins with 'path/'.
+        If none are found, tries 'path-' as a fallback prefix.
+        If still none are found, tries partial prefix "path" => "pathX".
+
+        Examples:
+        path="SEA/clos_instance/spine" might match "SEA/clos_instance/spine/myspine-1"
+        path="S" might match "S1", "S2" if we resort to partial prefix logic.
+        """
+        # 1) Exact or slash-based
+        result = [
+            n
+            for n in self.nodes.values()
+            if n.name == path or n.name.startswith(f"{path}/")
+        ]
+        if result:
+            return result
+
+        # 2) Fallback: path-
+        result = [n for n in self.nodes.values() if n.name.startswith(f"{path}-")]
+        if result:
+            return result
+
+        # 3) Partial
+        partial = []
+        for n in self.nodes.values():
+            if n.name.startswith(path) and n.name != path:
+                partial.append(n)
+        return partial

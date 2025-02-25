@@ -69,3 +69,6 @@ def test_scenario_3_build_graph() -> None:
     assert (
         "my_clos2/spine/t3-16" in scenario.network.nodes
     ), "Missing expected spine node 'my_clos2/spine/t3-16' in expanded blueprint."
+
+    print(scenario.results.get("capacity_probe", "max_flow"))
+    raise

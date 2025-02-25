@@ -62,3 +62,7 @@ network:
 workflow:
   - step_type: BuildGraph
     name: build_graph
+  - step_type: CapacityProbe
+    name: capacity_probe
+    source_path: my_clos1/b1/t1
+    sink_path: my_clos2/b2/t1

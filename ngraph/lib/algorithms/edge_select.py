@@ -24,7 +24,7 @@ def edge_select_fabric(
     ] = None,
     excluded_edges: Optional[Set[EdgeID]] = None,
     excluded_nodes: Optional[Set[NodeID]] = None,
-    cost_attr: str = "metric",
+    cost_attr: str = "cost",
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
 ) -> Callable[
@@ -73,7 +73,7 @@ def edge_select_fabric(
         ignored_edges: Optional[Set[EdgeID]] = None,
         ignored_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """Return all edges with the minimal metric among those available."""
+        """Return all edges with the minimal cost among those available."""
         if ignored_nodes and dst_node in ignored_nodes:
             return float("inf"), []
 
@@ -101,7 +101,7 @@ def edge_select_fabric(
         ignored_edges: Optional[Set[EdgeID]] = None,
         ignored_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """Return exactly one edge: the single lowest-metric edge."""
+        """Return exactly one edge: the single lowest-cost edge."""
         if ignored_nodes and dst_node in ignored_nodes:
             return float("inf"), []
 
@@ -128,7 +128,7 @@ def edge_select_fabric(
     ) -> Tuple[Cost, List[EdgeID]]:
         """
         Return all edges that have remaining capacity >= min_cap, ignoring
-        their metric except for reporting the minimal one found.
+        their cost except for reporting the minimal one found.
         """
         if ignored_nodes and dst_node in ignored_nodes:
             return float("inf"), []
@@ -191,7 +191,7 @@ def edge_select_fabric(
         ignored_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
         """
-        Return exactly one edge with the minimal metric among those with
+        Return exactly one edge with the minimal cost among those with
         remaining capacity >= min_cap.
         """
         if ignored_nodes and dst_node in ignored_nodes:
@@ -224,7 +224,7 @@ def edge_select_fabric(
         """
         Return exactly one edge, factoring both 'cost_attr' and load level
         into a combined cost:
-            combined_cost = (metric * 100) + round((flow / capacity) * 10)
+            combined_cost = (cost * 100) + round((flow / capacity) * 10)
         Only edges with remaining capacity >= min_cap are considered.
         """
         if ignored_nodes and dst_node in ignored_nodes:

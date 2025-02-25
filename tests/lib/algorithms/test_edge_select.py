@@ -17,14 +17,14 @@ def mock_graph() -> StrictMultiDiGraph:
 @pytest.fixture
 def edge_map() -> Dict[EdgeID, AttrDict]:
     """
-    A basic edge_map with varying metrics/capacities/flows.
+    A basic edge_map with varying costs/capacities/flows.
     """
     return {
-        "edgeA": {"metric": 10, "capacity": 100, "flow": 0},  # leftover=100
-        "edgeB": {"metric": 10, "capacity": 50, "flow": 25},  # leftover=25
-        "edgeC": {"metric": 5, "capacity": 10, "flow": 0},  # leftover=10
-        "edgeD": {"metric": 20, "capacity": 10, "flow": 5},  # leftover=5
-        "edgeE": {"metric": 5, "capacity": 2, "flow": 1},  # leftover=1
+        "edgeA": {"cost": 10, "capacity": 100, "flow": 0},  # leftover=100
+        "edgeB": {"cost": 10, "capacity": 50, "flow": 25},  # leftover=25
+        "edgeC": {"cost": 5, "capacity": 10, "flow": 0},  # leftover=10
+        "edgeD": {"cost": 20, "capacity": 10, "flow": 5},  # leftover=5
+        "edgeE": {"cost": 5, "capacity": 2, "flow": 1},  # leftover=1
     }
 
 
@@ -99,13 +99,13 @@ def test_all_min_cost_tie_break(mock_graph):
     We'll make the difference strictly < 1e-12 so they are recognized as equal.
     """
     edge_map_ = {
-        "e1": {"metric": 10.0, "capacity": 50, "flow": 0},
+        "e1": {"cost": 10.0, "capacity": 50, "flow": 0},
         "e2": {
-            "metric": 10.0000000000005,
+            "cost": 10.0000000000005,
             "capacity": 50,
             "flow": 0,
         },  # diff=5e-13 < 1e-12
-        "e3": {"metric": 12.0, "capacity": 50, "flow": 0},
+        "e3": {"cost": 12.0, "capacity": 50, "flow": 0},
     }
     select_func = edge_select_fabric(EdgeSelect.ALL_MIN_COST)
     cost, edges = select_func(
@@ -121,8 +121,8 @@ def test_all_min_cost_no_valid(mock_graph):
     If all edges are in ignored_edges, we get (inf, []) from ALL_MIN_COST.
     """
     edge_map_ = {
-        "e1": {"metric": 10, "capacity": 50, "flow": 0},
-        "e2": {"metric": 20, "capacity": 50, "flow": 0},
+        "e1": {"cost": 10, "capacity": 50, "flow": 0},
+        "e2": {"cost": 20, "capacity": 50, "flow": 0},
     }
     select_func = edge_select_fabric(EdgeSelect.ALL_MIN_COST)
     cost, edges = select_func(
@@ -156,7 +156,7 @@ def test_edge_select_excluded_edges(mock_graph, edge_map):
 
 
 def test_edge_select_all_min_cost(mock_graph, edge_map):
-    """ALL_MIN_COST => all edges with minimal metric => 5 => edgeC, edgeE."""
+    """ALL_MIN_COST => all edges with minimal cost => 5 => edgeC, edgeE."""
     select_func = edge_select_fabric(EdgeSelect.ALL_MIN_COST)
     cost, chosen = select_func(
         mock_graph, "A", "B", edge_map, ignored_edges=set(), ignored_nodes=set()
@@ -167,7 +167,7 @@ def test_edge_select_all_min_cost(mock_graph, edge_map):
 
 def test_edge_select_single_min_cost(mock_graph, edge_map):
     """
-    SINGLE_MIN_COST => one edge with min metric => 5 => either edgeC or edgeE.
+    SINGLE_MIN_COST => one edge with min cost => 5 => either edgeC or edgeE.
     """
     select_func = edge_select_fabric(EdgeSelect.SINGLE_MIN_COST)
     cost, chosen = select_func(
@@ -180,7 +180,7 @@ def test_edge_select_single_min_cost(mock_graph, edge_map):
 
 def test_edge_select_all_min_cost_with_cap(mock_graph, edge_map):
     """
-    ALL_MIN_COST_WITH_CAP_REMAINING => leftover>=10 => edgesA,B,C => among them, metric=5 => edgeC
+    ALL_MIN_COST_WITH_CAP_REMAINING => leftover>=10 => edgesA,B,C => among them, cost=5 => edgeC
     so cost=5, chosen=[edgeC]
     """
     select_func = edge_select_fabric(
@@ -196,7 +196,7 @@ def test_edge_select_all_min_cost_with_cap(mock_graph, edge_map):
 def test_edge_select_all_any_cost_with_cap(mock_graph, edge_map):
     """
     ALL_ANY_COST_WITH_CAP_REMAINING => leftover>=10 => edgesA,B,C. We return all three, ignoring
-    metric except for returning min metric => 5
+    cost except for returning min cost => 5
     """
     select_func = edge_select_fabric(
         EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING, select_value=10
@@ -211,7 +211,7 @@ def test_edge_select_all_any_cost_with_cap(mock_graph, edge_map):
 def test_edge_select_single_min_cost_with_cap_remaining(mock_graph, edge_map):
     """
     SINGLE_MIN_COST_WITH_CAP_REMAINING => leftover>=5 => edgesA(100),B(25),C(10),D(5).
-    among them, min metric=5 => edgeC
+    among them, min cost=5 => edgeC
     """
     select_func = edge_select_fabric(
         EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING, select_value=5
@@ -239,7 +239,7 @@ def test_edge_select_single_min_cost_with_cap_remaining_no_valid(mock_graph, edg
 
 def test_edge_select_single_min_cost_load_factored(mock_graph, edge_map):
     """
-    cost= metric*100 + round((flow/capacity)*10). Among leftover>=MIN_CAP => all edges.
+    cost= cost*100 + round((flow/capacity)*10). Among leftover>=MIN_CAP => all edges.
     edgeC => 5*100+0=500 => minimum => pick edgeC
     """
     select_func = edge_select_fabric(
@@ -288,8 +288,8 @@ def test_all_any_cost_with_cap_no_valid(mock_graph, edge_map):
 
 def test_user_defined_custom(mock_graph, edge_map):
     """
-    Provide a user-defined function that picks edges with metric <=10
-    and uses sum of metrics as the cost.
+    Provide a user-defined function that picks edges with cost <=10
+    and uses sum of costs as the cost.
     """
 
     def custom_func(
@@ -305,9 +305,9 @@ def test_user_defined_custom(mock_graph, edge_map):
         for eid, attrs in edg_map.items():
             if eid in ignored_edges:
                 continue
-            if attrs["metric"] <= 10:
+            if attrs["cost"] <= 10:
                 chosen.append(eid)
-                total += attrs["metric"]
+                total += attrs["cost"]
         if not chosen:
             return float("inf"), []
         return (total, chosen)
