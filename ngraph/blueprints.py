@@ -231,8 +231,8 @@ def _expand_adjacency_pattern(
                       wrap-around if one side is an integer multiple of the other.
                       Also skips self-loops.
     """
-    source_nodes = _find_nodes_by_path(ctx.network, source_path)
-    target_nodes = _find_nodes_by_path(ctx.network, target_path)
+    source_nodes = ctx.network.select_nodes_by_path(source_path)
+    target_nodes = ctx.network.select_nodes_by_path(target_path)
 
     if not source_nodes or not target_nodes:
         return
@@ -336,36 +336,6 @@ def _join_paths(parent_path: str, rel_path: str) -> str:
     if parent_path:
         return f"{parent_path}/{rel_path}"
     return rel_path
-
-
-def _find_nodes_by_path(net: Network, path: str) -> List[Node]:
-    """
-    Returns all nodes whose name is exactly 'path' or begins with 'path/'.
-    If none are found, tries 'path-' as a fallback prefix.
-    If still none are found, tries partial prefix "path" => "pathX".
-
-    Examples:
-      path="SEA/clos_instance/spine" might match "SEA/clos_instance/spine/myspine-1"
-      path="S" might match "S1", "S2" if we resort to partial prefix logic.
-    """
-    # 1) Exact or slash-based
-    result = [
-        n for n in net.nodes.values() if n.name == path or n.name.startswith(f"{path}/")
-    ]
-    if result:
-        return result
-
-    # 2) Fallback: path-
-    result = [n for n in net.nodes.values() if n.name.startswith(f"{path}-")]
-    if result:
-        return result
-
-    # 3) Partial
-    partial = []
-    for n in net.nodes.values():
-        if n.name.startswith(path) and n.name != path:
-            partial.append(n)
-    return partial
 
 
 def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:

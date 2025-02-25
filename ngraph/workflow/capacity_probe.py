@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
-from ngraph.lib.algorithms.max_flow import calc_max_flow
+from ngraph.lib.algorithms.base import FlowPlacement
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -17,31 +17,32 @@ class CapacityProbe(WorkflowStep):
     A workflow step that probes capacity between selected nodes.
 
     Attributes:
-        source_path (str): A path/prefix to match source nodes.
-        sink_path (str): A path/prefix to match sink nodes.
+        source_path (str): Path/prefix to select source nodes.
+        sink_path (str): Path/prefix to select sink nodes.
+        shortest_path (bool): If True, uses only the shortest paths (default False).
+        flow_placement (FlowPlacement): Load balancing across parallel edges.
     """
 
     source_path: str = ""
     sink_path: str = ""
+    shortest_path: bool = False
+    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL
 
     def run(self, scenario: Scenario) -> None:
-        # 1) Select source and sink nodes
-        sources = scenario.network.select_nodes_by_path(self.source_path)
-        sinks = scenario.network.select_nodes_by_path(self.sink_path)
+        """
+        Executes the capacity probe by computing the max flow between
+        nodes selected by source_path and sink_path, then storing the
+        result in the scenario's results container.
 
-        # 2) Build the graph
-        graph = scenario.network.to_strict_multidigraph()
+        Args:
+            scenario (Scenario): The scenario object containing the network and results.
+        """
+        flow = scenario.network.max_flow(
+            self.source_path,
+            self.sink_path,
+            shortest_path=self.shortest_path,
+            flow_placement=self.flow_placement,
+        )
 
-        # 3) Attach pseudo-nodes the source and sink groups, then use max flow
-        #    to calculate max flow between them
-        results = {}
-        graph.add_node("source")
-        graph.add_node("sink")
-        for source in sources:
-            graph.add_edge("source", source.name, capacity=float("inf"), cost=0)
-        for sink in sinks:
-            graph.add_edge(sink.name, "sink", capacity=float("inf"), cost=0)
-        flow = calc_max_flow(graph, "source", "sink")
-
-        # 4) Store results in scenario
-        scenario.results.put(self.name, "max_flow", flow)
+        result_label = f"max_flow:[{self.source_path} -> {self.sink_path}]"
+        scenario.results.put(self.name, result_label, flow)

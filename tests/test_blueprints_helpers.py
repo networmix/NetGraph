@@ -6,7 +6,6 @@ from ngraph.blueprints import (
     Blueprint,
     _apply_parameters,
     _join_paths,
-    _find_nodes_by_path,
     _create_link,
     _expand_adjacency_pattern,
     _process_direct_nodes,
@@ -29,43 +28,6 @@ def test_join_paths():
     assert _join_paths("SEA", "leaf") == "SEA/leaf"
     # Parent path plus leading slash => "SEA/leaf"
     assert _join_paths("SEA", "/leaf") == "SEA/leaf"
-
-
-def test_find_nodes_by_path():
-    """
-    Tests _find_nodes_by_path for exact matches, slash-based prefix matches, and fallback prefix pattern.
-    """
-    net = Network()
-    # Add some nodes
-    net.add_node(Node("SEA/spine/myspine-1"))
-    net.add_node(Node("SEA/leaf/leaf-1"))
-    net.add_node(Node("SEA-other"))
-    net.add_node(Node("SFO"))
-
-    # 1) Exact match => "SFO"
-    nodes = _find_nodes_by_path(net, "SFO")
-    assert len(nodes) == 1
-    assert nodes[0].name == "SFO"
-
-    # 2) Slash prefix => "SEA/spine" matches "SEA/spine/myspine-1"
-    nodes = _find_nodes_by_path(net, "SEA/spine")
-    assert len(nodes) == 1
-    assert nodes[0].name == "SEA/spine/myspine-1"
-
-    # 3) Fallback: "SEA-other" won't be found by slash prefix "SEA/other", but if we search "SEA-other",
-    #    we do an exact match or a fallback "SEA-other" => here it's exact, so we get 1 node
-    nodes = _find_nodes_by_path(net, "SEA-other")
-    assert len(nodes) == 1
-    assert nodes[0].name == "SEA-other"
-
-    # 4) If we search just "SEA", we match "SEA/spine/myspine-1" and "SEA/leaf/leaf-1" by slash prefix,
-    #    but "SEA-other" won't appear because fallback never triggers (we already found slash matches).
-    nodes = _find_nodes_by_path(net, "SEA")
-    found = set(n.name for n in nodes)
-    assert found == {
-        "SEA/spine/myspine-1",
-        "SEA/leaf/leaf-1",
-    }
 
 
 def test_apply_parameters():
