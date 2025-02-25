@@ -159,7 +159,7 @@ class Path:
         self,
         dst_node: NodeID,
         graph: StrictMultiDiGraph,
-        cost_attr: str = "metric",
+        cost_attr: str = "cost",
     ) -> Path:
         """
         Create a sub-path ending at the specified destination node, recalculating the cost.
@@ -172,7 +172,7 @@ class Path:
         Args:
             dst_node: The node at which to truncate the path.
             graph: The graph containing edge attributes.
-            cost_attr: The edge attribute name to use for cost (default is "metric").
+            cost_attr: The edge attribute name to use for cost (default is "cost").
 
         Returns:
             A new Path instance representing the sub-path from the original source to `dst_node`.

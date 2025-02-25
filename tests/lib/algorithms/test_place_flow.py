@@ -41,39 +41,39 @@ class TestPlaceFlowOnGraph:
                 "B",
                 0,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "flow": 4.0,
                     "flows": {("A", "C", "TEST"): 4.0},
                 },
             ),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            1: ("B", "A", 1, {"cost": 1, "capacity": 5, "flow": 0, "flows": {}}),
             2: (
                 "B",
                 "C",
                 2,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "TEST"): 1.0},
                 },
             ),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            3: ("C", "B", 3, {"cost": 1, "capacity": 1, "flow": 0, "flows": {}}),
             4: (
                 "B",
                 "C",
                 4,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 3,
                     "flow": 3.0,
                     "flows": {("A", "C", "TEST"): 3.0},
                 },
             ),
-            5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
-            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
-            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            5: ("C", "B", 5, {"cost": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
         assert flow_placement_meta.nodes == {"A", "C", "B"}
         assert flow_placement_meta.edges == {0, 2, 4}
@@ -110,10 +110,10 @@ class TestPlaceFlowOnGraph:
                     "capacity": 5,
                     "flow": 2.0,
                     "flows": {("A", "C", "TEST"): 2.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "metric": 1}),
+            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "cost": 1}),
             2: (
                 "B",
                 "C",
@@ -122,10 +122,10 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "TEST"): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
+            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
             4: (
                 "B",
                 "C",
@@ -134,12 +134,12 @@ class TestPlaceFlowOnGraph:
                     "capacity": 3,
                     "flow": 1.0,
                     "flows": {("A", "C", "TEST"): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "metric": 1}),
-            6: ("B", "C", 6, {"capacity": 7, "flow": 0, "flows": {}, "metric": 2}),
-            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "metric": 2}),
+            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 1}),
+            6: ("B", "C", 6, {"capacity": 7, "flow": 0, "flows": {}, "cost": 2}),
+            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "cost": 2}),
         }
         assert flow_placement_meta.nodes == {"A", "C", "B"}
         assert flow_placement_meta.edges == {0, 2, 4}
@@ -187,39 +187,39 @@ class TestPlaceFlowOnGraph:
                 "B",
                 0,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "flow": 4.0,
                     "flows": {("A", "C", None): 4.0},
                 },
             ),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            1: ("B", "A", 1, {"cost": 1, "capacity": 5, "flow": 0, "flows": {}}),
             2: (
                 "B",
                 "C",
                 2,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
                 },
             ),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            3: ("C", "B", 3, {"cost": 1, "capacity": 1, "flow": 0, "flows": {}}),
             4: (
                 "B",
                 "C",
                 4,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 3,
                     "flow": 3.0,
                     "flows": {("A", "C", None): 3.0},
                 },
             ),
-            5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
-            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
-            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            5: ("C", "B", 5, {"cost": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_graph3_proportional_1(self, graph3):
@@ -254,7 +254,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -265,7 +265,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 4,
                     "flow": 2.0,
                     "flows": {("A", "C", None): 2.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -276,7 +276,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 6,
                     "flow": 3.0,
                     "flows": {("A", "C", None): 3.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             3: (
@@ -287,7 +287,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             4: (
@@ -298,7 +298,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "C", None): 2.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             5: (
@@ -309,10 +309,10 @@ class TestPlaceFlowOnGraph:
                     "capacity": 3,
                     "flow": 3.0,
                     "flows": {("A", "C", None): 3.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            6: ("C", "D", 6, {"capacity": 3, "flow": 0, "flows": {}, "metric": 2}),
+            6: ("C", "D", 6, {"capacity": 3, "flow": 0, "flows": {}, "cost": 2}),
             7: (
                 "A",
                 "E",
@@ -321,7 +321,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 5,
                     "flow": 4.0,
                     "flows": {("A", "C", None): 4.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             8: (
@@ -332,12 +332,12 @@ class TestPlaceFlowOnGraph:
                     "capacity": 4,
                     "flow": 4.0,
                     "flows": {("A", "C", None): 4.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            9: ("A", "D", 9, {"capacity": 2, "flow": 0, "flows": {}, "metric": 4}),
-            10: ("C", "F", 10, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
-            11: ("F", "D", 11, {"capacity": 2, "flow": 0, "flows": {}, "metric": 1}),
+            9: ("A", "D", 9, {"capacity": 2, "flow": 0, "flows": {}, "cost": 4}),
+            10: ("C", "F", 10, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
+            11: ("F", "D", 11, {"capacity": 2, "flow": 0, "flows": {}, "cost": 1}),
         }
         assert flow_placement_meta.nodes == {"A", "E", "B", "C"}
         assert flow_placement_meta.edges == {0, 1, 2, 3, 4, 5, 7, 8}
@@ -374,7 +374,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 0.6666666666666666,
                     "flows": {("A", "D", None): 0.6666666666666666},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -385,7 +385,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 4,
                     "flow": 1.3333333333333333,
                     "flows": {("A", "D", None): 1.3333333333333333},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -396,7 +396,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 6,
                     "flow": 2.0,
                     "flows": {("A", "D", None): 2.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             3: (
@@ -407,7 +407,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 0.6666666666666666,
                     "flows": {("A", "D", None): 0.6666666666666666},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             4: (
@@ -418,7 +418,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 1.3333333333333333,
                     "flows": {("A", "D", None): 1.3333333333333333},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             5: (
@@ -429,7 +429,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 3,
                     "flow": 2.0,
                     "flows": {("A", "D", None): 2.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             6: (
@@ -440,11 +440,11 @@ class TestPlaceFlowOnGraph:
                     "capacity": 3,
                     "flow": 3.0,
                     "flows": {("A", "D", None): 3.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
-            7: ("A", "E", 7, {"capacity": 5, "flow": 0, "flows": {}, "metric": 1}),
-            8: ("E", "C", 8, {"capacity": 4, "flow": 0, "flows": {}, "metric": 1}),
+            7: ("A", "E", 7, {"capacity": 5, "flow": 0, "flows": {}, "cost": 1}),
+            8: ("E", "C", 8, {"capacity": 4, "flow": 0, "flows": {}, "cost": 1}),
             9: (
                 "A",
                 "D",
@@ -453,7 +453,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "D", None): 2.0},
-                    "metric": 4,
+                    "cost": 4,
                 },
             ),
             10: (
@@ -464,7 +464,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "D", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             11: (
@@ -475,7 +475,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 2,
                     "flow": 1.0,
                     "flows": {("A", "D", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
         }
@@ -508,39 +508,39 @@ class TestPlaceFlowOnGraph:
                 "B",
                 0,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "flow": 2.0,
                     "flows": {("A", "C", None): 2.0},
                 },
             ),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            1: ("B", "A", 1, {"cost": 1, "capacity": 5, "flow": 0, "flows": {}}),
             2: (
                 "B",
                 "C",
                 2,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
                 },
             ),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            3: ("C", "B", 3, {"cost": 1, "capacity": 1, "flow": 0, "flows": {}}),
             4: (
                 "B",
                 "C",
                 4,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 3,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
                 },
             ),
-            5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
-            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
-            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            5: ("C", "B", 5, {"cost": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_line1_balanced_2(self, line1):
@@ -586,39 +586,39 @@ class TestPlaceFlowOnGraph:
                 "B",
                 0,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "flow": 2.0,
                     "flows": {("A", "C", None): 2.0},
                 },
             ),
-            1: ("B", "A", 1, {"metric": 1, "capacity": 5, "flow": 0, "flows": {}}),
+            1: ("B", "A", 1, {"cost": 1, "capacity": 5, "flow": 0, "flows": {}}),
             2: (
                 "B",
                 "C",
                 2,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
                 },
             ),
-            3: ("C", "B", 3, {"metric": 1, "capacity": 1, "flow": 0, "flows": {}}),
+            3: ("C", "B", 3, {"cost": 1, "capacity": 1, "flow": 0, "flows": {}}),
             4: (
                 "B",
                 "C",
                 4,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 3,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
                 },
             ),
-            5: ("C", "B", 5, {"metric": 1, "capacity": 3, "flow": 0, "flows": {}}),
-            6: ("B", "C", 6, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
-            7: ("C", "B", 7, {"metric": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            5: ("C", "B", 5, {"cost": 1, "capacity": 3, "flow": 0, "flows": {}}),
+            6: ("B", "C", 6, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
+            7: ("C", "B", 7, {"cost": 2, "capacity": 7, "flow": 0, "flows": {}}),
         }
 
     def test_place_flow_on_graph_graph4_balanced(self, graph4):
@@ -655,7 +655,7 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -666,13 +666,13 @@ class TestPlaceFlowOnGraph:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", None): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            2: ("A", "B1", 2, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
-            3: ("B1", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
-            4: ("A", "B2", 4, {"capacity": 3, "flow": 0, "flows": {}, "metric": 3}),
-            5: ("B2", "C", 5, {"capacity": 3, "flow": 0, "flows": {}, "metric": 3}),
+            2: ("A", "B1", 2, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
+            3: ("B1", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
+            4: ("A", "B2", 4, {"capacity": 3, "flow": 0, "flows": {}, "cost": 3}),
+            5: ("B2", "C", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 3}),
         }
 
 
@@ -712,12 +712,12 @@ class TestRemoveFlowFromGraph:
 
         # Or check exact dictionary:
         assert r.get_edges() == {
-            0: ("A", "B", 0, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
-            1: ("B", "C", 1, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
-            2: ("A", "B1", 2, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
-            3: ("B1", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
-            4: ("A", "B2", 4, {"capacity": 3, "flow": 0, "flows": {}, "metric": 3}),
-            5: ("B2", "C", 5, {"capacity": 3, "flow": 0, "flows": {}, "metric": 3}),
+            0: ("A", "B", 0, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
+            1: ("B", "C", 1, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
+            2: ("A", "B1", 2, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
+            3: ("B1", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
+            4: ("A", "B2", 4, {"capacity": 3, "flow": 0, "flows": {}, "cost": 3}),
+            5: ("B2", "C", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 3}),
         }
 
     def test_remove_specific_flow(self, graph4):

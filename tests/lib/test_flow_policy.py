@@ -99,7 +99,7 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -110,11 +110,11 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            2: ("A", "D", 2, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
-            3: ("D", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "metric": 2}),
+            2: ("A", "D", 2, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
+            3: ("D", "C", 3, {"capacity": 2, "flow": 0, "flows": {}, "cost": 2}),
         }
 
     def test_flow_policy_place_demand_2(self, square1):
@@ -135,7 +135,7 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -146,7 +146,7 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -157,7 +157,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 1): 1.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
             3: (
@@ -168,7 +168,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 1): 1.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
         }
@@ -188,8 +188,8 @@ class TestFlowPolicy:
         assert placed_flow == 2
         assert remaining_flow == 0
         assert r.get_edges() == {
-            0: ("A", "B", 0, {"capacity": 1, "flow": 0.0, "flows": {}, "metric": 1}),
-            1: ("B", "C", 1, {"capacity": 1, "flow": 0.0, "flows": {}, "metric": 1}),
+            0: ("A", "B", 0, {"capacity": 1, "flow": 0.0, "flows": {}, "cost": 1}),
+            1: ("B", "C", 1, {"capacity": 1, "flow": 0.0, "flows": {}, "cost": 1}),
             2: (
                 "A",
                 "D",
@@ -198,7 +198,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "C", "test_flow", 0): 2.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
             3: (
@@ -209,7 +209,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "C", "test_flow", 0): 2.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
         }
@@ -236,7 +236,7 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -247,7 +247,7 @@ class TestFlowPolicy:
                     "capacity": 1,
                     "flow": 1.0,
                     "flows": {("A", "C", "test_flow", 0): 1.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -258,7 +258,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "C", "test_flow", 1): 2.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
             3: (
@@ -269,7 +269,7 @@ class TestFlowPolicy:
                     "capacity": 2,
                     "flow": 2.0,
                     "flows": {("A", "C", "test_flow", 1): 2.0},
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
         }
@@ -296,7 +296,7 @@ class TestFlowPolicy:
                     "capacity": 100,
                     "flow": 100.0,
                     "flows": {("A", "C", "test_flow", 0): 100.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -310,7 +310,7 @@ class TestFlowPolicy:
                         ("A", "C", "test_flow", 0): 100.0,
                         ("A", "C", "test_flow", 2): 25.0,
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -324,7 +324,7 @@ class TestFlowPolicy:
                         ("A", "C", "test_flow", 1): 50.0,
                         ("A", "C", "test_flow", 2): 25.0,
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             3: (
@@ -335,10 +335,10 @@ class TestFlowPolicy:
                     "capacity": 50,
                     "flow": 50.0,
                     "flows": {("A", "C", "test_flow", 1): 50.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            4: ("B", "D", 4, {"capacity": 50, "flow": 0, "flows": {}, "metric": 1}),
+            4: ("B", "D", 4, {"capacity": 50, "flow": 0, "flows": {}, "cost": 1}),
             5: (
                 "D",
                 "B",
@@ -347,7 +347,7 @@ class TestFlowPolicy:
                     "capacity": 50,
                     "flow": 25.0,
                     "flows": {("A", "C", "test_flow", 2): 25.0},
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
         }
@@ -389,12 +389,12 @@ class TestFlowPolicy:
                             flow_id=1,
                         ): 2.5,
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "metric": 1}),
-            2: ("B", "C", 2, {"capacity": 1, "flow": 0.0, "flows": {}, "metric": 1}),
-            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
+            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "cost": 1}),
+            2: ("B", "C", 2, {"capacity": 1, "flow": 0.0, "flows": {}, "cost": 1}),
+            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
             4: (
                 "B",
                 "C",
@@ -410,10 +410,10 @@ class TestFlowPolicy:
                             flow_id=1,
                         ): 2.5
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "metric": 1}),
+            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 1}),
             6: (
                 "B",
                 "C",
@@ -429,10 +429,10 @@ class TestFlowPolicy:
                             flow_id=0,
                         ): 2.5
                     },
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
-            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "metric": 2}),
+            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "cost": 2}),
         }
 
     def test_flow_policy_place_demand_7(self, square3):
@@ -472,7 +472,7 @@ class TestFlowPolicy:
                             flow_id=2,
                         ): 49.99999999999999,
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             1: (
@@ -496,7 +496,7 @@ class TestFlowPolicy:
                             flow_id=2,
                         ): 49.99999999999999,
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             2: (
@@ -514,7 +514,7 @@ class TestFlowPolicy:
                             flow_id=1,
                         ): 50.0
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
             3: (
@@ -532,11 +532,11 @@ class TestFlowPolicy:
                             flow_id=1,
                         ): 50.0
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            4: ("B", "D", 4, {"capacity": 50, "flow": 0, "flows": {}, "metric": 1}),
-            5: ("D", "B", 5, {"capacity": 50, "flow": 0.0, "flows": {}, "metric": 1}),
+            4: ("B", "D", 4, {"capacity": 50, "flow": 0, "flows": {}, "cost": 1}),
+            5: ("D", "B", 5, {"capacity": 50, "flow": 0.0, "flows": {}, "cost": 1}),
         }
 
     def test_flow_policy_place_demand_8(self, line1):

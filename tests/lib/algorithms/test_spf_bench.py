@@ -17,7 +17,7 @@ def create_complex_graph(num_nodes: int, num_edges: int):
                    For each iteration, we add 4 edges, so we iterate num_edges/4 times.
     Returns:
         (node_labels, edges) where edges is a list of tuples:
-            (src, dst, metric, capacity).
+            (src, dst, cost, capacity).
     """
     node_labels = [str(i) for i in range(num_nodes)]
     edges = []
@@ -28,11 +28,11 @@ def create_complex_graph(num_nodes: int, num_edges: int):
         if src == tgt:
             #  skip self-loops
             continue
-        # Add four parallel edges from src->tgt with random metric/capacity
+        # Add four parallel edges from src->tgt with random cost/capacity
         for _ in range(4):
-            metric = random.randint(1, 10)
+            cost = random.randint(1, 10)
             cap = random.randint(1, 5)
-            edges.append((src, tgt, metric, cap))
+            edges.append((src, tgt, cost, cap))
         edges_added += 1
     return node_labels, edges
 
@@ -58,11 +58,11 @@ def graph1():
         gnx.add_node(node)
 
     # Add edges to both graphs
-    for src, dst, metric, cap in edges:
+    for src, dst, cost, cap in edges:
         # Our custom graph
-        g.add_edge(src, dst, metric=metric, capacity=cap)
+        g.add_edge(src, dst, cost=cost, capacity=cap)
         # NetworkX
-        gnx.add_edge(src, dst, metric=metric, capacity=cap)
+        gnx.add_edge(src, dst, cost=cost, capacity=cap)
 
     return g, gnx
 
@@ -84,6 +84,6 @@ def test_bench_networkx_spf_1(benchmark, graph1):
     """
 
     def run_nx_dijkstra():
-        nx.dijkstra_predecessor_and_distance(graph1[1], "0", weight="metric")
+        nx.dijkstra_predecessor_and_distance(graph1[1], "0", weight="cost")
 
     benchmark(run_nx_dijkstra)

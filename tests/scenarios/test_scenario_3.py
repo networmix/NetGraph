@@ -6,16 +6,17 @@ from ngraph.scenario import Scenario
 from ngraph.failure_policy import FailurePolicy
 
 
-def test_scenario_3_build_graph() -> None:
+def test_scenario_3_build_graph_and_capacity_probe() -> None:
     """
-    Integration test that verifies we can parse scenario_3.yaml,
-    run the BuildGraph step, and produce a valid StrictMultiDiGraph.
+    Integration test that verifies we can parse scenario_3.yaml, run the workflow
+    (BuildGraph + CapacityProbe), and check results.
 
     Checks:
       - The expected number of expanded nodes and links (two interconnected 3-tier CLOS fabrics).
-      - The presence of key expanded nodes.
+      - Presence of key expanded nodes.
       - The traffic demands are empty in this scenario.
       - The failure policy is empty by default.
+      - The max flow from my_clos1/b -> my_clos2/b matches the expected capacity.
     """
     # 1) Load the YAML file
     scenario_path = Path(__file__).parent / "scenario_3.yaml"
@@ -24,7 +25,7 @@ def test_scenario_3_build_graph() -> None:
     # 2) Parse into a Scenario object (this calls blueprint expansion)
     scenario = Scenario.from_yaml(yaml_text)
 
-    # 3) Run the scenario's workflow (in this YAML, there's only "BuildGraph")
+    # 3) Run the scenario's workflow (BuildGraph then CapacityProbe)
     scenario.run()
 
     # 4) Retrieve the graph built by BuildGraph
@@ -34,8 +35,7 @@ def test_scenario_3_build_graph() -> None:
     ), "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
 
     # 5) Verify total node count
-    #    Each 3-tier CLOS instance has 32 nodes (2 sub-bricks of 8 nodes each + 16 spine),
-    #    so with 2 instances => 64 nodes total.
+    #    Each 3-tier CLOS instance has 32 nodes -> 2 instances => 64 total.
     expected_nodes = 64
     actual_nodes = len(graph.nodes)
     assert (
@@ -43,10 +43,9 @@ def test_scenario_3_build_graph() -> None:
     ), f"Expected {expected_nodes} nodes, found {actual_nodes}"
 
     # 6) Verify total physical links before direction is applied to Nx
-    #    Each 3-tier CLOS has 64 links internally. With 2 instances => 128 links,
-    #    plus 16 links connecting my_clos1/spine to my_clos2/spine (one_to_one).
-    #    => total physical links = 128 + 16 = 144
-    #    => each link becomes 2 directed edges in MultiDiGraph => 288 edges
+    #    Each 3-tier CLOS has 64 links internally -> 2 instances => 128
+    #    Plus 16 links connecting my_clos1/spine -> my_clos2/spine => 144 total physical links
+    #    Each link => 2 directed edges => 288 total edges in MultiDiGraph
     expected_links = 144
     expected_nx_edges = expected_links * 2
     actual_edges = len(graph.edges)
@@ -62,10 +61,22 @@ def test_scenario_3_build_graph() -> None:
     assert len(policy.rules) == 0, "Expected an empty failure policy."
 
     # 9) Check presence of a few key expanded nodes
-    #    For example: a t1 node in my_clos1/b1 and a spine node in my_clos2.
     assert (
         "my_clos1/b1/t1/t1-1" in scenario.network.nodes
     ), "Missing expected node 'my_clos1/b1/t1/t1-1' in expanded blueprint."
     assert (
         "my_clos2/spine/t3-16" in scenario.network.nodes
     ), "Missing expected spine node 'my_clos2/spine/t3-16' in expanded blueprint."
+
+    # 10) Retrieve max flow result from the CapacityProbe step
+    #     The probe is configured with source_path="my_clos1/b" and sink_path="my_clos2/b".
+    flow_result_label = "max_flow:[my_clos1/b -> my_clos2/b]"
+    flow_value = scenario.results.get("capacity_probe", flow_result_label)
+
+    # 11) Assert the expected max flow value
+    #     The bottleneck is the 16 spine-to-spine links of capacity=2 => total 32.
+    expected_flow = 32.0
+    assert flow_value == expected_flow, (
+        f"Expected max flow of {expected_flow}, got {flow_value}. "
+        "Check blueprint or link capacities if this fails."
+    )

@@ -14,18 +14,18 @@ def create_sample_graph(with_attrs: bool = False) -> StrictMultiDiGraph:
 
     if with_attrs:
         # Add edges with attributes.
-        graph.add_edge(1, 2, 1, metric=1, capacity=1)
-        graph.add_edge(1, 2, 2, metric=2, capacity=2)
-        graph.add_edge(1, 2, 3, metric=3, capacity=3)
-        graph.add_edge(2, 1, 4, metric=4, capacity=4)
-        graph.add_edge(2, 1, 5, metric=5, capacity=5)
-        graph.add_edge(2, 1, 6, metric=6, capacity=6)
-        graph.add_edge(1, 1, 7, metric=7, capacity=7)
-        graph.add_edge(1, 1, 8, metric=8, capacity=8)
-        graph.add_edge(1, 1, 9, metric=9, capacity=9)
-        graph.add_edge(2, 2, 10, metric=10, capacity=10)
-        graph.add_edge(2, 2, 11, metric=11, capacity=11)
-        graph.add_edge(2, 2, 12, metric=12, capacity=12)
+        graph.add_edge(1, 2, 1, cost=1, capacity=1)
+        graph.add_edge(1, 2, 2, cost=2, capacity=2)
+        graph.add_edge(1, 2, 3, cost=3, capacity=3)
+        graph.add_edge(2, 1, 4, cost=4, capacity=4)
+        graph.add_edge(2, 1, 5, cost=5, capacity=5)
+        graph.add_edge(2, 1, 6, cost=6, capacity=6)
+        graph.add_edge(1, 1, 7, cost=7, capacity=7)
+        graph.add_edge(1, 1, 8, cost=8, capacity=8)
+        graph.add_edge(1, 1, 9, cost=9, capacity=9)
+        graph.add_edge(2, 2, 10, cost=10, capacity=10)
+        graph.add_edge(2, 2, 11, cost=11, capacity=11)
+        graph.add_edge(2, 2, 12, cost=12, capacity=12)
     else:
         # Add edges without attributes.
         graph.add_edge(1, 2, 1)
@@ -71,68 +71,68 @@ def test_to_digraph_with_edge_func():
     nx_graph = to_digraph(
         graph,
         edge_func=lambda g, u, v, edges: {
-            "metric": min(edge["metric"] for edge in edges.values()),
+            "cost": min(edge["cost"] for edge in edges.values()),
             "capacity": sum(edge["capacity"] for edge in edges.values()),
         },
     )
     assert dict(nx_graph.nodes) == {1: {}, 2: {}}
     expected_edges = {
         (1, 2): {
-            "metric": 1,
+            "cost": 1,
             "capacity": 6,
             "_uv_edges": [
                 (
                     1,
                     2,
                     {
-                        1: {"metric": 1, "capacity": 1},
-                        2: {"metric": 2, "capacity": 2},
-                        3: {"metric": 3, "capacity": 3},
+                        1: {"cost": 1, "capacity": 1},
+                        2: {"cost": 2, "capacity": 2},
+                        3: {"cost": 3, "capacity": 3},
                     },
                 ),
             ],
         },
         (2, 1): {
-            "metric": 4,
+            "cost": 4,
             "capacity": 15,
             "_uv_edges": [
                 (
                     2,
                     1,
                     {
-                        4: {"metric": 4, "capacity": 4},
-                        5: {"metric": 5, "capacity": 5},
-                        6: {"metric": 6, "capacity": 6},
+                        4: {"cost": 4, "capacity": 4},
+                        5: {"cost": 5, "capacity": 5},
+                        6: {"cost": 6, "capacity": 6},
                     },
                 ),
             ],
         },
         (1, 1): {
-            "metric": 7,
+            "cost": 7,
             "capacity": 24,
             "_uv_edges": [
                 (
                     1,
                     1,
                     {
-                        7: {"metric": 7, "capacity": 7},
-                        8: {"metric": 8, "capacity": 8},
-                        9: {"metric": 9, "capacity": 9},
+                        7: {"cost": 7, "capacity": 7},
+                        8: {"cost": 8, "capacity": 8},
+                        9: {"cost": 9, "capacity": 9},
                     },
                 ),
             ],
         },
         (2, 2): {
-            "metric": 10,
+            "cost": 10,
             "capacity": 33,
             "_uv_edges": [
                 (
                     2,
                     2,
                     {
-                        10: {"metric": 10, "capacity": 10},
-                        11: {"metric": 11, "capacity": 11},
-                        12: {"metric": 12, "capacity": 12},
+                        10: {"cost": 10, "capacity": 10},
+                        11: {"cost": 11, "capacity": 11},
+                        12: {"cost": 12, "capacity": 12},
                     },
                 ),
             ],
@@ -211,62 +211,62 @@ def test_to_graph_with_edge_func():
     nx_graph = to_graph(
         graph,
         edge_func=lambda g, u, v, edges: {
-            "metric": min(edge["metric"] for edge in edges.values()),
+            "cost": min(edge["cost"] for edge in edges.values()),
             "capacity": sum(edge["capacity"] for edge in edges.values()),
         },
     )
     assert dict(nx_graph.nodes) == {1: {}, 2: {}}
     expected_edges = {
         (1, 2): {
-            "metric": 4,
+            "cost": 4,
             "capacity": 15,
             "_uv_edges": [
                 (
                     1,
                     2,
                     {
-                        1: {"metric": 1, "capacity": 1},
-                        2: {"metric": 2, "capacity": 2},
-                        3: {"metric": 3, "capacity": 3},
+                        1: {"cost": 1, "capacity": 1},
+                        2: {"cost": 2, "capacity": 2},
+                        3: {"cost": 3, "capacity": 3},
                     },
                 ),
                 (
                     2,
                     1,
                     {
-                        4: {"metric": 4, "capacity": 4},
-                        5: {"metric": 5, "capacity": 5},
-                        6: {"metric": 6, "capacity": 6},
+                        4: {"cost": 4, "capacity": 4},
+                        5: {"cost": 5, "capacity": 5},
+                        6: {"cost": 6, "capacity": 6},
                     },
                 ),
             ],
         },
         (1, 1): {
-            "metric": 7,
+            "cost": 7,
             "capacity": 24,
             "_uv_edges": [
                 (
                     1,
                     1,
                     {
-                        7: {"metric": 7, "capacity": 7},
-                        8: {"metric": 8, "capacity": 8},
-                        9: {"metric": 9, "capacity": 9},
+                        7: {"cost": 7, "capacity": 7},
+                        8: {"cost": 8, "capacity": 8},
+                        9: {"cost": 9, "capacity": 9},
                     },
                 ),
             ],
         },
         (2, 2): {
-            "metric": 10,
+            "cost": 10,
             "capacity": 33,
             "_uv_edges": [
                 (
                     2,
                     2,
                     {
-                        10: {"metric": 10, "capacity": 10},
-                        11: {"metric": 11, "capacity": 11},
-                        12: {"metric": 12, "capacity": 12},
+                        10: {"cost": 10, "capacity": 10},
+                        11: {"cost": 11, "capacity": 11},
+                        12: {"cost": 12, "capacity": 12},
                     },
                 ),
             ],

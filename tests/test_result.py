@@ -52,12 +52,12 @@ def test_overwriting_value():
     Test that storing a new value under an existing step/key pair overwrites the old value.
     """
     results = Results()
-    results.put("Step1", "metric", 10)
-    assert results.get("Step1", "metric") == 10
+    results.put("Step1", "cost", 10)
+    assert results.get("Step1", "cost") == 10
 
     # Overwrite
-    results.put("Step1", "metric", 20)
-    assert results.get("Step1", "metric") == 20
+    results.put("Step1", "cost", 20)
+    assert results.get("Step1", "cost") == 20
 
 
 def test_empty_results():

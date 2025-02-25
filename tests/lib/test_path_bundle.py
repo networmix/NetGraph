@@ -13,12 +13,12 @@ def triangle1():
     g.add_node("A")
     g.add_node("B")
     g.add_node("C")
-    g.add_edge("A", "B", metric=1, capacity=15, key=0)
-    g.add_edge("B", "A", metric=1, capacity=15, key=1)
-    g.add_edge("B", "C", metric=1, capacity=15, key=2)
-    g.add_edge("C", "B", metric=1, capacity=15, key=3)
-    g.add_edge("A", "C", metric=1, capacity=5, key=4)
-    g.add_edge("C", "A", metric=1, capacity=5, key=5)
+    g.add_edge("A", "B", cost=1, capacity=15, key=0)
+    g.add_edge("B", "A", cost=1, capacity=15, key=1)
+    g.add_edge("B", "C", cost=1, capacity=15, key=2)
+    g.add_edge("C", "B", cost=1, capacity=15, key=3)
+    g.add_edge("A", "C", cost=1, capacity=5, key=4)
+    g.add_edge("C", "A", cost=1, capacity=5, key=5)
     return g
 
 

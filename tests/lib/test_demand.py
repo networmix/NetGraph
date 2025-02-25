@@ -79,10 +79,10 @@ class TestDemand:
                             src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 5.0
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "metric": 1}),
+            1: ("B", "A", 1, {"capacity": 5, "flow": 0, "flows": {}, "cost": 1}),
             2: (
                 "B",
                 "C",
@@ -95,10 +95,10 @@ class TestDemand:
                             src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 0.45454545454545453
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "metric": 1}),
+            3: ("C", "B", 3, {"capacity": 1, "flow": 0, "flows": {}, "cost": 1}),
             4: (
                 "B",
                 "C",
@@ -111,10 +111,10 @@ class TestDemand:
                             src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 1.3636363636363635
                     },
-                    "metric": 1,
+                    "cost": 1,
                 },
             ),
-            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "metric": 1}),
+            5: ("C", "B", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 1}),
             6: (
                 "B",
                 "C",
@@ -127,10 +127,10 @@ class TestDemand:
                             src_node="A", dst_node="C", flow_class=99, flow_id=0
                         ): 3.1818181818181817
                     },
-                    "metric": 2,
+                    "cost": 2,
                 },
             ),
-            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "metric": 2}),
+            7: ("C", "B", 7, {"capacity": 7, "flow": 0, "flows": {}, "cost": 2}),
         }
         assert r.get_edges() == expected_edges
 
@@ -201,7 +201,7 @@ class TestDemand:
                 "B",
                 0,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 15,
                     "label": "1",
                     "flow": 15.0,
@@ -220,7 +220,7 @@ class TestDemand:
                 "A",
                 1,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 15,
                     "label": "1",
                     "flow": 15.0,
@@ -239,7 +239,7 @@ class TestDemand:
                 "C",
                 2,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 15,
                     "label": "2",
                     "flow": 15.0,
@@ -258,7 +258,7 @@ class TestDemand:
                 "B",
                 3,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 15,
                     "label": "2",
                     "flow": 15.0,
@@ -277,7 +277,7 @@ class TestDemand:
                 "C",
                 4,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "label": "3",
                     "flow": 5.0,
@@ -293,7 +293,7 @@ class TestDemand:
                 "A",
                 5,
                 {
-                    "metric": 1,
+                    "cost": 1,
                     "capacity": 5,
                     "label": "3",
                     "flow": 5.0,

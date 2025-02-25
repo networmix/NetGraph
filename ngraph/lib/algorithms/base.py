@@ -40,18 +40,18 @@ class EdgeSelect(IntEnum):
     for path-finding between a node and its neighbor(s).
     """
 
-    #: Return all edges matching the minimum metric among the candidate edges.
+    #: Return all edges matching the minimum cost among the candidate edges.
     ALL_MIN_COST = 1
-    #: Return all edges matching the minimum metric among edges with remaining capacity.
+    #: Return all edges matching the minimum cost among edges with remaining capacity.
     ALL_MIN_COST_WITH_CAP_REMAINING = 2
-    #: Return all edges that have remaining capacity, ignoring metric except for returning min_cost.
+    #: Return all edges that have remaining capacity, ignoring cost except for returning min_cost.
     ALL_ANY_COST_WITH_CAP_REMAINING = 3
-    #: Return exactly one edge (the single lowest metric).
+    #: Return exactly one edge (the single lowest cost).
     SINGLE_MIN_COST = 4
-    #: Return exactly one edge, the lowest-metric edge with remaining capacity.
+    #: Return exactly one edge, the lowest-cost edge with remaining capacity.
     SINGLE_MIN_COST_WITH_CAP_REMAINING = 5
-    #: Return exactly one edge factoring both metric and load:
-    #: cost = (metric * 100) + round(flow / capacity * 10).
+    #: Return exactly one edge factoring both cost and load:
+    #: cost = (cost * 100) + round(flow / capacity * 10).
     SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED = 6
     #: Use a user-defined function for edge selection logic.
     USER_DEFINED = 99

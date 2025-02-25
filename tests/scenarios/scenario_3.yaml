@@ -13,7 +13,7 @@ blueprints:
         target: /t2
         pattern: mesh
         link_params:
-          capacity: 1
+          capacity: 2
           cost: 1
 
   3tier_clos:
@@ -31,13 +31,13 @@ blueprints:
         target: spine
         pattern: one_to_one
         link_params:
-          capacity: 1
+          capacity: 2
           cost: 1
       - source: b2/t2
         target: spine
         pattern: one_to_one
         link_params:
-          capacity: 1
+          capacity: 2
           cost: 1
 network:
   name: "3tier_clos_network"
@@ -55,10 +55,15 @@ network:
       target: my_clos2/spine
       pattern: one_to_one
       link_params:
-        capacity: 1
+        capacity: 2
         cost: 1
 
 
 workflow:
   - step_type: BuildGraph
     name: build_graph
+  - step_type: CapacityProbe
+    name: capacity_probe
+    source_path: my_clos1/b
+    sink_path: my_clos2/b
+    shortest_path: True
