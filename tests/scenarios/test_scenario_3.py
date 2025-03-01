@@ -69,6 +69,7 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     ), "Missing expected node 'my_clos2/spine/t3-16' in expanded blueprint."
 
     # 10) The capacity probe step computed forward and reverse flows in 'combine' mode
+    # with PROPORTIONAL flow placement.
     flow_result_label_fwd = "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
     flow_result_label_rev = "max_flow:[my_clos2/b.*/t1 -> my_clos1/b.*/t1]"
 
@@ -80,7 +81,31 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     # 11) Assert the expected flows
     #     The main bottleneck is the 16 spine-to-spine links of capacity=2 => total 32
     #     (same in both forward and reverse).
-    expected_flow = 32.0
+    #     However, one link is overriden to capacity=1, so, with PROPORTIONAL flow placement,
+    #     the max flow is 31.
+    expected_flow = 31.0
+    assert forward_flow == expected_flow, (
+        f"Expected forward max flow of {expected_flow}, got {forward_flow}. "
+        "Check blueprint or link capacities if this fails."
+    )
+    assert reverse_flow == expected_flow, (
+        f"Expected reverse max flow of {expected_flow}, got {reverse_flow}. "
+        "Check blueprint or link capacities if this fails."
+    )
+
+    # 12) The capacity probe step computed with EQUAL_BALANCED flow placement
+
+    # Retrieve the forward flow
+    forward_flow = scenario.results.get("capacity_probe2", flow_result_label_fwd)
+    # Retrieve the reverse flow
+    reverse_flow = scenario.results.get("capacity_probe2", flow_result_label_rev)
+
+    # 13) Assert the expected flows
+    #     The main bottleneck is the 16 spine-to-spine links of capacity=2 => total 32
+    #     (same in both forward and reverse).
+    #     However, one link is overriden to capacity=1, so, with EQUAL_BALANCED flow placement,
+    #     the max flow is 16.
+    expected_flow = 16.0
     assert forward_flow == expected_flow, (
         f"Expected forward max flow of {expected_flow}, got {forward_flow}. "
         "Check blueprint or link capacities if this fails."

@@ -1,11 +1,7 @@
 from __future__ import annotations
-from typing import (
-    Hashable,
-    NamedTuple,
-    Optional,
-    Set,
-    Tuple,
-)
+
+from typing import Hashable, NamedTuple, Optional, Set, Tuple
+
 from ngraph.lib.algorithms.base import MIN_FLOW
 from ngraph.lib.algorithms.place_flow import (
     FlowPlacement,
@@ -21,10 +17,10 @@ class FlowIndex(NamedTuple):
     Describes a unique identifier for a Flow in the network.
 
     Attributes:
-        src_node: The source node of the flow.
-        dst_node: The destination node of the flow.
-        flow_class: An integer representing the 'class' of this flow (e.g. a traffic class).
-        flow_id: A unique integer ID for this flow.
+        src_node (NodeID): The source node of the flow.
+        dst_node (NodeID): The destination node of the flow.
+        flow_class (int): Integer representing the 'class' of this flow (e.g., traffic class).
+        flow_id (int): A unique integer ID for this flow.
     """
 
     src_node: NodeID
@@ -54,26 +50,30 @@ class Flow:
         Initialize a Flow object.
 
         Args:
-            path_bundle: A `PathBundle` representing the set of paths this flow will use.
-            flow_index: A unique identifier (can be any hashable) that tags this flow
-                in the network (e.g. an MPLS label, a tuple of (src, dst, class, id), etc.).
-            excluded_edges: An optional set of edges to exclude from consideration.
-            excluded_nodes: An optional set of nodes to exclude from consideration.
+            path_bundle (PathBundle): The set of paths this flow uses.
+            flow_index (Hashable): A unique identifier for this flow (e.g., MPLS label, tuple, etc.).
+            excluded_edges (Optional[Set[EdgeID]]): Edges to exclude from usage.
+            excluded_nodes (Optional[Set[NodeID]]): Nodes to exclude from usage.
         """
         self.path_bundle: PathBundle = path_bundle
         self.flow_index: Hashable = flow_index
         self.excluded_edges: Set[EdgeID] = excluded_edges or set()
         self.excluded_nodes: Set[NodeID] = excluded_nodes or set()
 
-        # Store convenience references for the Flow's endpoints
+        # Convenience references for flow endpoints
         self.src_node: NodeID = path_bundle.src_node
         self.dst_node: NodeID = path_bundle.dst_node
 
-        # Track how much flow has been successfully placed so far
+        # Track how much flow has been successfully placed
         self.placed_flow: float = 0.0
 
     def __str__(self) -> str:
-        """String representation of the Flow."""
+        """
+        Returns a string representation of the Flow.
+
+        Returns:
+            str: String representation including flow index and placed flow amount.
+        """
         return f"Flow(flow_index={self.flow_index}, placed_flow={self.placed_flow})"
 
     def place_flow(
@@ -83,22 +83,21 @@ class Flow:
         flow_placement: FlowPlacement,
     ) -> Tuple[float, float]:
         """
-        Attempt to place (or update) this flow on `flow_graph`.
+        Attempt to place (or update) this flow on the given `flow_graph`.
 
         Args:
-            flow_graph: The network graph where flow capacities and usage are tracked.
-            to_place: The amount of flow requested to be placed on this path bundle.
-            flow_placement: Strategy determining how flow is distributed among parallel edges.
+            flow_graph (StrictMultiDiGraph): The network graph tracking capacities and usage.
+            to_place (float): The amount of flow requested to be placed.
+            flow_placement (FlowPlacement): Strategy for distributing flow among equal-cost paths.
 
         Returns:
-            A tuple `(placed_flow, remaining_flow)` where:
-              - `placed_flow` is the amount of flow actually placed on `flow_graph`.
-              - `remaining_flow` is how much of `to_place` could not be placed
-                (due to capacity limits or other constraints).
+            Tuple[float, float]: A tuple of:
+                placed_flow (float): The amount of flow actually placed.
+                remaining_flow (float): The flow that could not be placed.
         """
         placed_flow = 0.0
 
-        # Only place flow if it's above the MIN_FLOW threshold
+        # Only place flow if above the minimum threshold
         if to_place >= MIN_FLOW:
             flow_placement_meta = place_flow_on_graph(
                 flow_graph=flow_graph,
@@ -117,10 +116,10 @@ class Flow:
 
     def remove_flow(self, flow_graph: StrictMultiDiGraph) -> None:
         """
-        Remove this flow's contribution from `flow_graph`.
+        Remove this flow's contribution from the provided `flow_graph`.
 
         Args:
-            flow_graph: The network graph from which this flow's usage should be removed.
+            flow_graph (StrictMultiDiGraph): The network graph from which to remove this flow's usage.
         """
         remove_flow_from_graph(flow_graph, flow_index=self.flow_index)
         self.placed_flow = 0.0

@@ -50,7 +50,7 @@ def place_flow_on_graph(
         pred: A dictionary of node->(adj_node->list_of_edge_IDs) giving path adjacency.
         flow: Requested flow amount; can be infinite.
         flow_index: Identifier for this flow (used to track multiple flows).
-        flow_placement: Strategy for distributing flow among parallel edges.
+        flow_placement: Strategy for distributing flow among parallel equal cost paths.
         capacity_attr: Attribute name on edges for capacity.
         flow_attr: Attribute name on edges/nodes for aggregated flow.
         flows_attr: Attribute name on edges/nodes for per-flow tracking.
