@@ -159,60 +159,62 @@ def test_add_duplicate_node_raises_valueerror():
         network.add_node(node2)
 
 
-def test_select_nodes_by_path():
+def test_select_node_groups_by_path():
     """
-    Tests select_nodes_by_path for exact matches, slash-based prefix matches,
-    and fallback prefix pattern.
+    Tests select_node_groups_by_path for exact matches, slash-based prefix matches,
+    and * prefix pattern, plus capturing groups.
     """
     net = Network()
     # Add some nodes
     net.add_node(Node("SEA/spine/myspine-1"))
-    net.add_node(Node("SEA/leaf/leaf-1"))
+    net.add_node(Node("SEA/spine/myspine-2"))
+    net.add_node(Node("SEA/leaf1/leaf-1"))
+    net.add_node(Node("SEA/leaf1/leaf-2"))
+    net.add_node(Node("SEA/leaf2/leaf-1"))
+    net.add_node(Node("SEA/leaf2/leaf-2"))
     net.add_node(Node("SEA-other"))
     net.add_node(Node("SFO"))
 
     # 1) Exact match => "SFO"
-    nodes = net.select_nodes_by_path("SFO")
-    assert len(nodes) == 1
+    node_groups = net.select_node_groups_by_path("SFO")
+    assert len(node_groups) == 1  # Only 1 group
+    nodes = node_groups["SFO"]
+    assert len(nodes) == 1  # Only 1 node
     assert nodes[0].name == "SFO"
 
-    # 2) Slash prefix => "SEA/spine" matches "SEA/spine/myspine-1"
-    nodes = net.select_nodes_by_path("SEA/spine")
-    assert len(nodes) == 1
-    assert nodes[0].name == "SEA/spine/myspine-1"
+    # 2) Startwith match => "SEA/spine"
+    node_groups = net.select_node_groups_by_path("SEA/spine")
+    assert len(node_groups) == 1  # Only 1 group
+    nodes = node_groups["SEA/spine"]
+    assert len(nodes) == 2  # 2 nodes
+    found = {n.name for n in nodes}
+    assert found == {"SEA/spine/myspine-1", "SEA/spine/myspine-2"}
 
-    # 3) Fallback: "SEA-other" won't be found by slash prefix "SEA/other",
-    #    but if we search "SEA-other", we do an exact match, so we get 1 node
-    nodes = net.select_nodes_by_path("SEA-other")
-    assert len(nodes) == 1
-    assert nodes[0].name == "SEA-other"
-
-    # 4) If we search just "SEA", we match "SEA/spine/myspine-1" and "SEA/leaf/leaf-1"
-    #    by slash prefix, so fallback never triggers, and "SEA-other" is not included.
-    nodes = net.select_nodes_by_path("SEA")
-    found = set(n.name for n in nodes)
+    # 3) * match => "SEA/leaf*"
+    node_groups = net.select_node_groups_by_path("SEA/leaf*")
+    assert len(node_groups) == 1  # Only 1 group
+    nodes = node_groups["SEA/leaf*"]
+    assert len(nodes) == 4  # 4 nodes
+    found = {n.name for n in nodes}
     assert found == {
-        "SEA/spine/myspine-1",
-        "SEA/leaf/leaf-1",
+        "SEA/leaf1/leaf-1",
+        "SEA/leaf1/leaf-2",
+        "SEA/leaf2/leaf-1",
+        "SEA/leaf2/leaf-2",
     }
 
+    # 4) match with capture => "(SEA/leaf\\d)"
+    node_groups = net.select_node_groups_by_path("(SEA/leaf\\d)")
+    assert len(node_groups) == 2  # 2 distinct captures
+    nodes = node_groups["SEA/leaf1"]
+    assert len(nodes) == 2  # 2 nodes
+    found = {n.name for n in nodes}
+    assert found == {"SEA/leaf1/leaf-1", "SEA/leaf1/leaf-2"}
 
-def test_select_nodes_by_path_partial_fallback():
-    """
-    Tests the partial prefix logic if both exact/slash-based and dash-based
-    lookups fail, then partial prefix 'path...' is used.
-    """
-    net = Network()
-    net.add_node(Node("S1"))
-    net.add_node(Node("S2"))
-    net.add_node(Node("SEA-spine"))
-    net.add_node(Node("NOTMATCH"))
-
-    # The path "S" won't match "S" exactly, won't match "S/" or "S-", so it should
-    # return partial matches: "S1", "S2", and "SEA-spine".
-    nodes = net.select_nodes_by_path("S")
-    found = sorted([n.name for n in nodes])
-    assert found == ["S1", "S2", "SEA-spine"]
+    nodes = node_groups["SEA/leaf2"]
+    assert len(nodes) == 2
+    found = {n.name for n in nodes}
+    assert found == {"SEA/leaf2/leaf-1", "SEA/leaf2/leaf-2"}
 
 
 def test_to_strict_multidigraph_add_reverse_true():
@@ -265,8 +267,8 @@ def test_to_strict_multidigraph_add_reverse_false():
     # Only one forward edge should exist
     edges = list(graph.edges(keys=True))
     assert len(edges) == 1
-    assert edges[0][0] == "A"  # source
-    assert edges[0][1] == "B"  # target
+    assert edges[0][0] == "A"
+    assert edges[0][1] == "B"
     assert edges[0][2] == link_ab.id
 
 
@@ -285,14 +287,14 @@ def test_max_flow_simple():
 
     # Max flow from A to C is limited by the smallest capacity (3)
     flow_value = net.max_flow("A", "C")
-    assert flow_value == 3.0
+    assert flow_value == {("A", "C"): 3.0}
 
 
 def test_max_flow_multi_parallel():
     """
     Tests a scenario where two parallel paths can carry flow.
-    A -> B -> C and A -> D -> C, each with capacity 5.
-    The total flow A to C should be 10.
+    A -> B -> C and A -> D -> C, each with capacity=5.
+    The total flow A->C should be 10.
     """
     net = Network()
     net.add_node(Node("A"))
@@ -306,7 +308,7 @@ def test_max_flow_multi_parallel():
     net.add_link(Link("D", "C", capacity=5))
 
     flow_value = net.max_flow("A", "C")
-    assert flow_value == 10.0
+    assert flow_value == {("A", "C"): 10.0}
 
 
 def test_max_flow_no_source():
@@ -319,7 +321,7 @@ def test_max_flow_no_source():
     net.add_node(Node("C"))
     net.add_link(Link("B", "C", capacity=10))
 
-    with pytest.raises(ValueError, match="No source nodes found matching path 'A'"):
+    with pytest.raises(ValueError, match="No source nodes found matching 'A'"):
         net.max_flow("A", "C")
 
 
@@ -332,5 +334,264 @@ def test_max_flow_no_sink():
     net.add_node(Node("B"))
     net.add_link(Link("A", "B", capacity=10))
 
-    with pytest.raises(ValueError, match="No sink nodes found matching path 'C'"):
+    with pytest.raises(ValueError, match="No sink nodes found matching 'C'"):
         net.max_flow("A", "C")
+
+
+def test_max_flow_combine_empty():
+    """
+    Demonstrate that if the dictionary for sinks is not empty, but
+    all matched sink nodes are disabled, the final combined_snk_nodes is empty
+    => returns 0.0 (rather than raising ValueError).
+
+    We add:
+      - Node("A") enabled => matches ^(A|Z)$ (source)
+      - Node("Z") disabled => also matches ^(A|Z)$
+      So the final combined source label is "A|Z".
+
+      - Node("C") disabled => matches ^(C|Y)$
+      - Node("Y") disabled => matches ^(C|Y)$
+      So the final combined sink label is "C|Y".
+
+    Even though the source group is partially enabled (A),
+    the sink group ends up fully disabled (C, Y).
+    That yields 0.0 flow and the final label is ("A|Z", "C|Y").
+    """
+    net = Network()
+    net.add_node(Node("A"))  # enabled
+    net.add_node(
+        Node("Z", attrs={"disabled": True})
+    )  # disabled => but still recognized by regex
+
+    net.add_node(Node("C", attrs={"disabled": True}))
+    net.add_node(Node("Y", attrs={"disabled": True}))
+
+    flow_vals = net.max_flow("^(A|Z)$", "^(C|Y)$", mode="combine")
+    # Because "C" and "Y" are *all* disabled, the combined sink side is empty => 0.0
+    # However, the label becomes "A|Z" for sources (both matched by pattern),
+    # and "C|Y" for sinks. That matches what the code returns.
+    assert flow_vals == {("A|Z", "C|Y"): 0.0}
+
+
+def test_max_flow_pairwise_some_empty():
+    """
+    In 'pairwise' mode, we want distinct groups to appear in the result,
+    even if one group is fully disabled. Here:
+      - ^(A|B)$ => "A" => Node("A", enabled), "B" => Node("B", enabled)
+      - ^(C|Z)$ => "C" => Node("C", enabled), "Z" => Node("Z", disabled)
+    This yields pairs: (A,C), (A,Z), (B,C), (B,Z).
+    The 'Z' sub-group is fully disabled => flow=0.0 from either A or B to Z.
+    """
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_node(Node("C"))
+    net.add_node(Node("Z", attrs={"disabled": True}))  # needed for the label "C|Z"
+
+    # A->B->C
+    net.add_link(Link("A", "B", capacity=5))
+    net.add_link(Link("B", "C", capacity=3))
+
+    flow_vals = net.max_flow("^(A|B)$", "^(C|Z)$", mode="pairwise")
+    assert flow_vals == {
+        ("A", "C"): 3.0,  # active path
+        ("A", "Z"): 0.0,  # sink is disabled
+        ("B", "C"): 3.0,  # active path
+        ("B", "Z"): 0.0,  # sink is disabled
+    }
+
+
+def test_max_flow_invalid_mode():
+    """
+    Passing an invalid mode should raise ValueError. This covers the
+    else-branch in max_flow that was previously untested.
+    """
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    with pytest.raises(ValueError, match="Invalid mode 'foobar'"):
+        net.max_flow("A", "B", mode="foobar")
+
+
+def test_compute_flow_single_group_empty_source_or_sink():
+    """
+    Directly tests _compute_flow_single_group returning 0.0 if sources or sinks is empty.
+    """
+    net = Network()
+    # Minimal setup
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_link(Link("A", "B", capacity=5))
+
+    flow_val_empty_sources = net._compute_flow_single_group(
+        [], [Node("B")], False, None
+    )
+    assert flow_val_empty_sources == 0.0
+
+    flow_val_empty_sinks = net._compute_flow_single_group([Node("A")], [], False, None)
+    assert flow_val_empty_sinks == 0.0
+
+
+def test_disable_enable_node():
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_link(Link("A", "B"))
+
+    # Initially, nothing is disabled
+    assert not net.nodes["A"].attrs["disabled"]
+    assert not net.nodes["B"].attrs["disabled"]
+
+    net.disable_node("A")
+    assert net.nodes["A"].attrs["disabled"]
+    assert not net.nodes["B"].attrs["disabled"]
+
+    # Re-enable
+    net.enable_node("A")
+    assert not net.nodes["A"].attrs["disabled"]
+
+
+def test_disable_node_does_not_exist():
+    net = Network()
+    with pytest.raises(ValueError, match="Node 'A' does not exist."):
+        net.disable_node("A")
+
+    with pytest.raises(ValueError, match="Node 'B' does not exist."):
+        net.enable_node("B")
+
+
+def test_disable_enable_link():
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    link = Link("A", "B")
+    net.add_link(link)
+
+    assert not net.links[link.id].attrs["disabled"]
+
+    net.disable_link(link.id)
+    assert net.links[link.id].attrs["disabled"]
+
+    net.enable_link(link.id)
+    assert not net.links[link.id].attrs["disabled"]
+
+
+def test_disable_link_does_not_exist():
+    net = Network()
+    with pytest.raises(ValueError, match="Link 'xyz' does not exist."):
+        net.disable_link("xyz")
+    with pytest.raises(ValueError, match="Link 'xyz' does not exist."):
+        net.enable_link("xyz")
+
+
+def test_enable_all_disable_all():
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    link = Link("A", "B")
+    net.add_link(link)
+
+    # Everything enabled by default
+    assert not net.nodes["A"].attrs["disabled"]
+    assert not net.nodes["B"].attrs["disabled"]
+    assert not net.links[link.id].attrs["disabled"]
+
+    # Disable all
+    net.disable_all()
+    assert net.nodes["A"].attrs["disabled"]
+    assert net.nodes["B"].attrs["disabled"]
+    assert net.links[link.id].attrs["disabled"]
+
+    # Enable all
+    net.enable_all()
+    assert not net.nodes["A"].attrs["disabled"]
+    assert not net.nodes["B"].attrs["disabled"]
+    assert not net.links[link.id].attrs["disabled"]
+
+
+def test_to_strict_multidigraph_excludes_disabled():
+    """
+    Disabled nodes or links should not appear in the final StrictMultiDiGraph.
+    """
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    link_ab = Link("A", "B")
+    net.add_link(link_ab)
+
+    # Disable node A
+    net.disable_node("A")
+    graph = net.to_strict_multidigraph()
+    # Node A and link A->B should not appear
+    assert "A" not in graph.nodes
+    # B is still there
+    assert "B" in graph.nodes
+    # No edges in the graph because A is disabled
+    assert len(graph.edges()) == 0
+
+    # Enable node A, disable link
+    net.enable_all()
+    net.disable_link(link_ab.id)
+    graph = net.to_strict_multidigraph()
+    # Nodes A and B appear now, but no edges because the link is disabled
+    assert "A" in graph.nodes
+    assert "B" in graph.nodes
+    assert len(graph.edges()) == 0
+
+
+def test_get_links_between():
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_node(Node("C"))
+
+    link_ab1 = Link("A", "B")
+    link_ab2 = Link("A", "B")
+    link_bc = Link("B", "C")
+    net.add_link(link_ab1)
+    net.add_link(link_ab2)
+    net.add_link(link_bc)
+
+    # Two links from A->B
+    ab_links = net.get_links_between("A", "B")
+    assert len(ab_links) == 2
+    assert set(ab_links) == {link_ab1.id, link_ab2.id}
+
+    # One link from B->C
+    bc_links = net.get_links_between("B", "C")
+    assert len(bc_links) == 1
+    assert bc_links[0] == link_bc.id
+
+    # None from B->A
+    ba_links = net.get_links_between("B", "A")
+    assert ba_links == []
+
+
+def test_find_links():
+    net = Network()
+    net.add_node(Node("srcA"))
+    net.add_node(Node("srcB"))
+    net.add_node(Node("C"))
+    link_a_c = Link("srcA", "C")
+    link_b_c = Link("srcB", "C")
+    net.add_link(link_a_c)
+    net.add_link(link_b_c)
+
+    # No filter => returns all
+    all_links = net.find_links()
+    assert len(all_links) == 2
+    assert set(l.id for l in all_links) == {link_a_c.id, link_b_c.id}
+
+    # Filter by source pattern "srcA"
+    a_links = net.find_links(source_regex="^srcA$")
+    assert len(a_links) == 1
+    assert a_links[0].id == link_a_c.id
+
+    # Filter by target pattern "C"
+    c_links = net.find_links(target_regex="^C$")
+    assert len(c_links) == 2
+
+    # Combined filter that picks only link from "srcB" -> "C"
+    b_links = net.find_links(source_regex="srcB", target_regex="^C$")
+    assert len(b_links) == 1
+    assert b_links[0].id == link_b_c.id

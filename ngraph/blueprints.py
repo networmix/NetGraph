@@ -231,8 +231,11 @@ def _expand_adjacency_pattern(
                       wrap-around if one side is an integer multiple of the other.
                       Also skips self-loops.
     """
-    source_nodes = ctx.network.select_nodes_by_path(source_path)
-    target_nodes = ctx.network.select_nodes_by_path(target_path)
+    source_node_groups = ctx.network.select_node_groups_by_path(source_path)
+    target_node_groups = ctx.network.select_node_groups_by_path(target_path)
+
+    source_nodes = [node for _, nodes in source_node_groups.items() for node in nodes]
+    target_nodes = [node for _, nodes in target_node_groups.items() for node in nodes]
 
     if not source_nodes or not target_nodes:
         return
