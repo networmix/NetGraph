@@ -59,6 +59,14 @@ network:
         capacity: 2
         cost: 1
 
+  link_overrides:
+    # Overriding a link between two spine devices.
+    - source: my_clos1/spine/t3-1$
+      target: my_clos2/spine/t3-1$
+      link_params:
+        capacity: 1
+        cost: 1
+
 workflow:
   - step_type: BuildGraph
     name: build_graph
@@ -70,3 +78,13 @@ workflow:
     mode: combine
     probe_reverse: True
     shortest_path: True
+    flow_placement: PROPORTIONAL
+
+  - step_type: CapacityProbe
+    name: capacity_probe2
+    source_path: my_clos1/b.*/t1
+    sink_path: my_clos2/b.*/t1
+    mode: combine
+    probe_reverse: True
+    shortest_path: True
+    flow_placement: EQUAL_BALANCED

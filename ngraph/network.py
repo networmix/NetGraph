@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import uuid
 import base64
 import re
+import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from ngraph.lib.graph import StrictMultiDiGraph
-from ngraph.lib.algorithms.max_flow import calc_max_flow
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.lib.algorithms.max_flow import calc_max_flow
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
 def new_base64_uuid() -> str:
@@ -32,7 +32,8 @@ class Node:
     Attributes:
         name (str): Unique identifier for the node.
         attrs (Dict[str, Any]): Optional metadata (e.g., type, coordinates, region).
-                                Use attrs["disabled"] = True/False to mark active/inactive.
+                                Set attrs["disabled"] = True to mark the node as inactive.
+                                Defaults to an empty dict.
     """
 
     name: str
@@ -50,7 +51,8 @@ class Link:
         capacity (float): Link capacity (default 1.0).
         cost (float): Link cost (default 1.0).
         attrs (Dict[str, Any]): Optional metadata (e.g., type, distance).
-                                Use attrs["disabled"] = True/False to mark active/inactive.
+                                Set attrs["disabled"] = True to mark link as inactive.
+                                Defaults to an empty dict.
         id (str): Auto-generated unique identifier in the form
                   "{source}|{target}|<base64_uuid>".
     """
@@ -89,7 +91,8 @@ class Network:
         """
         Add a node to the network (keyed by node.name).
 
-        Auto-tags node.attrs["type"] = "node" if not already set.
+        Auto-tags node.attrs["type"] = "node" if not already set,
+        and node.attrs["disabled"] = False if not specified.
 
         Args:
             node: Node to add.
@@ -107,13 +110,14 @@ class Network:
         """
         Add a link to the network (keyed by the link's auto-generated ID).
 
-        Auto-tags link.attrs["type"] = "link" if not already set.
+        Auto-tags link.attrs["type"] = "link" if not already set,
+        and link.attrs["disabled"] = False if not specified.
 
         Args:
             link: Link to add.
 
         Raises:
-            ValueError: If the link's source or target node is missing.
+            ValueError: If the link's source or target node does not exist.
         """
         if link.source not in self.nodes:
             raise ValueError(f"Source node '{link.source}' not found in network.")
@@ -128,30 +132,30 @@ class Network:
         """
         Create a StrictMultiDiGraph representation of this Network.
 
-        Nodes and links with attrs["disabled"] = True are omitted.
+        Nodes and links whose attrs["disabled"] == True are omitted.
 
         Args:
             add_reverse: If True, also add a reverse edge for each link.
 
         Returns:
-            StrictMultiDiGraph: A directed multigraph representation.
+            StrictMultiDiGraph: A directed multigraph representation of the network.
         """
         graph = StrictMultiDiGraph()
 
-        # Add enabled nodes
+        # Identify disabled nodes for quick checks
         disabled_nodes = {
             name
             for name, node in self.nodes.items()
             if node.attrs.get("disabled", False)
         }
+
+        # Add enabled nodes
         for node_name, node in self.nodes.items():
-            if node.attrs.get("disabled", False):
-                continue
-            graph.add_node(node_name, **node.attrs)
+            if not node.attrs.get("disabled", False):
+                graph.add_node(node_name, **node.attrs)
 
         # Add enabled links
         for link_id, link in self.links.items():
-            # Skip if link is disabled or if source/target is disabled
             if link.attrs.get("disabled", False):
                 continue
             if link.source in disabled_nodes or link.target in disabled_nodes:
@@ -185,17 +189,17 @@ class Network:
         """
         Select and group nodes whose names match a given regular expression.
 
-        This method uses re.match(), so the pattern is automatically anchored
-        at the start of the node name. If the pattern includes capturing groups,
+        This method uses re.match(), so the pattern is anchored at the start
+        of the node name. If the pattern includes capturing groups,
         the group label is formed by joining all non-None captures with '|'.
-        If no capturing groups exist, the group label is simply the original
+        If no capturing groups exist, the group label is the original
         pattern string.
 
         Args:
             path: A Python regular expression pattern (e.g., "^foo", "bar(\\d+)", etc.).
 
         Returns:
-            A mapping from group label -> list of nodes that matched the pattern.
+            Dict[str, List[Node]]: A mapping from group label -> list of matching nodes.
         """
         pattern = re.compile(path)
         groups_map: Dict[str, List[Node]] = {}
@@ -222,27 +226,24 @@ class Network:
     ) -> Dict[Tuple[str, str], float]:
         """
         Compute maximum flow between groups of source nodes and sink nodes.
-        Always returns a dictionary of flow values. The dict keys are
-        (source_label, sink_label), and the values are the flow amounts.
+        Returns a dictionary of flow values keyed by (source_label, sink_label).
 
         Args:
             source_path: Regex pattern for selecting source nodes.
             sink_path: Regex pattern for selecting sink nodes.
-            mode: "combine" or "pairwise".
-                - "combine": All matched sources become one combined source group,
-                  all matched sinks become one combined sink group. Returns a dict
-                  with a single entry {("<all_src_labels>", "<all_snk_labels>"): flow_value}.
-                - "pairwise": Compute flow for each (source_group, sink_group) and
-                  return a dict of flows for all pairs.
-            shortest_path: If True, flow is constrained to shortest paths.
-            flow_placement: Determines how parallel edges are handled.
+            mode: Either "combine" or "pairwise".
+                - "combine": Treat all matched sources as one group,
+                  and all matched sinks as one group. Returns a single dict entry.
+                - "pairwise": Compute flow for each (source_group, sink_group) pair.
+            shortest_path: If True, flows are constrained to shortest paths.
+            flow_placement: Determines how parallel equal-cost paths are handled.
 
         Returns:
-            A dictionary mapping (src_label, snk_label) -> flow.
+            Dict[Tuple[str, str], float]: Flow values for each (src_label, snk_label) pair.
 
         Raises:
             ValueError: If no matching source or sink groups are found,
-                        or if mode is invalid.
+                        or if the mode is invalid.
         """
         src_groups = self.select_node_groups_by_path(source_path)
         snk_groups = self.select_node_groups_by_path(sink_path)
@@ -285,9 +286,7 @@ class Network:
             return results
 
         else:
-            raise ValueError(
-                f"Invalid mode '{mode}' for max_flow. Must be 'combine' or 'pairwise'."
-            )
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
 
     def _compute_flow_single_group(
         self,
@@ -297,22 +296,21 @@ class Network:
         flow_placement: FlowPlacement,
     ) -> float:
         """
-        Attach a pseudo-source and pseudo-sink to the given node lists,
+        Attach a pseudo-source and pseudo-sink to the provided node lists,
         then run calc_max_flow. Returns the resulting flow from all
         sources to all sinks as a single float.
-        Ignores disabled nodes.
+
+        Disabled nodes are excluded from flow computation.
 
         Args:
             sources: List of source nodes.
             sinks: List of sink nodes.
-            shortest_path: Whether to use shortest paths only.
-            flow_placement: How parallel edges are handled.
+            shortest_path: If True, use only shortest paths for flow.
+            flow_placement: Strategy for placing flow among parallel equal-cost paths.
 
         Returns:
-            The computed max-flow value, or 0.0 if either list is empty
-            or all are disabled.
+            float: The computed maximum flow value, or 0.0 if there are no active sources or sinks.
         """
-        # Filter out disabled nodes at the source/sink stage
         active_sources = [s for s in sources if not s.attrs.get("disabled", False)]
         active_sinks = [s for s in sinks if not s.attrs.get("disabled", False)]
 
@@ -325,7 +323,6 @@ class Network:
 
         for src_node in active_sources:
             graph.add_edge("source", src_node.name, capacity=float("inf"), cost=0)
-
         for sink_node in active_sinks:
             graph.add_edge(sink_node.name, "sink", capacity=float("inf"), cost=0)
 
@@ -340,10 +337,13 @@ class Network:
 
     def disable_node(self, node_name: str) -> None:
         """
-        Mark a node as disabled. Raises ValueError if the node doesn't exist.
+        Mark a node as disabled.
 
         Args:
             node_name: Name of the node to disable.
+
+        Raises:
+            ValueError: If the specified node does not exist.
         """
         if node_name not in self.nodes:
             raise ValueError(f"Node '{node_name}' does not exist.")
@@ -351,10 +351,13 @@ class Network:
 
     def enable_node(self, node_name: str) -> None:
         """
-        Mark a node as enabled. Raises ValueError if the node doesn't exist.
+        Mark a node as enabled.
 
         Args:
             node_name: Name of the node to enable.
+
+        Raises:
+            ValueError: If the specified node does not exist.
         """
         if node_name not in self.nodes:
             raise ValueError(f"Node '{node_name}' does not exist.")
@@ -362,10 +365,13 @@ class Network:
 
     def disable_link(self, link_id: str) -> None:
         """
-        Mark a link as disabled. Raises ValueError if the link doesn't exist.
+        Mark a link as disabled.
 
         Args:
             link_id: ID of the link to disable.
+
+        Raises:
+            ValueError: If the specified link does not exist.
         """
         if link_id not in self.links:
             raise ValueError(f"Link '{link_id}' does not exist.")
@@ -373,10 +379,13 @@ class Network:
 
     def enable_link(self, link_id: str) -> None:
         """
-        Mark a link as enabled. Raises ValueError if the link doesn't exist.
+        Mark a link as enabled.
 
         Args:
             link_id: ID of the link to enable.
+
+        Raises:
+            ValueError: If the specified link does not exist.
         """
         if link_id not in self.links:
             raise ValueError(f"Link '{link_id}' does not exist.")
@@ -402,15 +411,14 @@ class Network:
 
     def get_links_between(self, source: str, target: str) -> List[str]:
         """
-        Return all link IDs that connect the specified source and target exactly.
+        Retrieve all link IDs that connect the specified source node to the target node.
 
         Args:
             source: Name of the source node.
             target: Name of the target node.
 
         Returns:
-            A list of link IDs for links where (link.source == source
-            and link.target == target).
+            List[str]: All link IDs where (link.source == source and link.target == target).
         """
         matches = []
         for link_id, link in self.links.items():
@@ -424,15 +432,15 @@ class Network:
         target_regex: Optional[str] = None,
     ) -> List[Link]:
         """
-        Search for links based on optional regex patterns for source or target.
+        Search for links using optional regex patterns for source or target node names.
 
         Args:
-            source_regex: Regex pattern to match the link's source node.
-            target_regex: Regex pattern to match the link's target node.
+            source_regex: Regex pattern to match link.source. If None, matches all.
+            target_regex: Regex pattern to match link.target. If None, matches all.
 
         Returns:
-            A list of Link objects matching the criteria. If both patterns
-            are None, returns all links.
+            List[Link]: A list of Link objects that match the provided criteria.
+                        If both patterns are None, returns all links.
         """
         if source_regex:
             src_pat = re.compile(source_regex)

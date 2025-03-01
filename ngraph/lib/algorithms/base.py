@@ -58,7 +58,7 @@ class EdgeSelect(IntEnum):
 
 
 class FlowPlacement(IntEnum):
-    """Ways to distribute flow on parallel edges."""
+    """Ways to distribute flow across parallel equal cost paths."""
 
     PROPORTIONAL = 1  # Flow is split proportional to capacity (Dinic-like approach)
-    EQUAL_BALANCED = 2  # Flow is equally divided among parallel edges
+    EQUAL_BALANCED = 2  # Flow is equally divided among parallel paths of equal cost

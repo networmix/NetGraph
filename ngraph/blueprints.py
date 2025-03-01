@@ -4,7 +4,7 @@ import copy
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from ngraph.network import Network, Node, Link
+from ngraph.network import Link, Network, Node
 
 
 @dataclass(slots=True)
@@ -16,9 +16,11 @@ class Blueprint:
     and a name_template), plus adjacency rules describing how those groups connect.
 
     Attributes:
-        name: Unique identifier of this blueprint.
-        groups: A mapping of group_name -> group definition (e.g. node_count, name_template).
-        adjacency: A list of adjacency dictionaries describing how groups are linked.
+        name (str): Unique identifier of this blueprint.
+        groups (Dict[str, Any]): A mapping of group_name -> group definition
+            (e.g. node_count, name_template).
+        adjacency (List[Dict[str, Any]]): A list of adjacency dictionaries
+            describing how groups are linked.
     """
 
     name: str
@@ -33,8 +35,10 @@ class DSLExpansionContext:
     to be populated during DSL expansion.
 
     Attributes:
-        blueprints: A dictionary of blueprint name -> Blueprint object.
-        network: The Network into which expanded nodes/links will be inserted.
+        blueprints (Dict[str, Blueprint]): A dictionary of blueprint-name ->
+            Blueprint object.
+        network (Network): The Network into which expanded nodes/links
+            will be inserted.
     """
 
     blueprints: Dict[str, Blueprint]
@@ -54,12 +58,14 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
       4) Process any direct node definitions.
       5) Expand adjacency definitions in 'network["adjacency"]'.
       6) Process any direct link definitions.
+      7) Process link overrides.
 
     Args:
-        data: The YAML-parsed dictionary containing optional "blueprints" + "network".
+        data (Dict[str, Any]): The YAML-parsed dictionary containing
+            optional "blueprints" + "network".
 
     Returns:
-        A fully expanded Network object with all nodes and links.
+        Network: A fully expanded Network object with all nodes and links.
     """
     # 1) Parse blueprint definitions
     blueprint_map: Dict[str, Blueprint] = {}
@@ -101,7 +107,29 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     # 6) Process direct link definitions
     _process_direct_links(ctx.network, network_data)
 
+    # 7) Process link overrides
+    _process_link_overrides(ctx.network, network_data)
+
     return net
+
+
+def _process_link_overrides(network: Network, network_data: Dict[str, Any]) -> None:
+    """
+    Processes the 'link_overrides' section of the network DSL, updating
+    existing links with new parameters.
+
+    Args:
+        network (Network): The Network whose links will be updated.
+        network_data (Dict[str, Any]): The overall DSL data for the 'network'.
+            Expected to contain 'link_overrides' as a list of dicts, each with
+            'source', 'target', and 'link_params'.
+    """
+    link_overrides = network_data.get("link_overrides", [])
+    for link_override in link_overrides:
+        source = link_override["source"]
+        target = link_override["target"]
+        link_params = link_override["link_params"]
+        _update_links(network, source, target, link_params)
 
 
 def _expand_group(
@@ -117,11 +145,15 @@ def _expand_group(
       - Another blueprint's subgroups, or
       - A direct node group (node_count, name_template).
 
-    We do *not* skip the subgroup name even inside blueprint expansion, because
-    typically the 'group_name' is "leaf"/"spine" etc., not the blueprint’s name.
-
-    So the final path is always 'parent_path + "/" + group_name' if parent_path is non-empty,
-    otherwise just group_name.
+    Args:
+        ctx (DSLExpansionContext): The context containing all blueprint info
+            and the target Network.
+        parent_path (str): The parent path in the hierarchy.
+        group_name (str): The current group's name.
+        group_def (Dict[str, Any]): The group definition (e.g. {node_count, name_template}
+            or {use_blueprint, parameters, ...}).
+        blueprint_expansion (bool): Indicates whether we are expanding within
+            a blueprint context or not.
     """
     # Construct the effective path by appending group_name if parent_path is non-empty
     if parent_path:
@@ -182,7 +214,14 @@ def _expand_blueprint_adjacency(
     parent_path: str,
 ) -> None:
     """
-    Expands adjacency definitions from within a blueprint, using parent_path as the local root.
+    Expands adjacency definitions from within a blueprint, using parent_path
+    as the local root.
+
+    Args:
+        ctx (DSLExpansionContext): The context object with blueprint info and the network.
+        adj_def (Dict[str, Any]): The adjacency definition inside the blueprint,
+            containing 'source', 'target', 'pattern', etc.
+        parent_path (str): The path that serves as the base for the blueprint's node paths.
     """
     source_rel = adj_def["source"]
     target_rel = adj_def["target"]
@@ -201,6 +240,11 @@ def _expand_adjacency(
 ) -> None:
     """
     Expands a top-level adjacency definition from 'network.adjacency'.
+
+    Args:
+        ctx (DSLExpansionContext): The context containing the target network.
+        adj_def (Dict[str, Any]): The adjacency definition dict, containing
+            'source', 'target', and optional 'pattern', 'link_params'.
     """
     source_path_raw = adj_def["source"]
     target_path_raw = adj_def["target"]
@@ -230,6 +274,13 @@ def _expand_adjacency_pattern(
       * "one_to_one": Pair each source node with exactly one target node, supporting
                       wrap-around if one side is an integer multiple of the other.
                       Also skips self-loops.
+
+    Args:
+        ctx (DSLExpansionContext): The context containing the target network.
+        source_path (str): The path pattern that identifies the source node group(s).
+        target_path (str): The path pattern that identifies the target node group(s).
+        pattern (str): The type of adjacency pattern (e.g., "mesh", "one_to_one").
+        link_params (Dict[str, Any]): Additional link parameters (capacity, cost, attrs).
     """
     source_node_groups = ctx.network.select_node_groups_by_path(source_path)
     target_node_groups = ctx.network.select_node_groups_by_path(target_path)
@@ -281,7 +332,6 @@ def _expand_adjacency_pattern(
             if pair not in dedup_pairs:
                 dedup_pairs.add(pair)
                 _create_link(ctx.network, sn, tn, link_params)
-
     else:
         raise ValueError(f"Unknown adjacency pattern: {pattern}")
 
@@ -291,6 +341,13 @@ def _create_link(
 ) -> None:
     """
     Creates and adds a Link to the network, applying capacity/cost/attrs from link_params.
+
+    Args:
+        net (Network): The network to which the new link is added.
+        source (str): Source node name for the link.
+        target (str): Target node name for the link.
+        link_params (Dict[str, Any]): A dict possibly containing 'capacity', 'cost',
+            and 'attrs' keys.
     """
     capacity = link_params.get("capacity", 1.0)
     cost = link_params.get("cost", 1.0)
@@ -306,15 +363,67 @@ def _create_link(
     net.add_link(link)
 
 
+def _update_links(
+    net: Network,
+    source: str,
+    target: str,
+    link_params: Dict[str, Any],
+    any_direction: bool = True,
+) -> None:
+    """
+    Update all Link objects between nodes matching 'source' and 'target' paths
+    with new parameters.
+
+    Args:
+        net (Network): The network whose links should be updated.
+        source (str): A path pattern identifying source node group(s).
+        target (str): A path pattern identifying target node group(s).
+        link_params (Dict[str, Any]): New parameter values for the links (capacity, cost, attrs).
+        any_direction (bool): If True, also update links in the reverse direction.
+    """
+    source_node_groups = net.select_node_groups_by_path(source)
+    target_node_groups = net.select_node_groups_by_path(target)
+
+    source_nodes = {
+        node.name for _, nodes in source_node_groups.items() for node in nodes
+    }
+    target_nodes = {
+        node.name for _, nodes in target_node_groups.items() for node in nodes
+    }
+
+    for link in net.links.values():
+        if link.source in source_nodes and link.target in target_nodes:
+            link.capacity = link_params.get("capacity", link.capacity)
+            link.cost = link_params.get("cost", link.cost)
+            link.attrs.update(link_params.get("attrs", {}))
+
+        if (
+            any_direction
+            and link.source in target_nodes
+            and link.target in source_nodes
+        ):
+            link.capacity = link_params.get("capacity", link.capacity)
+            link.cost = link_params.get("cost", link.cost)
+            link.attrs.update(link_params.get("attrs", {}))
+
+
 def _apply_parameters(
     subgroup_name: str, subgroup_def: Dict[str, Any], params_overrides: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
     Applies user-provided parameter overrides to a blueprint subgroup.
 
-    E.g.:
-      if 'spine.node_count' = 6 is in params_overrides,
-      we set 'node_count'=6 for the 'spine' subgroup.
+    Example:
+        If 'spine.node_count'=6 is in params_overrides,
+        we set 'node_count'=6 for the 'spine' subgroup.
+
+    Args:
+        subgroup_name (str): Name of the subgroup in the blueprint (e.g. 'spine').
+        subgroup_def (Dict[str, Any]): The default definition of the subgroup.
+        params_overrides (Dict[str, Any]): Overrides in the form of { 'spine.node_count': <val> }.
+
+    Returns:
+        Dict[str, Any]: A copy of subgroup_def with parameter overrides applied.
     """
     out = dict(subgroup_def)
     for key, val in params_overrides.items():
@@ -327,22 +436,39 @@ def _apply_parameters(
 
 def _join_paths(parent_path: str, rel_path: str) -> str:
     """
-    If rel_path starts with '/', interpret that as relative to 'parent_path';
-    otherwise, simply append rel_path to parent_path with '/' if needed.
+    Joins two path segments according to NetGraph's DSL conventions:
+      - If rel_path starts with '/', remove the leading slash and treat it
+        as a relative path appended to parent_path (if present).
+      - Otherwise, simply append rel_path to parent_path if parent_path is non-empty.
+
+    Args:
+        parent_path (str): The existing path prefix.
+        rel_path (str): A relative path that may start with '/'.
+
+    Returns:
+        str: The combined path as a single string.
     """
     if rel_path.startswith("/"):
         rel_path = rel_path[1:]
         if parent_path:
             return f"{parent_path}/{rel_path}"
-        else:
-            return rel_path
+        return rel_path
+
     if parent_path:
         return f"{parent_path}/{rel_path}"
     return rel_path
 
 
 def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
-    """Processes direct node definitions (network_data["nodes"])."""
+    """
+    Processes direct node definitions (network_data["nodes"]) and adds them to the network
+    if they do not already exist.
+
+    Args:
+        net (Network): The network to which nodes are added.
+        network_data (Dict[str, Any]): DSL data containing a "nodes" dict
+            keyed by node name -> attributes.
+    """
     for node_name, node_attrs in network_data.get("nodes", {}).items():
         if node_name not in net.nodes:
             new_node = Node(name=node_name, attrs=node_attrs or {})
@@ -352,7 +478,12 @@ def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
 
 def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
     """
-    Processes direct link definitions (network_data["links"]).
+    Processes direct link definitions (network_data["links"]) and adds them to the network.
+
+    Args:
+        net (Network): The network to which links are added.
+        network_data (Dict[str, Any]): DSL data containing a "links" list,
+            each item must have "source", "target", and optionally "link_params".
     """
     existing_node_names = set(net.nodes.keys())
     for link_info in network_data.get("links", []):
@@ -360,6 +491,8 @@ def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
         target = link_info["target"]
         if source not in existing_node_names or target not in existing_node_names:
             raise ValueError(f"Link references unknown node(s): {source}, {target}.")
+        if source == target:
+            raise ValueError(f"Link cannot have the same source and target: {source}")
         link_params = link_info.get("link_params", {})
         link = Link(
             source=source,

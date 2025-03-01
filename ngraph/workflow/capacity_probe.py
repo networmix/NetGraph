@@ -23,7 +23,7 @@ class CapacityProbe(WorkflowStep):
             - "pairwise": Compute flow for each (source_group, sink_group).
         probe_reverse (bool): If True, also compute flow in the reverse direction (sink→source).
         shortest_path (bool): If True, only use shortest paths when computing flow.
-        flow_placement (FlowPlacement): Handling strategy for parallel edges (default PROPORTIONAL).
+        flow_placement (FlowPlacement): Handling strategy for parallel equal cost paths (default PROPORTIONAL).
     """
 
     source_path: str = ""
@@ -32,6 +32,17 @@ class CapacityProbe(WorkflowStep):
     probe_reverse: bool = False
     shortest_path: bool = False
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL
+
+    def __post_init__(self):
+        if isinstance(self.flow_placement, str):
+            try:
+                self.flow_placement = FlowPlacement[self.flow_placement.upper()]
+            except KeyError:
+                valid_values = ", ".join([e.name for e in FlowPlacement])
+                raise ValueError(
+                    f"Invalid flow_placement '{self.flow_placement}'. "
+                    f"Valid values are: {valid_values}"
+                )
 
     def run(self, scenario: Scenario) -> None:
         """
