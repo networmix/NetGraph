@@ -20,13 +20,13 @@ class FlowIndex(NamedTuple):
         src_node (NodeID): The source node of the flow.
         dst_node (NodeID): The destination node of the flow.
         flow_class (int): Integer representing the 'class' of this flow (e.g., traffic class).
-        flow_id (int): A unique integer ID for this flow.
+        flow_id (str): A unique ID for this flow.
     """
 
     src_node: NodeID
     dst_node: NodeID
     flow_class: int
-    flow_id: int
+    flow_id: str
 
 
 class Flow:
@@ -34,8 +34,8 @@ class Flow:
     Represents a fraction of demand routed along a given PathBundle.
 
     In traffic-engineering scenarios, a `Flow` object can model:
-      - An MPLS LSP/tunnel,
-      - IP forwarding behavior (with ECMP),
+      - MPLS LSPs/tunnels with explicit paths,
+      - IP forwarding behavior (with ECMP or UCMP),
       - Or anything that follows a specific set of paths.
     """
 

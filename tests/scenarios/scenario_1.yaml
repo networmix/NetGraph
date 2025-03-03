@@ -114,17 +114,17 @@ failure_policy:
       count: 1
 
 traffic_demands:
-  - source: SEA
-    target: JFK
+  - source_path: SEA
+    sink_path: JFK
     demand: 50
-  - source: SFO
-    target: DCA
+  - source_path: SFO
+    sink_path: DCA
     demand: 50
-  - source: SEA
-    target: DCA
+  - source_path: SEA
+    sink_path: DCA
     demand: 50
-  - source: SFO
-    target: JFK
+  - source_path: SFO
+    sink_path: JFK
     demand: 50
 
 workflow:

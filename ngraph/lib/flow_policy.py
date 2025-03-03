@@ -426,11 +426,15 @@ class FlowPolicy:
                 raise RuntimeError("Infinite loop detected in place_demand.")
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
-        if self.flow_placement == FlowPlacement.EQUAL_BALANCED:
-            target_flow_volume = self.placed_demand / len(self.flows)
+        if (
+            self.flow_placement == FlowPlacement.EQUAL_BALANCED
+            and len(self.flows) > 0  # must not rebalance if no flows
+        ):
+            target_flow_volume = self.placed_demand / float(len(self.flows))
+            # If the flows are not already near balanced
             if any(
-                abs(target_flow_volume - flow.placed_flow) >= base.MIN_FLOW
-                for flow in self.flows.values()
+                abs(target_flow_volume - f.placed_flow) >= base.MIN_FLOW
+                for f in self.flows.values()
             ):
                 total_placed_flow, excess_flow = self.rebalance_demand(
                     flow_graph, src_node, dst_node, flow_class, target_flow_volume

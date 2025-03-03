@@ -7,7 +7,6 @@ from ngraph.lib.flow import FlowIndex
 from .algorithms.sample_graphs import line1, square1, square2, triangle1, graph3
 
 
-# Helper to create a FlowPolicy for testing given a config or explicit parameters.
 def create_flow_policy(
     *,
     path_alg: PathAlg,
@@ -17,6 +16,7 @@ def create_flow_policy(
     max_flow_count: int = None,
     max_path_cost_factor: float = None
 ) -> FlowPolicy:
+    """Helper to create a FlowPolicy for testing."""
     return FlowPolicy(
         path_alg=path_alg,
         flow_placement=flow_placement,
@@ -29,23 +29,38 @@ def create_flow_policy(
 
 class TestDemand:
     def test_demand_initialization(self) -> None:
-        """Test that a Demand object initializes correctly."""
+        """
+        Test that a Demand object initializes correctly.
+        """
         d = Demand("A", "C", float("inf"))
         assert d.src_node == "A"
         assert d.dst_node == "C"
         assert d.volume == float("inf")
-        # Default demand_class is 0
         assert d.demand_class == 0
+        assert d.flow_policy is None
+        assert d.placed_demand == 0.0
+
+    def test_demand_no_flow_policy_raises_error(self, line1) -> None:
+        """
+        Test that placing a Demand without a flow policy raises RuntimeError.
+        """
+        r = init_flow_graph(line1)
+        d = Demand("A", "C", 10)
+        with pytest.raises(RuntimeError, match="No FlowPolicy set on this Demand."):
+            d.place(r)
 
     def test_demand_comparison(self) -> None:
-        """Test that Demand instances are compared based on their demand class."""
+        """
+        Test that Demand instances are compared based on their demand class.
+        """
         d_high = Demand("A", "C", float("inf"), demand_class=99)
         d_low = Demand("A", "C", float("inf"), demand_class=0)
         assert d_high > d_low
 
     def test_demand_place_basic(self, line1) -> None:
-        """Test placing a demand using a basic flow policy and check edge values."""
-        # Initialize flow graph from fixture 'line1'
+        """
+        Test placing a demand using a basic flow policy and check edge values.
+        """
         r = init_flow_graph(line1)
         flow_policy = create_flow_policy(
             path_alg=PathAlg.SPF,
@@ -53,8 +68,8 @@ class TestDemand:
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
             multipath=True,
         )
-        d = Demand("A", "C", float("inf"), demand_class=99)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand("A", "C", float("inf"), demand_class=99, flow_policy=flow_policy)
+        placed_demand, remaining_demand = d.place(r)
 
         # Check placed/remaining values
         assert placed_demand == 5
@@ -135,7 +150,9 @@ class TestDemand:
         assert r.get_edges() == expected_edges
 
     def test_demand_place_with_square1(self, square1) -> None:
-        """Test demand placement on 'square1' graph with min cost flow policy."""
+        """
+        Test demand placement on 'square1' graph with min cost flow policy.
+        """
         r = init_flow_graph(square1)
         flow_policy = create_flow_policy(
             path_alg=PathAlg.SPF,
@@ -144,13 +161,15 @@ class TestDemand:
             multipath=True,
             max_path_cost_factor=1,
         )
-        d = Demand("A", "C", float("inf"), demand_class=99)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand("A", "C", float("inf"), demand_class=99, flow_policy=flow_policy)
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 1
         assert remaining_demand == float("inf")
 
     def test_demand_place_with_square1_anycost(self, square1) -> None:
-        """Test demand placement on 'square1' graph using any-cost flow policy."""
+        """
+        Test demand placement on 'square1' graph using any-cost flow policy.
+        """
         r = init_flow_graph(square1)
         flow_policy = create_flow_policy(
             path_alg=PathAlg.SPF,
@@ -158,13 +177,15 @@ class TestDemand:
             edge_select=EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
             multipath=True,
         )
-        d = Demand("A", "C", float("inf"), demand_class=99)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand("A", "C", float("inf"), demand_class=99, flow_policy=flow_policy)
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 3
         assert remaining_demand == float("inf")
 
     def test_demand_place_with_square2_equal_balanced(self, square2) -> None:
-        """Test demand placement on 'square2' graph with equal-balanced flow placement."""
+        """
+        Test demand placement on 'square2' graph with equal-balanced flow placement.
+        """
         r = init_flow_graph(square2)
         flow_policy = create_flow_policy(
             path_alg=PathAlg.SPF,
@@ -173,28 +194,63 @@ class TestDemand:
             multipath=True,
             max_flow_count=1,
         )
-        d = Demand("A", "C", float("inf"), demand_class=99)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand("A", "C", float("inf"), demand_class=99, flow_policy=flow_policy)
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 2
         assert remaining_demand == float("inf")
 
     def test_multiple_demands_on_triangle(self, triangle1) -> None:
-        """Test multiple demands placement on a triangle graph."""
+        """
+        Test multiple demands placement on a triangle graph.
+        """
         r = init_flow_graph(triangle1)
-        # Create a list of six demands with same volume and demand class.
         demands = [
-            Demand("A", "B", 10, demand_class=42),
-            Demand("B", "A", 10, demand_class=42),
-            Demand("B", "C", 10, demand_class=42),
-            Demand("C", "B", 10, demand_class=42),
-            Demand("A", "C", 10, demand_class=42),
-            Demand("C", "A", 10, demand_class=42),
+            Demand(
+                "A",
+                "B",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
+            Demand(
+                "B",
+                "A",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
+            Demand(
+                "B",
+                "C",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
+            Demand(
+                "C",
+                "B",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
+            Demand(
+                "A",
+                "C",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
+            Demand(
+                "C",
+                "A",
+                10,
+                demand_class=42,
+                flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+            ),
         ]
         for demand in demands:
-            flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-            demand.place(r, flow_policy)
+            demand.place(r)
 
-        # Expected consolidated edges from the triangle graph.
         expected_edges = {
             0: (
                 "A",
@@ -307,12 +363,13 @@ class TestDemand:
         }
         assert r.get_edges() == expected_edges
 
-        # Verify each demand has been fully placed (placed_demand == demand volume).
         for demand in demands:
             assert demand.placed_demand == 10
 
     def test_demand_place_partial_with_fraction(self, square2) -> None:
-        """Test placing a demand in partial fractions on 'square2' graph."""
+        """
+        Test placing a demand in partial fractions on 'square2' graph.
+        """
         r = init_flow_graph(square2)
         flow_policy = create_flow_policy(
             path_alg=PathAlg.SPF,
@@ -321,49 +378,102 @@ class TestDemand:
             multipath=False,
             max_flow_count=2,
         )
-        d = Demand("A", "C", 3, demand_class=99)
+        d = Demand("A", "C", 3, demand_class=99, flow_policy=flow_policy)
+
         # First placement: only half of the remaining demand should be placed.
-        placed_demand, remaining_demand = d.place(r, flow_policy, max_fraction=0.5)
+        placed_demand, remaining_demand = d.place(r, max_fraction=0.5)
         assert placed_demand == 1.5
         assert remaining_demand == 0
 
         # Second placement: only 0.5 should be placed, leaving 1 unit unplaced.
-        placed_demand, remaining_demand = d.place(r, flow_policy, max_fraction=0.5)
+        placed_demand, remaining_demand = d.place(r, max_fraction=0.5)
         assert placed_demand == 0.5
         assert remaining_demand == 1
 
+    def test_demand_place_max_placement(self, line1) -> None:
+        """
+        Test placing a demand with a max_placement limit.
+        """
+        r = init_flow_graph(line1)
+        flow_policy = create_flow_policy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+            max_flow_count=16,
+        )
+        d = Demand("A", "C", 10, demand_class=99, flow_policy=flow_policy)
+        placed, remaining = d.place(r, max_placement=4)
+        # Should place only up to 4 in this call
+        assert placed == 4
+        assert remaining == 0
+        # Place again with unlimited in second call
+        placed, remaining = d.place(r)
+        # Should have placed what it could from the remaining
+        assert placed == 1
+        assert remaining == 5
+        assert d.placed_demand == 5
+
     def test_demand_place_te_ucmp_unlim(self, square2) -> None:
-        """Test demand placement using TE_UCMP_UNLIM flow policy on 'square2'."""
+        """
+        Test demand placement using TE_UCMP_UNLIM flow policy on 'square2'.
+        """
         r = init_flow_graph(square2)
-        d = Demand("A", "C", 3, demand_class=99)
-        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand(
+            "A",
+            "C",
+            3,
+            demand_class=99,
+            flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+        )
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 3
         assert remaining_demand == 0
 
     def test_demand_place_shortest_paths_ecmp(self, square2) -> None:
-        """Test demand placement using SHORTEST_PATHS_ECMP flow policy on 'square2'."""
+        """
+        Test demand placement using SHORTEST_PATHS_ECMP flow policy on 'square2'.
+        """
         r = init_flow_graph(square2)
-        d = Demand("A", "C", 3, demand_class=99)
-        flow_policy = get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand(
+            "A",
+            "C",
+            3,
+            demand_class=99,
+            flow_policy=get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP),
+        )
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 2
         assert remaining_demand == 1
 
     def test_demand_place_graph3_sp_ecmp(self, graph3) -> None:
-        """Test demand placement on 'graph3' using SHORTEST_PATHS_ECMP."""
+        """
+        Test demand placement on 'graph3' using SHORTEST_PATHS_ECMP.
+        """
         r = init_flow_graph(graph3)
-        d = Demand("A", "D", float("inf"), demand_class=99)
-        flow_policy = get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand(
+            "A",
+            "D",
+            float("inf"),
+            demand_class=99,
+            flow_policy=get_flow_policy(FlowPolicyConfig.SHORTEST_PATHS_ECMP),
+        )
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 2.5
         assert remaining_demand == float("inf")
 
     def test_demand_place_graph3_te_ucmp(self, graph3) -> None:
-        """Test demand placement on 'graph3' using TE_UCMP_UNLIM."""
+        """
+        Test demand placement on 'graph3' using TE_UCMP_UNLIM.
+        """
         r = init_flow_graph(graph3)
-        d = Demand("A", "D", float("inf"), demand_class=99)
-        flow_policy = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-        placed_demand, remaining_demand = d.place(r, flow_policy)
+        d = Demand(
+            "A",
+            "D",
+            float("inf"),
+            demand_class=99,
+            flow_policy=get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM),
+        )
+        placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 6
         assert remaining_demand == float("inf")

@@ -102,11 +102,11 @@ failure_policy:
       logic: "and"
       rule_type: "all"
 traffic_demands:
-  - source: NodeA
-    target: NodeB
+  - source_path: NodeA
+    sink_path: NodeB
     demand: 15
-  - source: NodeA
-    target: NodeC
+  - source_path: NodeA
+    sink_path: NodeC
     demand: 5
 workflow:
   - step_type: DoSmth
@@ -137,8 +137,8 @@ network:
 failure_policy:
   rules: []
 traffic_demands:
-  - source: NodeA
-    target: NodeB
+  - source_path: NodeA
+    sink_path: NodeB
     demand: 10
 workflow:
   - name: StepWithoutType
@@ -165,8 +165,8 @@ network:
 failure_policy:
   rules: []
 traffic_demands:
-  - source: NodeA
-    target: NodeB
+  - source_path: NodeA
+    sink_path: NodeB
     demand: 10
 workflow:
   - step_type: NonExistentStep
@@ -276,7 +276,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
         (
             d
             for d in scenario.traffic_demands
-            if d.source == "NodeA" and d.target == "NodeB"
+            if d.source_path == "NodeA" and d.sink_path == "NodeB"
         ),
         None,
     )
@@ -284,7 +284,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
         (
             d
             for d in scenario.traffic_demands
-            if d.source == "NodeA" and d.target == "NodeC"
+            if d.source_path == "NodeA" and d.sink_path == "NodeC"
         ),
         None,
     )
