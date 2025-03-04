@@ -93,19 +93,21 @@ def test_traffic_engineering_simulation():
     # Initialize flow-related structures (e.g., to track placed flows in the graph).
     flow_graph = init_flow_graph(g)
 
-    # Demand from A→C (volume 20).
-    demand_ac = Demand("A", "C", 20)
+    # Create flow policies for each demand.
     flow_policy_ac = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-    demand_ac.place(flow_graph, flow_policy_ac)
+    flow_policy_ca = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+
+    # Demand from A→C (volume 20).
+    demand_ac = Demand("A", "C", 20, flow_policy=flow_policy_ac)
+    demand_ac.place(flow_graph)
     assert demand_ac.placed_demand == 20, (
         f"Demand from {demand_ac.src_node} to {demand_ac.dst_node} "
         f"expected to be fully placed."
     )
 
-    # Demand from C→A (volume 20), using a separate FlowPolicy instance.
-    demand_ca = Demand("C", "A", 20)
-    flow_policy_ca = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-    demand_ca.place(flow_graph, flow_policy_ca)
+    # Demand from C→A (volume 20).
+    demand_ca = Demand("C", "A", 20, flow_policy=flow_policy_ca)
+    demand_ca.place(flow_graph)
     assert demand_ca.placed_demand == 20, (
         f"Demand from {demand_ca.src_node} to {demand_ca.dst_node} "
         f"expected to be fully placed."
