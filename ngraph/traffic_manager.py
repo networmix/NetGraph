@@ -1,7 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 import statistics
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, NamedTuple
 
 from ngraph.lib.algorithms import base
 from ngraph.lib.algorithms.flow_init import init_flow_graph
@@ -10,6 +10,27 @@ from ngraph.lib.flow_policy import FlowPolicyConfig, FlowPolicy, get_flow_policy
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Network, Node
 from ngraph.traffic_demand import TrafficDemand
+
+
+class TrafficResult(NamedTuple):
+    """
+    A container for traffic demand result data.
+
+    Attributes:
+        priority (int): Demand priority class (lower=more critical).
+        total_volume (float): Total traffic volume for this entry.
+        placed_volume (float): The volume actually placed in the flow graph.
+        unplaced_volume (float): The volume not placed (total_volume - placed_volume).
+        src (str): Source node/path.
+        dst (str): Destination node/path.
+    """
+
+    priority: int
+    total_volume: float
+    placed_volume: float
+    unplaced_volume: float
+    src: str
+    dst: str
 
 
 @dataclass
@@ -261,6 +282,61 @@ class TrafficManager:
             usage[edge_key] = attr_dict.get("flow", 0.0)
 
         return usage
+
+    def get_traffic_results(self, detailed: bool = False) -> List[TrafficResult]:
+        """
+        Returns traffic demand summaries.
+
+        If detailed=False, each top-level TrafficDemand is returned as a single entry.
+        If detailed=True, each expanded Demand is returned separately.
+
+        Args:
+            detailed (bool): Whether to return per-expanded-demand data
+                instead of top-level aggregated data.
+
+        Returns:
+            List[TrafficResult]: A list of traffic result tuples, each containing:
+                (priority, total_volume, placed_volume, unplaced_volume, src, dst).
+        """
+        results: List[TrafficResult] = []
+
+        if not detailed:
+            # Summaries for top-level TrafficDemands
+            for td in self.traffic_demands:
+                total_volume = td.demand
+                placed_volume = td.demand_placed
+                unplaced_volume = total_volume - placed_volume
+
+                # For aggregated results, we return the original src/dst "paths."
+                results.append(
+                    TrafficResult(
+                        priority=td.priority,
+                        total_volume=total_volume,
+                        placed_volume=placed_volume,
+                        unplaced_volume=unplaced_volume,
+                        src=td.source_path,
+                        dst=td.sink_path,
+                    )
+                )
+        else:
+            # Summaries for each expanded Demand
+            for dmd in self.demands:
+                total_volume = dmd.volume
+                placed_volume = dmd.placed_demand
+                unplaced_volume = total_volume - placed_volume
+
+                results.append(
+                    TrafficResult(
+                        priority=dmd.demand_class,
+                        total_volume=total_volume,
+                        placed_volume=placed_volume,
+                        unplaced_volume=unplaced_volume,
+                        src=dmd.src_node,
+                        dst=dmd.dst_node,
+                    )
+                )
+
+        return results
 
     def _reoptimize_priority_demands(self, demands_in_prio: List[Demand]) -> None:
         """
