@@ -316,3 +316,120 @@ def test_operator_condition_le_ge():
     e3 = {"capacity": 110}
     assert _evaluate_condition(e3, cond_le) is False
     assert _evaluate_condition(e3, cond_ge) is True
+
+
+def test_operator_contains_not_contains():
+    """
+    Verify that 'contains' and 'not_contains' operators work with string or list attributes.
+    """
+    rule_contains = FailureRule(
+        conditions=[FailureCondition(attr="tags", operator="contains", value="foo")],
+        logic="and",
+        rule_type="all",
+    )
+    rule_not_contains = FailureRule(
+        conditions=[
+            FailureCondition(attr="tags", operator="not_contains", value="bar")
+        ],
+        logic="and",
+        rule_type="all",
+    )
+
+    # Entities with a 'tags' attribute
+    nodes = {
+        "N1": {"type": "node", "tags": ["foo", "bar"]},  # contains 'foo'
+        "N2": {"type": "node", "tags": ["baz", "qux"]},  # doesn't contain 'foo'
+        "N3": {"type": "node", "tags": "foobar"},  # string containing 'foo'
+        "N4": {"type": "node", "tags": ""},  # string not containing anything
+    }
+    links = {}
+
+    # Test the 'contains' rule
+    failed_contains = FailurePolicy(rules=[rule_contains]).apply_failures(nodes, links)
+    # N1 has 'foo' in list, N3 has 'foo' in string "foobar"
+    assert set(failed_contains) == {"N1", "N3"}
+
+    # Test the 'not_contains' rule
+    failed_not_contains = FailurePolicy(rules=[rule_not_contains]).apply_failures(
+        nodes, links
+    )
+    # N2 => doesn't have 'bar', N4 => empty string, also doesn't have 'bar'
+    assert set(failed_not_contains) == {"N2", "N4"}
+
+
+def test_operator_any_value_no_value():
+    """
+    Verify that 'any_value' matches entities that have the attribute (non-None),
+    and 'no_value' matches entities that do not have that attribute or None.
+    """
+    any_rule = FailureRule(
+        conditions=[
+            FailureCondition(attr="capacity", operator="any_value", value=None)
+        ],
+        logic="and",
+        rule_type="all",
+    )
+    none_rule = FailureRule(
+        conditions=[FailureCondition(attr="capacity", operator="no_value", value=None)],
+        logic="and",
+        rule_type="all",
+    )
+
+    nodes = {
+        "N1": {"type": "node", "capacity": 100},  # has capacity
+        "N2": {"type": "node"},  # no 'capacity' attr
+        "N3": {"type": "node", "capacity": None},  # capacity is explicitly None
+    }
+    links = {}
+
+    failed_any = FailurePolicy(rules=[any_rule]).apply_failures(nodes, links)
+    # N1 has capacity=100, N3 has capacity=None (still present, even if None)
+    assert set(failed_any) == {"N1", "N3"}
+
+    failed_none = FailurePolicy(rules=[none_rule]).apply_failures(nodes, links)
+    # N2 has no 'capacity' attribute. N3 has capacity=None => attribute is present but None => also matches
+    # This depends on your interpretation of "no_value", but typically "no_value" means derived_value is None.
+    # We do see from the code that derived_value= entity.get(cond.attr, None) => if the key is missing or is None, we pass
+    assert set(failed_none) == {"N2", "N3"}
+
+
+def test_shared_risk_groups_expansion():
+    """
+    Verify that if fail_shared_risk_groups=True is set, any failed entity
+    causes all entities in the same shared_risk_group to fail.
+    """
+    # This rule matches link type=link, then chooses exactly 1
+    rule = FailureRule(
+        conditions=[FailureCondition(attr="type", operator="==", value="link")],
+        logic="and",
+        rule_type="choice",
+        count=1,
+    )
+    policy = FailurePolicy(
+        rules=[rule],
+        attrs={"fail_shared_risk_groups": True},
+    )
+
+    nodes = {
+        "N1": {"type": "node"},
+        "N2": {"type": "node"},
+    }
+    # Suppose L1 and L2 are in SRG1, L3 in SRG2
+    links = {
+        "L1": {"type": "link", "shared_risk_group": "SRG1"},
+        "L2": {"type": "link", "shared_risk_group": "SRG1"},
+        "L3": {"type": "link", "shared_risk_group": "SRG2"},
+    }
+
+    # Mock picking "L1"
+    with patch("ngraph.failure_policy.sample", return_value=["L1"]):
+        failed = policy.apply_failures(nodes, links)
+
+    # L1 was chosen, which triggers any others in SRG1 => L2 also fails.
+    # L3 is unaffected.
+    assert set(failed) == {"L1", "L2"}
+
+    # If we pick "L3", L1 & L2 remain healthy
+    with patch("ngraph.failure_policy.sample", return_value=["L3"]):
+        failed = policy.apply_failures(nodes, links)
+    assert set(failed) == {"L3"}
