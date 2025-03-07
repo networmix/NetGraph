@@ -79,7 +79,6 @@ class Scenario:
             raise ValueError("The provided YAML must map to a dictionary at top-level.")
 
         # 1) Build the network using blueprint expansion logic
-        #    This handles both "blueprints" and "network" sections if present.
         network = expand_network_dsl(data)
 
         # 2) Build the multi-rule failure policy
@@ -110,6 +109,7 @@ class Scenario:
             failure_policy:
               name: "anySingleLink"
               description: "Test single-link failures."
+              fail_shared_risk_groups: true
               rules:
                 - conditions:
                     - attr: "type"
@@ -155,7 +155,7 @@ class Scenario:
 
     @staticmethod
     def _build_workflow_steps(
-        workflow_data: List[Dict[str, Any]]
+        workflow_data: List[Dict[str, Any]],
     ) -> List[WorkflowStep]:
         """
         Converts workflow step dictionaries into instantiated WorkflowStep objects.

@@ -67,6 +67,37 @@ network:
         capacity: 1
         cost: 1
 
+    # Demonstrates setting a shared_risk_group and optic_type on all spine to spine links.
+    - source: .*/spine/.*
+      target: .*/spine/.*
+      any_direction: True
+      link_params:
+        attrs:
+          shared_risk_group: "SpineSRG"
+          optic_type: "400G-LR4"
+  
+  # Example node overrides that assign SRGs and hardware types
+  node_overrides:
+    - path: my_clos1/b1/t1
+      attrs:
+        shared_risk_group: "clos1-b1t1-SRG"
+        hw_type: "LeafHW-A"
+
+    - path: my_clos2/b2/t1
+      attrs:
+        shared_risk_group: "clos2-b2t1-SRG"
+        hw_type: "LeafHW-B"
+
+    - path: my_clos1/spine/t3.* 
+      attrs:
+        shared_risk_group: "clos1-spine-SRG"
+        hw_type: "SpineHW"
+
+    - path: my_clos2/spine/t3.*
+      attrs:
+        shared_risk_group: "clos2-spine-SRG"
+        hw_type: "SpineHW"
+
 workflow:
   - step_type: BuildGraph
     name: build_graph
