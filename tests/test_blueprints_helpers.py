@@ -13,6 +13,10 @@ from ngraph.blueprints import (
     _expand_blueprint_adjacency,
     _expand_adjacency,
     _expand_group,
+    _update_nodes,
+    _update_links,
+    _process_node_overrides,
+    _process_link_overrides,
 )
 
 
@@ -356,3 +360,127 @@ def test_expand_group_blueprint():
     link = next(iter(ctx_net.links.values()))
     sources_targets = {link.source, link.target}
     assert sources_targets == {"Main/leaf/leaf-1", "Main/leaf/leaf-2"}
+
+
+def test_update_nodes():
+    """
+    Tests _update_nodes to ensure it updates matching node attributes in bulk.
+    """
+    net = Network()
+    net.add_node(Node("N1", attrs={"foo": "old"}))
+    net.add_node(Node("N2", attrs={"foo": "old"}))
+    net.add_node(Node("M1", attrs={"foo": "unchanged"}))
+
+    # We only want to update nodes whose path matches "N"
+    _update_nodes(net, "N", {"hw_type": "X100", "foo": "new"})
+
+    # N1, N2 should get updated
+    assert net.nodes["N1"].attrs["hw_type"] == "X100"
+    assert net.nodes["N1"].attrs["foo"] == "new"
+    assert net.nodes["N2"].attrs["hw_type"] == "X100"
+    assert net.nodes["N2"].attrs["foo"] == "new"
+
+    # M1 remains unchanged
+    assert "hw_type" not in net.nodes["M1"].attrs
+    assert net.nodes["M1"].attrs["foo"] == "unchanged"
+
+
+def test_update_links():
+    """
+    Tests _update_links to ensure it updates matching links in bulk.
+    """
+    net = Network()
+    net.add_node(Node("S1"))
+    net.add_node(Node("S2"))
+    net.add_node(Node("T1"))
+    net.add_node(Node("T2"))
+
+    # Create some links
+    net.add_link(Link("S1", "T1"))
+    net.add_link(Link("S2", "T2"))
+    net.add_link(Link("T1", "S2"))  # reversed
+
+    # Update all links from S->T with capacity=999
+    _update_links(net, "S", "T", {"capacity": 999})
+
+    # The link S1->T1 is updated
+    link_st = [l for l in net.links.values() if l.source == "S1" and l.target == "T1"]
+    assert link_st[0].capacity == 999
+
+    link_st2 = [l for l in net.links.values() if l.source == "S2" and l.target == "T2"]
+    assert link_st2[0].capacity == 999
+
+    # The reversed link T1->S2 also matches if any_direction is True by default
+    link_ts = [l for l in net.links.values() if l.source == "T1" and l.target == "S2"]
+    assert link_ts[0].capacity == 999
+
+
+def test_process_node_overrides():
+    """
+    Tests _process_node_overrides to verify node attributes get updated
+    based on the DSL's node_overrides block.
+    """
+    net = Network()
+    net.add_node(Node("A/1"))
+    net.add_node(Node("A/2"))
+    net.add_node(Node("B/1"))
+
+    network_data = {
+        "node_overrides": [
+            {
+                "path": "A",  # matches "A/1" and "A/2"
+                "attrs": {"optics_type": "SR4", "shared_risk_group": "SRG1"},
+            }
+        ]
+    }
+    _process_node_overrides(net, network_data)
+
+    # "A/1" and "A/2" should be updated
+    assert net.nodes["A/1"].attrs["optics_type"] == "SR4"
+    assert net.nodes["A/1"].attrs["shared_risk_group"] == "SRG1"
+    assert net.nodes["A/2"].attrs["optics_type"] == "SR4"
+    assert net.nodes["A/2"].attrs["shared_risk_group"] == "SRG1"
+
+    # "B/1" remains unchanged
+    assert "optics_type" not in net.nodes["B/1"].attrs
+    assert "shared_risk_group" not in net.nodes["B/1"].attrs
+
+
+def test_process_link_overrides():
+    """
+    Tests _process_link_overrides to verify link attributes get updated
+    based on the DSL's link_overrides block.
+    """
+    net = Network()
+    net.add_node(Node("A/1"))
+    net.add_node(Node("A/2"))
+    net.add_node(Node("B/1"))
+
+    net.add_link(Link("A/1", "A/2", attrs={"color": "red"}))
+    net.add_link(Link("A/1", "B/1"))
+
+    network_data = {
+        "link_overrides": [
+            {
+                "source": "A/1",
+                "target": "A/2",
+                "link_params": {"capacity": 123, "attrs": {"color": "blue"}},
+            }
+        ]
+    }
+
+    _process_link_overrides(net, network_data)
+
+    # Only the link A/1->A/2 is updated
+    link1 = [l for l in net.links.values() if l.source == "A/1" and l.target == "A/2"][
+        0
+    ]
+    assert link1.capacity == 123
+    assert link1.attrs["color"] == "blue"
+
+    # The other link remains unmodified
+    link2 = [l for l in net.links.values() if l.source == "A/1" and l.target == "B/1"][
+        0
+    ]
+    assert link2.capacity == 1.0  # default
+    assert "color" not in link2.attrs
