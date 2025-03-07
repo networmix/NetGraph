@@ -430,6 +430,7 @@ class Network:
         self,
         source_regex: Optional[str] = None,
         target_regex: Optional[str] = None,
+        any_direction: bool = False,
     ) -> List[Link]:
         """
         Search for links using optional regex patterns for source or target node names.
@@ -437,6 +438,7 @@ class Network:
         Args:
             source_regex: Regex pattern to match link.source. If None, matches all.
             target_regex: Regex pattern to match link.target. If None, matches all.
+            any_direction: If True, also match links where source and target are reversed.
 
         Returns:
             List[Link]: A list of Link objects that match the provided criteria.
@@ -458,4 +460,13 @@ class Network:
             if tgt_pat and not tgt_pat.search(link.target):
                 continue
             results.append(link)
+
+        if any_direction:
+            for link in self.links.values():
+                if src_pat and not src_pat.search(link.target):
+                    continue
+                if tgt_pat and not tgt_pat.search(link.source):
+                    continue
+                results.append(link)
+
         return results
