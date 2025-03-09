@@ -10,12 +10,16 @@ import networkx as nx
 
 def new_base64_uuid() -> str:
     """
-    Generate a Base64-encoded UUID without padding (22-character string).
+    Generate a Base64-encoded UUID without padding.
+
+    This function produces a 22-character, URL-safe, Base64-encoded UUID.
 
     Returns:
         str: A unique 22-character Base64-encoded UUID.
     """
-    return base64.urlsafe_b64encode(uuid.uuid4().bytes).decode("ascii").rstrip("=")
+    # For a 16-byte UUID, the standard Base64 output is always 24 characters,
+    # followed by '=='. We can safely slice off the trailing '==' getting 22 chars.
+    return base64.urlsafe_b64encode(uuid.uuid4().bytes)[:-2].decode("ascii")
 
 
 NodeID = Hashable
@@ -29,12 +33,14 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     A custom multi-directed graph with strict rules and unique edge IDs.
 
     This class enforces:
-    - No automatic creation of missing nodes when adding an edge.
-    - No duplicate nodes. Attempting to add a node that already exists raises ``ValueError``.
-    - No duplicate edges. Attempting to add an edge with an existing key raises ``ValueError``.
-    - Removing non-existent nodes or edges raises ``ValueError``.
-    - Each edge key must be unique; by default, a Base64-UUID is generated if none is provided.
-    - ``copy()`` can perform a pickle-based deep copy that may be faster than NetworkX's default.
+      - No automatic creation of missing nodes when adding an edge.
+      - No duplicate nodes (raising ValueError on duplicates).
+      - No duplicate edges by key (raising ValueError on duplicates).
+      - Attempting to remove non-existent nodes or edges raises ValueError.
+      - Each edge key must be unique; by default, a Base64-UUID is generated
+        if none is provided.
+      - copy() can perform a pickle-based deep copy that may be faster
+        than NetworkX's default.
 
     Inherits from:
         networkx.MultiDiGraph
@@ -45,8 +51,8 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         Initialize a StrictMultiDiGraph.
 
         Args:
-            *args: Positional arguments forwarded to the ``MultiDiGraph`` constructor.
-            **kwargs: Keyword arguments forwarded to the ``MultiDiGraph`` constructor.
+            *args: Positional arguments forwarded to the MultiDiGraph constructor.
+            **kwargs: Keyword arguments forwarded to the MultiDiGraph constructor.
 
         Attributes:
             _edges (Dict[EdgeID, EdgeTuple]): Maps an edge key to a tuple
@@ -76,20 +82,17 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         """
         Create a copy of this graph.
 
-        By default, uses pickle-based deep copying. If ``pickle=False``, this
-        method calls the parent class's ``copy`` which supports views.
+        By default, uses pickle-based deep copying. If pickle=False,
+        this method calls the parent class's copy, which supports views.
 
         Args:
-            as_view (bool): If ``True``, returns a view instead of a full copy.
-                Only used if ``pickle=False``. Defaults to ``False``.
-            pickle (bool): If ``True``, perform a pickle-based deep copy.
-                Defaults to ``True``.
+            as_view (bool): If True, returns a view instead of a full copy;
+                only used if pickle=False. Defaults to False.
+            pickle (bool): If True, perform a pickle-based deep copy.
+                Defaults to True.
 
         Returns:
             StrictMultiDiGraph: A new instance (or view) of the graph.
-
-        Raises:
-            TypeError: If the parent class copy cannot handle certain arguments.
         """
         if not pickle:
             return super().copy(as_view=as_view)
@@ -104,7 +107,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
 
         Args:
             n (NodeID): The node to add.
-            **attr: Arbitrary keyword attributes to associate with this node.
+            **attr: Arbitrary attributes for this node.
 
         Raises:
             ValueError: If the node already exists in the graph.
@@ -145,26 +148,24 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         **attr: Any,
     ) -> EdgeID:
         """
-        Add a directed edge from ``u_for_edge`` to ``v_for_edge``.
+        Add a directed edge from u_for_edge to v_for_edge.
 
         If no key is provided, a unique Base64-UUID is generated. This method
-        does not create nodes automatically; both ``u_for_edge`` and
-        ``v_for_edge`` must already exist in the graph.
+        does not create nodes automatically; both u_for_edge and v_for_edge
+        must already exist in the graph.
 
         Args:
             u_for_edge (NodeID): The source node. Must exist in the graph.
             v_for_edge (NodeID): The target node. Must exist in the graph.
-            key (Optional[EdgeID]): The unique edge key. Defaults to None,
-                in which case a new key is generated. If provided,
-                it must not already be in the graph.
+            key (Optional[EdgeID]): The unique edge key. If None, a new key
+                is generated. Must not already be in use if provided.
             **attr: Arbitrary edge attributes.
 
         Returns:
             EdgeID: The key associated with this new edge.
 
         Raises:
-            ValueError: If either node does not exist, or if the key
-                is already in use.
+            ValueError: If either node does not exist, or if the key is already in use.
         """
         if u_for_edge not in self:
             raise ValueError(f"Source node '{u_for_edge}' does not exist.")
@@ -193,21 +194,20 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         key: Optional[EdgeID] = None,
     ) -> None:
         """
-        Remove an edge (or edges) between nodes ``u`` and ``v``.
+        Remove an edge (or edges) between nodes u and v.
 
-        If ``key`` is provided, remove only that edge. Otherwise, remove all
-        edges from ``u`` to ``v``.
+        If key is provided, remove only that edge. Otherwise, remove all edges
+        from u to v.
 
         Args:
             u (NodeID): The source node of the edge(s). Must exist in the graph.
             v (NodeID): The target node of the edge(s). Must exist in the graph.
-            key (Optional[EdgeID]): If provided, remove the specific edge
-                with this key. Otherwise, remove all edges from ``u`` to ``v``.
+            key (Optional[EdgeID]): If provided, remove the edge with this key.
+                Otherwise, remove all edges from u to v.
 
         Raises:
-            ValueError: If ``u`` or ``v`` is not in the graph, or if the
-                specified edge key does not exist, or if no edges are found
-                from ``u`` to ``v``.
+            ValueError: If the nodes do not exist, or if the specified edge key
+                does not exist, or if no edges are found from u to v.
         """
         if u not in self:
             raise ValueError(f"Source node '{u}' does not exist.")
@@ -253,10 +253,10 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     #
     def get_nodes(self) -> Dict[NodeID, AttrDict]:
         """
-        Retrieve all nodes and their attributes in a dictionary.
+        Retrieve all nodes and their attributes as a dictionary.
 
         Returns:
-            Dict[NodeID, AttrDict]: A mapping of node ID to its attribute dictionary.
+            Dict[NodeID, AttrDict]: A mapping of node ID to its attributes.
         """
         return dict(self.nodes(data=True))
 

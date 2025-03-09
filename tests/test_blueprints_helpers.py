@@ -36,7 +36,8 @@ def test_join_paths():
 
 def test_apply_parameters():
     """
-    Tests _apply_parameters to ensure user-provided overrides get applied to the correct subgroup fields.
+    Tests _apply_parameters to ensure user-provided overrides get applied
+    to the correct subgroup fields.
     """
     original_def = {
         "node_count": 4,
@@ -79,9 +80,34 @@ def test_create_link():
     assert link_obj.attrs["color"] == "red"
 
 
+def test_create_link_multiple():
+    """
+    Tests _create_link with link_count=2 to ensure multiple parallel links are created.
+    """
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+
+    _create_link(
+        net,
+        "A",
+        "B",
+        {"capacity": 10, "cost": 1, "attrs": {"color": "green"}},
+        link_count=2,
+    )
+
+    assert len(net.links) == 2
+    for link_obj in net.links.values():
+        assert link_obj.source == "A"
+        assert link_obj.target == "B"
+        assert link_obj.capacity == 10
+        assert link_obj.cost == 1
+        assert link_obj.attrs["color"] == "green"
+
+
 def test_expand_adjacency_pattern_one_to_one():
     """
-    Tests _expand_adjacency_pattern in 'one_to_one' mode for the simplest matching case (2:2).
+    Tests _expand_adjacency_pattern in 'one_to_one' mode for a simple 2:2 case.
     Should produce pairs: (S1->T1), (S2->T2).
     """
     ctx_net = Network()
@@ -106,8 +132,8 @@ def test_expand_adjacency_pattern_one_to_one():
 
 def test_expand_adjacency_pattern_one_to_one_wrap():
     """
-    Tests 'one_to_one' with wrapping case: e.g., 4 vs 2. (both sides a multiple)
-    => S1->T1, S2->T2, S3->T1, S4->T2 => total 4 links
+    Tests 'one_to_one' with wrapping case: e.g., 4 vs 2. (both sides a multiple).
+    => S1->T1, S2->T2, S3->T1, S4->T2 => total 4 links.
     """
     ctx_net = Network()
     # 4 source nodes
@@ -140,7 +166,7 @@ def test_expand_adjacency_pattern_one_to_one_wrap():
 def test_expand_adjacency_pattern_one_to_one_mismatch():
     """
     Tests 'one_to_one' with a mismatch (3 vs 2) => raises a ValueError
-    since 3 % 2 != 0
+    since 3 % 2 != 0.
     """
     ctx_net = Network()
     # 3 sources, 2 targets
@@ -154,13 +180,14 @@ def test_expand_adjacency_pattern_one_to_one_mismatch():
 
     with pytest.raises(ValueError) as exc:
         _expand_adjacency_pattern(ctx, "S", "T", "one_to_one", {})
-    assert "requires either equal node counts or a valid wrap-around" in str(exc.value)
+    # Our error text checks
+    assert "requires sizes with a multiple factor" in str(exc.value)
 
 
 def test_expand_adjacency_pattern_mesh():
     """
     Tests _expand_adjacency_pattern in 'mesh' mode: all-to-all links among matched nodes,
-    with dedup so we don't double-link reversed pairs.
+    skipping self-loops and deduplicating reversed pairs.
     """
     ctx_net = Network()
     ctx_net.add_node(Node("X1"))
@@ -170,17 +197,36 @@ def test_expand_adjacency_pattern_mesh():
 
     ctx = DSLExpansionContext({}, ctx_net)
 
-    # mesh => X1, X2 => Y1, Y2 => 4 links total
+    # mesh => X1,X2 => Y1,Y2 => 4 links total
     _expand_adjacency_pattern(ctx, "X", "Y", "mesh", {"capacity": 99})
     assert len(ctx_net.links) == 4
     for link in ctx_net.links.values():
         assert link.capacity == 99
 
 
+def test_expand_adjacency_pattern_mesh_link_count():
+    """
+    Tests 'mesh' mode with link_count=2 to ensure multiple parallel links are created per pairing.
+    """
+    ctx_net = Network()
+    ctx_net.add_node(Node("A1"))
+    ctx_net.add_node(Node("A2"))
+    ctx_net.add_node(Node("B1"))
+    ctx_net.add_node(Node("B2"))
+
+    ctx = DSLExpansionContext({}, ctx_net)
+
+    _expand_adjacency_pattern(ctx, "A", "B", "mesh", {"attrs": {"color": "purple"}}, 2)
+    # A1->B1, A1->B2, A2->B1, A2->B2 => each repeated 2 times => 8 total links
+    assert len(ctx_net.links) == 8
+    for link in ctx_net.links.values():
+        assert link.attrs.get("color") == "purple"
+
+
 def test_process_direct_nodes():
     """
-    Tests _process_direct_nodes to ensure direct node creation
-    works.
+    Tests _process_direct_nodes to ensure direct node creation works.
+    Existing nodes are not overwritten.
     """
     net = Network()
     net.add_node(Node("Existing"))
@@ -190,7 +236,7 @@ def test_process_direct_nodes():
             "New1": {"foo": "bar"},
             "Existing": {
                 "override": "ignored"
-            },  # This won't be merged since node exists
+            },  # This won't be merged since node already exists
         },
     }
 
@@ -231,10 +277,37 @@ def test_process_direct_links():
     assert link.capacity == 5
 
 
+def test_process_direct_links_link_count():
+    """
+    Tests _process_direct_links with link_count > 1 to ensure multiple parallel links.
+    """
+    net = Network()
+    net.add_node(Node("N1"))
+    net.add_node(Node("N2"))
+
+    network_data = {
+        "links": [
+            {
+                "source": "N1",
+                "target": "N2",
+                "link_params": {"capacity": 20},
+                "link_count": 3,
+            }
+        ]
+    }
+    _process_direct_links(net, network_data)
+
+    assert len(net.links) == 3
+    for link_obj in net.links.values():
+        assert link_obj.capacity == 20
+        assert link_obj.source == "N1"
+        assert link_obj.target == "N2"
+
+
 def test_expand_blueprint_adjacency():
     """
-    Tests _expand_blueprint_adjacency: verifying that relative paths inside a blueprint are joined
-    with parent_path, then expanded as normal adjacency.
+    Tests _expand_blueprint_adjacency: verifying that relative paths inside a blueprint
+    are joined with parent_path, then expanded as normal adjacency.
     """
     ctx_net = Network()
     ctx_net.add_node(Node("Parent/leaf-1"))
@@ -291,7 +364,8 @@ def test_expand_adjacency():
 
 def test_expand_group_direct():
     """
-    Tests _expand_group for a direct node group (no use_blueprint), ensuring node_count and name_template.
+    Tests _expand_group for a direct node group (no use_blueprint),
+    ensuring node_count and name_template usage.
     """
     ctx_net = Network()
     ctx = DSLExpansionContext({}, ctx_net)
@@ -362,6 +436,71 @@ def test_expand_group_blueprint():
     assert sources_targets == {"Main/leaf/leaf-1", "Main/leaf/leaf-2"}
 
 
+def test_expand_group_blueprint_with_params():
+    """
+    Tests _expand_group with blueprint usage and parameter overrides.
+    """
+    bp = Blueprint(
+        name="bp1",
+        groups={
+            "leaf": {
+                "node_count": 2,
+                "name_template": "leafy-{node_num}",
+                "node_attrs": {"role": "old"},
+            },
+        },
+        adjacency=[],
+    )
+    ctx_net = Network()
+    ctx = DSLExpansionContext(blueprints={"bp1": bp}, network=ctx_net)
+
+    group_def = {
+        "use_blueprint": "bp1",
+        "parameters": {
+            # Overriding the name_template for the subgroup 'leaf'
+            "leaf.name_template": "newleaf-{node_num}",
+            "leaf.node_attrs.role": "updated",
+        },
+    }
+    _expand_group(
+        ctx,
+        parent_path="ZoneA",
+        group_name="Main",
+        group_def=group_def,
+        blueprint_expansion=False,
+    )
+
+    # We expect 2 nodes => "ZoneA/Main/leaf/newleaf-1" and "...-2"
+    # plus the updated role attribute
+    assert len(ctx_net.nodes) == 2
+    n1_name = "ZoneA/Main/leaf/newleaf-1"
+    n2_name = "ZoneA/Main/leaf/newleaf-2"
+    assert n1_name in ctx_net.nodes
+    assert n2_name in ctx_net.nodes
+    assert ctx_net.nodes[n1_name].attrs["role"] == "updated"
+    assert ctx_net.nodes[n2_name].attrs["role"] == "updated"
+
+
+def test_expand_group_blueprint_unknown():
+    """
+    Tests _expand_group with a reference to an unknown blueprint -> ValueError.
+    """
+    ctx_net = Network()
+    ctx = DSLExpansionContext(blueprints={}, network=ctx_net)
+
+    group_def = {
+        "use_blueprint": "non_existent",
+    }
+    with pytest.raises(ValueError) as exc:
+        _expand_group(
+            ctx,
+            parent_path="",
+            group_name="Test",
+            group_def=group_def,
+        )
+    assert "unknown blueprint 'non_existent'" in str(exc.value)
+
+
 def test_update_nodes():
     """
     Tests _update_nodes to ensure it updates matching node attributes in bulk.
@@ -398,7 +537,7 @@ def test_update_links():
     # Create some links
     net.add_link(Link("S1", "T1"))
     net.add_link(Link("S2", "T2"))
-    net.add_link(Link("T1", "S2"))  # reversed
+    net.add_link(Link("T1", "S2"))  # reversed direction
 
     # Update all links from S->T with capacity=999
     _update_links(net, "S", "T", {"capacity": 999})
