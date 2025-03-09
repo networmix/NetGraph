@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+from math import isclose
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from ngraph.lib.graph import StrictMultiDiGraph, NodeID, EdgeID, AttrDict
@@ -39,7 +38,7 @@ def edge_select_fabric(
     Tuple[Cost, List[EdgeID]],
 ]:
     """
-    Creates (fabricates) a function that selects edges between two nodes according
+    Creates a function that selects edges between two nodes according
     to a given EdgeSelect strategy (or a user-defined function).
 
     Args:
@@ -47,8 +46,8 @@ def edge_select_fabric(
         select_value: An optional numeric threshold or scaling factor for capacity checks.
         edge_select_func: A user-supplied function if edge_select=USER_DEFINED.
         excluded_edges: A set of edges to ignore entirely.
-        excluded_nodes: A set of nodes to skip.
-        cost_attr: The edge attribute name representing cost/metric.
+        excluded_nodes: A set of nodes to skip (if the destination node is in this set).
+        cost_attr: The edge attribute name representing cost.
         capacity_attr: The edge attribute name representing capacity.
         flow_attr: The edge attribute name representing current flow.
 
@@ -56,39 +55,38 @@ def edge_select_fabric(
         A function with signature:
             (graph, src_node, dst_node, edges_dict, excluded_edges, excluded_nodes) ->
             (selected_cost, [list_of_edge_ids])
-        where `selected_cost` is the numeric cost used by the path-finding algorithm
-        (e.g. Dijkstra), and `[list_of_edge_ids]` is the set (or subset) of edges chosen.
+        where:
+            - `selected_cost` is the numeric cost used by the path-finding algorithm (e.g. Dijkstra).
+            - `[list_of_edge_ids]` is the list of edges chosen.
     """
-
-    # --------------------------------------------------------------------------
-    # Internal selection routines (closed over the above arguments).
-    # Each of these returns (cost, [edge_ids]) indicating which edges are chosen.
-    # --------------------------------------------------------------------------
 
     def get_all_min_cost_edges(
         graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """Return all edges with the minimal cost among those available."""
-        if ignored_nodes and dst_node in ignored_nodes:
+        """
+        Return all edges whose cost is the minimum among available edges.
+        If the destination node is excluded, returns (inf, []).
+        """
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         edge_list: List[EdgeID] = []
         min_cost = float("inf")
-        for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
-                continue
-            cost_val = attr[cost_attr]
 
+        for edge_id, attr in edges_map.items():
+            if excluded_edges and edge_id in excluded_edges:
+                continue
+
+            cost_val = attr[cost_attr]
             if cost_val < min_cost:
                 min_cost = cost_val
                 edge_list = [edge_id]
-            elif abs(cost_val - min_cost) < 1e-12:
-                # If cost_val == min_cost
+            elif isclose(cost_val, min_cost, abs_tol=1e-12):
                 edge_list.append(edge_id)
 
         return min_cost, edge_list
@@ -98,20 +96,24 @@ def edge_select_fabric(
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """Return exactly one edge: the single lowest-cost edge."""
-        if ignored_nodes and dst_node in ignored_nodes:
+        """
+        Return exactly one edge: the single lowest-cost edge.
+        If the destination node is excluded, returns (inf, []).
+        """
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         chosen_edge: List[EdgeID] = []
         min_cost = float("inf")
-        for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
-                continue
-            cost_val = attr[cost_attr]
 
+        for edge_id, attr in edges_map.items():
+            if excluded_edges and edge_id in excluded_edges:
+                continue
+
+            cost_val = attr[cost_attr]
             if cost_val < min_cost:
                 min_cost = cost_val
                 chosen_edge = [edge_id]
@@ -123,14 +125,14 @@ def edge_select_fabric(
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
         """
-        Return all edges that have remaining capacity >= min_cap, ignoring
-        their cost except for reporting the minimal one found.
+        Return all edges that have remaining capacity >= min_cap,
+        ignoring cost differences (though return the minimal cost found).
         """
-        if ignored_nodes and dst_node in ignored_nodes:
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         edge_list: List[EdgeID] = []
@@ -138,12 +140,17 @@ def edge_select_fabric(
         min_cap = select_value if select_value is not None else MIN_CAP
 
         for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
+            if excluded_edges and edge_id in excluded_edges:
                 continue
 
-            if (attr[capacity_attr] - attr[flow_attr]) >= min_cap:
+            capacity_val = attr[capacity_attr]
+            flow_val = attr[flow_attr]
+            remaining_cap = capacity_val - flow_val
+
+            if remaining_cap >= min_cap:
                 cost_val = attr[cost_attr]
-                min_cost = min(min_cost, cost_val)
+                if cost_val < min_cost:
+                    min_cost = cost_val
                 edge_list.append(edge_id)
 
         return min_cost, edge_list
@@ -153,14 +160,14 @@ def edge_select_fabric(
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
         """
-        Return all edges that have remaining capacity >= min_cap,
+        Return all edges that have remaining capacity >= min_cap
         among those with the minimum cost.
         """
-        if ignored_nodes and dst_node in ignored_nodes:
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         edge_list: List[EdgeID] = []
@@ -168,16 +175,19 @@ def edge_select_fabric(
         min_cap = select_value if select_value is not None else MIN_CAP
 
         for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
+            if excluded_edges and edge_id in excluded_edges:
                 continue
 
-            available_cap = attr[capacity_attr] - attr[flow_attr]
-            if available_cap >= min_cap:
+            capacity_val = attr[capacity_attr]
+            flow_val = attr[flow_attr]
+            remaining_cap = capacity_val - flow_val
+
+            if remaining_cap >= min_cap:
                 cost_val = attr[cost_attr]
                 if cost_val < min_cost:
                     min_cost = cost_val
                     edge_list = [edge_id]
-                elif abs(cost_val - min_cost) < 1e-12:
+                elif isclose(cost_val, min_cost, abs_tol=1e-12):
                     edge_list.append(edge_id)
 
         return min_cost, edge_list
@@ -187,14 +197,14 @@ def edge_select_fabric(
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
         """
-        Return exactly one edge with the minimal cost among those with
-        remaining capacity >= min_cap.
+        Return exactly one edge with the minimal cost among those
+        that have remaining capacity >= min_cap.
         """
-        if ignored_nodes and dst_node in ignored_nodes:
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         chosen_edge: List[EdgeID] = []
@@ -202,10 +212,14 @@ def edge_select_fabric(
         min_cap = select_value if select_value is not None else MIN_CAP
 
         for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
+            if excluded_edges and edge_id in excluded_edges:
                 continue
 
-            if (attr[capacity_attr] - attr[flow_attr]) >= min_cap:
+            capacity_val = attr[capacity_attr]
+            flow_val = attr[flow_attr]
+            remaining_cap = capacity_val - flow_val
+
+            if remaining_cap >= min_cap:
                 cost_val = attr[cost_attr]
                 if cost_val < min_cost:
                     min_cost = cost_val
@@ -218,16 +232,15 @@ def edge_select_fabric(
         src_node: NodeID,
         dst_node: NodeID,
         edges_map: Dict[EdgeID, AttrDict],
-        ignored_edges: Optional[Set[EdgeID]] = None,
-        ignored_nodes: Optional[Set[NodeID]] = None,
+        excluded_edges: Optional[Set[EdgeID]] = None,
+        excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
         """
-        Return exactly one edge, factoring both 'cost_attr' and load level
-        into a combined cost:
-            combined_cost = (cost * 100) + round((flow / capacity) * 10)
+        Return exactly one edge, factoring both cost and load level
+        into a combined cost: cost_factor = (cost * 100) + round((flow/capacity)*10).
         Only edges with remaining capacity >= min_cap are considered.
         """
-        if ignored_nodes and dst_node in ignored_nodes:
+        if excluded_nodes and dst_node in excluded_nodes:
             return float("inf"), []
 
         chosen_edge: List[EdgeID] = []
@@ -235,13 +248,21 @@ def edge_select_fabric(
         min_cap = select_value if select_value is not None else MIN_CAP
 
         for edge_id, attr in edges_map.items():
-            if ignored_edges and edge_id in ignored_edges:
+            if excluded_edges and edge_id in excluded_edges:
                 continue
 
-            remaining_cap = attr[capacity_attr] - attr[flow_attr]
+            capacity_val = attr[capacity_attr]
+            flow_val = attr[flow_attr]
+            remaining_cap = capacity_val - flow_val
+
             if remaining_cap >= min_cap:
-                load_factor = round((attr[flow_attr] / attr[capacity_attr]) * 10)
-                cost_val = attr[cost_attr] * 100 + load_factor
+                base_cost = attr[cost_attr] * 100
+                # Avoid division by zero if capacity_val == 0
+                load_factor = (
+                    round((flow_val / capacity_val) * 10) if capacity_val else 999999
+                )
+                cost_val = base_cost + load_factor
+
                 if cost_val < min_cost_factor:
                     min_cost_factor = cost_val
                     chosen_edge = [edge_id]
@@ -249,7 +270,7 @@ def edge_select_fabric(
         return float(min_cost_factor), chosen_edge
 
     # --------------------------------------------------------------------------
-    # Fabric: map the EdgeSelect enum to the appropriate inner function.
+    # Map the EdgeSelect enum to the appropriate inner function.
     # --------------------------------------------------------------------------
     if edge_select == EdgeSelect.ALL_MIN_COST:
         return get_all_min_cost_edges

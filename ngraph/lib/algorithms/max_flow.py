@@ -1,11 +1,8 @@
-from __future__ import annotations
-
 from ngraph.lib.algorithms.spf import spf
 from ngraph.lib.algorithms.place_flow import place_flow_on_graph
 from ngraph.lib.algorithms.base import EdgeSelect, FlowPlacement
 from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 from ngraph.lib.algorithms.flow_init import init_flow_graph
-from ngraph.lib.algorithms.edge_select import edge_select_fabric
 
 
 def calc_max_flow(
@@ -25,14 +22,14 @@ def calc_max_flow(
     using an iterative shortest-path augmentation approach.
 
     By default, this function:
-      1. Creates or re-initializes a flow-aware copy of the graph (using ``init_flow_graph``).
-      2. Repeatedly finds a path from ``src_node`` to any reachable node via ``spf`` with
-         capacity constraints (through ``EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING``).
-      3. Places flow along that path (using ``place_flow_on_graph``) until no augmenting path
+      1. Creates or re-initializes a flow-aware copy of the graph (via ``init_flow_graph``).
+      2. Repeatedly finds a path from ``src_node`` to ``dst_node`` using ``spf`` with
+         capacity constraints (``EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING``).
+      3. Places flow along that path (via ``place_flow_on_graph``) until no augmenting path
          remains or the capacities are exhausted.
 
-    If ``shortest_path=True``, it will run only one iteration of path-finding and flow placement,
-    returning the flow placed by that single augmentation (not the true max flow).
+    If ``shortest_path=True``, the function performs only one iteration (single augmentation)
+    and returns the flow placed along that single path (not the true max flow).
 
     Args:
         graph (StrictMultiDiGraph):
@@ -46,10 +43,10 @@ def calc_max_flow(
             Defaults to ``FlowPlacement.PROPORTIONAL``.
         shortest_path (bool):
             If True, place flow only once along the first shortest path found and return
-            immediately, rather than iterating to find the true max flow.
+            immediately, rather than iterating for the true max flow.
         reset_flow_graph (bool):
-            If True, reset any existing flow data (e.g., attributes in ``flow_attr`` and
-            ``flows_attr``). Defaults to False.
+            If True, reset any existing flow data (e.g., ``flow_attr``, ``flows_attr``).
+            Defaults to False.
         capacity_attr (str):
             The name of the capacity attribute on edges. Defaults to "capacity".
         flow_attr (str):
@@ -61,8 +58,13 @@ def calc_max_flow(
             Defaults to True.
 
     Returns:
-        float: The total flow placed between ``src_node`` and ``dst_node``.
-               If ``shortest_path=True``, this is the flow placed by a single augmentation.
+        float:
+            The total flow placed between ``src_node`` and ``dst_node``. If ``shortest_path=True``,
+            this is just the flow from a single augmentation.
+
+    Notes:
+        - For large graphs or performance-critical scenarios, consider specialized max-flow
+          algorithms (e.g., Dinic, Edmond-Karp) for better scaling.
 
     Examples:
         >>> g = StrictMultiDiGraph()
@@ -83,11 +85,10 @@ def calc_max_flow(
         reset_flow_graph,
     )
 
-    # Prepare the edge selection function (selects edges with capacity remaining).
-    edge_select_func = edge_select_fabric(EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING)
-
     # First path-finding iteration.
-    _, pred = spf(flow_graph, src_node, edge_select_func=edge_select_func)
+    _, pred = spf(
+        flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
+    )
     flow_meta = place_flow_on_graph(
         flow_graph,
         src_node,
@@ -98,7 +99,7 @@ def calc_max_flow(
         flow_attr=flow_attr,
         flows_attr=flows_attr,
     )
-    max_flow: float = flow_meta.placed_flow
+    max_flow = flow_meta.placed_flow
 
     # If only one path (single augmentation) is desired, return early.
     if shortest_path:
@@ -106,9 +107,11 @@ def calc_max_flow(
 
     # Otherwise, repeatedly find augmenting paths until no new flow can be placed.
     while True:
-        _, pred = spf(flow_graph, src_node, edge_select_func=edge_select_func)
+        _, pred = spf(
+            flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
+        )
         if dst_node not in pred:
-            # No path found; we've reached the max flow.
+            # No path found; we've reached max flow.
             break
 
         flow_meta = place_flow_on_graph(
@@ -122,7 +125,7 @@ def calc_max_flow(
             flows_attr=flows_attr,
         )
         if flow_meta.placed_flow <= 0:
-            # No additional flow could be placed; we're at capacity.
+            # No additional flow could be placed; at capacity.
             break
 
         max_flow += flow_meta.placed_flow
