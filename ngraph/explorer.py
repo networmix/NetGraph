@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Optional
@@ -57,7 +58,7 @@ class TreeStats:
     total_power: float = 0.0
 
 
-@dataclass
+@dataclass(eq=False)
 class TreeNode:
     """
     Represents a node in the hierarchical tree.
@@ -78,6 +79,14 @@ class TreeNode:
     subtree_nodes: Set[str] = field(default_factory=set)
     stats: TreeStats = field(default_factory=TreeStats)
     raw_nodes: List[Node] = field(default_factory=list)
+
+    def __hash__(self) -> int:
+        """
+        Make the node hashable based on object identity.
+        This preserves uniqueness in sets/dicts without
+        forcing equality by fields.
+        """
+        return id(self)
 
     def add_child(self, child_name: str) -> TreeNode:
         """
@@ -135,6 +144,9 @@ class NetworkExplorer:
         self._node_map: Dict[str, TreeNode] = {}  # node_name -> deepest TreeNode
         self._path_map: Dict[str, TreeNode] = {}  # path -> TreeNode
 
+        # Cache for storing each node's ancestor set:
+        self._ancestors_cache: Dict[TreeNode, Set[TreeNode]] = {}
+
     @classmethod
     def explore_network(
         cls,
@@ -160,15 +172,15 @@ class NetworkExplorer:
         # 1) Build the hierarchical structure
         instance.root_node = instance._build_hierarchy_tree()
 
-        # 2) Compute subtree sets
+        # 2) Compute subtree sets (subtree_nodes)
         instance._compute_subtree_sets(instance.root_node)
 
         # 3) Build node and path maps
         instance._build_node_map(instance.root_node)
         instance._build_path_map(instance.root_node)
 
-        # 4) Aggregate statistics (nodes, links, cost, power)
-        instance._aggregate_stats(instance.root_node)
+        # 4) Aggregate statistics (node counts, link stats, cost, power)
+        instance._compute_statistics()
 
         return instance
 
@@ -270,96 +282,130 @@ class NetworkExplorer:
             node = node.parent
         return self._compute_full_path(node)
 
-    def _aggregate_stats(self, node: TreeNode) -> None:
+    def _get_ancestors(self, node: TreeNode) -> Set[TreeNode]:
         """
-        Summarize node count, link stats, and cost/power usage for this subtree,
-        then recurse to children.
-
-        Args:
-            node (TreeNode): The current tree node to process.
+        Return a cached set of this node's ancestors (including itself),
+        up to the root.
         """
-        # 1) Node count
-        node.stats.node_count = len(node.subtree_nodes)
+        if node in self._ancestors_cache:
+            return self._ancestors_cache[node]
 
-        # 2) Accumulate node-level cost/power
-        for node_name in node.subtree_nodes:
-            nd = self.network.nodes[node_name]
+        ancestors = set()
+        current = node
+        while current is not None:
+            ancestors.add(current)
+            current = current.parent
+        self._ancestors_cache[node] = ancestors
+        return ancestors
+
+    def _compute_statistics(self) -> None:
+        """
+        Computes all subtree statistics in a more efficient manner:
+
+        - node_count is set from each node's 'subtree_nodes' (already stored).
+        - For each network node, cost/power is added to all ancestors in the
+          hierarchy.
+        - For each link, we figure out which subtrees see it as internal or
+          external, and update stats accordingly.
+        """
+
+        # 1) node_count: use subtree sets
+        #    (each node gets the size of subtree_nodes)
+        #    stats are zeroed initially in the constructor.
+        def set_node_counts(node: TreeNode) -> None:
+            node.stats.node_count = len(node.subtree_nodes)
+            for child in node.children.values():
+                set_node_counts(child)
+
+        set_node_counts(self.root_node)
+
+        # 2) Accumulate node cost/power into all ancestor stats
+        for nd in self.network.nodes.values():
             hw_component = nd.attrs.get("hw_component")
+            comp = None
             if hw_component:
                 comp = self.components_library.get(hw_component)
-                if comp:
-                    node.stats.total_cost += comp.total_cost()
-                    node.stats.total_power += comp.total_power()
-                else:
+                if comp is None:
                     logger.warning(
                         "Node '%s' references unknown hw_component '%s'.",
-                        node_name,
+                        nd.name,
                         hw_component,
                     )
 
-        # Minor early-out: if this node is a leaf and has <= 1 raw node,
-        # no links are possible within or external to it.
-        # (If it has multiple raw_nodes, we do need the link checks.)
-        if node.is_leaf() and len(node.raw_nodes) <= 1:
-            return
+            # Walk up from the deepest node
+            node_for_name = self._node_map[nd.name]
+            ancestors = self._get_ancestors(node_for_name)
+            if comp:
+                cval = comp.total_cost()
+                pval = comp.total_power()
+                for an in ancestors:
+                    an.stats.total_cost += cval
+                    an.stats.total_power += pval
 
-        # 3) Evaluate link-level stats
+        # 3) Single pass to accumulate link stats
+        #    For each link, determine for which subtrees it's internal vs external,
+        #    and update stats accordingly. Also add link hw cost/power if applicable.
         for link in self.network.links.values():
-            src_in = link.source in node.subtree_nodes
-            dst_in = link.target in node.subtree_nodes
+            src = link.source
+            dst = link.target
 
-            if src_in and dst_in:
-                # Internal link
-                node.stats.internal_link_count += 1
-                node.stats.internal_link_capacity += link.capacity
-
-                # If there's an hw_component on the link, add cost/power
-                hw_comp = link.attrs.get("hw_component")
-                if hw_comp:
-                    comp = self.components_library.get(hw_comp)
-                    if comp:
-                        node.stats.total_cost += comp.total_cost()
-                        node.stats.total_power += comp.total_power()
-                    else:
-                        logger.warning(
-                            "Link '%s->%s' references unknown hw_component '%s'.",
-                            link.source,
-                            link.target,
-                            hw_comp,
-                        )
-            elif src_in ^ dst_in:
-                # External link
-                node.stats.external_link_count += 1
-                node.stats.external_link_capacity += link.capacity
-
-                other_side = link.target if src_in else link.source
-                other_node = self._node_map.get(other_side)
-                if other_node:
-                    other_path = self._compute_full_path(other_node)
-                    bd = node.stats.external_link_details.setdefault(
-                        other_path, ExternalLinkBreakdown()
+            # Check link's hw_component
+            hw_comp = link.attrs.get("hw_component")
+            link_comp = None
+            if hw_comp:
+                link_comp = self.components_library.get(hw_comp)
+                if link_comp is None:
+                    logger.warning(
+                        "Link '%s->%s' references unknown hw_component '%s'.",
+                        src,
+                        dst,
+                        hw_comp,
                     )
-                    bd.link_count += 1
-                    bd.link_capacity += link.capacity
 
-                # Possibly add link optic/hw cost/power
-                hw_comp = link.attrs.get("hw_component")
-                if hw_comp:
-                    comp = self.components_library.get(hw_comp)
-                    if comp:
-                        node.stats.total_cost += comp.total_cost()
-                        node.stats.total_power += comp.total_power()
-                    else:
-                        logger.warning(
-                            "Link '%s->%s' references unknown hw_component '%s'.",
-                            link.source,
-                            link.target,
-                            hw_comp,
-                        )
+            src_node = self._node_map[src]
+            dst_node = self._node_map[dst]
+            A_src = self._get_ancestors(src_node)
+            A_dst = self._get_ancestors(dst_node)
 
-        # 4) Recurse to children
-        for child in node.children.values():
-            self._aggregate_stats(child)
+            # Intersection => internal
+            # XOR => external
+            inter = A_src & A_dst
+            xor = A_src ^ A_dst
+
+            # Capacity
+            cap = link.capacity
+
+            # For cost/power from link, we add to any node
+            # that sees it either internal or external.
+            link_cost = link_comp.total_cost() if link_comp else 0.0
+            link_power = link_comp.total_power() if link_comp else 0.0
+
+            # Internal link updates
+            for an in inter:
+                an.stats.internal_link_count += 1
+                an.stats.internal_link_capacity += cap
+                an.stats.total_cost += link_cost
+                an.stats.total_power += link_power
+
+            # External link updates
+            for an in xor:
+                an.stats.external_link_count += 1
+                an.stats.external_link_capacity += cap
+                an.stats.total_cost += link_cost
+                an.stats.total_power += link_power
+
+                # Update external_link_details
+                if an in A_src:
+                    # 'an' sees the other side as 'dst'
+                    other_path = self._compute_full_path(dst_node)
+                else:
+                    # 'an' sees the other side as 'src'
+                    other_path = self._compute_full_path(src_node)
+                bd = an.stats.external_link_details.setdefault(
+                    other_path, ExternalLinkBreakdown()
+                )
+                bd.link_count += 1
+                bd.link_capacity += cap
 
     def print_tree(
         self,
