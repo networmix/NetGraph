@@ -244,7 +244,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     # Check failure policy
     assert isinstance(scenario.failure_policy, FailurePolicy)
     assert len(scenario.failure_policy.rules) == 2, "Expected 2 rules in the policy."
-    # leftover fields (e.g. name, description) in policy.attrs
+    # leftover fields (e.g., name, description) in policy.attrs
     assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
     assert (
         scenario.failure_policy.attrs.get("description")
