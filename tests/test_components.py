@@ -1,6 +1,7 @@
 import pytest
 from copy import deepcopy
 from typing import Dict
+
 from ngraph.components import Component, ComponentsLibrary
 
 
@@ -47,6 +48,37 @@ def test_component_total_cost_and_power_with_children() -> None:
 
     assert parent.total_cost() == 100.0 + 50.0 + 20.0
     assert parent.total_power() == 10.0 + 5.0 + 2.0
+
+
+def test_component_as_dict() -> None:
+    """
+    Test that as_dict returns a dictionary with correct fields,
+    and that we can exclude child data if desired.
+    """
+    child = Component(name="Child", cost=10.0)
+    parent = Component(
+        name="Parent",
+        cost=100.0,
+        power_watts=25.0,
+        children={"Child": child},
+        attrs={"location": "rack1"},
+    )
+
+    # Include children
+    parent_dict_incl = parent.as_dict(include_children=True)
+    assert parent_dict_incl["name"] == "Parent"
+    assert parent_dict_incl["cost"] == 100.0
+    assert parent_dict_incl["power_watts"] == 25.0
+    assert parent_dict_incl["attrs"]["location"] == "rack1"
+    assert "children" in parent_dict_incl
+    assert len(parent_dict_incl["children"]) == 1
+    assert parent_dict_incl["children"]["Child"]["name"] == "Child"
+    assert parent_dict_incl["children"]["Child"]["cost"] == 10.0
+
+    # Exclude children
+    parent_dict_excl = parent.as_dict(include_children=False)
+    assert parent_dict_excl["name"] == "Parent"
+    assert "children" not in parent_dict_excl
 
 
 def test_components_library_empty() -> None:
@@ -165,7 +197,7 @@ def test_components_library_from_dict() -> None:
                 }
             },
         },
-        "400G-LR4": {"component_type": "optic", "cost": 2000, "power_watts": 15},
+        "400G-LR4": {"component_type": "optic", "cost": 2000, "power_watts": 10},
     }
 
     lib = ComponentsLibrary.from_dict(data)
@@ -183,7 +215,7 @@ def test_components_library_from_dict() -> None:
     assert optic is not None
     assert optic.component_type == "optic"
     assert optic.cost == 2000
-    assert optic.power_watts == 15
+    assert optic.power_watts == 10
 
 
 def test_components_library_from_yaml_valid() -> None:
