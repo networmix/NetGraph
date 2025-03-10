@@ -1014,3 +1014,653 @@ def test_existing_node_preserves_attrs():
     # So "myattr" won't appear, because the node was created from groups.
     assert "myattr" not in node_obj.attrs
     assert node_obj.attrs["type"] == "node"
+
+
+def test_expand_network_dsl_empty():
+    """
+    Tests calling expand_network_dsl with an empty dictionary => empty Network.
+    """
+    net = expand_network_dsl({})
+    assert len(net.nodes) == 0
+    assert len(net.links) == 0
+    assert not net.attrs, "No attributes expected in an empty scenario."
+
+
+def test_network_version_attribute():
+    """
+    Tests that 'version' in the network data is recorded in net.attrs.
+    """
+    scenario_data = {
+        "network": {
+            "version": "1.2.3",
+        }
+    }
+    net = expand_network_dsl(scenario_data)
+    assert net.attrs["version"] == "1.2.3"
+
+
+def test_expand_group_with_bracket_expansions():
+    """
+    Tests bracket expansions in group names, e.g. group_name='fa[1-2]_plane[3-4]'.
+    We expect 4 expansions => fa1_plane3, fa1_plane4, fa2_plane3, fa2_plane4.
+    """
+    ctx_net = Network()
+    ctx = DSLExpansionContext({}, ctx_net)
+
+    group_def = {"node_count": 1}  # We'll create 1 node per expanded group
+    _expand_group(
+        ctx, parent_path="", group_name="fa[1-2]_plane[3-4]", group_def=group_def
+    )
+
+    # We expect 4 groups => each with 1 node => total 4 nodes
+    expected_names = {
+        "fa1_plane3/fa1_plane3-1",
+        "fa1_plane4/fa1_plane4-1",
+        "fa2_plane3/fa2_plane3-1",
+        "fa2_plane4/fa2_plane4-1",
+    }
+    assert set(ctx_net.nodes.keys()) == expected_names
+
+
+def test_apply_parameters_nested_fields():
+    """
+    Tests parameter overrides for nested fields beyond just 'attrs'.
+    E.g., 'leaf.some_field.nested_key = 999'.
+    """
+    bp = Blueprint(
+        name="bp1",
+        groups={
+            "leaf": {
+                "node_count": 1,
+                "some_field": {"nested_key": 111},
+            },
+        },
+        adjacency=[],
+    )
+    ctx_net = Network()
+    ctx = DSLExpansionContext(blueprints={"bp1": bp}, network=ctx_net)
+
+    group_def = {
+        "use_blueprint": "bp1",
+        "parameters": {
+            "leaf.some_field.nested_key": 999,
+        },
+    }
+    _expand_group(
+        ctx,
+        parent_path="Region",
+        group_name="Main",
+        group_def=group_def,
+    )
+
+    # Expect 1 node => "Region/Main/leaf/leaf-1"
+    assert len(ctx_net.nodes) == 1
+    node_obj = ctx_net.nodes["Region/Main/leaf/leaf-1"]
+    # Check that nested field was updated
+    assert node_obj.attrs["some_field"]["nested_key"] == 999
+
+
+def test_link_overrides_repeated():
+    """
+    Tests applying multiple link_overrides in sequence to the same links.
+    Each override can set different fields, verifying that the last override
+    wins if there's a conflict.
+    """
+    net = Network()
+    net.add_node(Node("S1"))
+    net.add_node(Node("T1"))
+    link = Link("S1", "T1", capacity=5, cost=5, attrs={})
+    net.add_link(link)
+
+    network_data = {
+        "link_overrides": [
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "capacity": 100,
+                    "attrs": {"color": "red"},
+                },
+            },
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "cost": 999,
+                    "attrs": {"color": "blue"},  # Overwrites 'color': 'red'
+                },
+            },
+        ]
+    }
+    _process_link_overrides(net, network_data)
+    assert link.capacity == 100
+    assert link.cost == 999
+    assert link.attrs["color"] == "blue"  # second override wins
+
+
+def test_node_overrides_repeated():
+    """
+    Tests multiple node_overrides in sequence, verifying that the last override
+    wins on conflicting attributes and merges others.
+    """
+    net = Network()
+    net.add_node(Node("X", attrs={"existing": "keep"}))
+
+    network_data = {
+        "node_overrides": [
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "old_role",
+                    "color": "red",
+                },
+            },
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "updated_role",
+                    "speed": "fast",
+                },
+            },
+        ]
+    }
+    _process_node_overrides(net, network_data)
+    node_attrs = net.nodes["X"].attrs
+
+    # existing attribute is retained
+    assert node_attrs["existing"] == "keep"
+    # role was overwritten by second override
+    assert node_attrs["role"] == "updated_role"
+    # color is from the first override but not overwritten by the second => remains
+    assert node_attrs["color"] == "red"
+    # speed is added by the second override
+    assert node_attrs["speed"] == "fast"
+
+
+def test_adjacency_no_matching_source_or_target():
+    """
+    Tests adjacency expansion where the source or target path does not match any nodes.
+    Should simply skip and create no links.
+    """
+    scenario_data = {
+        "network": {
+            "nodes": {"RealNode": {}},
+            "adjacency": [
+                {
+                    "source": "/MissingSource",
+                    "target": "/RealNode",
+                    "pattern": "mesh",
+                },
+                {
+                    "source": "/RealNode",
+                    "target": "/MissingTarget",
+                    "pattern": "mesh",
+                },
+            ],
+        }
+    }
+    net = expand_network_dsl(scenario_data)
+    # Only 1 node => RealNode
+    assert len(net.nodes) == 1
+    # No valid adjacency => no links
+    assert len(net.links) == 0
+
+
+def test_provide_network_version_and_name():
+    """
+    Tests that both 'name' and 'version' keys in the DSL are captured as net.attrs.
+    """
+    data = {
+        "network": {
+            "name": "NetGraphTest",
+            "version": "2.0-beta",
+        }
+    }
+    net = expand_network_dsl(data)
+    assert net.attrs["name"] == "NetGraphTest"
+    assert net.attrs["version"] == "2.0-beta"
+
+
+def test_expand_group_with_bracket_expansions():
+    """
+    Tests bracket expansions in group names, e.g. group_name='fa[1-2]_plane[3-4]'.
+    We expect 4 expansions => fa1_plane3, fa1_plane4, fa2_plane3, fa2_plane4.
+    """
+    ctx_net = Network()
+    ctx = DSLExpansionContext({}, ctx_net)
+
+    group_def = {"node_count": 1}  # We'll create 1 node per expanded group
+    _expand_group(
+        ctx, parent_path="", group_name="fa[1-2]_plane[3-4]", group_def=group_def
+    )
+
+    # We expect 4 groups => each with 1 node => total 4 nodes
+    expected_names = {
+        "fa1_plane3/fa1_plane3-1",
+        "fa1_plane4/fa1_plane4-1",
+        "fa2_plane3/fa2_plane3-1",
+        "fa2_plane4/fa2_plane4-1",
+    }
+    assert set(ctx_net.nodes.keys()) == expected_names
+
+
+def test_apply_parameters_nested_fields():
+    """
+    Tests parameter overrides for nested fields beyond just 'attrs'.
+    E.g., 'leaf.some_field.nested_key = 999'.
+    """
+    bp = Blueprint(
+        name="bp1",
+        groups={
+            "leaf": {
+                "node_count": 1,
+                "some_field": {"nested_key": 111},
+            },
+        },
+        adjacency=[],
+    )
+    ctx_net = Network()
+    ctx = DSLExpansionContext(blueprints={"bp1": bp}, network=ctx_net)
+
+    group_def = {
+        "use_blueprint": "bp1",
+        "parameters": {
+            "leaf.some_field.nested_key": 999,
+        },
+    }
+    _expand_group(
+        ctx,
+        parent_path="Region",
+        group_name="Main",
+        group_def=group_def,
+    )
+
+    # Expect 1 node => "Region/Main/leaf/leaf-1"
+    assert len(ctx_net.nodes) == 1
+    node_obj = ctx_net.nodes["Region/Main/leaf/leaf-1"]
+    # Check that nested field was updated
+    assert node_obj.attrs["some_field"]["nested_key"] == 999
+
+
+def test_link_overrides_repeated():
+    """
+    Tests applying multiple link_overrides in sequence to the same links.
+    Each override can set different fields, verifying that the last override
+    wins if there's a conflict.
+    """
+    net = Network()
+    net.add_node(Node("S1"))
+    net.add_node(Node("T1"))
+    link = Link("S1", "T1", capacity=5, cost=5, attrs={})
+    net.add_link(link)
+
+    network_data = {
+        "link_overrides": [
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "capacity": 100,
+                    "attrs": {"color": "red"},
+                },
+            },
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "cost": 999,
+                    "attrs": {"color": "blue"},  # Overwrites 'color': 'red'
+                },
+            },
+        ]
+    }
+    _process_link_overrides(net, network_data)
+    assert link.capacity == 100
+    assert link.cost == 999
+    assert link.attrs["color"] == "blue"  # second override wins
+
+
+def test_node_overrides_repeated():
+    """
+    Tests multiple node_overrides in sequence, verifying that the last override
+    wins on conflicting attributes and merges others.
+    """
+    net = Network()
+    net.add_node(Node("X", attrs={"existing": "keep"}))
+
+    network_data = {
+        "node_overrides": [
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "old_role",
+                    "color": "red",
+                },
+            },
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "updated_role",
+                    "speed": "fast",
+                },
+            },
+        ]
+    }
+    _process_node_overrides(net, network_data)
+    node_attrs = net.nodes["X"].attrs
+
+    # existing attribute is retained
+    assert node_attrs["existing"] == "keep"
+    # role was overwritten by second override
+    assert node_attrs["role"] == "updated_role"
+    # color is from the first override but not overwritten by the second => remains
+    assert node_attrs["color"] == "red"
+    # speed is added by the second override
+    assert node_attrs["speed"] == "fast"
+
+
+def test_adjacency_no_matching_source_or_target():
+    """
+    Tests adjacency expansion where the source or target path does not match any nodes.
+    Should simply skip and create no links.
+    """
+    scenario_data = {
+        "network": {
+            "nodes": {"RealNode": {}},
+            "adjacency": [
+                {
+                    "source": "/MissingSource",
+                    "target": "/RealNode",
+                    "pattern": "mesh",
+                },
+                {
+                    "source": "/RealNode",
+                    "target": "/MissingTarget",
+                    "pattern": "mesh",
+                },
+            ],
+        }
+    }
+    net = expand_network_dsl(scenario_data)
+    # Only 1 node => RealNode
+    assert len(net.nodes) == 1
+    # No valid adjacency => no links
+    assert len(net.links) == 0
+
+
+def test_provide_network_version_and_name():
+    """
+    Tests that both 'name' and 'version' keys in the DSL are captured as net.attrs.
+    """
+    data = {
+        "network": {
+            "name": "NetGraphTest",
+            "version": "2.0-beta",
+        }
+    }
+    net = expand_network_dsl(data)
+    assert net.attrs["name"] == "NetGraphTest"
+    assert net.attrs["version"] == "2.0-beta"
+
+
+def test_expand_group_with_bracket_expansions():
+    """
+    Tests bracket expansions in group names, e.g. group_name='fa[1-2]_plane[3-4]'.
+    We expect 4 expansions => fa1_plane3, fa1_plane4, fa2_plane3, fa2_plane4.
+    """
+    ctx_net = Network()
+    ctx = DSLExpansionContext({}, ctx_net)
+
+    group_def = {"node_count": 1}  # We'll create 1 node per expanded group
+    _expand_group(
+        ctx, parent_path="", group_name="fa[1-2]_plane[3-4]", group_def=group_def
+    )
+
+    # We expect 4 groups => each with 1 node => total 4 nodes
+    expected_names = {
+        "fa1_plane3/fa1_plane3-1",
+        "fa1_plane4/fa1_plane4-1",
+        "fa2_plane3/fa2_plane3-1",
+        "fa2_plane4/fa2_plane4-1",
+    }
+    assert set(ctx_net.nodes.keys()) == expected_names
+
+
+def test_apply_parameters_nested_fields():
+    """
+    Tests parameter overrides for nested fields beyond just 'attrs'.
+    E.g., 'leaf.some_field.nested_key = 999'.
+    """
+    bp = Blueprint(
+        name="bp1",
+        groups={
+            "leaf": {
+                "node_count": 1,
+                "some_field": {"nested_key": 111},
+            },
+        },
+        adjacency=[],
+    )
+    ctx_net = Network()
+    ctx = DSLExpansionContext(blueprints={"bp1": bp}, network=ctx_net)
+
+    group_def = {
+        "use_blueprint": "bp1",
+        "parameters": {
+            "leaf.some_field.nested_key": 999,
+        },
+    }
+    _expand_group(
+        ctx,
+        parent_path="Region",
+        group_name="Main",
+        group_def=group_def,
+    )
+
+    # Expect 1 node => "Region/Main/leaf/leaf-1"
+    assert len(ctx_net.nodes) == 1
+    node_obj = ctx_net.nodes["Region/Main/leaf/leaf-1"]
+    # Check that nested field was updated
+    assert node_obj.attrs["some_field"]["nested_key"] == 999
+
+
+def test_link_overrides_repeated():
+    """
+    Tests applying multiple link_overrides in sequence to the same links.
+    Each override can set different fields, verifying that the last override
+    wins if there's a conflict.
+    """
+    net = Network()
+    net.add_node(Node("S1"))
+    net.add_node(Node("T1"))
+    link = Link("S1", "T1", capacity=5, cost=5, attrs={})
+    net.add_link(link)
+
+    network_data = {
+        "link_overrides": [
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "capacity": 100,
+                    "attrs": {"color": "red"},
+                },
+            },
+            {
+                "source": "S1",
+                "target": "T1",
+                "link_params": {
+                    "cost": 999,
+                    "attrs": {"color": "blue"},  # Overwrites 'color': 'red'
+                },
+            },
+        ]
+    }
+    _process_link_overrides(net, network_data)
+    assert link.capacity == 100
+    assert link.cost == 999
+    assert link.attrs["color"] == "blue"  # second override wins
+
+
+def test_node_overrides_repeated():
+    """
+    Tests multiple node_overrides in sequence, verifying that the last override
+    wins on conflicting attributes and merges others.
+    """
+    net = Network()
+    net.add_node(Node("X", attrs={"existing": "keep"}))
+
+    network_data = {
+        "node_overrides": [
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "old_role",
+                    "color": "red",
+                },
+            },
+            {
+                "path": "X",
+                "attrs": {
+                    "role": "updated_role",
+                    "speed": "fast",
+                },
+            },
+        ]
+    }
+    _process_node_overrides(net, network_data)
+    node_attrs = net.nodes["X"].attrs
+
+    # existing attribute is retained
+    assert node_attrs["existing"] == "keep"
+    # role was overwritten by second override
+    assert node_attrs["role"] == "updated_role"
+    # color is from the first override but not overwritten by the second => remains
+    assert node_attrs["color"] == "red"
+    # speed is added by the second override
+    assert node_attrs["speed"] == "fast"
+
+
+def test_adjacency_no_matching_source_or_target():
+    """
+    Tests adjacency expansion where the source or target path does not match any nodes.
+    Should simply skip and create no links.
+    """
+    scenario_data = {
+        "network": {
+            "nodes": {"RealNode": {}},
+            "adjacency": [
+                {
+                    "source": "/MissingSource",
+                    "target": "/RealNode",
+                    "pattern": "mesh",
+                },
+                {
+                    "source": "/RealNode",
+                    "target": "/MissingTarget",
+                    "pattern": "mesh",
+                },
+            ],
+        }
+    }
+    net = expand_network_dsl(scenario_data)
+    # Only 1 node => RealNode
+    assert len(net.nodes) == 1
+    # No valid adjacency => no links
+    assert len(net.links) == 0
+
+
+def test_provide_network_version_and_name():
+    """
+    Tests that both 'name' and 'version' keys in the DSL are captured as net.attrs.
+    """
+    data = {
+        "network": {
+            "name": "NetGraphTest",
+            "version": "2.0-beta",
+        }
+    }
+    net = expand_network_dsl(data)
+    assert net.attrs["name"] == "NetGraphTest"
+    assert net.attrs["version"] == "2.0-beta"
+
+
+def test_expand_adjacency_with_variables_zip():
+    """
+    Tests adjacency expansion with 'expand_vars' in 'zip' mode.
+    Verifies that expansions occur in lockstep for equal-length lists.
+    """
+    scenario_data = {
+        "network": {
+            "groups": {
+                "RackA": {"node_count": 1, "name_template": "RackA-{node_num}"},
+                "RackB": {"node_count": 1, "name_template": "RackB-{node_num}"},
+                "RackC": {"node_count": 1, "name_template": "RackC-{node_num}"},
+            },
+            "adjacency": [
+                {
+                    "source": "/Rack{rack_id}",
+                    "target": "/Rack{other_rack_id}",
+                    "expand_vars": {
+                        "rack_id": ["A", "B", "C"],
+                        "other_rack_id": ["B", "C", "A"],
+                    },
+                    "expansion_mode": "zip",
+                    "pattern": "mesh",
+                    "link_params": {"capacity": 100},
+                }
+            ],
+        }
+    }
+    net = expand_network_dsl(scenario_data)
+
+    # We have 3 racks: RackA-1, RackB-1, RackC-1
+    # expand_vars with zip => (A->B), (B->C), (C->A) for the source/target
+    # pattern=mesh => each source node to each target node => but each "group" here has only 1 node
+    # => we get exactly 3 unique links
+    assert len(net.nodes) == 3
+    assert len(net.links) == 3
+
+    link_pairs = {(l.source, l.target) for l in net.links.values()}
+    # RackA-1 -> RackB-1
+    # RackB-1 -> RackC-1
+    # RackC-1 -> RackA-1
+    # (no duplication, no self-loops)
+    expected = {
+        ("RackA/RackA-1", "RackB/RackB-1"),
+        ("RackB/RackB-1", "RackC/RackC-1"),
+        ("RackC/RackC-1", "RackA/RackA-1"),
+    }
+    assert link_pairs == expected
+    for link in net.links.values():
+        assert link.capacity == 100
+
+
+def test_expand_adjacency_with_variables_zip_mismatch():
+    """
+    Tests that 'zip' mode with lists of different lengths raises ValueError.
+    """
+    scenario_data = {
+        "network": {
+            "groups": {
+                "RackA": {"node_count": 1},
+                "RackB": {"node_count": 1},
+                "RackC": {"node_count": 1},
+            },
+            "adjacency": [
+                {
+                    "source": "/Rack{rack_id}",
+                    "target": "/Rack{other_rack_id}",
+                    "expand_vars": {
+                        "rack_id": ["A", "B"],
+                        "other_rack_id": ["C", "A", "B"],  # mismatch length
+                    },
+                    "expansion_mode": "zip",
+                }
+            ],
+        }
+    }
+
+    with pytest.raises(ValueError) as exc:
+        expand_network_dsl(scenario_data)
+    assert "zip expansion requires all lists be the same length" in str(exc.value)
