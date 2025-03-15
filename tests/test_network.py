@@ -33,6 +33,7 @@ def test_node_creation_default_attrs():
     node = Node("A")
     assert node.name == "A"
     assert node.attrs == {}
+    assert node.disabled is False
 
 
 def test_node_creation_custom_attrs():
@@ -43,6 +44,7 @@ def test_node_creation_custom_attrs():
     node = Node("B", attrs=custom_attrs)
     assert node.name == "B"
     assert node.attrs == custom_attrs
+    assert node.disabled is False
 
 
 def test_link_defaults_and_id_generation():
@@ -55,6 +57,7 @@ def test_link_defaults_and_id_generation():
     assert link.capacity == 1.0
     assert link.cost == 1.0
     assert link.attrs == {}
+    assert link.disabled is False
 
     # ID should start with 'A|B|' and have a random suffix
     assert link.id.startswith("A|B|")
@@ -74,6 +77,7 @@ def test_link_custom_values():
     assert link.capacity == 2.0
     assert link.cost == 4.0
     assert link.attrs == custom_attrs
+    assert link.disabled is False
     assert link.id.startswith("X|Y|")
 
 
@@ -358,18 +362,12 @@ def test_max_flow_combine_empty():
     That yields 0.0 flow and the final label is ("A|Z", "C|Y").
     """
     net = Network()
-    net.add_node(Node("A"))  # enabled
-    net.add_node(
-        Node("Z", attrs={"disabled": True})
-    )  # disabled => but still recognized by regex
-
-    net.add_node(Node("C", attrs={"disabled": True}))
-    net.add_node(Node("Y", attrs={"disabled": True}))
+    net.add_node(Node("A"))
+    net.add_node(Node("Z", disabled=True))  # disabled => but recognized by ^(A|Z)$
+    net.add_node(Node("C", disabled=True))
+    net.add_node(Node("Y", disabled=True))
 
     flow_vals = net.max_flow("^(A|Z)$", "^(C|Y)$", mode="combine")
-    # Because "C" and "Y" are *all* disabled, the combined sink side is empty => 0.0
-    # However, the label becomes "A|Z" for sources (both matched by pattern),
-    # and "C|Y" for sinks. That matches what the code returns.
     assert flow_vals == {("A|Z", "C|Y"): 0.0}
 
 
@@ -386,7 +384,7 @@ def test_max_flow_pairwise_some_empty():
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     net.add_node(Node("C"))
-    net.add_node(Node("Z", attrs={"disabled": True}))  # needed for the label "C|Z"
+    net.add_node(Node("Z", disabled=True))
 
     # A->B->C
     net.add_link(Link("A", "B", capacity=5))
@@ -394,10 +392,10 @@ def test_max_flow_pairwise_some_empty():
 
     flow_vals = net.max_flow("^(A|B)$", "^(C|Z)$", mode="pairwise")
     assert flow_vals == {
-        ("A", "C"): 3.0,  # active path
-        ("A", "Z"): 0.0,  # sink is disabled
-        ("B", "C"): 3.0,  # active path
-        ("B", "Z"): 0.0,  # sink is disabled
+        ("A", "C"): 3.0,
+        ("A", "Z"): 0.0,
+        ("B", "C"): 3.0,
+        ("B", "Z"): 0.0,
     }
 
 
@@ -439,16 +437,16 @@ def test_disable_enable_node():
     net.add_link(Link("A", "B"))
 
     # Initially, nothing is disabled
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
 
     net.disable_node("A")
-    assert net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is False
 
     # Re-enable
     net.enable_node("A")
-    assert not net.nodes["A"].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
 
 
 def test_disable_node_does_not_exist():
@@ -467,13 +465,13 @@ def test_disable_enable_link():
     link = Link("A", "B")
     net.add_link(link)
 
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is False
 
     net.disable_link(link.id)
-    assert net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is True
 
     net.enable_link(link.id)
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is False
 
 
 def test_disable_link_does_not_exist():
@@ -492,21 +490,21 @@ def test_enable_all_disable_all():
     net.add_link(link)
 
     # Everything enabled by default
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
+    assert net.links[link.id].disabled is False
 
     # Disable all
     net.disable_all()
-    assert net.nodes["A"].attrs["disabled"]
-    assert net.nodes["B"].attrs["disabled"]
-    assert net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is True
+    assert net.links[link.id].disabled is True
 
     # Enable all
     net.enable_all()
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
+    assert net.links[link.id].disabled is False
 
 
 def test_to_strict_multidigraph_excludes_disabled():

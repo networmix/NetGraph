@@ -4,7 +4,7 @@ import yaml
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from ngraph.network import Network
+from ngraph.network import Network, RiskGroup
 from ngraph.failure_policy import FailurePolicy, FailureRule, FailureCondition
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.results import Results
@@ -33,12 +33,12 @@ class Scenario:
         # Inspect scenario.results
 
     Attributes:
-        network (Network): The network model containing nodes and links.
-        failure_policy (FailurePolicy): Defines how and which entities fail.
-        traffic_demands (List[TrafficDemand]): Describes source/target flows.
-        workflow (List[WorkflowStep]): Defines the execution pipeline.
-        results (Results): Stores outputs from the workflow steps.
-        components_library (ComponentsLibrary): Stores hardware/optics definitions.
+        network: The network model containing nodes and links.
+        failure_policy: Defines how and which entities fail.
+        traffic_demands: Describes source/target flows.
+        workflow: Steps to execute in sequence.
+        results: Stores outputs from the workflow steps.
+        components_library: Hardware/optics library definitions.
     """
 
     network: Network
@@ -52,8 +52,8 @@ class Scenario:
         """
         Executes the scenario's workflow steps in the defined order.
 
-        Each step may access and modify scenario data, or store outputs in
-        scenario.results.
+        Each step may access and modify scenario data, or store outputs
+        in scenario.results.
         """
         for step in self.workflow:
             step.run(self)
@@ -75,11 +75,12 @@ class Scenario:
           - traffic_demands: A list of demands (source, target, amount).
           - workflow: Steps to execute in sequence.
           - components: Optional dictionary defining scenario-specific components.
+          - risk_groups: Optional list of shared-risk group definitions (may specify "disabled").
 
         Args:
-            yaml_str (str): The YAML string that defines the scenario.
-            default_components (Optional[ComponentsLibrary]): An optional default
-                library to merge with scenario-specific components.
+            yaml_str: The YAML string that defines the scenario.
+            default_components: An optional default library to merge with
+                scenario-specific components.
 
         Returns:
             Scenario: An initialized Scenario with expanded network.
@@ -120,6 +121,16 @@ class Scenario:
         if scenario_comps_lib:
             final_components.merge(scenario_comps_lib)
 
+        # 6) Parse optional risk_groups in the scenario, then add to the network
+        risk_group_data = data.get("risk_groups", [])
+        if risk_group_data:
+            risk_groups = cls._build_risk_groups(risk_group_data)
+            for rg in risk_groups:
+                network.risk_groups[rg.name] = rg
+                # Disable the entire group if rg.disabled is True
+                if rg.disabled:
+                    network.disable_risk_group(rg.name, recursive=True)
+
         return cls(
             network=network,
             failure_policy=failure_policy,
@@ -127,6 +138,28 @@ class Scenario:
             workflow=workflow_steps,
             components_library=final_components,
         )
+
+    @staticmethod
+    def _build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
+        """
+        Recursively build a list of RiskGroups from YAML data. Each dict
+        may have keys: "name", "children", "disabled" (bool).
+
+        Args:
+            rg_data: Top-level list of risk-group definitions.
+
+        Returns:
+            A list of top-level RiskGroup objects, each possibly containing children.
+        """
+
+        def build_one(d: Dict[str, Any]) -> RiskGroup:
+            name: str = d["name"]
+            children_data = d.get("children", [])
+            disabled = d.get("disabled", False)  # optional; default to False
+            child_groups = [build_one(child) for child in children_data]
+            return RiskGroup(name=name, children=child_groups, disabled=disabled)
+
+        return [build_one(entry) for entry in rg_data]
 
     @staticmethod
     def _build_failure_policy(fp_data: Dict[str, Any]) -> FailurePolicy:
@@ -137,7 +170,6 @@ class Scenario:
             failure_policy:
               name: "anySingleLink"
               description: "Test single-link failures."
-              fail_shared_risk_groups: true
               rules:
                 - conditions:
                     - attr: "type"
@@ -148,10 +180,10 @@ class Scenario:
                   count: 1
 
         Args:
-            fp_data (Dict[str, Any]): Dictionary from the 'failure_policy' section.
+            fp_data: Dictionary from the 'failure_policy' section.
 
         Returns:
-            FailurePolicy: A policy containing a list of FailureRule objects.
+            A FailurePolicy containing a list of FailureRule objects.
 
         Raises:
             ValueError: If 'rules' is not a list when provided.
@@ -165,7 +197,6 @@ class Scenario:
             conditions_data = rule_dict.get("conditions", [])
             conditions: List[FailureCondition] = []
             for cond_dict in conditions_data:
-                # Rely on KeyError to surface missing required fields
                 condition = FailureCondition(
                     attr=cond_dict["attr"],
                     operator=cond_dict["operator"],
@@ -182,7 +213,7 @@ class Scenario:
             )
             rules.append(rule)
 
-        # Put any extra keys (like "name" or "description") into policy.attrs
+        # Put any extra keys (like "name", "description", etc.) into policy.attrs
         attrs = {k: v for k, v in fp_data.items() if k != "rules"}
 
         return FailurePolicy(rules=rules, attrs=attrs)
@@ -205,11 +236,10 @@ class Scenario:
                 name: compute_routes
 
         Args:
-            workflow_data (List[Dict[str, Any]]): A list of dictionaries, each
-                describing a workflow step.
+            workflow_data: A list of dictionaries, each describing a workflow step.
 
         Returns:
-            List[WorkflowStep]: A list of WorkflowStep instances.
+            A list of WorkflowStep instances.
 
         Raises:
             ValueError: If workflow_data is not a list, or if any entry

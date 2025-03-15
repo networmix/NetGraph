@@ -88,7 +88,7 @@ class FailurePolicy:
             A list of FailureRules to apply.
         attrs (Dict[str, Any]):
             Arbitrary metadata about this policy (e.g. "name", "description").
-            If `fail_shared_risk_groups=True`, then shared-risk expansion is used.
+            If `fail_shared_risk_groups=True`, shared-risk expansion is used.
     """
 
     rules: List[FailureRule] = field(default_factory=list)
@@ -110,8 +110,9 @@ class FailurePolicy:
         Returns:
             A list of failed entity IDs (union of all rule matches).
         """
+        # Merge all entities into a single dict
         all_entities = {**nodes, **links}
-        failed_entities = set()
+        failed_entities: set[str] = set()
 
         # 1) Collect matched failures from each rule
         for rule in self.rules:
@@ -147,7 +148,7 @@ class FailurePolicy:
             return list(all_entities.keys())
 
         if not conditions:
-            # If zero conditions, we match nothing unless logic='any'.
+            # If zero conditions, match nothing unless logic='any'.
             return []
 
         matched = []
@@ -174,11 +175,12 @@ class FailurePolicy:
         Returns:
             True if conditions pass, else False.
         """
-        if logic not in ("and", "or"):
+        if logic == "and":
+            return all(_evaluate_condition(entity_attrs, c) for c in conditions)
+        elif logic == "or":
+            return any(_evaluate_condition(entity_attrs, c) for c in conditions)
+        else:
             raise ValueError(f"Unsupported logic: {logic}")
-
-        results = [_evaluate_condition(entity_attrs, c) for c in conditions]
-        return all(results) if logic == "and" else any(results)
 
     @staticmethod
     def _select_entities(
@@ -191,7 +193,7 @@ class FailurePolicy:
 
         Args:
             entity_ids: Matched entity IDs from _match_entities.
-            all_entities: Full entity map (unused now, but available if needed).
+            all_entities: Full entity map (unused currently, but available if needed).
             rule: The FailureRule specifying 'random', 'choice', or 'all'.
 
         Returns:
@@ -204,44 +206,44 @@ class FailurePolicy:
             return [eid for eid in entity_ids if random() < rule.probability]
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
-            return sample(sorted(entity_ids), k=count)
+            return sample(entity_ids, k=count)
         elif rule.rule_type == "all":
             return entity_ids
         else:
             raise ValueError(f"Unsupported rule_type: {rule.rule_type}")
 
     def _expand_shared_risk_groups(
-        self, failed_entities: set[str], all_entities: Dict[str, Dict[str, Any]]
+        self,
+        failed_entities: set[str],
+        all_entities: Dict[str, Dict[str, Any]],
     ) -> None:
         """
-        Expand the 'failed_entities' set so that if an entity has
-        shared_risk_group=X, all other entities with the same group also fail.
-
-        This is done iteratively until no new failures are found.
+        Expand 'failed_entities' so that if an entity is in a shared_risk_group,
+        all other entities in that same group also fail. Continues until no new
+        failures are added.
 
         Args:
-            failed_entities: Set of entity IDs already marked as failed.
-            all_entities: Map of entity_id -> attributes (which may contain 'shared_risk_group').
+            failed_entities: A set of entity IDs already marked as failed.
+            all_entities: {entity_id -> attributes}, possibly including 'shared_risk_groups'.
         """
-        # Pre-compute SRG -> entity IDs mapping for efficiency
-        srg_map = defaultdict(set)
+        # Build a map of srg_value -> set of entity IDs
+        srg_map: Dict[Any, set[str]] = defaultdict(set)
         for eid, attrs in all_entities.items():
-            srg = attrs.get("shared_risk_group")
-            if srg:
+            srgs = attrs.get("shared_risk_groups", [])
+            for srg in srgs:
                 srg_map[srg].add(eid)
 
+        # BFS through the shared risk groups
         queue = deque(failed_entities)
         while queue:
             current = queue.popleft()
-            current_srg = all_entities[current].get("shared_risk_group")
-            if not current_srg:
-                continue
-
-            # All entities in the same SRG should fail
-            for other_eid in srg_map[current_srg]:
-                if other_eid not in failed_entities:
-                    failed_entities.add(other_eid)
-                    queue.append(other_eid)
+            current_srgs = all_entities[current].get("shared_risk_groups", [])
+            for current_srg in current_srgs:
+                # Fail every entity in this SRG
+                for other_eid in srg_map[current_srg]:
+                    if other_eid not in failed_entities:
+                        failed_entities.add(other_eid)
+                        queue.append(other_eid)
 
 
 def _evaluate_condition(entity: Dict[str, Any], cond: FailureCondition) -> bool:
