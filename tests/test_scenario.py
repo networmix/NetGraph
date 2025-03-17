@@ -18,9 +18,6 @@ if TYPE_CHECKING:
     from ngraph.scenario import Scenario
 
 
-# -------------------------------------------------------------------
-# Dummy workflow steps for testing
-# -------------------------------------------------------------------
 @register_workflow_step("DoSmth")
 @dataclass
 class DoSmth(WorkflowStep):
@@ -64,12 +61,15 @@ def valid_scenario_yaml() -> str:
 network:
   nodes:
     NodeA:
-      role: ingress
-      location: somewhere
+      attrs:
+        role: ingress
+        location: somewhere
     NodeB:
-      role: transit
+      attrs:
+        role: transit
     NodeC:
-      role: egress
+      attrs:
+        role: egress
   links:
     - source: NodeA
       target: NodeB
@@ -200,6 +200,29 @@ workflow:
     some_param: 42
     extra_param: 99
 """
+
+
+@pytest.fixture
+def minimal_scenario_yaml() -> str:
+    """
+    Returns a YAML string with only a single workflow step, no network,
+    no failure_policy, and no traffic_demands. Should be valid but minimal.
+    """
+    return """
+workflow:
+  - step_type: DoSmth
+    name: JustStep
+    some_param: 100
+"""
+
+
+@pytest.fixture
+def empty_yaml() -> str:
+    """
+    Returns an empty YAML string; from_yaml should still construct
+    a Scenario object but with None/empty fields if possible.
+    """
+    return ""
 
 
 def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
@@ -355,7 +378,75 @@ def test_scenario_from_yaml_unsupported_param(extra_param_yaml: str) -> None:
     """
     with pytest.raises(TypeError) as excinfo:
         _ = Scenario.from_yaml(extra_param_yaml)
-
-    # Typically the error message is something like:
-    # "DoSmth.__init__() got an unexpected keyword argument 'extra_param'"
+    # Typically the error message is about "unexpected keyword argument 'extra_param'"
     assert "extra_param" in str(excinfo.value)
+
+
+def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
+    """
+    Tests that a Scenario can be constructed from a minimal YAML that only
+    defines a single workflow step. Ensures scenario.network, scenario.failure_policy,
+    and scenario.traffic_demands are empty or None but the scenario is still valid.
+    """
+    scenario = Scenario.from_yaml(minimal_scenario_yaml)
+    # network might be an empty Network, or None, depending on expansion logic
+    assert scenario.network is None or len(scenario.network.nodes) == 0
+    # failure policy might be empty
+    assert scenario.failure_policy is None or len(scenario.failure_policy.rules) == 0
+    assert not scenario.traffic_demands
+    assert len(scenario.workflow) == 1
+    step = scenario.workflow[0]
+    assert step.__class__ == WORKFLOW_STEP_REGISTRY["DoSmth"]
+    assert step.some_param == 100
+
+
+def test_scenario_empty_yaml(empty_yaml: str) -> None:
+    """
+    Tests constructing a scenario from an empty YAML string. Should produce
+    an effectively empty scenario (network, policy, demands, workflow all empty).
+    """
+    scenario = Scenario.from_yaml(empty_yaml)
+    assert scenario.network is not None
+    assert len(scenario.network.nodes) == 0
+    assert len(scenario.network.links) == 0
+    assert scenario.failure_policy is not None
+    assert len(scenario.failure_policy.rules) == 0
+    assert scenario.traffic_demands == []
+    assert scenario.workflow == []
+
+
+def test_scenario_risk_groups() -> None:
+    """
+    Tests that risk groups are parsed correctly, with the 'disabled' field respected.
+    """
+    scenario_yaml = """
+network:
+  nodes:
+    NodeA: {}
+    NodeB: {}
+links: []
+risk_groups:
+  - name: "RG1"
+    disabled: false
+  - name: "RG2"
+    disabled: true
+"""
+    scenario = Scenario.from_yaml(scenario_yaml)
+    assert "RG1" in scenario.network.risk_groups
+    assert "RG2" in scenario.network.risk_groups
+    assert not scenario.network.risk_groups["RG1"].disabled
+    assert scenario.network.risk_groups["RG2"].disabled
+
+
+def test_scenario_risk_group_missing_name() -> None:
+    """
+    Tests that a ValueError is raised if a risk group is missing its 'name' field.
+    """
+    scenario_yaml = """
+network: {}
+risk_groups:
+  - name_missing: "RG1"
+"""
+    with pytest.raises(ValueError) as excinfo:
+        Scenario.from_yaml(scenario_yaml)
+    assert "RiskGroup entry missing 'name' field" in str(excinfo.value)

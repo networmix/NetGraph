@@ -30,13 +30,15 @@ class Node:
     the key in the Network's node dictionary.
 
     Attributes:
-        name: Unique identifier for the node.
-        disabled: Whether the node is disabled (excluded from calculations).
-        attrs: Additional metadata (e.g., coordinates, region, shared_risk_groups).
+        name (str): Unique identifier for the node.
+        disabled (bool): Whether the node is disabled (excluded from calculations).
+        risk_groups (Set[str]): Set of risk group names this node belongs to.
+        attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
     """
 
     name: str
     disabled: bool = False
+    risk_groups: Set[str] = field(default_factory=set)
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -46,13 +48,14 @@ class Link:
     Represents a directed link between two nodes in the network.
 
     Attributes:
-        source: Name of the source node.
-        target: Name of the target node.
-        capacity: Link capacity (default 1.0).
-        cost: Link cost (default 1.0).
-        disabled: Whether the link is disabled.
-        attrs: Additional metadata (e.g., distance, shared_risk_groups).
-        id: Auto-generated unique identifier: "{source}|{target}|<base64_uuid>".
+        source (str): Name of the source node.
+        target (str): Name of the target node.
+        capacity (float): Link capacity (default 1.0).
+        cost (float): Link cost (default 1.0).
+        disabled (bool): Whether the link is disabled.
+        risk_groups (Set[str]): Set of risk group names this link belongs to.
+        attrs (Dict[str, Any]): Additional metadata (e.g., distance).
+        id (str): Auto-generated unique identifier: "{source}|{target}|<base64_uuid>".
     """
 
     source: str
@@ -60,6 +63,7 @@ class Link:
     capacity: float = 1.0
     cost: float = 1.0
     disabled: bool = False
+    risk_groups: Set[str] = field(default_factory=set)
     attrs: Dict[str, Any] = field(default_factory=dict)
     id: str = field(init=False)
 
@@ -76,10 +80,9 @@ class RiskGroup:
     Represents a shared-risk or failure domain, which may have nested children.
 
     Attributes:
-        name: Unique name of this risk group.
-        children: Subdomains in a nested structure.
-        disabled: Whether this group was declared disabled on load.
-                  Disabling is enforced by `disable_risk_group()` in the Network.
+        name (str): Unique name of this risk group.
+        children (List[RiskGroup]): Subdomains in a nested structure.
+        disabled (bool): Whether this group was declared disabled on load.
     """
 
     name: str
@@ -95,29 +98,25 @@ class Network:
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
         links (Dict[str, Link]): Mapping from link ID -> Link object.
-        risk_groups: Top-level risk groups by name.
+        risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
         attrs (Dict[str, Any]): Optional metadata about the network.
     """
 
     nodes: Dict[str, Node] = field(default_factory=dict)
     links: Dict[str, Link] = field(default_factory=dict)
+    risk_groups: Dict[str, RiskGroup] = field(default_factory=dict)
     attrs: Dict[str, Any] = field(default_factory=dict)
 
     def add_node(self, node: Node) -> None:
         """
         Add a node to the network (keyed by node.name).
 
-        Auto-tags node.attrs["type"] = "node" if not already set,
-        and node.attrs["disabled"] = False if not specified.
-
         Args:
-            node: Node to add.
+            node (Node): Node to add.
 
         Raises:
             ValueError: If a node with the same name already exists.
         """
-        node.attrs.setdefault("type", "node")
-        node.attrs.setdefault("disabled", False)
         if node.name in self.nodes:
             raise ValueError(f"Node '{node.name}' already exists in the network.")
         self.nodes[node.name] = node
@@ -126,11 +125,8 @@ class Network:
         """
         Add a link to the network (keyed by the link's auto-generated ID).
 
-        Auto-tags link.attrs["type"] = "link" if not already set,
-        and link.attrs["disabled"] = False if not specified.
-
         Args:
-            link: Link to add.
+            link (Link): Link to add.
 
         Raises:
             ValueError: If the link's source or target node does not exist.
@@ -140,8 +136,6 @@ class Network:
         if link.target not in self.nodes:
             raise ValueError(f"Target node '{link.target}' not found in network.")
 
-        link.attrs.setdefault("type", "link")
-        link.attrs.setdefault("disabled", False)
         self.links[link.id] = link
 
     def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
@@ -151,10 +145,10 @@ class Network:
         Skips disabled nodes/links. Optionally adds reverse edges.
 
         Args:
-            add_reverse: If True, also add a reverse edge for each link.
+            add_reverse (bool): If True, also add a reverse edge for each link.
 
         Returns:
-            A directed multigraph representation of the network.
+            StrictMultiDiGraph: A directed multigraph representation of the network.
         """
         graph = StrictMultiDiGraph()
         disabled_nodes = {name for name, nd in self.nodes.items() if nd.disabled}
@@ -199,14 +193,13 @@ class Network:
         """
         Select and group nodes whose names match a given regular expression.
 
-        This method uses re.match(), so the pattern is anchored at the start
-        of the node name. If the pattern includes capturing groups,
-        the group label is formed by joining all non-None captures with '|'.
-        If no capturing groups exist, the group label is the original
-        pattern string.
+        Uses re.match(), so the pattern is anchored at the start of the node name.
+        If the pattern includes capturing groups, the group label is formed by
+        joining all non-None captures with '|'. If no capturing groups exist,
+        the group label is the original pattern string.
 
         Args:
-            path: A Python regular expression pattern (e.g., "^foo", "bar(\\d+)", etc.).
+            path (str): A Python regular expression pattern (e.g., "^foo", "bar(\\d+)", etc.).
 
         Returns:
             Dict[str, List[Node]]: A mapping from group label -> list of matching nodes.
@@ -240,17 +233,18 @@ class Network:
         Returns a dictionary of flow values keyed by (source_label, sink_label).
 
         Args:
-            source_path: Regex pattern for selecting source nodes.
-            sink_path: Regex pattern for selecting sink nodes.
-            mode: Either "combine" or "pairwise".
-                  - "combine": Treat all matched sources as one group,
-                    and all matched sinks as one group. Returns a single entry.
-                  - "pairwise": Compute flow for each (source_group, sink_group) pair.
-            shortest_path: If True, flows are constrained to shortest paths.
-            flow_placement: Determines how parallel equal-cost paths are handled.
+            source_path (str): Regex pattern for selecting source nodes.
+            sink_path (str): Regex pattern for selecting sink nodes.
+            mode (str): Either "combine" or "pairwise".
+                - "combine": Treat all matched sources as one group,
+                  and all matched sinks as one group. Returns a single entry.
+                - "pairwise": Compute flow for each (source_group, sink_group) pair.
+            shortest_path (bool): If True, flows are constrained to shortest paths.
+            flow_placement (FlowPlacement): Determines how parallel equal-cost paths
+                are handled.
 
         Returns:
-            A dict of {(src_label, snk_label): flow_value}.
+            Dict[Tuple[str, str], float]: Flow values keyed by (src_label, snk_label).
 
         Raises:
             ValueError: If no matching source or sink groups are found, or invalid mode.
@@ -303,7 +297,7 @@ class Network:
         sources: List[Node],
         sinks: List[Node],
         shortest_path: bool,
-        flow_placement: FlowPlacement,
+        flow_placement: Optional[FlowPlacement],
     ) -> float:
         """
         Attach a pseudo-source and pseudo-sink to the provided node lists,
@@ -313,14 +307,18 @@ class Network:
         Disabled nodes are excluded from flow computation.
 
         Args:
-            sources: List of source nodes.
-            sinks: List of sink nodes.
-            shortest_path: If True, restrict flows to shortest paths only.
-            flow_placement: Strategy for placing flow among parallel equal-cost paths.
+            sources (List[Node]): List of source nodes.
+            sinks (List[Node]): List of sink nodes.
+            shortest_path (bool): If True, restrict flows to shortest paths only.
+            flow_placement (FlowPlacement or None): Strategy for placing flow among
+                parallel equal-cost paths. If None, defaults to FlowPlacement.PROPORTIONAL.
 
         Returns:
-            The computed max flow value, or 0.0 if no active sources or sinks.
+            float: The computed max flow value, or 0.0 if no active sources or sinks.
         """
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
         active_sources = [s for s in sources if not s.disabled]
         active_sinks = [s for s in sinks if not s.disabled]
 
@@ -353,7 +351,7 @@ class Network:
         Mark a node as disabled.
 
         Args:
-            node_name: Name of the node to disable.
+            node_name (str): Name of the node to disable.
 
         Raises:
             ValueError: If the specified node does not exist.
@@ -367,7 +365,7 @@ class Network:
         Mark a node as enabled.
 
         Args:
-            node_name: Name of the node to enable.
+            node_name (str): Name of the node to enable.
 
         Raises:
             ValueError: If the specified node does not exist.
@@ -381,7 +379,7 @@ class Network:
         Mark a link as disabled.
 
         Args:
-            link_id: ID of the link to disable.
+            link_id (str): ID of the link to disable.
 
         Raises:
             ValueError: If the specified link does not exist.
@@ -395,7 +393,7 @@ class Network:
         Mark a link as enabled.
 
         Args:
-            link_id: ID of the link to enable.
+            link_id (str): ID of the link to enable.
 
         Raises:
             ValueError: If the specified link does not exist.
@@ -428,11 +426,11 @@ class Network:
         to the target node.
 
         Args:
-            source: Source node name.
-            target: Target node name.
+            source (str): Source node name.
+            target (str): Target node name.
 
         Returns:
-            A list of link IDs for all direct links from source to target.
+            List[str]: A list of link IDs for all direct links from source to target.
         """
         matches = []
         for link_id, link in self.links.items():
@@ -450,12 +448,12 @@ class Network:
         Search for links using optional regex patterns for source or target node names.
 
         Args:
-            source_regex: Regex pattern to match link.source. If None, matches all sources.
-            target_regex: Regex pattern to match link.target. If None, matches all targets.
-            any_direction: If True, also match where source and target are reversed.
+            source_regex (str or None): Regex to match link.source. If None, matches all sources.
+            target_regex (str or None): Regex to match link.target. If None, matches all targets.
+            any_direction (bool): If True, also match reversed source/target.
 
         Returns:
-            A list of unique Link objects that match the criteria.
+            List[Link]: A list of unique Link objects that match the criteria.
         """
         src_pat = re.compile(source_regex) if source_regex else None
         tgt_pat = re.compile(target_regex) if target_regex else None
@@ -482,12 +480,12 @@ class Network:
 
     def disable_risk_group(self, name: str, recursive: bool = True) -> None:
         """
-        Disable all nodes/links that have 'name' in their shared_risk_groups.
+        Disable all nodes/links that have 'name' in their risk_groups.
         If recursive=True, also disable items belonging to child risk groups.
 
         Args:
-            name: The name of the risk group to disable.
-            recursive: If True, also disable subgroups recursively.
+            name (str): The name of the risk group to disable.
+            recursive (bool): If True, also disable subgroups recursively.
         """
         if name not in self.risk_groups:
             return
@@ -500,19 +498,19 @@ class Network:
             if recursive:
                 queue.extend(grp.children)
 
+        # Disable nodes
         for node_name, node_obj in self.nodes.items():
-            srgs = node_obj.attrs.get("shared_risk_groups", [])
-            if any(g in to_disable for g in srgs):
+            if node_obj.risk_groups & to_disable:
                 self.disable_node(node_name)
 
+        # Disable links
         for link_id, link_obj in self.links.items():
-            srgs = link_obj.attrs.get("shared_risk_groups", [])
-            if any(g in to_disable for g in srgs):
+            if link_obj.risk_groups & to_disable:
                 self.disable_link(link_id)
 
     def enable_risk_group(self, name: str, recursive: bool = True) -> None:
         """
-        Enable all nodes/links that have 'name' in their shared_risk_groups.
+        Enable all nodes/links that have 'name' in their risk_groups.
         If recursive=True, also enable items belonging to child risk groups.
 
         Note:
@@ -521,8 +519,8 @@ class Network:
             remain disabled.
 
         Args:
-            name: The name of the risk group to enable.
-            recursive: If True, also enable subgroups recursively.
+            name (str): The name of the risk group to enable.
+            recursive (bool): If True, also enable subgroups recursively.
         """
         if name not in self.risk_groups:
             return
@@ -535,12 +533,12 @@ class Network:
             if recursive:
                 queue.extend(grp.children)
 
+        # Enable nodes
         for node_name, node_obj in self.nodes.items():
-            srgs = node_obj.attrs.get("shared_risk_groups", [])
-            if any(g in to_enable for g in srgs):
+            if node_obj.risk_groups & to_enable:
                 self.enable_node(node_name)
 
+        # Enable links
         for link_id, link_obj in self.links.items():
-            srgs = link_obj.attrs.get("shared_risk_groups", [])
-            if any(g in to_enable for g in srgs):
+            if link_obj.risk_groups & to_enable:
                 self.enable_link(link_id)

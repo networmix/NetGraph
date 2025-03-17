@@ -4,17 +4,23 @@ network:
 
   nodes:
     SEA:
-      coords: [47.6062, -122.3321]
+      attrs:
+        coords: [47.6062, -122.3321]
     SFO:
-      coords: [37.7749, -122.4194]
+      attrs:
+        coords: [37.7749, -122.4194]
     DEN:
-      coords: [39.7392, -104.9903]
+      attrs:
+        coords: [39.7392, -104.9903]
     DFW:
-      coords: [32.8998, -97.0403]
+      attrs:
+        coords: [32.8998, -97.0403]
     JFK:
-      coords: [40.641766, -73.780968]
+      attrs:
+        coords: [40.641766, -73.780968]
     DCA:
-      coords: [38.907192, -77.036871]
+      attrs:
+        coords: [38.907192, -77.036871]
 
   links:
     # West -> Middle

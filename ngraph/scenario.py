@@ -87,13 +87,19 @@ class Scenario:
 
         Raises:
             ValueError: If the YAML is malformed or missing required sections.
+            TypeError: If the workflow step arguments are invalid for the step class.
         """
+        # Safely load the YAML; treat None as an empty dict
         data = yaml.safe_load(yaml_str)
+        if data is None:
+            data = {}
         if not isinstance(data, dict):
             raise ValueError("The provided YAML must map to a dictionary at top-level.")
 
-        # 1) Build the network using blueprint expansion logic
+        # 1) Build the network using blueprint expansion logic (default to empty if None)
         network = expand_network_dsl(data)
+        if network is None:
+            network = Network()
 
         # 2) Build the multi-rule failure policy
         fp_data = data.get("failure_policy", {})
@@ -143,19 +149,25 @@ class Scenario:
     def _build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
         """
         Recursively build a list of RiskGroups from YAML data. Each dict
-        may have keys: "name", "children", "disabled" (bool).
+        may have keys: "name", "children", and "disabled" (bool). Raises
+        ValueError if "name" is missing.
 
         Args:
             rg_data: Top-level list of risk-group definitions.
 
         Returns:
             A list of top-level RiskGroup objects, each possibly containing children.
+
+        Raises:
+            ValueError: If a risk-group definition lacks a "name" field.
         """
 
         def build_one(d: Dict[str, Any]) -> RiskGroup:
-            name: str = d["name"]
+            name = d.get("name")
+            if not name:
+                raise ValueError("RiskGroup entry missing 'name' field.")
             children_data = d.get("children", [])
-            disabled = d.get("disabled", False)  # optional; default to False
+            disabled = d.get("disabled", False)
             child_groups = [build_one(child) for child in children_data]
             return RiskGroup(name=name, children=child_groups, disabled=disabled)
 
@@ -195,14 +207,16 @@ class Scenario:
         rules: List[FailureRule] = []
         for rule_dict in rules_data:
             conditions_data = rule_dict.get("conditions", [])
-            conditions: List[FailureCondition] = []
-            for cond_dict in conditions_data:
-                condition = FailureCondition(
+            if not isinstance(conditions_data, list):
+                raise ValueError("Each rule's 'conditions' must be a list if present.")
+            conditions: List[FailureCondition] = [
+                FailureCondition(
                     attr=cond_dict["attr"],
                     operator=cond_dict["operator"],
                     value=cond_dict["value"],
                 )
-                conditions.append(condition)
+                for cond_dict in conditions_data
+            ]
 
             rule = FailureRule(
                 conditions=conditions,

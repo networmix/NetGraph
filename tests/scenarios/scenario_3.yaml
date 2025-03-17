@@ -73,29 +73,29 @@ network:
       any_direction: True
       link_params:
         attrs:
-          shared_risk_group: "SpineSRG"
+          shared_risk_groups: ["SpineSRG"]
           hw_component: "400G-LR4"
   
   # Example node overrides that assign SRGs and hardware types
   node_overrides:
     - path: my_clos1/b1/t1
       attrs:
-        shared_risk_group: "clos1-b1t1-SRG"
+        shared_risk_groups: ["clos1-b1t1-SRG"]
         hw_component: "LeafHW-A"
 
     - path: my_clos2/b2/t1
       attrs:
-        shared_risk_group: "clos2-b2t1-SRG"
+        shared_risk_groups: ["clos2-b2t1-SRG"]
         hw_component: "LeafHW-B"
 
     - path: my_clos1/spine/t3.* 
       attrs:
-        shared_risk_group: "clos1-spine-SRG"
+        shared_risk_groups: ["clos1-spine-SRG"]
         hw_component: "SpineHW"
 
     - path: my_clos2/spine/t3.*
       attrs:
-        shared_risk_group: "clos2-spine-SRG"
+        shared_risk_groups: ["clos2-spine-SRG"]
         hw_component: "SpineHW"
 
 workflow:
