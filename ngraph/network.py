@@ -83,11 +83,13 @@ class RiskGroup:
         name (str): Unique name of this risk group.
         children (List[RiskGroup]): Subdomains in a nested structure.
         disabled (bool): Whether this group was declared disabled on load.
+        attrs (Dict[str, Any]): Additional metadata for the risk group.
     """
 
     name: str
     children: List[RiskGroup] = field(default_factory=list)
     disabled: bool = False
+    attrs: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -208,9 +210,9 @@ class Network:
         groups_map: Dict[str, List[Node]] = {}
 
         for node in self.nodes.values():
-            m = pattern.match(node.name)
-            if m:
-                captures = m.groups()
+            match = pattern.match(node.name)
+            if match:
+                captures = match.groups()
                 if captures:
                     label = "|".join(c for c in captures if c is not None)
                 else:

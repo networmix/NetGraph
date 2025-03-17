@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional, Set
 from random import random, sample
 from collections import defaultdict, deque
 
@@ -10,7 +12,6 @@ class FailureCondition:
     A single condition for matching an entity's attribute with an operator and value.
 
     Example usage (YAML):
-
       conditions:
         - attr: "capacity"
           operator: "<"
@@ -18,12 +19,12 @@ class FailureCondition:
 
     Attributes:
         attr (str):
-            The name of the attribute to inspect (e.g., "type", "capacity").
+            The name of the attribute to inspect (e.g., "capacity", "region").
         operator (str):
-            The comparison operator: "==", "!=", "<", "<=", ">", ">=", "contains",
-            "not_contains", "any_value", or "no_value".
+            The comparison operator: "==", "!=", "<", "<=", ">", ">=",
+            "contains", "not_contains", "any_value", or "no_value".
         value (Any):
-            The value to compare against (e.g., "node", 100, True, etc.).
+            The value to compare against (e.g., 100, True, "foo", etc.).
     """
 
     attr: str
@@ -31,29 +32,36 @@ class FailureCondition:
     value: Any
 
 
+# Supported entity scopes for a rule
+EntityScope = Literal["node", "link", "risk_group"]
+
+
 @dataclass
 class FailureRule:
     """
-    Defines how to match entities and then select them for failure.
+    Defines how to match and then select entities for failure.
 
     Attributes:
+        entity_scope (EntityScope):
+            The type of entities this rule applies to: "node", "link", or "risk_group".
         conditions (List[FailureCondition]):
             A list of conditions to filter matching entities.
         logic (Literal["and", "or", "any"]):
-            - "and": All conditions must be true for a match.
-            - "or": At least one condition is true for a match.
-            - "any": Skip condition checks and match all entities.
+            "and": All conditions must be true for a match.
+            "or": At least one condition is true for a match.
+            "any": Skip condition checks and match all.
         rule_type (Literal["random", "choice", "all"]):
             The selection strategy among the matched set:
-              - "random": Each matched entity is chosen with probability=`probability`.
-              - "choice": Pick exactly `count` items (random sample).
-              - "all": Select every matched entity.
+              - "random": each matched entity is chosen with probability = `probability`.
+              - "choice": pick exactly `count` items from the matched set (random sample).
+              - "all": select every matched entity in the matched set.
         probability (float):
             Probability in [0,1], used if `rule_type="random"`.
         count (int):
             Number of entities to pick if `rule_type="choice"`.
     """
 
+    entity_scope: EntityScope
     conditions: List[FailureCondition] = field(default_factory=list)
     logic: Literal["and", "or", "any"] = "and"
     rule_type: Literal["random", "choice", "all"] = "all"
@@ -61,11 +69,8 @@ class FailureRule:
     count: int = 1
 
     def __post_init__(self) -> None:
-        """
-        Validate the probability if rule_type is 'random'.
-        """
         if self.rule_type == "random":
-            if not 0.0 <= self.probability <= 1.0:
+            if not (0.0 <= self.probability <= 1.0):
                 raise ValueError(
                     f"probability={self.probability} must be within [0,1] "
                     f"for rule_type='random'."
@@ -78,135 +83,201 @@ class FailurePolicy:
     A container for multiple FailureRules plus optional metadata in `attrs`.
 
     The main entry point is `apply_failures`, which:
-      1) Merges all nodes and links into a single entity dictionary.
-      2) Applies each FailureRule, collecting a set of failed entity IDs.
-      3) Optionally expands failures to include entities sharing a
-         'shared_risk_group' with any entity that failed.
+      1) For each rule, gather the relevant entities (node, link, or risk_group).
+      2) Match them based on rule conditions (or skip if 'logic=any').
+      3) Apply the selection strategy (all, random, or choice).
+      4) Collect the union of all failed entities across all rules.
+      5) Optionally expand failures by shared-risk groups or sub-risks.
+
+    Large-scale performance:
+      - If you set `use_cache=True`, matched sets for each rule are cached,
+        so repeated calls to `apply_failures` can skip re-matching if the
+        network hasn't changed. If your network changes between calls,
+        you should clear the cache or re-initialize the policy.
 
     Attributes:
         rules (List[FailureRule]):
             A list of FailureRules to apply.
         attrs (Dict[str, Any]):
             Arbitrary metadata about this policy (e.g. "name", "description").
-            If `fail_shared_risk_groups=True`, shared-risk expansion is used.
+        fail_shared_risk_groups (bool):
+            If True, after initial selection, expand failures among any
+            node/link that shares a risk group with a failed entity.
+        fail_risk_group_children (bool):
+            If True, and if a risk_group is marked as failed, expand to
+            children risk_groups recursively.
+        use_cache (bool):
+            If True, match results for each rule are cached to speed up
+            repeated calls. If the network changes, the cached results
+            may be stale.
+
     """
 
     rules: List[FailureRule] = field(default_factory=list)
     attrs: Dict[str, Any] = field(default_factory=dict)
+    fail_shared_risk_groups: bool = False
+    fail_risk_group_children: bool = False
+    use_cache: bool = False
+
+    # Internal cache for matched sets:  (rule_index -> set_of_entities)
+    _match_cache: Dict[int, Set[str]] = field(default_factory=dict, init=False)
 
     def apply_failures(
         self,
-        nodes: Dict[str, Dict[str, Any]],
-        links: Dict[str, Dict[str, Any]],
+        network_nodes: Dict[str, Any],
+        network_links: Dict[str, Any],
+        network_risk_groups: Dict[str, Any] = None,
     ) -> List[str]:
         """
         Identify which entities fail given the defined rules, then optionally
-        expand by shared-risk groups.
+        expand by shared-risk groups or nested risk groups.
 
         Args:
-            nodes: Dict[node_name, node_attributes]. Must have 'type'="node".
-            links: Dict[link_id, link_attributes]. Must have 'type'="link".
+            network_nodes: {node_id -> node_object_or_dict}, each with top-level attributes
+                           (capacity, disabled, risk_groups, etc.).
+            network_links: {link_id -> link_object_or_dict}, similarly.
+            network_risk_groups: {rg_name -> RiskGroup} or dict. If you don't have risk
+                                 groups, pass None or {}.
 
         Returns:
-            A list of failed entity IDs (union of all rule matches).
+            A list of IDs that fail (union of all rule matches, possibly expanded).
+            For risk groups, the ID is the risk group's name.
         """
-        # Merge all entities into a single dict
-        all_entities = {**nodes, **links}
-        failed_entities: set[str] = set()
+        if network_risk_groups is None:
+            network_risk_groups = {}
 
-        # 1) Collect matched failures from each rule
-        for rule in self.rules:
-            matched = self._match_entities(all_entities, rule.conditions, rule.logic)
-            selected = self._select_entities(matched, all_entities, rule)
-            failed_entities.update(selected)
+        failed_nodes: Set[str] = set()
+        failed_links: Set[str] = set()
+        failed_risk_groups: Set[str] = set()
 
-        # 2) Optionally expand failures by shared-risk group
-        if self.attrs.get("fail_shared_risk_groups", False):
-            self._expand_shared_risk_groups(failed_entities, all_entities)
+        # 1) Collect matched from each rule
+        for idx, rule in enumerate(self.rules):
+            matched_ids = self._match_scope(
+                idx,
+                rule,
+                network_nodes,
+                network_links,
+                network_risk_groups,
+            )
+            # Then select a subset from matched_ids according to rule_type
+            selected = self._select_entities(matched_ids, rule)
 
-        return list(failed_entities)
+            # Add them to the respective fail sets
+            if rule.entity_scope == "node":
+                failed_nodes |= set(selected)
+            elif rule.entity_scope == "link":
+                failed_links |= set(selected)
+            elif rule.entity_scope == "risk_group":
+                failed_risk_groups |= set(selected)
+
+        # 2) Optionally expand failures by shared-risk groups
+        if self.fail_shared_risk_groups:
+            self._expand_shared_risk_groups(
+                failed_nodes, failed_links, network_nodes, network_links
+            )
+
+        # 3) Optionally expand risk-group children (if a risk group is failed, recursively fail children)
+        if self.fail_risk_group_children and failed_risk_groups:
+            self._expand_failed_risk_group_children(
+                failed_risk_groups, network_risk_groups
+            )
+
+        # Return union: node IDs, link IDs, and risk_group names
+        # For the code that uses this, you can interpret them in your manager.
+        all_failed = set(failed_nodes) | set(failed_links) | set(failed_risk_groups)
+        return sorted(all_failed)
+
+    def _match_scope(
+        self,
+        rule_idx: int,
+        rule: FailureRule,
+        network_nodes: Dict[str, Any],
+        network_links: Dict[str, Any],
+        network_risk_groups: Dict[str, Any],
+    ) -> Set[str]:
+        """
+        Get the set of IDs matched by the given rule, either from cache
+        or by performing a fresh match over the relevant entity type.
+        """
+        if self.use_cache and rule_idx in self._match_cache:
+            return self._match_cache[rule_idx]
+
+        # Decide which mapping to iterate
+        if rule.entity_scope == "node":
+            matched = self._match_entities(network_nodes, rule.conditions, rule.logic)
+        elif rule.entity_scope == "link":
+            matched = self._match_entities(network_links, rule.conditions, rule.logic)
+        else:  # risk_group
+            matched = self._match_entities(
+                network_risk_groups, rule.conditions, rule.logic
+            )
+
+        if self.use_cache:
+            self._match_cache[rule_idx] = matched
+        return matched
 
     def _match_entities(
         self,
-        all_entities: Dict[str, Dict[str, Any]],
+        entity_map: Dict[str, Any],
         conditions: List[FailureCondition],
         logic: str,
-    ) -> List[str]:
+    ) -> Set[str]:
         """
-        Return all entity IDs matching the given conditions based on 'and'/'or'/'any' logic.
+        Return all entity IDs that match the given conditions based on 'and'/'or'/'any' logic.
 
-        Args:
-            all_entities: {entity_id: attributes}.
-            conditions: List of FailureCondition to evaluate.
-            logic: "and", "or", or "any".
+        entity_map is either nodes, links, or risk_groups:
+          {entity_id -> {top_level_attr: value, ...}}
+
+        If logic='any', skip condition checks and return everything.
+        If no conditions and logic!='any', return empty set.
 
         Returns:
-            A list of matching entity IDs.
+            A set of matching entity IDs.
         """
         if logic == "any":
-            # Skip condition checks; everything matches.
-            return list(all_entities.keys())
+            return set(entity_map.keys())
 
         if not conditions:
-            # If zero conditions, match nothing unless logic='any'.
-            return []
+            return set()
 
-        matched = []
-        for entity_id, attr_dict in all_entities.items():
-            if self._evaluate_conditions(attr_dict, conditions, logic):
-                matched.append(entity_id)
+        matched = set()
+        for entity_id, attrs in entity_map.items():
+            if self._evaluate_conditions(attrs, conditions, logic):
+                matched.add(entity_id)
+
         return matched
 
     @staticmethod
     def _evaluate_conditions(
-        entity_attrs: Dict[str, Any],
+        attrs: Dict[str, Any],
         conditions: List[FailureCondition],
         logic: str,
     ) -> bool:
         """
         Evaluate multiple conditions on a single entity. All or any condition(s)
         must pass, depending on 'logic'.
-
-        Args:
-            entity_attrs: Attribute dict for one entity.
-            conditions: List of FailureCondition to test.
-            logic: "and" or "or".
-
-        Returns:
-            True if conditions pass, else False.
         """
         if logic == "and":
-            return all(_evaluate_condition(entity_attrs, c) for c in conditions)
+            return all(_evaluate_condition(attrs, c) for c in conditions)
         elif logic == "or":
-            return any(_evaluate_condition(entity_attrs, c) for c in conditions)
+            return any(_evaluate_condition(attrs, c) for c in conditions)
         else:
             raise ValueError(f"Unsupported logic: {logic}")
 
     @staticmethod
-    def _select_entities(
-        entity_ids: List[str],
-        all_entities: Dict[str, Dict[str, Any]],
-        rule: FailureRule,
-    ) -> List[str]:
+    def _select_entities(entity_ids: Set[str], rule: FailureRule) -> Set[str]:
         """
         From the matched IDs, pick which entities fail under the given rule_type.
-
-        Args:
-            entity_ids: Matched entity IDs from _match_entities.
-            all_entities: Full entity map (unused currently, but available if needed).
-            rule: The FailureRule specifying 'random', 'choice', or 'all'.
-
-        Returns:
-            A list of selected entity IDs to fail.
         """
         if not entity_ids:
-            return []
+            return set()
 
         if rule.rule_type == "random":
-            return [eid for eid in entity_ids if random() < rule.probability]
+            return {eid for eid in entity_ids if random() < rule.probability}
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
-            return sample(entity_ids, k=count)
+            # sample needs a list
+            return set(sample(list(entity_ids), k=count))
         elif rule.rule_type == "all":
             return entity_ids
         else:
@@ -214,54 +285,113 @@ class FailurePolicy:
 
     def _expand_shared_risk_groups(
         self,
-        failed_entities: set[str],
-        all_entities: Dict[str, Dict[str, Any]],
+        failed_nodes: Set[str],
+        failed_links: Set[str],
+        network_nodes: Dict[str, Any],
+        network_links: Dict[str, Any],
     ) -> None:
         """
-        Expand 'failed_entities' so that if an entity is in a shared_risk_group,
-        all other entities in that same group also fail. Continues until no new
-        failures are added.
-
-        Args:
-            failed_entities: A set of entity IDs already marked as failed.
-            all_entities: {entity_id -> attributes}, possibly including 'shared_risk_groups'.
+        Expand failures among any node/link that shares a risk group
+        with a failed entity. BFS until no new failures.
         """
-        # Build a map of srg_value -> set of entity IDs
-        srg_map: Dict[Any, set[str]] = defaultdict(set)
-        for eid, attrs in all_entities.items():
-            srgs = attrs.get("shared_risk_groups", [])
-            for srg in srgs:
-                srg_map[srg].add(eid)
+        # We'll handle node + link expansions only. (Risk group expansions are separate.)
+        # Build a map risk_group -> set of node or link IDs
+        rg_to_entities: Dict[str, Set[str]] = defaultdict(set)
 
-        # BFS through the shared risk groups
-        queue = deque(failed_entities)
+        # Gather risk_groups from nodes
+        for n_id, nd in network_nodes.items():
+            if "risk_groups" in nd and nd["risk_groups"]:
+                for rg in nd["risk_groups"]:
+                    rg_to_entities[rg].add(n_id)
+
+        # Gather risk_groups from links
+        for l_id, lk in network_links.items():
+            if "risk_groups" in lk and lk["risk_groups"]:
+                for rg in lk["risk_groups"]:
+                    rg_to_entities[rg].add(l_id)
+
+        # Combined set of failed node/link IDs
+        queue = deque(failed_nodes | failed_links)
+        visited = set(queue)  # track which entity IDs we've processed
+
         while queue:
-            current = queue.popleft()
-            current_srgs = all_entities[current].get("shared_risk_groups", [])
-            for current_srg in current_srgs:
-                # Fail every entity in this SRG
-                for other_eid in srg_map[current_srg]:
-                    if other_eid not in failed_entities:
-                        failed_entities.add(other_eid)
-                        queue.append(other_eid)
+            current_id = queue.popleft()
+            # figure out if current_id is a node or a link by seeing where it appears
+            current_rgs = []
+            if current_id in network_nodes:
+                # node
+                nd = network_nodes[current_id]
+                current_rgs = nd.get("risk_groups", [])
+            elif current_id in network_links:
+                # link
+                lk = network_links[current_id]
+                current_rgs = lk.get("risk_groups", [])
+
+            for rg in current_rgs:
+                # all entity IDs in rg_to_entities[rg] should be failed
+                for other_id in rg_to_entities[rg]:
+                    if other_id not in visited:
+                        visited.add(other_id)
+                        queue.append(other_id)
+                        if other_id in network_nodes:
+                            failed_nodes.add(other_id)
+                        elif other_id in network_links:
+                            failed_links.add(other_id)
+                        # if other_id in risk_groups => not handled here
+
+    def _expand_failed_risk_group_children(
+        self,
+        failed_rgs: Set[str],
+        all_risk_groups: Dict[str, Any],
+    ) -> None:
+        """
+        If we fail a risk_group, also fail its descendants recursively.
+
+        We assume each entry in all_risk_groups is something like:
+            rg_name -> RiskGroup object or { 'name': .., 'children': [...] }
+
+        BFS or DFS any children to mark them as failed as well.
+        """
+        queue = deque(failed_rgs)
+        while queue:
+            rg_name = queue.popleft()
+            rg_data = all_risk_groups.get(rg_name)
+            if not rg_data:
+                continue
+            # Suppose the children are in rg_data["children"]
+            # or if it's an actual RiskGroup object => rg_data.children
+            child_list = []
+            if isinstance(rg_data, dict):
+                child_list = rg_data.get("children", [])
+            else:
+                # assume it's a RiskGroup object with a .children
+                child_list = rg_data.children
+
+            for child_obj in child_list:
+                # child_obj might be a dict or RiskGroup with name
+                child_name = (
+                    child_obj["name"] if isinstance(child_obj, dict) else child_obj.name
+                )
+                if child_name not in failed_rgs:
+                    failed_rgs.add(child_name)
+                    queue.append(child_name)
 
 
-def _evaluate_condition(entity: Dict[str, Any], cond: FailureCondition) -> bool:
+def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
     """
-    Evaluate a single FailureCondition against an entity's attributes.
+    Evaluate a single FailureCondition against entity attributes.
 
     Operators supported:
-      ==, !=, <, <=, >, >=, contains, not_contains, any_value, no_value
+      ==, !=, <, <=, >, >=
+      contains, not_contains
+      any_value, no_value
 
-    Args:
-        entity: Entity attributes (e.g., node.attrs or link.attrs).
-        cond: FailureCondition specifying (attr, operator, value).
+    If entity_attrs does not have cond.attr => derived_value=None.
 
-    Returns:
-        True if the condition passes, else False.
+    Returns True if condition passes, else False.
     """
-    has_attr = cond.attr in entity
-    derived_value = entity.get(cond.attr, None)
+    has_attr = cond.attr in entity_attrs
+    derived_value = entity_attrs.get(cond.attr, None)
     op = cond.operator
 
     if op == "==":
@@ -285,8 +415,7 @@ def _evaluate_condition(entity: Dict[str, Any], cond: FailureCondition) -> bool:
             return True
         return cond.value not in derived_value
     elif op == "any_value":
-        # Pass if the attribute key exists, even if the value is None
-        return has_attr
+        return has_attr  # True if attribute key exists
     elif op == "no_value":
         # Pass if the attribute key is missing or the value is None
         return (not has_attr) or (derived_value is None)

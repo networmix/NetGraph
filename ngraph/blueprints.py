@@ -697,7 +697,7 @@ def _process_node_overrides(net: Network, network_data: Dict[str, Any]) -> None:
     Each override must have {"path"} plus optionally {"attrs", "disabled", "risk_groups"}.
 
     - If "disabled" is present at top level, we set node.disabled.
-    - If "risk_groups" is present, we *replace* the node’s risk_groups.
+    - If "risk_groups" is present, we *replace* the node's risk_groups.
     - Everything else merges into node.attrs.
 
     Args:
@@ -745,7 +745,7 @@ def _update_links(
     If any_direction=True, both (source->target) and (target->source) links
     are updated if present.
 
-    If link_params["risk_groups"] is given, it *replaces* the link’s existing risk_groups.
+    If link_params["risk_groups"] is given, it *replaces* the link's existing risk_groups.
 
     Args:
         net (Network): The network whose links should be updated.

@@ -180,14 +180,12 @@ network:
           distance_km: 342.69
 
 failure_policy:
-  name: "anySingleLink"
-  description: "Evaluate traffic routing under any single link failure."
+  attrs:
+    name: "anySingleLink"
+    description: "Evaluate traffic routing under any single link failure."
   rules:
-    - conditions:
-        - attr: "type"
-          operator: "=="
-          value: "link"
-      logic: "and"
+    - entity_scope: "link"
+      logic: "any"
       rule_type: "choice"
       count: 1
 

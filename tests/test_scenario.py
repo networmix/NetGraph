@@ -53,7 +53,7 @@ def valid_scenario_yaml() -> str:
     """
     Returns a YAML string for constructing a Scenario with:
       - A small network of three nodes and two links
-      - A multi-rule failure policy
+      - A multi-rule failure policy referencing 'type' in conditions
       - Two traffic demands
       - Two workflow steps
     """
@@ -64,12 +64,15 @@ network:
       attrs:
         role: ingress
         location: somewhere
+        type: node
     NodeB:
       attrs:
         role: transit
+        type: node
     NodeC:
       attrs:
         role: egress
+        type: node
   links:
     - source: NodeA
       target: NodeB
@@ -77,29 +80,29 @@ network:
         capacity: 10
         cost: 5
         attrs:
+          type: link
           some_attr: some_value
     - source: NodeB
       target: NodeC
       link_params:
         capacity: 20
         cost: 4
-        attrs: {}
+        attrs:
+          type: link
 failure_policy:
-  name: "multi_rule_example"
-  description: "Testing multi-rule approach."
+  attrs:
+    name: "multi_rule_example"
+    description: "Testing multi-rule approach."
+  fail_shared_risk_groups: false
+  fail_risk_group_children: false
+  use_cache: false
   rules:
-    - conditions:
-        - attr: "type"
-          operator: "=="
-          value: "node"
-      logic: "and"
+    - entity_scope: node
+      logic: "any"
       rule_type: "choice"
       count: 1
-    - conditions:
-        - attr: "type"
-          operator: "=="
-          value: "link"
-      logic: "and"
+    - entity_scope: link
+      logic: "any"
       rule_type: "all"
 traffic_demands:
   - source_path: NodeA
@@ -220,16 +223,16 @@ workflow:
 def empty_yaml() -> str:
     """
     Returns an empty YAML string; from_yaml should still construct
-    a Scenario object but with None/empty fields if possible.
+    a Scenario object but with none/empty fields if possible.
     """
     return ""
 
 
 def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     """
-    Tests that a Scenario can be correctly constructed from a valid YAML string.
+    Tests that a Scenario can be constructed from a valid YAML string.
     Ensures that:
-      - Network has correct nodes and links
+      - Network has correct nodes/links
       - FailurePolicy is set with multiple rules
       - TrafficDemands are parsed
       - Workflow steps are instantiated
@@ -242,87 +245,70 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert len(scenario.network.nodes) == 3  # NodeA, NodeB, NodeC
     assert len(scenario.network.links) == 2  # NodeA->NodeB, NodeB->NodeC
 
-    node_names = [node.name for node in scenario.network.nodes.values()]
+    node_names = list(scenario.network.nodes.keys())
     assert "NodeA" in node_names
     assert "NodeB" in node_names
     assert "NodeC" in node_names
 
-    links = list(scenario.network.links.values())
-    assert len(links) == 2
+    link_names = list(scenario.network.links.keys())
+    assert len(link_names) == 2
 
-    link_ab = next((lk for lk in links if lk.source == "NodeA"), None)
-    link_bc = next((lk for lk in links if lk.source == "NodeB"), None)
-
-    assert link_ab is not None, "Link from NodeA to NodeB was not found."
+    # Link from NodeA -> NodeB
+    link_ab = next(
+        (lk for lk in scenario.network.links.values() if lk.source == "NodeA"), None
+    )
+    link_bc = next(
+        (lk for lk in scenario.network.links.values() if lk.source == "NodeB"), None
+    )
+    assert link_ab is not None, "Could not find link NodeA->NodeB"
     assert link_ab.target == "NodeB"
     assert link_ab.capacity == 10
     assert link_ab.cost == 5
     assert link_ab.attrs.get("some_attr") == "some_value"
 
-    assert link_bc is not None, "Link from NodeB to NodeC was not found."
+    assert link_bc is not None, "Could not find link NodeB->NodeC"
     assert link_bc.target == "NodeC"
     assert link_bc.capacity == 20
     assert link_bc.cost == 4
 
     # Check failure policy
     assert isinstance(scenario.failure_policy, FailurePolicy)
-    assert len(scenario.failure_policy.rules) == 2, "Expected 2 rules in the policy."
-    # leftover fields (e.g., name, description) in policy.attrs
+    assert not scenario.failure_policy.fail_shared_risk_groups
+    assert not scenario.failure_policy.fail_risk_group_children
+    assert not scenario.failure_policy.use_cache
+
+    assert len(scenario.failure_policy.rules) == 2
     assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
     assert (
         scenario.failure_policy.attrs.get("description")
         == "Testing multi-rule approach."
     )
 
-    # Rule1 => "choice", count=1, conditions => type == "node"
+    # Rule1 => entity_scope=node, rule_type=choice, count=1
     rule1 = scenario.failure_policy.rules[0]
+    assert rule1.entity_scope == "node"
     assert rule1.rule_type == "choice"
     assert rule1.count == 1
-    assert len(rule1.conditions) == 1
-    cond1 = rule1.conditions[0]
-    assert cond1.attr == "type"
-    assert cond1.operator == "=="
-    assert cond1.value == "node"
 
-    # Rule2 => "all", conditions => type == "link"
+    # Rule2 => entity_scope=link, rule_type=all
     rule2 = scenario.failure_policy.rules[1]
+    assert rule2.entity_scope == "link"
     assert rule2.rule_type == "all"
-    assert len(rule2.conditions) == 1
-    cond2 = rule2.conditions[0]
-    assert cond2.attr == "type"
-    assert cond2.operator == "=="
-    assert cond2.value == "link"
 
     # Check traffic demands
     assert len(scenario.traffic_demands) == 2
-    demand_ab = next(
-        (
-            d
-            for d in scenario.traffic_demands
-            if d.source_path == "NodeA" and d.sink_path == "NodeB"
-        ),
-        None,
-    )
-    demand_ac = next(
-        (
-            d
-            for d in scenario.traffic_demands
-            if d.source_path == "NodeA" and d.sink_path == "NodeC"
-        ),
-        None,
-    )
-    assert demand_ab is not None, "Demand from NodeA to NodeB not found."
-    assert demand_ab.demand == 15
-
-    assert demand_ac is not None, "Demand from NodeA to NodeC not found."
-    assert demand_ac.demand == 5
+    d1 = scenario.traffic_demands[0]
+    d2 = scenario.traffic_demands[1]
+    assert d1.source_path == "NodeA"
+    assert d1.sink_path == "NodeB"
+    assert d1.demand == 15
+    assert d2.source_path == "NodeA"
+    assert d2.sink_path == "NodeC"
+    assert d2.demand == 5
 
     # Check workflow
     assert len(scenario.workflow) == 2
-    step1 = scenario.workflow[0]
-    step2 = scenario.workflow[1]
-
-    # Verify the step types come from the registry
+    step1, step2 = scenario.workflow
     assert step1.__class__ == WORKFLOW_STEP_REGISTRY["DoSmth"]
     assert step1.name == "Step1"
     assert step1.some_param == 42
@@ -331,21 +317,19 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert step2.name == "Step2"
     assert step2.factor == 2.0
 
-    # Check the scenario results store
+    # Check results
     assert isinstance(scenario.results, Results)
 
 
 def test_scenario_run(valid_scenario_yaml: str) -> None:
     """
-    Tests that calling scenario.run() executes each workflow step in order
-    without errors. Steps may store data in scenario.results.
+    Tests scenario.run() => each workflow step is executed in order,
+    storing data in scenario.results.
     """
     scenario = Scenario.from_yaml(valid_scenario_yaml)
     scenario.run()
 
-    # The first step's name is "Step1" in the YAML:
     assert scenario.results.get("Step1", "ran", default=False) is True
-    # The second step's name is "Step2" in the YAML:
     assert scenario.results.get("Step2", "ran", default=False) is True
 
 
@@ -355,7 +339,7 @@ def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> No
     is missing the 'step_type' field.
     """
     with pytest.raises(ValueError) as excinfo:
-        _ = Scenario.from_yaml(missing_step_type_yaml)
+        Scenario.from_yaml(missing_step_type_yaml)
     assert "must have a 'step_type' field" in str(excinfo.value)
 
 
@@ -367,64 +351,65 @@ def test_scenario_from_yaml_unrecognized_step_type(
     is not found in the WORKFLOW_STEP_REGISTRY.
     """
     with pytest.raises(ValueError) as excinfo:
-        _ = Scenario.from_yaml(unrecognized_step_type_yaml)
+        Scenario.from_yaml(unrecognized_step_type_yaml)
     assert "Unrecognized 'step_type'" in str(excinfo.value)
 
 
 def test_scenario_from_yaml_unsupported_param(extra_param_yaml: str) -> None:
     """
-    Tests that Scenario.from_yaml raises a TypeError if a workflow step
-    in the YAML has an unsupported parameter.
+    Tests that Scenario.from_yaml raises TypeError if a workflow step
+    has an unsupported parameter in the YAML.
     """
     with pytest.raises(TypeError) as excinfo:
-        _ = Scenario.from_yaml(extra_param_yaml)
-    # Typically the error message is about "unexpected keyword argument 'extra_param'"
+        Scenario.from_yaml(extra_param_yaml)
     assert "extra_param" in str(excinfo.value)
 
 
 def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     """
-    Tests that a Scenario can be constructed from a minimal YAML that only
-    defines a single workflow step. Ensures scenario.network, scenario.failure_policy,
-    and scenario.traffic_demands are empty or None but the scenario is still valid.
+    A minimal scenario with only workflow steps => no network, no demands, no policy.
+    Should still produce a valid Scenario object.
     """
     scenario = Scenario.from_yaml(minimal_scenario_yaml)
-    # network might be an empty Network, or None, depending on expansion logic
-    assert scenario.network is None or len(scenario.network.nodes) == 0
-    # failure policy might be empty
-    assert scenario.failure_policy is None or len(scenario.failure_policy.rules) == 0
-    assert not scenario.traffic_demands
+    assert scenario.network is not None
+    assert len(scenario.network.nodes) == 0
+    assert len(scenario.network.links) == 0
+
+    # If no failure_policy block, scenario.failure_policy => None
+    assert scenario.failure_policy is None
+
+    assert scenario.traffic_demands == []
     assert len(scenario.workflow) == 1
     step = scenario.workflow[0]
-    assert step.__class__ == WORKFLOW_STEP_REGISTRY["DoSmth"]
+    assert step.name == "JustStep"
     assert step.some_param == 100
 
 
 def test_scenario_empty_yaml(empty_yaml: str) -> None:
     """
-    Tests constructing a scenario from an empty YAML string. Should produce
-    an effectively empty scenario (network, policy, demands, workflow all empty).
+    Constructing from an empty YAML => produce empty scenario
+    with no network, no policy, no demands, no steps.
     """
     scenario = Scenario.from_yaml(empty_yaml)
     assert scenario.network is not None
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
-    assert scenario.failure_policy is not None
-    assert len(scenario.failure_policy.rules) == 0
+    assert scenario.failure_policy is None
     assert scenario.traffic_demands == []
     assert scenario.workflow == []
 
 
 def test_scenario_risk_groups() -> None:
     """
-    Tests that risk groups are parsed correctly, with the 'disabled' field respected.
+    Tests that risk groups are parsed, and if 'disabled' is True,
+    the group is disabled on load.
     """
     scenario_yaml = """
 network:
   nodes:
     NodeA: {}
     NodeB: {}
-links: []
+  links: []
 risk_groups:
   - name: "RG1"
     disabled: false
@@ -434,13 +419,15 @@ risk_groups:
     scenario = Scenario.from_yaml(scenario_yaml)
     assert "RG1" in scenario.network.risk_groups
     assert "RG2" in scenario.network.risk_groups
-    assert not scenario.network.risk_groups["RG1"].disabled
-    assert scenario.network.risk_groups["RG2"].disabled
+    rg1 = scenario.network.risk_groups["RG1"]
+    rg2 = scenario.network.risk_groups["RG2"]
+    assert rg1.disabled is False
+    assert rg2.disabled is True
 
 
 def test_scenario_risk_group_missing_name() -> None:
     """
-    Tests that a ValueError is raised if a risk group is missing its 'name' field.
+    If a risk group is missing 'name', raise ValueError.
     """
     scenario_yaml = """
 network: {}
