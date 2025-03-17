@@ -75,12 +75,8 @@ def test_scenario_2_build_graph() -> None:
     assert len(policy.rules) == 1, "Should only have 1 rule for 'anySingleLink'."
 
     rule = policy.rules[0]
-    assert len(rule.conditions) == 1, "Expected exactly 1 condition for matching links."
-    cond = rule.conditions[0]
-    assert cond.attr == "type"
-    assert cond.operator == "=="
-    assert cond.value == "link"
-    assert rule.logic == "and"
+    assert rule.entity_scope == "link"
+    assert rule.logic == "any"
     assert rule.rule_type == "choice"
     assert rule.count == 1
     assert policy.attrs.get("name") == "anySingleLink"

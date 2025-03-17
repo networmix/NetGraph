@@ -58,9 +58,9 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     # 7) Verify no traffic demands in this scenario
     assert len(scenario.traffic_demands) == 0, "Expected zero traffic demands."
 
-    # 8) Verify the default (empty) failure policy
+    # 8) Verify the default failure policy is None
     policy: FailurePolicy = scenario.failure_policy
-    assert len(policy.rules) == 0, "Expected an empty failure policy."
+    assert policy is None, "Expected no failure policy in this scenario."
 
     # 9) Check presence of some expanded nodes
     assert (
@@ -78,19 +78,19 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     assert (
         node_a1.attrs.get("hw_component") == "LeafHW-A"
     ), "Expected hw_component=LeafHW-A for 'my_clos1/b1/t1/t1-1', but not found."
-    assert (
-        node_a1.attrs.get("shared_risk_group") == "clos1-b1t1-SRG"
-    ), "Expected shared_risk_group=clos1-b1t1-SRG for 'my_clos1/b1/t1/t1-1'."
+    assert node_a1.attrs.get("shared_risk_groups") == [
+        "clos1-b1t1-SRG"
+    ], "Expected shared_risk_group=clos1-b1t1-SRG for 'my_clos1/b1/t1/t1-1'."
 
     # For "my_clos2/b2/t1/t1-1", check hw_component="LeafHW-B" and SRG="clos2-b2t1-SRG"
     node_b2 = net.nodes["my_clos2/b2/t1/t1-1"]
     assert node_b2.attrs.get("hw_component") == "LeafHW-B"
-    assert node_b2.attrs.get("shared_risk_group") == "clos2-b2t1-SRG"
+    assert node_b2.attrs.get("shared_risk_groups") == ["clos2-b2t1-SRG"]
 
     # For "my_clos1/spine/t3-1", check hw_component="SpineHW" and SRG="clos1-spine-SRG"
     node_spine1 = net.nodes["my_clos1/spine/t3-1"]
     assert node_spine1.attrs.get("hw_component") == "SpineHW"
-    assert node_spine1.attrs.get("shared_risk_group") == "clos1-spine-SRG"
+    assert node_spine1.attrs.get("shared_risk_groups") == ["clos1-spine-SRG"]
 
     # (B) Link attribute checks from link_overrides:
     # The override sets capacity=1 for "my_clos1/spine/t3-1" <-> "my_clos2/spine/t3-1"
@@ -107,7 +107,7 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
             "'my_clos2/spine/t3-1'"
         )
 
-    # Another override sets shared_risk_group="SpineSRG" + hw_component="400G-LR4" on all spine-spine links
+    # Another override sets shared_risk_groups=["SpineSRG"] + hw_component="400G-LR4" on all spine-spine links
     # We'll check a random spine pair, e.g. "t3-2"
     link_id_2 = net.find_links(
         "my_clos1/spine/t3-2$",
@@ -115,9 +115,9 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     )
     assert link_id_2, "Spine link (t3-2) not found for override check."
     for link_obj in link_id_2:
-        assert (
-            link_obj.attrs.get("shared_risk_group") == "SpineSRG"
-        ), "Expected SRG=SpineSRG on spine<->spine link."
+        assert link_obj.attrs.get("shared_risk_groups") == [
+            "SpineSRG"
+        ], "Expected SRG=SpineSRG on spine<->spine link."
         assert (
             link_obj.attrs.get("hw_component") == "400G-LR4"
         ), "Expected hw_component=400G-LR4 on spine<->spine link."

@@ -1,5 +1,11 @@
 import pytest
-from ngraph.network import Network, Node, Link, new_base64_uuid
+from ngraph.network import (
+    Network,
+    Node,
+    Link,
+    RiskGroup,
+    new_base64_uuid,
+)
 from ngraph.lib.graph import StrictMultiDiGraph
 
 
@@ -33,6 +39,8 @@ def test_node_creation_default_attrs():
     node = Node("A")
     assert node.name == "A"
     assert node.attrs == {}
+    assert node.risk_groups == set()
+    assert node.disabled is False
 
 
 def test_node_creation_custom_attrs():
@@ -43,6 +51,8 @@ def test_node_creation_custom_attrs():
     node = Node("B", attrs=custom_attrs)
     assert node.name == "B"
     assert node.attrs == custom_attrs
+    assert node.risk_groups == set()
+    assert node.disabled is False
 
 
 def test_link_defaults_and_id_generation():
@@ -55,6 +65,8 @@ def test_link_defaults_and_id_generation():
     assert link.capacity == 1.0
     assert link.cost == 1.0
     assert link.attrs == {}
+    assert link.risk_groups == set()
+    assert link.disabled is False
 
     # ID should start with 'A|B|' and have a random suffix
     assert link.id.startswith("A|B|")
@@ -74,6 +86,8 @@ def test_link_custom_values():
     assert link.capacity == 2.0
     assert link.cost == 4.0
     assert link.attrs == custom_attrs
+    assert link.risk_groups == set()
+    assert link.disabled is False
     assert link.id.startswith("X|Y|")
 
 
@@ -343,50 +357,27 @@ def test_max_flow_combine_empty():
     Demonstrate that if the dictionary for sinks is not empty, but
     all matched sink nodes are disabled, the final combined_snk_nodes is empty
     => returns 0.0 (rather than raising ValueError).
-
-    We add:
-      - Node("A") enabled => matches ^(A|Z)$ (source)
-      - Node("Z") disabled => also matches ^(A|Z)$
-      So the final combined source label is "A|Z".
-
-      - Node("C") disabled => matches ^(C|Y)$
-      - Node("Y") disabled => matches ^(C|Y)$
-      So the final combined sink label is "C|Y".
-
-    Even though the source group is partially enabled (A),
-    the sink group ends up fully disabled (C, Y).
-    That yields 0.0 flow and the final label is ("A|Z", "C|Y").
     """
     net = Network()
-    net.add_node(Node("A"))  # enabled
-    net.add_node(
-        Node("Z", attrs={"disabled": True})
-    )  # disabled => but still recognized by regex
-
-    net.add_node(Node("C", attrs={"disabled": True}))
-    net.add_node(Node("Y", attrs={"disabled": True}))
+    net.add_node(Node("A"))
+    net.add_node(Node("Z", disabled=True))  # disabled => but recognized by ^(A|Z)$
+    net.add_node(Node("C", disabled=True))
+    net.add_node(Node("Y", disabled=True))
 
     flow_vals = net.max_flow("^(A|Z)$", "^(C|Y)$", mode="combine")
-    # Because "C" and "Y" are *all* disabled, the combined sink side is empty => 0.0
-    # However, the label becomes "A|Z" for sources (both matched by pattern),
-    # and "C|Y" for sinks. That matches what the code returns.
     assert flow_vals == {("A|Z", "C|Y"): 0.0}
 
 
 def test_max_flow_pairwise_some_empty():
     """
     In 'pairwise' mode, we want distinct groups to appear in the result,
-    even if one group is fully disabled. Here:
-      - ^(A|B)$ => "A" => Node("A", enabled), "B" => Node("B", enabled)
-      - ^(C|Z)$ => "C" => Node("C", enabled), "Z" => Node("Z", disabled)
-    This yields pairs: (A,C), (A,Z), (B,C), (B,Z).
-    The 'Z' sub-group is fully disabled => flow=0.0 from either A or B to Z.
+    even if one group is fully disabled.
     """
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     net.add_node(Node("C"))
-    net.add_node(Node("Z", attrs={"disabled": True}))  # needed for the label "C|Z"
+    net.add_node(Node("Z", disabled=True))
 
     # A->B->C
     net.add_link(Link("A", "B", capacity=5))
@@ -394,17 +385,16 @@ def test_max_flow_pairwise_some_empty():
 
     flow_vals = net.max_flow("^(A|B)$", "^(C|Z)$", mode="pairwise")
     assert flow_vals == {
-        ("A", "C"): 3.0,  # active path
-        ("A", "Z"): 0.0,  # sink is disabled
-        ("B", "C"): 3.0,  # active path
-        ("B", "Z"): 0.0,  # sink is disabled
+        ("A", "C"): 3.0,
+        ("A", "Z"): 0.0,
+        ("B", "C"): 3.0,
+        ("B", "Z"): 0.0,
     }
 
 
 def test_max_flow_invalid_mode():
     """
-    Passing an invalid mode should raise ValueError. This covers the
-    else-branch in max_flow that was previously untested.
+    Passing an invalid mode should raise ValueError.
     """
     net = Network()
     net.add_node(Node("A"))
@@ -433,25 +423,31 @@ def test_compute_flow_single_group_empty_source_or_sink():
 
 
 def test_disable_enable_node():
+    """
+    Tests disabling and enabling a single node.
+    """
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     net.add_link(Link("A", "B"))
 
     # Initially, nothing is disabled
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
 
     net.disable_node("A")
-    assert net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is False
 
     # Re-enable
     net.enable_node("A")
-    assert not net.nodes["A"].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
 
 
 def test_disable_node_does_not_exist():
+    """
+    Tests that disabling/enabling a non-existent node raises ValueError.
+    """
     net = Network()
     with pytest.raises(ValueError, match="Node 'A' does not exist."):
         net.disable_node("A")
@@ -461,22 +457,28 @@ def test_disable_node_does_not_exist():
 
 
 def test_disable_enable_link():
+    """
+    Tests disabling and enabling a single link.
+    """
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     link = Link("A", "B")
     net.add_link(link)
 
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is False
 
     net.disable_link(link.id)
-    assert net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is True
 
     net.enable_link(link.id)
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.links[link.id].disabled is False
 
 
 def test_disable_link_does_not_exist():
+    """
+    Tests that disabling/enabling a non-existent link raises ValueError.
+    """
     net = Network()
     with pytest.raises(ValueError, match="Link 'xyz' does not exist."):
         net.disable_link("xyz")
@@ -485,6 +487,10 @@ def test_disable_link_does_not_exist():
 
 
 def test_enable_all_disable_all():
+    """
+    Ensures that enable_all and disable_all correctly toggle
+    all nodes and links in the network.
+    """
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
@@ -492,21 +498,21 @@ def test_enable_all_disable_all():
     net.add_link(link)
 
     # Everything enabled by default
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
+    assert net.links[link.id].disabled is False
 
     # Disable all
     net.disable_all()
-    assert net.nodes["A"].attrs["disabled"]
-    assert net.nodes["B"].attrs["disabled"]
-    assert net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is True
+    assert net.links[link.id].disabled is True
 
     # Enable all
     net.enable_all()
-    assert not net.nodes["A"].attrs["disabled"]
-    assert not net.nodes["B"].attrs["disabled"]
-    assert not net.links[link.id].attrs["disabled"]
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
+    assert net.links[link.id].disabled is False
 
 
 def test_to_strict_multidigraph_excludes_disabled():
@@ -540,6 +546,9 @@ def test_to_strict_multidigraph_excludes_disabled():
 
 
 def test_get_links_between():
+    """
+    Tests retrieving all links that connect a specific source to a target.
+    """
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
@@ -568,6 +577,10 @@ def test_get_links_between():
 
 
 def test_find_links():
+    """
+    Tests finding links by optional source_regex, target_regex,
+    and the any_direction parameter.
+    """
     net = Network()
     net.add_node(Node("srcA"))
     net.add_node(Node("srcB"))
@@ -595,3 +608,112 @@ def test_find_links():
     b_links = net.find_links(source_regex="srcB", target_regex="^C$")
     assert len(b_links) == 1
     assert b_links[0].id == link_b_c.id
+
+
+#
+# New tests to improve coverage for RiskGroup-related methods.
+#
+def test_disable_risk_group_nonexistent():
+    """
+    If we call disable_risk_group on a name that is not in net.risk_groups,
+    it should do nothing (not raise an error).
+    """
+    net = Network()
+    # no risk groups at all
+    net.disable_risk_group("nonexistent_group")  # Should not raise
+
+
+def test_enable_risk_group_nonexistent():
+    """
+    If we call enable_risk_group on a name that is not in net.risk_groups,
+    it should do nothing (not raise an error).
+    """
+    net = Network()
+    # no risk groups at all
+    net.enable_risk_group("nonexistent_group")  # Should not raise
+
+
+def test_disable_risk_group_recursive():
+    """
+    Tests disabling a top-level group with recursive=True
+    which should also disable child subgroups.
+    """
+    net = Network()
+
+    # Set up nodes/links
+    net.add_node(Node("A", risk_groups={"top"}))
+    net.add_node(Node("B", risk_groups={"child1"}))
+    net.add_node(Node("C", risk_groups={"child2"}))
+    link = Link("A", "C", risk_groups={"child2"})
+    net.add_link(link)
+
+    # Add risk groups: "top" with children => child1, child2
+    net.risk_groups["top"] = RiskGroup(
+        "top", children=[RiskGroup("child1"), RiskGroup("child2")]
+    )
+
+    # By default, all are enabled
+    assert net.nodes["A"].disabled is False
+    assert net.nodes["B"].disabled is False
+    assert net.nodes["C"].disabled is False
+    assert net.links[link.id].disabled is False
+
+    # Disable top group recursively
+    net.disable_risk_group("top", recursive=True)
+
+    # A is in "top", B in "child1", C/link in "child2" => all disabled
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is True
+    assert net.nodes["C"].disabled is True
+    assert net.links[link.id].disabled is True
+
+
+def test_disable_risk_group_non_recursive():
+    """
+    Tests disabling a top-level group with recursive=False
+    which should NOT disable child subgroups.
+    """
+    net = Network()
+    net.add_node(Node("A", risk_groups={"top"}))
+    net.add_node(Node("B", risk_groups={"child1"}))
+    net.add_node(Node("C", risk_groups={"child2"}))
+
+    net.risk_groups["top"] = RiskGroup(
+        "top", children=[RiskGroup("child1"), RiskGroup("child2")]
+    )
+
+    # Disable top group, but do NOT recurse
+    net.disable_risk_group("top", recursive=False)
+
+    # A is in "top" => disabled
+    # B is in "child1" => still enabled
+    # C is in "child2" => still enabled
+    assert net.nodes["A"].disabled is True
+    assert net.nodes["B"].disabled is False
+    assert net.nodes["C"].disabled is False
+
+
+def test_enable_risk_group_multi_membership():
+    """
+    A node belongs to multiple risk groups. Disabling one group
+    will disable that node, but enabling a different group that
+    also includes that node should re-enable it.
+    """
+    net = Network()
+
+    # Node X belongs to "group1" and "group2"
+    net.add_node(Node("X", risk_groups={"group1", "group2"}))
+    # Add risk groups
+    net.risk_groups["group1"] = RiskGroup("group1")
+    net.risk_groups["group2"] = RiskGroup("group2")
+
+    # Initially enabled
+    assert net.nodes["X"].disabled is False
+
+    # Disable group1 => X disabled
+    net.disable_risk_group("group1")
+    assert net.nodes["X"].disabled is True
+
+    # Enable group2 => X re-enabled because it's in "group2" also
+    net.enable_risk_group("group2")
+    assert net.nodes["X"].disabled is False

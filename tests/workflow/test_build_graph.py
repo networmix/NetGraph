@@ -3,65 +3,37 @@ from unittest.mock import MagicMock
 
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.workflow.build_graph import BuildGraph
-from ngraph.network import Network
-
-
-class MockNode:
-    """
-    A simple mock Node to simulate scenario.network.nodes[node_name].
-    """
-
-    def __init__(self, attrs=None):
-        self.attrs = attrs or {}
-
-
-class MockLink:
-    """
-    A simple mock Link to simulate scenario.network.links[link_id].
-    """
-
-    def __init__(self, link_id, source, target, capacity, cost, attrs=None):
-        self.id = link_id
-        self.source = source
-        self.target = target
-        self.capacity = capacity
-        self.cost = cost
-        self.attrs = attrs or {}
+from ngraph.network import Network, Node, Link
 
 
 @pytest.fixture
 def mock_scenario():
     """
-    Provides a mock Scenario object for testing.
+    Provides a mock Scenario object for testing, including:
+      - A Network object with two nodes (A, B).
+      - Two links (L1, L2), each of which is auto-created via Link
+        but we override their IDs to maintain the naming expected by the tests.
+      - A MagicMock-based results object for verifying output.
     """
     scenario = MagicMock()
     scenario.network = Network()
 
-    # Sample data:
-    scenario.network.nodes = {
-        "A": MockNode(attrs={"type": "router", "location": "rack1"}),
-        "B": MockNode(attrs={"type": "router", "location": "rack2"}),
-    }
-    scenario.network.links = {
-        "L1": MockLink(
-            link_id="L1",
-            source="A",
-            target="B",
-            capacity=100,
-            cost=5,
-            attrs={"fiber": True},
-        ),
-        "L2": MockLink(
-            link_id="L2",
-            source="B",
-            target="A",
-            capacity=50,
-            cost=2,
-            attrs={"copper": True},
-        ),
-    }
+    # Create real Node objects and add them to the network
+    node_a = Node(name="A", attrs={"type": "router", "location": "rack1"})
+    node_b = Node(name="B", attrs={"type": "router", "location": "rack2"})
+    scenario.network.add_node(node_a)
+    scenario.network.add_node(node_b)
 
-    # Mock results object with a MagicMocked put method
+    # Create real Link objects, then override their ID to match the original test expectations.
+    link1 = Link(source="A", target="B", capacity=100, cost=5, attrs={"fiber": True})
+    link1.id = "L1"  # Force the ID so the test can look up "L1"
+    scenario.network.links[link1.id] = link1  # Insert directly
+
+    link2 = Link(source="B", target="A", capacity=50, cost=2, attrs={"copper": True})
+    link2.id = "L2"
+    scenario.network.links[link2.id] = link2
+
+    # Mock results object
     scenario.results = MagicMock()
     scenario.results.put = MagicMock()
     return scenario
@@ -106,17 +78,19 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     ), "Should have two edges (forward/reverse) for each link."
 
     # Check forward edge from link 'L1'
-    edge_data = created_graph.get_edge_data("A", "B", key="L1")
-    assert edge_data is not None, "Forward edge 'L1' should exist from A to B."
-    assert edge_data["capacity"] == 100
-    assert edge_data["cost"] == 5
-    assert "fiber" in edge_data
+    edge_data_l1 = created_graph.get_edge_data("A", "B", key="L1")
+    assert edge_data_l1 is not None, "Forward edge 'L1' should exist from A to B."
+    assert edge_data_l1["capacity"] == 100
+    assert edge_data_l1["cost"] == 5
+    assert "fiber" in edge_data_l1
 
     # Check reverse edge from link 'L1'
-    rev_edge_data = created_graph.get_edge_data("B", "A", key="L1_rev")
-    assert rev_edge_data is not None, "Reverse edge 'L1_rev' should exist from B to A."
+    rev_edge_data_l1 = created_graph.get_edge_data("B", "A", key="L1_rev")
     assert (
-        rev_edge_data["capacity"] == 100
+        rev_edge_data_l1 is not None
+    ), "Reverse edge 'L1_rev' should exist from B to A."
+    assert (
+        rev_edge_data_l1["capacity"] == 100
     ), "Reverse edge should share the same capacity."
 
     # Check forward edge from link 'L2'

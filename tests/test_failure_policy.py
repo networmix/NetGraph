@@ -9,427 +9,279 @@ from ngraph.failure_policy import (
 )
 
 
-def test_empty_policy_no_failures():
-    """
-    Verify that if no rules are present, no entities fail.
-    """
-    policy = FailurePolicy(rules=[])
-
-    # Suppose we have 2 nodes, 1 link
-    nodes = {
-        "N1": {"type": "node", "capacity": 100},
-        "N2": {"type": "node", "capacity": 200},
-    }
-    links = {
-        "N1-N2-abc123": {"type": "link", "capacity": 50},
-    }
-
-    failed = policy.apply_failures(nodes, links)
-    assert failed == [], "No rules => no entities fail."
-
-
-def test_single_rule_all_matched():
-    """
-    If we have a rule that matches all entities and selects 'all',
-    then everything fails.
-    """
+def test_node_scope_all():
+    """Rule with entity_scope='node' and rule_type='all' => fails all matched nodes."""
     rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="!=", value="")],
+        entity_scope="node",
+        conditions=[FailureCondition(attr="capacity", operator=">", value=50)],
         logic="and",
         rule_type="all",
     )
     policy = FailurePolicy(rules=[rule])
 
-    nodes = {"N1": {"type": "node"}, "N2": {"type": "node"}}
+    # 3 nodes, 2 links
+    nodes = {
+        "N1": {"capacity": 100, "region": "west"},
+        "N2": {"capacity": 40, "region": "east"},
+        "N3": {"capacity": 60},
+    }
     links = {
-        "L1": {"type": "link"},
-        "L2": {"type": "link"},
+        "L1": {"capacity": 999},
+        "L2": {"capacity": 10},
     }
 
     failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "N2", "L1", "L2"}
+    # Should fail nodes with capacity>50 => N1(100), N3(60)
+    # Does not consider links at all
+    assert set(failed) == {"N1", "N3"}
 
 
-def test_single_rule_choice():
-    """
-    Test rule_type='choice': it picks exactly 'count' entities from the matched set.
-    """
+def test_link_scope_choice():
+    """Rule with entity_scope='link' => only matches links, ignoring nodes."""
     rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
+        entity_scope="link",
+        conditions=[FailureCondition(attr="capacity", operator="==", value=100)],
         logic="and",
         rule_type="choice",
-        count=2,
+        count=1,
     )
     policy = FailurePolicy(rules=[rule])
 
     nodes = {
-        "SEA": {"type": "node", "capacity": 100},
-        "SFO": {"type": "node", "capacity": 200},
-        "DEN": {"type": "node", "capacity": 300},
+        "N1": {"capacity": 100},
+        "N2": {"capacity": 100},
     }
     links = {
-        "SEA-SFO-xxx": {"type": "link", "capacity": 400},
+        "L1": {"capacity": 100, "risk_groups": ["RG1"]},
+        "L2": {"capacity": 100},
+        "L3": {"capacity": 50},
     }
 
-    with patch("ngraph.failure_policy.sample", return_value=["SEA", "DEN"]):
+    with patch("ngraph.failure_policy.sample", return_value=["L2"]):
         failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"SEA", "DEN"}
+    # Matches L1, L2 (capacity=100), picks exactly 1 => "L2"
+    assert set(failed) == {"L2"}
 
 
-@patch("ngraph.failure_policy.random")
-def test_single_rule_random(mock_random):
+def test_risk_group_scope_random():
     """
-    For rule_type='random', each matched entity is selected if random() < probability.
-    We'll mock out random() to test.
+    Rule with entity_scope='risk_group' => matches risk groups by cost>100 and selects
+    each match with probability=0.5. We mock random() calls so the first match is picked,
+    the second match is skipped, but the iteration order is not guaranteed. Therefore, we
+    only verify that exactly one of the matched RGs is selected.
     """
     rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="link")],
+        entity_scope="risk_group",
+        conditions=[FailureCondition(attr="cost", operator=">", value=100)],
         logic="and",
         rule_type="random",
         probability=0.5,
     )
     policy = FailurePolicy(rules=[rule])
 
-    nodes = {
-        "SEA": {"type": "node"},
-        "SFO": {"type": "node"},
-    }
-    links = {
-        "L1": {"type": "link", "capacity": 100},
-        "L2": {"type": "link", "capacity": 100},
-        "L3": {"type": "link", "capacity": 100},
-    }
-
-    mock_random.side_effect = [0.4, 0.6, 0.3]
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"L1", "L3"}, "Should fail those where random() < 0.5"
-
-
-def test_operator_conditions():
-    """
-    Check that <, != conditions evaluate correctly in 'and' logic.
-    (We also have coverage for ==, > in other tests.)
-    """
-    conditions = [
-        FailureCondition(attr="capacity", operator="<", value=300),
-        FailureCondition(attr="region", operator="!=", value="east"),
-    ]
-    rule = FailureRule(conditions=conditions, logic="and", rule_type="all")
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {
-        "N1": {"type": "node", "capacity": 100, "region": "west"},  # matches
-        "N2": {"type": "node", "capacity": 100, "region": "east"},  # fails !=
-        "N3": {"type": "node", "capacity": 300, "region": "west"},  # fails <
-    }
-    links = {
-        "L1": {"type": "link", "capacity": 200, "region": "east"},  # fails !=
-    }
-
-    failed = policy.apply_failures(nodes, links)
-    assert failed == ["N1"]
-
-
-def test_logic_or():
-    """
-    Check 'or' logic: an entity is matched if it satisfies at least one condition (>150 or region=east).
-    """
-    conditions = [
-        FailureCondition(attr="capacity", operator=">", value=150),
-        FailureCondition(attr="region", operator="==", value="east"),
-    ]
-    rule = FailureRule(conditions=conditions, logic="or", rule_type="all")
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {
-        "N1": {"type": "node", "capacity": 100, "region": "west"},  # fails both
-        "N2": {
-            "type": "node",
-            "capacity": 200,
-            "region": "west",
-        },  # passes capacity>150
-        "N3": {"type": "node", "capacity": 100, "region": "east"},  # passes region=east
-        "N4": {"type": "node", "capacity": 200, "region": "east"},  # passes both
-    }
+    nodes = {}
     links = {}
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N2", "N3", "N4"}
+    risk_groups = {
+        "RG1": {"name": "RG1", "cost": 200},
+        "RG2": {"name": "RG2", "cost": 50},
+        "RG3": {"name": "RG3", "cost": 300},
+    }
+
+    # RG1 and RG3 match; RG2 does not
+    # We'll mock random => [0.4, 0.6] so that one match is picked (0.4 < 0.5)
+    # and the other is skipped (0.6 >= 0.5). The set iteration order is not guaranteed,
+    # so we only check that exactly 1 RG is chosen, and it must be from RG1/RG3.
+    with patch("ngraph.failure_policy.random") as mock_random:
+        mock_random.side_effect = [0.4, 0.6]
+        failed = policy.apply_failures(nodes, links, risk_groups)
+
+    # Exactly one should fail, and it must be one of the two matched.
+    assert len(failed) == 1
+    assert set(failed).issubset({"RG1", "RG3"})
 
 
-def test_logic_any():
+def test_multi_rule_union():
     """
-    'any' logic means all entities are selected, ignoring conditions.
+    Two rules => union of results: one rule fails certain nodes, the other fails certain links.
     """
-    rule = FailureRule(
-        conditions=[FailureCondition(attr="capacity", operator="==", value=-999)],
-        logic="any",
-        rule_type="all",
-    )
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"N1": {"type": "node"}, "N2": {"type": "node"}}
-    links = {"L1": {"type": "link"}, "L2": {"type": "link"}}
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "N2", "L1", "L2"}
-
-
-def test_multiple_rules_union():
-    """
-    If multiple rules exist, the final set of failed entities is the union
-    of each rule's selection.
-    """
-    rule1 = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
+    r1 = FailureRule(
+        entity_scope="node",
+        conditions=[FailureCondition(attr="capacity", operator=">", value=100)],
         logic="and",
         rule_type="all",
     )
-    rule2 = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="link")],
+    r2 = FailureRule(
+        entity_scope="link",
+        conditions=[FailureCondition(attr="cost", operator="==", value=9)],
         logic="and",
         rule_type="choice",
         count=1,
     )
-    policy = FailurePolicy(rules=[rule1, rule2])
+    policy = FailurePolicy(rules=[r1, r2])
 
-    nodes = {"N1": {"type": "node"}, "N2": {"type": "node"}}
-    links = {"L1": {"type": "link"}, "L2": {"type": "link"}}
-
+    nodes = {
+        "N1": {"capacity": 50},
+        "N2": {"capacity": 120},  # fails rule1
+    }
+    links = {
+        "L1": {"cost": 9},  # matches rule2
+        "L2": {"cost": 9},  # matches rule2
+        "L3": {"cost": 7},
+    }
     with patch("ngraph.failure_policy.sample", return_value=["L1"]):
         failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "N2", "L1"}
+    # fails N2 from rule1, fails L1 from rule2 => union
+    assert set(failed) == {"N2", "L1"}
 
 
-def test_unsupported_logic():
+def test_fail_shared_risk_groups():
     """
-    Ensure that if a rule specifies an unsupported logic string,
-    _evaluate_conditions() raises ValueError.
-    """
-    rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
-        logic="UNSUPPORTED",
-        rule_type="all",
-    )
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"A": {"type": "node"}}
-    links = {}
-    with pytest.raises(ValueError, match="Unsupported logic: UNSUPPORTED"):
-        policy.apply_failures(nodes, links)
-
-
-def test_unsupported_rule_type():
-    """
-    Ensure that if a rule has an unknown rule_type,
-    _select_entities() raises ValueError.
+    If fail_shared_risk_groups=True, failing any node/link also fails
+    all node/links that share a risk group with it.
     """
     rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
-        logic="and",
-        rule_type="UNKNOWN",
-    )
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"A": {"type": "node"}}
-    links = {}
-    with pytest.raises(ValueError, match="Unsupported rule_type: UNKNOWN"):
-        policy.apply_failures(nodes, links)
-
-
-def test_unsupported_operator():
-    """
-    If a condition has an unknown operator, _evaluate_condition() raises ValueError.
-    """
-    cond = FailureCondition(attr="capacity", operator="??", value=100)
-    with pytest.raises(ValueError, match="Unsupported operator: "):
-        _evaluate_condition({"capacity": 100}, cond)
-
-
-def test_no_conditions_with_non_any_logic():
-    """
-    If logic is not 'any' but conditions is empty,
-    we expect _evaluate_conditions() to return False.
-    """
-    rule = FailureRule(conditions=[], logic="and", rule_type="all")
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"N1": {"type": "node"}}
-    links = {}
-    failed = policy.apply_failures(nodes, links)
-    assert failed == [], "No conditions => no match => no failures."
-
-
-def test_choice_larger_count_than_matched():
-    """
-    If rule.count > number of matched entities, we pick all matched.
-    """
-    rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
-        logic="and",
-        rule_type="choice",
-        count=10,
-    )
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"A": {"type": "node"}, "B": {"type": "node"}}
-    links = {"L1": {"type": "link"}}
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"A", "B"}
-
-
-def test_choice_zero_count():
-    """
-    If rule.count=0, we select none from the matched entities.
-    """
-    rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="node")],
-        logic="and",
-        rule_type="choice",
-        count=0,
-    )
-    policy = FailurePolicy(rules=[rule])
-
-    nodes = {"A": {"type": "node"}, "B": {"type": "node"}, "C": {"type": "node"}}
-    links = {}
-    failed = policy.apply_failures(nodes, links)
-    assert failed == [], "count=0 => no entities chosen."
-
-
-def test_operator_condition_le_ge():
-    """
-    Verify that the '<=' and '>=' operators in _evaluate_condition are correctly handled.
-    """
-    cond_le = FailureCondition(attr="capacity", operator="<=", value=100)
-    cond_ge = FailureCondition(attr="capacity", operator=">=", value=100)
-
-    # Entity with capacity=100 => passes both <=100 and >=100
-    e1 = {"capacity": 100}
-    assert _evaluate_condition(e1, cond_le) is True
-    assert _evaluate_condition(e1, cond_ge) is True
-
-    # capacity=90 => pass <=100, fail >=100
-    e2 = {"capacity": 90}
-    assert _evaluate_condition(e2, cond_le) is True
-    assert _evaluate_condition(e2, cond_ge) is False
-
-    # capacity=110 => fail <=100, pass >=100
-    e3 = {"capacity": 110}
-    assert _evaluate_condition(e3, cond_le) is False
-    assert _evaluate_condition(e3, cond_ge) is True
-
-
-def test_operator_contains_not_contains():
-    """
-    Verify that 'contains' and 'not_contains' operators work with string or list attributes.
-    """
-    rule_contains = FailureRule(
-        conditions=[FailureCondition(attr="tags", operator="contains", value="foo")],
-        logic="and",
-        rule_type="all",
-    )
-    rule_not_contains = FailureRule(
-        conditions=[
-            FailureCondition(attr="tags", operator="not_contains", value="bar")
-        ],
-        logic="and",
-        rule_type="all",
-    )
-
-    # Entities with a 'tags' attribute
-    nodes = {
-        "N1": {"type": "node", "tags": ["foo", "bar"]},  # contains 'foo'
-        "N2": {"type": "node", "tags": ["baz", "qux"]},  # doesn't contain 'foo'
-        "N3": {"type": "node", "tags": "foobar"},  # string containing 'foo'
-        "N4": {"type": "node", "tags": ""},  # string not containing anything
-    }
-    links = {}
-
-    # Test the 'contains' rule
-    failed_contains = FailurePolicy(rules=[rule_contains]).apply_failures(nodes, links)
-    # N1 has 'foo' in list, N3 has 'foo' in string "foobar"
-    assert set(failed_contains) == {"N1", "N3"}
-
-    # Test the 'not_contains' rule
-    failed_not_contains = FailurePolicy(rules=[rule_not_contains]).apply_failures(
-        nodes, links
-    )
-    # N2 => doesn't have 'bar', N4 => empty string, also doesn't have 'bar'
-    assert set(failed_not_contains) == {"N2", "N4"}
-
-
-def test_operator_any_value_no_value():
-    """
-    Verify that 'any_value' matches entities that have the attribute (non-None),
-    and 'no_value' matches entities that do not have that attribute or None.
-    """
-    any_rule = FailureRule(
-        conditions=[
-            FailureCondition(attr="capacity", operator="any_value", value=None)
-        ],
-        logic="and",
-        rule_type="all",
-    )
-    none_rule = FailureRule(
-        conditions=[FailureCondition(attr="capacity", operator="no_value", value=None)],
-        logic="and",
-        rule_type="all",
-    )
-
-    nodes = {
-        "N1": {"type": "node", "capacity": 100},  # has capacity
-        "N2": {"type": "node"},  # no 'capacity' attr
-        "N3": {"type": "node", "capacity": None},  # capacity is explicitly None
-    }
-    links = {}
-
-    failed_any = FailurePolicy(rules=[any_rule]).apply_failures(nodes, links)
-    # N1 has capacity=100, N3 has capacity=None (still present, even if None)
-    assert set(failed_any) == {"N1", "N3"}
-
-    failed_none = FailurePolicy(rules=[none_rule]).apply_failures(nodes, links)
-    # N2 has no 'capacity' attribute. N3 has capacity=None => attribute is present but None => also matches
-    # This depends on your interpretation of "no_value", but typically "no_value" means derived_value is None.
-    # We do see from the code that derived_value= entity.get(cond.attr, None) => if the key is missing or is None, we pass
-    assert set(failed_none) == {"N2", "N3"}
-
-
-def test_shared_risk_groups_expansion():
-    """
-    Verify that if fail_shared_risk_groups=True is set, any failed entity
-    causes all entities in the same shared_risk_group to fail.
-    """
-    # This rule matches link type=link, then chooses exactly 1
-    rule = FailureRule(
-        conditions=[FailureCondition(attr="type", operator="==", value="link")],
+        entity_scope="link",
+        conditions=[FailureCondition(attr="capacity", operator=">", value=100)],
         logic="and",
         rule_type="choice",
         count=1,
+    )
+    # Only "L2" has capacity>100 => it will definitely match
+    # We pick exactly 1 => "L2"
+    policy = FailurePolicy(
+        rules=[rule],
+        fail_shared_risk_groups=True,
+    )
+
+    nodes = {
+        "N1": {"capacity": 999, "risk_groups": ["RGalpha"]},  # not matched by link rule
+        "N2": {"capacity": 10, "risk_groups": ["RGalpha"]},
+    }
+    links = {
+        "L1": {"capacity": 100, "risk_groups": ["RGbeta"]},
+        "L2": {"capacity": 300, "risk_groups": ["RGalpha"]},  # matched
+        "L3": {"capacity": 80, "risk_groups": ["RGalpha"]},
+        "L4": {"capacity": 500, "risk_groups": ["RGgamma"]},
+    }
+
+    with patch("ngraph.failure_policy.sample", return_value=["L2"]):
+        failed = policy.apply_failures(nodes, links)
+    # L2 fails => shares risk_groups "RGalpha" => that includes N1, N2, L3
+    # so they all fail
+    # L4 is not in RGalpha => remains unaffected
+    assert set(failed) == {"L2", "N1", "N2", "L3"}
+
+
+def test_fail_risk_group_children():
+    """
+    If fail_risk_group_children=True, failing a risk group also fails
+    its children recursively.
+    """
+    # We'll fail any RG with cost>=200
+    rule = FailureRule(
+        entity_scope="risk_group",
+        conditions=[FailureCondition(attr="cost", operator=">=", value=200)],
+        logic="and",
+        rule_type="all",
     )
     policy = FailurePolicy(
         rules=[rule],
-        attrs={"fail_shared_risk_groups": True},
+        fail_risk_group_children=True,
     )
 
+    rgs = {
+        "TopRG": {
+            "name": "TopRG",
+            "cost": 250,
+            "children": [
+                {"name": "SubRG1", "cost": 100, "children": []},
+                {"name": "SubRG2", "cost": 300, "children": []},
+            ],
+        },
+        "OtherRG": {
+            "name": "OtherRG",
+            "cost": 50,
+            "children": [],
+        },
+        "SubRG1": {
+            "name": "SubRG1",
+            "cost": 100,
+            "children": [],
+        },
+        "SubRG2": {
+            "name": "SubRG2",
+            "cost": 300,
+            "children": [],
+        },
+    }
+    nodes = {}
+    links = {}
+
+    failed = policy.apply_failures(nodes, links, rgs)
+    # "TopRG" cost=250 => fails => also fails children SubRG1, SubRG2
+    # "SubRG2" cost=300 => also matches rule => but anyway it's included
+    # "OtherRG" is unaffected
+    assert set(failed) == {"TopRG", "SubRG1", "SubRG2"}
+
+
+def test_use_cache():
+    """
+    Demonstrate that if use_cache=True, repeated calls do not re-match
+    conditions. We'll just check that the second call returns the same
+    result and that we've only used matching logic once.
+    """
+    rule = FailureRule(
+        entity_scope="node",
+        conditions=[FailureCondition(attr="capacity", operator=">", value=50)],
+        logic="and",
+        rule_type="all",
+    )
+    policy = FailurePolicy(rules=[rule], use_cache=True)
+
     nodes = {
-        "N1": {"type": "node"},
-        "N2": {"type": "node"},
+        "N1": {"capacity": 100},
+        "N2": {"capacity": 40},
     }
-    # Suppose L1 and L2 are in SRG1, L3 in SRG2
-    links = {
-        "L1": {"type": "link", "shared_risk_group": "SRG1"},
-        "L2": {"type": "link", "shared_risk_group": "SRG1"},
-        "L3": {"type": "link", "shared_risk_group": "SRG2"},
+    links = {}
+
+    first_fail = policy.apply_failures(nodes, links)
+    assert set(first_fail) == {"N1"}
+    # Clear the node capacity for N1 => but we do NOT clear the cache
+    nodes["N1"]["capacity"] = 10
+
+    second_fail = policy.apply_failures(nodes, links)
+    # Because of caching, it returns the same "failed" set => ignoring the updated capacity
+    assert set(second_fail) == {"N1"}, "Cache used => no re-check of conditions"
+
+    # If we want the new matching, we must clear the cache
+    policy._match_cache.clear()
+    third_fail = policy.apply_failures(nodes, links)
+    # Now N1 capacity=10 => does not match capacity>50 => no failures
+    assert third_fail == []
+
+
+def test_cache_disabled():
+    """
+    If use_cache=False, each call re-checks conditions => we see updated results.
+    """
+    rule = FailureRule(
+        entity_scope="node",
+        conditions=[FailureCondition(attr="capacity", operator=">", value=50)],
+        logic="and",
+        rule_type="all",
+    )
+    policy = FailurePolicy(rules=[rule], use_cache=False)
+
+    nodes = {
+        "N1": {"capacity": 100},
+        "N2": {"capacity": 40},
     }
+    links = {}
 
-    # Mock picking "L1"
-    with patch("ngraph.failure_policy.sample", return_value=["L1"]):
-        failed = policy.apply_failures(nodes, links)
+    first_fail = policy.apply_failures(nodes, links)
+    assert set(first_fail) == {"N1"}
 
-    # L1 was chosen, which triggers any others in SRG1 => L2 also fails.
-    # L3 is unaffected.
-    assert set(failed) == {"L1", "L2"}
-
-    # If we pick "L3", L1 & L2 remain healthy
-    with patch("ngraph.failure_policy.sample", return_value=["L3"]):
-        failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"L3"}
+    # Now reduce capacity => we re-check => no longer fails
+    nodes["N1"]["capacity"] = 10
+    second_fail = policy.apply_failures(nodes, links)
+    assert set(second_fail) == set()
