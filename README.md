@@ -16,35 +16,28 @@
 
 ## Introduction
 
-NetGraph is a tool for network modeling and analysis. It consists of two main parts:
-- A lower level library providing graph data structures and algorithms for network modeling and analysis.
-- A set of higher level abstractions like network and workflow that can comprise a complete network analysis scenario.
+NetGraph is a scenario-based network modeling and analysis framework written in Python. It allows you to design, simulate, and evaluate complex network topologies - ranging from small test cases to massive Data Center fabrics and WAN networks.
 
-The lower level lib provides the following main primitives:
+You can load an entire scenario from a single YAML file (including topology, failure policies, traffic demands, multi-step workflows) and run it in just a few lines of Python. The results can then be explored, visualized, and refined — making NetGraph well-suited for iterative network design, traffic engineering experiments, and what-if scenario analysis in large-scale topologies.
 
-- **StrictMultiDiGraph**  
-  Specialized multi-digraph with addressable edges and strict checks on duplicate nodes/edges.
+### Core Concepts
 
-- **Path**  
-  Represents a single path between two nodes in the graph.
+- **Topology Language and Hierarchical Blueprints**:
+NetGraph includes a domain-specific language for describing topologies via “blueprints.” These blueprints can be nested and reused, letting you define node groups and their interconnects in a hierarchical manner. Connectivity patterns (e.g., "mesh", "one_to_one") and complex expansions (e.g., dc[1-3, 5-6]) let you scale out large topologies with minimal repetition.
 
-- **PathBundle**  
-  A collection of equal-cost paths between two nodes.
+- **Scenario-Based Workflows**:
+A Scenario is the main entry point for building and running network analyses: it encapsulates the topology, failure policies, traffic demands, and workflow steps. A Scenario can be loaded from a YAML file or created programmatically, and it can be run in a single step or iteratively to explore different configurations.
 
-- **Demand**  
-  Models a network demand from a source node to a destination node with a specified traffic volume.
-
-- **Flow**  
-  Represent placement of a Demand volume along one or more paths (via a PathBundle) in a graph.
-
-- **FlowPolicy**  
-  Governs how Demands are split into Flows, enforcing routing/TE constraints (e.g., shortest paths, multipath, capacity limits).
+- **Low-Level Library**:
+Under the hood, NetGraph provides robust primitives for building and analyzing network graphs, calculating flows, placing traffic demands, and enforcing traffic engineering policies. This library is used by the scenario-based workflows, but it can also be used independently.
 
 ---
 
 ## Installation and Usage
 
 NetGraph can be used in two ways:
+- **Using the Docker Container with JupyterLab**: This is the easiest way to get started with NetGraph, as it provides a pre-configured environment with JupyterLab and all dependencies installed.
+- **Using the Python Package**: If you prefer to use NetGraph in your own Python environment, you can install the package using pip and use it in your Python code.
 
 ### 1. Using the Docker Container with JupyterLab
 
@@ -70,7 +63,7 @@ NetGraph can be used in two ways:
 3. Start the container with JupyterLab server:
 
     ```bash
-    ./run.sh start
+    ./run.sh run
     ```
 
 4. Open the JupyterLab URL in your browser:
@@ -79,11 +72,9 @@ NetGraph can be used in two ways:
     http://127.0.0.1:8788/
     ```
 
-5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks or create your own.
+5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks (e.g., open scenario_dc.ipynb) or create your own.
 
-Note: Docker will mount the content of `NetGraph` directory into the `/root/env` directory inside container, so any changes made to the code in the `NetGraph` directory will be reflected in the container and vice versa.
-
-The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and see the changes reflected immediately in JupyterLab.
+**Note**: Docker is instructed to mount the content of `NetGraph` directory into the `/root/env` directory inside container, so any changes made to any files in the `NetGraph` directory will be reflected in the container and vice versa. The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and leverage them immediately in JupyterLab. But don't forget to restart the JupyterLab kernel to see the changes.
 
 To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server is running. To stop the remaining Docker container, run:
 
@@ -95,7 +86,7 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 **Prerequisites:**
 
-- Python 3.8 or higher installed on your machine.
+- Python 3.10 or higher installed on your machine.
 
 Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflicts with other Python packages. See [Python Virtual Environments](https://docs.python.org/3/library/venv.html) for more information.
 
@@ -110,141 +101,99 @@ Note: Don't forget to use a virtual environment (e.g., `venv`) to avoid conflict
 2. Use the package in your Python code:
 
     ```python
-      from ngraph.lib.graph import StrictMultiDiGraph
-      from ngraph.lib.algorithms.max_flow import calc_max_flow
-
-      # Create a graph
-      g = StrictMultiDiGraph()
-      g.add_node("A")
-      g.add_node("B")
-      g.add_node("C")
-      g.add_edge("A", "B", cost=1, capacity=1)
-      g.add_edge("A", "B", cost=1, capacity=1)
-      g.add_edge("B", "C", cost=1, capacity=2)
-      g.add_edge("A", "C", cost=2, capacity=3)
-
-      # Calculate MaxFlow between the source and destination nodes
-      max_flow = calc_max_flow(g, "A", "C")
-
-      print(max_flow)
+    from ngraph.scenario import Scenario
+    from ngraph.explorer import NetworkExplorer
+    scenario_yaml = """
+    <describe your scenario here>
+    """
+    scenario = Scenario.from_yaml(scenario_yaml)
+    scenario.run()
+    network = scenario.network
+    explorer = NetworkExplorer.explore_network(network)
+    explorer.print_tree(skip_leaves=True, detailed=False)
     ```
 
 ## Use Case Examples
 
-### Calculate MaxFlow in a graph
+### Calculate MaxFlow between two 3-tier Clos networks
+
 ```python
-    """
-    Tests max flow calculations on a graph with parallel edges.
+from ngraph.scenario import Scenario
+from ngraph.lib.flow_policy import FlowPlacement
+scenario_yaml = """
+blueprints:
+  brick_2tier:
+    groups:
+      t1:
+        node_count: 8
+        name_template: t1-{node_num}
+      t2:
+        node_count: 8
+        name_template: t2-{node_num}
 
-    Graph topology (costs/capacities):
+    adjacency:
+      - source: /t1
+        target: /t2
+        pattern: mesh
+        link_params:
+          capacity: 2
+          cost: 1
 
-                 [1,1] & [1,2]     [1,1] & [1,2]
-          A ──────────────────► B ─────────────► C
-          │                                      ▲
-          │    [2,3]                             │ [2,3]
-          └───────────────────► D ───────────────┘
+  3tier_clos:
+    groups:
+      b1:
+        use_blueprint: brick_2tier
+      b2:
+        use_blueprint: brick_2tier
+      spine:
+        node_count: 64
+        name_template: t3-{node_num}
 
-    Edges:
-      - A→B: two parallel edges with (cost=1, capacity=1) and (cost=1, capacity=2)
-      - B→C: two parallel edges with (cost=1, capacity=1) and (cost=1, capacity=2)
-      - A→D: (cost=2, capacity=3)
-      - D→C: (cost=2, capacity=3)
+    adjacency:
+      - source: b1/t2
+        target: spine
+        pattern: one_to_one
+        link_params:
+          capacity: 2
+          cost: 1
+      - source: b2/t2
+        target: spine
+        pattern: one_to_one
+        link_params:
+          capacity: 2
+          cost: 1
 
-    The test computes:
-      - The true maximum flow (expected flow: 6.0)
-      - The flow along the shortest paths (expected flow: 3.0)
-      - Flow placement using an equal-balanced strategy on the shortest paths (expected flow: 2.0)
-    """
-    from ngraph.lib.graph import StrictMultiDiGraph
-    from ngraph.lib.algorithms.max_flow import calc_max_flow
-    from ngraph.lib.algorithms.base import FlowPlacement
+network:
+  name: "3tier_clos_network"
+  version: 1.0
 
-    g = StrictMultiDiGraph()
-    for node in ("A", "B", "C", "D"):
-        g.add_node(node)
+  groups:
+    my_clos1:
+      use_blueprint: 3tier_clos
 
-    # Create parallel edges between A→B and B→C
-    g.add_edge("A", "B", key=0, cost=1, capacity=1)
-    g.add_edge("A", "B", key=1, cost=1, capacity=2)
-    g.add_edge("B", "C", key=2, cost=1, capacity=1)
-    g.add_edge("B", "C", key=3, cost=1, capacity=2)
-    # Create an alternative path A→D→C
-    g.add_edge("A", "D", key=4, cost=2, capacity=3)
-    g.add_edge("D", "C", key=5, cost=2, capacity=3)
+    my_clos2:
+      use_blueprint: 3tier_clos
 
-    # 1. The true maximum flow
-    max_flow_prop = calc_max_flow(g, "A", "C")
-    assert max_flow_prop == 6.0, f"Expected 6.0, got {max_flow_prop}"
-
-    # 2. The flow along the shortest paths
-    max_flow_sp = calc_max_flow(g, "A", "C", shortest_path=True)
-    assert max_flow_sp == 3.0, f"Expected 3.0, got {max_flow_sp}"
-
-    # 3. Flow placement using an equal-balanced strategy on the shortest paths
-    max_flow_eq = calc_max_flow(
-        g, "A", "C", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
-    )
-    assert max_flow_eq == 2.0, f"Expected 2.0, got {max_flow_eq}"
-
+  adjacency:
+    - source: my_clos1/spine
+      target: my_clos2/spine
+      pattern: one_to_one
+      link_count: 4
+      link_params:
+        capacity: 1
+        cost: 1
+"""
+scenario = Scenario.from_yaml(scenario_yaml)
+network = scenario.network
+network.max_flow(
+    source_path=r"my_clos1.*(b[0-9]*)/t1",
+    sink_path=r"my_clos2.*(b[0-9]*)/t1",
+    mode="combine",
+    shortest_path=True,
+    flow_placement=FlowPlacement.EQUAL_BALANCED,
+)
 ```
+{('b1|b2', 'b1|b2'): 256.0}
+Which means that the maximum flow between all t1 nodes in `my_clos1` and all t1 nodes in `my_clos2` is 256.0.
 
-### Traffic demands placement on a graph
-```python
-    """
-    Demonstrates traffic engineering by placing two demands on a network.
-
-    Graph topology (costs/capacities):
-
-              [15]
-          A ─────── B
-           \      /
-        [5] \    / [15]
-             \  /
-              C
-
-    - Each link is bidirectional:
-         A↔B: capacity 15, B↔C: capacity 15, and A↔C: capacity 5.
-    - We place a demand of volume 20 from A→C and a second demand of volume 20 from C→A.
-    - Each demand uses its own FlowPolicy, so the policy's global flow accounting does not overlap.
-    - The test verifies that each demand is fully placed at 20 units.
-    """
-    from ngraph.lib.graph import StrictMultiDiGraph
-    from ngraph.lib.algorithms.flow_init import init_flow_graph
-    from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
-    from ngraph.lib.demand import Demand
-
-    # Build the graph.
-    g = StrictMultiDiGraph()
-    for node in ("A", "B", "C"):
-        g.add_node(node)
-
-    # Create bidirectional edges with distinct labels (for clarity).
-    g.add_edge("A", "B", key=0, cost=1, capacity=15, label="1")
-    g.add_edge("B", "A", key=1, cost=1, capacity=15, label="1")
-    g.add_edge("B", "C", key=2, cost=1, capacity=15, label="2")
-    g.add_edge("C", "B", key=3, cost=1, capacity=15, label="2")
-    g.add_edge("A", "C", key=4, cost=1, capacity=5, label="3")
-    g.add_edge("C", "A", key=5, cost=1, capacity=5, label="3")
-
-    # Initialize flow-related structures (e.g., to track placed flows in the graph).
-    flow_graph = init_flow_graph(g)
-
-    # Demand from A→C (volume 20).
-    demand_ac = Demand("A", "C", 20)
-    flow_policy_ac = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-    demand_ac.place(flow_graph, flow_policy_ac)
-    assert demand_ac.placed_demand == 20, (
-        f"Demand from {demand_ac.src_node} to {demand_ac.dst_node} "
-        f"expected to be fully placed."
-    )
-
-    # Demand from C→A (volume 20), using a separate FlowPolicy instance.
-    demand_ca = Demand("C", "A", 20)
-    flow_policy_ca = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
-    demand_ca.place(flow_graph, flow_policy_ca)
-    assert demand_ca.placed_demand == 20, (
-        f"Demand from {demand_ca.src_node} to {demand_ca.dst_node} "
-        f"expected to be fully placed."
-    )
-
-```
+Note that flow_placement parameter is set to FlowPlacement.EQUAL_BALANCED, which emulates ECMP. This means that the flow is distributed equally between all possible paths. If we were to disable three out of four links between any pair of spine routers (bringing the overal spine - spine capacity to 253.0), the overall flow in such ECMP scenario would be limited by this bottleneck and the maximum flow would be 64.0 (not 253). While setting flow_placement to FlowPlacement.PROPORTIONAL would result in the flow being distributed proportionally to the link capacities (emulation of UCMP). Resulting in the maximum flow of 253.0.
