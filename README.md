@@ -9,9 +9,7 @@
     - [Using the Docker Container with JupyterLab](#1-using-the-docker-container-with-jupyterlab)
     - [Using the Python Package](#2-using-the-python-package)
 - [Use Case Examples](#use-case-examples)
-    - [Calculate MaxFlow in a graph](#calculate-maxflow-in-a-graph)
-    - [Traffic demands placement on a graph](#traffic-demands-placement-on-a-graph)
-
+    - [Calculate MaxFlow between two 3-tier Clos networks](#calculate-maxflow-between-two-3-tier-clos-networks)
 ---
 
 ## Introduction
@@ -193,7 +191,6 @@ network.max_flow(
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
 ```
-{('b1|b2', 'b1|b2'): 256.0}
-Which means that the maximum flow between all t1 nodes in `my_clos1` and all t1 nodes in `my_clos2` is 256.0.
+Result is `{('b1|b2', 'b1|b2'): 256.0}`. It means that the maximum flow between all t1 nodes in `my_clos1` and all t1 nodes in `my_clos2` is 256.0.
 
 Note that flow_placement parameter is set to FlowPlacement.EQUAL_BALANCED, which emulates ECMP. This means that the flow is distributed equally between all possible paths. If we were to disable three out of four links between any pair of spine routers (bringing the overal spine - spine capacity to 253.0), the overall flow in such ECMP scenario would be limited by this bottleneck and the maximum flow would be 64.0 (not 253). While setting flow_placement to FlowPlacement.PROPORTIONAL would result in the flow being distributed proportionally to the link capacities (emulation of UCMP). Resulting in the maximum flow of 253.0.
