@@ -1,3 +1,46 @@
 [build-system]
-requires = ["setuptools>=65.5.0"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
+
+# ---------------------------------------------------------------------
+[project]
+name = "ngraph"
+version = "0.6.1"
+description = "A tool and a library for network modeling and capacity analysis."
+readme = "README.md"
+authors = [{ name = "Andrey Golovanov" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+# Runtime deps
+dependencies = [
+    "geopy",
+    "networkx",
+    "pyyaml",
+]
+
+# Dev/CI extras
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "black",
+    "isort",
+]
+
+# ---------------------------------------------------------------------
+# Pytest flags
+[tool.pytest.ini_options]
+addopts = "--cov=ngraph --cov-fail-under=85 --cov-report term-missing"
+
+# ---------------------------------------------------------------------
+# Tell setuptools to package ONLY the 'ngraph' package tree
+[tool.setuptools.packages.find]
+include = ["ngraph*"]          # anything under ngraph/
+exclude = ["tests*", "notebooks*", "examples*", "dev*"]
