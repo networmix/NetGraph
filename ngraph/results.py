@@ -54,3 +54,7 @@ class Results:
             if key in data:
                 result[step_name] = data[key]
         return result
+
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
+        """Return a dictionary representation of all stored results."""
+        return {step: data.copy() for step, data in self._store.items()}
