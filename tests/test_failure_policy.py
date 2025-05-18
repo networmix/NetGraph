@@ -1,12 +1,8 @@
-import pytest
 from unittest.mock import patch
 
-from ngraph.failure_policy import (
-    FailurePolicy,
-    FailureRule,
-    FailureCondition,
-    _evaluate_condition,
-)
+import pytest
+
+from ngraph.failure_policy import FailureCondition, FailurePolicy, FailureRule
 
 
 def test_node_scope_all():
@@ -285,3 +281,23 @@ def test_cache_disabled():
     nodes["N1"]["capacity"] = 10
     second_fail = policy.apply_failures(nodes, links)
     assert set(second_fail) == set()
+
+
+def test_evaluate_conditions_invalid_logic():
+    """_evaluate_conditions should raise for unsupported logic values."""
+    attrs = {"cap": 50}
+    conds = [FailureCondition(attr="cap", operator=">=", value=10)]
+    with pytest.raises(ValueError, match="Unsupported logic"):
+        FailurePolicy._evaluate_conditions(attrs, conds, "xor")
+
+
+def test_select_entities_invalid_rule_type():
+    """_select_entities should raise for unsupported rule_type."""
+    dummy_rule = FailureRule(
+        entity_scope="node",
+        conditions=[],
+        logic="any",
+        rule_type="bogus",
+    )
+    with pytest.raises(ValueError, match="Unsupported rule_type"):
+        FailurePolicy._select_entities({"A", "B"}, dummy_rule)

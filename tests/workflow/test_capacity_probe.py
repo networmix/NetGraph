@@ -1,9 +1,10 @@
-import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
-from ngraph.network import Network, Node, Link
-from ngraph.workflow.capacity_probe import CapacityProbe
+import pytest
+
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.network import Link, Network, Node
+from ngraph.workflow.capacity_probe import CapacityProbe
 
 
 @pytest.fixture
@@ -244,3 +245,9 @@ def test_capacity_probe_probe_reverse(mock_scenario):
     assert "max_flow:[B -> A]" in flows
     assert flows["max_flow:[A -> B]"] == 3.0
     assert flows["max_flow:[B -> A]"] == 3.0
+
+
+def test_capacity_probe_invalid_flow_placement():
+    """Invalid flow_placement string should raise ValueError."""
+    with pytest.raises(ValueError, match="Invalid flow_placement"):
+        CapacityProbe(name="Bad", flow_placement="bogus")

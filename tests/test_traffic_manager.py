@@ -1,12 +1,10 @@
 import pytest
 
-from ngraph.network import Network, Node, Link
-from ngraph.traffic_demand import TrafficDemand
+from ngraph.lib.algorithms.base import MIN_FLOW
 from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.lib.graph import StrictMultiDiGraph
-from ngraph.lib.algorithms.base import MIN_FLOW
-from ngraph.lib.demand import Demand
-
+from ngraph.network import Link, Network, Node
+from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficManager
 
 
@@ -411,3 +409,34 @@ def test_estimate_rounds_no_capacities():
     total_placed = tm.place_all_demands(placement_rounds="auto")
     # The link has 0 capacity, so no actual flow can be placed.
     assert total_placed == 0.0, "No capacity => no flow placed"
+
+
+def test_get_traffic_results_aggregated_and_detailed(small_network):
+    """TrafficManager.get_traffic_results should summarize correctly."""
+    demands = [
+        TrafficDemand(source_path="A", sink_path="C", demand=10.0),
+        TrafficDemand(source_path="B", sink_path="C", demand=5.0),
+    ]
+    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm.build_graph()
+    tm.expand_demands()
+    tm.place_all_demands()
+
+    agg = tm.get_traffic_results(detailed=False)
+    assert len(agg) == 2
+    for res in agg:
+        assert res.total_volume == res.placed_volume
+
+    detailed = tm.get_traffic_results(detailed=True)
+    assert len(detailed) == len(tm.demands)
+    for res in detailed:
+        assert res.total_volume == res.placed_volume
+
+
+def test_estimate_rounds_typical_case(small_network):
+    """_estimate_rounds should compute rounds based on demand/capacity ratio."""
+    demands = [TrafficDemand(source_path="A", sink_path="C", demand=20.0)]
+    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm.build_graph()
+    tm.expand_demands()
+    assert tm._estimate_rounds() == 6
