@@ -33,6 +33,9 @@ dev = [
     "black",
     "isort",
 ]
+[project.scripts]
+ngraph = "ngraph.cli:main"
+
 
 # ---------------------------------------------------------------------
 # Pytest flags
