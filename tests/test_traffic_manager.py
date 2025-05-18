@@ -1,6 +1,5 @@
 import pytest
 
-from ngraph.lib.algorithms.base import MIN_FLOW
 from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Link, Network, Node
