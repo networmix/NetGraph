@@ -36,10 +36,9 @@ class TreeStats:
         internal_link_capacity (float): Sum of capacities for those internal links.
         external_link_count (int): Number of external links from this subtree to another.
         external_link_capacity (float): Sum of capacities for those external links.
-        external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown of external
-            links by the other subtree's path.
-        total_cost (float): Cumulative cost from node 'hw_component' plus link 'hw_component'.
-        total_power (float): Cumulative power from node 'hw_component' plus link 'hw_component'.
+        external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown by other subtree path.
+        total_cost (float): Cumulative cost (nodes + links).
+        total_power (float): Cumulative power (nodes + links).
     """
 
     node_count: int = 0
@@ -64,39 +63,37 @@ class TreeNode:
     Represents a node in the hierarchical tree.
 
     Attributes:
-        name (str): Name/label of this node (e.g., "dc1", "plane1", etc.).
+        name (str): Name/label of this node.
         parent (Optional[TreeNode]): Pointer to the parent tree node.
         children (Dict[str, TreeNode]): Mapping of child name -> child TreeNode.
-        subtree_nodes (Set[str]): The set of all node names in this subtree.
-        stats (TreeStats): Computed statistics for this subtree.
-        raw_nodes (List[Node]): Direct Node objects at this hierarchical level.
+        subtree_nodes (Set[str]): Node names in the subtree (all nodes, ignoring disabled).
+        active_subtree_nodes (Set[str]): Node names in the subtree (only enabled).
+        stats (TreeStats): Aggregated stats for "all" view.
+        active_stats (TreeStats): Aggregated stats for "active" (only enabled) view.
+        raw_nodes (List[Node]): Direct Node objects at this hierarchy level.
     """
 
     name: str
     parent: Optional[TreeNode] = None
 
     children: Dict[str, TreeNode] = field(default_factory=dict)
+
+    # "All" includes disabled nodes; "Active" excludes them.
     subtree_nodes: Set[str] = field(default_factory=set)
+    active_subtree_nodes: Set[str] = field(default_factory=set)
+
     stats: TreeStats = field(default_factory=TreeStats)
+    active_stats: TreeStats = field(default_factory=TreeStats)
+
     raw_nodes: List[Node] = field(default_factory=list)
 
     def __hash__(self) -> int:
-        """
-        Make the node hashable based on object identity.
-        This preserves uniqueness in sets/dicts without
-        forcing equality by fields.
-        """
+        # Keep identity-based hashing so each node is unique in sets/dicts.
         return id(self)
 
     def add_child(self, child_name: str) -> TreeNode:
         """
         Ensure a child node named 'child_name' exists and return it.
-
-        Args:
-            child_name (str): The name of the child node to add/find.
-
-        Returns:
-            TreeNode: The new or existing child TreeNode.
         """
         if child_name not in self.children:
             child_node = TreeNode(name=child_name, parent=self)
@@ -106,18 +103,14 @@ class TreeNode:
     def is_leaf(self) -> bool:
         """
         Return True if this node has no children.
-
-        Returns:
-            bool: True if there are no children, False otherwise.
         """
         return len(self.children) == 0
 
 
 class NetworkExplorer:
     """
-    Provides hierarchical exploration of a Network, computing internal/external
-    link counts, node counts, and cost/power usage. Also records external link
-    breakdowns by subtree path, with optional roll-up of leaf nodes in display.
+    Provides hierarchical exploration of a Network, computing statistics in two modes:
+    'all' (ignores disabled) and 'active' (only enabled).
     """
 
     def __init__(
@@ -125,16 +118,6 @@ class NetworkExplorer:
         network: Network,
         components_library: Optional[ComponentsLibrary] = None,
     ) -> None:
-        """
-        Initialize a NetworkExplorer. Generally, use 'explore_network' to build
-        and populate stats automatically.
-
-        Args:
-            network (Network): The network to explore.
-            components_library (Optional[ComponentsLibrary]): Library of
-                hardware/optic components to calculate cost/power. If None,
-                an empty library is used and cost/power will be 0.
-        """
         self.network = network
         self.components_library = components_library or ComponentsLibrary()
 
@@ -144,7 +127,7 @@ class NetworkExplorer:
         self._node_map: Dict[str, TreeNode] = {}  # node_name -> deepest TreeNode
         self._path_map: Dict[str, TreeNode] = {}  # path -> TreeNode
 
-        # Cache for storing each node's ancestor set:
+        # Cache for ancestor sets:
         self._ancestors_cache: Dict[TreeNode, Set[TreeNode]] = {}
 
     @classmethod
@@ -154,32 +137,24 @@ class NetworkExplorer:
         components_library: Optional[ComponentsLibrary] = None,
     ) -> NetworkExplorer:
         """
-        Creates a NetworkExplorer, builds a hierarchy tree, and computes stats.
-
-        NOTE: If you do not pass a non-empty components_library, any hardware
-        references for cost/power data will not be found.
-
-        Args:
-            network (Network): The network to explore.
-            components_library (Optional[ComponentsLibrary]): Components library
-                to use for cost/power lookups.
-
-        Returns:
-            NetworkExplorer: A fully populated explorer instance with stats.
+        Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
         """
         instance = cls(network, components_library)
 
-        # 1) Build the hierarchical structure
+        # 1) Build hierarchy
         instance.root_node = instance._build_hierarchy_tree()
 
-        # 2) Compute subtree sets (subtree_nodes)
-        instance._compute_subtree_sets(instance.root_node)
+        # 2) Compute subtree sets for "all" (ignoring disabled state)
+        instance._compute_subtree_sets_all(instance.root_node)
 
-        # 3) Build node and path maps
+        # 3) Compute subtree sets for "active" (excluding disabled)
+        instance._compute_subtree_sets_active(instance.root_node)
+
+        # 4) Build node & path maps
         instance._build_node_map(instance.root_node)
         instance._build_path_map(instance.root_node)
 
-        # 4) Aggregate statistics (node counts, link stats, cost, power)
+        # 5) Aggregate statistics (both 'all' and 'active')
         instance._compute_statistics()
 
         return instance
@@ -188,9 +163,6 @@ class NetworkExplorer:
         """
         Build a multi-level tree by splitting node names on '/'.
         Example: "dc1/plane1/ssw/ssw-1" => root/dc1/plane1/ssw/ssw-1
-
-        Returns:
-            TreeNode: The root of the newly constructed tree.
         """
         root = TreeNode(name="root")
         for nd in self.network.nodes.values():
@@ -201,46 +173,48 @@ class NetworkExplorer:
             current.raw_nodes.append(nd)
         return root
 
-    def _compute_subtree_sets(self, node: TreeNode) -> Set[str]:
+    def _compute_subtree_sets_all(self, node: TreeNode) -> Set[str]:
         """
-        Recursively compute the set of node names in each subtree.
-
-        Args:
-            node (TreeNode): The current tree node.
-
-        Returns:
-            Set[str]: A set of node names belonging to the subtree under 'node'.
+        Recursively collect all node names (regardless of disabled) into subtree_nodes.
         """
         collected = set()
         for child in node.children.values():
-            collected |= self._compute_subtree_sets(child)
+            collected |= self._compute_subtree_sets_all(child)
         for nd in node.raw_nodes:
             collected.add(nd.name)
         node.subtree_nodes = collected
         return collected
 
+    def _compute_subtree_sets_active(self, node: TreeNode) -> Set[str]:
+        """
+        Recursively collect enabled node names into active_subtree_nodes.
+        A node is considered enabled if nd.attrs.get("disabled") is not truthy.
+        """
+        collected = set()
+        for child in node.children.values():
+            collected |= self._compute_subtree_sets_active(child)
+        for nd in node.raw_nodes:
+            if not nd.attrs.get("disabled"):
+                collected.add(nd.name)
+        node.active_subtree_nodes = collected
+        return collected
+
     def _build_node_map(self, node: TreeNode) -> None:
         """
-        Post-order traversal to populate _node_map.
-
-        Each node_name in 'node.subtree_nodes' maps to 'node' if not already
-        assigned. The "deepest" node (lowest in the hierarchy) takes precedence.
-
-        Args:
-            node (TreeNode): The current tree node.
+        Assign each node's name to the *deepest* TreeNode that actually holds it.
+        We do a parent-first approach so children override if needed.
         """
+        # Map the raw_nodes at this level
+        for nd in node.raw_nodes:
+            self._node_map[nd.name] = node
+
+        # Then recurse, letting children override deeper nodes
         for child in node.children.values():
             self._build_node_map(child)
-        for node_name in node.subtree_nodes:
-            if node_name not in self._node_map:
-                self._node_map[node_name] = node
 
     def _build_path_map(self, node: TreeNode) -> None:
         """
-        Build a path->TreeNode map for easy lookups. Skips "root" in paths.
-
-        Args:
-            node (TreeNode): The current tree node.
+        Build a path->TreeNode map for easy lookups. Skips "root" in path strings.
         """
         path_str = self._compute_full_path(node)
         self._path_map[path_str] = node
@@ -250,12 +224,6 @@ class NetworkExplorer:
     def _compute_full_path(self, node: TreeNode) -> str:
         """
         Return a '/'-joined path, omitting "root".
-
-        Args:
-            node (TreeNode): The tree node to compute a path for.
-
-        Returns:
-            str: E.g., "dc1/plane1/ssw".
         """
         parts = []
         current = node
@@ -264,28 +232,9 @@ class NetworkExplorer:
             current = current.parent
         return "/".join(reversed(parts))
 
-    def _roll_up_if_leaf(self, path: str) -> str:
-        """
-        If 'path' corresponds to a leaf node, climb up until a non-leaf or root
-        is found. Return the resulting path.
-
-        Args:
-            path (str): A '/'-joined path.
-
-        Returns:
-            str: Possibly re-mapped path if a leaf was rolled up.
-        """
-        node = self._path_map.get(path)
-        if not node:
-            return path
-        while node.parent and node.parent.name != "root" and node.is_leaf():
-            node = node.parent
-        return self._compute_full_path(node)
-
     def _get_ancestors(self, node: TreeNode) -> Set[TreeNode]:
         """
-        Return a cached set of this node's ancestors (including itself),
-        up to the root.
+        Return a cached set of this node's ancestors (including itself).
         """
         if node in self._ancestors_cache:
             return self._ancestors_cache[node]
@@ -300,108 +249,133 @@ class NetworkExplorer:
 
     def _compute_statistics(self) -> None:
         """
-        Computes all subtree statistics in a more efficient manner:
-
-        - node_count is set from each node's 'subtree_nodes' (already stored).
-        - For each network node, cost/power is added to all ancestors in the
-          hierarchy.
-        - For each link, we figure out which subtrees see it as internal or
-          external, and update stats accordingly.
+        Populates two stats sets for each TreeNode:
+         - node.stats (all, ignoring disabled)
+         - node.active_stats (only enabled nodes/links)
         """
 
-        # 1) node_count: use subtree sets
-        #    (each node gets the size of subtree_nodes)
-        #    stats are zeroed initially in the constructor.
-        def set_node_counts(node: TreeNode) -> None:
-            node.stats.node_count = len(node.subtree_nodes)
-            for child in node.children.values():
-                set_node_counts(child)
+        # First, zero them out
+        def reset_stats(n: TreeNode):
+            n.stats = TreeStats()
+            n.active_stats = TreeStats()
+            for c in n.children.values():
+                reset_stats(c)
 
-        set_node_counts(self.root_node)
+        if self.root_node:
+            reset_stats(self.root_node)
 
-        # 2) Accumulate node cost/power into all ancestor stats
+        # 1) Node counts from subtree sets
+        def set_node_counts(n: TreeNode):
+            n.stats.node_count = len(n.subtree_nodes)
+            n.active_stats.node_count = len(n.active_subtree_nodes)
+            for c in n.children.values():
+                set_node_counts(c)
+
+        if self.root_node:
+            set_node_counts(self.root_node)
+
+        # 2) Accumulate node cost/power
         for nd in self.network.nodes.values():
-            hw_component = nd.attrs.get("hw_component")
+            hw_comp_name = nd.attrs.get("hw_component")
             comp = None
-            if hw_component:
-                comp = self.components_library.get(hw_component)
+            if hw_comp_name:
+                comp = self.components_library.get(hw_comp_name)
                 if comp is None:
                     logger.warning(
                         "Node '%s' references unknown hw_component '%s'.",
                         nd.name,
-                        hw_component,
+                        hw_comp_name,
                     )
+            cost_val = comp.total_cost() if comp else 0.0
+            power_val = comp.total_power() if comp else 0.0
 
-            # Walk up from the deepest node
-            node_for_name = self._node_map[nd.name]
-            ancestors = self._get_ancestors(node_for_name)
-            if comp:
-                cval = comp.total_cost()
-                pval = comp.total_power()
-                for an in ancestors:
-                    an.stats.total_cost += cval
-                    an.stats.total_power += pval
+            tree_node = self._node_map[nd.name]
+            # "All" includes disabled
+            for an in self._get_ancestors(tree_node):
+                an.stats.total_cost += cost_val
+                an.stats.total_power += power_val
 
-        # 3) Single pass to accumulate link stats
-        #    For each link, determine for which subtrees it's internal vs external,
-        #    and update stats accordingly. Also add link hw cost/power if applicable.
+            # "Active" excludes disabled
+            if not nd.attrs.get("disabled"):
+                for an in self._get_ancestors(tree_node):
+                    an.active_stats.total_cost += cost_val
+                    an.active_stats.total_power += power_val
+
+        # 3) Accumulate link stats (internal/external + cost/power)
         for link in self.network.links.values():
             src = link.source
             dst = link.target
 
-            # Check link's hw_component
-            hw_comp = link.attrs.get("hw_component")
+            link_comp_name = link.attrs.get("hw_component")
             link_comp = None
-            if hw_comp:
-                link_comp = self.components_library.get(hw_comp)
+            if link_comp_name:
+                link_comp = self.components_library.get(link_comp_name)
                 if link_comp is None:
                     logger.warning(
                         "Link '%s->%s' references unknown hw_component '%s'.",
                         src,
                         dst,
-                        hw_comp,
+                        link_comp_name,
                     )
+            link_cost = link_comp.total_cost() if link_comp else 0.0
+            link_power = link_comp.total_power() if link_comp else 0.0
+            cap = link.capacity
 
             src_node = self._node_map[src]
             dst_node = self._node_map[dst]
             A_src = self._get_ancestors(src_node)
             A_dst = self._get_ancestors(dst_node)
 
-            # Intersection => internal
-            # XOR => external
-            inter = A_src & A_dst
-            xor = A_src ^ A_dst
+            inter_anc = A_src & A_dst  # sees link as "internal"
+            xor_anc = A_src ^ A_dst  # sees link as "external"
 
-            # Capacity
-            cap = link.capacity
-
-            # For cost/power from link, we add to any node
-            # that sees it either internal or external.
-            link_cost = link_comp.total_cost() if link_comp else 0.0
-            link_power = link_comp.total_power() if link_comp else 0.0
-
-            # Internal link updates
-            for an in inter:
+            # ----- "ALL" stats -----
+            for an in inter_anc:
                 an.stats.internal_link_count += 1
                 an.stats.internal_link_capacity += cap
                 an.stats.total_cost += link_cost
                 an.stats.total_power += link_power
-
-            # External link updates
-            for an in xor:
+            for an in xor_anc:
                 an.stats.external_link_count += 1
                 an.stats.external_link_capacity += cap
                 an.stats.total_cost += link_cost
                 an.stats.total_power += link_power
 
-                # Update external_link_details
                 if an in A_src:
-                    # 'an' sees the other side as 'dst'
                     other_path = self._compute_full_path(dst_node)
                 else:
-                    # 'an' sees the other side as 'src'
                     other_path = self._compute_full_path(src_node)
                 bd = an.stats.external_link_details.setdefault(
+                    other_path, ExternalLinkBreakdown()
+                )
+                bd.link_count += 1
+                bd.link_capacity += cap
+
+            # ----- "ACTIVE" stats -----
+            # If link or either endpoint is disabled, skip
+            if link.attrs.get("disabled"):
+                continue
+            if self.network.nodes[src].attrs.get("disabled"):
+                continue
+            if self.network.nodes[dst].attrs.get("disabled"):
+                continue
+
+            for an in inter_anc:
+                an.active_stats.internal_link_count += 1
+                an.active_stats.internal_link_capacity += cap
+                an.active_stats.total_cost += link_cost
+                an.active_stats.total_power += link_power
+            for an in xor_anc:
+                an.active_stats.external_link_count += 1
+                an.active_stats.external_link_capacity += cap
+                an.active_stats.total_cost += link_cost
+                an.active_stats.total_power += link_power
+
+                if an in A_src:
+                    other_path = self._compute_full_path(dst_node)
+                else:
+                    other_path = self._compute_full_path(src_node)
+                bd = an.active_stats.external_link_details.setdefault(
                     other_path, ExternalLinkBreakdown()
                 )
                 bd.link_count += 1
@@ -414,18 +388,19 @@ class NetworkExplorer:
         max_depth: Optional[int] = None,
         skip_leaves: bool = False,
         detailed: bool = False,
+        include_disabled: bool = True,
     ) -> None:
         """
-        Print the hierarchy from the given node (default: root).
-        If detailed=True, show link capacities and external link breakdown.
-        If skip_leaves=True, leaf nodes are omitted from printing (rolled up).
+        Print the hierarchy from 'node' down (default: root).
 
         Args:
-            node (Optional[TreeNode]): The node to start printing from; defaults to root.
-            indent (int): Indentation level for the output.
-            max_depth (Optional[int]): If set, stop printing deeper levels when exceeded.
-            skip_leaves (bool): If True, leaf nodes are not individually printed.
-            detailed (bool): If True, print more detailed link/capacity breakdowns.
+            node (TreeNode): subtree to print, or root if None
+            indent (int): indentation level
+            max_depth (int): if set, limit display depth
+            skip_leaves (bool): if True, skip leaf subtrees
+            detailed (bool): if True, print link capacity breakdowns
+            include_disabled (bool): If False, show stats only for enabled nodes/links.
+                                     Subtrees with zero active nodes are omitted.
         """
         if node is None:
             node = self.root_node
@@ -436,10 +411,17 @@ class NetworkExplorer:
         if max_depth is not None and indent > max_depth:
             return
 
+        # Pick which stats to display
+        stats = node.stats if include_disabled else node.active_stats
+
+        # If 'active' mode and this node has 0 nodes, omit it (unless it's the root)
+        if not include_disabled and stats.node_count == 0 and node.parent is not None:
+            return
+
+        # Possibly skip leaves
         if skip_leaves and node.is_leaf() and node.parent is not None:
             return
 
-        stats = node.stats
         total_links = stats.internal_link_count + stats.external_link_count
         line = (
             f"{'  ' * indent}- {node.name or 'root'} | "
@@ -460,6 +442,7 @@ class NetworkExplorer:
             for other_path, info in stats.external_link_details.items():
                 rolled_path = other_path
                 if skip_leaves:
+                    # If that path is a leaf, roll up
                     rolled_path = self._roll_up_if_leaf(rolled_path)
                 accum = rolled_map.setdefault(rolled_path, ExternalLinkBreakdown())
                 accum.link_count += info.link_count
@@ -474,7 +457,7 @@ class NetworkExplorer:
                     f"{ext_info.link_count} links, cap={ext_info.link_capacity}"
                 )
 
-        # Recurse children
+        # Recurse on children
         for child in node.children.values():
             self.print_tree(
                 node=child,
@@ -482,4 +465,16 @@ class NetworkExplorer:
                 max_depth=max_depth,
                 skip_leaves=skip_leaves,
                 detailed=detailed,
+                include_disabled=include_disabled,
             )
+
+    def _roll_up_if_leaf(self, path: str) -> str:
+        """
+        If 'path' is a leaf node's path, climb up until a non-leaf or root is found.
+        """
+        node = self._path_map.get(path)
+        if not node:
+            return path
+        while node.parent and node.parent.name != "root" and node.is_leaf():
+            node = node.parent
+        return self._compute_full_path(node)

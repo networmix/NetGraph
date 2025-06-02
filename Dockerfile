@@ -1,21 +1,22 @@
 # Stage 1: Base image with system dependencies
-FROM python:3.13 AS base
+FROM python:3.13-slim AS base
 
 # Prevent interactive config during installation
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies and cleanup
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y \
-        build-essential \
-        cmake \
-        curl \
-        wget \
-        unzip \
-        git \
-        libgeos-dev \
-        libproj-dev \
-        libgdal-dev \
+    build-essential \
+    cmake \
+    curl \
+    wget \
+    unzip \
+    git \
+    libgeos-dev \
+    libproj-dev \
+    libgdal-dev \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,10 +25,6 @@ FROM base AS jupyterlab
 
 # Upgrade pip and setuptools
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Copy requirements first to leverage cache
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Python packages
 RUN pip install --no-cache-dir \
