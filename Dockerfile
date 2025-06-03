@@ -27,19 +27,7 @@ FROM base AS jupyterlab
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install Python packages
-RUN pip install --no-cache-dir \
-    numpy \
-    pandas \
-    matplotlib \
-    seaborn \
-    build \
-    twine \
-    pytest \
-    pytest-cov \
-    pytest-benchmark \
-    pytest-mock \
-    pylint \
-    black
+RUN pip install --no-cache-dir '.[dev]'
 
 # Install JupyterLab and LSP
 RUN pip install --no-cache-dir \
