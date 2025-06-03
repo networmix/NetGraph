@@ -23,6 +23,10 @@ dependencies = [
     "geopy",
     "networkx",
     "pyyaml",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "seaborn",
 ]
 
 # Dev/CI extras
@@ -30,8 +34,13 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-cov",
+    "pytest-benchmark",
+    "pytest-mock",
     "black",
     "isort",
+    "pylint",
+    "mkdocs-material",
+    "pdoc",
 ]
 [project.scripts]
 ngraph = "ngraph.cli:main"

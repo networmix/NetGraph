@@ -1,0 +1,17 @@
+site_name: NetGraph
+site_url: https://networmix.github.io/NetGraph/
+repo_url: https://github.com/networmix/NetGraph
+edit_uri: edit/main/docs/
+theme:
+  name: material
+  features:
+    - navigation.sections
+markdown_extensions:
+  - admonition
+  - codehilite
+nav:
+  - Home: index.md
+  - Reference:
+      - DSL: reference/dsl.md
+plugins:
+  - search
