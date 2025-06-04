@@ -6,12 +6,25 @@ theme:
   name: material
   features:
     - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - toc.integrate
 markdown_extensions:
   - admonition
   - codehilite
+  - toc:
+      permalink: true
 nav:
   - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Tutorial: getting-started/tutorial.md
+  - Examples:
+      - Clos Fabric: examples/clos-fabric.md
   - Reference:
       - DSL: reference/dsl.md
+      - CLI: reference/cli.md
+      - API: reference/api.md
+      - API Full: reference/api-full.md
 plugins:
   - search

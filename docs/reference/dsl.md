@@ -646,28 +646,3 @@ traffic_demands:
 # Use raw strings (preferred)
 pattern = r"^S(\d+)$"
 ```
-
-## Command Line Interface
-
-NetGraph provides a command-line interface for running scenarios and generating results:
-
-**Basic Usage:**
-```bash
-# Run a scenario and output results to stdout as JSON
-python -m ngraph run scenario.yaml
-
-# Run a scenario and save results to a file
-python -m ngraph run scenario.yaml --results output.json
-python -m ngraph run scenario.yaml -r output.json
-```
-
-**Example:**
-```bash
-# Run one of the test scenarios
-python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
-```
-
-The CLI will execute the complete workflow defined in the scenario file and output all results in JSON format, including:
-- Graph statistics from `BuildGraph` steps
-- Flow analysis results from `CapacityProbe` steps
-- Any other workflow step outputs

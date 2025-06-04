@@ -23,8 +23,19 @@ RUN apt-get update && \
 # Stage 2: Build stage for Python packages
 FROM base AS jupyterlab
 
+# Set working directory for build
+WORKDIR /app
+
+# Copy project files needed for installation
+COPY pyproject.toml .
+COPY README.md .
+COPY ngraph/ ./ngraph/
+
 # Upgrade pip and setuptools
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install build tools that might be needed
+RUN pip install --no-cache-dir build twine
 
 # Install Python packages
 RUN pip install --no-cache-dir '.[dev]'
