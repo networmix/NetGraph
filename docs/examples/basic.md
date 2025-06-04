@@ -1,10 +1,8 @@
-# Fundamentals
+# Basic Examples
 
 This guide demonstrates basic NetGraph functionality using a couple of simple examples. These fundamentals will help you understand the more complex scenarios in the [Clos Fabric Analysis](clos-fabric.md) example.
 
 ## Calculating MaxFlow
-
-NetGraph provides a high-level API for calculating maximum flow in networks. This is useful for understanding how much traffic a network can handle.
 
 In this example, we'll create a simple network with parallel edges and alternative paths, then run max flow analysis with different flow placement policies.
 
@@ -118,9 +116,7 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 - **"True" MaxFlow**: Uses all available paths regardless of their cost
 - **Shortest Path**: Only uses paths with minimum cost
-- **EQUAL_BALANCED Flow Placement**: How traffic is distributed across parallel paths
-  - `PROPORTIONAL` (UCMP): Distributes based on capacity ratios. Can utilize all available capacity.
-  - `EQUAL_BALANCED` (ECMP): Distributes equally across parallel paths. Flow can be limited by the smallest capacity path.
+- **EQUAL_BALANCED Flow Placement**: Distributes equally across parallel paths. Flow can be limited by the smallest capacity path.
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 

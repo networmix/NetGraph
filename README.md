@@ -6,56 +6,35 @@
 
 NetGraph is a scenario-based network modeling and analysis framework written in Python. Design, simulate, and evaluate complex network topologies from small test cases to massive Data Center fabrics and WAN networks.
 
-## Quick Start
-
-```bash
-pip install ngraph
-```
-
-```python
-from ngraph.scenario import Scenario
-
-scenario_yaml = """
-network:
-  groups:
-    servers:
-      node_count: 4
-      name_template: "server-{node_num}"
-    switches:
-      node_count: 2
-      name_template: "switch-{node_num}"
-  adjacency:
-    - source: /servers
-      target: /switches
-      pattern: mesh
-"""
-
-scenario = Scenario.from_yaml(scenario_yaml)
-network = scenario.network
-print(f"Created network with {len(network.nodes)} nodes and {len(network.links)} links")
-```
-
 ## Key Features
 
-- **Scenario-Based Modeling**: Define complete network scenarios in YAML with topology, failures, traffic, and workflows
-- **Hierarchical Blueprints**: Reusable network templates with nested structures and bracket expansion
-- **Flow Analysis**: Calculate max flows, shortest paths, and capacity with ECMP/UCMP support
-- **Failure Simulation**: Model component failures and risk groups for availability analysis
-- **Traffic Engineering**: Define traffic demands with various placement policies
-- **Rich Visualization**: Explore network topology and analyze results interactively
+- **Scenario-Based Modeling** [DONE]: Define complete network scenarios in YAML with topology, failures, traffic, and workflows
+- **Hierarchical Blueprints** [DONE]: Reusable network templates with nested structures and bracket expansion
+- **Flow Analysis** [DONE]: Calculate capacity with different flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
+- **Failure Simulation** [DONE]: Model component and risk groups failures for availability analysis
 
-## Documentation
+## Quick Start
 
-📚 **[Full Documentation](https://networmix.github.io/NetGraph/)**
+### Docker (Recommended)
 
-- **[Installation Guide](https://networmix.github.io/NetGraph/getting-started/installation/)** - Docker and pip installation
-- **[Quick Tutorial](https://networmix.github.io/NetGraph/getting-started/tutorial/)** - Build your first scenario
-- **[Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/)** - Clos fabric analysis and more
-- **[DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/)** - Complete YAML syntax
-- **[API Reference](https://networmix.github.io/NetGraph/reference/api/)** - Python API documentation
+```bash
+git clone https://github.com/networmix/NetGraph
+cd NetGraph
+./run.sh build
+./run.sh run  # Opens JupyterLab at http://127.0.0.1:8788/
+```
 
-## Quick Example: Clos Fabric Analysis
+### Local Installation
 
+```bash
+git clone https://github.com/networmix/NetGraph
+cd NetGraph
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e '.[dev]'
+```
+
+### Example: Clos Fabric Analysis
 ```python
 from ngraph.scenario import Scenario
 from ngraph.lib.flow_policy import FlowPlacement
@@ -132,26 +111,15 @@ print(f"Maximum flow: {max_flow}")
 # Result: {('b1|b2', 'b1|b2'): 256.0}
 ```
 
-## Development Setup
+## Documentation
 
-### Docker (Recommended)
+📚 **[Full Documentation](https://networmix.github.io/NetGraph/)**
 
-```bash
-git clone https://github.com/networmix/NetGraph
-cd NetGraph
-./run.sh build
-./run.sh run  # Opens JupyterLab at http://127.0.0.1:8788/
-```
-
-### Local Installation
-
-```bash
-git clone https://github.com/networmix/NetGraph
-cd NetGraph
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e .
-```
+- **[Installation Guide](https://networmix.github.io/NetGraph/getting-started/installation/)** - Docker and pip installation
+- **[Quick Tutorial](https://networmix.github.io/NetGraph/getting-started/tutorial/)** - Build your first scenario
+- **[Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/)** - Clos fabric analysis and more
+- **[DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/)** - Complete YAML syntax
+- **[API Reference](https://networmix.github.io/NetGraph/reference/api/)** - Python API documentation
 
 ## License
 
