@@ -192,6 +192,6 @@ Note that in the MaxFlow context, `flow_placement` makes sense only when `shorte
 
 ## Next Steps
 
-- **[Clos Fabric Analysis](clos-fabric.md)** - Explore a more complex Clos fabric example
+- **[Clos Fabric Analysis](../examples/clos-fabric.md)** - Explore a more complex Clos fabric example
 - **[DSL Reference](../reference/dsl.md)** - Learn the complete YAML syntax
 - **[API Reference](../reference/api.md)** - Explore the Python API in detail
