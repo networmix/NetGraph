@@ -4,18 +4,20 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-NetGraph is a scenario-based network modeling and analysis framework written in Python. Design, simulate, and evaluate complex network topologies from small test cases to massive Data Center fabrics and WAN networks.
+NetGraph is a scenario-based network modeling and analysis framework written in Python. It allows you to design, simulate, and evaluate complex network topologies - ranging from small test cases to massive Data Center fabrics and WAN networks.
 
 ## Key Features
 
-- **Scenario-Based Modeling** [DONE]: Define complete network scenarios in YAML with topology, failures, traffic, and workflows
-- **Hierarchical Blueprints** [DONE]: Reusable network templates with nested structures and bracket expansion
-- **Flow Analysis** [DONE]: Calculate capacity with different flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
+- **Scenario-Based Modeling** [DONE]: Define complete network scenarios in YAML with topology, failures, traffic, and workflow
+- **Hierarchical Blueprints** [DONE]: Reusable network templates with nested structures and parameterization
+- **Demand Placement** [DONE]: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
+- **Capacity Calculation** [DONE]: Calculate capacity with different flow placement strategies 
 - **Failure Simulation** [DONE]: Model component and risk groups failures for availability analysis
+- **Network Analysis** [IN PROGRESS]: Analyze capacity, failure tolerance, and efficiency
 
 ## Quick Start
 
-### Docker (Recommended)
+### Docker with JupyterLab (Recommended)
 
 ```bash
 git clone https://github.com/networmix/NetGraph
@@ -39,7 +41,7 @@ pip install -e '.[dev]'
 from ngraph.scenario import Scenario
 from ngraph.lib.flow_policy import FlowPlacement
 
-# Define a 3-tier Clos network with inter-fabric connectivity
+# Define two 3-tier Clos networks with inter-fabric connectivity
 clos_scenario_yaml = """
 blueprints:
   brick_2tier:
@@ -108,7 +110,7 @@ max_flow = network.max_flow(
     flow_placement=FlowPlacement.EQUAL_BALANCED
 )
 print(f"Maximum flow: {max_flow}")
-# Result: {('b1|b2', 'b1|b2'): 256.0}
+# Maximum flow: {('b1|b2', 'b1|b2'): 256.0}
 ```
 
 ## Documentation

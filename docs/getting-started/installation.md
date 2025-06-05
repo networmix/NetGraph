@@ -14,32 +14,32 @@ NetGraph can be used in two ways:
 
 1. Clone the repository:
 
-    ```bash
-    git clone https://github.com/networmix/NetGraph
-    ```
+   ```bash
+   git clone https://github.com/networmix/NetGraph
+   ```
 
 2. Build the Docker image:
 
-    ```bash
-    cd NetGraph
-    ./run.sh build
-    ```
+   ```bash
+   cd NetGraph
+   ./run.sh build
+   ```
 
 3. Start the container with JupyterLab server:
 
-    ```bash
-    ./run.sh run
-    ```
+   ```bash
+   ./run.sh run
+   ```
 
 4. Open the JupyterLab URL in your browser:
 
-    ```bash
-    http://127.0.0.1:8788/
-    ```
+   ```bash
+   http://127.0.0.1:8788/
+   ```
 
 5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks (e.g., open scenario_dc.ipynb) or create your own.
 
-**Note**: Docker is instructed to mount the content of `NetGraph` directory into the `/root/env` directory inside container, so any changes made to any files in the `NetGraph` directory will be reflected in the container and vice versa. The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and leverage them immediately in JupyterLab. But don't forget to restart the JupyterLab kernel to see the changes.
+**Note**: Docker is instructed to mount the content of `NetGraph` directory into the `/root/env` directory inside container, so any changes made to any files in the `NetGraph` directory will be reflected in the container and vice versa. The `ngraph` package is installed in the container in editable mode, so you can make changes to the code and leverage them immediately in JupyterLab. But **don't forget to restart the JupyterLab kernel** after making changes to the package code to see the effects in the running notebook.
 
 To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server is running. To stop the remaining Docker container, run:
 
@@ -60,31 +60,41 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 1. Install the package using pip:
 
-    ```bash
-    pip install ngraph
-    ```
+   ```bash
+   pip install ngraph
+   ```
 
 2. Use the package in your Python code:
 
-    ```python
-    from ngraph.scenario import Scenario
-    from ngraph.explorer import NetworkExplorer
-    
-    scenario_yaml = """
-    network:
-      groups:
-        servers:
-          node_count: 2
-          name_template: "server-{node_num}"
-    """
-    
-    scenario = Scenario.from_yaml(scenario_yaml)
-    network = scenario.network
-    explorer = NetworkExplorer.explore_network(network)
-    explorer.print_tree(skip_leaves=True, detailed=False)
-    ```
+   ```python
+   from ngraph.scenario import Scenario
+
+   scenario_yaml = """
+   network:
+   name: "Two-Tier Clos Fabric"
+   groups:
+      leaf:
+         node_count: 4
+         name_template: "leaf-{node_num}"
+      spine:
+         node_count: 2  
+         name_template: "spine-{node_num}"
+   adjacency:
+      - source: /leaf
+         target: /spine
+         pattern: mesh
+         link_params:
+         capacity: 10
+         cost: 1
+   """
+
+   scenario = Scenario.from_yaml(scenario_yaml)
+   network = scenario.network
+   print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
+   ```
 
 ## Next Steps
 
 - **[Quick Tutorial](tutorial.md)** - Build your first network scenario
-- **[DSL Reference](../reference/dsl.md)** - Learn the YAML syntax
+- **[DSL Reference](../reference/dsl.md)** - Learn the complete YAML syntax
+- **[API Reference](../reference/api.md)** - Explore the Python API in detail

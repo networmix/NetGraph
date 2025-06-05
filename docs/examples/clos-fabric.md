@@ -168,3 +168,8 @@ costs, pred = spf(network.to_strict_multidigraph(), src_node)
 paths = list(resolve_to_paths(src_node, dst_node, pred))
 print(f"Found {len(paths)} paths between segments")
 ```
+
+## Next Steps
+
+- **[DSL Reference](../reference/dsl.md)** - Learn the complete YAML syntax
+- **[API Reference](../reference/api.md)** - Explore the Python API in detail

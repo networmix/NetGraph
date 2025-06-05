@@ -1,10 +1,6 @@
-# Basic Examples
+# Basic Example
 
-This guide demonstrates basic NetGraph functionality using a couple of simple examples. These fundamentals will help you understand the more complex scenarios in the [Clos Fabric Analysis](clos-fabric.md) example.
-
-## Calculating MaxFlow
-
-In this example, we'll create a simple network with parallel edges and alternative paths, then run max flow analysis with different flow placement policies.
+In this toy example, we'll create a simple graph with parallel edges and alternative paths, then run max flow analysis with different flow placement policies. 
 
 ### Creating a Simple Network
 
@@ -82,6 +78,8 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 ```
 
+Note that here we used a simple `nodes` and `links` structure to directly define the network topology. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
+
 ### Flow Analysis Variants
 
 Now let's run MaxFlow using the high-level Network API:
@@ -112,17 +110,17 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 # Result: 2.0 (splits flow equally across parallel edges in A→B and B→C)
 ```
 
-### Key Concepts
+### Results Interpretation
 
 - **"True" MaxFlow**: Uses all available paths regardless of their cost
-- **Shortest Path**: Only uses paths with minimum cost
-- **EQUAL_BALANCED Flow Placement**: Distributes equally across parallel paths. Flow can be limited by the smallest capacity path.
+- **Shortest Path**: Only uses paths with the minimum cost
+- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The toal flow can be limited by the smallest capacity path.
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
 ## Next Steps
 
-- **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
 - **[Tutorial](../getting-started/tutorial.md)** - Build complete network scenarios
+- **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
 - **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
 - **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage
