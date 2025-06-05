@@ -34,6 +34,7 @@ print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.lin
 ```
 
 This creates a classic leaf-spine topology:
+
 - 4 leaf switches: `leaf/leaf-1`, `leaf/leaf-2`, `leaf/leaf-3`, `leaf/leaf-4`
 - 2 spine switches: `spine/spine-1`, `spine/spine-2`
 - 8 bidirectional links (mesh pattern) providing full connectivity
@@ -100,6 +101,7 @@ network = scenario.network
 ```
 
 This creates a three-tier Clos fabric with the following structure:
+
 - 2 pods, each containing 8 servers, 4 leaf switches, and 2 spine switches
 - 4 super-spine switches connecting the pods
 - Each server connects with two parallel links to its leaf switch
@@ -179,8 +181,10 @@ Maximum flow pod1→pod2 spine: {('pod1/spine', 'pod2/spine'): 400.0}
 All the nodes matched by the `source_path` and `sink_path` respectively are attached to pseudo-source and pseudo-sink nodes, which are then used to calculate the maximum flow. The results show the maximum flow between these two pseudo-nodes, which represent the total capacity of the network paths between them.
 
 MaxFlow calculation can be influenced by the folowing parameters:
+
 - **`shortest_path`**: If set to `True`, it will only consider the shortest paths between source and sink nodes.
 - **`flow_placement`**: This parameter controls how flows are distributed across multiple shortest paths. Options include `FlowPlacement.PROPORTIONAL` (default) and `FlowPlacement.EQUAL_BALANCED`.
+
   - `PROPORTIONAL` distributes flows based on link capacities.
   - `EQUAL_BALANCED` evenly distributes flows across all available paths.
 

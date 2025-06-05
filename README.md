@@ -37,6 +37,7 @@ pip install -e '.[dev]'
 ```
 
 ### Example: Clos Fabric Analysis
+
 ```python
 from ngraph.scenario import Scenario
 from ngraph.lib.flow_policy import FlowPlacement

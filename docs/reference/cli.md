@@ -35,9 +35,11 @@ python -m ngraph run <scenario_file> [options]
 ```
 
 **Arguments:**
+
 - `scenario_file`: Path to the YAML scenario file to execute
 
 **Options:**
+
 - `--results`, `-r`: Output file path for results (JSON format)
 - `--help`, `-h`: Show help message
 
@@ -73,6 +75,7 @@ The CLI outputs results in JSON format. The structure depends on the workflow st
 - **Other Steps**: Each step stores its results with step-specific keys
 
 Example output structure:
+
 ```json
 {
   "build_graph": {
@@ -85,6 +88,7 @@ Example output structure:
 ```
 
 The exact keys and values depend on:
+
 - Which workflow steps are defined in your scenario
 - The parameters and results of each step
 - The network topology and analysis performed

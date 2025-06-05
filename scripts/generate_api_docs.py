@@ -53,7 +53,7 @@ def get_class_info(cls):
     if hasattr(cls, "__dataclass_fields__"):
         for field_name, field in cls.__dataclass_fields__.items():
             field_type = getattr(field.type, "__name__", str(field.type))
-            
+
             # Handle dataclass field defaults properly
             if field.default is not dataclasses.MISSING:
                 default_val = field.default
@@ -65,7 +65,7 @@ def get_class_info(cls):
                     default_val = f"{field.default_factory.__name__}()"
             else:
                 default_val = None
-            
+
             info["attributes"].append(
                 {
                     "name": field_name,
@@ -181,6 +181,7 @@ This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**
+
 > - **[Main API Guide (api.md)](api.md)** - Curated examples and usage patterns
 > - **This Document (api-full.md)** - Complete auto-generated reference
 > - **[CLI Reference](cli.md)** - Command-line interface
@@ -210,6 +211,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 ## Error Handling
 
 NetGraph uses standard Python exceptions:
+
 - `ValueError` - For validation errors
 - `KeyError` - For missing required fields
 - `RuntimeError` - For runtime errors

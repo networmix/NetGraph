@@ -5,6 +5,7 @@ In this toy example, we'll create a simple graph with parallel edges and alterna
 ### Creating a Simple Network
 
 **Network Topology:**
+
 ```
              [1,1] & [1,2]     [1,1] & [1,2]
       A ─────────────────── B ────────────── C

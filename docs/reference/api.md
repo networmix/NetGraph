@@ -3,6 +3,7 @@
 This section provides detailed documentation for NetGraph's Python API.
 
 > **📚 Quick Navigation:**
+
 > - **[Complete Auto-Generated API Reference](api-full.md)** - Comprehensive class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line interface documentation
 > - **[DSL Reference](dsl.md)** - YAML DSL syntax reference
@@ -25,6 +26,7 @@ scenario.run()
 ```
 
 **Key Methods:**
+
 - `from_yaml(yaml_content)` - Create scenario from YAML string
 - `run()` - Execute the scenario workflow
 
@@ -39,6 +41,7 @@ network = Network()
 ```
 
 **Key Methods:**
+
 - `max_flow(source_path, sink_path, **kwargs)` - Calculate maximum flow
 - `add_node(name, **attrs)` - Add network node
 - `add_link(source, target, **params)` - Add network link

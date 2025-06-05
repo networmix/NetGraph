@@ -116,6 +116,7 @@ network:
 ```
 
 The bracket expansion syntax supports:
+
 - **Numeric ranges**: `[1-4]` expands to `1`, `2`, `3`, `4`
 - **Character ranges**: `[a-c]` expands to `a`, `b`, `c`  
 - **Explicit lists**: `[red,blue,green]` expands to `red`, `blue`, `green`

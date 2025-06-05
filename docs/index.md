@@ -12,6 +12,7 @@ You can load an entire scenario from a single YAML file (including topology, fai
 - **[Quick Tutorial](getting-started/tutorial.md)** - Build your first network scenario
 
 ## Examples
+
 - **[Basic Example](examples/basic.md)** - A very simple graph
 - **[Clos Fabric Analysis](examples/clos_fabric_analysis.md)** - Analyze a 3-tier Clos network
 

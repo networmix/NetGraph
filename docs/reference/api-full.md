@@ -4,12 +4,13 @@ This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**
+
 > - **[Main API Guide (api.md)](api.md)** - Curated examples and usage patterns
 > - **This Document (api-full.md)** - Complete auto-generated reference
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 05, 2025 at 00:25 UTC
+**Generated from source code on:** June 05, 2025 at 03:11 UTC
 
 ---
 
@@ -1186,6 +1187,7 @@ Args:
 ## Error Handling
 
 NetGraph uses standard Python exceptions:
+
 - `ValueError` - For validation errors
 - `KeyError` - For missing required fields
 - `RuntimeError` - For runtime errors

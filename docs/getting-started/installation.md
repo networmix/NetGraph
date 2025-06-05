@@ -1,6 +1,7 @@
 # Installation
 
 NetGraph can be used in two ways:
+
 - **Using the Docker Container with JupyterLab**: This is the easiest way to get started with NetGraph, as it provides a pre-configured environment with JupyterLab and all dependencies installed.
 - **Using the Python Package**: If you prefer to use NetGraph in your own Python environment, you can install the package using pip and use it in your Python code.
 
