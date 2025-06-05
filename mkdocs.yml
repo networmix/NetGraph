@@ -11,7 +11,11 @@ theme:
     - toc.integrate
 markdown_extensions:
   - admonition
-  - codehilite
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.superfences  # <-- enables nested fences
   - toc:
       permalink: true
 nav:

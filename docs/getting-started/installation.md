@@ -14,28 +14,28 @@ NetGraph can be used in two ways:
 
 1. Clone the repository:
 
-   ```bash
-   git clone https://github.com/networmix/NetGraph
-   ```
+    ```bash
+    git clone https://github.com/networmix/NetGraph
+    ```
 
 2. Build the Docker image:
 
-   ```bash
-   cd NetGraph
-   ./run.sh build
-   ```
+    ```bash
+    cd NetGraph
+    ./run.sh build
+    ```
 
 3. Start the container with JupyterLab server:
 
-   ```bash
-   ./run.sh run
-   ```
+    ```bash
+    ./run.sh run
+    ```
 
 4. Open the JupyterLab URL in your browser:
 
-   ```bash
-   http://127.0.0.1:8788/
-   ```
+    ```bash
+    http://127.0.0.1:8788/
+    ```
 
 5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks (e.g., open scenario_dc.ipynb) or create your own.
 
@@ -60,38 +60,38 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 1. Install the package using pip:
 
-   ```bash
-   pip install ngraph
-   ```
+    ```bash
+    pip install ngraph
+    ```
 
 2. Use the package in your Python code:
 
-   ```python
-   from ngraph.scenario import Scenario
+    ```python
+    from ngraph.scenario import Scenario
 
-   scenario_yaml = """
-   network:
-   name: "Two-Tier Clos Fabric"
-   groups:
-      leaf:
-         node_count: 4
-         name_template: "leaf-{node_num}"
-      spine:
-         node_count: 2  
-         name_template: "spine-{node_num}"
-   adjacency:
-      - source: /leaf
-         target: /spine
-         pattern: mesh
-         link_params:
-         capacity: 10
-         cost: 1
-   """
+    scenario_yaml = """
+    network:
+    name: "Two-Tier Clos Fabric"
+    groups:
+        leaf:
+            node_count: 4
+            name_template: "leaf-{node_num}"
+        spine:
+            node_count: 2  
+            name_template: "spine-{node_num}"
+    adjacency:
+        - source: /leaf
+            target: /spine
+            pattern: mesh
+            link_params:
+            capacity: 10
+            cost: 1
+    """
 
-   scenario = Scenario.from_yaml(scenario_yaml)
-   network = scenario.network
-   print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
-   ```
+    scenario = Scenario.from_yaml(scenario_yaml)
+    network = scenario.network
+    print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
+    ```
 
 ## Next Steps
 
