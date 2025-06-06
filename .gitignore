@@ -138,3 +138,6 @@ dmypy.json
 
 # other
 tmp/
+
+# Ignore agent instructions
+AGENTS.md
