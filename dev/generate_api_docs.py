@@ -177,7 +177,7 @@ def generate_api_documentation():
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M UTC")
     header = f"""# NetGraph API Reference (Auto-Generated)
 
-This is the complete auto-generated API documentation for NetGraph. 
+This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**

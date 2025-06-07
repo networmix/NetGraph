@@ -1,6 +1,6 @@
 # NetGraph API Reference (Auto-Generated)
 
-This is the complete auto-generated API documentation for NetGraph. 
+This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**
@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 07, 2025 at 22:48 UTC
+**Generated from source code on:** June 08, 2025 at 00:33 UTC
 
 ---
 
@@ -439,7 +439,7 @@ Attributes:
     priority (int): A priority class for this demand (default=0).
     demand (float): The total demand volume (default=0.0).
     demand_placed (float): The portion of this demand that has been placed so far.
-    flow_policy_config ((Optional[FlowPolicyConfig]): The routing/placement policy config.
+    flow_policy_config (Optional[FlowPolicyConfig]): The routing/placement policy config.
     flow_policy (Optional[FlowPolicy]): A fully constructed FlowPolicy instance.
         If provided, it overrides flow_policy_config.
     mode (str): Expansion mode for generating sub-demands.

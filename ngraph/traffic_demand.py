@@ -16,7 +16,7 @@ class TrafficDemand:
         priority (int): A priority class for this demand (default=0).
         demand (float): The total demand volume (default=0.0).
         demand_placed (float): The portion of this demand that has been placed so far.
-        flow_policy_config ((Optional[FlowPolicyConfig]): The routing/placement policy config.
+        flow_policy_config (Optional[FlowPolicyConfig]): The routing/placement policy config.
         flow_policy (Optional[FlowPolicy]): A fully constructed FlowPolicy instance.
             If provided, it overrides flow_policy_config.
         mode (str): Expansion mode for generating sub-demands.

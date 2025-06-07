@@ -31,17 +31,17 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
 
     # 4) Retrieve the graph from the BuildGraph step
     graph = scenario.results.get("build_graph", "graph")
-    assert isinstance(graph, StrictMultiDiGraph), (
-        "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
-    )
+    assert isinstance(
+        graph, StrictMultiDiGraph
+    ), "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
 
     # 5) Verify total node count:
     #    Each 3-tier CLOS instance has 32 nodes -> 2 instances => 64 total.
     expected_nodes = 64
     actual_nodes = len(graph.nodes)
-    assert actual_nodes == expected_nodes, (
-        f"Expected {expected_nodes} nodes, found {actual_nodes}"
-    )
+    assert (
+        actual_nodes == expected_nodes
+    ), f"Expected {expected_nodes} nodes, found {actual_nodes}"
 
     # 6) Verify total physical links (before direction):
     #    Each 3-tier CLOS has 64 links internally => 2 instances => 128
@@ -50,9 +50,9 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     expected_links = 144
     expected_directed_edges = expected_links * 2
     actual_edges = len(graph.edges)
-    assert actual_edges == expected_directed_edges, (
-        f"Expected {expected_directed_edges} edges, found {actual_edges}"
-    )
+    assert (
+        actual_edges == expected_directed_edges
+    ), f"Expected {expected_directed_edges} edges, found {actual_edges}"
 
     # 7) Verify no traffic demands in this scenario
     assert len(scenario.traffic_demands) == 0, "Expected zero traffic demands."
@@ -62,24 +62,24 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     assert policy is None, "Expected no failure policy in this scenario."
 
     # 9) Check presence of some expanded nodes
-    assert "my_clos1/b1/t1/t1-1" in scenario.network.nodes, (
-        "Missing expected node 'my_clos1/b1/t1/t1-1' in expanded blueprint."
-    )
-    assert "my_clos2/spine/t3-16" in scenario.network.nodes, (
-        "Missing expected node 'my_clos2/spine/t3-16' in expanded blueprint."
-    )
+    assert (
+        "my_clos1/b1/t1/t1-1" in scenario.network.nodes
+    ), "Missing expected node 'my_clos1/b1/t1/t1-1' in expanded blueprint."
+    assert (
+        "my_clos2/spine/t3-16" in scenario.network.nodes
+    ), "Missing expected node 'my_clos2/spine/t3-16' in expanded blueprint."
 
     net = scenario.network
 
     # (A) Node attribute checks from node_overrides:
     # For "my_clos1/b1/t1/t1-1", we expect hw_component="LeafHW-A" and SRG="clos1-b1t1-SRG"
     node_a1 = net.nodes["my_clos1/b1/t1/t1-1"]
-    assert node_a1.attrs.get("hw_component") == "LeafHW-A", (
-        "Expected hw_component=LeafHW-A for 'my_clos1/b1/t1/t1-1', but not found."
-    )
-    assert node_a1.attrs.get("shared_risk_groups") == ["clos1-b1t1-SRG"], (
-        "Expected shared_risk_group=clos1-b1t1-SRG for 'my_clos1/b1/t1/t1-1'."
-    )
+    assert (
+        node_a1.attrs.get("hw_component") == "LeafHW-A"
+    ), "Expected hw_component=LeafHW-A for 'my_clos1/b1/t1/t1-1', but not found."
+    assert node_a1.attrs.get("shared_risk_groups") == [
+        "clos1-b1t1-SRG"
+    ], "Expected shared_risk_group=clos1-b1t1-SRG for 'my_clos1/b1/t1/t1-1'."
 
     # For "my_clos2/b2/t1/t1-1", check hw_component="LeafHW-B" and SRG="clos2-b2t1-SRG"
     node_b2 = net.nodes["my_clos2/b2/t1/t1-1"]
@@ -114,12 +114,12 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     )
     assert link_id_2, "Spine link (t3-2) not found for override check."
     for link_obj in link_id_2:
-        assert link_obj.attrs.get("shared_risk_groups") == ["SpineSRG"], (
-            "Expected SRG=SpineSRG on spine<->spine link."
-        )
-        assert link_obj.attrs.get("hw_component") == "400G-LR4", (
-            "Expected hw_component=400G-LR4 on spine<->spine link."
-        )
+        assert link_obj.attrs.get("shared_risk_groups") == [
+            "SpineSRG"
+        ], "Expected SRG=SpineSRG on spine<->spine link."
+        assert (
+            link_obj.attrs.get("hw_component") == "400G-LR4"
+        ), "Expected hw_component=400G-LR4 on spine<->spine link."
 
     # 10) The capacity probe step computed forward and reverse flows in 'combine' mode
     # with PROPORTIONAL flow placement.

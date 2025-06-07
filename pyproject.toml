@@ -16,7 +16,7 @@ requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12", 
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
@@ -46,6 +46,12 @@ dev = [
     # style + type checking
     "ruff>=0.5",
     "pyright",
+    # pre-commit hooks
+    "pre-commit",
+    # build
+    "build",
+    # publishing
+    "twine",
 ]
 
 [project.scripts]

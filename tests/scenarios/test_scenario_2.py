@@ -28,9 +28,9 @@ def test_scenario_2_build_graph() -> None:
 
     # 4) Retrieve the graph built by BuildGraph
     graph = scenario.results.get("build_graph", "graph")
-    assert isinstance(graph, StrictMultiDiGraph), (
-        "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
-    )
+    assert isinstance(
+        graph, StrictMultiDiGraph
+    ), "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
 
     # 5) Verify total node count after blueprint expansion
     #    city_cloud blueprint: (4 leaves + 6 spines + 4 edge_nodes) = 14
@@ -39,9 +39,9 @@ def test_scenario_2_build_graph() -> None:
     #    => 14 + 1 + 4 = 19 total
     expected_nodes = 19
     actual_nodes = len(graph.nodes)
-    assert actual_nodes == expected_nodes, (
-        f"Expected {expected_nodes} nodes, found {actual_nodes}"
-    )
+    assert (
+        actual_nodes == expected_nodes
+    ), f"Expected {expected_nodes} nodes, found {actual_nodes}"
 
     # 6) Verify total physical links before direction is applied to Nx
     #    - clos_2tier adjacency: 4 leaf * 6 spine = 24
@@ -59,15 +59,15 @@ def test_scenario_2_build_graph() -> None:
     expected_links = 56
     expected_nx_edges = expected_links * 2
     actual_edges = len(graph.edges)
-    assert actual_edges == expected_nx_edges, (
-        f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
-    )
+    assert (
+        actual_edges == expected_nx_edges
+    ), f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
 
     # 7) Verify the traffic demands (should have 4)
     expected_demands = 4
-    assert len(scenario.traffic_demands) == expected_demands, (
-        f"Expected {expected_demands} traffic demands."
-    )
+    assert (
+        len(scenario.traffic_demands) == expected_demands
+    ), f"Expected {expected_demands} traffic demands."
 
     # 8) Check the single-rule failure policy "anySingleLink"
     policy: FailurePolicy = scenario.failure_policy
@@ -87,9 +87,9 @@ def test_scenario_2_build_graph() -> None:
     # 9) Check presence of key expanded nodes
     #    For example: the overridden spine node "myspine-6" under "SEA/clos_instance/spine"
     #    and the single node blueprint "SFO/single/single-1".
-    assert "SEA/clos_instance/spine/myspine-6" in scenario.network.nodes, (
-        "Missing expected overridden spine node (myspine-6) in expanded blueprint."
-    )
-    assert "SFO/single/single-1" in scenario.network.nodes, (
-        "Missing expected single-node blueprint expansion under SFO."
-    )
+    assert (
+        "SEA/clos_instance/spine/myspine-6" in scenario.network.nodes
+    ), "Missing expected overridden spine node (myspine-6) in expanded blueprint."
+    assert (
+        "SFO/single/single-1" in scenario.network.nodes
+    ), "Missing expected single-node blueprint expansion under SFO."

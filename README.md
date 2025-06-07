@@ -11,7 +11,7 @@ NetGraph is a scenario-based network modeling and analysis framework written in 
 - **Scenario-Based Modeling** [DONE]: Define complete network scenarios in YAML with topology, failures, traffic, and workflow
 - **Hierarchical Blueprints** [DONE]: Reusable network templates with nested structures and parameterization
 - **Demand Placement** [DONE]: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
-- **Capacity Calculation** [DONE]: Calculate capacity with different flow placement strategies 
+- **Capacity Calculation** [DONE]: Calculate capacity with different flow placement strategies
 - **Failure Simulation** [DONE]: Model component and risk groups failures for availability analysis
 - **Network Analysis** [IN PROGRESS]: Analyze capacity, failure tolerance, and efficiency
 

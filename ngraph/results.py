@@ -23,9 +23,10 @@ class Results:
         Store a value under (step_name, key).
         If the step_name sub-dict does not exist, it is created.
 
-        :param step_name: The workflow step that produced the result.
-        :param key: A short label describing the data (e.g. "total_capacity").
-        :param value: The actual data to store (can be any Python object).
+        Args:
+            step_name (str): The workflow step that produced the result.
+            key (str): A short label describing the data (e.g. "total_capacity").
+            value (Any): The actual data to store (can be any Python object).
         """
         if step_name not in self._store:
             self._store[step_name] = {}
@@ -35,10 +36,13 @@ class Results:
         """
         Retrieve the value from (step_name, key). If the key is missing, return `default`.
 
-        :param step_name: The workflow step name.
-        :param key: The key under which the data was stored.
-        :param default: Value to return if the (step_name, key) is not present.
-        :return: The data, or `default` if not found.
+        Args:
+            step_name (str): The workflow step name.
+            key (str): The key under which the data was stored.
+            default (Any): Value to return if the (step_name, key) is not present.
+
+        Returns:
+            Any: The data, or `default` if not found.
         """
         return self._store.get(step_name, {}).get(key, default)
 
@@ -46,8 +50,11 @@ class Results:
         """
         Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
 
-        :param key: The key to look up in each step.
-        :return: A dict mapping step_name -> value for all steps that have stored something under 'key'.
+        Args:
+            key (str): The key to look up in each step.
+
+        Returns:
+            Dict[str, Any]: A dict mapping step_name -> value for all steps that have stored something under 'key'.
         """
         result = {}
         for step_name, data in self._store.items():
@@ -56,5 +63,10 @@ class Results:
         return result
 
     def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        """Return a dictionary representation of all stored results."""
+        """
+        Return a dictionary representation of all stored results.
+
+        Returns:
+            Dict[str, Dict[str, Any]]: Dictionary representation of all stored results.
+        """
         return {step: data.copy() for step, data in self._store.items()}

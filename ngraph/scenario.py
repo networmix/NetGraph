@@ -154,7 +154,7 @@ class Scenario:
                 if rg.disabled:
                     network_obj.disable_risk_group(rg.name, recursive=True)
 
-        return cls(
+        return Scenario(
             network=network_obj,
             failure_policy=failure_policy,
             traffic_demands=traffic_demands,

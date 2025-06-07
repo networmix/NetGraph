@@ -208,7 +208,7 @@ class ComponentsLibrary:
         components_map: Dict[str, Component] = {}
         for comp_name, comp_def in data.items():
             components_map[comp_name] = cls._build_component(comp_name, comp_def)
-        return cls(components=components_map)
+        return ComponentsLibrary(components=components_map)
 
     @classmethod
     def _build_component(cls, name: str, definition_data: Dict[str, Any]) -> Component:

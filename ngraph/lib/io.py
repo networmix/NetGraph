@@ -148,7 +148,7 @@ def edgelist_to_graph(
                 f"Line '{line}' does not match expected columns {columns} (token count mismatch)."
             )
 
-        line_dict = dict(zip(columns, tokens))
+        line_dict = dict(zip(columns, tokens, strict=False))
         src_id = line_dict[source]
         dst_id = line_dict[target]
         edge_key = line_dict.get(key, None)

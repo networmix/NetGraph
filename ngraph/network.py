@@ -312,7 +312,7 @@ class Network:
             sources (List[Node]): List of source nodes.
             sinks (List[Node]): List of sink nodes.
             shortest_path (bool): If True, restrict flows to shortest paths only.
-            flow_placement (FlowPlacement or None): Strategy for placing flow among
+            flow_placement (Optional[FlowPlacement]): Strategy for placing flow among
                 parallel equal-cost paths. If None, defaults to FlowPlacement.PROPORTIONAL.
 
         Returns:
@@ -450,8 +450,8 @@ class Network:
         Search for links using optional regex patterns for source or target node names.
 
         Args:
-            source_regex (str or None): Regex to match link.source. If None, matches all sources.
-            target_regex (str or None): Regex to match link.target. If None, matches all targets.
+            source_regex (Optional[str]): Regex to match link.source. If None, matches all sources.
+            target_regex (Optional[str]): Regex to match link.target. If None, matches all targets.
             any_direction (bool): If True, also match reversed source/target.
 
         Returns:

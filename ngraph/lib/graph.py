@@ -162,11 +162,13 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
                 raise ValueError(f"Edge with id '{key}' already exists.")
 
         super().add_edge(u_for_edge, v_for_edge, key=key, **attr)
+        # At this point, key is guaranteed to be non-None (either provided or generated)
+        assert key is not None
         self._edges[key] = (
             u_for_edge,
             v_for_edge,
             key,
-            self[u_for_edge][v_for_edge][key],
+            self[u_for_edge][v_for_edge][key],  # pyright: ignore[reportArgumentType]
         )
         return key
 

@@ -50,7 +50,7 @@ def _spf_fast_all_min_cost_dijkstra(
             from the predecessor to that node. If multipath=True, there may be
             multiple predecessors for the same node.
     """
-    outgoing_adjacencies = graph._adj
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 
@@ -115,7 +115,7 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
           - pred: For each reachable node, a dict of predecessor -> list of edges
             from the predecessor to that node.
     """
-    outgoing_adjacencies = graph._adj
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 
@@ -227,7 +227,7 @@ def spf(
     if edge_select_func is None:
         edge_select_func = edge_select_fabric(edge_select)
 
-    outgoing_adjacencies = graph._adj
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 

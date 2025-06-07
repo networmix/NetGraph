@@ -118,7 +118,7 @@ network:
 The bracket expansion syntax supports:
 
 - **Numeric ranges**: `[1-4]` expands to `1`, `2`, `3`, `4`
-- **Character ranges**: `[a-c]` expands to `a`, `b`, `c`  
+- **Character ranges**: `[a-c]` expands to `a`, `b`, `c`
 - **Explicit lists**: `[red,blue,green]` expands to `red`, `blue`, `green`
 - **Multiple expansions**: `dc[1-2]/rack[a-b]` creates `dc1/racka`, `dc1/rackb`, `dc2/racka`, `dc2/rackb`
 
@@ -133,11 +133,11 @@ adjacency:
     target: "spine{s}"
     expand_vars:
       p: [1, 2]
-      r: ["a", "b"] 
+      r: ["a", "b"]
       s: [1, 2, 3]
     expansion_mode: "cartesian"  # Creates all combinations
     pattern: "mesh"
-    
+
   # Zip expansion (pairs elements by index)
   - source: "server{idx}"
     target: "switch{idx}"
@@ -164,7 +164,7 @@ You can override specific attributes of nodes and links after they are created b
 ```yaml
 network:
   # ... groups and adjacency definitions ...
-  
+
   node_overrides:
     - path: "^my_clos1/spine/switch-(1|3|5)$"  # Specific spine switches
       disabled: true
@@ -266,7 +266,7 @@ blueprints:
           idx: [1, 2, 3, 4, 5, 6, 7, 8]
         expansion_mode: "zip"  # Pairs source[i] with target[i]
         pattern: "mesh"
-        link_params: 
+        link_params:
           capacity: 3200
 ```
 
@@ -320,7 +320,7 @@ components:
         capacity: 12800.0  # 32x400G ports
         ports: 32
         count: 4
-        
+
   Optic400GLR4:
     component_type: "optic"
     description: "400G LR4 pluggable optic"
@@ -585,7 +585,7 @@ workflow:
   - step_type: EnableNodes
     path: "^my_clos2/leaf/switch-\\d+$"  # All leaf switches
     count: 4
-    
+
   - step_type: CapacityProbe
     source_path: "^(dc\\d+)/client"  # Capturing group creates per-DC groups
     sink_path: "^(dc\\d+)/server"
@@ -595,7 +595,7 @@ workflow:
 ### Best Practices
 
 1. **Use anchors for precision**: Always use `$` at the end if you want exact matches
-2. **Escape special characters in YAML**: 
+2. **Escape special characters in YAML**:
    - For digit patterns: Use `\\d+` instead of `\d+` in quoted YAML strings
    - For simple wildcards: `.*/spine/.*` works directly in YAML
    - In Python code: Use raw strings `r"pattern"` or double escaping `"\\d+"`
@@ -607,15 +607,15 @@ workflow:
 
 1. **Missing end anchors**: `switch-1` matches `switch-10`, `switch-11`, etc.
    - Fix: Use `switch-1$` for exact match
-   
-2. **YAML escaping inconsistencies**: 
+
+2. **YAML escaping inconsistencies**:
    - Simple patterns like `.*` work directly: `path: .*/spine/.*`
    - Complex patterns need escaping: `path: "spine-\\d+$"`
    - Python code always needs proper escaping: `"(SEA/leaf\\d)"`
-   
+
 3. **Greedy matching**: `.*` can match more than intended
    - Fix: Use specific patterns like `[^/]+` to match within path segments
-   
+
 4. **Empty groups**: Patterns that don't match any nodes create empty results
    - Fix: Test patterns against your actual node names
 
@@ -630,7 +630,7 @@ adjacency:
   - source: .*/spine/.*    # Matches any spine nodes
     target: .*/spine/.*
 
-# Complex patterns - use quotes and double backslashes  
+# Complex patterns - use quotes and double backslashes
 node_overrides:
   - path: "spine-\\d+$"    # Matches spine-1, spine-2, etc.
     attrs:
