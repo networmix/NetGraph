@@ -3,8 +3,8 @@ from __future__ import annotations
 from itertools import product
 from typing import Dict, Iterator, List
 
-from ngraph.lib.graph import NodeID, EdgeID
 from ngraph.lib.algorithms.base import PathTuple
+from ngraph.lib.graph import EdgeID, NodeID
 
 
 def resolve_to_paths(

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Union, Tuple
-from ngraph.lib.graph import NodeID, EdgeID
+from typing import Tuple, Union
+
+from ngraph.lib.graph import EdgeID, NodeID
 
 #: Represents numeric cost in the network (e.g. distance, latency, etc.).
 Cost = Union[int, float]

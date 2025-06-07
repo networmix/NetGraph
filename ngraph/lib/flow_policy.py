@@ -5,10 +5,10 @@ from collections import deque
 from enum import IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from ngraph.lib.flow import Flow, FlowIndex
-from ngraph.lib.algorithms import spf, base, edge_select
+from ngraph.lib.algorithms import base, edge_select, spf
 from ngraph.lib.algorithms.place_flow import FlowPlacement
-from ngraph.lib.graph import AttrDict, NodeID, EdgeID, StrictMultiDiGraph
+from ngraph.lib.flow import Flow, FlowIndex
+from ngraph.lib.graph import AttrDict, EdgeID, NodeID, StrictMultiDiGraph
 from ngraph.lib.path_bundle import PathBundle
 
 

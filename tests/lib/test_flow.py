@@ -1,14 +1,9 @@
 from ngraph.lib.algorithms.base import (
-    EdgeSelect,
-    PathAlg,
     FlowPlacement,
-    MIN_FLOW,
 )
 from ngraph.lib.algorithms.flow_init import init_flow_graph
-from ngraph.lib.flow import Flow, FlowIndex
+from ngraph.lib.flow import Flow
 from ngraph.lib.path_bundle import PathBundle
-
-from .algorithms.sample_graphs import *
 
 
 class TestFlow:

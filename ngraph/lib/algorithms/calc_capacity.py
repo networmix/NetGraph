@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from typing import Deque, Dict, List, Set, Tuple
 
-from ngraph.lib.graph import EdgeID, StrictMultiDiGraph, NodeID
 from ngraph.lib.algorithms.base import MIN_CAP, MIN_FLOW, FlowPlacement
+from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 
 
 def _init_graph_data(

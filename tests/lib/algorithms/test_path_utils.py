@@ -1,4 +1,3 @@
-import pytest
 from ngraph.lib.algorithms.path_utils import resolve_to_paths
 
 

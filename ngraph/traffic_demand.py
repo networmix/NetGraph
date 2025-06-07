@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from ngraph.lib.flow_policy import FlowPolicyConfig, FlowPolicy
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig
 from ngraph.network import new_base64_uuid
 
 

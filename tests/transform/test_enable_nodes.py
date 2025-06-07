@@ -1,9 +1,8 @@
-import pytest
+import random
+
 from ngraph.network import Network, Node
 from ngraph.scenario import Scenario
 from ngraph.transform.enable_nodes import EnableNodesTransform
-import ngraph.transform.enable_nodes as en_mod
-import random
 
 
 def make_scenario(nodes):

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, Tuple, Pattern
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, Pattern, Tuple
+
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -42,7 +43,7 @@ class CapacityProbe(WorkflowStep):
                 raise ValueError(
                     f"Invalid flow_placement '{self.flow_placement}'. "
                     f"Valid values are: {valid_values}"
-                )
+                ) from None
 
     def run(self, scenario: Scenario) -> None:
         """

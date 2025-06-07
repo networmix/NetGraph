@@ -263,8 +263,8 @@ failure_policy:
 
     scenario = Scenario.from_yaml(yaml_content)
     assert scenario.failure_policy is not None
-    assert scenario.failure_policy.fail_shared_risk_groups == True
-    assert scenario.failure_policy.fail_risk_group_children == False
+    assert scenario.failure_policy.fail_shared_risk_groups
+    assert not scenario.failure_policy.fail_risk_group_children
     assert len(scenario.failure_policy.rules) == 1
     rule = scenario.failure_policy.rules[0]
     assert rule.entity_scope == "node"

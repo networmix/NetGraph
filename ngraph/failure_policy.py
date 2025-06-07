@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Set
-from random import random, sample
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from random import random, sample
+from typing import Any, Dict, List, Literal, Set
 
 
 @dataclass

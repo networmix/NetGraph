@@ -4,13 +4,13 @@ Generate API documentation for NetGraph
 This script should be run from the project root directory.
 """
 
-import inspect
-import importlib
-import sys
-import os
 import dataclasses
-from pathlib import Path
+import importlib
+import inspect
+import os
+import sys
 from datetime import datetime
+from pathlib import Path
 
 # Add the current directory to Python path for development installs
 if os.path.exists("ngraph"):
@@ -61,7 +61,7 @@ def get_class_info(cls):
                 try:
                     # Try to call the factory to get a representative value
                     default_val = field.default_factory()
-                except:
+                except Exception:
                     default_val = f"{field.default_factory.__name__}()"
             else:
                 default_val = None
@@ -238,7 +238,7 @@ help(ngraph.network.Network.max_flow)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(doc)
 
-    print(f"✅ API documentation generated successfully!")
+    print("✅ API documentation generated successfully!")
     print(f"📄 Written to: {output_path}")
     print(f"📊 Size: {len(doc):,} characters")
     print(f"📚 Modules documented: {len(modules)}")

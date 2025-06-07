@@ -1,9 +1,10 @@
 import random
-import pytest
-import networkx as nx
 
-from ngraph.lib.graph import StrictMultiDiGraph
+import networkx as nx
+import pytest
+
 from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.graph import StrictMultiDiGraph
 
 random.seed(0)
 

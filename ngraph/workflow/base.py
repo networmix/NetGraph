@@ -1,7 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+
 from abc import ABC, abstractmethod
-from typing import Dict, Type, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Dict, Type
 
 if TYPE_CHECKING:
     # Only imported for type-checking; not at runtime, so no circular import occurs.

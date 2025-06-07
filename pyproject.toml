@@ -36,9 +36,7 @@ dev = [
     "pytest-cov",
     "pytest-benchmark",
     "pytest-mock",
-    "black",
-    "isort",
-    "pylint",
+    "ruff",
     "mkdocs-material",
     "pdoc",
 ]
@@ -56,3 +54,21 @@ addopts = "--cov=ngraph --cov-fail-under=85 --cov-report term-missing"
 [tool.setuptools.packages.find]
 include = ["ngraph*"]          # anything under ngraph/
 exclude = ["tests*", "notebooks*", "examples*", "dev*"]
+
+[tool.ruff]
+# Black-compatible defaults
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+#  Core E/F rules plus Bugbear (B) and import-sorter (I)
+select = ["E4", "E7", "E9", "F", "B", "I"]
+ignore = ["E501"]            # long lines handled by the formatter
+fixable = ["ALL"]            # allow auto-fix on save
+
+[tool.ruff.lint.isort]
+known-first-party = ["ngraph"]  # make ngraph imports “local”
+
+[tool.ruff.format]
+quote-style = "double"          # match Black
+skip-magic-trailing-comma = false

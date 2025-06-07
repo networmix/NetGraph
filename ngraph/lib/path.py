@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Iterator, Set, Tuple, Any
+from typing import Any, Iterator, Set, Tuple
 
 from ngraph.lib.algorithms.base import Cost, PathTuple
-from ngraph.lib.graph import EdgeID, StrictMultiDiGraph, NodeID
+from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 
 
 @dataclass

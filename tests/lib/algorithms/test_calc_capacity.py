@@ -1,10 +1,10 @@
 # pylint: disable=protected-access,invalid-name
 import pytest
 
+from ngraph.lib.algorithms.calc_capacity import FlowPlacement, calc_graph_capacity
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.algorithms.spf import spf
-from ngraph.lib.algorithms.calc_capacity import calc_graph_capacity, FlowPlacement
-from tests.lib.algorithms.sample_graphs import *
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
 class TestGraphCapacity:

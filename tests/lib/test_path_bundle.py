@@ -1,9 +1,10 @@
-import pytest
 from typing import List, Set
-from ngraph.lib.graph import StrictMultiDiGraph
 
+import pytest
+
+from ngraph.lib.algorithms.base import EdgeSelect
+from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.path_bundle import Path, PathBundle
-from ngraph.lib.algorithms.base import EdgeSelect, Cost
 
 
 @pytest.fixture

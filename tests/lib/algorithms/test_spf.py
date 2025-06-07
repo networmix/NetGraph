@@ -1,7 +1,5 @@
-import pytest
-from ngraph.lib.algorithms.spf import spf, ksp
 from ngraph.lib.algorithms.edge_select import EdgeSelect, edge_select_fabric
-from tests.lib.algorithms.sample_graphs import *
+from ngraph.lib.algorithms.spf import ksp, spf
 
 
 class TestSPF:
@@ -137,7 +135,7 @@ class TestKSP:
         """
         paths = list(ksp(graph5, "A", "B", multipath=True))
         visited = set()
-        for costs, pred in paths:
+        for _costs, pred in paths:
             edge_ids = tuple(
                 sorted(
                     edge_id

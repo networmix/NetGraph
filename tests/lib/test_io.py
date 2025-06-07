@@ -1,10 +1,11 @@
 import pytest
+
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.io import (
-    graph_to_node_link,
-    node_link_to_graph,
     edgelist_to_graph,
     graph_to_edgelist,
+    graph_to_node_link,
+    node_link_to_graph,
 )
 
 
@@ -41,7 +42,7 @@ def test_graph_to_node_link_basic():
 
     # Check one link's structure
     # For example, find the link with key=e1
-    link_e1 = next(l for l in links if l["key"] == e1)
+    link_e1 = next(link for link in links if link["key"] == e1)
     assert link_e1["source"] == 0  # "A" => index 0
     assert link_e1["target"] == 1  # "B" => index 1
     assert link_e1["attr"] == {"weight": "10"} or {"weight": 10}
@@ -139,7 +140,7 @@ def test_edgelist_to_graph_basic():
     # Check each edge's attribute
     e_map = g.get_edges()
     # We can't assume numeric IDs, just find them by iteration
-    for eid, (src, dst, _, attrs) in e_map.items():
+    for _eid, (src, dst, _, attrs) in e_map.items():
         w = attrs["weight"]
         if src == "A" and dst == "B":
             assert w == "10"
@@ -192,10 +193,10 @@ def test_graph_to_edgelist_basic():
     g.add_node("B")
     g.add_node("C")
 
-    e1 = g.add_edge("A", "B", cost=10)
-    e2 = g.add_edge("B", "C", cost=20)
+    g.add_edge("A", "B", cost=10)
+    g.add_edge("B", "C", cost=20)
     # No custom keys for the rest -> random base64 IDs
-    e3 = g.add_edge("C", "A", label="X")
+    g.add_edge("C", "A", label="X")
 
     lines = graph_to_edgelist(g)
     # By default: [src, dst, key] + sorted(attributes)
@@ -214,7 +215,7 @@ def test_graph_to_edgelist_basic():
     # but for e1, e2 we have "cost" attribute, for e3 we have "label"
     # Check adjacency
     edges_seen = set()
-    for eid, (s, d, _, attrs) in e2_map.items():
+    for _eid, (s, d, _, _attrs) in e2_map.items():
         edges_seen.add((s, d))
         # if there's a "cost" in attrs, it might be "10" or "20"
         # if there's a "label" in attrs, it's "X"
@@ -229,7 +230,7 @@ def test_graph_to_edgelist_columns():
     g = StrictMultiDiGraph()
     g.add_node("A")
     g.add_node("B")
-    eAB = g.add_edge("A", "B", cost=10, color="red")
+    g.add_edge("A", "B", cost=10, color="red")
 
     lines = graph_to_edgelist(g, columns=["src", "dst", "cost", "color"], separator=",")
     # We expect one line: "A,B,10,red"

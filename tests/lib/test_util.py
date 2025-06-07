@@ -1,8 +1,7 @@
-import pytest
 import networkx as nx
 
 from ngraph.lib.graph import StrictMultiDiGraph
-from ngraph.lib.util import to_digraph, from_digraph, to_graph, from_graph
+from ngraph.lib.util import from_digraph, from_graph, to_digraph, to_graph
 
 
 def create_sample_graph(with_attrs: bool = False) -> StrictMultiDiGraph:

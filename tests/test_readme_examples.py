@@ -21,9 +21,9 @@ def test_max_flow_variants():
       - The flow along the shortest paths (expected flow: 3.0)
       - Flow placement using an equal-balanced strategy on the shortest paths (expected flow: 2.0)
     """
-    from ngraph.lib.graph import StrictMultiDiGraph
-    from ngraph.lib.algorithms.max_flow import calc_max_flow
     from ngraph.lib.algorithms.base import FlowPlacement
+    from ngraph.lib.algorithms.max_flow import calc_max_flow
+    from ngraph.lib.graph import StrictMultiDiGraph
 
     g = StrictMultiDiGraph()
     for node in ("A", "B", "C", "D"):
@@ -72,10 +72,10 @@ def test_traffic_engineering_simulation():
     - Each demand uses its own FlowPolicy, so the policy's global flow accounting does not overlap.
     - The test verifies that each demand is fully placed at 20 units.
     """
-    from ngraph.lib.graph import StrictMultiDiGraph
     from ngraph.lib.algorithms.flow_init import init_flow_graph
-    from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
     from ngraph.lib.demand import Demand
+    from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
+    from ngraph.lib.graph import StrictMultiDiGraph
 
     # Build the graph.
     g = StrictMultiDiGraph()

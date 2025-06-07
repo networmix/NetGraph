@@ -1,6 +1,4 @@
 import pytest
-from copy import deepcopy
-from typing import Dict
 
 from ngraph.components import Component, ComponentsLibrary
 

@@ -4,7 +4,7 @@ import base64
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.lib.algorithms.max_flow import calc_max_flow

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import yaml
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import yaml
 
 
 @dataclass(slots=True)

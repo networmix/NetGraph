@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from ngraph.lib.graph import StrictMultiDiGraph
+from ngraph.network import Link, Network, Node
 from ngraph.workflow.build_graph import BuildGraph
-from ngraph.network import Network, Node, Link
 
 
 @pytest.fixture
@@ -57,9 +58,9 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     assert call_args[0][0] == "MyBuildStep"
     assert call_args[0][1] == "graph"
     created_graph = call_args[0][2]
-    assert isinstance(
-        created_graph, StrictMultiDiGraph
-    ), "Resulting object must be a StrictMultiDiGraph."
+    assert isinstance(created_graph, StrictMultiDiGraph), (
+        "Resulting object must be a StrictMultiDiGraph."
+    )
 
     # Verify the correct nodes were added
     assert set(created_graph.nodes()) == {
@@ -73,9 +74,9 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
     # Verify edges
     # We expect two edges for each link: forward ("L1") and reverse ("L1_rev"), etc.
     # So we should have 4 edges in total (2 from L1, 2 from L2).
-    assert (
-        created_graph.number_of_edges() == 4
-    ), "Should have two edges (forward/reverse) for each link."
+    assert created_graph.number_of_edges() == 4, (
+        "Should have two edges (forward/reverse) for each link."
+    )
 
     # Check forward edge from link 'L1'
     edge_data_l1 = created_graph.get_edge_data("A", "B", key="L1")
@@ -86,12 +87,12 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
 
     # Check reverse edge from link 'L1'
     rev_edge_data_l1 = created_graph.get_edge_data("B", "A", key="L1_rev")
-    assert (
-        rev_edge_data_l1 is not None
-    ), "Reverse edge 'L1_rev' should exist from B to A."
-    assert (
-        rev_edge_data_l1["capacity"] == 100
-    ), "Reverse edge should share the same capacity."
+    assert rev_edge_data_l1 is not None, (
+        "Reverse edge 'L1_rev' should exist from B to A."
+    )
+    assert rev_edge_data_l1["capacity"] == 100, (
+        "Reverse edge should share the same capacity."
+    )
 
     # Check forward edge from link 'L2'
     edge_data_l2 = created_graph.get_edge_data("B", "A", key="L2")
@@ -102,9 +103,9 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
 
     # Check reverse edge from link 'L2'
     rev_edge_data_l2 = created_graph.get_edge_data("A", "B", key="L2_rev")
-    assert (
-        rev_edge_data_l2 is not None
-    ), "Reverse edge 'L2_rev' should exist from A to B."
-    assert (
-        rev_edge_data_l2["capacity"] == 50
-    ), "Reverse edge should share the same capacity."
+    assert rev_edge_data_l2 is not None, (
+        "Reverse edge 'L2_rev' should exist from A to B."
+    )
+    assert rev_edge_data_l2["capacity"] == 50, (
+        "Reverse edge should share the same capacity."
+    )

@@ -1,7 +1,8 @@
-from typing import Optional, Callable, Any
+from typing import Callable, Optional
+
 import networkx as nx
 
-from ngraph.lib.graph import StrictMultiDiGraph, NodeID
+from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 
 def to_digraph(
@@ -65,7 +66,7 @@ def from_digraph(nx_graph: nx.DiGraph) -> StrictMultiDiGraph:
     graph.add_nodes_from(nx_graph.nodes)
 
     # Restore original multi-edges from the consolidated edge attribute.
-    for u, v, data in nx_graph.edges(data=True):
+    for _u, _v, data in nx_graph.edges(data=True):
         uv_edges = data.get("_uv_edges", [])
         for orig_u, orig_v, edges in uv_edges:
             for edge_id, edge_data in edges.items():
@@ -129,7 +130,7 @@ def from_graph(nx_graph: nx.Graph) -> StrictMultiDiGraph:
     graph.add_nodes_from(nx_graph.nodes)
 
     # Restore multi-edge data from each edge's '_uv_edges' attribute.
-    for u, v, data in nx_graph.edges(data=True):
+    for _u, _v, data in nx_graph.edges(data=True):
         uv_edges = data.get("_uv_edges", [])
         for orig_u, orig_v, edges in uv_edges:
             for edge_id, edge_data in edges.items():

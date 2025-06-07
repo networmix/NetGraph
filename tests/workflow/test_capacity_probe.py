@@ -1,9 +1,10 @@
-import pytest
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
-from ngraph.network import Network, Node, Link
-from ngraph.workflow.capacity_probe import CapacityProbe
+import pytest
+
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.network import Link, Network, Node
+from ngraph.workflow.capacity_probe import CapacityProbe
 
 
 @pytest.fixture

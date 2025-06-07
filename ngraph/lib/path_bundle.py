@@ -6,7 +6,7 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple
 from ngraph.lib.algorithms.base import Cost, EdgeSelect
 from ngraph.lib.algorithms.edge_select import edge_select_fabric
 from ngraph.lib.algorithms.path_utils import resolve_to_paths
-from ngraph.lib.graph import EdgeID, StrictMultiDiGraph, NodeID
+from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 from ngraph.lib.path import Path
 
 
@@ -103,10 +103,7 @@ class PathBundle:
 
     def __repr__(self) -> str:
         """String representation of this PathBundle."""
-        return (
-            f"PathBundle("
-            f"{self.src_node}, {self.dst_node}, {self.pred}, {self.cost})"
-        )
+        return f"PathBundle({self.src_node}, {self.dst_node}, {self.pred}, {self.cost})"
 
     def add(self, other: PathBundle) -> PathBundle:
         """

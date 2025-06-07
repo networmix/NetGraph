@@ -1,10 +1,11 @@
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from ngraph.workflow.base import (
+    WORKFLOW_STEP_REGISTRY,
     WorkflowStep,
     register_workflow_step,
-    WORKFLOW_STEP_REGISTRY,
 )
 
 

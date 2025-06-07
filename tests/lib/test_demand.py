@@ -1,10 +1,10 @@
 import pytest
-from ngraph.lib.algorithms.base import EdgeSelect, PathAlg, FlowPlacement
+
+from ngraph.lib.algorithms.base import EdgeSelect, FlowPlacement, PathAlg
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.demand import Demand
-from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
 from ngraph.lib.flow import FlowIndex
-from .algorithms.sample_graphs import line1, square1, square2, triangle1, graph3
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig, get_flow_policy
 
 
 def create_flow_policy(
@@ -14,7 +14,7 @@ def create_flow_policy(
     edge_select: EdgeSelect,
     multipath: bool,
     max_flow_count: int = None,
-    max_path_cost_factor: float = None
+    max_path_cost_factor: float = None,
 ) -> FlowPolicy:
     """Helper to create a FlowPolicy for testing."""
     return FlowPolicy(

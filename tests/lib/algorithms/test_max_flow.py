@@ -1,14 +1,9 @@
 import pytest
 from pytest import approx
 
-from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.lib.algorithms.max_flow import calc_max_flow
-from tests.lib.algorithms.sample_graphs import (
-    line1,
-    square4,
-    graph5,
-)
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
 class TestMaxFlowBasic:

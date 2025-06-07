@@ -1,12 +1,12 @@
+import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
-import statistics
-from typing import Dict, List, Optional, Tuple, Union, NamedTuple
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
 from ngraph.lib.algorithms import base
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.demand import Demand
-from ngraph.lib.flow_policy import FlowPolicyConfig, FlowPolicy, get_flow_policy
+from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Network, Node
 from ngraph.traffic_demand import TrafficDemand

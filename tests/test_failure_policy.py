@@ -1,11 +1,9 @@
-import pytest
 from unittest.mock import patch
 
 from ngraph.failure_policy import (
+    FailureCondition,
     FailurePolicy,
     FailureRule,
-    FailureCondition,
-    _evaluate_condition,
 )
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Any
+from typing import Any, Dict, Iterable, List, Optional
 
-from ngraph.lib.graph import StrictMultiDiGraph, NodeID
+from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 
 def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict[str, Any]:

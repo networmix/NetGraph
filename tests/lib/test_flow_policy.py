@@ -1,15 +1,15 @@
+import pytest
+
 from ngraph.lib.algorithms.base import (
-    EdgeSelect,
-    PathAlg,
-    FlowPlacement,
     MIN_FLOW,
+    EdgeSelect,
+    FlowPlacement,
+    PathAlg,
 )
 from ngraph.lib.algorithms.flow_init import init_flow_graph
-from ngraph.lib.flow import Flow, FlowIndex
+from ngraph.lib.flow import FlowIndex
 from ngraph.lib.flow_policy import FlowPolicy
 from ngraph.lib.path_bundle import PathBundle
-
-from .algorithms.sample_graphs import *
 
 
 class TestFlowPolicy:
