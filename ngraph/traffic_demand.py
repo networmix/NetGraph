@@ -5,7 +5,7 @@ from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig
 from ngraph.network import new_base64_uuid
 
 
-@dataclass(slots=True)
+@dataclass
 class TrafficDemand:
     """
     Represents a single traffic demand in a network.

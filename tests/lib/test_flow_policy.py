@@ -30,7 +30,8 @@ class TestFlowPolicy:
             multipath=True,
         )
         r = init_flow_graph(square1)
-        path_bundle: PathBundle = flow_policy._get_path_bundle(r, "A", "C")
+        path_bundle = flow_policy._get_path_bundle(r, "A", "C")
+        assert path_bundle is not None
         assert path_bundle.pred == {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}
         assert path_bundle.edges == {0, 1}
         assert path_bundle.nodes == {"A", "B", "C"}
@@ -43,7 +44,8 @@ class TestFlowPolicy:
             multipath=True,
         )
         r = init_flow_graph(square1)
-        path_bundle: PathBundle = flow_policy._get_path_bundle(r, "A", "C", 2)
+        path_bundle = flow_policy._get_path_bundle(r, "A", "C", 2)
+        assert path_bundle is not None
         assert path_bundle.pred == {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}}
         assert path_bundle.edges == {2, 3}
         assert path_bundle.nodes == {"D", "C", "A"}
@@ -57,6 +59,7 @@ class TestFlowPolicy:
         )
         r = init_flow_graph(square1)
         flow = flow_policy._create_flow(r, "A", "C", "test_flow")
+        assert flow is not None
         assert flow.path_bundle.pred == {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}
 
     def test_flow_policy_create_flow_2(self, square1):
@@ -68,6 +71,7 @@ class TestFlowPolicy:
         )
         r = init_flow_graph(square1)
         flow = flow_policy._create_flow(r, "A", "C", "test_flow", 2)
+        assert flow is not None
         assert flow.path_bundle.pred == {"A": {}, "C": {"D": [3]}, "D": {"A": [2]}}
 
     def test_flow_policy_create_flow_3(self, square1):
@@ -754,7 +758,8 @@ class TestFlowPolicy:
         flow_policy.place_demand(r, "A", "C", "test_flow", 2)
         initial_count = len(flow_policy.flows)
         # Pick any flow_index that was created
-        flow_index_to_delete = next(iter(flow_policy.flows.keys()))
+        flow_index_tuple = next(iter(flow_policy.flows.keys()))
+        flow_index_to_delete = FlowIndex(*flow_index_tuple)
         flow_policy._delete_flow(r, flow_index_to_delete)
         assert len(flow_policy.flows) == initial_count - 1
 
@@ -779,21 +784,23 @@ class TestFlowPolicy:
         placed_flow, remaining = flow_policy.place_demand(r, "A", "C", "test_flow", 1)
         assert placed_flow == 1
         # We'll pick the first flow index
-        flow_index_to_reopt = next(iter(flow_policy.flows.keys()))
+        flow_index_tuple = next(iter(flow_policy.flows.keys()))
+        flow_index_to_reopt = FlowIndex(*flow_index_tuple)
         # Reoptimize with additional "headroom" that might force a different path
         new_flow = flow_policy._reoptimize_flow(r, flow_index_to_reopt, headroom=1)
         # Because the alternative path has capacity=2, we expect re-optimization to succeed
         assert new_flow is not None
         # The old flow index still references the new flow
-        assert flow_policy.flows[flow_index_to_reopt] == new_flow
+        assert flow_policy.flows[flow_index_tuple] == new_flow
 
         # Now try re-optimizing with very large headroom; no path should be found, so revert
-        flow_index_to_reopt2 = next(iter(flow_policy.flows.keys()))
-        flow_before_reopt = flow_policy.flows[flow_index_to_reopt2]
+        flow_index_tuple2 = next(iter(flow_policy.flows.keys()))
+        flow_index_to_reopt2 = FlowIndex(*flow_index_tuple2)
+        flow_before_reopt = flow_policy.flows[flow_index_tuple2]
         reverted_flow = flow_policy._reoptimize_flow(
             r, flow_index_to_reopt2, headroom=10
         )
         # We expect a revert -> None returned
         assert reverted_flow is None
         # The flow in the dictionary should still be the same old flow
-        assert flow_policy.flows[flow_index_to_reopt2] == flow_before_reopt
+        assert flow_policy.flows[flow_index_tuple2] == flow_before_reopt

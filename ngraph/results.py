@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 
-@dataclass(slots=True)
+@dataclass
 class Results:
     """
     A container for storing arbitrary key-value data that arises during workflow steps.

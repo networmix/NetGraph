@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 import yaml
 
 
-@dataclass(slots=True)
+@dataclass
 class Component:
     """
     A generic component that can represent chassis, line cards, optics, etc.
@@ -125,7 +125,7 @@ class Component:
         return data
 
 
-@dataclass(slots=True)
+@dataclass
 class ComponentsLibrary:
     """
     Holds a collection of named Components. Each entry is a top-level "template"

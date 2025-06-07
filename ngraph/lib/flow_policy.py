@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from collections import deque
 from enum import IntEnum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, Hashable, List, Optional, Set, Tuple
 
 from ngraph.lib.algorithms import base, edge_select, spf
 from ngraph.lib.algorithms.place_flow import FlowPlacement
@@ -46,7 +46,14 @@ class FlowPolicy:
         static_paths: Optional[List[PathBundle]] = None,
         edge_select_func: Optional[
             Callable[
-                [StrictMultiDiGraph, NodeID, NodeID, Dict[EdgeID, AttrDict]],
+                [
+                    StrictMultiDiGraph,
+                    NodeID,
+                    NodeID,
+                    Dict[EdgeID, AttrDict],
+                    Optional[Set[EdgeID]],
+                    Optional[Set[NodeID]],
+                ],
                 Tuple[base.Cost, List[EdgeID]],
             ]
         ] = None,
@@ -150,7 +157,7 @@ class FlowPolicy:
         self,
         src_node: NodeID,
         dst_node: NodeID,
-        flow_class: int,
+        flow_class: Hashable,
         flow_id: int,
     ) -> FlowIndex:
         """
@@ -241,7 +248,7 @@ class FlowPolicy:
         flow_graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
-        flow_class: int,
+        flow_class: Hashable,
         min_flow: Optional[float] = None,
         path_bundle: Optional[PathBundle] = None,
         excluded_edges: Optional[Set[EdgeID]] = None,
@@ -281,7 +288,7 @@ class FlowPolicy:
         flow_graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
-        flow_class: int,
+        flow_class: Hashable,
         min_flow: Optional[float] = None,
     ) -> None:
         """
@@ -387,7 +394,7 @@ class FlowPolicy:
         flow_graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
-        flow_class: int,
+        flow_class: Hashable,
         volume: float,
         target_flow_volume: Optional[float] = None,
         min_flow: Optional[float] = None,
@@ -474,7 +481,7 @@ class FlowPolicy:
         flow_graph: StrictMultiDiGraph,
         src_node: NodeID,
         dst_node: NodeID,
-        flow_class: int,
+        flow_class: Hashable,
         target_flow_volume: float,
     ) -> Tuple[float, float]:
         """

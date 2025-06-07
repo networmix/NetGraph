@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Set
 from ngraph.network import Link, Network, Node
 
 
-@dataclass(slots=True)
+@dataclass
 class Blueprint:
     """
     Represents a reusable blueprint for hierarchical sub-topologies.
@@ -33,7 +33,7 @@ class Blueprint:
     adjacency: List[Dict[str, Any]]
 
 
-@dataclass(slots=True)
+@dataclass
 class DSLExpansionContext:
     """
     Carries the blueprint definitions and the final Network instance
@@ -162,7 +162,7 @@ def _expand_group(
     parent_path: str,
     group_name: str,
     group_def: Dict[str, Any],
-    inherited_risk_groups: Set[str] = frozenset(),
+    inherited_risk_groups: Set[str] | None = None,
 ) -> None:
     """
     Expands a single group definition into either:
@@ -191,6 +191,8 @@ def _expand_group(
         group_def (Dict[str, Any]): The group definition (node_count, name_template, etc.).
         inherited_risk_groups (Set[str]): Risk groups inherited from a higher-level group.
     """
+    if inherited_risk_groups is None:
+        inherited_risk_groups = set()
     expanded_names = _expand_name_patterns(group_name)
     # If bracket expansions exist, replicate for each expansion
     if len(expanded_names) > 1 or expanded_names[0] != group_name:
@@ -416,7 +418,7 @@ def _expand_adjacency_with_variables(
             )
 
         for combo_tuple in zip_longest(*lists_of_values, fillvalue=None):
-            combo_dict = dict(zip(var_names, combo_tuple))
+            combo_dict = dict(zip(var_names, combo_tuple, strict=False))
             expanded_src = _join_paths(
                 parent_path, source_template.format(**combo_dict)
             )
@@ -429,7 +431,7 @@ def _expand_adjacency_with_variables(
     else:
         # "cartesian" default
         for combo_tuple in product(*lists_of_values):
-            combo_dict = dict(zip(var_names, combo_tuple))
+            combo_dict = dict(zip(var_names, combo_tuple, strict=False))
             expanded_src = _join_paths(
                 parent_path, source_template.format(**combo_dict)
             )

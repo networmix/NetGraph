@@ -61,23 +61,6 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         super().__init__(*args, **kwargs)
         self._edges: Dict[EdgeID, EdgeTuple] = {}
 
-    @staticmethod
-    def new_edge_key(src_node: NodeID, dst_node: NodeID) -> EdgeID:
-        """
-        Generate a unique edge key.
-
-        By default, creates a Base64-encoded UUID. Subclasses may override this
-        to provide an alternative scheme, such as a numeric counter.
-
-        Args:
-            src_node (NodeID): The source node of the new edge.
-            dst_node (NodeID): The target node of the new edge.
-
-        Returns:
-            EdgeID: The newly generated edge key.
-        """
-        return new_base64_uuid()
-
     def copy(self, as_view: bool = False, pickle: bool = True) -> StrictMultiDiGraph:
         """
         Create a copy of this graph.
@@ -95,26 +78,26 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
             StrictMultiDiGraph: A new instance (or view) of the graph.
         """
         if not pickle:
-            return super().copy(as_view=as_view)
+            return super().copy(as_view=as_view)  # type: ignore[return-value]
         return loads(dumps(self))
 
     #
     # Node management
     #
-    def add_node(self, n: NodeID, **attr: Any) -> None:
+    def add_node(self, node_for_adding: NodeID, **attr: Any) -> None:
         """
         Add a single node, disallowing duplicates.
 
         Args:
-            n (NodeID): The node to add.
+            node_for_adding (NodeID): The node to add.
             **attr: Arbitrary attributes for this node.
 
         Raises:
             ValueError: If the node already exists in the graph.
         """
-        if n in self:
-            raise ValueError(f"Node '{n}' already exists in this graph.")
-        super().add_node(n, **attr)
+        if node_for_adding in self:
+            raise ValueError(f"Node '{node_for_adding}' already exists in this graph.")
+        super().add_node(node_for_adding, **attr)
 
     def remove_node(self, n: NodeID) -> None:
         """
@@ -173,7 +156,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
             raise ValueError(f"Target node '{v_for_edge}' does not exist.")
 
         if key is None:
-            key = self.new_edge_key(u_for_edge, v_for_edge)
+            key = new_base64_uuid()
         else:
             if key in self._edges:
                 raise ValueError(f"Edge with id '{key}' already exists.")

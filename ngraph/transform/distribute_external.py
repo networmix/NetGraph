@@ -23,7 +23,7 @@ from ngraph.scenario import Scenario
 from ngraph.transform.base import NetworkTransform, register_transform
 
 
-@dataclass(slots=True)
+@dataclass
 class _StripeChooser:
     """Round-robin stripe selection."""
 

@@ -11,10 +11,13 @@ readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12", 
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
 
@@ -29,20 +32,24 @@ dependencies = [
     "seaborn",
 ]
 
-# Dev/CI extras
+# Dev / CI extras
 [project.optional-dependencies]
 dev = [
+    # testing
     "pytest>=8",
     "pytest-cov",
     "pytest-benchmark",
     "pytest-mock",
-    "ruff",
+    # docs
     "mkdocs-material",
     "pdoc",
+    # style + type checking
+    "ruff>=0.5",
+    "pyright",
 ]
+
 [project.scripts]
 ngraph = "ngraph.cli:main"
-
 
 # ---------------------------------------------------------------------
 # Pytest flags
@@ -50,25 +57,44 @@ ngraph = "ngraph.cli:main"
 addopts = "--cov=ngraph --cov-fail-under=85 --cov-report term-missing"
 
 # ---------------------------------------------------------------------
-# Tell setuptools to package ONLY the 'ngraph' package tree
+# Package discovery
 [tool.setuptools.packages.find]
-include = ["ngraph*"]          # anything under ngraph/
+include = ["ngraph*"]
 exclude = ["tests*", "notebooks*", "examples*", "dev*"]
 
+# ---------------------------------------------------------------------
+# Ruff
 [tool.ruff]
-# Black-compatible defaults
 line-length = 88
 indent-width = 4
 
 [tool.ruff.lint]
-#  Core E/F rules plus Bugbear (B) and import-sorter (I)
-select = ["E4", "E7", "E9", "F", "B", "I"]
-ignore = ["E501"]            # long lines handled by the formatter
-fixable = ["ALL"]            # allow auto-fix on save
+select = ["E4", "E7", "E9", "F", "B", "I"]   # core + Bugbear + isort
+ignore = ["E501"]                             # long lines handled by formatter
+fixable = ["ALL"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["ngraph"]  # make ngraph imports “local”
+known-first-party = ["ngraph"]
 
 [tool.ruff.format]
-quote-style = "double"          # match Black
+quote-style = "double"
 skip-magic-trailing-comma = false
+
+# ---------------------------------------------------------------------
+# Pyright / Pylance
+[tool.pyright]
+typeCheckingMode = "standard"     # balanced level
+pythonVersion = "3.11"
+exclude = [
+    "tests/**",                   # tests often use dynamic patterns
+    "**/venv/**",                # virtual environments (generic)
+    "**/*venv/**",               # virtual environments (various naming)
+    "build/**",                  # build artifacts
+    "dist/**",                   # distribution files
+    "**/__pycache__/**",         # Python cache files
+    "**/*.egg-info/**"           # egg info directories
+]
+reportMissingTypeStubs = "warning"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"

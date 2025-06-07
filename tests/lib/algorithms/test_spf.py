@@ -137,13 +137,12 @@ class TestKSP:
         visited = set()
         for _costs, pred in paths:
             edge_ids = tuple(
-                sorted(
-                    edge_id
-                    for nbrs in pred.values()
-                    for edge_list in nbrs.values()
-                    for edge_id in edge_list
-                )
+                str(edge_id)
+                for nbrs in pred.values()
+                for edge_list in nbrs.values()
+                for edge_id in edge_list
             )
+            edge_ids = tuple(sorted(edge_ids))
             if edge_ids in visited:
                 raise Exception(f"Duplicate path found: {edge_ids}")
             visited.add(edge_ids)

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 from ngraph.failure_policy import FailurePolicy
+from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.network import Network
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficManager, TrafficResult
@@ -29,7 +30,7 @@ class FailureManager:
         network: Network,
         traffic_demands: List[TrafficDemand],
         failure_policy: Optional[FailurePolicy] = None,
-        default_flow_policy_config=None,
+        default_flow_policy_config: Optional[FlowPolicyConfig] = None,
     ) -> None:
         """
         Initialize a FailureManager.
@@ -84,7 +85,8 @@ class FailureManager:
         tmgr = TrafficManager(
             network=self.network,
             traffic_demands=copy.deepcopy(self.traffic_demands),
-            default_flow_policy_config=self.default_flow_policy_config,
+            default_flow_policy_config=self.default_flow_policy_config
+            or FlowPolicyConfig.SHORTEST_PATHS_ECMP,
         )
         tmgr.build_graph()
         tmgr.expand_demands()

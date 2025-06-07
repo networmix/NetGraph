@@ -32,11 +32,13 @@ def to_digraph(
     nx_graph = nx.DiGraph()
     nx_graph.add_nodes_from(graph.get_nodes())
 
-    # Iterate over nodes and their neighbors using the internal _adj attribute.
-    for u, neighbors in graph._adj.items():
+    # Iterate over nodes and their neighbors using the adjacency method.
+    for u, neighbors in graph.adjacency():
         for v, edges in neighbors.items():
+            # Convert edges to the expected dict format
+            typed_edges: dict = dict(edges)
             if edge_func:
-                edge_data = edge_func(graph, u, v, edges)
+                edge_data = edge_func(graph, u, v, typed_edges)
                 nx_graph.add_edge(u, v, **edge_data)
             else:
                 nx_graph.add_edge(u, v)
@@ -45,7 +47,7 @@ def to_digraph(
                 # Store the original multi-edge data in the '_uv_edges' attribute.
                 edge_attr = nx_graph.edges[u, v]
                 edge_attr.setdefault("_uv_edges", [])
-                edge_attr["_uv_edges"].append((u, v, edges))
+                edge_attr["_uv_edges"].append((u, v, typed_edges))
     return nx_graph
 
 
@@ -97,11 +99,13 @@ def to_graph(
     nx_graph = nx.Graph()
     nx_graph.add_nodes_from(graph.get_nodes())
 
-    # Iterate over the internal _adj attribute to consolidate edges.
-    for u, neighbors in graph._adj.items():
+    # Iterate over the adjacency to consolidate edges.
+    for u, neighbors in graph.adjacency():
         for v, edges in neighbors.items():
+            # Convert edges to the expected dict format
+            typed_edges: dict = dict(edges)
             if edge_func:
-                edge_data = edge_func(graph, u, v, edges)
+                edge_data = edge_func(graph, u, v, typed_edges)
                 nx_graph.add_edge(u, v, **edge_data)
             else:
                 nx_graph.add_edge(u, v)
@@ -109,7 +113,7 @@ def to_graph(
             if revertible:
                 edge_attr = nx_graph.edges[u, v]
                 edge_attr.setdefault("_uv_edges", [])
-                edge_attr["_uv_edges"].append((u, v, edges))
+                edge_attr["_uv_edges"].append((u, v, typed_edges))
     return nx_graph
 
 

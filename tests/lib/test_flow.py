@@ -1,8 +1,6 @@
-from ngraph.lib.algorithms.base import (
-    FlowPlacement,
-)
+from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.lib.algorithms.flow_init import init_flow_graph
-from ngraph.lib.flow import Flow
+from ngraph.lib.flow import Flow, FlowIndex
 from ngraph.lib.path_bundle import PathBundle
 
 
@@ -12,7 +10,7 @@ class TestFlow:
         path_bundle = PathBundle(
             "A", "C", {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}, 2
         )
-        flow = Flow(path_bundle, ("A", "C", "test_flow"))
+        flow = Flow(path_bundle, FlowIndex("A", "C", "test_flow", 0))
         placed_flow, remaining_flow = flow.place_flow(
             flow_graph, 0, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
@@ -24,7 +22,7 @@ class TestFlow:
         path_bundle = PathBundle(
             "A", "C", {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}, 2
         )
-        flow = Flow(path_bundle, ("A", "C", "test_flow"))
+        flow = Flow(path_bundle, FlowIndex("A", "C", "test_flow", 0))
         placed_flow, remaining_flow = flow.place_flow(
             flow_graph, 1, flow_placement=FlowPlacement.EQUAL_BALANCED
         )
@@ -36,7 +34,7 @@ class TestFlow:
         path_bundle = PathBundle(
             "A", "C", {"A": {}, "C": {"B": [1]}, "B": {"A": [0]}}, 2
         )
-        flow = Flow(path_bundle, ("A", "C", "test_flow"))
+        flow = Flow(path_bundle, FlowIndex("A", "C", "test_flow", 0))
         placed_flow, remaining_flow = flow.place_flow(
             flow_graph, 1, flow_placement=FlowPlacement.EQUAL_BALANCED
         )

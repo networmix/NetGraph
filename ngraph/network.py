@@ -21,7 +21,7 @@ def new_base64_uuid() -> str:
     return base64.urlsafe_b64encode(uuid.uuid4().bytes).decode("ascii").rstrip("=")
 
 
-@dataclass(slots=True)
+@dataclass
 class Node:
     """
     Represents a node in the network.
@@ -42,7 +42,7 @@ class Node:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class Link:
     """
     Represents a directed link between two nodes in the network.
@@ -74,7 +74,7 @@ class Link:
         self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
 
 
-@dataclass(slots=True)
+@dataclass
 class RiskGroup:
     """
     Represents a shared-risk or failure domain, which may have nested children.
@@ -92,7 +92,7 @@ class RiskGroup:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class Network:
     """
     A container for network nodes and links.

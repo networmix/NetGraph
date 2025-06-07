@@ -18,7 +18,7 @@ from ngraph.traffic_demand import TrafficDemand
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 
 
-@dataclass(slots=True)
+@dataclass
 class Scenario:
     """
     Represents a complete scenario for building and executing network workflows.

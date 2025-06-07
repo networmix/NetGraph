@@ -1,10 +1,15 @@
 # pylint: disable=protected-access,invalid-name
+from typing import Dict, List
+
 import pytest
 
 from ngraph.lib.algorithms.calc_capacity import FlowPlacement, calc_graph_capacity
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.algorithms.spf import spf
-from ngraph.lib.graph import StrictMultiDiGraph
+from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
+
+# Type alias to ensure consistency with library expectations
+PredDict = Dict[NodeID, Dict[NodeID, List[EdgeID]]]
 
 
 class TestGraphCapacity:
@@ -40,7 +45,7 @@ class TestGraphCapacity:
         g.add_edge("A", "B", key=0, capacity=0)
         g.add_edge("B", "C", key=1, capacity=1)
         r = init_flow_graph(g)
-        pred = {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}}
+        pred: PredDict = {"A": {}, "B": {"A": [0]}, "C": {"B": [1]}}
 
         # Expected max_flow = 0 because there is no capacity along the path
         max_flow, flow_dict = calc_graph_capacity(
@@ -50,6 +55,7 @@ class TestGraphCapacity:
 
     def test_calc_graph_capacity_line1(self, line1):
         _, pred = spf(line1, "A")
+        pred: PredDict = pred  # Type annotation for clarity
         r = init_flow_graph(line1)
 
         max_flow, flow_dict = calc_graph_capacity(

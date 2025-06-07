@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Pattern, Tuple
+from typing import TYPE_CHECKING, Dict, Tuple
 
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
@@ -27,8 +27,8 @@ class CapacityProbe(WorkflowStep):
         flow_placement (FlowPlacement): Handling strategy for parallel equal cost paths (default PROPORTIONAL).
     """
 
-    source_path: Pattern[str] = ""
-    sink_path: Pattern[str] = ""
+    source_path: str = ""
+    sink_path: str = ""
     mode: str = "combine"
     probe_reverse: bool = False
     shortest_path: bool = False

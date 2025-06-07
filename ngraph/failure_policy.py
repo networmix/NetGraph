@@ -126,7 +126,7 @@ class FailurePolicy:
         self,
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],
-        network_risk_groups: Dict[str, Any] = None,
+        network_risk_groups: Dict[str, Any] | None = None,
     ) -> List[str]:
         """
         Identify which entities fail given the defined rules, then optionally

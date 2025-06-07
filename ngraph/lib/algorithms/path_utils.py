@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import Dict, Iterator, List
+from typing import Any, Dict, Iterator, List
 
 from ngraph.lib.algorithms.base import PathTuple
 from ngraph.lib.graph import EdgeID, NodeID
@@ -31,7 +31,7 @@ def resolve_to_paths(
 
     seen = {dst_node}
     # Each stack entry: [(current_node, tuple_of_edgeIDs), predecessor_index]
-    stack: List[List[object]] = [[(dst_node, ()), 0]]
+    stack: List[List[Any]] = [[(dst_node, ()), 0]]
     top = 0
 
     while top >= 0:

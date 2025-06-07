@@ -223,6 +223,10 @@ def spf(
         else:
             edge_select_func = edge_select_fabric(edge_select)
 
+    # Ensure edge_select_func is set at this point
+    if edge_select_func is None:
+        edge_select_func = edge_select_fabric(edge_select)
+
     outgoing_adjacencies = graph._adj
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
@@ -284,7 +288,7 @@ def ksp(
         ]
     ] = None,
     max_k: Optional[int] = None,
-    max_path_cost: Optional[Cost] = float("inf"),
+    max_path_cost: Cost = float("inf"),
     max_path_cost_factor: Optional[float] = None,
     multipath: bool = True,
     excluded_edges: Optional[Set[EdgeID]] = None,
