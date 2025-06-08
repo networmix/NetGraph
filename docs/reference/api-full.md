@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 08, 2025 at 01:15 UTC
+**Generated from source code on:** June 08, 2025 at 03:05 UTC
 
 ---
 
@@ -1148,19 +1148,6 @@ Ordering is configurable; default is lexical by node name.
 
 ## ngraph.transform.distribute_external
 
-Distribute external (remote) nodes across stripes of attachment nodes.
-
-The transform is generic:
-
-* ``attachment_path`` - regex that selects any enabled nodes to serve as
-  attachment points.
-* ``remote_locations`` - short names; each is mapped deterministically to
-  a stripe of attachments.
-* ``stripe_width`` - number of attachment nodes per stripe.
-* ``capacity`` / ``cost`` - link attributes for created edges.
-
-Idempotent: re-running the transform will not duplicate nodes or links.
-
 ### DistributeExternalConnectivity
 
 Attach (or create) remote nodes and link them to attachment stripes.
@@ -1176,7 +1163,7 @@ Args:
 
 **Methods:**
 
-- `apply(self, scenario: 'Scenario') -> 'None'`
+- `apply(self, scenario: ngraph.scenario.Scenario) -> None`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
