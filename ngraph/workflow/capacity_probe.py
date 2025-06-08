@@ -13,8 +13,7 @@ if TYPE_CHECKING:
 @register_workflow_step("CapacityProbe")
 @dataclass
 class CapacityProbe(WorkflowStep):
-    """
-    A workflow step that probes capacity (max flow) between selected groups of nodes.
+    """A workflow step that probes capacity (max flow) between selected groups of nodes.
 
     Attributes:
         source_path (str): A regex pattern to select source node groups.
@@ -46,8 +45,7 @@ class CapacityProbe(WorkflowStep):
                 ) from None
 
     def run(self, scenario: Scenario) -> None:
-        """
-        Executes the capacity probe by computing max flow between node groups
+        """Executes the capacity probe by computing max flow between node groups
         matched by source_path and sink_path. Results are stored in scenario.results.
 
         Depending on 'mode', the returned flow is either a single combined dict entry
@@ -89,8 +87,7 @@ class CapacityProbe(WorkflowStep):
         scenario: Scenario,
         flow_dict: Dict[Tuple[str, str], float],
     ) -> None:
-        """
-        Stores the flow dictionary in the scenario's results container, labeling
+        """Stores the flow dictionary in the scenario's results container, labeling
         each entry consistently. For each (src_label, snk_label) in the flow_dict,
         we store: "max_flow:[src_label -> snk_label]".
 

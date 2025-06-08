@@ -10,8 +10,7 @@ from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 
 @dataclass
 class FlowPlacementMeta:
-    """
-    Metadata capturing how flow was placed on the graph.
+    """Metadata capturing how flow was placed on the graph.
 
     Attributes:
         placed_flow: The amount of flow actually placed.

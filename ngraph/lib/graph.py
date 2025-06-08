@@ -9,8 +9,7 @@ import networkx as nx
 
 
 def new_base64_uuid() -> str:
-    """
-    Generate a Base64-encoded UUID without padding.
+    """Generate a Base64-encoded UUID without padding.
 
     This function produces a 22-character, URL-safe, Base64-encoded UUID.
 
@@ -29,8 +28,7 @@ EdgeTuple = Tuple[NodeID, NodeID, EdgeID, AttrDict]
 
 
 class StrictMultiDiGraph(nx.MultiDiGraph):
-    """
-    A custom multi-directed graph with strict rules and unique edge IDs.
+    """A custom multi-directed graph with strict rules and unique edge IDs.
 
     This class enforces:
       - No automatic creation of missing nodes when adding an edge.
@@ -47,8 +45,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     """
 
     def __init__(self, *args, **kwargs) -> None:
-        """
-        Initialize a StrictMultiDiGraph.
+        """Initialize a StrictMultiDiGraph.
 
         Args:
             *args: Positional arguments forwarded to the MultiDiGraph constructor.
@@ -62,8 +59,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         self._edges: Dict[EdgeID, EdgeTuple] = {}
 
     def copy(self, as_view: bool = False, pickle: bool = True) -> StrictMultiDiGraph:
-        """
-        Create a copy of this graph.
+        """Create a copy of this graph.
 
         By default, uses pickle-based deep copying. If pickle=False,
         this method calls the parent class's copy, which supports views.
@@ -85,8 +81,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     # Node management
     #
     def add_node(self, node_for_adding: NodeID, **attr: Any) -> None:
-        """
-        Add a single node, disallowing duplicates.
+        """Add a single node, disallowing duplicates.
 
         Args:
             node_for_adding (NodeID): The node to add.
@@ -100,8 +95,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         super().add_node(node_for_adding, **attr)
 
     def remove_node(self, n: NodeID) -> None:
-        """
-        Remove a single node and all incident edges.
+        """Remove a single node and all incident edges.
 
         Args:
             n (NodeID): The node to remove.
@@ -130,8 +124,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         key: Optional[EdgeID] = None,
         **attr: Any,
     ) -> EdgeID:
-        """
-        Add a directed edge from u_for_edge to v_for_edge.
+        """Add a directed edge from u_for_edge to v_for_edge.
 
         If no key is provided, a unique Base64-UUID is generated. This method
         does not create nodes automatically; both u_for_edge and v_for_edge
@@ -178,8 +171,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         v: NodeID,
         key: Optional[EdgeID] = None,
     ) -> None:
-        """
-        Remove an edge (or edges) between nodes u and v.
+        """Remove an edge (or edges) between nodes u and v.
 
         If key is provided, remove only that edge. Otherwise, remove all edges
         from u to v.
@@ -219,8 +211,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
                 self.remove_edge_by_id(e_id)
 
     def remove_edge_by_id(self, key: EdgeID) -> None:
-        """
-        Remove a directed edge by its unique key.
+        """Remove a directed edge by its unique key.
 
         Args:
             key (EdgeID): The key identifying the edge to remove.
@@ -237,8 +228,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     # Convenience methods
     #
     def get_nodes(self) -> Dict[NodeID, AttrDict]:
-        """
-        Retrieve all nodes and their attributes as a dictionary.
+        """Retrieve all nodes and their attributes as a dictionary.
 
         Returns:
             Dict[NodeID, AttrDict]: A mapping of node ID to its attributes.
@@ -246,8 +236,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         return dict(self.nodes(data=True))
 
     def get_edges(self) -> Dict[EdgeID, EdgeTuple]:
-        """
-        Retrieve a dictionary of all edges by their keys.
+        """Retrieve a dictionary of all edges by their keys.
 
         Returns:
             Dict[EdgeID, EdgeTuple]: A mapping of edge key to a tuple
@@ -256,8 +245,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         return self._edges
 
     def get_edge_attr(self, key: EdgeID) -> AttrDict:
-        """
-        Retrieve the attribute dictionary of a specific edge.
+        """Retrieve the attribute dictionary of a specific edge.
 
         Args:
             key (EdgeID): The unique edge key.
@@ -273,8 +261,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         return self._edges[key][3]
 
     def has_edge_by_id(self, key: EdgeID) -> bool:
-        """
-        Check whether an edge with the given key exists.
+        """Check whether an edge with the given key exists.
 
         Args:
             key (EdgeID): The unique edge key to check.
@@ -285,8 +272,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         return key in self._edges
 
     def edges_between(self, u: NodeID, v: NodeID) -> List[EdgeID]:
-        """
-        List all edge keys from node u to node v.
+        """List all edge keys from node u to node v.
 
         Args:
             u (NodeID): The source node.
@@ -300,8 +286,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         return list(self.succ[u][v].keys())
 
     def update_edge_attr(self, key: EdgeID, **attr: Any) -> None:
-        """
-        Update attributes on an existing edge by key.
+        """Update attributes on an existing edge by key.
 
         Args:
             key (EdgeID): The unique edge key to update.

@@ -1,20 +1,3 @@
-"""
-Distribute external (remote) nodes across stripes of attachment nodes.
-
-The transform is generic:
-
-* ``attachment_path`` - regex that selects any enabled nodes to serve as
-  attachment points.
-* ``remote_locations`` - short names; each is mapped deterministically to
-  a stripe of attachments.
-* ``stripe_width`` - number of attachment nodes per stripe.
-* ``capacity`` / ``cost`` - link attributes for created edges.
-
-Idempotent: re-running the transform will not duplicate nodes or links.
-"""
-
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import List, Sequence
 
@@ -38,8 +21,7 @@ class _StripeChooser:
 
 @register_transform("DistributeExternalConnectivity")
 class DistributeExternalConnectivity(NetworkTransform):
-    """
-    Attach (or create) remote nodes and link them to attachment stripes.
+    """Attach (or create) remote nodes and link them to attachment stripes.
 
     Args:
         remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.

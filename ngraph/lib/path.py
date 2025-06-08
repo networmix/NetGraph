@@ -10,8 +10,7 @@ from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 
 @dataclass
 class Path:
-    """
-    Represents a single path in the network.
+    """Represents a single path in the network.
 
     Attributes:
         path_tuple (PathTuple):
@@ -36,16 +35,14 @@ class Path:
     )
 
     def __post_init__(self) -> None:
-        """
-        Populate `edges`, `nodes`, and `edge_tuples` from `path_tuple`."""
+        """Populate `edges`, `nodes`, and `edge_tuples` from `path_tuple`."""
         for node, parallel_edges in self.path_tuple:
             self.nodes.add(node)
             self.edges.update(parallel_edges)
             self.edge_tuples.add(parallel_edges)
 
     def __getitem__(self, idx: int) -> Tuple[NodeID, Tuple[EdgeID, ...]]:
-        """
-        Return the (node, parallel_edges) tuple at the specified index.
+        """Return the (node, parallel_edges) tuple at the specified index.
 
         Args:
             idx: The index of the desired path element.
@@ -56,8 +53,7 @@ class Path:
         return self.path_tuple[idx]
 
     def __iter__(self) -> Iterator[Tuple[NodeID, Tuple[EdgeID, ...]]]:
-        """
-        Iterate over each (node, parallel_edges) element in the path.
+        """Iterate over each (node, parallel_edges) element in the path.
 
         Yields:
             Each element from `path_tuple` in order.
@@ -65,8 +61,7 @@ class Path:
         return iter(self.path_tuple)
 
     def __len__(self) -> int:
-        """
-        Return the number of elements in the path.
+        """Return the number of elements in the path.
 
         Returns:
             The length of `path_tuple`.
@@ -75,19 +70,16 @@ class Path:
 
     @property
     def src_node(self) -> NodeID:
-        """
-        Return the first node in the path (the source node)."""
+        """Return the first node in the path (the source node)."""
         return self.path_tuple[0][0]
 
     @property
     def dst_node(self) -> NodeID:
-        """
-        Return the last node in the path (the destination node)."""
+        """Return the last node in the path (the destination node)."""
         return self.path_tuple[-1][0]
 
     def __lt__(self, other: Any) -> bool:
-        """
-        Compare two paths based on their cost.
+        """Compare two paths based on their cost.
 
         Args:
             other: Another Path instance.
@@ -101,8 +93,7 @@ class Path:
         return self.cost < other.cost
 
     def __eq__(self, other: Any) -> bool:
-        """
-        Check equality by comparing path structure and cost.
+        """Check equality by comparing path structure and cost.
 
         Args:
             other: Another Path instance.
@@ -116,8 +107,7 @@ class Path:
         return (self.path_tuple == other.path_tuple) and (self.cost == other.cost)
 
     def __hash__(self) -> int:
-        """
-        Compute a hash based on the (path_tuple, cost) tuple.
+        """Compute a hash based on the (path_tuple, cost) tuple.
 
         Returns:
             The hash value of this Path.
@@ -125,8 +115,7 @@ class Path:
         return hash((self.path_tuple, self.cost))
 
     def __repr__(self) -> str:
-        """
-        Return a string representation of the path including its tuple and cost.
+        """Return a string representation of the path including its tuple and cost.
 
         Returns:
             A debug-friendly string representation.
@@ -135,8 +124,7 @@ class Path:
 
     @cached_property
     def edges_seq(self) -> Tuple[Tuple[EdgeID, ...], ...]:
-        """
-        Return a tuple containing the sequence of parallel-edge tuples for each path element except the last.
+        """Return a tuple containing the sequence of parallel-edge tuples for each path element except the last.
 
         Returns:
             A tuple of parallel-edge tuples; returns an empty tuple if the path has 1 or fewer elements.
@@ -147,8 +135,7 @@ class Path:
 
     @cached_property
     def nodes_seq(self) -> Tuple[NodeID, ...]:
-        """
-        Return a tuple of node IDs in order along the path.
+        """Return a tuple of node IDs in order along the path.
 
         Returns:
             A tuple containing the ordered sequence of nodes from source to destination.
@@ -161,8 +148,7 @@ class Path:
         graph: StrictMultiDiGraph,
         cost_attr: str = "cost",
     ) -> Path:
-        """
-        Create a sub-path ending at the specified destination node, recalculating the cost.
+        """Create a sub-path ending at the specified destination node, recalculating the cost.
 
         The sub-path is formed by truncating the original path at the first occurrence
         of `dst_node` and ensuring that the final element has an empty tuple of edges.

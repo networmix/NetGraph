@@ -12,8 +12,7 @@ def to_digraph(
     ] = None,
     revertible: bool = True,
 ) -> nx.DiGraph:
-    """
-    Convert a StrictMultiDiGraph to a NetworkX DiGraph.
+    """Convert a StrictMultiDiGraph to a NetworkX DiGraph.
 
     This function consolidates multi-edges between nodes into a single edge.
     Optionally, a custom edge function can be provided to compute edge attributes.
@@ -52,8 +51,7 @@ def to_digraph(
 
 
 def from_digraph(nx_graph: nx.DiGraph) -> StrictMultiDiGraph:
-    """
-    Convert a revertible NetworkX DiGraph to a StrictMultiDiGraph.
+    """Convert a revertible NetworkX DiGraph to a StrictMultiDiGraph.
 
     This function reconstructs the original StrictMultiDiGraph by restoring
     multi-edge information from the '_uv_edges' attribute of each edge.
@@ -83,8 +81,7 @@ def to_graph(
     ] = None,
     revertible: bool = True,
 ) -> nx.Graph:
-    """
-    Convert a StrictMultiDiGraph to a NetworkX Graph.
+    """Convert a StrictMultiDiGraph to a NetworkX Graph.
 
     This function works similarly to `to_digraph` but returns an undirected graph.
 
@@ -118,8 +115,7 @@ def to_graph(
 
 
 def from_graph(nx_graph: nx.Graph) -> StrictMultiDiGraph:
-    """
-    Convert a revertible NetworkX Graph to a StrictMultiDiGraph.
+    """Convert a revertible NetworkX Graph to a StrictMultiDiGraph.
 
     Restores the original multi-edge structure from the '_uv_edges' attribute stored
     in each consolidated edge.

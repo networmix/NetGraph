@@ -4,8 +4,7 @@ from typing import Any, Dict
 
 @dataclass
 class Results:
-    """
-    A container for storing arbitrary key-value data that arises during workflow steps.
+    """A container for storing arbitrary key-value data that arises during workflow steps.
     The data is organized by step name, then by key.
 
     Example usage:
@@ -19,8 +18,7 @@ class Results:
     _store: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def put(self, step_name: str, key: str, value: Any) -> None:
-        """
-        Store a value under (step_name, key).
+        """Store a value under (step_name, key).
         If the step_name sub-dict does not exist, it is created.
 
         Args:
@@ -33,8 +31,7 @@ class Results:
         self._store[step_name][key] = value
 
     def get(self, step_name: str, key: str, default: Any = None) -> Any:
-        """
-        Retrieve the value from (step_name, key). If the key is missing, return `default`.
+        """Retrieve the value from (step_name, key). If the key is missing, return `default`.
 
         Args:
             step_name (str): The workflow step name.
@@ -47,8 +44,7 @@ class Results:
         return self._store.get(step_name, {}).get(key, default)
 
     def get_all(self, key: str) -> Dict[str, Any]:
-        """
-        Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+        """Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
 
         Args:
             key (str): The key to look up in each step.
@@ -63,8 +59,7 @@ class Results:
         return result
 
     def to_dict(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Return a dictionary representation of all stored results.
+        """Return a dictionary representation of all stored results.
 
         Returns:
             Dict[str, Dict[str, Any]]: Dictionary representation of all stored results.

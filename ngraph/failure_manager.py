@@ -14,8 +14,7 @@ from ngraph.traffic_manager import TrafficManager, TrafficResult
 
 
 class FailureManager:
-    """
-    Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
+    """Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
     repeats multiple times for Monte Carlo experiments.
 
     Attributes:
@@ -32,8 +31,7 @@ class FailureManager:
         failure_policy: Optional[FailurePolicy] = None,
         default_flow_policy_config: Optional[FlowPolicyConfig] = None,
     ) -> None:
-        """
-        Initialize a FailureManager.
+        """Initialize a FailureManager.
 
         Args:
             network: The Network to be modified by failures.
@@ -47,8 +45,7 @@ class FailureManager:
         self.default_flow_policy_config = default_flow_policy_config
 
     def apply_failures(self) -> None:
-        """
-        Apply the current failure_policy to self.network (in-place).
+        """Apply the current failure_policy to self.network (in-place).
 
         If failure_policy is None, this method does nothing.
         """
@@ -69,8 +66,7 @@ class FailureManager:
                 self.network.disable_link(f_id)
 
     def run_single_failure_scenario(self) -> List[TrafficResult]:
-        """
-        Applies failures to the network, places the demands, and returns per-demand results.
+        """Applies failures to the network, places the demands, and returns per-demand results.
 
         Returns:
             List[TrafficResult]: A list of traffic result objects under the applied failures.
@@ -100,8 +96,7 @@ class FailureManager:
         iterations: int,
         parallelism: int = 1,
     ) -> Dict[str, Any]:
-        """
-        Repeatedly applies (randomized) failures to the network and accumulates
+        """Repeatedly applies (randomized) failures to the network and accumulates
         per-run traffic data. Returns both overall volume statistics and a
         breakdown of results for each (src, dst, priority).
 

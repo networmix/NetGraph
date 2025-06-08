@@ -7,8 +7,7 @@ from ngraph.network import new_base64_uuid
 
 @dataclass
 class TrafficDemand:
-    """
-    Represents a single traffic demand in a network.
+    """Represents a single traffic demand in a network.
 
     Attributes:
         source_path (str): A regex pattern (string) for selecting source nodes.
@@ -36,7 +35,5 @@ class TrafficDemand:
     id: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """
-        Generate a unique ID by combining source, sink, and a random Base64 UUID.
-        """
+        """Generate a unique ID by combining source, sink, and a random Base64 UUID."""
         self.id = f"{self.source_path}|{self.sink_path}|{new_base64_uuid()}"

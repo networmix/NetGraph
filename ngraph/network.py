@@ -12,8 +12,7 @@ from ngraph.lib.graph import StrictMultiDiGraph
 
 
 def new_base64_uuid() -> str:
-    """
-    Generate a Base64-encoded, URL-safe UUID (22 characters, no padding).
+    """Generate a Base64-encoded, URL-safe UUID (22 characters, no padding).
 
     Returns:
         str: A 22-character Base64 URL-safe string with trailing '=' removed.
@@ -23,8 +22,7 @@ def new_base64_uuid() -> str:
 
 @dataclass
 class Node:
-    """
-    Represents a node in the network.
+    """Represents a node in the network.
 
     Each node is uniquely identified by its name, which is used as
     the key in the Network's node dictionary.
@@ -44,8 +42,7 @@ class Node:
 
 @dataclass
 class Link:
-    """
-    Represents a directed link between two nodes in the network.
+    """Represents a directed link between two nodes in the network.
 
     Attributes:
         source (str): Name of the source node.
@@ -68,16 +65,13 @@ class Link:
     id: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """
-        Generate the link's unique ID upon initialization.
-        """
+        """Generate the link's unique ID upon initialization."""
         self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
 
 
 @dataclass
 class RiskGroup:
-    """
-    Represents a shared-risk or failure domain, which may have nested children.
+    """Represents a shared-risk or failure domain, which may have nested children.
 
     Attributes:
         name (str): Unique name of this risk group.
@@ -94,8 +88,7 @@ class RiskGroup:
 
 @dataclass
 class Network:
-    """
-    A container for network nodes and links.
+    """A container for network nodes and links.
 
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
@@ -110,8 +103,7 @@ class Network:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
     def add_node(self, node: Node) -> None:
-        """
-        Add a node to the network (keyed by node.name).
+        """Add a node to the network (keyed by node.name).
 
         Args:
             node (Node): Node to add.
@@ -124,8 +116,7 @@ class Network:
         self.nodes[node.name] = node
 
     def add_link(self, link: Link) -> None:
-        """
-        Add a link to the network (keyed by the link's auto-generated ID).
+        """Add a link to the network (keyed by the link's auto-generated ID).
 
         Args:
             link (Link): Link to add.
@@ -141,8 +132,7 @@ class Network:
         self.links[link.id] = link
 
     def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
-        """
-        Create a StrictMultiDiGraph representation of this Network.
+        """Create a StrictMultiDiGraph representation of this Network.
 
         Skips disabled nodes/links. Optionally adds reverse edges.
 
@@ -192,8 +182,7 @@ class Network:
         return graph
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
-        """
-        Select and group nodes whose names match a given regular expression.
+        """Select and group nodes whose names match a given regular expression.
 
         Uses re.match(), so the pattern is anchored at the start of the node name.
         If the pattern includes capturing groups, the group label is formed by
@@ -229,8 +218,7 @@ class Network:
         shortest_path: bool = False,
         flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     ) -> Dict[Tuple[str, str], float]:
-        """
-        Compute maximum flow between groups of source nodes and sink nodes.
+        """Compute maximum flow between groups of source nodes and sink nodes.
 
         Returns a dictionary of flow values keyed by (source_label, sink_label).
 
@@ -301,8 +289,7 @@ class Network:
         shortest_path: bool,
         flow_placement: Optional[FlowPlacement],
     ) -> float:
-        """
-        Attach a pseudo-source and pseudo-sink to the provided node lists,
+        """Attach a pseudo-source and pseudo-sink to the provided node lists,
         then run calc_max_flow. Returns the resulting flow from all
         sources to all sinks as a single float.
 
@@ -349,8 +336,7 @@ class Network:
         )
 
     def disable_node(self, node_name: str) -> None:
-        """
-        Mark a node as disabled.
+        """Mark a node as disabled.
 
         Args:
             node_name (str): Name of the node to disable.
@@ -363,8 +349,7 @@ class Network:
         self.nodes[node_name].disabled = True
 
     def enable_node(self, node_name: str) -> None:
-        """
-        Mark a node as enabled.
+        """Mark a node as enabled.
 
         Args:
             node_name (str): Name of the node to enable.
@@ -377,8 +362,7 @@ class Network:
         self.nodes[node_name].disabled = False
 
     def disable_link(self, link_id: str) -> None:
-        """
-        Mark a link as disabled.
+        """Mark a link as disabled.
 
         Args:
             link_id (str): ID of the link to disable.
@@ -391,8 +375,7 @@ class Network:
         self.links[link_id].disabled = True
 
     def enable_link(self, link_id: str) -> None:
-        """
-        Mark a link as enabled.
+        """Mark a link as enabled.
 
         Args:
             link_id (str): ID of the link to enable.
@@ -405,26 +388,21 @@ class Network:
         self.links[link_id].disabled = False
 
     def enable_all(self) -> None:
-        """
-        Mark all nodes and links as enabled.
-        """
+        """Mark all nodes and links as enabled."""
         for node in self.nodes.values():
             node.disabled = False
         for link in self.links.values():
             link.disabled = False
 
     def disable_all(self) -> None:
-        """
-        Mark all nodes and links as disabled.
-        """
+        """Mark all nodes and links as disabled."""
         for node in self.nodes.values():
             node.disabled = True
         for link in self.links.values():
             link.disabled = True
 
     def get_links_between(self, source: str, target: str) -> List[str]:
-        """
-        Retrieve all link IDs that connect the specified source node
+        """Retrieve all link IDs that connect the specified source node
         to the target node.
 
         Args:
@@ -446,8 +424,7 @@ class Network:
         target_regex: Optional[str] = None,
         any_direction: bool = False,
     ) -> List[Link]:
-        """
-        Search for links using optional regex patterns for source or target node names.
+        """Search for links using optional regex patterns for source or target node names.
 
         Args:
             source_regex (Optional[str]): Regex to match link.source. If None, matches all sources.
@@ -481,8 +458,7 @@ class Network:
         return results
 
     def disable_risk_group(self, name: str, recursive: bool = True) -> None:
-        """
-        Disable all nodes/links that have 'name' in their risk_groups.
+        """Disable all nodes/links that have 'name' in their risk_groups.
         If recursive=True, also disable items belonging to child risk groups.
 
         Args:
@@ -511,8 +487,7 @@ class Network:
                 self.disable_link(link_id)
 
     def enable_risk_group(self, name: str, recursive: bool = True) -> None:
-        """
-        Enable all nodes/links that have 'name' in their risk_groups.
+        """Enable all nodes/links that have 'name' in their risk_groups.
         If recursive=True, also enable items belonging to child risk groups.
 
         Note:

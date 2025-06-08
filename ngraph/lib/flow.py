@@ -13,8 +13,7 @@ from ngraph.lib.path_bundle import PathBundle
 
 
 class FlowIndex(NamedTuple):
-    """
-    Describes a unique identifier for a Flow in the network.
+    """Describes a unique identifier for a Flow in the network.
 
     Attributes:
         src_node (NodeID): The source node of the flow.
@@ -31,8 +30,7 @@ class FlowIndex(NamedTuple):
 
 
 class Flow:
-    """
-    Represents a fraction of demand routed along a given PathBundle.
+    """Represents a fraction of demand routed along a given PathBundle.
 
     In traffic-engineering scenarios, a `Flow` object can model:
       - MPLS LSPs/tunnels with explicit paths,
@@ -47,8 +45,7 @@ class Flow:
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> None:
-        """
-        Initialize a Flow object.
+        """Initialize a Flow object.
 
         Args:
             path_bundle (PathBundle): The set of paths this flow uses.
@@ -69,8 +66,7 @@ class Flow:
         self.placed_flow: float = 0.0
 
     def __str__(self) -> str:
-        """
-        Returns a string representation of the Flow.
+        """Returns a string representation of the Flow.
 
         Returns:
             str: String representation including flow index and placed flow amount.
@@ -83,8 +79,7 @@ class Flow:
         to_place: float,
         flow_placement: FlowPlacement,
     ) -> Tuple[float, float]:
-        """
-        Attempt to place (or update) this flow on the given `flow_graph`.
+        """Attempt to place (or update) this flow on the given `flow_graph`.
 
         Args:
             flow_graph (StrictMultiDiGraph): The network graph tracking capacities and usage.
@@ -116,8 +111,7 @@ class Flow:
         return placed_flow, to_place
 
     def remove_flow(self, flow_graph: StrictMultiDiGraph) -> None:
-        """
-        Remove this flow's contribution from the provided `flow_graph`.
+        """Remove this flow's contribution from the provided `flow_graph`.
 
         Args:
             flow_graph (StrictMultiDiGraph): The network graph from which to remove this flow's usage.

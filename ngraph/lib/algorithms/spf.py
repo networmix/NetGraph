@@ -29,8 +29,7 @@ def _spf_fast_all_min_cost_dijkstra(
     src_node: NodeID,
     multipath: bool,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
-    """
-    Specialized Dijkstra's SPF for:
+    """Specialized Dijkstra's SPF for:
       - EdgeSelect.ALL_MIN_COST
       - No excluded edges/nodes.
 
@@ -96,8 +95,7 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
     src_node: NodeID,
     multipath: bool,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
-    """
-    Specialized Dijkstra's SPF for:
+    """Specialized Dijkstra's SPF for:
       - EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
       - No excluded edges/nodes
 
@@ -177,8 +175,7 @@ def spf(
     excluded_edges: Optional[Set[EdgeID]] = None,
     excluded_nodes: Optional[Set[NodeID]] = None,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
-    """
-    Compute shortest paths (cost-based) from a source node using a Dijkstra-like method.
+    """Compute shortest paths (cost-based) from a source node using a Dijkstra-like method.
 
     By default, uses EdgeSelect.ALL_MIN_COST. If multipath=True, multiple equal-cost
     paths to the same node will be recorded in the predecessor structure. If no
@@ -294,8 +291,7 @@ def ksp(
     excluded_edges: Optional[Set[EdgeID]] = None,
     excluded_nodes: Optional[Set[NodeID]] = None,
 ) -> Iterator[Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]]:
-    """
-    Generator of up to k shortest paths from src_node to dst_node using a Yen-like algorithm.
+    """Generator of up to k shortest paths from src_node to dst_node using a Yen-like algorithm.
 
     The initial SPF (shortest path) is computed; subsequent paths are found by systematically
     excluding edges/nodes used by previously generated paths. Each iteration yields a

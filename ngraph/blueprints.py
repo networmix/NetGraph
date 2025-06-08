@@ -11,8 +11,7 @@ from ngraph.network import Link, Network, Node
 
 @dataclass
 class Blueprint:
-    """
-    Represents a reusable blueprint for hierarchical sub-topologies.
+    """Represents a reusable blueprint for hierarchical sub-topologies.
 
     A blueprint may contain multiple groups of nodes (each can have a node_count
     and a name_template), plus adjacency rules describing how those groups connect.
@@ -35,8 +34,7 @@ class Blueprint:
 
 @dataclass
 class DSLExpansionContext:
-    """
-    Carries the blueprint definitions and the final Network instance
+    """Carries the blueprint definitions and the final Network instance
     to be populated during DSL expansion.
 
     Attributes:
@@ -49,8 +47,7 @@ class DSLExpansionContext:
 
 
 def expand_network_dsl(data: Dict[str, Any]) -> Network:
-    """
-    Expands a combined blueprint + network DSL into a complete Network object.
+    """Expands a combined blueprint + network DSL into a complete Network object.
 
     Overall flow:
       1) Parse "blueprints" into Blueprint objects.
@@ -164,8 +161,7 @@ def _expand_group(
     group_def: Dict[str, Any],
     inherited_risk_groups: Set[str] | None = None,
 ) -> None:
-    """
-    Expands a single group definition into either:
+    """Expands a single group definition into either:
       - Another blueprint's subgroups, or
       - A direct node group (with node_count, etc.),
       - Possibly replicating itself if group_name has bracket expansions.
@@ -319,8 +315,7 @@ def _expand_blueprint_adjacency(
     adj_def: Dict[str, Any],
     parent_path: str,
 ) -> None:
-    """
-    Expands adjacency definitions from within a blueprint, using parent_path
+    """Expands adjacency definitions from within a blueprint, using parent_path
     as the local root. This also handles optional expand_vars for repeated adjacency.
 
     Recognized adjacency keys:
@@ -352,8 +347,7 @@ def _expand_blueprint_adjacency(
 
 
 def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None:
-    """
-    Expands a top-level adjacency definition from 'network.adjacency'. If 'expand_vars'
+    """Expands a top-level adjacency definition from 'network.adjacency'. If 'expand_vars'
     is provided, we expand the source/target as templates repeatedly.
 
     Recognized adjacency keys:
@@ -388,8 +382,7 @@ def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None
 def _expand_adjacency_with_variables(
     ctx: DSLExpansionContext, adj_def: Dict[str, Any], parent_path: str
 ) -> None:
-    """
-    Handles adjacency expansions when 'expand_vars' is provided.
+    """Handles adjacency expansions when 'expand_vars' is provided.
     We substitute variables into the 'source' and 'target' templates to produce
     multiple adjacency expansions. Then each expansion is passed to _expand_adjacency_pattern.
 
@@ -451,8 +444,7 @@ def _expand_adjacency_pattern(
     link_params: Dict[str, Any],
     link_count: int = 1,
 ) -> None:
-    """
-    Generates Link objects for the chosen adjacency pattern among matched nodes.
+    """Generates Link objects for the chosen adjacency pattern among matched nodes.
 
     Supported Patterns:
       * "mesh": Connect every source node to every target node
@@ -531,8 +523,7 @@ def _create_link(
     link_params: Dict[str, Any],
     link_count: int = 1,
 ) -> None:
-    """
-    Creates and adds one or more Links to the network, applying capacity, cost,
+    """Creates and adds one or more Links to the network, applying capacity, cost,
     disabled, risk_groups, and attrs from link_params if present.
 
     Args:
@@ -566,8 +557,7 @@ def _create_link(
 
 
 def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
-    """
-    Processes direct node definitions (network_data["nodes"]) and adds them to the network
+    """Processes direct node definitions (network_data["nodes"]) and adds them to the network
     if they do not already exist. If the node name already exists, we do nothing.
 
     Allowed top-level keys for each node: {"disabled", "attrs", "risk_groups"}.
@@ -609,8 +599,7 @@ def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
 
 
 def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
-    """
-    Processes direct link definitions (network_data["links"]) and adds them to the network.
+    """Processes direct link definitions (network_data["links"]) and adds them to the network.
 
     Each link dict must contain {"source", "target"} plus optionally
     {"link_params", "link_count"}. No other top-level keys allowed.
@@ -653,8 +642,7 @@ def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
 
 
 def _process_link_overrides(net: Network, network_data: Dict[str, Any]) -> None:
-    """
-    Processes the 'link_overrides' section of the network DSL, updating
+    """Processes the 'link_overrides' section of the network DSL, updating
     existing links with new parameters. Overrides are applied in order if
     multiple items match the same link.
 
@@ -691,8 +679,7 @@ def _process_link_overrides(net: Network, network_data: Dict[str, Any]) -> None:
 
 
 def _process_node_overrides(net: Network, network_data: Dict[str, Any]) -> None:
-    """
-    Processes the 'node_overrides' section of the network DSL, updating
+    """Processes the 'node_overrides' section of the network DSL, updating
     existing nodes with new attributes in bulk. Overrides are applied in order
     if multiple items match the same node.
 
@@ -740,8 +727,7 @@ def _update_links(
     link_params: Dict[str, Any],
     any_direction: bool = True,
 ) -> None:
-    """
-    Updates all Link objects between nodes matching 'source' and 'target' paths
+    """Updates all Link objects between nodes matching 'source' and 'target' paths
     with new parameters (capacity, cost, disabled, risk_groups, attrs).
 
     If any_direction=True, both (source->target) and (target->source) links
@@ -802,8 +788,7 @@ def _update_nodes(
     disabled_val: Any = None,
     risk_groups_val: Any = None,
 ) -> None:
-    """
-    Updates attributes on all nodes matching a given path pattern.
+    """Updates attributes on all nodes matching a given path pattern.
 
     - If 'disabled_val' is not None, sets node.disabled to that boolean value.
     - If 'risk_groups_val' is not None, *replaces* the node's risk_groups with that new set.
@@ -833,8 +818,7 @@ def _update_nodes(
 def _apply_parameters(
     subgroup_name: str, subgroup_def: Dict[str, Any], params_overrides: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Applies user-provided parameter overrides to a blueprint subgroup.
+    """Applies user-provided parameter overrides to a blueprint subgroup.
 
     Example:
         If 'spine.node_count' = 6 is in params_overrides,
@@ -864,8 +848,7 @@ def _apply_parameters(
 def _apply_nested_path(
     node_def: Dict[str, Any], path_parts: List[str], value: Any
 ) -> None:
-    """
-    Recursively applies a path like ["attrs", "role"] to set node_def["attrs"]["role"] = value.
+    """Recursively applies a path like ["attrs", "role"] to set node_def["attrs"]["role"] = value.
     Creates intermediate dicts as needed.
 
     Args:
@@ -888,8 +871,7 @@ _RANGE_REGEX = re.compile(r"\[([^\]]+)\]")
 
 
 def _expand_name_patterns(name: str) -> List[str]:
-    """
-    Parses and expands bracketed expressions in a group name. For example:
+    """Parses and expands bracketed expressions in a group name. For example:
 
         "fa[1-3]" -> ["fa1", "fa2", "fa3"]
         "dc[1,3,5-6]" -> ["dc1", "dc3", "dc5", "dc6"]
@@ -930,8 +912,7 @@ def _expand_name_patterns(name: str) -> List[str]:
 
 
 def _parse_range_expr(expr: str) -> List[str]:
-    """
-    Parses a bracket expression that might have commas, single values, and dash ranges.
+    """Parses a bracket expression that might have commas, single values, and dash ranges.
     For example: "1-3,5,7-9" -> ["1", "2", "3", "5", "7", "8", "9"].
 
     Args:
@@ -955,8 +936,7 @@ def _parse_range_expr(expr: str) -> List[str]:
 
 
 def _join_paths(parent_path: str, rel_path: str) -> str:
-    """
-    Joins two path segments according to NetGraph's DSL conventions:
+    """Joins two path segments according to NetGraph's DSL conventions:
 
     - If rel_path starts with '/', we strip the leading slash and treat it as
       appended to parent_path if parent_path is not empty.
@@ -983,8 +963,7 @@ def _join_paths(parent_path: str, rel_path: str) -> str:
 def _check_no_extra_keys(
     data_dict: Dict[str, Any], allowed: set[str], context: str
 ) -> None:
-    """
-    Checks that data_dict only has keys in 'allowed'. Raises ValueError if not.
+    """Checks that data_dict only has keys in 'allowed'. Raises ValueError if not.
 
     Args:
         data_dict (Dict[str, Any]): The dict to check.
@@ -1000,8 +979,7 @@ def _check_no_extra_keys(
 
 
 def _check_adjacency_keys(adj_def: Dict[str, Any], context: str) -> None:
-    """
-    Ensures adjacency definitions only contain recognized keys.
+    """Ensures adjacency definitions only contain recognized keys.
 
     Recognized adjacency keys are:
       {"source", "target", "pattern", "link_count", "link_params",
@@ -1025,9 +1003,8 @@ def _check_adjacency_keys(adj_def: Dict[str, Any], context: str) -> None:
 
 
 def _check_link_params(link_params: Dict[str, Any], context: str) -> None:
-    """
-    Checks that link_params only has recognized keys:
-      {"capacity", "cost", "disabled", "risk_groups", "attrs"}.
+    """Checks that link_params only has recognized keys:
+    {"capacity", "cost", "disabled", "risk_groups", "attrs"}.
     """
     recognized = {"capacity", "cost", "disabled", "risk_groups", "attrs"}
     extra = set(link_params.keys()) - recognized

@@ -11,8 +11,7 @@ from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 @dataclass
 class Demand:
-    """
-    Represents a network demand between two nodes. It is realized via one or more
+    """Represents a network demand between two nodes. It is realized via one or more
     flows through a single FlowPolicy.
     """
 
@@ -34,8 +33,7 @@ class Demand:
         return value
 
     def __lt__(self, other: Demand) -> bool:
-        """
-        Compare Demands by their demand_class (priority). A lower demand_class
+        """Compare Demands by their demand_class (priority). A lower demand_class
         indicates higher priority, so it should come first in sorting.
 
         Args:
@@ -47,9 +45,7 @@ class Demand:
         return self.demand_class < other.demand_class
 
     def __str__(self) -> str:
-        """
-        String representation showing src, dst, volume, priority, and placed_demand.
-        """
+        """String representation showing src, dst, volume, priority, and placed_demand."""
         return (
             f"Demand(src_node={self.src_node}, dst_node={self.dst_node}, "
             f"volume={self.volume}, demand_class={self.demand_class}, "
@@ -62,8 +58,7 @@ class Demand:
         max_fraction: float = 1.0,
         max_placement: Optional[float] = None,
     ) -> Tuple[float, float]:
-        """
-        Places demand volume onto the network via self.flow_policy.
+        """Places demand volume onto the network via self.flow_policy.
 
         Args:
             flow_graph (StrictMultiDiGraph): The graph to place flows onto.

@@ -12,9 +12,7 @@ if TYPE_CHECKING:
 @register_workflow_step("BuildGraph")
 @dataclass
 class BuildGraph(WorkflowStep):
-    """
-    A workflow step that builds a StrictMultiDiGraph from scenario.network.
-    """
+    """A workflow step that builds a StrictMultiDiGraph from scenario.network."""
 
     def run(self, scenario: Scenario) -> None:
         graph = scenario.network.to_strict_multidigraph(add_reverse=True)

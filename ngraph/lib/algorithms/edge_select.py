@@ -37,8 +37,7 @@ def edge_select_fabric(
     ],
     Tuple[Cost, List[EdgeID]],
 ]:
-    """
-    Creates a function that selects edges between two nodes according
+    """Creates a function that selects edges between two nodes according
     to a given EdgeSelect strategy (or a user-defined function).
 
     Args:
@@ -68,8 +67,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return all edges whose cost is the minimum among available edges.
+        """Return all edges whose cost is the minimum among available edges.
         If the destination node is excluded, returns (inf, []).
         """
         if excluded_nodes and dst_node in excluded_nodes:
@@ -99,8 +97,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return exactly one edge: the single lowest-cost edge.
+        """Return exactly one edge: the single lowest-cost edge.
         If the destination node is excluded, returns (inf, []).
         """
         if excluded_nodes and dst_node in excluded_nodes:
@@ -128,8 +125,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return all edges that have remaining capacity >= min_cap,
+        """Return all edges that have remaining capacity >= min_cap,
         ignoring cost differences (though return the minimal cost found).
         """
         if excluded_nodes and dst_node in excluded_nodes:
@@ -163,8 +159,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return all edges that have remaining capacity >= min_cap
+        """Return all edges that have remaining capacity >= min_cap
         among those with the minimum cost.
         """
         if excluded_nodes and dst_node in excluded_nodes:
@@ -200,8 +195,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return exactly one edge with the minimal cost among those
+        """Return exactly one edge with the minimal cost among those
         that have remaining capacity >= min_cap.
         """
         if excluded_nodes and dst_node in excluded_nodes:
@@ -235,8 +229,7 @@ def edge_select_fabric(
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Tuple[Cost, List[EdgeID]]:
-        """
-        Return exactly one edge, factoring both cost and load level
+        """Return exactly one edge, factoring both cost and load level
         into a combined cost: cost_factor = (cost * 100) + round((flow/capacity)*10).
         Only edges with remaining capacity >= min_cap are considered.
         """

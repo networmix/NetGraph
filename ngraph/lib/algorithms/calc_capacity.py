@@ -20,8 +20,7 @@ def _init_graph_data(
     Dict[NodeID, Dict[NodeID, float]],
     Dict[NodeID, Dict[NodeID, float]],
 ]:
-    """
-    Build the necessary data structures for the flow algorithm (in reversed orientation):
+    """Build the necessary data structures for the flow algorithm (in reversed orientation):
 
       - ``succ``: Reversed adjacency mapping. For each forward edge u->v in ``pred``,
         store v->u in ``succ`` along with the tuple of edge IDs.
@@ -150,8 +149,7 @@ def _set_levels_bfs(
     levels: Dict[NodeID, int],
     residual_cap: Dict[NodeID, Dict[NodeID, float]],
 ) -> None:
-    """
-    Perform a BFS on the reversed residual graph to assign levels for Dinic's algorithm.
+    """Perform a BFS on the reversed residual graph to assign levels for Dinic's algorithm.
     An edge is considered if its residual capacity is at least MIN_CAP.
 
     Args:
@@ -183,8 +181,7 @@ def _push_flow_dfs(
     flow_dict: Dict[NodeID, Dict[NodeID, float]],
     levels: Dict[NodeID, int],
 ) -> float:
-    """
-    Recursively push flow from `current` to `sink` in the reversed residual graph using DFS.
+    """Recursively push flow from `current` to `sink` in the reversed residual graph using DFS.
     Only paths that follow the level structure (levels[nxt] == levels[current] + 1) are considered.
 
     Args:
@@ -243,8 +240,7 @@ def _equal_balance_bfs(
     succ: Dict[NodeID, Dict[NodeID, Tuple[EdgeID, ...]]],
     flow_dict: Dict[NodeID, Dict[NodeID, float]],
 ) -> None:
-    """
-    Perform a BFS-like pass to distribute a nominal flow of 1.0 from `src_node`
+    """Perform a BFS-like pass to distribute a nominal flow of 1.0 from `src_node`
     over the reversed adjacency (succ), splitting flow equally among all outgoing
     parallel edges from each node. This does not verify capacities. It merely
     assigns relative (fractional) flow amounts, which are later scaled so that
@@ -300,8 +296,7 @@ def calc_graph_capacity(
     capacity_attr: str = "capacity",
     flow_attr: str = "flow",
 ) -> Tuple[float, Dict[NodeID, Dict[NodeID, float]]]:
-    """
-    Calculate the maximum feasible flow from src_node to dst_node (forward sense)
+    """Calculate the maximum feasible flow from src_node to dst_node (forward sense)
     using either the PROPORTIONAL or EQUAL_BALANCED approach.
 
     In PROPORTIONAL mode (similar to Dinic in reversed orientation):
