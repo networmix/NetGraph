@@ -23,6 +23,7 @@ help:
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs          - Generate API documentation"
+	@echo "  make docs-test     - Test API documentation generation"
 	@echo "  make docs-serve    - Serve documentation locally"
 	@echo ""
 	@echo "Build & Package:"
@@ -79,7 +80,12 @@ test-quick:
 # Documentation
 docs:
 	@echo "📚 Generating API documentation..."
-	@python dev/generate_api_docs.py
+	@echo "ℹ️  This regenerates docs/reference/api-full.md from source code"
+	@python dev/generate_api_docs.py --write-file
+
+docs-test:
+	@echo "🧪 Testing API documentation generation..."
+	@python dev/test_doc_generation.py
 
 docs-serve:
 	@echo "🌐 Serving documentation locally..."

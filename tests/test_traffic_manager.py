@@ -108,9 +108,9 @@ def test_place_all_demands_simple(small_network):
 
     # Check final placed_demand on each Demand
     for d in tm.demands:
-        assert (
-            abs(d.placed_demand - d.volume) < MIN_FLOW
-        ), "Demand should be fully placed"
+        assert abs(d.placed_demand - d.volume) < MIN_FLOW, (
+            "Demand should be fully placed"
+        )
 
     # Summarize link usage
     usage = tm.summarize_link_usage()
@@ -235,9 +235,9 @@ def test_place_all_demands_auto_rounds(small_network):
     total_placed = tm.place_all_demands(placement_rounds="auto")
     assert total_placed == 25.0, "Should place all traffic under auto rounds"
     for d in tm.demands:
-        assert (
-            abs(d.placed_demand - d.volume) < MIN_FLOW
-        ), "Demand should be fully placed"
+        assert abs(d.placed_demand - d.volume) < MIN_FLOW, (
+            "Demand should be fully placed"
+        )
 
 
 def test_combine_mode_multi_source_sink():
@@ -279,9 +279,9 @@ def test_combine_mode_multi_source_sink():
         for _, (src, dst, _, data) in tm.graph.get_edges().items()
         if src == d.src_node
     ]
-    assert (
-        len(edges_out_of_pseudo_src) == 2
-    ), "2 edges from pseudo-source to real sources"
+    assert len(edges_out_of_pseudo_src) == 2, (
+        "2 edges from pseudo-source to real sources"
+    )
 
     edges_into_pseudo_snk = [
         (src, dst)
@@ -373,9 +373,9 @@ def test_full_mesh_mode_self_pairs():
     # So we expect 2 demands, each with 10.0
     assert len(tm.demands) == 2, "Only N1->N2 and N2->N1 should be created"
     for d in tm.demands:
-        assert (
-            abs(d.volume - 10.0) < MIN_FLOW
-        ), "Volume should be evenly split among 2 pairs"
+        assert abs(d.volume - 10.0) < MIN_FLOW, (
+            "Volume should be evenly split among 2 pairs"
+        )
 
 
 def test_estimate_rounds_no_demands(small_network):

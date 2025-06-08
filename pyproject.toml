@@ -44,7 +44,7 @@ dev = [
     "mkdocs-material",
     "pdoc",
     # style + type checking
-    "ruff>=0.5",
+    "ruff==0.11.13",
     "pyright",
     # pre-commit hooks
     "pre-commit",
