@@ -13,8 +13,7 @@ def resolve_to_paths(
     pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]],
     split_parallel_edges: bool = False,
 ) -> Iterator[PathTuple]:
-    """
-    Enumerate all source->destination paths from a predecessor map.
+    """Enumerate all source->destination paths from a predecessor map.
 
     Args:
         src_node: Source node ID.

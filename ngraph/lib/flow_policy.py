@@ -13,9 +13,7 @@ from ngraph.lib.path_bundle import PathBundle
 
 
 class FlowPolicyConfig(IntEnum):
-    """
-    Enumerates supported flow policy configurations.
-    """
+    """Enumerates supported flow policy configurations."""
 
     SHORTEST_PATHS_ECMP = 1
     SHORTEST_PATHS_UCMP = 2
@@ -25,8 +23,7 @@ class FlowPolicyConfig(IntEnum):
 
 
 class FlowPolicy:
-    """
-    Manages the placement and management of flows (demands) on a network graph.
+    """Manages the placement and management of flows (demands) on a network graph.
 
     A FlowPolicy converts a demand into one or more Flow objects subject to
     capacity constraints and user-specified configurations such as path
@@ -60,8 +57,7 @@ class FlowPolicy:
         edge_select_value: Optional[Any] = None,
         reoptimize_flows_on_each_placement: bool = False,
     ) -> None:
-        """
-        Initializes a FlowPolicy instance.
+        """Initializes a FlowPolicy instance.
 
         Args:
             path_alg: The path algorithm to use (e.g., SPF).
@@ -120,8 +116,7 @@ class FlowPolicy:
             raise ValueError("max_flow_count must be set for EQUAL_BALANCED placement.")
 
     def deep_copy(self) -> FlowPolicy:
-        """
-        Creates and returns a deep copy of this FlowPolicy, including all flows.
+        """Creates and returns a deep copy of this FlowPolicy, including all flows.
 
         Returns:
             A new FlowPolicy object that is a deep copy of the current instance.
@@ -130,21 +125,16 @@ class FlowPolicy:
 
     @property
     def flow_count(self) -> int:
-        """
-        Returns the number of flows currently tracked by the policy.
-        """
+        """Returns the number of flows currently tracked by the policy."""
         return len(self.flows)
 
     @property
     def placed_demand(self) -> float:
-        """
-        Returns the sum of all placed flow volumes across flows.
-        """
+        """Returns the sum of all placed flow volumes across flows."""
         return sum(flow.placed_flow for flow in self.flows.values())
 
     def _get_next_flow_id(self) -> int:
-        """
-        Retrieves and increments the internal flow ID counter.
+        """Retrieves and increments the internal flow ID counter.
 
         Returns:
             The next available integer flow ID.
@@ -160,8 +150,7 @@ class FlowPolicy:
         flow_class: Hashable,
         flow_id: int,
     ) -> FlowIndex:
-        """
-        Constructs a FlowIndex tuple used as a dictionary key to track flows.
+        """Constructs a FlowIndex tuple used as a dictionary key to track flows.
 
         Args:
             src_node: The source node identifier.
@@ -183,8 +172,7 @@ class FlowPolicy:
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Optional[PathBundle]:
-        """
-        Finds a path or set of paths from src_node to dst_node, optionally excluding
+        """Finds a path or set of paths from src_node to dst_node, optionally excluding
         certain edges or nodes.
 
         Args:
@@ -254,8 +242,7 @@ class FlowPolicy:
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> Optional[Flow]:
-        """
-        Creates a new Flow and registers it within the policy.
+        """Creates a new Flow and registers it within the policy.
 
         Args:
             flow_graph: The network graph.
@@ -291,8 +278,7 @@ class FlowPolicy:
         flow_class: Hashable,
         min_flow: Optional[float] = None,
     ) -> None:
-        """
-        Creates the initial set of flows for a new demand.
+        """Creates the initial set of flows for a new demand.
 
         If static paths are defined, they are used directly; otherwise, flows
         are created via path-finding.
@@ -332,8 +318,7 @@ class FlowPolicy:
     def _delete_flow(
         self, flow_graph: StrictMultiDiGraph, flow_index: FlowIndex
     ) -> None:
-        """
-        Deletes a flow from the policy and removes it from the network graph.
+        """Deletes a flow from the policy and removes it from the network graph.
 
         Args:
             flow_graph: The network graph.
@@ -351,8 +336,7 @@ class FlowPolicy:
         flow_index: FlowIndex,
         headroom: float = 0.0,
     ) -> Optional[Flow]:
-        """
-        Re-optimizes an existing flow by finding a new path that can accommodate
+        """Re-optimizes an existing flow by finding a new path that can accommodate
         additional volume headroom. If no better path is found, the original path is restored.
 
         Args:
@@ -399,8 +383,7 @@ class FlowPolicy:
         target_flow_volume: Optional[float] = None,
         min_flow: Optional[float] = None,
     ) -> Tuple[float, float]:
-        """
-        Places the given demand volume on the network graph by splitting or creating
+        """Places the given demand volume on the network graph by splitting or creating
         flows as needed. Optionally re-optimizes flows based on the policy configuration.
 
         Args:
@@ -484,8 +467,7 @@ class FlowPolicy:
         flow_class: Hashable,
         target_flow_volume: float,
     ) -> Tuple[float, float]:
-        """
-        Rebalances the demand across existing flows so that their volumes are closer
+        """Rebalances the demand across existing flows so that their volumes are closer
         to the target_flow_volume. This is achieved by removing all flows from
         the network graph and re-placing them.
 
@@ -506,8 +488,7 @@ class FlowPolicy:
         )
 
     def remove_demand(self, flow_graph: StrictMultiDiGraph) -> None:
-        """
-        Removes all flows from the network graph without clearing internal state.
+        """Removes all flows from the network graph without clearing internal state.
         This allows subsequent re-optimization.
 
         Args:
@@ -518,8 +499,7 @@ class FlowPolicy:
 
 
 def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
-    """
-    Factory method to create and return a FlowPolicy instance based on the provided configuration.
+    """Factory method to create and return a FlowPolicy instance based on the provided configuration.
 
     Args:
         flow_policy_config: A FlowPolicyConfig enum value specifying the desired policy.

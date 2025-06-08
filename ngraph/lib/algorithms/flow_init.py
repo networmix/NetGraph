@@ -9,8 +9,7 @@ def init_flow_graph(
     flows_attr: str = "flows",
     reset_flow_graph: bool = True,
 ) -> StrictMultiDiGraph:
-    """
-    Ensure that every node and edge in the provided `flow_graph` has
+    """Ensure that every node and edge in the provided `flow_graph` has
     flow-related attributes. Specifically, for each node and edge:
 
     - The attribute named `flow_attr` (default: "flow") is set to 0.

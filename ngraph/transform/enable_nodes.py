@@ -9,8 +9,7 @@ from ngraph.transform.base import NetworkTransform, Scenario, register_transform
 
 @register_transform("EnableNodes")
 class EnableNodesTransform(NetworkTransform):
-    """
-    Enable *count* disabled nodes that match *path*.
+    """Enable *count* disabled nodes that match *path*.
 
     Ordering is configurable; default is lexical by node name.
     """

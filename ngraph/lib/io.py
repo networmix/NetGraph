@@ -6,8 +6,7 @@ from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 
 def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict[str, Any]:
-    """
-    Converts a StrictMultiDiGraph into a node-link dict representation.
+    """Converts a StrictMultiDiGraph into a node-link dict representation.
 
     This representation is suitable for JSON serialization (e.g., for D3.js or Nx formats).
 
@@ -58,8 +57,7 @@ def graph_to_node_link(graph: StrictMultiDiGraph) -> Dict[str, Any]:
 
 
 def node_link_to_graph(data: Dict[str, Any]) -> StrictMultiDiGraph:
-    """
-    Reconstructs a StrictMultiDiGraph from its node-link dict representation.
+    """Reconstructs a StrictMultiDiGraph from its node-link dict representation.
 
     Expected input format:
         {
@@ -116,8 +114,7 @@ def edgelist_to_graph(
     target: str = "dst",
     key: str = "key",
 ) -> StrictMultiDiGraph:
-    """
-    Builds or updates a StrictMultiDiGraph from an edge list.
+    """Builds or updates a StrictMultiDiGraph from an edge list.
 
     Each line in the input is split by the specified separator into tokens. These tokens
     are mapped to column names provided in `columns`. The tokens corresponding to `source`
@@ -177,8 +174,7 @@ def graph_to_edgelist(
     target_col: str = "dst",
     key_col: str = "key",
 ) -> List[str]:
-    """
-    Converts a StrictMultiDiGraph into an edge-list text representation.
+    """Converts a StrictMultiDiGraph into an edge-list text representation.
 
     Each line in the output represents one edge with tokens joined by the given separator.
     By default, the output columns are:

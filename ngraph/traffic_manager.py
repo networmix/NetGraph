@@ -13,8 +13,7 @@ from ngraph.traffic_demand import TrafficDemand
 
 
 class TrafficResult(NamedTuple):
-    """
-    A container for traffic demand result data.
+    """A container for traffic demand result data.
 
     Attributes:
         priority (int): Demand priority class (lower=more critical).
@@ -35,8 +34,7 @@ class TrafficResult(NamedTuple):
 
 @dataclass
 class TrafficManager:
-    """
-    Manages the expansion and placement of traffic demands on a Network.
+    """Manages the expansion and placement of traffic demands on a Network.
 
     This class:
 
@@ -84,8 +82,7 @@ class TrafficManager:
     _td_to_demands: Dict[str, List[Demand]] = field(default_factory=dict)
 
     def build_graph(self, add_reverse: bool = True) -> None:
-        """
-        Builds or rebuilds the internal StrictMultiDiGraph from self.network.
+        """Builds or rebuilds the internal StrictMultiDiGraph from self.network.
 
         This also initializes flow-related edge attributes (e.g., flow=0).
 
@@ -97,8 +94,7 @@ class TrafficManager:
         init_flow_graph(self.graph)  # Initialize flow-related attributes
 
     def expand_demands(self) -> None:
-        """
-        Converts each TrafficDemand in self.traffic_demands into one or more
+        """Converts each TrafficDemand in self.traffic_demands into one or more
         Demand objects based on the demand's 'mode'.
 
         The expanded demands are stored in self.demands, sorted by ascending
@@ -144,8 +140,7 @@ class TrafficManager:
         placement_rounds: Union[int, str] = "auto",
         reoptimize_after_each_round: bool = False,
     ) -> float:
-        """
-        Places all expanded demands in ascending priority order using multiple
+        """Places all expanded demands in ascending priority order using multiple
         incremental rounds per priority.
 
         In each priority class:
@@ -228,8 +223,7 @@ class TrafficManager:
         return total_placed
 
     def reset_all_flow_usages(self) -> None:
-        """
-        Removes flow usage from the graph for each Demand's FlowPolicy
+        """Removes flow usage from the graph for each Demand's FlowPolicy
         and resets placed_demand to 0 for all demands.
 
         Also sets TrafficDemand.demand_placed to 0 for each top-level demand.
@@ -246,8 +240,7 @@ class TrafficManager:
             td.demand_placed = 0.0
 
     def get_flow_details(self) -> Dict[Tuple[int, int], Dict[str, object]]:
-        """
-        Summarizes flows from each Demand's FlowPolicy.
+        """Summarizes flows from each Demand's FlowPolicy.
 
         Returns:
             Dict[Tuple[int, int], Dict[str, object]]:
@@ -274,8 +267,7 @@ class TrafficManager:
         return details
 
     def summarize_link_usage(self) -> Dict[str, float]:
-        """
-        Returns the total flow usage per edge in the graph.
+        """Returns the total flow usage per edge in the graph.
 
         Returns:
             Dict[str, float]: A mapping from edge_key -> current flow on that edge.
@@ -291,8 +283,7 @@ class TrafficManager:
         return usage
 
     def get_traffic_results(self, detailed: bool = False) -> List[TrafficResult]:
-        """
-        Returns traffic demand summaries.
+        """Returns traffic demand summaries.
 
         If detailed=False, each top-level TrafficDemand is returned as a single entry.
         If detailed=True, each expanded Demand is returned separately.
@@ -346,8 +337,7 @@ class TrafficManager:
         return results
 
     def _reoptimize_priority_demands(self, demands_in_prio: List[Demand]) -> None:
-        """
-        Re-run flow-policy placement for each Demand in the same priority class.
+        """Re-run flow-policy placement for each Demand in the same priority class.
 
         Removing and re-placing each flow allows the flow policy to adjust if
         capacity constraints have changed due to other demands.
@@ -379,8 +369,7 @@ class TrafficManager:
         src_groups: Dict[str, List[Node]],
         snk_groups: Dict[str, List[Node]],
     ) -> None:
-        """
-        'combine' mode expansion.
+        """'combine' mode expansion.
 
         Attaches a single pseudo-source and a single pseudo-sink node for the
         matched source and sink nodes, similar to the approach in network.py.
@@ -456,8 +445,7 @@ class TrafficManager:
         src_groups: Dict[str, List[Node]],
         snk_groups: Dict[str, List[Node]],
     ) -> None:
-        """
-        'full_mesh' mode expansion.
+        """'full_mesh' mode expansion.
 
         Combines all matched source nodes into one group and all matched sink
         nodes into another group. Creates a Demand for each (src_node, dst_node)
@@ -510,8 +498,7 @@ class TrafficManager:
             )
 
     def _estimate_rounds(self) -> int:
-        """
-        Estimates a suitable number of placement rounds by comparing
+        """Estimates a suitable number of placement rounds by comparing
         the median demand volume and the median edge capacity. Returns
         a default of 5 rounds if there is insufficient data for a
         meaningful calculation.

@@ -13,8 +13,7 @@ logger.setLevel(logging.DEBUG)
 
 @dataclass
 class ExternalLinkBreakdown:
-    """
-    Holds stats for external links to a particular other subtree.
+    """Holds stats for external links to a particular other subtree.
 
     Attributes:
         link_count (int): Number of links to that other subtree.
@@ -27,8 +26,7 @@ class ExternalLinkBreakdown:
 
 @dataclass
 class TreeStats:
-    """
-    Aggregated statistics for a single tree node (subtree).
+    """Aggregated statistics for a single tree node (subtree).
 
     Attributes:
         node_count (int): Total number of nodes in this subtree.
@@ -59,8 +57,7 @@ class TreeStats:
 
 @dataclass(eq=False)
 class TreeNode:
-    """
-    Represents a node in the hierarchical tree.
+    """Represents a node in the hierarchical tree.
 
     Attributes:
         name (str): Name/label of this node.
@@ -92,24 +89,19 @@ class TreeNode:
         return id(self)
 
     def add_child(self, child_name: str) -> TreeNode:
-        """
-        Ensure a child node named 'child_name' exists and return it.
-        """
+        """Ensure a child node named 'child_name' exists and return it."""
         if child_name not in self.children:
             child_node = TreeNode(name=child_name, parent=self)
             self.children[child_name] = child_node
         return self.children[child_name]
 
     def is_leaf(self) -> bool:
-        """
-        Return True if this node has no children.
-        """
+        """Return True if this node has no children."""
         return len(self.children) == 0
 
 
 class NetworkExplorer:
-    """
-    Provides hierarchical exploration of a Network, computing statistics in two modes:
+    """Provides hierarchical exploration of a Network, computing statistics in two modes:
     'all' (ignores disabled) and 'active' (only enabled).
     """
 
@@ -136,9 +128,7 @@ class NetworkExplorer:
         network: Network,
         components_library: Optional[ComponentsLibrary] = None,
     ) -> NetworkExplorer:
-        """
-        Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
-        """
+        """Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats."""
         instance = cls(network, components_library)
 
         # 1) Build hierarchy
@@ -160,8 +150,7 @@ class NetworkExplorer:
         return instance
 
     def _build_hierarchy_tree(self) -> TreeNode:
-        """
-        Build a multi-level tree by splitting node names on '/'.
+        """Build a multi-level tree by splitting node names on '/'.
         Example: "dc1/plane1/ssw/ssw-1" => root/dc1/plane1/ssw/ssw-1
         """
         root = TreeNode(name="root")
@@ -174,9 +163,7 @@ class NetworkExplorer:
         return root
 
     def _compute_subtree_sets_all(self, node: TreeNode) -> Set[str]:
-        """
-        Recursively collect all node names (regardless of disabled) into subtree_nodes.
-        """
+        """Recursively collect all node names (regardless of disabled) into subtree_nodes."""
         collected = set()
         for child in node.children.values():
             collected |= self._compute_subtree_sets_all(child)
@@ -186,8 +173,7 @@ class NetworkExplorer:
         return collected
 
     def _compute_subtree_sets_active(self, node: TreeNode) -> Set[str]:
-        """
-        Recursively collect enabled node names into active_subtree_nodes.
+        """Recursively collect enabled node names into active_subtree_nodes.
         A node is considered enabled if nd.attrs.get("disabled") is not truthy.
         """
         collected = set()
@@ -200,8 +186,7 @@ class NetworkExplorer:
         return collected
 
     def _build_node_map(self, node: TreeNode) -> None:
-        """
-        Assign each node's name to the *deepest* TreeNode that actually holds it.
+        """Assign each node's name to the *deepest* TreeNode that actually holds it.
         We do a parent-first approach so children override if needed.
         """
         # Map the raw_nodes at this level
@@ -213,18 +198,14 @@ class NetworkExplorer:
             self._build_node_map(child)
 
     def _build_path_map(self, node: TreeNode) -> None:
-        """
-        Build a path->TreeNode map for easy lookups. Skips "root" in path strings.
-        """
+        """Build a path->TreeNode map for easy lookups. Skips "root" in path strings."""
         path_str = self._compute_full_path(node)
         self._path_map[path_str] = node
         for child in node.children.values():
             self._build_path_map(child)
 
     def _compute_full_path(self, node: TreeNode) -> str:
-        """
-        Return a '/'-joined path, omitting "root".
-        """
+        """Return a '/'-joined path, omitting "root"."""
         parts = []
         current = node
         while current and current.name != "root":
@@ -233,9 +214,7 @@ class NetworkExplorer:
         return "/".join(reversed(parts))
 
     def _get_ancestors(self, node: TreeNode) -> Set[TreeNode]:
-        """
-        Return a cached set of this node's ancestors (including itself).
-        """
+        """Return a cached set of this node's ancestors (including itself)."""
         if node in self._ancestors_cache:
             return self._ancestors_cache[node]
 
@@ -248,10 +227,9 @@ class NetworkExplorer:
         return ancestors
 
     def _compute_statistics(self) -> None:
-        """
-        Populates two stats sets for each TreeNode:
-         - node.stats (all, ignoring disabled)
-         - node.active_stats (only enabled nodes/links)
+        """Populates two stats sets for each TreeNode:
+        - node.stats (all, ignoring disabled)
+        - node.active_stats (only enabled nodes/links)
         """
 
         # First, zero them out
@@ -390,8 +368,7 @@ class NetworkExplorer:
         detailed: bool = False,
         include_disabled: bool = True,
     ) -> None:
-        """
-        Print the hierarchy from 'node' down (default: root).
+        """Print the hierarchy from 'node' down (default: root).
 
         Args:
             node (TreeNode): subtree to print, or root if None
@@ -469,9 +446,7 @@ class NetworkExplorer:
             )
 
     def _roll_up_if_leaf(self, path: str) -> str:
-        """
-        If 'path' is a leaf node's path, climb up until a non-leaf or root is found.
-        """
+        """If 'path' is a leaf node's path, climb up until a non-leaf or root is found."""
         node = self._path_map.get(path)
         if not node:
             return path

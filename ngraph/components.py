@@ -9,8 +9,7 @@ import yaml
 
 @dataclass
 class Component:
-    """
-    A generic component that can represent chassis, line cards, optics, etc.
+    """A generic component that can represent chassis, line cards, optics, etc.
     Components can have nested children, each with their own cost, power, etc.
 
     Attributes:
@@ -44,8 +43,7 @@ class Component:
     children: Dict[str, Component] = field(default_factory=dict)
 
     def total_cost(self) -> float:
-        """
-        Computes the total (recursive) cost of this component, including children,
+        """Computes the total (recursive) cost of this component, including children,
         multiplied by this component's count.
 
         Returns:
@@ -57,8 +55,7 @@ class Component:
         return single_instance_cost * self.count
 
     def total_power(self) -> float:
-        """
-        Computes the total *typical* (recursive) power usage of this component,
+        """Computes the total *typical* (recursive) power usage of this component,
         including children, multiplied by this component's count.
 
         Returns:
@@ -70,8 +67,7 @@ class Component:
         return single_instance_power * self.count
 
     def total_power_max(self) -> float:
-        """
-        Computes the total *peak* (recursive) power usage of this component,
+        """Computes the total *peak* (recursive) power usage of this component,
         including children, multiplied by this component's count.
 
         Returns:
@@ -83,8 +79,7 @@ class Component:
         return single_instance_power_max * self.count
 
     def total_capacity(self) -> float:
-        """
-        Computes the total (recursive) capacity of this component,
+        """Computes the total (recursive) capacity of this component,
         including children, multiplied by this component's count.
 
         Returns:
@@ -96,8 +91,7 @@ class Component:
         return single_instance_capacity * self.count
 
     def as_dict(self, include_children: bool = True) -> Dict[str, Any]:
-        """
-        Returns a dictionary containing all properties of this component.
+        """Returns a dictionary containing all properties of this component.
 
         Args:
             include_children (bool): If True, recursively includes children.
@@ -127,8 +121,7 @@ class Component:
 
 @dataclass
 class ComponentsLibrary:
-    """
-    Holds a collection of named Components. Each entry is a top-level "template"
+    """Holds a collection of named Components. Each entry is a top-level "template"
     that can be referenced for cost/power/capacity lookups, possibly with nested children.
 
     Example (YAML-like):
@@ -155,8 +148,7 @@ class ComponentsLibrary:
     components: Dict[str, Component] = field(default_factory=dict)
 
     def get(self, name: str) -> Optional[Component]:
-        """
-        Retrieves a Component by its name from the library.
+        """Retrieves a Component by its name from the library.
 
         Args:
             name (str): Name of the component.
@@ -169,8 +161,7 @@ class ComponentsLibrary:
     def merge(
         self, other: ComponentsLibrary, override: bool = True
     ) -> ComponentsLibrary:
-        """
-        Merges another ComponentsLibrary into this one. By default (override=True),
+        """Merges another ComponentsLibrary into this one. By default (override=True),
         duplicate components in `other` overwrite those in the current library.
 
         Args:
@@ -186,8 +177,7 @@ class ComponentsLibrary:
         return self
 
     def clone(self) -> ComponentsLibrary:
-        """
-        Creates a deep copy of this ComponentsLibrary.
+        """Creates a deep copy of this ComponentsLibrary.
 
         Returns:
             ComponentsLibrary: A new, cloned library instance.
@@ -196,8 +186,7 @@ class ComponentsLibrary:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ComponentsLibrary:
-        """
-        Constructs a ComponentsLibrary from a dictionary of raw component definitions.
+        """Constructs a ComponentsLibrary from a dictionary of raw component definitions.
 
         Args:
             data (Dict[str, Any]): Raw component definitions.
@@ -212,8 +201,7 @@ class ComponentsLibrary:
 
     @classmethod
     def _build_component(cls, name: str, definition_data: Dict[str, Any]) -> Component:
-        """
-        Recursively constructs a single Component from a dictionary definition.
+        """Recursively constructs a single Component from a dictionary definition.
 
         Args:
             name (str): Name of the component.
@@ -269,8 +257,7 @@ class ComponentsLibrary:
 
     @classmethod
     def from_yaml(cls, yaml_str: str) -> ComponentsLibrary:
-        """
-        Constructs a ComponentsLibrary from a YAML string. If the YAML contains
+        """Constructs a ComponentsLibrary from a YAML string. If the YAML contains
         a top-level 'components' key, that key is used; otherwise the entire
         top-level is treated as component definitions.
 

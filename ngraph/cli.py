@@ -10,6 +10,7 @@ from ngraph.scenario import Scenario
 
 def _run_scenario(path: Path, output: Optional[Path]) -> None:
     """Run a scenario file and store results as JSON."""
+
     yaml_text = path.read_text()
     scenario = Scenario.from_yaml(yaml_text)
     scenario.run()
@@ -23,7 +24,12 @@ def _run_scenario(path: Path, output: Optional[Path]) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> None:
-    """Entry point for the ``ngraph`` command."""
+    """Entry point for the ``ngraph`` command.
+
+    Args:
+        argv: Optional list of command-line arguments. If ``None``, ``sys.argv``
+            is used.
+    """
     parser = argparse.ArgumentParser(prog="ngraph")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

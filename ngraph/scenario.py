@@ -20,8 +20,7 @@ from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 
 @dataclass
 class Scenario:
-    """
-    Represents a complete scenario for building and executing network workflows.
+    """Represents a complete scenario for building and executing network workflows.
 
     This scenario includes:
       - A network (nodes/links), constructed via blueprint expansion.
@@ -46,8 +45,7 @@ class Scenario:
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
 
     def run(self) -> None:
-        """
-        Executes the scenario's workflow steps in order.
+        """Executes the scenario's workflow steps in order.
 
         Each step may modify scenario data or store outputs
         in scenario.results.
@@ -61,8 +59,7 @@ class Scenario:
         yaml_str: str,
         default_components: Optional[ComponentsLibrary] = None,
     ) -> Scenario:
-        """
-        Constructs a Scenario from a YAML string, optionally merging
+        """Constructs a Scenario from a YAML string, optionally merging
         with a default ComponentsLibrary if provided.
 
         Top-level YAML keys can include:
@@ -164,8 +161,7 @@ class Scenario:
 
     @staticmethod
     def _build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
-        """
-        Recursively builds a list of RiskGroup objects from YAML data.
+        """Recursively builds a list of RiskGroup objects from YAML data.
 
         Each entry may have keys: "name", "children", "disabled", and "attrs" (dict).
 
@@ -195,8 +191,7 @@ class Scenario:
 
     @staticmethod
     def _build_failure_policy(fp_data: Dict[str, Any]) -> FailurePolicy:
-        """
-        Constructs a FailurePolicy from data that may specify multiple rules plus
+        """Constructs a FailurePolicy from data that may specify multiple rules plus
         optional top-level fields like fail_shared_risk_groups, fail_risk_group_children,
         use_cache, and attrs.
 
@@ -275,8 +270,7 @@ class Scenario:
     def _build_workflow_steps(
         workflow_data: List[Dict[str, Any]],
     ) -> List[WorkflowStep]:
-        """
-        Converts workflow step dictionaries into WorkflowStep objects.
+        """Converts workflow step dictionaries into WorkflowStep objects.
 
         Each step dict must have a "step_type" referencing a registered workflow
         step in WORKFLOW_STEP_REGISTRY. All other keys in the dict are passed

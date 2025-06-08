@@ -10,8 +10,7 @@ TRANSFORM_REGISTRY: Dict[str, Type["NetworkTransform"]] = {}
 
 
 def register_transform(name: str) -> Any:
-    """
-    Class decorator that registers a concrete :class:`NetworkTransform` and
+    """Class decorator that registers a concrete :class:`NetworkTransform` and
     auto-wraps it as a :class:`WorkflowStep`.
 
     The same *name* is used for both the transform factory and the workflow
@@ -43,8 +42,7 @@ def register_transform(name: str) -> Any:
 
 
 class NetworkTransform(abc.ABC):
-    """
-    Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
+    """Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
 
     Subclasses must override :meth:`apply`.
     """
@@ -58,8 +56,7 @@ class NetworkTransform(abc.ABC):
 
     @classmethod
     def create(cls, step_type: str, **kwargs: Any) -> Self:
-        """
-        Instantiate a registered transform by *step_type*.
+        """Instantiate a registered transform by *step_type*.
 
         Args:
             step_type: Name given in :func:`register_transform`.

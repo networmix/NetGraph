@@ -17,8 +17,7 @@ def calc_max_flow(
     flows_attr: str = "flows",
     copy_graph: bool = True,
 ) -> float:
-    """
-    Compute the maximum flow between two nodes in a directed multi-graph,
+    """Compute the maximum flow between two nodes in a directed multi-graph,
     using an iterative shortest-path augmentation approach.
 
     By default, this function:

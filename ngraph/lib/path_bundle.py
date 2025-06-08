@@ -11,8 +11,7 @@ from ngraph.lib.path import Path
 
 
 class PathBundle:
-    """
-    A collection of equal-cost paths between two nodes.
+    """A collection of equal-cost paths between two nodes.
 
     This class encapsulates one or more parallel paths (all of the same cost)
     between `src_node` and `dst_node`. The predecessor map `pred` associates
@@ -33,8 +32,7 @@ class PathBundle:
         pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]],
         cost: Cost,
     ) -> None:
-        """
-        Initialize the PathBundle.
+        """Initialize the PathBundle.
 
         Args:
             src_node: The source node for all paths in this bundle.
@@ -106,8 +104,7 @@ class PathBundle:
         return f"PathBundle({self.src_node}, {self.dst_node}, {self.pred}, {self.cost})"
 
     def add(self, other: PathBundle) -> PathBundle:
-        """
-        Concatenate this bundle with another bundle (end-to-start).
+        """Concatenate this bundle with another bundle (end-to-start).
 
         This effectively merges the predecessor maps and combines costs.
 
@@ -150,8 +147,7 @@ class PathBundle:
         cost_attr: str = "cost",
         capacity_attr: str = "capacity",
     ) -> PathBundle:
-        """
-        Construct a PathBundle from a single `Path` object.
+        """Construct a PathBundle from a single `Path` object.
 
         Args:
             path: A `Path` object which contains node-edge tuples, plus a `cost`.
@@ -218,8 +214,7 @@ class PathBundle:
         return cls(src_node, dst_node, pred_map, path.cost)
 
     def resolve_to_paths(self, split_parallel_edges: bool = False) -> Iterator[Path]:
-        """
-        Generate all concrete `Path` objects contained in this PathBundle.
+        """Generate all concrete `Path` objects contained in this PathBundle.
 
         Args:
             split_parallel_edges: If False, any parallel edges are grouped together
@@ -238,8 +233,7 @@ class PathBundle:
             yield Path(path_tuple, self.cost)
 
     def contains(self, other: PathBundle) -> bool:
-        """
-        Check if this bundle's edge set contains all edges of `other`.
+        """Check if this bundle's edge set contains all edges of `other`.
 
         Args:
             other: Another PathBundle.
@@ -250,8 +244,7 @@ class PathBundle:
         return self.edges.issuperset(other.edges)
 
     def is_subset_of(self, other: PathBundle) -> bool:
-        """
-        Check if this bundle's edge set is contained in `other`'s edge set.
+        """Check if this bundle's edge set is contained in `other`'s edge set.
 
         Args:
             other: Another PathBundle.
@@ -262,8 +255,7 @@ class PathBundle:
         return self.edges.issubset(other.edges)
 
     def is_disjoint_from(self, other: PathBundle) -> bool:
-        """
-        Check if this bundle shares no edges with `other`.
+        """Check if this bundle shares no edges with `other`.
 
         Args:
             other: Another PathBundle.
@@ -279,8 +271,7 @@ class PathBundle:
         graph: StrictMultiDiGraph,
         cost_attr: str = "cost",
     ) -> PathBundle:
-        """
-        Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
+        """Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
 
         This method performs a reverse traversal (BFS) from `new_dst_node` up to
         `self.src_node`, collecting edges and recalculating the cost along the way

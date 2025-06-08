@@ -8,8 +8,7 @@ from typing import Any, Dict, List, Literal, Set
 
 @dataclass
 class FailureCondition:
-    """
-    A single condition for matching an entity's attribute with an operator and value.
+    """A single condition for matching an entity's attribute with an operator and value.
 
     Example usage (YAML):
       conditions:
@@ -38,8 +37,7 @@ EntityScope = Literal["node", "link", "risk_group"]
 
 @dataclass
 class FailureRule:
-    """
-    Defines how to match and then select entities for failure.
+    """Defines how to match and then select entities for failure.
 
     Attributes:
         entity_scope (EntityScope):
@@ -79,8 +77,7 @@ class FailureRule:
 
 @dataclass
 class FailurePolicy:
-    """
-    A container for multiple FailureRules plus optional metadata in `attrs`.
+    """A container for multiple FailureRules plus optional metadata in `attrs`.
 
     The main entry point is `apply_failures`, which:
       1) For each rule, gather the relevant entities (node, link, or risk_group).
@@ -128,8 +125,7 @@ class FailurePolicy:
         network_links: Dict[str, Any],
         network_risk_groups: Dict[str, Any] | None = None,
     ) -> List[str]:
-        """
-        Identify which entities fail given the defined rules, then optionally
+        """Identify which entities fail given the defined rules, then optionally
         expand by shared-risk groups or nested risk groups.
 
         Args:
@@ -195,8 +191,7 @@ class FailurePolicy:
         network_links: Dict[str, Any],
         network_risk_groups: Dict[str, Any],
     ) -> Set[str]:
-        """
-        Get the set of IDs matched by the given rule, either from cache
+        """Get the set of IDs matched by the given rule, either from cache
         or by performing a fresh match over the relevant entity type.
         """
         if self.use_cache and rule_idx in self._match_cache:
@@ -222,8 +217,7 @@ class FailurePolicy:
         conditions: List[FailureCondition],
         logic: str,
     ) -> Set[str]:
-        """
-        Return all entity IDs that match the given conditions based on 'and'/'or'/'any' logic.
+        """Return all entity IDs that match the given conditions based on 'and'/'or'/'any' logic.
 
         entity_map is either nodes, links, or risk_groups:
           {entity_id -> {top_level_attr: value, ...}}
@@ -253,8 +247,7 @@ class FailurePolicy:
         conditions: List[FailureCondition],
         logic: str,
     ) -> bool:
-        """
-        Evaluate multiple conditions on a single entity. All or any condition(s)
+        """Evaluate multiple conditions on a single entity. All or any condition(s)
         must pass, depending on 'logic'.
         """
         if logic == "and":
@@ -266,9 +259,7 @@ class FailurePolicy:
 
     @staticmethod
     def _select_entities(entity_ids: Set[str], rule: FailureRule) -> Set[str]:
-        """
-        From the matched IDs, pick which entities fail under the given rule_type.
-        """
+        """From the matched IDs, pick which entities fail under the given rule_type."""
         if not entity_ids:
             return set()
 
@@ -290,8 +281,7 @@ class FailurePolicy:
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],
     ) -> None:
-        """
-        Expand failures among any node/link that shares a risk group
+        """Expand failures among any node/link that shares a risk group
         with a failed entity. BFS until no new failures.
         """
         # We'll handle node + link expansions only. (Risk group expansions are separate.)
@@ -344,8 +334,7 @@ class FailurePolicy:
         failed_rgs: Set[str],
         all_risk_groups: Dict[str, Any],
     ) -> None:
-        """
-        If we fail a risk_group, also fail its descendants recursively.
+        """If we fail a risk_group, also fail its descendants recursively.
 
         We assume each entry in all_risk_groups is something like:
             rg_name -> RiskGroup object or { 'name': .., 'children': [...] }
@@ -378,8 +367,7 @@ class FailurePolicy:
 
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
-    """
-    Evaluate a single FailureCondition against entity attributes.
+    """Evaluate a single FailureCondition against entity attributes.
 
     Operators supported:
       ==, !=, <, <=, >, >=

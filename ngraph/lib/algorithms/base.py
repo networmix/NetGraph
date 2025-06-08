@@ -27,17 +27,14 @@ MIN_FLOW = 2**-12
 
 
 class PathAlg(IntEnum):
-    """
-    Types of path finding algorithms
-    """
+    """Types of path finding algorithms"""
 
     SPF = 1
     KSP_YENS = 2
 
 
 class EdgeSelect(IntEnum):
-    """
-    Edge selection criteria determining which edges are considered
+    """Edge selection criteria determining which edges are considered
     for path-finding between a node and its neighbor(s).
     """
 
