@@ -1,11 +1,12 @@
 from math import isclose
-import pytest
-from unittest.mock import MagicMock
 from typing import Dict, Set, Tuple
+from unittest.mock import MagicMock
 
-from ngraph.lib.graph import StrictMultiDiGraph, NodeID, EdgeID, AttrDict
+import pytest
+
+from ngraph.lib.algorithms.base import Cost
 from ngraph.lib.algorithms.edge_select import EdgeSelect, edge_select_fabric
-from ngraph.lib.algorithms.base import Cost, MIN_CAP
+from ngraph.lib.graph import AttrDict, EdgeID, NodeID, StrictMultiDiGraph
 
 
 @pytest.fixture

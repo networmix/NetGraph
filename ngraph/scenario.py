@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-import yaml
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from ngraph.network import Network, RiskGroup
-from ngraph.failure_policy import (
-    FailurePolicy,
-    FailureRule,
-    FailureCondition,
-)
-from ngraph.traffic_demand import TrafficDemand
-from ngraph.results import Results
-from ngraph.workflow.base import WorkflowStep, WORKFLOW_STEP_REGISTRY
+import yaml
+
 from ngraph.blueprints import expand_network_dsl
 from ngraph.components import ComponentsLibrary
+from ngraph.failure_policy import (
+    FailureCondition,
+    FailurePolicy,
+    FailureRule,
+)
+from ngraph.network import Network, RiskGroup
+from ngraph.results import Results
+from ngraph.traffic_demand import TrafficDemand
+from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 
 
-@dataclass(slots=True)
+@dataclass
 class Scenario:
     """
     Represents a complete scenario for building and executing network workflows.
@@ -153,7 +154,7 @@ class Scenario:
                 if rg.disabled:
                     network_obj.disable_risk_group(rg.name, recursive=True)
 
-        return cls(
+        return Scenario(
             network=network_obj,
             failure_policy=failure_policy,
             traffic_demands=traffic_demands,

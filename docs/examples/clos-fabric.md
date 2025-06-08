@@ -7,7 +7,7 @@ This example demonstrates how to model and analyze a 3-tier Clos network fabric 
 We'll create two separate 3-tier Clos networks and analyze the maximum flow capacity between them. This scenario showcases:
 
 - Hierarchical blueprint composition
-- Complex adjacency patterns  
+- Complex adjacency patterns
 - Flow analysis with different placement policies
 - ECMP vs UCMP traffic distribution
 
@@ -102,7 +102,7 @@ print(f"Maximum flow with ECMP: {max_flow_ecmp}")
 
 The result `{('b1|b2', 'b1|b2'): 256.0}` means:
 - **Source**: All t1 nodes in both b1 and b2 segments of my_clos1
-- **Sink**: All t1 nodes in both b1 and b2 segments of my_clos2  
+- **Sink**: All t1 nodes in both b1 and b2 segments of my_clos2
 - **Capacity**: Maximum flow of 256.0 units
 
 ## Traffic Engineering Comparison
@@ -115,7 +115,7 @@ The result `{('b1|b2', 'b1|b2'): 256.0}` means:
 # ECMP: Equal distribution across all paths
 max_flow_ecmp = network.max_flow(
     source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1", 
+    sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine",
     flow_placement=FlowPlacement.EQUAL_BALANCED
 )
@@ -124,7 +124,7 @@ max_flow_ecmp = network.max_flow(
 max_flow_ucmp = network.max_flow(
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine", 
+    mode="combine",
     flow_placement=FlowPlacement.PROPORTIONAL
 )
 

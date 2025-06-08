@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Hashable, List, Optional, Set
 
-from ngraph.lib.algorithms.calc_capacity import calc_graph_capacity
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.lib.algorithms.calc_capacity import calc_graph_capacity
 from ngraph.lib.graph import EdgeID, NodeID, StrictMultiDiGraph
 
 
@@ -120,9 +120,9 @@ def place_flow_on_graph(
                                     edges[eid][3][flows_attr].setdefault(
                                         flow_index, 0.0
                                     )
-                                    edges[eid][3][flows_attr][
-                                        flow_index
-                                    ] += edge_subflow
+                                    edges[eid][3][flows_attr][flow_index] += (
+                                        edge_subflow
+                                    )
 
                 elif flow_placement == FlowPlacement.EQUAL_BALANCED:
                     # Split equally across all parallel edges in edge_list.
@@ -153,7 +153,7 @@ def remove_flow_from_graph(
         flows_attr: The per-flow attribute name on edges.
     """
     edges = flow_graph.get_edges()
-    for edge_id, (_, _, _, edge_attr) in edges.items():
+    for _edge_id, (_, _, _, edge_attr) in edges.items():
         if flow_index is not None and flow_index in edge_attr[flows_attr]:
             # Subtract only the specified flow
             removed = edge_attr[flows_attr][flow_index]

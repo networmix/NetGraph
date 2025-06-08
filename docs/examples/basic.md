@@ -1,6 +1,6 @@
 # Basic Example
 
-In this toy example, we'll create a simple graph with parallel edges and alternative paths, then run max flow analysis with different flow placement policies. 
+In this toy example, we'll create a simple graph with parallel edges and alternative paths, then run max flow analysis with different flow placement policies.
 
 ### Creating a Simple Network
 
@@ -27,7 +27,7 @@ from ngraph.lib.algorithms.base import FlowPlacement
 scenario_yaml = """
 network:
   name: "fundamentals_example"
-  
+
   # Create individual nodes
   nodes:
     A: {}
@@ -48,8 +48,8 @@ network:
       link_params:
         capacity: 2
         cost: 1
-    
-    # Parallel edges between B→C  
+
+    # Parallel edges between B→C
     - source: B
       target: C
       link_params:
@@ -60,7 +60,7 @@ network:
       link_params:
         capacity: 2
         cost: 1
-    
+
     # Alternative path A→D→C
     - source: A
       target: D
@@ -102,9 +102,9 @@ print(f"Flow on shortest paths: {max_flow_shortest}")
 
 # 3. Equal-balanced flow placement on shortest paths
 max_flow_shortest_balanced = network.max_flow(
-    source_path="A", 
-    sink_path="C", 
-    shortest_path=True, 
+    source_path="A",
+    sink_path="C",
+    shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED
 )
 print(f"Equal-balanced flow: {max_flow_shortest_balanced}")

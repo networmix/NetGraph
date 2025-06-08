@@ -78,7 +78,7 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
             node_count: 4
             name_template: "leaf-{node_num}"
         spine:
-            node_count: 2  
+            node_count: 2
             name_template: "spine-{node_num}"
     adjacency:
         - source: /leaf

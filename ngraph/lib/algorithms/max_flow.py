@@ -1,8 +1,8 @@
-from ngraph.lib.algorithms.spf import spf
-from ngraph.lib.algorithms.place_flow import place_flow_on_graph
 from ngraph.lib.algorithms.base import EdgeSelect, FlowPlacement
-from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 from ngraph.lib.algorithms.flow_init import init_flow_graph
+from ngraph.lib.algorithms.place_flow import place_flow_on_graph
+from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 
 def calc_max_flow(

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Set
-from random import random, sample
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from random import random, sample
+from typing import Any, Dict, List, Literal, Set
 
 
 @dataclass
@@ -126,7 +126,7 @@ class FailurePolicy:
         self,
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],
-        network_risk_groups: Dict[str, Any] = None,
+        network_risk_groups: Dict[str, Any] | None = None,
     ) -> List[str]:
         """
         Identify which entities fail given the defined rules, then optionally

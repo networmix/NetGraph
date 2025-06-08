@@ -9,19 +9,19 @@ from typing import (
     Tuple,
 )
 
-from ngraph.lib.graph import (
-    AttrDict,
-    NodeID,
-    EdgeID,
-    StrictMultiDiGraph,
-)
 from ngraph.lib.algorithms.base import (
+    MIN_CAP,
     Cost,
     EdgeSelect,
-    MIN_CAP,
 )
 from ngraph.lib.algorithms.edge_select import edge_select_fabric
 from ngraph.lib.algorithms.path_utils import resolve_to_paths
+from ngraph.lib.graph import (
+    AttrDict,
+    EdgeID,
+    NodeID,
+    StrictMultiDiGraph,
+)
 
 
 def _spf_fast_all_min_cost_dijkstra(
@@ -50,7 +50,7 @@ def _spf_fast_all_min_cost_dijkstra(
             from the predecessor to that node. If multipath=True, there may be
             multiple predecessors for the same node.
     """
-    outgoing_adjacencies = graph._adj
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 
@@ -115,7 +115,7 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
           - pred: For each reachable node, a dict of predecessor -> list of edges
             from the predecessor to that node.
     """
-    outgoing_adjacencies = graph._adj
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 
@@ -223,7 +223,11 @@ def spf(
         else:
             edge_select_func = edge_select_fabric(edge_select)
 
-    outgoing_adjacencies = graph._adj
+    # Ensure edge_select_func is set at this point
+    if edge_select_func is None:
+        edge_select_func = edge_select_fabric(edge_select)
+
+    outgoing_adjacencies = graph._adj  # type: ignore[attr-defined]
     if src_node not in outgoing_adjacencies:
         raise KeyError(f"Source node '{src_node}' is not in the graph.")
 
@@ -284,7 +288,7 @@ def ksp(
         ]
     ] = None,
     max_k: Optional[int] = None,
-    max_path_cost: Optional[Cost] = float("inf"),
+    max_path_cost: Cost = float("inf"),
     max_path_cost_factor: Optional[float] = None,
     multipath: bool = True,
     excluded_edges: Optional[Set[EdgeID]] = None,
@@ -370,7 +374,7 @@ def ksp(
         # For each realized path from src->dst in the last SPF
         for path in resolve_to_paths(src_node, dst_node, root_pred):
             # Spur node iteration
-            for idx, (spur_node, edges_list) in enumerate(path[:-1]):
+            for idx, (spur_node, _edges_list) in enumerate(path[:-1]):
                 # The path up to but not including spur_node
                 root_path = path[:idx]
 
@@ -380,7 +384,7 @@ def ksp(
 
                 # Remove edges (and possibly nodes) used in previous shortest paths that
                 # share the same root_path
-                for sp_costs, sp_pred, sp_ex_e, sp_ex_n in shortest_paths:
+                for _sp_costs, sp_pred, sp_ex_e, sp_ex_n in shortest_paths:
                     for p in resolve_to_paths(src_node, dst_node, sp_pred):
                         if p[:idx] == root_path:
                             excl_e.update(sp_ex_e)

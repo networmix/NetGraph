@@ -1,12 +1,12 @@
+import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
-import statistics
-from typing import Dict, List, Optional, Tuple, Union, NamedTuple
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
 from ngraph.lib.algorithms import base
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.demand import Demand
-from ngraph.lib.flow_policy import FlowPolicyConfig, FlowPolicy, get_flow_policy
+from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Network, Node
 from ngraph.traffic_demand import TrafficDemand
@@ -177,6 +177,13 @@ class TrafficManager:
         if isinstance(placement_rounds, str) and placement_rounds.lower() == "auto":
             placement_rounds = self._estimate_rounds()
 
+        # Ensure placement_rounds is an int for range() and arithmetic operations
+        placement_rounds_int = (
+            int(placement_rounds)
+            if isinstance(placement_rounds, str)
+            else placement_rounds
+        )
+
         # Group demands by priority class
         prio_map: Dict[int, List[Demand]] = defaultdict(list)
         for dmd in self.demands:
@@ -188,9 +195,9 @@ class TrafficManager:
         for priority_class in sorted_priorities:
             demands_in_class = prio_map[priority_class]
 
-            for round_idx in range(placement_rounds):
+            for round_idx in range(placement_rounds_int):
                 placed_in_this_round = 0.0
-                rounds_left = placement_rounds - round_idx
+                rounds_left = placement_rounds_int - round_idx
 
                 for demand in demands_in_class:
                     leftover = demand.volume - demand.placed_demand
@@ -257,8 +264,8 @@ class TrafficManager:
         for i, dmd in enumerate(self.demands):
             if not dmd.flow_policy:
                 continue
-            for f_idx, flow_obj in dmd.flow_policy.flows.items():
-                details[(i, f_idx)] = {
+            for j, (_f_idx, flow_obj) in enumerate(dmd.flow_policy.flows.items()):
+                details[(i, j)] = {
                     "placed_flow": flow_obj.placed_flow,
                     "src_node": flow_obj.src_node,
                     "dst_node": flow_obj.dst_node,
@@ -279,7 +286,7 @@ class TrafficManager:
 
         for edge_key, edge_tuple in self.graph.get_edges().items():
             attr_dict = edge_tuple[3]
-            usage[edge_key] = attr_dict.get("flow", 0.0)
+            usage[str(edge_key)] = attr_dict.get("flow", 0.0)
 
         return usage
 
@@ -331,8 +338,8 @@ class TrafficManager:
                         total_volume=total_volume,
                         placed_volume=placed_volume,
                         unplaced_volume=unplaced_volume,
-                        src=dmd.src_node,
-                        dst=dmd.dst_node,
+                        src=str(dmd.src_node),
+                        dst=str(dmd.dst_node),
                     )
                 )
 

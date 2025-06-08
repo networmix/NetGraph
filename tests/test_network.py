@@ -1,12 +1,12 @@
 import pytest
+
 from ngraph.network import (
+    Link,
     Network,
     Node,
-    Link,
     RiskGroup,
     new_base64_uuid,
 )
-from ngraph.lib.graph import StrictMultiDiGraph
 
 
 def test_new_base64_uuid_length_and_uniqueness():
@@ -593,7 +593,7 @@ def test_find_links():
     # No filter => returns all
     all_links = net.find_links()
     assert len(all_links) == 2
-    assert set(l.id for l in all_links) == {link_a_c.id, link_b_c.id}
+    assert set(link.id for link in all_links) == {link_a_c.id, link_b_c.id}
 
     # Filter by source pattern "srcA"
     a_links = net.find_links(source_regex="^srcA$")

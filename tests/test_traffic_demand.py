@@ -1,4 +1,3 @@
-import pytest
 from ngraph.traffic_demand import TrafficDemand
 
 

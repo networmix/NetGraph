@@ -19,7 +19,7 @@ from ngraph.scenario import Scenario
 # Create from YAML
 scenario = Scenario.from_yaml(yaml_content)
 
-# Create programmatically  
+# Create programmatically
 scenario = Scenario()
 scenario.network = Network()
 scenario.run()
@@ -118,7 +118,7 @@ from ngraph.traffic_demand import TrafficDemand
 demand = TrafficDemand(
     name="web_traffic",
     source_path="web_servers",
-    sink_path="databases", 
+    sink_path="databases",
     volume=1000,
     mode="full_mesh"
 )
@@ -207,7 +207,7 @@ restored_graph = from_digraph(nx_digraph)
 restored_graph = from_graph(nx_graph)
 ```
 
-### Graph Algorithms  
+### Graph Algorithms
 Low-level graph analysis functions.
 
 ```python

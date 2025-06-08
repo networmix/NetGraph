@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import yaml
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
+import yaml
 
 
-@dataclass(slots=True)
+@dataclass
 class Component:
     """
     A generic component that can represent chassis, line cards, optics, etc.
@@ -124,7 +125,7 @@ class Component:
         return data
 
 
-@dataclass(slots=True)
+@dataclass
 class ComponentsLibrary:
     """
     Holds a collection of named Components. Each entry is a top-level "template"
@@ -207,7 +208,7 @@ class ComponentsLibrary:
         components_map: Dict[str, Component] = {}
         for comp_name, comp_def in data.items():
             components_map[comp_name] = cls._build_component(comp_name, comp_def)
-        return cls(components=components_map)
+        return ComponentsLibrary(components=components_map)
 
     @classmethod
     def _build_component(cls, name: str, definition_data: Dict[str, Any]) -> Component:

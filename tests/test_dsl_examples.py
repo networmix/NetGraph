@@ -263,8 +263,8 @@ failure_policy:
 
     scenario = Scenario.from_yaml(yaml_content)
     assert scenario.failure_policy is not None
-    assert scenario.failure_policy.fail_shared_risk_groups == True
-    assert scenario.failure_policy.fail_risk_group_children == False
+    assert scenario.failure_policy.fail_shared_risk_groups
+    assert not scenario.failure_policy.fail_risk_group_children
     assert len(scenario.failure_policy.rules) == 1
     rule = scenario.failure_policy.rules[0]
     assert rule.entity_scope == "node"
@@ -313,7 +313,7 @@ network:
   groups:
     my_clos1:
       use_blueprint: test_bp
-  
+
   node_overrides:
     - path: "^my_clos1/switches/switch-(1|3)$"
       disabled: true
@@ -344,7 +344,7 @@ network:
     group2:
       node_count: 2
       name_template: "node-{node_num}"
-  
+
   adjacency:
     - source: /group1
       target: /group2
@@ -352,7 +352,7 @@ network:
       link_params:
         capacity: 100
         cost: 10
-  
+
   link_overrides:
     - source: "^group1/node-1$"
       target: "^group2/node-1$"
@@ -386,7 +386,7 @@ blueprints:
         node_count: 2
         name_template: "rack-{node_num}"
       plane2_rack:
-        node_count: 2  
+        node_count: 2
         name_template: "rack-{node_num}"
       spine:
         node_count: 2

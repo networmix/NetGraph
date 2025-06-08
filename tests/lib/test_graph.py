@@ -1,5 +1,5 @@
-import pytest
 import networkx as nx
+import pytest
 
 from ngraph.lib.graph import StrictMultiDiGraph
 

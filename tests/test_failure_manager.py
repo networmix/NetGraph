@@ -1,14 +1,15 @@
 """Tests for the FailureManager class."""
 
-import pytest
-from unittest.mock import MagicMock
 from typing import List
+from unittest.mock import MagicMock
 
+import pytest
+
+from ngraph.failure_manager import FailureManager
+from ngraph.failure_policy import FailurePolicy
 from ngraph.network import Network
 from ngraph.traffic_demand import TrafficDemand
-from ngraph.traffic_manager import TrafficManager, TrafficResult
-from ngraph.failure_policy import FailurePolicy
-from ngraph.failure_manager import FailureManager
+from ngraph.traffic_manager import TrafficResult
 
 
 @pytest.fixture

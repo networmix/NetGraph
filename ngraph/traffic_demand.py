@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from ngraph.lib.flow_policy import FlowPolicyConfig, FlowPolicy
+from ngraph.lib.flow_policy import FlowPolicy, FlowPolicyConfig
 from ngraph.network import new_base64_uuid
 
 
-@dataclass(slots=True)
+@dataclass
 class TrafficDemand:
     """
     Represents a single traffic demand in a network.
@@ -16,7 +16,7 @@ class TrafficDemand:
         priority (int): A priority class for this demand (default=0).
         demand (float): The total demand volume (default=0.0).
         demand_placed (float): The portion of this demand that has been placed so far.
-        flow_policy_config ((Optional[FlowPolicyConfig]): The routing/placement policy config.
+        flow_policy_config (Optional[FlowPolicyConfig]): The routing/placement policy config.
         flow_policy (Optional[FlowPolicy]): A fully constructed FlowPolicy instance.
             If provided, it overrides flow_policy_config.
         mode (str): Expansion mode for generating sub-demands.

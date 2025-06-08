@@ -4,7 +4,7 @@ import base64
 import re
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.lib.algorithms.max_flow import calc_max_flow
@@ -21,7 +21,7 @@ def new_base64_uuid() -> str:
     return base64.urlsafe_b64encode(uuid.uuid4().bytes).decode("ascii").rstrip("=")
 
 
-@dataclass(slots=True)
+@dataclass
 class Node:
     """
     Represents a node in the network.
@@ -42,7 +42,7 @@ class Node:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class Link:
     """
     Represents a directed link between two nodes in the network.
@@ -74,7 +74,7 @@ class Link:
         self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
 
 
-@dataclass(slots=True)
+@dataclass
 class RiskGroup:
     """
     Represents a shared-risk or failure domain, which may have nested children.
@@ -92,7 +92,7 @@ class RiskGroup:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass(slots=True)
+@dataclass
 class Network:
     """
     A container for network nodes and links.
@@ -312,7 +312,7 @@ class Network:
             sources (List[Node]): List of source nodes.
             sinks (List[Node]): List of sink nodes.
             shortest_path (bool): If True, restrict flows to shortest paths only.
-            flow_placement (FlowPlacement or None): Strategy for placing flow among
+            flow_placement (Optional[FlowPlacement]): Strategy for placing flow among
                 parallel equal-cost paths. If None, defaults to FlowPlacement.PROPORTIONAL.
 
         Returns:
@@ -450,8 +450,8 @@ class Network:
         Search for links using optional regex patterns for source or target node names.
 
         Args:
-            source_regex (str or None): Regex to match link.source. If None, matches all sources.
-            target_regex (str or None): Regex to match link.target. If None, matches all targets.
+            source_regex (Optional[str]): Regex to match link.source. If None, matches all sources.
+            target_regex (Optional[str]): Regex to match link.target. If None, matches all targets.
             any_direction (bool): If True, also match reversed source/target.
 
         Returns:

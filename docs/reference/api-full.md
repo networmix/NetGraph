@@ -1,6 +1,6 @@
 # NetGraph API Reference (Auto-Generated)
 
-This is the complete auto-generated API documentation for NetGraph. 
+This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**
@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 05, 2025 at 03:11 UTC
+**Generated from source code on:** June 08, 2025 at 01:15 UTC
 
 ---
 
@@ -439,7 +439,7 @@ Attributes:
     priority (int): A priority class for this demand (default=0).
     demand (float): The total demand volume (default=0.0).
     demand_placed (float): The portion of this demand that has been placed so far.
-    flow_policy_config ((Optional[FlowPolicyConfig]): The routing/placement policy config.
+    flow_policy_config (Optional[FlowPolicyConfig]): The routing/placement policy config.
     flow_policy (Optional[FlowPolicy]): A fully constructed FlowPolicy instance.
         If provided, it overrides flow_policy_config.
     mode (str): Expansion mode for generating sub-demands.
@@ -532,7 +532,7 @@ Attributes:
 
 **Methods:**
 
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any]' = None) -> 'List[str]'`
+- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
   - Identify which entities fail given the defined rules, then optionally
 
 ### FailureRule
@@ -729,7 +729,7 @@ Inherits from:
   - Add a directed edge from u_for_edge to v_for_edge.
 - `add_edges_from(self, ebunch_to_add, **attr)`
   - Add all the edges in ebunch_to_add.
-- `add_node(self, n: 'NodeID', **attr: 'Any') -> 'None'`
+- `add_node(self, node_for_adding: 'NodeID', **attr: 'Any') -> 'None'`
   - Add a single node, disallowing duplicates.
 - `add_nodes_from(self, nodes_for_adding, **attr)`
   - Add multiple nodes.
@@ -773,8 +773,8 @@ Inherits from:
   - Returns an iterator over nodes contained in nbunch that are
 - `neighbors(self, n)`
   - Returns an iterator over successor nodes of n.
-- `new_edge_key(src_node: 'NodeID', dst_node: 'NodeID') -> 'EdgeID'`
-  - Generate a unique edge key.
+- `new_edge_key(self, u, v)`
+  - Returns an unused key for edges between nodes `u` and `v`.
 - `number_of_edges(self, u=None, v=None)`
   - Returns the number of edges between two nodes.
 - `number_of_nodes(self)`
@@ -889,7 +889,7 @@ Returns:
 
 ## ngraph.lib.algorithms.spf
 
-### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float, NoneType] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
+### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
 
 Generator of up to k shortest paths from src_node to dst_node using a Yen-like algorithm.
 
@@ -1087,8 +1087,8 @@ Attributes:
 **Attributes:**
 
 - `name` (str)
-- `source_path` (Pattern[str])
-- `sink_path` (Pattern[str])
+- `source_path` (str)
+- `sink_path` (str)
 - `mode` (str) = combine
 - `probe_reverse` (bool) = False
 - `shortest_path` (bool) = False

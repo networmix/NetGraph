@@ -6,7 +6,7 @@ from typing import Dict, Iterator, List, Optional, Set, Tuple
 from ngraph.lib.algorithms.base import Cost, EdgeSelect
 from ngraph.lib.algorithms.edge_select import edge_select_fabric
 from ngraph.lib.algorithms.path_utils import resolve_to_paths
-from ngraph.lib.graph import EdgeID, StrictMultiDiGraph, NodeID
+from ngraph.lib.graph import AttrDict, EdgeID, NodeID, StrictMultiDiGraph
 from ngraph.lib.path import Path
 
 
@@ -86,8 +86,10 @@ class PathBundle:
         """Compare two PathBundles by cost (for sorting)."""
         return self.cost < other.cost
 
-    def __eq__(self, other: PathBundle) -> bool:
+    def __eq__(self, other: object) -> bool:
         """Check equality of two PathBundles by (src, dst, cost, edges)."""
+        if not isinstance(other, PathBundle):
+            return False
         return (
             self.src_node == other.src_node
             and self.dst_node == other.dst_node
@@ -96,17 +98,12 @@ class PathBundle:
         )
 
     def __hash__(self) -> int:
-        """Create a unique hash based on (src, dst, cost, sorted edges)."""
-        return hash(
-            (self.src_node, self.dst_node, self.cost, tuple(sorted(self.edges)))
-        )
+        """Create a unique hash based on (src, dst, cost, frozenset of edges)."""
+        return hash((self.src_node, self.dst_node, self.cost, frozenset(self.edges)))
 
     def __repr__(self) -> str:
         """String representation of this PathBundle."""
-        return (
-            f"PathBundle("
-            f"{self.src_node}, {self.dst_node}, {self.pred}, {self.cost})"
-        )
+        return f"PathBundle({self.src_node}, {self.dst_node}, {self.pred}, {self.cost})"
 
     def add(self, other: PathBundle) -> PathBundle:
         """
@@ -177,6 +174,10 @@ class PathBundle:
                 raise ValueError(
                     "A StrictMultiDiGraph `graph` is required when resolve_edges=True."
                 )
+            if edge_select is None:
+                raise ValueError(
+                    "edge_select must be provided when resolve_edges=True."
+                )
             edge_selector = edge_select_fabric(
                 edge_select,
                 cost_attr=cost_attr,
@@ -185,24 +186,32 @@ class PathBundle:
         else:
             edge_selector = None
 
-        src_node = path[0][0]
-        dst_node = path[-1][0]
+        src_node = path.path_tuple[0][0]
+        dst_node = path.path_tuple[-1][0]
         pred_map: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {src_node: {}}
         total_cost: Cost = 0
 
         # Build the predecessor map from each hop
-        for (a_node, a_edges), (z_node, _) in zip(path[:-1], path[1:]):
+        for (a_node, a_edges), (z_node, _) in zip(
+            path.path_tuple[:-1], path.path_tuple[1:], strict=True
+        ):
             pred_map.setdefault(z_node, {})
             # If we're not resolving edges, just copy whatever the path has
             if not resolve_edges:
                 pred_map[z_node][a_node] = list(a_edges)
             else:
                 # Re-select edges from a_node to z_node
-                min_cost, edge_list = edge_selector(
-                    graph, a_node, z_node, graph[a_node][z_node]
-                )
-                pred_map[z_node][a_node] = edge_list
-                total_cost += min_cost
+                if edge_selector is not None and graph is not None:
+                    # Convert edges_dict to the expected Dict[EdgeID, AttrDict] format
+                    # Since EdgeID is just Hashable, we can cast the keys directly
+                    typed_edges_dict: Dict[EdgeID, AttrDict] = {
+                        k: v for k, v in graph[a_node][z_node].items()
+                    }
+                    min_cost, edge_list = edge_selector(
+                        graph, a_node, z_node, typed_edges_dict, None, None
+                    )
+                    pred_map[z_node][a_node] = edge_list
+                    total_cost += min_cost
 
         if resolve_edges:
             return cls(src_node, dst_node, pred_map, total_cost)

@@ -4,12 +4,13 @@ import copy
 import statistics
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Optional, Tuple, Any
+from typing import Any, Dict, List, Optional, Tuple
 
+from ngraph.failure_policy import FailurePolicy
+from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.network import Network
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficManager, TrafficResult
-from ngraph.failure_policy import FailurePolicy
 
 
 class FailureManager:
@@ -29,7 +30,7 @@ class FailureManager:
         network: Network,
         traffic_demands: List[TrafficDemand],
         failure_policy: Optional[FailurePolicy] = None,
-        default_flow_policy_config=None,
+        default_flow_policy_config: Optional[FlowPolicyConfig] = None,
     ) -> None:
         """
         Initialize a FailureManager.
@@ -56,7 +57,7 @@ class FailureManager:
 
         # Collect node/links as dicts {id: attrs}, matching FailurePolicy expectations
         node_map = {n_name: n.attrs for n_name, n in self.network.nodes.items()}
-        link_map = {l_id: l.attrs for l_id, l in self.network.links.items()}
+        link_map = {link_id: link.attrs for link_id, link in self.network.links.items()}
 
         failed_ids = self.failure_policy.apply_failures(node_map, link_map)
 
@@ -84,7 +85,8 @@ class FailureManager:
         tmgr = TrafficManager(
             network=self.network,
             traffic_demands=copy.deepcopy(self.traffic_demands),
-            default_flow_policy_config=self.default_flow_policy_config,
+            default_flow_policy_config=self.default_flow_policy_config
+            or FlowPolicyConfig.SHORTEST_PATHS_ECMP,
         )
         tmgr.build_graph()
         tmgr.expand_demands()

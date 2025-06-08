@@ -1,13 +1,10 @@
-import pytest
+from ngraph.lib.algorithms.calc_capacity import FlowPlacement
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.algorithms.place_flow import (
     place_flow_on_graph,
     remove_flow_from_graph,
 )
-from ngraph.lib.algorithms.calc_capacity import FlowPlacement
-
 from ngraph.lib.algorithms.spf import spf
-from tests.lib.algorithms.sample_graphs import *
 
 
 class TestPlaceFlowOnGraph:
@@ -144,7 +141,7 @@ class TestPlaceFlowOnGraph:
         assert flow_placement_meta.nodes == {"A", "C", "B"}
         assert flow_placement_meta.edges == {0, 2, 4}
 
-    def test_place_flow_on_graph_line1_proportional(self, line1):
+    def test_place_flow_on_graph_line1_proportional_partial(self, line1):
         """
         In two steps, place 3 units of flow, then attempt another 3.
         Check partial flow placement when capacity is partially exhausted.

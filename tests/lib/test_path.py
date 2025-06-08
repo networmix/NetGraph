@@ -1,6 +1,7 @@
 import pytest
-from ngraph.lib.graph import StrictMultiDiGraph, EdgeID
+
 from ngraph.lib.algorithms.base import PathTuple
+from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.path import Path
 
 

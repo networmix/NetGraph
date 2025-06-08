@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Optional, Set
 
-from ngraph.network import Network, Node, Link
 from ngraph.components import ComponentsLibrary
+from ngraph.network import Network, Node
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)

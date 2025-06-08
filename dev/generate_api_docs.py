@@ -2,15 +2,19 @@
 """
 Generate API documentation for NetGraph
 This script should be run from the project root directory.
+
+By default, outputs documentation to stdout.
+Use --write-file to write to docs/reference/api-full.md instead.
 """
 
-import inspect
-import importlib
-import sys
-import os
+import argparse
 import dataclasses
-from pathlib import Path
+import importlib
+import inspect
+import os
+import sys
 from datetime import datetime
+from pathlib import Path
 
 # Add the current directory to Python path for development installs
 if os.path.exists("ngraph"):
@@ -61,7 +65,7 @@ def get_class_info(cls):
                 try:
                     # Try to call the factory to get a representative value
                     default_val = field.default_factory()
-                except:
+                except Exception:
                     default_val = f"{field.default_factory.__name__}()"
             else:
                 default_val = None
@@ -145,8 +149,16 @@ def document_module(module_name):
     return doc
 
 
-def generate_api_documentation():
-    """Generate the complete API documentation."""
+def generate_api_documentation(output_to_file=False):
+    """Generate the complete API documentation.
+
+    Args:
+        output_to_file (bool): If True, write to docs/reference/api-full.md.
+                               If False, return the documentation string.
+
+    Returns:
+        str: The generated documentation (when output_to_file=False)
+    """
 
     # Modules to document (in order)
     modules = [
@@ -177,7 +189,7 @@ def generate_api_documentation():
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M UTC")
     header = f"""# NetGraph API Reference (Auto-Generated)
 
-This is the complete auto-generated API documentation for NetGraph. 
+This is the complete auto-generated API documentation for NetGraph.
 For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 > **📋 Documentation Types:**
@@ -230,19 +242,45 @@ help(ngraph.network.Network.max_flow)
 
     doc += footer
 
-    # Ensure output directory exists
-    output_path = Path("docs/reference/api-full.md")
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_to_file:
+        # Ensure output directory exists
+        output_path = Path("docs/reference/api-full.md")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write to file
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(doc)
+        # Write to file
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(doc)
 
-    print(f"✅ API documentation generated successfully!")
-    print(f"📄 Written to: {output_path}")
-    print(f"📊 Size: {len(doc):,} characters")
-    print(f"📚 Modules documented: {len(modules)}")
+        print("✅ API documentation generated successfully!")
+        print(f"📄 Written to: {output_path}")
+        print(f"📊 Size: {len(doc):,} characters")
+        print(f"📚 Modules documented: {len(modules)}")
+    else:
+        # Return the documentation string
+        return doc
 
 
 if __name__ == "__main__":
-    generate_api_documentation()
+    parser = argparse.ArgumentParser(
+        description="Generate API documentation for NetGraph",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python generate_api_docs.py                # Output to stdout
+  python generate_api_docs.py --write-file   # Write to docs/reference/api-full.md
+        """,
+    )
+    parser.add_argument(
+        "--write-file",
+        action="store_true",
+        help="Write documentation to docs/reference/api-full.md instead of stdout",
+    )
+
+    args = parser.parse_args()
+
+    if args.write_file:
+        generate_api_documentation(output_to_file=True)
+    else:
+        # Output to stdout
+        doc = generate_api_documentation(output_to_file=False)
+        print(doc)

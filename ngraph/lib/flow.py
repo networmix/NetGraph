@@ -19,14 +19,15 @@ class FlowIndex(NamedTuple):
     Attributes:
         src_node (NodeID): The source node of the flow.
         dst_node (NodeID): The destination node of the flow.
-        flow_class (int): Integer representing the 'class' of this flow (e.g., traffic class).
-        flow_id (str): A unique ID for this flow.
+        flow_class (Hashable): Identifier representing the 'class' of this flow (e.g., traffic class).
+                               Can be int, str, or any hashable type for flexibility.
+        flow_id (int): A unique ID for this flow.
     """
 
     src_node: NodeID
     dst_node: NodeID
-    flow_class: int
-    flow_id: str
+    flow_class: Hashable
+    flow_id: int
 
 
 class Flow:
@@ -42,7 +43,7 @@ class Flow:
     def __init__(
         self,
         path_bundle: PathBundle,
-        flow_index: Hashable,
+        flow_index: FlowIndex,
         excluded_edges: Optional[Set[EdgeID]] = None,
         excluded_nodes: Optional[Set[NodeID]] = None,
     ) -> None:
@@ -51,12 +52,12 @@ class Flow:
 
         Args:
             path_bundle (PathBundle): The set of paths this flow uses.
-            flow_index (Hashable): A unique identifier for this flow (e.g., MPLS label, tuple, etc.).
+            flow_index (FlowIndex): A unique identifier for this flow.
             excluded_edges (Optional[Set[EdgeID]]): Edges to exclude from usage.
             excluded_nodes (Optional[Set[NodeID]]): Nodes to exclude from usage.
         """
         self.path_bundle: PathBundle = path_bundle
-        self.flow_index: Hashable = flow_index
+        self.flow_index: FlowIndex = flow_index
         self.excluded_edges: Set[EdgeID] = excluded_edges or set()
         self.excluded_nodes: Set[NodeID] = excluded_nodes or set()
 

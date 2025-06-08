@@ -1,24 +1,24 @@
 import pytest
-from ngraph.network import Network, Node, Link
 
 from ngraph.blueprints import (
-    DSLExpansionContext,
     Blueprint,
+    DSLExpansionContext,
     _apply_parameters,
-    _join_paths,
     _create_link,
-    _expand_adjacency_pattern,
-    _process_direct_nodes,
-    _process_direct_links,
-    _expand_blueprint_adjacency,
     _expand_adjacency,
+    _expand_adjacency_pattern,
+    _expand_blueprint_adjacency,
     _expand_group,
-    _update_nodes,
-    _update_links,
-    _process_node_overrides,
+    _join_paths,
+    _process_direct_links,
+    _process_direct_nodes,
     _process_link_overrides,
+    _process_node_overrides,
+    _update_links,
+    _update_nodes,
     expand_network_dsl,
 )
+from ngraph.network import Link, Network, Node
 
 
 def test_join_paths():
@@ -130,10 +130,10 @@ def test_expand_adjacency_pattern_one_to_one():
     _expand_adjacency_pattern(ctx, "S", "T", "one_to_one", {"capacity": 10})
     # We expect 2 links: S1->T1, S2->T2
     assert len(ctx_net.links) == 2
-    pairs = {(l.source, l.target) for l in ctx_net.links.values()}
+    pairs = {(link.source, link.target) for link in ctx_net.links.values()}
     assert pairs == {("S1", "T1"), ("S2", "T2")}
-    for l in ctx_net.links.values():
-        assert l.capacity == 10
+    for link in ctx_net.links.values():
+        assert link.capacity == 10
 
 
 def test_expand_adjacency_pattern_one_to_one_wrap():
@@ -151,7 +151,7 @@ def test_expand_adjacency_pattern_one_to_one_wrap():
     _expand_adjacency_pattern(ctx, "S", "T", "one_to_one", {"cost": 99})
     # Expect 4 total links
     assert len(ctx_net.links) == 4
-    pairs = {(l.source, l.target) for l in ctx_net.links.values()}
+    pairs = {(link.source, link.target) for link in ctx_net.links.values()}
     expected = {
         ("S1", "T1"),
         ("S2", "T2"),
@@ -159,8 +159,8 @@ def test_expand_adjacency_pattern_one_to_one_wrap():
         ("S4", "T2"),
     }
     assert pairs == expected
-    for l in ctx_net.links.values():
-        assert l.cost == 99
+    for link in ctx_net.links.values():
+        assert link.cost == 99
 
 
 def test_expand_adjacency_pattern_one_to_one_mismatch():
@@ -853,14 +853,14 @@ def test_adjacency_one_to_one():
     # 4 total nodes => 2 from each group
     assert len(net.nodes) == 4
     # one_to_one => 2 links
-    pairs = {(l.source, l.target) for l in net.links.values()}
+    pairs = {(link.source, link.target) for link in net.links.values()}
     expected = {
         ("GroupA/GroupA-1", "GroupB/GroupB-1"),
         ("GroupA/GroupA-2", "GroupB/GroupB-2"),
     }
     assert pairs == expected
-    for l in net.links.values():
-        assert l.capacity == 99
+    for link in net.links.values():
+        assert link.capacity == 99
 
 
 def test_adjacency_one_to_one_wrap():
@@ -884,7 +884,7 @@ def test_adjacency_one_to_one_wrap():
     assert len(net.nodes) == 6
     # wrap => 4 links
     assert len(net.links) == 4
-    link_pairs = {(l.source, l.target) for l in net.links.values()}
+    link_pairs = {(link.source, link.target) for link in net.links.values()}
     expected = {
         ("Big/Big-1", "Small/Small-1"),
         ("Big/Big-2", "Small/Small-2"),
@@ -892,8 +892,8 @@ def test_adjacency_one_to_one_wrap():
         ("Big/Big-4", "Small/Small-2"),
     }
     assert link_pairs == expected
-    for l in net.links.values():
-        assert l.cost == 555
+    for link in net.links.values():
+        assert link.cost == 555
 
 
 def test_adjacency_mesh():
@@ -1210,7 +1210,7 @@ def test_expand_adjacency_with_variables_zip():
     # (A->B), (B->C), (C->A)
     assert len(net.nodes) == 3
     assert len(net.links) == 3
-    link_pairs = {(l.source, l.target) for l in net.links.values()}
+    link_pairs = {(link.source, link.target) for link in net.links.values()}
     expected = {
         ("RackA/RackA-1", "RackB/RackB-1"),
         ("RackB/RackB-1", "RackC/RackC-1"),

@@ -1,8 +1,8 @@
 from math import isclose
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from ngraph.lib.graph import StrictMultiDiGraph, NodeID, EdgeID, AttrDict
-from ngraph.lib.algorithms.base import Cost, MIN_CAP, EdgeSelect
+from ngraph.lib.algorithms.base import MIN_CAP, Cost, EdgeSelect
+from ngraph.lib.graph import AttrDict, EdgeID, NodeID, StrictMultiDiGraph
 
 
 def edge_select_fabric(

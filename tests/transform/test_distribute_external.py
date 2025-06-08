@@ -1,10 +1,11 @@
 import pytest
-from ngraph.transform.distribute_external import (
-    _StripeChooser,
-    DistributeExternalConnectivity,
-)
-from ngraph.network import Network, Node, Link
+
+from ngraph.network import Network, Node
 from ngraph.scenario import Scenario
+from ngraph.transform.distribute_external import (
+    DistributeExternalConnectivity,
+    _StripeChooser,
+)
 
 
 def make_scenario_with_network(net):

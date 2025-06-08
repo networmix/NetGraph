@@ -1,9 +1,8 @@
-import pytest
 from pathlib import Path
 
+from ngraph.failure_policy import FailurePolicy
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.scenario import Scenario
-from ngraph.failure_policy import FailurePolicy
 
 
 def test_scenario_1_build_graph() -> None:
@@ -28,32 +27,32 @@ def test_scenario_1_build_graph() -> None:
 
     # 4) Retrieve the graph built by BuildGraph
     graph = scenario.results.get("build_graph", "graph")
-    assert isinstance(
-        graph, StrictMultiDiGraph
-    ), "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
+    assert isinstance(graph, StrictMultiDiGraph), (
+        "Expected a StrictMultiDiGraph in scenario.results under key ('build_graph', 'graph')."
+    )
 
     # 5) Check the total number of nodes matches what's listed in scenario_1.yaml
     #    For a 6-node scenario, we expect 6 nodes in the final Nx graph.
     expected_nodes = 6
     actual_nodes = len(graph.nodes)
-    assert (
-        actual_nodes == expected_nodes
-    ), f"Expected {expected_nodes} nodes, found {actual_nodes}"
+    assert actual_nodes == expected_nodes, (
+        f"Expected {expected_nodes} nodes, found {actual_nodes}"
+    )
 
     # 6) Each physical link from the YAML becomes 2 directed edges in MultiDiGraph.
     #    If the YAML has 10 link definitions, we expect 2 * 10 = 20 directed edges.
     expected_links = 10
     expected_nx_edges = expected_links * 2
     actual_edges = len(graph.edges)
-    assert (
-        actual_edges == expected_nx_edges
-    ), f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
+    assert actual_edges == expected_nx_edges, (
+        f"Expected {expected_nx_edges} directed edges, found {actual_edges}"
+    )
 
     # 7) Verify the traffic demands.
     expected_demands = 4
-    assert (
-        len(scenario.traffic_demands) == expected_demands
-    ), f"Expected {expected_demands} traffic demands."
+    assert len(scenario.traffic_demands) == expected_demands, (
+        f"Expected {expected_demands} traffic demands."
+    )
 
     # 8) Check the multi-rule failure policy for "any single link".
     #    This should have exactly 1 rule that picks exactly 1 link from all links.

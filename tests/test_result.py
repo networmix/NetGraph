@@ -1,4 +1,3 @@
-import pytest
 from ngraph.results import Results
 
 

@@ -3,8 +3,8 @@ from __future__ import annotations
 import itertools
 from typing import List
 
-from ngraph.transform.base import NetworkTransform, register_transform, Scenario
 from ngraph.network import Network, Node
+from ngraph.transform.base import NetworkTransform, Scenario, register_transform
 
 
 @register_transform("EnableNodes")

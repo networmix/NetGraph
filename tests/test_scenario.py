@@ -1,17 +1,16 @@
-import pytest
-import yaml
-from typing import TYPE_CHECKING
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from ngraph.scenario import Scenario
+import pytest
+
+from ngraph.failure_policy import FailurePolicy
 from ngraph.network import Network
-from ngraph.failure_policy import FailurePolicy, FailureRule, FailureCondition
-from ngraph.traffic_demand import TrafficDemand
 from ngraph.results import Results
+from ngraph.scenario import Scenario
 from ngraph.workflow.base import (
+    WORKFLOW_STEP_REGISTRY,
     WorkflowStep,
     register_workflow_step,
-    WORKFLOW_STEP_REGISTRY,
 )
 
 if TYPE_CHECKING:

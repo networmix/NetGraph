@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict, Type, Self
+from typing import Any, Dict, Self, Type
 
 from ngraph.scenario import Scenario
 from ngraph.workflow.base import WorkflowStep, register_workflow_step

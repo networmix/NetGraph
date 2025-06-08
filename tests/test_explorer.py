@@ -1,14 +1,13 @@
-import pytest
 import logging
 
+import pytest
+
+from ngraph.components import Component, ComponentsLibrary
 from ngraph.explorer import (
     NetworkExplorer,
     TreeNode,
-    TreeStats,
-    ExternalLinkBreakdown,
 )
-from ngraph.network import Network, Node, Link
-from ngraph.components import ComponentsLibrary, Component
+from ngraph.network import Link, Network, Node
 
 
 def create_mock_components_library() -> ComponentsLibrary:

@@ -17,7 +17,7 @@ network:
       node_count: 4
       name_template: "leaf-{node_num}"
     spine:
-      node_count: 2  
+      node_count: 2
       name_template: "spine-{node_num}"
   adjacency:
     - source: /leaf
@@ -149,21 +149,21 @@ from ngraph.lib.flow_policy import FlowPlacement
 # Calculate MaxFlow from pod1 servers to pod2 servers
 max_flow = network.max_flow(
     source_path="pod1/servers",
-    sink_path="pod2/servers", 
+    sink_path="pod2/servers",
 )
 print(f"Maximum flow pod1→pod2: {max_flow}")
 
 # Calculate MaxFlow from pod1 leaf to pod2 leaf
 max_flow_leaf = network.max_flow(
     source_path="pod1/leaf",
-    sink_path="pod2/leaf", 
+    sink_path="pod2/leaf",
 )
 print(f"Maximum flow pod1→pod2 leaf: {max_flow_leaf}")
 
 # Calculate MaxFlow from pod1 spine to pod2 spine
 max_flow_spine = network.max_flow(
     source_path="pod1/spine",
-    sink_path="pod2/spine", 
+    sink_path="pod2/spine",
 )
 print(f"Maximum flow pod1→pod2 spine: {max_flow_spine}")
 ```

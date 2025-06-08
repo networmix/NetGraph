@@ -1,8 +1,9 @@
 import pytest
+
 from ngraph.transform.base import (
     TRANSFORM_REGISTRY,
-    register_transform,
     NetworkTransform,
+    register_transform,
 )
 
 
