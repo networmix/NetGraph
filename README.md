@@ -6,14 +6,27 @@
 
 NetGraph is a scenario-based network modeling and analysis framework written in Python. It allows you to design, simulate, and evaluate complex network topologies - ranging from small test cases to massive Data Center fabrics and WAN networks.
 
-## Key Features
+## Roadmap
 
-- **Scenario-Based Modeling** [DONE]: Define complete network scenarios in YAML with topology, failures, traffic, and workflow
-- **Hierarchical Blueprints** [DONE]: Reusable network templates with nested structures and parameterization
-- **Demand Placement** [DONE]: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
-- **Capacity Calculation** [DONE]: Calculate capacity with different flow placement strategies
-- **Failure Simulation** [DONE]: Model component and risk groups failures for availability analysis
-- **Network Analysis** [IN PROGRESS]: Analyze capacity, failure tolerance, and efficiency
+- ✅ **Fundamental Components**: StrictMultiGraph, base pathfinding and flow algorithms
+- ✅ **Scenario-Based Modeling**: YAML-based scenarios with Domain-Specific Language (DSL) describing topology, failures, traffic, and workflow
+- ✅ **Hierarchical Blueprints**: Reusable network templates with nested structures and parameterization
+- ✅ **JupyterLab Support**: Run NetGraph in a containerized environment with JupyterLab for interactive analysis
+- ✅ **Demand Placement**: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
+- ✅ **Capacity Calculation**: Calculate MaxFlow with different flow placement strategies
+- 🚧 **Failure Simulation**: Model component and risk groups failures for availability analysis with Monte Carlo simulation
+- 🚧 **Network Analysis**: Workflow steps and tools to analyze capacity, failure tolerance, and power/cost efficiency of network designs
+- 🚧 **Command Line Interface**: Execute scenarios from terminal with JSON output for simple automation
+- 🚧 **Python API**: API for programmatic access to scenario components and network analysis tools
+- 🚧 **Documentation and Examples**: Comprehensive guides and use cases
+- ❌ **Components Library**: Hardware/optics modeling with cost, power consumption, and capacity specifications
+- ❓ **Visualization**: Graphical representation of scenarios and results
+
+### Status Legend
+- ✅ **Done**: Feature implemented and tested
+- 🚧 **In Progress**: Feature under development
+- ❌ **Planned**: Feature planned but not yet started
+- ❓ **Future Consideration**: Feature may be added later
 
 ## Quick Start
 
