@@ -79,8 +79,7 @@ network:
         assert len(server_nodes) == 4
         assert len(leaf_nodes) == 4
         assert len(spine_nodes) == 2
-        assert len(leaf_nodes) == 4
-        assert len(spine_nodes) == 2
+# Removed duplicate assertions for leaf_nodes and spine_nodes.
 
     def test_analyzing_maximum_flow_capacity(self):
         """Test the maximum flow analysis examples from tutorial.md"""
