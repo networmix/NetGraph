@@ -156,8 +156,8 @@ def calc_max_flow(
         >>> g.add_node('A')
         >>> g.add_node('B')
         >>> g.add_node('C')
-        >>> _ = g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={})
-        >>> _ = g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={})
+        >>> g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={}, cost=1)
+        >>> g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={}, cost=1)
         >>>
         >>> # Basic usage (scalar return)
         >>> max_flow_value = calc_max_flow(g, 'A', 'C')
