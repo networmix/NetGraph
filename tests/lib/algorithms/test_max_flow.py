@@ -3,6 +3,7 @@ from pytest import approx
 
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.lib.algorithms.max_flow import calc_max_flow
+from ngraph.lib.algorithms.types import FlowSummary
 from ngraph.lib.graph import StrictMultiDiGraph
 
 
@@ -172,3 +173,271 @@ class TestMaxFlowEdgeCases:
         g.add_node("B")
         max_flow = calc_max_flow(g, "A", "B")
         assert max_flow == 0.0
+
+
+class TestMaxFlowExtended:
+    """
+    Tests for the extended max flow functionality with return_summary and return_graph flags.
+    """
+
+    def test_max_flow_return_summary_basic(self, line1):
+        """Test return_summary=True returns flow value and FlowSummary."""
+        result = calc_max_flow(line1, "A", "C", return_summary=True)
+
+        # Should return a tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+        flow_value, summary = result
+        assert flow_value == 5
+        assert isinstance(summary, FlowSummary)
+        assert summary.total_flow == 5
+
+        # Check that we have edge flows
+        assert len(summary.edge_flow) > 0
+        assert len(summary.residual_cap) > 0
+
+        # Check that source is reachable
+        assert "A" in summary.reachable
+
+        # Check min-cut is properly identified
+        assert isinstance(summary.min_cut, list)
+
+    def test_max_flow_return_graph_basic(self, line1):
+        """Test return_graph=True returns flow value and flow graph."""
+        result = calc_max_flow(line1, "A", "C", return_graph=True)
+
+        # Should return a tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+
+        flow_value, flow_graph = result
+        assert flow_value == 5
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+
+        # Flow graph should have flow attributes on edges
+        for _, _, _, d in flow_graph.edges(data=True, keys=True):
+            assert "flow" in d
+            assert "capacity" in d
+
+    def test_max_flow_return_both_flags(self, line1):
+        """Test both return_summary=True and return_graph=True."""
+        result = calc_max_flow(line1, "A", "C", return_summary=True, return_graph=True)
+
+        # Should return a tuple with 3 elements
+        assert isinstance(result, tuple)
+        assert len(result) == 3
+
+        flow_value, summary, flow_graph = result
+        assert flow_value == 5
+        assert isinstance(summary, FlowSummary)
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+        assert summary.total_flow == 5
+
+    def test_max_flow_backward_compatibility(self, line1):
+        """Test that default behavior (no flags) maintains backward compatibility."""
+        result = calc_max_flow(line1, "A", "C")
+
+        # Should return just the flow value as a scalar
+        assert isinstance(result, (int, float))
+        assert result == 5
+
+    def test_flow_summary_edge_flows(self, line1):
+        """Test that FlowSummary contains correct edge flow information."""
+        _, summary = calc_max_flow(line1, "A", "C", return_summary=True)
+
+        # Verify edge flows sum to total flow at source
+        total_outflow = sum(
+            flow for (u, _, _), flow in summary.edge_flow.items() if u == "A"
+        )
+        assert total_outflow == summary.total_flow
+
+        # Verify residual capacities are non-negative
+        for residual in summary.residual_cap.values():
+            assert residual >= 0
+
+    def test_flow_summary_min_cut_identification(self, square4):
+        """Test min-cut identification on a more complex graph."""
+        _, summary = calc_max_flow(square4, "A", "B", return_summary=True)
+
+        # Min-cut should be non-empty for a bottleneck graph
+        assert len(summary.min_cut) > 0
+
+        # All min-cut edges should be saturated (zero residual capacity)
+        for edge in summary.min_cut:
+            assert summary.residual_cap[edge] == 0
+
+    def test_flow_summary_reachable_nodes(self, line1):
+        """Test that reachable nodes are correctly identified."""
+        _, summary = calc_max_flow(line1, "A", "C", return_summary=True)
+
+        # Source should always be reachable
+        assert "A" in summary.reachable
+
+        # If there's flow to destination, intermediate nodes should be reachable
+        if summary.total_flow > 0:
+            # At least the source should be reachable
+            assert len(summary.reachable) >= 1
+
+    def test_shortest_path_with_summary(self, line1):
+        """Test return_summary works with shortest_path=True."""
+        result = calc_max_flow(line1, "A", "C", shortest_path=True, return_summary=True)
+
+        flow_value, summary = result
+        assert flow_value == 4  # Single path flow
+        assert summary.total_flow == 4
+        assert isinstance(summary.edge_flow, dict)
+        assert isinstance(summary.min_cut, list)
+
+    def test_empty_graph_with_summary(self):
+        """Test behavior with disconnected nodes."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+
+        flow_value, summary = calc_max_flow(g, "A", "B", return_summary=True)
+
+        assert flow_value == 0
+        assert summary.total_flow == 0
+        assert len(summary.edge_flow) == 0
+        assert len(summary.residual_cap) == 0
+        assert "A" in summary.reachable
+        assert "B" not in summary.reachable
+        assert len(summary.min_cut) == 0
+
+    def test_saturated_edges_helper(self, line1):
+        """Test the saturated_edges helper function."""
+        from ngraph.lib.algorithms.max_flow import saturated_edges
+
+        saturated = saturated_edges(line1, "A", "C")
+
+        # Should return a list of edge tuples
+        assert isinstance(saturated, list)
+
+        # All saturated edges should have zero residual capacity
+        _, summary = calc_max_flow(line1, "A", "C", return_summary=True)
+        for edge in saturated:
+            assert summary.residual_cap[edge] <= 1e-10
+
+    def test_sensitivity_analysis_helper(self, line1):
+        """Test the run_sensitivity helper function."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        sensitivity = run_sensitivity(line1, "A", "C", change_amount=1.0)
+
+        # Should return a dictionary mapping edges to flow increases
+        assert isinstance(sensitivity, dict)
+
+        # All sensitivity values should be non-negative
+        for edge, flow_increase in sensitivity.items():
+            assert isinstance(edge, tuple)
+            assert len(edge) == 3  # (u, v, k)
+            assert flow_increase >= 0
+
+    def test_sensitivity_analysis_identifies_bottlenecks(self, square4):
+        """Test that sensitivity analysis identifies meaningful bottlenecks."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        sensitivity = run_sensitivity(square4, "A", "B", change_amount=10.0)
+
+        # Should have some edges with positive sensitivity
+        positive_impacts = [impact for impact in sensitivity.values() if impact > 0]
+        assert len(positive_impacts) > 0
+
+        # Highest impact edges should be meaningful bottlenecks
+        if sensitivity:
+            max_impact = max(sensitivity.values())
+            assert max_impact > 0
+
+    def test_sensitivity_analysis_negative_capacity_protection(self, line1):
+        """Test that sensitivity analysis sets capacity to zero instead of negative values."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        # Test with a large negative change that would make capacities negative
+        sensitivity = run_sensitivity(line1, "A", "C", change_amount=-100.0)
+
+        # Should still return results (not skip edges)
+        assert isinstance(sensitivity, dict)
+        assert len(sensitivity) > 0
+
+        # All sensitivity values should be negative (flow reduction)
+        for edge, flow_change in sensitivity.items():
+            assert isinstance(edge, tuple)
+            assert len(edge) == 3  # (u, v, k)
+            assert (
+                flow_change <= 0
+            )  # Should reduce or maintain flow    def test_sensitivity_analysis_zero_capacity_behavior(self):
+        """Test specific behavior when edge capacity is reduced to zero."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        # Create a simple graph with known capacities
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_node("C")
+
+        # Add edges: A->B (capacity 10), B->C (capacity 5)
+        g.add_edge("A", "B", capacity=10.0, flow=0.0, flows={}, cost=1.0)
+        bc_edge_key = g.add_edge("B", "C", capacity=5.0, flow=0.0, flows={}, cost=1.0)
+
+        # Test reducing edge B->C capacity by 10 (more than its current capacity of 5)
+        sensitivity = run_sensitivity(g, "A", "C", change_amount=-10.0)
+
+        # Should reduce flow to zero (complete bottleneck removal)
+        bc_edge = ("B", "C", bc_edge_key)
+        assert bc_edge in sensitivity
+        assert (
+            sensitivity[bc_edge] == -5.0
+        )  # Should reduce flow by 5 (from 5 to 0)    def test_sensitivity_analysis_partial_capacity_reduction(self):
+        """Test behavior when capacity is partially reduced but not to zero."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        # Create a simple graph
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_node("C")
+
+        # Add edges with specific capacities
+        g.add_edge("A", "B", capacity=10.0, flow=0.0, flows={}, cost=1.0)
+        bc_edge_key = g.add_edge("B", "C", capacity=8.0, flow=0.0, flows={}, cost=1.0)
+
+        # Test reducing edge B->C capacity by 3 (from 8 to 5)
+        sensitivity = run_sensitivity(g, "A", "C", change_amount=-3.0)
+
+        # Should reduce flow by 3 (the bottleneck reduction)
+        bc_edge = ("B", "C", bc_edge_key)
+        assert bc_edge in sensitivity
+        assert sensitivity[bc_edge] == -3.0
+
+    def test_sensitivity_analysis_capacity_increase_and_decrease(self):
+        """Test that both positive and negative changes work correctly."""
+        from ngraph.lib.algorithms.max_flow import run_sensitivity
+
+        # Create a bottleneck graph
+        g = StrictMultiDiGraph()
+        for node in ["A", "B", "C", "D"]:
+            g.add_node(node)
+
+        g.add_edge("A", "B", capacity=20.0, flow=0.0, flows={}, cost=1.0)
+        g.add_edge("A", "C", capacity=20.0, flow=0.0, flows={}, cost=1.0)
+        g.add_edge("B", "D", capacity=10.0, flow=0.0, flows={}, cost=1.0)  # Bottleneck
+        g.add_edge("C", "D", capacity=15.0, flow=0.0, flows={}, cost=1.0)
+
+        # Test capacity increase
+        sensitivity_increase = run_sensitivity(g, "A", "D", change_amount=5.0)
+
+        # Test capacity decrease
+        sensitivity_decrease = run_sensitivity(g, "A", "D", change_amount=-3.0)
+
+        # Both should return results
+        assert len(sensitivity_increase) > 0
+        assert len(sensitivity_decrease) > 0
+
+        # Increases should be positive or zero
+        for flow_change in sensitivity_increase.values():
+            assert flow_change >= 0
+
+        # Decreases should be negative or zero
+        for flow_change in sensitivity_decrease.values():
+            assert flow_change <= 0

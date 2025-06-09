@@ -119,6 +119,34 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
+### Advanced Analysis: Sensitivity Analysis
+
+For deeper network analysis, you can use the low-level graph algorithms to perform sensitivity analysis and identify bottleneck edges:
+
+```python
+from ngraph.lib.algorithms.max_flow import calc_max_flow, saturated_edges, run_sensitivity
+
+# Get the underlying graph for low-level analysis
+graph = network.to_strict_multidigraph()
+
+# Identify bottleneck (saturated) edges
+bottlenecks = saturated_edges(graph, "A", "C")
+print(f"Bottleneck edges: {bottlenecks}")
+
+# Perform sensitivity analysis - test increasing capacity by 1 unit
+sensitivity_increase = run_sensitivity(graph, "A", "C", change_amount=1.0)
+print(f"Sensitivity to capacity increases: {sensitivity_increase}")
+
+# Test sensitivity to capacity decreases
+sensitivity_decrease = run_sensitivity(graph, "A", "C", change_amount=-1.0)
+print(f"Sensitivity to capacity decreases: {sensitivity_decrease}")
+```
+
+This analysis helps identify:
+- **Bottleneck edges**: Links that are fully utilized and limit overall flow
+- **High-impact upgrades**: Which capacity increases provide the most benefit
+- **Vulnerability assessment**: How flow decreases when links are degraded
+
 ## Next Steps
 
 - **[Tutorial](../getting-started/tutorial.md)** - Build complete network scenarios

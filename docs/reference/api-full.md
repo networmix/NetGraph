@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 08, 2025 at 03:05 UTC
+**Generated from source code on:** June 09, 2025 at 00:40 UTC
 
 ---
 
@@ -950,7 +950,7 @@ Raises:
 
 ## ngraph.lib.algorithms.max_flow
 
-### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True) -> float
+### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True) -> Union[float, tuple]
 
 Compute the maximum flow between two nodes in a directed multi-graph,
 using an iterative shortest-path augmentation approach.
@@ -972,6 +972,12 @@ Args:
         The source node for flow.
     dst_node (NodeID):
         The destination node for flow.
+    return_summary (bool):
+        If True, return a FlowSummary with detailed flow analytics.
+        Defaults to False.
+    return_graph (bool):
+        If True, return the mutated flow graph along with other results.
+        Defaults to False.
     flow_placement (FlowPlacement):
         Determines how flow is split among parallel edges of equal cost.
         Defaults to ``FlowPlacement.PROPORTIONAL``.
@@ -992,24 +998,74 @@ Args:
         Defaults to True.
 
 Returns:
-    float:
-        The total flow placed between ``src_node`` and ``dst_node``. If ``shortest_path=True``,
-        this is just the flow from a single augmentation.
+    Union[float, tuple]:
+        - If neither return_summary nor return_graph: float (total flow)
+        - If return_summary only: tuple[float, FlowSummary]
+        - If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
 
 Notes:
     - For large graphs or performance-critical scenarios, consider specialized max-flow
       algorithms (e.g., Dinic, Edmond-Karp) for better scaling.
+    - When using return_summary or return_graph, callers must unpack the returned tuple.
 
 Examples:
     >>> g = StrictMultiDiGraph()
     >>> g.add_node('A')
     >>> g.add_node('B')
     >>> g.add_node('C')
-    >>> _ = g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={})
-    >>> _ = g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={})
+    >>> _ = g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={}, cost=1)
+    >>> _ = g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={}, cost=1)
+    >>>
+    >>> # Basic usage (scalar return)
     >>> max_flow_value = calc_max_flow(g, 'A', 'C')
     >>> print(max_flow_value)
     5.0
+    >>>
+    >>> # With flow summary analytics
+    >>> flow, summary = calc_max_flow(g, 'A', 'C', return_summary=True)
+    >>> print(f"Min-cut edges: {summary.min_cut}")
+    >>>
+    >>> # With both summary and mutated graph
+    >>> flow, summary, flow_graph = calc_max_flow(
+    ...     g, 'A', 'C', return_summary=True, return_graph=True
+    ... )
+    >>> # flow_graph contains the flow assignments
+
+### run_sensitivity(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, capacity_attr: str = 'capacity', flow_attr: str = 'flow', change_amount: float = 1.0, **kwargs) -> dict[tuple, float]
+
+Perform sensitivity analysis to identify high-impact capacity changes.
+
+Tests changing each saturated edge capacity by change_amount and measures
+the resulting change in total flow. Positive values increase capacity,
+negative values decrease capacity (with validation to prevent negative capacities).
+
+Args:
+    graph: The graph to analyze
+    src_node: Source node
+    dst_node: Destination node
+    capacity_attr: Name of capacity attribute
+    flow_attr: Name of flow attribute
+    change_amount: Amount to change capacity for testing (positive=increase, negative=decrease)
+    **kwargs: Additional arguments passed to calc_max_flow
+
+Returns:
+    Dictionary mapping edge tuples to flow change when capacity is modified
+
+### saturated_edges(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, capacity_attr: str = 'capacity', flow_attr: str = 'flow', tolerance: float = 1e-10, **kwargs) -> list[tuple]
+
+Identify saturated (bottleneck) edges in the max flow solution.
+
+Args:
+    graph: The graph to analyze
+    src_node: Source node
+    dst_node: Destination node
+    capacity_attr: Name of capacity attribute
+    flow_attr: Name of flow attribute
+    tolerance: Tolerance for considering an edge saturated
+    **kwargs: Additional arguments passed to calc_max_flow
+
+Returns:
+    List of saturated edge tuples (u, v, k) where residual capacity <= tolerance
 
 ---
 

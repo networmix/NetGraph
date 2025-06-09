@@ -213,18 +213,23 @@ Low-level graph analysis functions.
 ```python
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.lib.algorithms.spf import spf, ksp
-from ngraph.lib.algorithms.max_flow import calc_max_flow
+from ngraph.lib.algorithms.max_flow import calc_max_flow, run_sensitivity, saturated_edges
 
 # Direct graph manipulation
 graph = StrictMultiDiGraph()
 graph.add_node("A")
-graph.add_edge("A", "B", capacity=10)
+graph.add_node("B")
+graph.add_edge("A", "B", capacity=10, cost=1)
 
 # Run shortest path algorithm
 costs, pred = spf(graph, "A")
 
 # Calculate maximum flow
 max_flow = calc_max_flow(graph, "A", "B")
+
+# Sensitivity analysis - identify bottleneck edges and test capacity changes
+saturated = saturated_edges(graph, "A", "B")
+sensitivity = run_sensitivity(graph, "A", "B", change_amount=1.0)
 ```
 
 ## Error Handling
