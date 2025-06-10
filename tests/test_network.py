@@ -610,9 +610,171 @@ def test_find_links():
     assert b_links[0].id == link_b_c.id
 
 
-#
-# New tests to improve coverage for RiskGroup-related methods.
-#
+def test_max_flow_overlapping_patterns_combine_mode():
+    """
+    Tests that overlapping source/sink patterns return 0 flow in combine mode.
+
+    When the same nodes match both source and sink patterns, flow conservation
+    principles dictate that no net flow can exist from a set to itself.
+    """
+    net = Network()
+    net.add_node(Node("N1"))
+    net.add_node(Node("N2"))
+    net.add_link(Link("N1", "N2", capacity=5.0))
+
+    # Same regex pattern matches both source and sink nodes
+    flow_result = net.max_flow(
+        source_path=r"^N(\d+)$",  # Matches N1, N2
+        sink_path=r"^N(\d+)$",  # Matches N1, N2 (OVERLAPPING!)
+        mode="combine",
+    )
+
+    # Should return 0 flow due to overlapping groups
+    assert len(flow_result) == 1
+    flow_val = list(flow_result.values())[0]
+    assert flow_val == 0.0
+
+    # Verify the combined label format
+    expected_label = ("1|2", "1|2")  # Combined source and sink labels
+    assert expected_label in flow_result
+
+
+def test_max_flow_overlapping_patterns_pairwise_mode():
+    """
+    Tests that overlapping source/sink patterns are handled correctly in pairwise mode.
+
+    Self-loop cases (N1->N1, N2->N2) should return 0 flow due to flow conservation,
+    while valid paths should return appropriate flow values.
+    """
+    net = Network()
+    net.add_node(Node("N1"))
+    net.add_node(Node("N2"))
+    net.add_link(Link("N1", "N2", capacity=3.0))
+
+    # Same regex pattern matches both source and sink nodes
+    flow_result = net.max_flow(
+        source_path=r"^N(\d+)$",  # Matches N1, N2
+        sink_path=r"^N(\d+)$",  # Matches N1, N2 (OVERLAPPING!)
+        mode="pairwise",
+    )
+
+    # Should return 4 results for 2x2 combinations
+    assert len(flow_result) == 4
+
+    expected_keys = {("1", "1"), ("1", "2"), ("2", "1"), ("2", "2")}
+    assert set(flow_result.keys()) == expected_keys
+
+    # Self-loops should have 0 flow
+    assert flow_result[("1", "1")] == 0.0  # N1->N1 self-loop
+    assert flow_result[("2", "2")] == 0.0  # N2->N2 self-loop
+
+    # Valid paths should have flow > 0
+    # Note: reverse edges are added by default in to_strict_multidigraph()
+    assert flow_result[("1", "2")] == 3.0  # N1->N2 forward path
+    assert flow_result[("2", "1")] == 3.0  # N2->N1 reverse path
+
+
+def test_max_flow_partial_overlap_pairwise():
+    """
+    Tests pairwise mode where source and sink patterns have partial overlap.
+
+    Some combinations will be self-loops (0 flow) while others are valid paths.
+    """
+    net = Network()
+    net.add_node(Node("SRC1"))
+    net.add_node(Node("SINK1"))
+    net.add_node(Node("BOTH1"))  # Node that matches both patterns
+    net.add_node(Node("BOTH2"))  # Node that matches both patterns
+
+    # Create some connections
+    net.add_link(Link("SRC1", "SINK1", capacity=2.0))
+    net.add_link(Link("SRC1", "BOTH1", capacity=1.0))
+    net.add_link(Link("BOTH1", "SINK1", capacity=1.5))
+    net.add_link(Link("BOTH2", "BOTH1", capacity=1.0))
+
+    flow_result = net.max_flow(
+        source_path=r"^(SRC\d+|BOTH\d+)$",  # Matches SRC1, BOTH1, BOTH2
+        sink_path=r"^(SINK\d+|BOTH\d+)$",  # Matches SINK1, BOTH1, BOTH2 (partial overlap!)
+        mode="pairwise",
+    )
+
+    # Should return results for all combinations
+    assert len(flow_result) == 9  # 3 sources × 3 sinks
+
+    # Self-loops for overlapping nodes should be 0
+    assert flow_result[("BOTH1", "BOTH1")] == 0.0
+    assert flow_result[("BOTH2", "BOTH2")] == 0.0
+
+    # Non-overlapping combinations should have meaningful flows
+    assert flow_result[("SRC1", "SINK1")] > 0.0
+
+
+def test_max_flow_complete_overlap_vs_non_overlap():
+    """
+    Compares behavior between complete overlap (self-loop) and non-overlapping patterns.
+    """
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_link(Link("A", "B", capacity=10.0))
+
+    # Test 1: Complete overlap (self-loop scenario)
+    overlap_result = net.max_flow(
+        source_path="A",
+        sink_path="A",  # Same node!
+        mode="combine",
+    )
+    assert overlap_result[("A", "A")] == 0.0
+
+    # Test 2: No overlap (normal scenario)
+    normal_result = net.max_flow(
+        source_path="A",
+        sink_path="B",  # Different nodes
+        mode="combine",
+    )
+    assert normal_result[("A", "B")] == 10.0
+
+
+def test_max_flow_overlapping_with_disabled_nodes():
+    """
+    Tests overlapping patterns when some overlapping nodes are disabled.
+
+    Disabled nodes are still included in regex matching but filtered out during
+    flow computation, so they appear as groups with 0 flow.
+    """
+    net = Network()
+    net.add_node(Node("N1"))
+    net.add_node(Node("N2", disabled=True))  # Disabled overlapping node
+    net.add_node(Node("N3"))
+
+    net.add_link(Link("N1", "N3", capacity=4.0))
+
+    # Patterns overlap, and N2 is disabled but still creates a group
+    flow_result = net.max_flow(
+        source_path=r"^N(\d+)$",  # Matches N1, N2, N3 (N2 disabled but still counted)
+        sink_path=r"^N(\d+)$",  # Matches N1, N2, N3 (N2 disabled but still counted)
+        mode="pairwise",
+    )
+
+    # N1, N2, N3 create groups "1", "2", "3", so we get 3x3 = 9 combinations
+    assert len(flow_result) == 9
+
+    # Self-loops return 0 (including disabled node)
+    assert flow_result[("1", "1")] == 0.0  # N1->N1 self-loop
+    assert flow_result[("2", "2")] == 0.0  # N2->N2 self-loop (disabled)
+    assert flow_result[("3", "3")] == 0.0  # N3->N3 self-loop
+
+    # Flows involving disabled node N2 should be 0
+    assert flow_result[("1", "2")] == 0.0  # N1->N2 (N2 disabled)
+    assert flow_result[("2", "1")] == 0.0  # N2->N1 (N2 disabled)
+    assert flow_result[("2", "3")] == 0.0  # N2->N3 (N2 disabled)
+    assert flow_result[("3", "2")] == 0.0  # N3->N2 (N2 disabled)
+
+    # Valid flows between active nodes
+    assert flow_result[("1", "3")] == 4.0  # N1->N3 direct path
+    assert flow_result[("3", "1")] == 4.0  # N3->N1 reverse path
+
+
 def test_disable_risk_group_nonexistent():
     """
     If we call disable_risk_group on a name that is not in net.risk_groups,

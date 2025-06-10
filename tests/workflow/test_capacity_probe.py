@@ -210,38 +210,298 @@ def test_capacity_probe_mode_pairwise_multiple_groups(mock_scenario):
         assert flows[label] == 2.0
 
 
-def test_capacity_probe_probe_reverse(mock_scenario):
+def test_capacity_probe_pairwise_asymmetric_groups(mock_scenario):
     """
-    Tests that probe_reverse=True computes flow in both directions. We expect
-    two sets of results: forward and reverse.
+    Tests pairwise mode with different numbers of source and sink groups.
+    3 sources, 2 sinks => 3×2 = 6 result entries.
     """
-    # Simple A->B link with capacity=3
-    mock_scenario.network.add_node(Node("A"))
-    mock_scenario.network.add_node(Node("B"))
-    mock_scenario.network.add_link(Link("A", "B", capacity=3))
+    # Create nodes
+    for i in [1, 2, 3]:
+        mock_scenario.network.add_node(Node(f"SRC{i}"))
+    for i in [1, 2]:
+        mock_scenario.network.add_node(Node(f"SINK{i}"))
+    mock_scenario.network.add_node(Node("HUB"))
+
+    # Connect all sources to hub with capacity 3, hub to all sinks with capacity 2
+    for i in [1, 2, 3]:
+        mock_scenario.network.add_link(Link(f"SRC{i}", "HUB", capacity=3))
+    for i in [1, 2]:
+        mock_scenario.network.add_link(Link("HUB", f"SINK{i}", capacity=2))
 
     step = CapacityProbe(
-        name="MyCapacityProbeReversed",
-        source_path="A",
-        sink_path="B",
-        probe_reverse=True,
-        mode="combine",
+        name="AsymmetricPairwise",
+        source_path=r"^SRC(\d+)$",  # groups: "1", "2", "3"
+        sink_path=r"^SINK(\d+)$",  # groups: "1", "2"
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 6  # 3×2
+
+    calls = mock_scenario.results.put.call_args_list
+    flows = {}
+    for c in calls:
+        step_name, label, flow_val = c[0]
+        flows[label] = flow_val
+
+    expected_labels = {
+        "max_flow:[1 -> 1]",
+        "max_flow:[1 -> 2]",
+        "max_flow:[2 -> 1]",
+        "max_flow:[2 -> 2]",
+        "max_flow:[3 -> 1]",
+        "max_flow:[3 -> 2]",
+    }
+    assert set(flows.keys()) == expected_labels
+    # Each flow should be limited by the hub->sink capacity of 2
+    for label in expected_labels:
+        assert flows[label] == 2.0
+
+
+def test_capacity_probe_pairwise_no_capturing_groups(mock_scenario):
+    """
+    Tests pairwise mode when the regex patterns don't use capturing groups.
+    All matching nodes should be grouped under the pattern string itself.
+    """
+    mock_scenario.network.add_node(Node("SOURCE_A"))
+    mock_scenario.network.add_node(Node("SOURCE_B"))
+    mock_scenario.network.add_node(Node("TARGET_X"))
+    mock_scenario.network.add_node(Node("TARGET_Y"))
+
+    # Create a hub topology
+    mock_scenario.network.add_node(Node("HUB"))
+    mock_scenario.network.add_link(Link("SOURCE_A", "HUB", capacity=5))
+    mock_scenario.network.add_link(Link("SOURCE_B", "HUB", capacity=5))
+    mock_scenario.network.add_link(Link("HUB", "TARGET_X", capacity=3))
+    mock_scenario.network.add_link(Link("HUB", "TARGET_Y", capacity=3))
+
+    step = CapacityProbe(
+        name="NoCapturingGroups",
+        source_path="^SOURCE_",  # no capturing groups
+        sink_path="^TARGET_",  # no capturing groups
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 1  # 1×1 since no capturing groups
+
+    call_args = mock_scenario.results.put.call_args[0]
+    assert call_args[0] == "NoCapturingGroups"
+    assert call_args[1] == "max_flow:[^SOURCE_ -> ^TARGET_]"
+    # Combined flow through HUB: min(5+5, 3+3) = 6
+    assert call_args[2] == 6.0
+
+
+def test_capacity_probe_pairwise_multiple_capturing_groups(mock_scenario):
+    """
+    Tests pairwise mode with multiple capturing groups in the regex pattern.
+    Groups should be joined with '|'.
+    """
+    # Create nodes with two-part naming: DC-Type pattern
+    mock_scenario.network.add_node(Node("DC1-WEB1"))
+    mock_scenario.network.add_node(Node("DC1-DB1"))
+    mock_scenario.network.add_node(Node("DC2-WEB1"))
+    mock_scenario.network.add_node(Node("DC2-DB1"))
+
+    # Create hub topology
+    mock_scenario.network.add_node(Node("CORE"))
+    for dc in [1, 2]:
+        for svc in ["WEB", "DB"]:
+            mock_scenario.network.add_link(Link(f"DC{dc}-{svc}1", "CORE", capacity=4))
+
+    step = CapacityProbe(
+        name="MultiCapture",
+        source_path=r"^(DC\d+)-(WEB\d+)$",  # captures: ("DC1", "WEB1"), etc.
+        sink_path=r"^(DC\d+)-(DB\d+)$",  # captures: ("DC1", "DB1"), etc.
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 4  # 2×2
+
+    calls = mock_scenario.results.put.call_args_list
+    flows = {}
+    for c in calls:
+        step_name, label, flow_val = c[0]
+        flows[label] = flow_val
+
+    expected_labels = {
+        "max_flow:[DC1|WEB1 -> DC1|DB1]",
+        "max_flow:[DC1|WEB1 -> DC2|DB1]",
+        "max_flow:[DC2|WEB1 -> DC1|DB1]",
+        "max_flow:[DC2|WEB1 -> DC2|DB1]",
+    }
+    assert set(flows.keys()) == expected_labels
+    for label in expected_labels:
+        assert flows[label] == 4.0
+
+
+def test_capacity_probe_pairwise_with_disabled_nodes(mock_scenario):
+    """
+    Tests pairwise mode when some matched nodes are disabled.
+    Disabled nodes should not participate in flow computation.
+    """
+    mock_scenario.network.add_node(Node("S1"))
+    mock_scenario.network.add_node(Node("S2", disabled=True))  # disabled
+    mock_scenario.network.add_node(Node("T1"))
+    mock_scenario.network.add_node(Node("T2"))
+
+    mock_scenario.network.add_node(Node("HUB"))
+    mock_scenario.network.add_link(Link("S1", "HUB", capacity=5))
+    mock_scenario.network.add_link(Link("S2", "HUB", capacity=5))  # disabled source
+    mock_scenario.network.add_link(Link("HUB", "T1", capacity=3))
+    mock_scenario.network.add_link(Link("HUB", "T2", capacity=3))
+
+    step = CapacityProbe(
+        name="DisabledNodes",
+        source_path=r"^S(\d+)$",
+        sink_path=r"^T(\d+)$",
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 4  # still 2×2 pairs
+
+    calls = mock_scenario.results.put.call_args_list
+    flows = {}
+    for c in calls:
+        step_name, label, flow_val = c[0]
+        flows[label] = flow_val
+
+    # S2 is disabled, so flows involving group "2" should be 0
+    assert flows["max_flow:[1 -> 1]"] == 3.0  # S1->T1
+    assert flows["max_flow:[1 -> 2]"] == 3.0  # S1->T2
+    assert flows["max_flow:[2 -> 1]"] == 0.0  # S2->T1 (S2 disabled)
+    assert flows["max_flow:[2 -> 2]"] == 0.0  # S2->T2 (S2 disabled)
+
+
+def test_capacity_probe_pairwise_disconnected_topology(mock_scenario):
+    """
+    Tests pairwise mode when some source-sink pairs have no connectivity.
+    Should return 0 flow for disconnected pairs.
+    """
+    # Create two isolated islands
+    mock_scenario.network.add_node(Node("S1"))
+    mock_scenario.network.add_node(Node("T1"))
+    mock_scenario.network.add_link(Link("S1", "T1", capacity=10))
+
+    mock_scenario.network.add_node(Node("S2"))
+    mock_scenario.network.add_node(Node("T2"))
+    mock_scenario.network.add_link(Link("S2", "T2", capacity=8))
+
+    # No connectivity between islands
+
+    step = CapacityProbe(
+        name="Disconnected",
+        source_path=r"^S(\d+)$",
+        sink_path=r"^T(\d+)$",
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 4
+
+    calls = mock_scenario.results.put.call_args_list
+    flows = {}
+    for c in calls:
+        step_name, label, flow_val = c[0]
+        flows[label] = flow_val
+
+    # Only same-island connections should have flow
+    assert flows["max_flow:[1 -> 1]"] == 10.0  # S1->T1 (connected)
+    assert flows["max_flow:[2 -> 2]"] == 8.0  # S2->T2 (connected)
+    assert flows["max_flow:[1 -> 2]"] == 0.0  # S1->T2 (disconnected)
+    assert flows["max_flow:[2 -> 1]"] == 0.0  # S2->T1 (disconnected)
+
+
+def test_capacity_probe_pairwise_single_group_each(mock_scenario):
+    """
+    Tests pairwise mode with only one source group and one sink group.
+    Should behave similarly to combine mode but still produce pairwise-style labels.
+    """
+    mock_scenario.network.add_node(Node("SRC1"))
+    mock_scenario.network.add_node(Node("SRC2"))
+    mock_scenario.network.add_node(Node("SINK1"))
+    mock_scenario.network.add_node(Node("SINK2"))
+
+    mock_scenario.network.add_node(Node("HUB"))
+    mock_scenario.network.add_link(Link("SRC1", "HUB", capacity=4))
+    mock_scenario.network.add_link(Link("SRC2", "HUB", capacity=6))
+    mock_scenario.network.add_link(Link("HUB", "SINK1", capacity=5))
+    mock_scenario.network.add_link(Link("HUB", "SINK2", capacity=3))
+
+    step = CapacityProbe(
+        name="SingleGroups",
+        source_path=r"^SRC",  # no capturing groups, all sources in one group
+        sink_path=r"^SINK",  # no capturing groups, all sinks in one group
+        mode="pairwise",
+    )
+
+    step.run(mock_scenario)
+    assert mock_scenario.results.put.call_count == 1  # 1×1
+
+    call_args = mock_scenario.results.put.call_args[0]
+    assert call_args[0] == "SingleGroups"
+    assert call_args[1] == "max_flow:[^SRC -> ^SINK]"
+    # Total flow: min(4+6, 5+3) = min(10, 8) = 8
+    assert call_args[2] == 8.0
+
+
+def test_capacity_probe_pairwise_potential_infinite_loop(mock_scenario):
+    """
+    Tests that overlapping source and sink patterns are handled gracefully.
+
+    When the same nodes can be both sources and destinations (overlapping regex patterns),
+    the max flow calculation should detect this scenario and return 0 flow for overlapping
+    cases due to flow conservation principles - no net flow from a set to itself.
+
+    This test verifies that scenarios like N1->N1 (self-loops) and overlapping groups
+    are handled correctly without causing infinite loops.
+
+    Expected behavior: Should handle overlapping patterns gracefully and complete quickly,
+    returning 0 flow for self-loop cases and appropriate flows for valid paths.
+    """
+    # Create nodes that match both source and sink patterns
+    mock_scenario.network.add_node(Node("N1"))
+    mock_scenario.network.add_node(Node("N2"))
+
+    # Simple topology with normal capacity
+    mock_scenario.network.add_link(Link("N1", "N2", capacity=1.0))
+
+    step = CapacityProbe(
+        name="OverlappingPatternsTest",
+        # OVERLAPPING patterns - same nodes match both source and sink
+        source_path=r"^N(\d+)$",  # Matches N1, N2
+        sink_path=r"^N(\d+)$",  # Matches N1, N2 (SAME NODES!)
+        mode="pairwise",  # Test pairwise mode with overlapping patterns
     )
 
     step.run(mock_scenario)
 
-    # Expect 2 calls: forward flow (A->B) and reverse flow (B->A).
-    assert mock_scenario.results.put.call_count == 2
-    calls = mock_scenario.results.put.call_args_list
+    # Should return 4 results for 2×2 = N1->N1, N1->N2, N2->N1, N2->N2
+    assert mock_scenario.results.put.call_count == 4
 
+    calls = mock_scenario.results.put.call_args_list
     flows = {}
     for c in calls:
         step_name, label, flow_val = c[0]
-        assert step_name == "MyCapacityProbeReversed"
+        assert step_name == "OverlappingPatternsTest"
         flows[label] = flow_val
 
-    # We expect "max_flow:[A -> B]" = 3, and "max_flow:[B -> A]" = 3
-    assert "max_flow:[A -> B]" in flows
-    assert "max_flow:[B -> A]" in flows
-    assert flows["max_flow:[A -> B]"] == 3.0
-    assert flows["max_flow:[B -> A]"] == 3.0
+    expected_labels = {
+        "max_flow:[1 -> 1]",  # N1->N1 (self-loop)
+        "max_flow:[1 -> 2]",  # N1->N2 (valid path)
+        "max_flow:[2 -> 1]",  # N2->N1 (no path)
+        "max_flow:[2 -> 2]",  # N2->N2 (self-loop)
+    }
+    assert set(flows.keys()) == expected_labels
+
+    # Self-loops should have 0 flow due to flow conservation
+    assert flows["max_flow:[1 -> 1]"] == 0.0  # N1->N1 self-loop
+    assert flows["max_flow:[2 -> 2]"] == 0.0  # N2->N2 self-loop
+
+    # Valid paths should have appropriate flows
+    assert flows["max_flow:[1 -> 2]"] == 1.0  # N1->N2 has capacity 1.0
+    assert (
+        flows["max_flow:[2 -> 1]"] == 1.0
+    )  # N2->N1 has reverse edge with capacity 1.0

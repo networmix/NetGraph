@@ -261,9 +261,20 @@ class Network:
             if not combined_src_nodes or not combined_snk_nodes:
                 return {(combined_src_label, combined_snk_label): 0.0}
 
-            flow_val = self._compute_flow_single_group(
-                combined_src_nodes, combined_snk_nodes, shortest_path, flow_placement
-            )
+            # Check for overlapping nodes in combined mode
+            combined_src_names = {node.name for node in combined_src_nodes}
+            combined_snk_names = {node.name for node in combined_snk_nodes}
+            if combined_src_names & combined_snk_names:  # If there's any overlap
+                # When source and sink groups overlap, flow is 0
+                # due to flow conservation - no net flow from a set to itself
+                flow_val = 0.0
+            else:
+                flow_val = self._compute_flow_single_group(
+                    combined_src_nodes,
+                    combined_snk_nodes,
+                    shortest_path,
+                    flow_placement,
+                )
             return {(combined_src_label, combined_snk_label): flow_val}
 
         elif mode == "pairwise":
@@ -271,9 +282,17 @@ class Network:
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        flow_val = self._compute_flow_single_group(
-                            src_nodes, snk_nodes, shortest_path, flow_placement
-                        )
+                        # Check for overlapping nodes (potential self-loops)
+                        src_names = {node.name for node in src_nodes}
+                        snk_names = {node.name for node in snk_nodes}
+                        if src_names & snk_names:  # If there's any overlap
+                            # When source and sink groups overlap, flow is 0
+                            # due to flow conservation - no net flow from a set to itself
+                            flow_val = 0.0
+                        else:
+                            flow_val = self._compute_flow_single_group(
+                                src_nodes, snk_nodes, shortest_path, flow_placement
+                            )
                     else:
                         flow_val = 0.0
                     results[(src_label, snk_label)] = flow_val
