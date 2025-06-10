@@ -10,45 +10,428 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 09, 2025 at 00:40 UTC
+**Generated from source code on:** June 11, 2025 at 00:06 UTC
+
+**Modules auto-discovered:** 35
 
 ---
 
-## ngraph.scenario
+## ngraph.blueprints
 
-### Scenario
+### Blueprint
 
-Represents a complete scenario for building and executing network workflows.
+Represents a reusable blueprint for hierarchical sub-topologies.
 
-This scenario includes:
-  - A network (nodes/links), constructed via blueprint expansion.
-  - A failure policy (one or more rules).
-  - A set of traffic demands.
-  - A list of workflow steps to execute.
-  - A results container for storing outputs.
-  - A components_library for hardware/optics definitions.
+A blueprint may contain multiple groups of nodes (each can have a node_count
+and a name_template), plus adjacency rules describing how those groups connect.
 
-Typical usage example:
-
-    scenario = Scenario.from_yaml(yaml_str, default_components=default_lib)
-    scenario.run()
-    # Inspect scenario.results
+Attributes:
+    name (str): Unique identifier of this blueprint.
+    groups (Dict[str, Any]): A mapping of group_name -> group definition.
+        Allowed top-level keys in each group definition here are the same
+        as in normal group definitions (e.g. node_count, name_template,
+        attrs, disabled, risk_groups, or nested use_blueprint references, etc.).
+    adjacency (List[Dict[str, Any]]): A list of adjacency definitions
+        describing how these groups are linked, using the DSL fields
+        (source, target, pattern, link_params, etc.).
 
 **Attributes:**
 
+- `name` (str)
+- `groups` (Dict[str, Any])
+- `adjacency` (List[Dict[str, Any]])
+
+### DSLExpansionContext
+
+Carries the blueprint definitions and the final Network instance
+to be populated during DSL expansion.
+
+Attributes:
+    blueprints (Dict[str, Blueprint]): Dictionary of blueprint-name -> Blueprint.
+    network (Network): The Network into which expanded nodes/links are inserted.
+
+**Attributes:**
+
+- `blueprints` (Dict[str, Blueprint])
 - `network` (Network)
-- `failure_policy` (Optional[FailurePolicy])
-- `traffic_demands` (List[TrafficDemand])
-- `workflow` (List[WorkflowStep])
-- `results` (Results) = Results(_store={})
-- `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
+
+### expand_network_dsl(data: 'Dict[str, Any]') -> 'Network'
+
+Expands a combined blueprint + network DSL into a complete Network object.
+
+Overall flow:
+  1) Parse "blueprints" into Blueprint objects.
+  2) Build a new Network from "network" metadata (e.g. name, version).
+  3) Expand 'network["groups"]'.
+     - If a group references a blueprint, incorporate that blueprint's subgroups
+       while merging parent's attrs + disabled + risk_groups into subgroups.
+     - Otherwise, directly create nodes (a "direct node group").
+  4) Process any direct node definitions (network["nodes"]).
+  5) Expand adjacency definitions in 'network["adjacency"]'.
+  6) Process any direct link definitions (network["links"]).
+  7) Process link overrides (in order if multiple overrides match).
+  8) Process node overrides (in order if multiple overrides match).
+
+Under the new rules:
+  - Only certain top-level fields are permitted in each structure. Any extra
+    keys raise a ValueError. "attrs" is where arbitrary user fields go.
+  - For link_params, recognized fields are "capacity", "cost", "disabled",
+    "risk_groups", "attrs". Everything else must go inside link_params["attrs"].
+  - For node/group definitions, recognized fields include "node_count",
+    "name_template", "attrs", "disabled", "risk_groups" or "use_blueprint"
+    for blueprint-based groups.
+
+Args:
+    data (Dict[str, Any]): The YAML-parsed dictionary containing
+        optional "blueprints" + "network".
+
+Returns:
+    Network: The fully expanded Network object with all nodes and links.
+
+---
+
+## ngraph.cli
+
+### main(argv: 'Optional[List[str]]' = None) -> 'None'
+
+Entry point for the ``ngraph`` command.
+
+Args:
+    argv: Optional list of command-line arguments. If ``None``, ``sys.argv``
+        is used.
+
+---
+
+## ngraph.components
+
+### Component
+
+A generic component that can represent chassis, line cards, optics, etc.
+Components can have nested children, each with their own cost, power, etc.
+
+Attributes:
+    name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
+    component_type (str): A string label (e.g., "chassis", "linecard", "optic").
+    description (str): A human-readable description of this component.
+    cost (float): Cost (capex) of a single instance of this component.
+    power_watts (float): Typical/nominal power usage (watts) for one instance.
+    power_watts_max (float): Maximum/peak power usage (watts) for one instance.
+    capacity (float): A generic capacity measure (e.g., platform capacity).
+    ports (int): Number of ports if relevant for this component.
+    count (int): How many identical copies of this component are present.
+    attrs (Dict[str, Any]): Arbitrary key-value attributes for extra metadata.
+    children (Dict[str, Component]): Nested child components (e.g., line cards
+        inside a chassis), keyed by child name.
+
+**Attributes:**
+
+- `name` (str)
+- `component_type` (str) = generic
+- `description` (str)
+- `cost` (float) = 0.0
+- `power_watts` (float) = 0.0
+- `power_watts_max` (float) = 0.0
+- `capacity` (float) = 0.0
+- `ports` (int) = 0
+- `count` (int) = 1
+- `attrs` (Dict[str, Any]) = {}
+- `children` (Dict[str, Component]) = {}
 
 **Methods:**
 
-- `from_yaml(yaml_str: 'str', default_components: 'Optional[ComponentsLibrary]' = None) -> 'Scenario'`
-  - Constructs a Scenario from a YAML string, optionally merging
-- `run(self) -> 'None'`
-  - Executes the scenario's workflow steps in order.
+- `as_dict(self, include_children: 'bool' = True) -> 'Dict[str, Any]'`
+  - Returns a dictionary containing all properties of this component.
+- `total_capacity(self) -> 'float'`
+  - Computes the total (recursive) capacity of this component,
+- `total_cost(self) -> 'float'`
+  - Computes the total (recursive) cost of this component, including children,
+- `total_power(self) -> 'float'`
+  - Computes the total *typical* (recursive) power usage of this component,
+- `total_power_max(self) -> 'float'`
+  - Computes the total *peak* (recursive) power usage of this component,
+
+### ComponentsLibrary
+
+Holds a collection of named Components. Each entry is a top-level "template"
+that can be referenced for cost/power/capacity lookups, possibly with nested children.
+
+Example (YAML-like):
+    components:
+      BigSwitch:
+        component_type: chassis
+        cost: 20000
+        power_watts: 1750
+        capacity: 25600
+        children:
+          PIM16Q-16x200G:
+            component_type: linecard
+            cost: 1000
+            power_watts: 10
+            ports: 16
+            count: 8
+      200G-FR4:
+        component_type: optic
+        cost: 2000
+        power_watts: 6
+        power_watts_max: 6.5
+
+**Attributes:**
+
+- `components` (Dict[str, Component]) = {}
+
+**Methods:**
+
+- `clone(self) -> 'ComponentsLibrary'`
+  - Creates a deep copy of this ComponentsLibrary.
+- `from_dict(data: 'Dict[str, Any]') -> 'ComponentsLibrary'`
+  - Constructs a ComponentsLibrary from a dictionary of raw component definitions.
+- `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'`
+  - Constructs a ComponentsLibrary from a YAML string. If the YAML contains
+- `get(self, name: 'str') -> 'Optional[Component]'`
+  - Retrieves a Component by its name from the library.
+- `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'`
+  - Merges another ComponentsLibrary into this one. By default (override=True),
+
+---
+
+## ngraph.config
+
+Configuration for NetGraph.
+
+### TrafficManagerConfig
+
+Configuration for traffic demand placement estimation.
+
+**Attributes:**
+
+- `default_rounds` (int) = 5
+- `min_rounds` (int) = 5
+- `max_rounds` (int) = 100
+- `ratio_base` (int) = 5
+- `ratio_multiplier` (int) = 5
+
+**Methods:**
+
+- `estimate_rounds(self, demand_capacity_ratio: float) -> int`
+  - Calculate placement rounds based on demand to capacity ratio.
+
+---
+
+## ngraph.explorer
+
+### ExternalLinkBreakdown
+
+Holds stats for external links to a particular other subtree.
+
+Attributes:
+    link_count (int): Number of links to that other subtree.
+    link_capacity (float): Sum of capacities for those links.
+
+**Attributes:**
+
+- `link_count` (int) = 0
+- `link_capacity` (float) = 0.0
+
+### NetworkExplorer
+
+Provides hierarchical exploration of a Network, computing statistics in two modes:
+'all' (ignores disabled) and 'active' (only enabled).
+
+**Methods:**
+
+- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'`
+  - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
+- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True) -> 'None'`
+  - Print the hierarchy from 'node' down (default: root).
+
+### TreeNode
+
+Represents a node in the hierarchical tree.
+
+Attributes:
+    name (str): Name/label of this node.
+    parent (Optional[TreeNode]): Pointer to the parent tree node.
+    children (Dict[str, TreeNode]): Mapping of child name -> child TreeNode.
+    subtree_nodes (Set[str]): Node names in the subtree (all nodes, ignoring disabled).
+    active_subtree_nodes (Set[str]): Node names in the subtree (only enabled).
+    stats (TreeStats): Aggregated stats for "all" view.
+    active_stats (TreeStats): Aggregated stats for "active" (only enabled) view.
+    raw_nodes (List[Node]): Direct Node objects at this hierarchy level.
+
+**Attributes:**
+
+- `name` (str)
+- `parent` (Optional[TreeNode])
+- `children` (Dict[str, TreeNode]) = {}
+- `subtree_nodes` (Set[str]) = set()
+- `active_subtree_nodes` (Set[str]) = set()
+- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
+- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
+- `raw_nodes` (List[Node]) = []
+
+**Methods:**
+
+- `add_child(self, child_name: 'str') -> 'TreeNode'`
+  - Ensure a child node named 'child_name' exists and return it.
+- `is_leaf(self) -> 'bool'`
+  - Return True if this node has no children.
+
+### TreeStats
+
+Aggregated statistics for a single tree node (subtree).
+
+Attributes:
+    node_count (int): Total number of nodes in this subtree.
+    internal_link_count (int): Number of internal links in this subtree.
+    internal_link_capacity (float): Sum of capacities for those internal links.
+    external_link_count (int): Number of external links from this subtree to another.
+    external_link_capacity (float): Sum of capacities for those external links.
+    external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown by other subtree path.
+    total_cost (float): Cumulative cost (nodes + links).
+    total_power (float): Cumulative power (nodes + links).
+
+**Attributes:**
+
+- `node_count` (int) = 0
+- `internal_link_count` (int) = 0
+- `internal_link_capacity` (float) = 0.0
+- `external_link_count` (int) = 0
+- `external_link_capacity` (float) = 0.0
+- `external_link_details` (Dict[str, ExternalLinkBreakdown]) = {}
+- `total_cost` (float) = 0.0
+- `total_power` (float) = 0.0
+
+---
+
+## ngraph.failure_manager
+
+### FailureManager
+
+Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
+repeats multiple times for Monte Carlo experiments.
+
+Attributes:
+    network (Network): The underlying network to mutate (enable/disable nodes/links).
+    traffic_demands (List[TrafficDemand]): List of demands to place after failures.
+    failure_policy (Optional[FailurePolicy]): The policy describing what fails.
+    default_flow_policy_config: The default flow policy for any demands lacking one.
+
+**Methods:**
+
+- `apply_failures(self) -> 'None'`
+  - Apply the current failure_policy to self.network (in-place).
+- `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
+  - Repeatedly applies (randomized) failures to the network and accumulates
+- `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
+  - Applies failures to the network, places the demands, and returns per-demand results.
+
+---
+
+## ngraph.failure_policy
+
+### FailureCondition
+
+A single condition for matching an entity's attribute with an operator and value.
+
+Example usage (YAML):
+  conditions:
+    - attr: "capacity"
+      operator: "<"
+      value: 100
+
+Attributes:
+    attr (str):
+        The name of the attribute to inspect (e.g., "capacity", "region").
+    operator (str):
+        The comparison operator: "==", "!=", "<", "<=", ">", ">=",
+        "contains", "not_contains", "any_value", or "no_value".
+    value (Any):
+        The value to compare against (e.g., 100, True, "foo", etc.).
+
+**Attributes:**
+
+- `attr` (str)
+- `operator` (str)
+- `value` (Any)
+
+### FailurePolicy
+
+A container for multiple FailureRules plus optional metadata in `attrs`.
+
+The main entry point is `apply_failures`, which:
+  1) For each rule, gather the relevant entities (node, link, or risk_group).
+  2) Match them based on rule conditions (or skip if 'logic=any').
+  3) Apply the selection strategy (all, random, or choice).
+  4) Collect the union of all failed entities across all rules.
+  5) Optionally expand failures by shared-risk groups or sub-risks.
+
+Large-scale performance:
+  - If you set `use_cache=True`, matched sets for each rule are cached,
+    so repeated calls to `apply_failures` can skip re-matching if the
+    network hasn't changed. If your network changes between calls,
+    you should clear the cache or re-initialize the policy.
+
+Attributes:
+    rules (List[FailureRule]):
+        A list of FailureRules to apply.
+    attrs (Dict[str, Any]):
+        Arbitrary metadata about this policy (e.g. "name", "description").
+    fail_shared_risk_groups (bool):
+        If True, after initial selection, expand failures among any
+        node/link that shares a risk group with a failed entity.
+    fail_risk_group_children (bool):
+        If True, and if a risk_group is marked as failed, expand to
+        children risk_groups recursively.
+    use_cache (bool):
+        If True, match results for each rule are cached to speed up
+        repeated calls. If the network changes, the cached results
+        may be stale.
+
+**Attributes:**
+
+- `rules` (List[FailureRule]) = []
+- `attrs` (Dict[str, Any]) = {}
+- `fail_shared_risk_groups` (bool) = False
+- `fail_risk_group_children` (bool) = False
+- `use_cache` (bool) = False
+- `_match_cache` (Dict[int, Set[str]]) = {}
+
+**Methods:**
+
+- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
+  - Identify which entities fail given the defined rules, then optionally
+
+### FailureRule
+
+Defines how to match and then select entities for failure.
+
+Attributes:
+    entity_scope (EntityScope):
+        The type of entities this rule applies to: "node", "link", or "risk_group".
+    conditions (List[FailureCondition]):
+        A list of conditions to filter matching entities.
+    logic (Literal["and", "or", "any"]):
+        "and": All conditions must be true for a match.
+        "or": At least one condition is true for a match.
+        "any": Skip condition checks and match all.
+    rule_type (Literal["random", "choice", "all"]):
+        The selection strategy among the matched set:
+          - "random": each matched entity is chosen with probability = `probability`.
+          - "choice": pick exactly `count` items from the matched set (random sample).
+          - "all": select every matched entity in the matched set.
+    probability (float):
+        Probability in [0,1], used if `rule_type="random"`.
+    count (int):
+        Number of entities to pick if `rule_type="choice"`.
+
+**Attributes:**
+
+- `entity_scope` (EntityScope)
+- `conditions` (List[FailureCondition]) = []
+- `logic` (Literal['and', 'or', 'any']) = and
+- `rule_type` (Literal['random', 'choice', 'all']) = all
+- `probability` (float) = 1.0
+- `count` (int) = 1
 
 ---
 
@@ -175,255 +558,70 @@ Returns:
 
 ---
 
-## ngraph.explorer
+## ngraph.results
 
-### ExternalLinkBreakdown
+### Results
 
-Holds stats for external links to a particular other subtree.
+A container for storing arbitrary key-value data that arises during workflow steps.
+The data is organized by step name, then by key.
 
-Attributes:
-    link_count (int): Number of links to that other subtree.
-    link_capacity (float): Sum of capacities for those links.
+Example usage:
+  results.put("Step1", "total_capacity", 123.45)
+  cap = results.get("Step1", "total_capacity")  # returns 123.45
+  all_caps = results.get_all("total_capacity")  # might return {"Step1": 123.45, "Step2": 98.76}
 
 **Attributes:**
 
-- `link_count` (int) = 0
-- `link_capacity` (float) = 0.0
-
-### NetworkExplorer
-
-Provides hierarchical exploration of a Network, computing statistics in two modes:
-'all' (ignores disabled) and 'active' (only enabled).
+- `_store` (Dict) = {}
 
 **Methods:**
 
-- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'`
-  - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
-- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True) -> 'None'`
-  - Print the hierarchy from 'node' down (default: root).
-
-### TreeNode
-
-Represents a node in the hierarchical tree.
-
-Attributes:
-    name (str): Name/label of this node.
-    parent (Optional[TreeNode]): Pointer to the parent tree node.
-    children (Dict[str, TreeNode]): Mapping of child name -> child TreeNode.
-    subtree_nodes (Set[str]): Node names in the subtree (all nodes, ignoring disabled).
-    active_subtree_nodes (Set[str]): Node names in the subtree (only enabled).
-    stats (TreeStats): Aggregated stats for "all" view.
-    active_stats (TreeStats): Aggregated stats for "active" (only enabled) view.
-    raw_nodes (List[Node]): Direct Node objects at this hierarchy level.
-
-**Attributes:**
-
-- `name` (str)
-- `parent` (Optional[TreeNode])
-- `children` (Dict[str, TreeNode]) = {}
-- `subtree_nodes` (Set[str]) = set()
-- `active_subtree_nodes` (Set[str]) = set()
-- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
-- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
-- `raw_nodes` (List[Node]) = []
-
-**Methods:**
-
-- `add_child(self, child_name: 'str') -> 'TreeNode'`
-  - Ensure a child node named 'child_name' exists and return it.
-- `is_leaf(self) -> 'bool'`
-  - Return True if this node has no children.
-
-### TreeStats
-
-Aggregated statistics for a single tree node (subtree).
-
-Attributes:
-    node_count (int): Total number of nodes in this subtree.
-    internal_link_count (int): Number of internal links in this subtree.
-    internal_link_capacity (float): Sum of capacities for those internal links.
-    external_link_count (int): Number of external links from this subtree to another.
-    external_link_capacity (float): Sum of capacities for those external links.
-    external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown by other subtree path.
-    total_cost (float): Cumulative cost (nodes + links).
-    total_power (float): Cumulative power (nodes + links).
-
-**Attributes:**
-
-- `node_count` (int) = 0
-- `internal_link_count` (int) = 0
-- `internal_link_capacity` (float) = 0.0
-- `external_link_count` (int) = 0
-- `external_link_capacity` (float) = 0.0
-- `external_link_details` (Dict[str, ExternalLinkBreakdown]) = {}
-- `total_cost` (float) = 0.0
-- `total_power` (float) = 0.0
+- `get(self, step_name: str, key: str, default: Any = None) -> Any`
+  - Retrieve the value from (step_name, key). If the key is missing, return `default`.
+- `get_all(self, key: str) -> Dict[str, Any]`
+  - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+- `put(self, step_name: str, key: str, value: Any) -> None`
+  - Store a value under (step_name, key).
+- `to_dict(self) -> Dict[str, Dict[str, Any]]`
+  - Return a dictionary representation of all stored results.
 
 ---
 
-## ngraph.components
+## ngraph.scenario
 
-### Component
+### Scenario
 
-A generic component that can represent chassis, line cards, optics, etc.
-Components can have nested children, each with their own cost, power, etc.
+Represents a complete scenario for building and executing network workflows.
 
-Attributes:
-    name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
-    component_type (str): A string label (e.g., "chassis", "linecard", "optic").
-    description (str): A human-readable description of this component.
-    cost (float): Cost (capex) of a single instance of this component.
-    power_watts (float): Typical/nominal power usage (watts) for one instance.
-    power_watts_max (float): Maximum/peak power usage (watts) for one instance.
-    capacity (float): A generic capacity measure (e.g., platform capacity).
-    ports (int): Number of ports if relevant for this component.
-    count (int): How many identical copies of this component are present.
-    attrs (Dict[str, Any]): Arbitrary key-value attributes for extra metadata.
-    children (Dict[str, Component]): Nested child components (e.g., line cards
-        inside a chassis), keyed by child name.
+This scenario includes:
+  - A network (nodes/links), constructed via blueprint expansion.
+  - A failure policy (one or more rules).
+  - A set of traffic demands.
+  - A list of workflow steps to execute.
+  - A results container for storing outputs.
+  - A components_library for hardware/optics definitions.
 
-**Attributes:**
+Typical usage example:
 
-- `name` (str)
-- `component_type` (str) = generic
-- `description` (str)
-- `cost` (float) = 0.0
-- `power_watts` (float) = 0.0
-- `power_watts_max` (float) = 0.0
-- `capacity` (float) = 0.0
-- `ports` (int) = 0
-- `count` (int) = 1
-- `attrs` (Dict[str, Any]) = {}
-- `children` (Dict[str, Component]) = {}
-
-**Methods:**
-
-- `as_dict(self, include_children: 'bool' = True) -> 'Dict[str, Any]'`
-  - Returns a dictionary containing all properties of this component.
-- `total_capacity(self) -> 'float'`
-  - Computes the total (recursive) capacity of this component,
-- `total_cost(self) -> 'float'`
-  - Computes the total (recursive) cost of this component, including children,
-- `total_power(self) -> 'float'`
-  - Computes the total *typical* (recursive) power usage of this component,
-- `total_power_max(self) -> 'float'`
-  - Computes the total *peak* (recursive) power usage of this component,
-
-### ComponentsLibrary
-
-Holds a collection of named Components. Each entry is a top-level "template"
-that can be referenced for cost/power/capacity lookups, possibly with nested children.
-
-Example (YAML-like):
-    components:
-      BigSwitch:
-        component_type: chassis
-        cost: 20000
-        power_watts: 1750
-        capacity: 25600
-        children:
-          PIM16Q-16x200G:
-            component_type: linecard
-            cost: 1000
-            power_watts: 10
-            ports: 16
-            count: 8
-      200G-FR4:
-        component_type: optic
-        cost: 2000
-        power_watts: 6
-        power_watts_max: 6.5
+    scenario = Scenario.from_yaml(yaml_str, default_components=default_lib)
+    scenario.run()
+    # Inspect scenario.results
 
 **Attributes:**
 
-- `components` (Dict[str, Component]) = {}
-
-**Methods:**
-
-- `clone(self) -> 'ComponentsLibrary'`
-  - Creates a deep copy of this ComponentsLibrary.
-- `from_dict(data: 'Dict[str, Any]') -> 'ComponentsLibrary'`
-  - Constructs a ComponentsLibrary from a dictionary of raw component definitions.
-- `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'`
-  - Constructs a ComponentsLibrary from a YAML string. If the YAML contains
-- `get(self, name: 'str') -> 'Optional[Component]'`
-  - Retrieves a Component by its name from the library.
-- `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'`
-  - Merges another ComponentsLibrary into this one. By default (override=True),
-
----
-
-## ngraph.blueprints
-
-### Blueprint
-
-Represents a reusable blueprint for hierarchical sub-topologies.
-
-A blueprint may contain multiple groups of nodes (each can have a node_count
-and a name_template), plus adjacency rules describing how those groups connect.
-
-Attributes:
-    name (str): Unique identifier of this blueprint.
-    groups (Dict[str, Any]): A mapping of group_name -> group definition.
-        Allowed top-level keys in each group definition here are the same
-        as in normal group definitions (e.g. node_count, name_template,
-        attrs, disabled, risk_groups, or nested use_blueprint references, etc.).
-    adjacency (List[Dict[str, Any]]): A list of adjacency definitions
-        describing how these groups are linked, using the DSL fields
-        (source, target, pattern, link_params, etc.).
-
-**Attributes:**
-
-- `name` (str)
-- `groups` (Dict[str, Any])
-- `adjacency` (List[Dict[str, Any]])
-
-### DSLExpansionContext
-
-Carries the blueprint definitions and the final Network instance
-to be populated during DSL expansion.
-
-Attributes:
-    blueprints (Dict[str, Blueprint]): Dictionary of blueprint-name -> Blueprint.
-    network (Network): The Network into which expanded nodes/links are inserted.
-
-**Attributes:**
-
-- `blueprints` (Dict[str, Blueprint])
 - `network` (Network)
+- `failure_policy` (Optional[FailurePolicy])
+- `traffic_demands` (List[TrafficDemand])
+- `workflow` (List[WorkflowStep])
+- `results` (Results) = Results(_store={})
+- `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 
-### expand_network_dsl(data: 'Dict[str, Any]') -> 'Network'
+**Methods:**
 
-Expands a combined blueprint + network DSL into a complete Network object.
-
-Overall flow:
-  1) Parse "blueprints" into Blueprint objects.
-  2) Build a new Network from "network" metadata (e.g. name, version).
-  3) Expand 'network["groups"]'.
-     - If a group references a blueprint, incorporate that blueprint's subgroups
-       while merging parent's attrs + disabled + risk_groups into subgroups.
-     - Otherwise, directly create nodes (a "direct node group").
-  4) Process any direct node definitions (network["nodes"]).
-  5) Expand adjacency definitions in 'network["adjacency"]'.
-  6) Process any direct link definitions (network["links"]).
-  7) Process link overrides (in order if multiple overrides match).
-  8) Process node overrides (in order if multiple overrides match).
-
-Under the new rules:
-  - Only certain top-level fields are permitted in each structure. Any extra
-    keys raise a ValueError. "attrs" is where arbitrary user fields go.
-  - For link_params, recognized fields are "capacity", "cost", "disabled",
-    "risk_groups", "attrs". Everything else must go inside link_params["attrs"].
-  - For node/group definitions, recognized fields include "node_count",
-    "name_template", "attrs", "disabled", "risk_groups" or "use_blueprint"
-    for blueprint-based groups.
-
-Args:
-    data (Dict[str, Any]): The YAML-parsed dictionary containing
-        optional "blueprints" + "network".
-
-Returns:
-    Network: The fully expanded Network object with all nodes and links.
+- `from_yaml(yaml_str: 'str', default_components: 'Optional[ComponentsLibrary]' = None) -> 'Scenario'`
+  - Constructs a Scenario from a YAML string, optionally merging
+- `run(self) -> 'None'`
+  - Executes the scenario's workflow steps in order.
 
 ---
 
@@ -458,138 +656,6 @@ Attributes:
 - `mode` (str) = combine
 - `attrs` (Dict) = {}
 - `id` (str)
-
----
-
-## ngraph.failure_policy
-
-### FailureCondition
-
-A single condition for matching an entity's attribute with an operator and value.
-
-Example usage (YAML):
-  conditions:
-    - attr: "capacity"
-      operator: "<"
-      value: 100
-
-Attributes:
-    attr (str):
-        The name of the attribute to inspect (e.g., "capacity", "region").
-    operator (str):
-        The comparison operator: "==", "!=", "<", "<=", ">", ">=",
-        "contains", "not_contains", "any_value", or "no_value".
-    value (Any):
-        The value to compare against (e.g., 100, True, "foo", etc.).
-
-**Attributes:**
-
-- `attr` (str)
-- `operator` (str)
-- `value` (Any)
-
-### FailurePolicy
-
-A container for multiple FailureRules plus optional metadata in `attrs`.
-
-The main entry point is `apply_failures`, which:
-  1) For each rule, gather the relevant entities (node, link, or risk_group).
-  2) Match them based on rule conditions (or skip if 'logic=any').
-  3) Apply the selection strategy (all, random, or choice).
-  4) Collect the union of all failed entities across all rules.
-  5) Optionally expand failures by shared-risk groups or sub-risks.
-
-Large-scale performance:
-  - If you set `use_cache=True`, matched sets for each rule are cached,
-    so repeated calls to `apply_failures` can skip re-matching if the
-    network hasn't changed. If your network changes between calls,
-    you should clear the cache or re-initialize the policy.
-
-Attributes:
-    rules (List[FailureRule]):
-        A list of FailureRules to apply.
-    attrs (Dict[str, Any]):
-        Arbitrary metadata about this policy (e.g. "name", "description").
-    fail_shared_risk_groups (bool):
-        If True, after initial selection, expand failures among any
-        node/link that shares a risk group with a failed entity.
-    fail_risk_group_children (bool):
-        If True, and if a risk_group is marked as failed, expand to
-        children risk_groups recursively.
-    use_cache (bool):
-        If True, match results for each rule are cached to speed up
-        repeated calls. If the network changes, the cached results
-        may be stale.
-
-**Attributes:**
-
-- `rules` (List[FailureRule]) = []
-- `attrs` (Dict[str, Any]) = {}
-- `fail_shared_risk_groups` (bool) = False
-- `fail_risk_group_children` (bool) = False
-- `use_cache` (bool) = False
-- `_match_cache` (Dict[int, Set[str]]) = {}
-
-**Methods:**
-
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
-  - Identify which entities fail given the defined rules, then optionally
-
-### FailureRule
-
-Defines how to match and then select entities for failure.
-
-Attributes:
-    entity_scope (EntityScope):
-        The type of entities this rule applies to: "node", "link", or "risk_group".
-    conditions (List[FailureCondition]):
-        A list of conditions to filter matching entities.
-    logic (Literal["and", "or", "any"]):
-        "and": All conditions must be true for a match.
-        "or": At least one condition is true for a match.
-        "any": Skip condition checks and match all.
-    rule_type (Literal["random", "choice", "all"]):
-        The selection strategy among the matched set:
-          - "random": each matched entity is chosen with probability = `probability`.
-          - "choice": pick exactly `count` items from the matched set (random sample).
-          - "all": select every matched entity in the matched set.
-    probability (float):
-        Probability in [0,1], used if `rule_type="random"`.
-    count (int):
-        Number of entities to pick if `rule_type="choice"`.
-
-**Attributes:**
-
-- `entity_scope` (EntityScope)
-- `conditions` (List[FailureCondition]) = []
-- `logic` (Literal['and', 'or', 'any']) = and
-- `rule_type` (Literal['random', 'choice', 'all']) = all
-- `probability` (float) = 1.0
-- `count` (int) = 1
-
----
-
-## ngraph.failure_manager
-
-### FailureManager
-
-Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
-repeats multiple times for Monte Carlo experiments.
-
-Attributes:
-    network (Network): The underlying network to mutate (enable/disable nodes/links).
-    traffic_demands (List[TrafficDemand]): List of demands to place after failures.
-    failure_policy (Optional[FailurePolicy]): The policy describing what fails.
-    default_flow_policy_config: The default flow policy for any demands lacking one.
-
-**Methods:**
-
-- `apply_failures(self) -> 'None'`
-  - Apply the current failure_policy to self.network (in-place).
-- `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
-  - Repeatedly applies (randomized) failures to the network and accumulates
-- `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
-  - Applies failures to the network, places the demands, and returns per-demand results.
 
 ---
 
@@ -675,32 +741,97 @@ Attributes:
 
 ---
 
-## ngraph.results
+## ngraph.lib.demand
 
-### Results
+### Demand
 
-A container for storing arbitrary key-value data that arises during workflow steps.
-The data is organized by step name, then by key.
-
-Example usage:
-  results.put("Step1", "total_capacity", 123.45)
-  cap = results.get("Step1", "total_capacity")  # returns 123.45
-  all_caps = results.get_all("total_capacity")  # might return {"Step1": 123.45, "Step2": 98.76}
+Represents a network demand between two nodes. It is realized via one or more
+flows through a single FlowPolicy.
 
 **Attributes:**
 
-- `_store` (Dict) = {}
+- `src_node` (NodeID)
+- `dst_node` (NodeID)
+- `volume` (float)
+- `demand_class` (int) = 0
+- `flow_policy` (Optional[FlowPolicy])
+- `placed_demand` (float) = 0.0
 
 **Methods:**
 
-- `get(self, step_name: str, key: str, default: Any = None) -> Any`
-  - Retrieve the value from (step_name, key). If the key is missing, return `default`.
-- `get_all(self, key: str) -> Dict[str, Any]`
-  - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
-- `put(self, step_name: str, key: str, value: Any) -> None`
-  - Store a value under (step_name, key).
-- `to_dict(self) -> Dict[str, Dict[str, Any]]`
-  - Return a dictionary representation of all stored results.
+- `place(self, flow_graph: 'StrictMultiDiGraph', max_fraction: 'float' = 1.0, max_placement: 'Optional[float]' = None) -> 'Tuple[float, float]'`
+  - Places demand volume onto the network via self.flow_policy.
+
+---
+
+## ngraph.lib.flow
+
+### Flow
+
+Represents a fraction of demand routed along a given PathBundle.
+
+In traffic-engineering scenarios, a `Flow` object can model:
+  - MPLS LSPs/tunnels with explicit paths,
+  - IP forwarding behavior (with ECMP or UCMP),
+  - Or anything that follows a specific set of paths.
+
+**Methods:**
+
+- `place_flow(self, flow_graph: 'StrictMultiDiGraph', to_place: 'float', flow_placement: 'FlowPlacement') -> 'Tuple[float, float]'`
+  - Attempt to place (or update) this flow on the given `flow_graph`.
+- `remove_flow(self, flow_graph: 'StrictMultiDiGraph') -> 'None'`
+  - Remove this flow's contribution from the provided `flow_graph`.
+
+### FlowIndex
+
+Describes a unique identifier for a Flow in the network.
+
+Attributes:
+    src_node (NodeID): The source node of the flow.
+    dst_node (NodeID): The destination node of the flow.
+    flow_class (Hashable): Identifier representing the 'class' of this flow (e.g., traffic class).
+                           Can be int, str, or any hashable type for flexibility.
+    flow_id (int): A unique ID for this flow.
+
+---
+
+## ngraph.lib.flow_policy
+
+### FlowPolicy
+
+Manages the placement and management of flows (demands) on a network graph.
+
+A FlowPolicy converts a demand into one or more Flow objects subject to
+capacity constraints and user-specified configurations such as path
+selection algorithms and flow placement methods.
+
+**Methods:**
+
+- `deep_copy(self) -> 'FlowPolicy'`
+  - Creates and returns a deep copy of this FlowPolicy, including all flows.
+- `place_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', volume: 'float', target_flow_volume: 'Optional[float]' = None, min_flow: 'Optional[float]' = None) -> 'Tuple[float, float]'`
+  - Places the given demand volume on the network graph by splitting or creating
+- `rebalance_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', target_flow_volume: 'float') -> 'Tuple[float, float]'`
+  - Rebalances the demand across existing flows so that their volumes are closer
+- `remove_demand(self, flow_graph: 'StrictMultiDiGraph') -> 'None'`
+  - Removes all flows from the network graph without clearing internal state.
+
+### FlowPolicyConfig
+
+Enumerates supported flow policy configurations.
+
+### get_flow_policy(flow_policy_config: 'FlowPolicyConfig') -> 'FlowPolicy'
+
+Factory method to create and return a FlowPolicy instance based on the provided configuration.
+
+Args:
+    flow_policy_config: A FlowPolicyConfig enum value specifying the desired policy.
+
+Returns:
+    A pre-configured FlowPolicy instance corresponding to the specified configuration.
+
+Raises:
+    ValueError: If an unknown FlowPolicyConfig value is provided.
 
 ---
 
@@ -825,6 +956,181 @@ Returns:
 
 ---
 
+## ngraph.lib.io
+
+### edgelist_to_graph(lines: 'Iterable[str]', columns: 'List[str]', separator: 'str' = ' ', graph: 'Optional[StrictMultiDiGraph]' = None, source: 'str' = 'src', target: 'str' = 'dst', key: 'str' = 'key') -> 'StrictMultiDiGraph'
+
+Builds or updates a StrictMultiDiGraph from an edge list.
+
+Each line in the input is split by the specified separator into tokens. These tokens
+are mapped to column names provided in `columns`. The tokens corresponding to `source`
+and `target` become the node IDs. If a `key` column exists, its token is used as the edge
+ID; remaining tokens are added as edge attributes.
+
+Args:
+    lines: An iterable of strings, each representing one edge.
+    columns: A list of column names, e.g. ["src", "dst", "cost"].
+    separator: The separator used to split each line (default is a space).
+    graph: An existing StrictMultiDiGraph to update; if None, a new graph is created.
+    source: The column name for the source node ID.
+    target: The column name for the target node ID.
+    key: The column name for a custom edge ID (if present).
+
+Returns:
+    The updated (or newly created) StrictMultiDiGraph.
+
+### graph_to_edgelist(graph: 'StrictMultiDiGraph', columns: 'Optional[List[str]]' = None, separator: 'str' = ' ', source_col: 'str' = 'src', target_col: 'str' = 'dst', key_col: 'str' = 'key') -> 'List[str]'
+
+Converts a StrictMultiDiGraph into an edge-list text representation.
+
+Each line in the output represents one edge with tokens joined by the given separator.
+By default, the output columns are:
+    [source_col, target_col, key_col] + sorted(edge_attribute_names)
+
+If an explicit list of columns is provided, those columns (in that order) are used,
+and any missing values are output as an empty string.
+
+Args:
+    graph: The StrictMultiDiGraph to export.
+    columns: Optional list of column names. If None, they are auto-generated.
+    separator: The string used to join tokens (default is a space).
+    source_col: The column name for the source node (default "src").
+    target_col: The column name for the target node (default "dst").
+    key_col: The column name for the edge key (default "key").
+
+Returns:
+    A list of strings, each representing one edge in the specified column format.
+
+### graph_to_node_link(graph: 'StrictMultiDiGraph') -> 'Dict[str, Any]'
+
+Converts a StrictMultiDiGraph into a node-link dict representation.
+
+This representation is suitable for JSON serialization (e.g., for D3.js or Nx formats).
+
+The returned dict has the following structure:
+    {
+        "graph": { ... top-level graph attributes ... },
+        "nodes": [
+            {"id": node_id, "attr": { ... node attributes ... }},
+            ...
+        ],
+        "links": [
+            {
+                "source": <indexed_node>,
+                "target": <indexed_node>,
+                "key": <edge_id>,
+                "attr": { ... edge attributes ... }
+            },
+            ...
+        ]
+    }
+
+Args:
+    graph: The StrictMultiDiGraph to convert.
+
+Returns:
+    A dict containing the 'graph' attributes, list of 'nodes', and list of 'links'.
+
+### node_link_to_graph(data: 'Dict[str, Any]') -> 'StrictMultiDiGraph'
+
+Reconstructs a StrictMultiDiGraph from its node-link dict representation.
+
+Expected input format:
+    {
+        "graph": { ... graph attributes ... },
+        "nodes": [
+            {"id": <node_id>, "attr": { ... node attributes ... }},
+            ...
+        ],
+        "links": [
+            {
+                "source": <indexed_node>,
+                "target": <indexed_node>,
+                "key": <edge_id>,
+                "attr": { ... edge attributes ... }
+            },
+            ...
+        ]
+    }
+
+Args:
+    data: A dict representing the node-link structure.
+
+Returns:
+    A StrictMultiDiGraph reconstructed from the provided data.
+
+---
+
+## ngraph.lib.path
+
+### Path
+
+Represents a single path in the network.
+
+Attributes:
+    path_tuple (PathTuple):
+        A sequence of path elements. Each element is a tuple of the form
+        (node_id, (edge_id_1, edge_id_2, ...)), where the final element typically has an empty tuple.
+    cost (Cost):
+        The total numeric cost (e.g., distance or metric) of the path.
+    edges (Set[EdgeID]):
+        A set of all edge IDs encountered in the path.
+    nodes (Set[NodeID]):
+        A set of all node IDs encountered in the path.
+    edge_tuples (Set[Tuple[EdgeID, ...]]):
+        A set of all tuples of parallel edges from each path element (including the final empty tuple).
+
+**Attributes:**
+
+- `path_tuple` (PathTuple)
+- `cost` (Cost)
+- `edges` (Set[EdgeID]) = set()
+- `nodes` (Set[NodeID]) = set()
+- `edge_tuples` (Set[Tuple[EdgeID, ...]]) = set()
+
+**Methods:**
+
+- `get_sub_path(self, dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'Path'`
+  - Create a sub-path ending at the specified destination node, recalculating the cost.
+
+---
+
+## ngraph.lib.path_bundle
+
+### PathBundle
+
+A collection of equal-cost paths between two nodes.
+
+This class encapsulates one or more parallel paths (all of the same cost)
+between `src_node` and `dst_node`. The predecessor map `pred` associates
+each node with the node(s) from which it can be reached, along with a list
+of edge IDs used in that step. The constructor performs a reverse traversal
+from `dst_node` to `src_node` to collect all edges, nodes, and store them
+in this bundle.
+
+Since we trust the input is already a DAG, no cycle-detection checks
+are performed. All relevant edges and nodes are simply gathered.
+If it's not a DAG, the behavior is... an infinite loop. Oops.
+
+**Methods:**
+
+- `add(self, other: 'PathBundle') -> 'PathBundle'`
+  - Concatenate this bundle with another bundle (end-to-start).
+- `contains(self, other: 'PathBundle') -> 'bool'`
+  - Check if this bundle's edge set contains all edges of `other`.
+- `from_path(path: 'Path', resolve_edges: 'bool' = False, graph: 'Optional[StrictMultiDiGraph]' = None, edge_select: 'Optional[EdgeSelect]' = None, cost_attr: 'str' = 'cost', capacity_attr: 'str' = 'capacity') -> 'PathBundle'`
+  - Construct a PathBundle from a single `Path` object.
+- `get_sub_path_bundle(self, new_dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'PathBundle'`
+  - Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
+- `is_disjoint_from(self, other: 'PathBundle') -> 'bool'`
+  - Check if this bundle shares no edges with `other`.
+- `is_subset_of(self, other: 'PathBundle') -> 'bool'`
+  - Check if this bundle's edge set is contained in `other`'s edge set.
+- `resolve_to_paths(self, split_parallel_edges: 'bool' = False) -> 'Iterator[Path]'`
+  - Generate all concrete `Path` objects contained in this PathBundle.
+
+---
+
 ## ngraph.lib.util
 
 ### from_digraph(nx_graph: networkx.classes.digraph.DiGraph) -> ngraph.lib.graph.StrictMultiDiGraph
@@ -887,64 +1193,117 @@ Returns:
 
 ---
 
-## ngraph.lib.algorithms.spf
+## ngraph.lib.algorithms.base
 
-### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
+### EdgeSelect
 
-Generator of up to k shortest paths from src_node to dst_node using a Yen-like algorithm.
+Edge selection criteria determining which edges are considered
+for path-finding between a node and its neighbor(s).
 
-The initial SPF (shortest path) is computed; subsequent paths are found by systematically
-excluding edges/nodes used by previously generated paths. Each iteration yields a
-(costs, pred) describing one path. Stops if there are no more valid paths or if max_k
-is reached.
+### FlowPlacement
+
+Ways to distribute flow across parallel equal cost paths.
+
+### PathAlg
+
+Types of path finding algorithms
+
+---
+
+## ngraph.lib.algorithms.calc_capacity
+
+### calc_graph_capacity(flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, capacity_attr: 'str' = 'capacity', flow_attr: 'str' = 'flow') -> 'Tuple[float, Dict[NodeID, Dict[NodeID, float]]]'
+
+Calculate the maximum feasible flow from src_node to dst_node (forward sense)
+using either the PROPORTIONAL or EQUAL_BALANCED approach.
+
+In PROPORTIONAL mode (similar to Dinic in reversed orientation):
+  1. Build the reversed residual graph from dst_node (via `_init_graph_data`).
+  2. Use BFS (in `_set_levels_bfs`) to build a level graph and DFS (`_push_flow_dfs`)
+     to push blocking flows, repeating until no more flow can be pushed.
+  3. The net flow found is stored in reversed orientation. Convert final flows
+     to forward orientation by negating and normalizing by the total.
+
+In EQUAL_BALANCED mode:
+  1. Build reversed adjacency from dst_node (also via `_init_graph_data`),
+     ignoring capacity checks in that BFS.
+  2. Perform a BFS pass from src_node (`_equal_balance_bfs`) to distribute a
+     nominal flow of 1.0 equally among parallel edges.
+  3. Determine the scaling ratio so that no edge capacity is exceeded.
+     Scale the flow assignments accordingly, then normalize to the forward sense.
 
 Args:
-    graph: The directed graph (StrictMultiDiGraph).
-    src_node: The source node.
-    dst_node: The destination node.
-    edge_select: The edge selection strategy. Defaults to ALL_MIN_COST.
-    edge_select_func: Optional override of the default edge selection function.
-    max_k: If set, yields at most k distinct paths.
-    max_path_cost: If set, do not yield any path whose total cost > max_path_cost.
-    max_path_cost_factor: If set, updates max_path_cost to:
-        min(max_path_cost, best_path_cost * max_path_cost_factor).
-    multipath: Whether to consider multiple same-cost expansions in SPF.
-    excluded_edges: Set of edge IDs to exclude globally.
-    excluded_nodes: Set of node IDs to exclude globally.
-
-Yields:
-    (costs, pred) for each discovered path from src_node to dst_node, in ascending
-    order of cost.
-
-### spf(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]
-
-Compute shortest paths (cost-based) from a source node using a Dijkstra-like method.
-
-By default, uses EdgeSelect.ALL_MIN_COST. If multipath=True, multiple equal-cost
-paths to the same node will be recorded in the predecessor structure. If no
-excluded edges/nodes are given and edge_select is one of the specialized
-(ALL_MIN_COST or ALL_MIN_COST_WITH_CAP_REMAINING), it uses a fast specialized
-routine.
-
-Args:
-    graph: The directed graph (StrictMultiDiGraph).
-    src_node: The source node from which to compute shortest paths.
-    edge_select: The edge selection strategy. Defaults to ALL_MIN_COST.
-    edge_select_func: If provided, overrides the default edge selection function.
-        Must return (cost, list_of_edges) for the given node->neighbor adjacency.
-    multipath: Whether to record multiple same-cost paths.
-    excluded_edges: A set of edge IDs to ignore in the graph.
-    excluded_nodes: A set of node IDs to ignore in the graph.
+    flow_graph: The multigraph with capacity and flow attributes.
+    src_node: The source node in the forward graph.
+    dst_node: The destination node in the forward graph.
+    pred: Forward adjacency mapping (node -> (adjacent node -> list of EdgeIDs)),
+          typically produced by `spf(..., multipath=True)`. Must be a DAG.
+    flow_placement: The flow distribution strategy (PROPORTIONAL or EQUAL_BALANCED).
+    capacity_attr: Name of the capacity attribute on edges.
+    flow_attr: Name of the flow attribute on edges.
 
 Returns:
-    A tuple of (costs, pred):
-      - costs: Maps each reachable node to its minimal cost from src_node.
-      - pred: For each reachable node, a dict of predecessor -> list of edges
-        from that predecessor to the node. Multiple predecessors are possible
-        if multipath=True.
+    A tuple of:
+      - total_flow: The maximum feasible flow from src_node to dst_node.
+      - flow_dict: A nested dictionary [u][v] -> flow value in the forward sense.
+        Positive if flow is from u to v, negative otherwise.
 
 Raises:
-    KeyError: If src_node does not exist in graph.
+    ValueError: If src_node or dst_node is not in the graph, or the flow_placement
+                is unsupported.
+
+---
+
+## ngraph.lib.algorithms.edge_select
+
+### edge_select_fabric(edge_select: ngraph.lib.algorithms.base.EdgeSelect, select_value: Optional[Any] = None, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]] = None, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None, cost_attr: str = 'cost', capacity_attr: str = 'capacity', flow_attr: str = 'flow') -> Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]
+
+Creates a function that selects edges between two nodes according
+to a given EdgeSelect strategy (or a user-defined function).
+
+Args:
+    edge_select: An EdgeSelect enum specifying the selection strategy.
+    select_value: An optional numeric threshold or scaling factor for capacity checks.
+    edge_select_func: A user-supplied function if edge_select=USER_DEFINED.
+    excluded_edges: A set of edges to ignore entirely.
+    excluded_nodes: A set of nodes to skip (if the destination node is in this set).
+    cost_attr: The edge attribute name representing cost.
+    capacity_attr: The edge attribute name representing capacity.
+    flow_attr: The edge attribute name representing current flow.
+
+Returns:
+    A function with signature:
+        (graph, src_node, dst_node, edges_dict, excluded_edges, excluded_nodes) ->
+        (selected_cost, [list_of_edge_ids])
+    where:
+        - `selected_cost` is the numeric cost used by the path-finding algorithm (e.g. Dijkstra).
+        - `[list_of_edge_ids]` is the list of edges chosen.
+
+---
+
+## ngraph.lib.algorithms.flow_init
+
+### init_flow_graph(flow_graph: 'StrictMultiDiGraph', flow_attr: 'str' = 'flow', flows_attr: 'str' = 'flows', reset_flow_graph: 'bool' = True) -> 'StrictMultiDiGraph'
+
+Ensure that every node and edge in the provided `flow_graph` has
+flow-related attributes. Specifically, for each node and edge:
+
+- The attribute named `flow_attr` (default: "flow") is set to 0.
+- The attribute named `flows_attr` (default: "flows") is set to an empty dict.
+
+If `reset_flow_graph` is True, any existing flow values in these attributes
+are overwritten; otherwise they are only created if missing.
+
+Args:
+    flow_graph: The StrictMultiDiGraph whose nodes and edges should be
+        prepared for flow assignment.
+    flow_attr: The attribute name to track a numeric flow value per node/edge.
+    flows_attr: The attribute name to track multiple flow identifiers (and flows).
+    reset_flow_graph: If True, reset existing flows (set to 0). If False, do not overwrite.
+
+Returns:
+    The same `flow_graph` object, after ensuring each node/edge has the
+    necessary flow-related attributes.
 
 ---
 
@@ -1013,8 +1372,8 @@ Examples:
     >>> g.add_node('A')
     >>> g.add_node('B')
     >>> g.add_node('C')
-    >>> _ = g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={}, cost=1)
-    >>> _ = g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={}, cost=1)
+    >>> g.add_edge('A', 'B', capacity=10.0, flow=0.0, flows={}, cost=1)
+    >>> g.add_edge('B', 'C', capacity=5.0, flow=0.0, flows={}, cost=1)
     >>>
     >>> # Basic usage (scalar return)
     >>> max_flow_value = calc_max_flow(g, 'A', 'C')
@@ -1069,20 +1428,165 @@ Returns:
 
 ---
 
-## ngraph.lib.algorithms.base
+## ngraph.lib.algorithms.path_utils
 
-### EdgeSelect
+### resolve_to_paths(src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', split_parallel_edges: 'bool' = False) -> 'Iterator[PathTuple]'
 
-Edge selection criteria determining which edges are considered
-for path-finding between a node and its neighbor(s).
+Enumerate all source->destination paths from a predecessor map.
 
-### FlowPlacement
+Args:
+    src_node: Source node ID.
+    dst_node: Destination node ID.
+    pred: Predecessor map from SPF or KSP.
+    split_parallel_edges: If True, expand parallel edges into distinct paths.
 
-Ways to distribute flow across parallel equal cost paths.
+Yields:
+    A tuple of (nodeID, (edgeIDs,)) pairs from src_node to dst_node.
 
-### PathAlg
+---
 
-Types of path finding algorithms
+## ngraph.lib.algorithms.place_flow
+
+### FlowPlacementMeta
+
+Metadata capturing how flow was placed on the graph.
+
+Attributes:
+    placed_flow: The amount of flow actually placed.
+    remaining_flow: The portion of flow that could not be placed due to capacity limits.
+    nodes: Set of node IDs that participated in the flow.
+    edges: Set of edge IDs that carried some portion of this flow.
+
+**Attributes:**
+
+- `placed_flow` (float)
+- `remaining_flow` (float)
+- `nodes` (Set[NodeID]) = set()
+- `edges` (Set[EdgeID]) = set()
+
+### place_flow_on_graph(flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', flow: 'float' = inf, flow_index: 'Optional[Hashable]' = None, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, capacity_attr: 'str' = 'capacity', flow_attr: 'str' = 'flow', flows_attr: 'str' = 'flows') -> 'FlowPlacementMeta'
+
+Place flow from `src_node` to `dst_node` on the given `flow_graph`.
+
+Uses a precomputed `flow_dict` from `calc_graph_capacity` to figure out how
+much flow can be placed. Updates the graph's edges and nodes with the placed flow.
+
+Args:
+    flow_graph: The graph on which flow will be placed.
+    src_node: The source node.
+    dst_node: The destination node.
+    pred: A dictionary of node->(adj_node->list_of_edge_IDs) giving path adjacency.
+    flow: Requested flow amount; can be infinite.
+    flow_index: Identifier for this flow (used to track multiple flows).
+    flow_placement: Strategy for distributing flow among parallel equal cost paths.
+    capacity_attr: Attribute name on edges for capacity.
+    flow_attr: Attribute name on edges/nodes for aggregated flow.
+    flows_attr: Attribute name on edges/nodes for per-flow tracking.
+
+Returns:
+    FlowPlacementMeta: Contains the placed flow amount, remaining flow amount,
+        and sets of touched nodes/edges.
+
+### remove_flow_from_graph(flow_graph: 'StrictMultiDiGraph', flow_index: 'Optional[Hashable]' = None, flow_attr: 'str' = 'flow', flows_attr: 'str' = 'flows') -> 'None'
+
+Remove one (or all) flows from the given graph.
+
+Args:
+    flow_graph: The graph from which flow(s) should be removed.
+    flow_index: If provided, only remove the specified flow. If None,
+        remove all flows entirely.
+    flow_attr: The aggregate flow attribute name on edges.
+    flows_attr: The per-flow attribute name on edges.
+
+---
+
+## ngraph.lib.algorithms.spf
+
+### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
+
+Generator of up to k shortest paths from src_node to dst_node using a Yen-like algorithm.
+
+The initial SPF (shortest path) is computed; subsequent paths are found by systematically
+excluding edges/nodes used by previously generated paths. Each iteration yields a
+(costs, pred) describing one path. Stops if there are no more valid paths or if max_k
+is reached.
+
+Args:
+    graph: The directed graph (StrictMultiDiGraph).
+    src_node: The source node.
+    dst_node: The destination node.
+    edge_select: The edge selection strategy. Defaults to ALL_MIN_COST.
+    edge_select_func: Optional override of the default edge selection function.
+    max_k: If set, yields at most k distinct paths.
+    max_path_cost: If set, do not yield any path whose total cost > max_path_cost.
+    max_path_cost_factor: If set, updates max_path_cost to:
+        min(max_path_cost, best_path_cost * max_path_cost_factor).
+    multipath: Whether to consider multiple same-cost expansions in SPF.
+    excluded_edges: Set of edge IDs to exclude globally.
+    excluded_nodes: Set of node IDs to exclude globally.
+
+Yields:
+    (costs, pred) for each discovered path from src_node to dst_node, in ascending
+    order of cost.
+
+### spf(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]
+
+Compute shortest paths (cost-based) from a source node using a Dijkstra-like method.
+
+By default, uses EdgeSelect.ALL_MIN_COST. If multipath=True, multiple equal-cost
+paths to the same node will be recorded in the predecessor structure. If no
+excluded edges/nodes are given and edge_select is one of the specialized
+(ALL_MIN_COST or ALL_MIN_COST_WITH_CAP_REMAINING), it uses a fast specialized
+routine.
+
+Args:
+    graph: The directed graph (StrictMultiDiGraph).
+    src_node: The source node from which to compute shortest paths.
+    edge_select: The edge selection strategy. Defaults to ALL_MIN_COST.
+    edge_select_func: If provided, overrides the default edge selection function.
+        Must return (cost, list_of_edges) for the given node->neighbor adjacency.
+    multipath: Whether to record multiple same-cost paths.
+    excluded_edges: A set of edge IDs to ignore in the graph.
+    excluded_nodes: A set of node IDs to ignore in the graph.
+
+Returns:
+    A tuple of (costs, pred):
+      - costs: Maps each reachable node to its minimal cost from src_node.
+      - pred: For each reachable node, a dict of predecessor -> list of edges
+        from that predecessor to the node. Multiple predecessors are possible
+        if multipath=True.
+
+Raises:
+    KeyError: If src_node does not exist in graph.
+
+---
+
+## ngraph.lib.algorithms.types
+
+Types and data structures for algorithm analytics.
+
+### FlowSummary
+
+Summary of max-flow computation results with detailed analytics.
+
+This immutable data structure provides comprehensive information about
+the flow solution, including edge flows, residual capacities, and
+min-cut analysis.
+
+Attributes:
+    total_flow: The maximum flow value achieved.
+    edge_flow: Flow amount on each edge, indexed by (src, dst, key).
+    residual_cap: Remaining capacity on each edge after flow placement.
+    reachable: Set of nodes reachable from source in residual graph.
+    min_cut: List of saturated edges that form the minimum cut.
+
+**Attributes:**
+
+- `total_flow` (float)
+- `edge_flow` (Dict[Edge, float])
+- `residual_cap` (Dict[Edge, float])
+- `reachable` (Set[str])
+- `min_cut` (List[Edge])
 
 ---
 
@@ -1185,23 +1689,6 @@ Raises:
 
 ---
 
-## ngraph.transform.enable_nodes
-
-### EnableNodesTransform
-
-Enable *count* disabled nodes that match *path*.
-
-Ordering is configurable; default is lexical by node name.
-
-**Methods:**
-
-- `apply(self, scenario: 'Scenario') -> 'None'`
-  - Modify *scenario.network* in-place.
-- `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
-  - Instantiate a registered transform by *step_type*.
-
----
-
 ## ngraph.transform.distribute_external
 
 ### DistributeExternalConnectivity
@@ -1220,6 +1707,23 @@ Args:
 **Methods:**
 
 - `apply(self, scenario: ngraph.scenario.Scenario) -> None`
+  - Modify *scenario.network* in-place.
+- `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
+  - Instantiate a registered transform by *step_type*.
+
+---
+
+## ngraph.transform.enable_nodes
+
+### EnableNodesTransform
+
+Enable *count* disabled nodes that match *path*.
+
+Ordering is configurable; default is lexical by node name.
+
+**Methods:**
+
+- `apply(self, scenario: 'Scenario') -> 'None'`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
