@@ -364,9 +364,9 @@ class TestMaxFlowExtended:
         for edge, flow_change in sensitivity.items():
             assert isinstance(edge, tuple)
             assert len(edge) == 3  # (u, v, k)
-            assert (
-                flow_change <= 0
-            )  # Should reduce or maintain flow    def test_sensitivity_analysis_zero_capacity_behavior(self):
+            assert flow_change <= 0  # Should reduce or maintain flow
+
+    def test_sensitivity_analysis_zero_capacity_behavior(self):
         """Test specific behavior when edge capacity is reduced to zero."""
         from ngraph.lib.algorithms.max_flow import run_sensitivity
 
@@ -386,9 +386,9 @@ class TestMaxFlowExtended:
         # Should reduce flow to zero (complete bottleneck removal)
         bc_edge = ("B", "C", bc_edge_key)
         assert bc_edge in sensitivity
-        assert (
-            sensitivity[bc_edge] == -5.0
-        )  # Should reduce flow by 5 (from 5 to 0)    def test_sensitivity_analysis_partial_capacity_reduction(self):
+        assert sensitivity[bc_edge] == -5.0  # Should reduce flow by 5 (from 5 to 0)
+
+    def test_sensitivity_analysis_partial_capacity_reduction(self):
         """Test behavior when capacity is partially reduced but not to zero."""
         from ngraph.lib.algorithms.max_flow import run_sensitivity
 
@@ -441,3 +441,178 @@ class TestMaxFlowExtended:
         # Decreases should be negative or zero
         for flow_change in sensitivity_decrease.values():
             assert flow_change <= 0
+
+    def test_max_flow_self_loop(self):
+        """Test max flow calculation when source equals destination (self-loop)."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", capacity=10.0, flow=0.0, flows={}, cost=1)
+
+        # Self-loop should return 0 flow (no meaningful flow from node to itself)
+        max_flow = calc_max_flow(g, "A", "A")
+        assert max_flow == 0.0
+
+    def test_max_flow_self_loop_all_return_combinations(self):
+        """Test all return value combinations for self-loops (s==t)."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", capacity=10.0, flow=0.0, flows={}, cost=1)
+
+        # Test scalar return (already covered above but for completeness)
+        flow = calc_max_flow(g, "A", "A")
+        assert flow == 0.0
+
+        # Test return_summary=True
+        flow, summary = calc_max_flow(g, "A", "A", return_summary=True)
+        assert flow == 0.0
+        assert isinstance(summary, FlowSummary)
+        assert summary.total_flow == 0.0
+        assert "A" in summary.reachable  # Source should be reachable
+        assert len(summary.min_cut) == 0  # No min-cut for self-loops
+        assert len(summary.edge_flow) == 1  # Should have the self-loop edge
+
+        # Check edge flow is 0 for the self-loop
+        self_loop_edges = [
+            (u, v, k) for (u, v, k) in summary.edge_flow.keys() if u == "A" and v == "A"
+        ]
+        assert len(self_loop_edges) >= 1
+        for edge in self_loop_edges:
+            assert summary.edge_flow[edge] == 0.0
+
+        # Test return_graph=True
+        flow, flow_graph = calc_max_flow(g, "A", "A", return_graph=True)
+        assert flow == 0.0
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+        assert flow_graph.has_node("A")
+        assert flow_graph.has_edge("A", "A")
+
+        # Check that flow attributes are properly initialized on the self-loop edge
+        for _, _, _, data in flow_graph.edges(data=True, keys=True):
+            assert "flow" in data
+            assert "capacity" in data
+            assert data["flow"] == 0.0  # Should be 0 for self-loop
+
+        # Test both return_summary=True and return_graph=True
+        flow, summary, flow_graph = calc_max_flow(
+            g, "A", "A", return_summary=True, return_graph=True
+        )
+        assert flow == 0.0
+        assert isinstance(summary, FlowSummary)
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+        assert summary.total_flow == 0.0
+        assert flow_graph.has_node("A")
+        assert flow_graph.has_edge("A", "A")
+
+    def test_max_flow_overlapping_source_sink_simple(self):
+        """Test max flow with overlapping source/sink nodes that caused infinite loops."""
+        g = StrictMultiDiGraph()
+        g.add_node("N1")
+        g.add_node("N2")
+
+        # Simple topology: N1 -> N2
+        g.add_edge("N1", "N2", capacity=1.0, flow=0.0, flows={}, cost=1)
+
+        # Test all combinations that would occur in pairwise mode with overlapping patterns
+        # N1 -> N1 (self-loop)
+        max_flow_n1_n1 = calc_max_flow(g, "N1", "N1")
+        assert max_flow_n1_n1 == 0.0
+
+        # N1 -> N2 (valid path)
+        max_flow_n1_n2 = calc_max_flow(g, "N1", "N2")
+        assert max_flow_n1_n2 == 1.0
+
+        # N2 -> N1 (no path)
+        max_flow_n2_n1 = calc_max_flow(g, "N2", "N1")
+        assert max_flow_n2_n1 == 0.0
+
+        # N2 -> N2 (self-loop)
+        max_flow_n2_n2 = calc_max_flow(g, "N2", "N2")
+        assert max_flow_n2_n2 == 0.0
+
+    def test_max_flow_overlapping_source_sink_with_bidirectional(self):
+        """Test overlapping source/sink with bidirectional edges."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+
+        # Bidirectional edges
+        g.add_edge("A", "B", capacity=5.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("B", "A", capacity=3.0, flow=0.0, flows={}, cost=1)
+
+        # Test all combinations
+        # A -> A (self-loop)
+        max_flow_a_a = calc_max_flow(g, "A", "A")
+        assert max_flow_a_a == 0.0
+
+        # A -> B (forward direction)
+        max_flow_a_b = calc_max_flow(g, "A", "B")
+        assert max_flow_a_b == 5.0
+
+        # B -> A (reverse direction)
+        max_flow_b_a = calc_max_flow(g, "B", "A")
+        assert max_flow_b_a == 3.0
+
+        # B -> B (self-loop)
+        max_flow_b_b = calc_max_flow(g, "B", "B")
+        assert max_flow_b_b == 0.0
+
+    def test_max_flow_self_loop_all_return_modes(self):
+        """
+        Test self-loop (s == t) behavior with all possible return value combinations.
+        Ensures that our optimization properly handles all return modes.
+        """
+        # Create a simple graph with a self-loop
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", capacity=10.0, flow=0.0, flows={}, cost=1)
+
+        # Test 1: Basic scalar return (return_summary=False, return_graph=False)
+        flow_scalar = calc_max_flow(g, "A", "A")
+        assert flow_scalar == 0.0
+        assert isinstance(flow_scalar, float)
+
+        # Test 2: With summary only (return_summary=True, return_graph=False)
+        flow_with_summary = calc_max_flow(g, "A", "A", return_summary=True)
+        assert isinstance(flow_with_summary, tuple)
+        assert len(flow_with_summary) == 2
+        flow, summary = flow_with_summary
+        assert flow == 0.0
+        assert isinstance(summary, FlowSummary)
+        assert summary.total_flow == 0.0
+        assert "A" in summary.reachable  # Source should be reachable from itself
+        assert len(summary.min_cut) == 0  # No min-cut edges for self-loop
+
+        # Test 3: With graph only (return_summary=False, return_graph=True)
+        flow_with_graph = calc_max_flow(g, "A", "A", return_graph=True)
+        assert isinstance(flow_with_graph, tuple)
+        assert len(flow_with_graph) == 2
+        flow, flow_graph = flow_with_graph
+        assert flow == 0.0
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+        assert flow_graph.has_node("A")
+        assert flow_graph.has_edge("A", "A")
+
+        # Test 4: With both summary and graph (return_summary=True, return_graph=True)
+        flow_with_both = calc_max_flow(
+            g, "A", "A", return_summary=True, return_graph=True
+        )
+        assert isinstance(flow_with_both, tuple)
+        assert len(flow_with_both) == 3
+        flow, summary, flow_graph = flow_with_both
+        assert flow == 0.0
+        assert isinstance(summary, FlowSummary)
+        assert isinstance(flow_graph, StrictMultiDiGraph)
+        assert summary.total_flow == 0.0
+        assert "A" in summary.reachable
+        assert len(summary.min_cut) == 0
+        assert flow_graph.has_node("A")
+        assert flow_graph.has_edge("A", "A")
+
+        # Verify that the flow on the self-loop edge is 0
+        self_loop_edges = list(flow_graph.edges(nbunch="A", data=True, keys=True))
+        a_to_a_edges = [
+            (u, v, k, d) for u, v, k, d in self_loop_edges if u == "A" and v == "A"
+        ]
+        assert len(a_to_a_edges) >= 1
+        for _u, _v, _k, data in a_to_a_edges:
+            assert data.get("flow", 0.0) == 0.0

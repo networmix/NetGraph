@@ -40,6 +40,7 @@ dev = [
     "pytest-cov",
     "pytest-benchmark",
     "pytest-mock",
+    "pytest-timeout",
     # docs
     "mkdocs-material",
     "pdoc",
@@ -61,6 +62,7 @@ ngraph = "ngraph.cli:main"
 # Pytest flags
 [tool.pytest.ini_options]
 addopts = "--cov=ngraph --cov-fail-under=85 --cov-report term-missing"
+timeout = 30
 
 # ---------------------------------------------------------------------
 # Package discovery
