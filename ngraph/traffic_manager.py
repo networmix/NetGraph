@@ -500,23 +500,25 @@ class TrafficManager:
     def _estimate_rounds(self) -> int:
         """Estimates a suitable number of placement rounds by comparing
         the median demand volume and the median edge capacity. Returns
-        a default of 5 rounds if there is insufficient data for a
+        a default number of rounds if there is insufficient data for a
         meaningful calculation.
 
         Returns:
             int: Estimated number of rounds to use for traffic placement.
         """
+        from ngraph.config import TRAFFIC_CONFIG
+
         if not self.demands:
-            return 5
+            return TRAFFIC_CONFIG.default_rounds
 
         demand_volumes = [demand.volume for demand in self.demands if demand.volume > 0]
         if not demand_volumes:
-            return 5
+            return TRAFFIC_CONFIG.default_rounds
 
         median_demand = statistics.median(demand_volumes)
 
         if not self.graph:
-            return 5
+            return TRAFFIC_CONFIG.default_rounds
 
         edges = self.graph.get_edges().values()
         capacities = [
@@ -525,9 +527,8 @@ class TrafficManager:
             if edge_data[3].get("capacity", 0) > 0
         ]
         if not capacities:
-            return 5
+            return TRAFFIC_CONFIG.default_rounds
 
         median_capacity = statistics.median(capacities)
         ratio = median_demand / median_capacity
-        guessed_rounds = int(5 + 5 * ratio)
-        return max(5, min(guessed_rounds, 100))
+        return TRAFFIC_CONFIG.estimate_rounds(ratio)
