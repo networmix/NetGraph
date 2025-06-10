@@ -56,6 +56,8 @@ class FlowPolicy:
         ] = None,
         edge_select_value: Optional[Any] = None,
         reoptimize_flows_on_each_placement: bool = False,
+        max_no_progress_iterations: int = 100,
+        max_total_iterations: int = 10000,
     ) -> None:
         """Initializes a FlowPolicy instance.
 
@@ -72,6 +74,8 @@ class FlowPolicy:
             edge_select_func: Custom function for edge selection, if needed.
             edge_select_value: Additional parameter for certain edge selection strategies.
             reoptimize_flows_on_each_placement: If True, re-run path optimization after every placement.
+            max_no_progress_iterations: Maximum consecutive iterations with no meaningful progress before detecting infinite loops.
+            max_total_iterations: Absolute maximum iterations regardless of progress (safety net for pathological cases).
 
         Raises:
             ValueError: If static_paths length does not match max_flow_count,
@@ -92,6 +96,10 @@ class FlowPolicy:
         self.reoptimize_flows_on_each_placement: bool = (
             reoptimize_flows_on_each_placement
         )
+
+        # Termination parameters for place_demand algorithm
+        self.max_no_progress_iterations: int = max_no_progress_iterations
+        self.max_total_iterations: int = max_total_iterations
 
         # Dictionary to track all flows by their FlowIndex.
         self.flows: Dict[Tuple, Flow] = {}
@@ -400,7 +408,8 @@ class FlowPolicy:
             volume successfully placed and remaining_volume is any unplaced volume.
 
         Raises:
-            RuntimeError: If an infinite loop is detected (safety net).
+            RuntimeError: If an infinite loop is detected due to misconfigured flow policy
+                         parameters, or if maximum iteration limit is exceeded.
         """
         if not self.flows:
             self._create_flows(flow_graph, src_node, dst_node, flow_class, min_flow)
@@ -409,7 +418,8 @@ class FlowPolicy:
         target_flow_volume = target_flow_volume or volume
 
         total_placed_flow = 0.0
-        iteration_count = 0
+        consecutive_no_progress = 0
+        total_iterations = 0
 
         while volume >= base.MIN_FLOW and flow_queue:
             flow = flow_queue.popleft()
@@ -418,6 +428,28 @@ class FlowPolicy:
             )
             volume -= placed_flow
             total_placed_flow += placed_flow
+            total_iterations += 1
+
+            # Track progress to detect infinite loops in flow creation/optimization
+            if placed_flow < base.MIN_FLOW:
+                consecutive_no_progress += 1
+                if consecutive_no_progress >= self.max_no_progress_iterations:
+                    # This indicates an infinite loop where flows keep being created
+                    # but can't place any meaningful volume
+                    raise RuntimeError(
+                        f"Infinite loop detected in place_demand: "
+                        f"{consecutive_no_progress} consecutive iterations with no progress. "
+                        f"This typically indicates misconfigured flow policy parameters "
+                        f"(e.g., non-capacity-aware edge selection with high max_flow_count)."
+                    )
+            else:
+                consecutive_no_progress = 0  # Reset counter on progress
+
+            # Safety net for pathological cases
+            if total_iterations > self.max_total_iterations:
+                raise RuntimeError(
+                    f"Maximum iteration limit ({self.max_total_iterations}) exceeded in place_demand."
+                )
 
             # If the flow can accept more volume, attempt to create or re-optimize.
             if (
@@ -434,10 +466,6 @@ class FlowPolicy:
                     )
                 if new_flow:
                     flow_queue.append(new_flow)
-
-            iteration_count += 1
-            if iteration_count > 10000:
-                raise RuntimeError("Infinite loop detected in place_demand.")
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
         if self.flow_placement == FlowPlacement.EQUAL_BALANCED and len(self.flows) > 0:
