@@ -311,3 +311,105 @@ class TestGraphCapacity:
             "E": {"A": -0.2, "C": 0.2},
             "F": {"C": -0.4, "D": 0.4},
         }
+
+    def test_calc_graph_capacity_self_loop_proportional(self):
+        """
+        Test self-loop behavior with PROPORTIONAL flow placement.
+        When source equals destination, max flow should always be 0.
+        """
+        # Create a graph with a self-loop
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Create a simple pred with self-loop
+        pred: PredDict = {"A": {"A": [0]}}
+
+        # Test PROPORTIONAL placement
+        max_flow, flow_dict = calc_graph_capacity(
+            r, "A", "A", pred, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+
+        assert max_flow == 0.0
+        # flow_dict should be empty or contain only zero flows
+        for node_flows in flow_dict.values():
+            for flow_value in node_flows.values():
+                assert flow_value == 0.0
+
+    def test_calc_graph_capacity_self_loop_equal_balanced(self):
+        """
+        Test self-loop behavior with EQUAL_BALANCED flow placement.
+        When source equals destination, max flow should always be 0.
+        """
+        # Create a graph with multiple self-loops
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=5.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "A", key=1, capacity=3.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Create pred with multiple self-loop edges
+        pred: PredDict = {"A": {"A": [0, 1]}}
+
+        # Test EQUAL_BALANCED placement
+        max_flow, flow_dict = calc_graph_capacity(
+            r, "A", "A", pred, flow_placement=FlowPlacement.EQUAL_BALANCED
+        )
+
+        assert max_flow == 0.0
+        # flow_dict should be empty or contain only zero flows
+        for node_flows in flow_dict.values():
+            for flow_value in node_flows.values():
+                assert flow_value == 0.0
+
+    def test_calc_graph_capacity_self_loop_with_other_edges(self):
+        """
+        Test self-loop behavior in a graph that also has regular edges.
+        The self-loop itself should still return 0 flow.
+        """
+        # Create a graph with both self-loop and regular edges
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "B", key=1, capacity=5.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "A", key=2, capacity=3.0, flow=0.0, flows={}, cost=2)
+        r = init_flow_graph(g)
+
+        # Test self-loop A->A
+        pred_self: PredDict = {"A": {"A": [0]}}
+        max_flow, flow_dict = calc_graph_capacity(
+            r, "A", "A", pred_self, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow == 0.0
+
+        # Test regular flow A->B to verify graph still works for non-self-loops
+        pred_regular: PredDict = {"A": {}, "B": {"A": [1]}}
+        max_flow_regular, _ = calc_graph_capacity(
+            r, "A", "B", pred_regular, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow_regular == 5.0  # Should be limited by A->B capacity
+
+    def test_calc_graph_capacity_self_loop_empty_pred(self):
+        """
+        Test self-loop behavior when pred is empty.
+        Should return 0 flow for self-loop even with empty pred.
+        """
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Empty pred
+        pred: PredDict = {}
+
+        max_flow, flow_dict = calc_graph_capacity(
+            r, "A", "A", pred, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+
+        assert max_flow == 0.0
+        # flow_dict should be empty or contain only zero flows
+        for node_flows in flow_dict.values():
+            for flow_value in node_flows.values():
+                assert flow_value == 0.0
