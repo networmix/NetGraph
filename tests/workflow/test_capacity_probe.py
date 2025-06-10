@@ -158,7 +158,7 @@ def test_capacity_probe_mode_pairwise_multiple_groups(mock_scenario):
     Tests 'pairwise' mode with multiple source groups and sink groups.
     We confirm multiple result entries are stored, one per (src_label, snk_label).
     To ensure distinct group labels, we use capturing groups in the regex
-    (e.g. ^S(\d+)$), so S1 => group '1', S2 => group '2', etc.
+    (e.g. ^S(\\d+)$), so S1 => group '1', S2 => group '2', etc.
     """
     # Network:
     #   S1 -> M -> T1
