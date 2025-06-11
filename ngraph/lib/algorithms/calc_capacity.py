@@ -339,6 +339,14 @@ def calc_graph_capacity(
             f"Source node {src_node} or destination node {dst_node} not found in the graph."
         )
 
+    # Handle self-loop case: when source equals destination, max flow is always 0
+    # Degenerate case (s == t):
+    # Flow value |f| is the net surplus at the vertex.
+    # Conservation forces that surplus to zero, so the
+    # only feasible (and thus maximum) flow value is 0.
+    if src_node == dst_node:
+        return 0.0, defaultdict(dict)
+
     # Build reversed data structures from dst_node
     succ, levels, residual_cap, flow_dict = _init_graph_data(
         flow_graph=flow_graph,

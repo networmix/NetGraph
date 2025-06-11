@@ -9,6 +9,7 @@ Use --write-file to write to docs/reference/api-full.md instead.
 
 import argparse
 import dataclasses
+import glob
 import importlib
 import inspect
 import os
@@ -19,6 +20,57 @@ from pathlib import Path
 # Add the current directory to Python path for development installs
 if os.path.exists("ngraph"):
     sys.path.insert(0, ".")
+
+
+def discover_modules():
+    """Automatically discover all documentable Python modules in the ngraph package."""
+    modules = []
+
+    # Find all .py files in ngraph/
+    for py_file in glob.glob("ngraph/**/*.py", recursive=True):
+        # Skip files that shouldn't be documented
+        filename = os.path.basename(py_file)
+        if filename in ["__init__.py", "__main__.py"]:
+            continue
+
+        # Convert file path to module name
+        module_path = py_file.replace("/", ".").replace(".py", "")
+        modules.append(module_path)
+
+    # Sort modules in logical order for documentation
+    def module_sort_key(module_name):
+        """Sort key to organize modules logically."""
+        parts = module_name.split(".")
+
+        # Main ngraph modules first
+        if len(parts) == 2:  # ngraph.xxx
+            return (0, parts[1])
+
+        # Then lib modules
+        elif len(parts) == 3 and parts[1] == "lib":  # ngraph.lib.xxx
+            return (1, parts[2])
+
+        # Then algorithm modules
+        elif len(parts) == 4 and parts[1:3] == [
+            "lib",
+            "algorithms",
+        ]:  # ngraph.lib.algorithms.xxx
+            return (2, parts[3])
+
+        # Then workflow modules
+        elif len(parts) == 3 and parts[1] == "workflow":  # ngraph.workflow.xxx
+            return (3, parts[2])
+
+        # Then transform modules
+        elif len(parts) == 3 and parts[1] == "transform":  # ngraph.transform.xxx
+            return (4, parts[2])
+
+        # Everything else at the end
+        else:
+            return (9, module_name)
+
+    modules.sort(key=module_sort_key)
+    return modules
 
 
 def get_class_info(cls):
@@ -160,30 +212,10 @@ def generate_api_documentation(output_to_file=False):
         str: The generated documentation (when output_to_file=False)
     """
 
-    # Modules to document (in order)
-    modules = [
-        "ngraph.scenario",
-        "ngraph.network",
-        "ngraph.explorer",
-        "ngraph.components",
-        "ngraph.blueprints",
-        "ngraph.traffic_demand",
-        "ngraph.failure_policy",
-        "ngraph.failure_manager",
-        "ngraph.traffic_manager",
-        "ngraph.results",
-        "ngraph.lib.graph",
-        "ngraph.lib.util",
-        "ngraph.lib.algorithms.spf",
-        "ngraph.lib.algorithms.max_flow",
-        "ngraph.lib.algorithms.base",
-        "ngraph.workflow.base",
-        "ngraph.workflow.build_graph",
-        "ngraph.workflow.capacity_probe",
-        "ngraph.transform.base",
-        "ngraph.transform.enable_nodes",
-        "ngraph.transform.distribute_external",
-    ]
+    # Automatically discover all documentable modules
+    modules = discover_modules()
+
+    print(f"🔍 Auto-discovered {len(modules)} modules to document...")
 
     # Generate header
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M UTC")
@@ -201,11 +233,13 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 
 **Generated from source code on:** {timestamp}
 
+**Modules auto-discovered:** {len(modules)}
+
 ---
 
 """
 
-    print("🔍 Generating API documentation...")
+    print("📝 Generating API documentation...")
     doc = header
 
     # Generate documentation for each module

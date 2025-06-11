@@ -5,6 +5,7 @@ from ngraph.lib.algorithms.place_flow import (
     remove_flow_from_graph,
 )
 from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.graph import StrictMultiDiGraph
 
 
 class TestPlaceFlowOnGraph:
@@ -672,6 +673,176 @@ class TestPlaceFlowOnGraph:
             5: ("B2", "C", 5, {"capacity": 3, "flow": 0, "flows": {}, "cost": 3}),
         }
 
+    def test_place_flow_on_graph_self_loop_proportional(self):
+        """
+        Test self-loop behavior with PROPORTIONAL flow placement.
+        When source equals destination, no flow should be placed.
+        """
+        # Create a graph with a self-loop
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Create pred with self-loop
+        pred = {"A": {"A": [0]}}
+
+        # Attempt to place flow on self-loop
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "A",
+            pred,
+            flow=5.0,
+            flow_index=("A", "A", "SELF_LOOP"),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        # Should place 0 flow and return the requested flow as remaining
+        assert flow_placement_meta.placed_flow == 0.0
+        assert flow_placement_meta.remaining_flow == 5.0
+
+        # Verify the self-loop edge has no flow placed on it
+        edges = r.get_edges()
+        self_loop_edge = edges[0]
+        assert self_loop_edge[3]["flow"] == 0.0
+        assert self_loop_edge[3]["flows"] == {}
+
+    def test_place_flow_on_graph_self_loop_equal_balanced(self):
+        """
+        Test self-loop behavior with EQUAL_BALANCED flow placement.
+        When source equals destination, no flow should be placed.
+        """
+        # Create a graph with multiple self-loops
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=5.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "A", key=1, capacity=3.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Create pred with multiple self-loop edges
+        pred = {"A": {"A": [0, 1]}}
+
+        # Attempt to place flow on self-loops
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "A",
+            pred,
+            flow=10.0,
+            flow_index=("A", "A", "MULTI_SELF_LOOP"),
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+        )
+
+        # Should place 0 flow and return all requested flow as remaining
+        assert flow_placement_meta.placed_flow == 0.0
+        assert flow_placement_meta.remaining_flow == 10.0
+
+        # Verify all self-loop edges have no flow placed on them
+        edges = r.get_edges()
+        for edge_data in edges.values():
+            assert edge_data[3]["flow"] == 0.0
+            assert edge_data[3]["flows"] == {}
+
+    def test_place_flow_on_graph_self_loop_infinite_flow(self):
+        """
+        Test self-loop behavior when requesting infinite flow.
+        Should still place 0 flow and return infinite remaining flow.
+        """
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=100.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        pred = {"A": {"A": [0]}}
+
+        # Request infinite flow on self-loop
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "A",
+            pred,
+            flow=float("inf"),
+            flow_index=("A", "A", "INF_SELF_LOOP"),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        # Should place 0 flow and return infinite remaining flow
+        assert flow_placement_meta.placed_flow == 0.0
+        assert flow_placement_meta.remaining_flow == float("inf")
+
+        # Verify metadata is correctly handled for self-loops
+        # The early return should not populate nodes/edges metadata
+        assert len(flow_placement_meta.nodes) <= 1  # Should be 0 or just contain source
+        assert flow_placement_meta.edges == set()  # No edges should carry flow
+
+    def test_place_flow_on_graph_self_loop_with_other_edges(self):
+        """
+        Test self-loop behavior in a graph that also has regular edges.
+        Self-loop should still place 0 flow while regular flows work normally.
+        """
+        # Create graph with both self-loop and regular edges
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "B", key=1, capacity=5.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "A", key=2, capacity=3.0, flow=0.0, flows={}, cost=2)
+        r = init_flow_graph(g)
+
+        # Test self-loop A->A
+        pred_self = {"A": {"A": [0]}}
+        flow_meta_self = place_flow_on_graph(
+            r, "A", "A", pred_self, flow=7.0, flow_index=("A", "A", "SELF")
+        )
+        assert flow_meta_self.placed_flow == 0.0
+        assert flow_meta_self.remaining_flow == 7.0
+
+        # Test regular flow A->B to verify graph still works for non-self-loops
+        pred_regular = {"A": {}, "B": {"A": [1]}}
+        flow_meta_regular = place_flow_on_graph(
+            r, "A", "B", pred_regular, flow=4.0, flow_index=("A", "B", "REGULAR")
+        )
+        assert flow_meta_regular.placed_flow == 4.0
+        assert flow_meta_regular.remaining_flow == 0.0
+
+        # Verify self-loop edge still has no flow
+        edges = r.get_edges()
+        assert edges[0][3]["flow"] == 0.0  # Self-loop edge
+        assert edges[1][3]["flow"] == 4.0  # A->B edge should have flow
+
+    def test_place_flow_on_graph_self_loop_empty_pred(self):
+        """
+        Test self-loop behavior when pred is empty.
+        Should return 0 flow even with empty pred.
+        """
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", key=0, capacity=10.0, flow=0.0, flows={}, cost=1)
+        r = init_flow_graph(g)
+
+        # Empty pred
+        pred = {}
+
+        flow_placement_meta = place_flow_on_graph(
+            r,
+            "A",
+            "A",
+            pred,
+            flow=5.0,
+            flow_index=("A", "A", "EMPTY_PRED"),
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        # Should place 0 flow due to self-loop optimization, not pred limitations
+        assert flow_placement_meta.placed_flow == 0.0
+        assert flow_placement_meta.remaining_flow == 5.0
+
+        # Verify the self-loop edge has no flow
+        edges = r.get_edges()
+        assert edges[0][3]["flow"] == 0.0
+        assert edges[0][3]["flows"] == {}
+
 
 #
 # Tests for removing flow from the graph, fully or partially.
@@ -780,9 +951,9 @@ class TestRemoveFlowFromGraph:
             flow_placement=FlowPlacement.PROPORTIONAL,
         )
         # Remove flows (none effectively exist)
-        remove_flow_from_graph(r, flow_index=("A", "C", "empty"))
-
-        # Ensure edges remain at zero flow
+        remove_flow_from_graph(
+            r, flow_index=("A", "C", "empty")
+        )  # Ensure edges remain at zero flow
         for _, edata in r.get_edges().items():
             assert edata[3]["flow"] == 0
             assert edata[3]["flows"] == {}

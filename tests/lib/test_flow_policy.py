@@ -560,8 +560,9 @@ class TestFlowPolicy:
 
     def test_flow_policy_place_demand_9(self, line1):
         """
-        Causes a RuntimeError due to infinite loop. The flow policy is incorrectly
-        configured to use non-capacity aware edge selection without reasonable limit on the number of flows.
+        Tests infinite loop detection with a flow policy that creates many flows
+        but can't place meaningful volume. The algorithm should detect this as an
+        infinite loop and raise a descriptive RuntimeError.
         """
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -571,10 +572,106 @@ class TestFlowPolicy:
             max_flow_count=1000000,
         )
         r = init_flow_graph(line1)
-        with pytest.raises(RuntimeError):
+        # Should raise RuntimeError due to infinite loop detection
+        with pytest.raises(
+            RuntimeError, match="Infinite loop detected in place_demand"
+        ):
             placed_flow, remaining_flow = flow_policy.place_demand(
                 r, "A", "C", "test_flow", 7
             )
+
+    def test_flow_policy_place_demand_normal_termination(self, line1):
+        """
+        Tests normal termination when algorithm naturally runs out of capacity.
+        This should terminate gracefully without raising an exception, even if
+        some volume remains unplaced.
+        """
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,  # Capacity-aware
+            multipath=True,
+            max_flow_count=10,  # Reasonable limit
+        )
+        r = init_flow_graph(line1)
+        # Should terminate gracefully when capacity is exhausted
+        placed_flow, remaining_flow = flow_policy.place_demand(
+            r,
+            "A",
+            "C",
+            "test_flow",
+            100,  # Large demand that exceeds capacity
+        )
+        # Should place some flow but not all due to capacity constraints
+        assert placed_flow >= 0
+        assert remaining_flow >= 0
+        assert placed_flow + remaining_flow == 100
+        # Should place at least some flow (line1 has capacity of 5)
+        assert placed_flow > 0
+
+    def test_flow_policy_place_demand_max_iterations(self, line1):
+        """
+        Tests the maximum iteration limit safety net. This creates a scenario that
+        forces many iterations by using a very low iteration limit parameter.
+        """
+        # Create a flow policy with very low max_total_iterations for testing
+        # Use EQUAL_BALANCED with unlimited flows to force many iterations
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST,
+            multipath=True,
+            max_flow_count=1000000,  # High flow count to create many flows
+            max_total_iterations=2,  # Very low limit to trigger the error easily
+        )
+
+        r = init_flow_graph(line1)
+
+        # This should hit the maximum iteration limit (2) before completing
+        # because it tries to create many flows in EQUAL_BALANCED mode
+        with pytest.raises(
+            RuntimeError, match="Maximum iteration limit .* exceeded in place_demand"
+        ):
+            flow_policy.place_demand(r, "A", "C", "test_flow", 7)
+
+    def test_flow_policy_configurable_iteration_limits(self, line1):
+        """
+        Tests that the iteration limit parameters are properly configurable
+        and affect the behavior as expected.
+        """
+        # Test with custom limits
+        flow_policy = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            edge_select=EdgeSelect.ALL_MIN_COST,
+            multipath=True,
+            max_flow_count=1000000,
+            max_no_progress_iterations=5,  # Very low limit
+            max_total_iterations=20000,  # High total limit
+        )
+
+        r = init_flow_graph(line1)
+
+        # Should hit the no-progress limit before the total limit
+        with pytest.raises(
+            RuntimeError, match="5 consecutive iterations with no progress"
+        ):
+            flow_policy.place_demand(r, "A", "C", "test_flow", 7)
+
+        # Test with default values (should work same as before)
+        flow_policy_default = FlowPolicy(
+            path_alg=PathAlg.SPF,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            multipath=True,
+        )
+
+        # Should complete normally with defaults
+        r2 = init_flow_graph(line1)
+        placed_flow, remaining_flow = flow_policy_default.place_demand(
+            r2, "A", "C", "test_flow", 3
+        )
+        assert placed_flow > 0
 
     def test_flow_policy_place_demand_10(self, square1):
         PATH_BUNDLE1 = PathBundle(

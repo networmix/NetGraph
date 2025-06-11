@@ -58,6 +58,14 @@ def place_flow_on_graph(
         FlowPlacementMeta: Contains the placed flow amount, remaining flow amount,
             and sets of touched nodes/edges.
     """
+    # Handle self-loop case: when source equals destination, max flow is always 0
+    # Degenerate case (s == t):
+    # Flow value |f| is the net surplus at the vertex.
+    # Conservation forces that surplus to zero, so the
+    # only feasible (and thus maximum) flow value is 0.
+    if src_node == dst_node:
+        return FlowPlacementMeta(0.0, flow)
+
     # 1) Determine the maximum feasible flow via calc_graph_capacity.
     rem_cap, flow_dict = calc_graph_capacity(
         flow_graph, src_node, dst_node, pred, flow_placement, capacity_attr, flow_attr

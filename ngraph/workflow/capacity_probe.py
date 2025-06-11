@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from ngraph.scenario import Scenario
 
 
-@register_workflow_step("CapacityProbe")
 @dataclass
 class CapacityProbe(WorkflowStep):
     """A workflow step that probes capacity (max flow) between selected groups of nodes.
@@ -98,3 +97,7 @@ class CapacityProbe(WorkflowStep):
         for (src_label, snk_label), flow_value in flow_dict.items():
             result_label = f"max_flow:[{src_label} -> {snk_label}]"
             scenario.results.put(self.name, result_label, flow_value)
+
+
+# Register the class after definition to avoid decorator ordering issues
+register_workflow_step("CapacityProbe")(CapacityProbe)

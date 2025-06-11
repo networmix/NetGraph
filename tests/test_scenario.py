@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from ngraph.scenario import Scenario
 
 
-@register_workflow_step("DoSmth")
 @dataclass
 class DoSmth(WorkflowStep):
     """
@@ -34,7 +33,6 @@ class DoSmth(WorkflowStep):
         scenario.results.put(self.name, "ran", True)
 
 
-@register_workflow_step("DoSmthElse")
 @dataclass
 class DoSmthElse(WorkflowStep):
     """
@@ -45,6 +43,11 @@ class DoSmthElse(WorkflowStep):
 
     def run(self, scenario: Scenario) -> None:
         scenario.results.put(self.name, "ran", True)
+
+
+# Register the classes after definition to avoid decorator ordering issues
+register_workflow_step("DoSmth")(DoSmth)
+register_workflow_step("DoSmthElse")(DoSmthElse)
 
 
 @pytest.fixture

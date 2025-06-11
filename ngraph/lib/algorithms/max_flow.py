@@ -174,6 +174,32 @@ def calc_max_flow(
         ... )
         >>> # flow_graph contains the flow assignments
     """
+    # Handle self-loop case: when source equals destination, max flow is always 0
+    # Degenerate case (s == t):
+    # Flow value |f| is the net surplus at the vertex.
+    # Conservation forces that surplus to zero, so the
+    # only feasible (and thus maximum) flow value is 0.
+    if src_node == dst_node:
+        if return_summary or return_graph:
+            # For consistency, we need to create a minimal flow graph for summary/graph returns
+            flow_graph = init_flow_graph(
+                graph.copy() if copy_graph else graph,
+                flow_attr,
+                flows_attr,
+                reset_flow_graph,
+            )
+            return _build_return_value(
+                0.0,
+                flow_graph,
+                src_node,
+                return_summary,
+                return_graph,
+                capacity_attr,
+                flow_attr,
+            )
+        else:
+            return 0.0
+
     # Initialize a flow-aware graph (copy or in-place).
     flow_graph = init_flow_graph(
         graph.copy() if copy_graph else graph,
