@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 11, 2025 at 00:06 UTC
+**Generated from source code on:** June 11, 2025 at 01:54 UTC
 
 **Modules auto-discovered:** 35
 
@@ -507,8 +507,12 @@ Attributes:
   - Retrieve all link IDs that connect the specified source node
 - `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], float]'`
   - Compute maximum flow between groups of source nodes and sink nodes.
+- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'`
+  - Identify saturated (bottleneck) edges in max flow solutions between node groups.
 - `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'`
   - Select and group nodes whose names match a given regular expression.
+- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'`
+  - Perform sensitivity analysis on capacity changes for max flow solutions.
 - `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> 'StrictMultiDiGraph'`
   - Create a StrictMultiDiGraph representation of this Network.
 
