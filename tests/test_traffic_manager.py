@@ -4,6 +4,7 @@ from ngraph.lib.algorithms.base import MIN_FLOW
 from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Link, Network, Node
+from ngraph.results_artifacts import TrafficMatrixSet
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficManager
 
@@ -52,12 +53,24 @@ def small_network_with_loop() -> Network:
     return net
 
 
+def create_traffic_manager(network, traffic_demands, matrix_name="default", **kwargs):
+    """Helper function to create TrafficManager with traffic_matrix_set."""
+    matrix_set = TrafficMatrixSet()
+    matrix_set.add(matrix_name, traffic_demands)
+    return TrafficManager(
+        network=network,
+        traffic_matrix_set=matrix_set,
+        matrix_name=None,  # Use default matrix
+        **kwargs,
+    )
+
+
 def test_build_graph_not_built_error(small_network):
     """
     Verify that calling place_all_demands before build_graph
     raises a RuntimeError.
     """
-    tm = TrafficManager(network=small_network, traffic_demands=[])
+    tm = create_traffic_manager(network=small_network, traffic_demands=[])
     # No build_graph call here, so we expect an error
     with pytest.raises(RuntimeError):
         tm.place_all_demands()
@@ -72,7 +85,7 @@ def test_basic_build_and_expand(small_network):
         TrafficDemand(source_path="A", sink_path="B", demand=10.0),
         TrafficDemand(source_path="A", sink_path="C", demand=20.0),
     ]
-    tm = TrafficManager(
+    tm = create_traffic_manager(
         network=small_network,
         traffic_demands=demands,
         default_flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
@@ -98,7 +111,7 @@ def test_place_all_demands_simple(small_network):
         TrafficDemand(source_path="A", sink_path="C", demand=50.0),
         TrafficDemand(source_path="B", sink_path="C", demand=20.0),
     ]
-    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm = create_traffic_manager(network=small_network, traffic_demands=demands)
 
     tm.build_graph()
     tm.expand_demands()
@@ -143,7 +156,7 @@ def test_priority_fairness(small_network):
         TrafficDemand(source_path="A", sink_path="C", demand=40.0, priority=0),
         TrafficDemand(source_path="B", sink_path="C", demand=40.0, priority=1),
     ]
-    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm = create_traffic_manager(network=small_network, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 
@@ -162,7 +175,7 @@ def test_reset_flow_usages(small_network):
     and sets all demands' placed_demand to 0.
     """
     demands = [TrafficDemand(source_path="A", sink_path="C", demand=10.0)]
-    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm = create_traffic_manager(network=small_network, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
     placed_before = tm.place_all_demands()
@@ -184,7 +197,7 @@ def test_reoptimize_flows(small_network_with_loop):
     removed and re-placed each round.
     """
     demands = [TrafficDemand(source_path="A", sink_path="C", demand=5.0)]
-    tm = TrafficManager(
+    tm = create_traffic_manager(
         network=small_network_with_loop,
         traffic_demands=demands,
         default_flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
@@ -216,7 +229,7 @@ def test_unknown_mode_raises_value_error(small_network):
     demands = [
         TrafficDemand(source_path="A", sink_path="B", demand=10.0, mode="invalid_mode")
     ]
-    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm = create_traffic_manager(network=small_network, traffic_demands=demands)
     tm.build_graph()
     with pytest.raises(ValueError, match="Unknown mode: invalid_mode"):
         tm.expand_demands()
@@ -228,7 +241,7 @@ def test_place_all_demands_auto_rounds(small_network):
     high capacity, we verify it doesn't crash and places demands correctly.
     """
     demands = [TrafficDemand(source_path="A", sink_path="C", demand=25.0)]
-    tm = TrafficManager(network=small_network, traffic_demands=demands)
+    tm = create_traffic_manager(network=small_network, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 
@@ -259,7 +272,7 @@ def test_combine_mode_multi_source_sink():
     demands = [
         TrafficDemand(source_path="S", sink_path="T", demand=100.0, mode="combine")
     ]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 
@@ -307,7 +320,7 @@ def test_full_mesh_mode_multi_source_sink():
     demands = [
         TrafficDemand(source_path="S", sink_path="T", demand=80.0, mode="full_mesh")
     ]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 
@@ -328,7 +341,7 @@ def test_combine_mode_no_nodes():
     demands = [
         TrafficDemand(source_path="A", sink_path="B", demand=10.0, mode="combine"),
     ]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
     assert len(tm.demands) == 0, "No demands created if source/sink matching fails"
@@ -345,7 +358,7 @@ def test_full_mesh_mode_no_nodes():
     demands = [
         TrafficDemand(source_path="A", sink_path="B", demand=10.0, mode="full_mesh"),
     ]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
     assert len(tm.demands) == 0, "No demands created if source/sink matching fails"
@@ -364,7 +377,7 @@ def test_full_mesh_mode_self_pairs():
         # source_path="N", sink_path="N" => matches N1, N2 for both source and sink
         TrafficDemand(source_path="N", sink_path="N", demand=20.0, mode="full_mesh"),
     ]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 
@@ -382,7 +395,7 @@ def test_estimate_rounds_no_demands(small_network):
     """
     Test that _estimate_rounds returns a default (5) if no demands exist.
     """
-    tm = TrafficManager(network=small_network, traffic_demands=[])
+    tm = create_traffic_manager(network=small_network, traffic_demands=[])
     tm.build_graph()
     # place_all_demands calls _estimate_rounds if placement_rounds="auto"
     # With no demands, we expect no error, just zero placed and default rounds chosen.
@@ -401,7 +414,7 @@ def test_estimate_rounds_no_capacities():
     net.add_link(Link(source="A", target="B", capacity=0.0, cost=1.0))
 
     demands = [TrafficDemand(source_path="A", sink_path="B", demand=50.0)]
-    tm = TrafficManager(network=net, traffic_demands=demands)
+    tm = create_traffic_manager(network=net, traffic_demands=demands)
     tm.build_graph()
     tm.expand_demands()
 

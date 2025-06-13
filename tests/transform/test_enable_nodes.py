@@ -9,7 +9,9 @@ def make_scenario(nodes):
     net = Network()
     for name, disabled in nodes:
         net.add_node(Node(name=name, disabled=disabled))
-    return Scenario(network=net, failure_policy=None, traffic_demands=[], workflow=[])
+    return Scenario(
+        network=net, failure_policy=None, traffic_matrix_set={}, workflow=[]
+    )
 
 
 def test_default_order_enables_lexical_nodes():

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import statistics
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -9,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ngraph.failure_policy import FailurePolicy
 from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.network import Network
-from ngraph.traffic_demand import TrafficDemand
+from ngraph.results_artifacts import TrafficMatrixSet
 from ngraph.traffic_manager import TrafficManager, TrafficResult
 
 
@@ -19,7 +18,8 @@ class FailureManager:
 
     Attributes:
         network (Network): The underlying network to mutate (enable/disable nodes/links).
-        traffic_demands (List[TrafficDemand]): List of demands to place after failures.
+        traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after failures.
+        matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
         failure_policy (Optional[FailurePolicy]): The policy describing what fails.
         default_flow_policy_config: The default flow policy for any demands lacking one.
     """
@@ -27,7 +27,8 @@ class FailureManager:
     def __init__(
         self,
         network: Network,
-        traffic_demands: List[TrafficDemand],
+        traffic_matrix_set: TrafficMatrixSet,
+        matrix_name: Optional[str] = None,
         failure_policy: Optional[FailurePolicy] = None,
         default_flow_policy_config: Optional[FlowPolicyConfig] = None,
     ) -> None:
@@ -35,12 +36,14 @@ class FailureManager:
 
         Args:
             network: The Network to be modified by failures.
-            traffic_demands: Demands to place on the network after applying failures.
+            traffic_matrix_set: Traffic matrices containing demands to place after failures.
+            matrix_name: Name of specific matrix to use. If None, uses default matrix.
             failure_policy: A FailurePolicy specifying the rules of what fails.
             default_flow_policy_config: Default FlowPolicyConfig if demands do not specify one.
         """
         self.network = network
-        self.traffic_demands = traffic_demands
+        self.traffic_matrix_set = traffic_matrix_set
+        self.matrix_name = matrix_name
         self.failure_policy = failure_policy
         self.default_flow_policy_config = default_flow_policy_config
 
@@ -80,7 +83,8 @@ class FailureManager:
         # Build TrafficManager and place demands
         tmgr = TrafficManager(
             network=self.network,
-            traffic_demands=copy.deepcopy(self.traffic_demands),
+            traffic_matrix_set=self.traffic_matrix_set,
+            matrix_name=self.matrix_name,
             default_flow_policy_config=self.default_flow_policy_config
             or FlowPolicyConfig.SHORTEST_PATHS_ECMP,
         )

@@ -196,8 +196,8 @@ network:
     assert len(rack1.children) == 2
 
 
-def test_traffic_demands_example():
-    """Test traffic demands definition."""
+def test_traffic_matrix_set_example():
+    """Test traffic matrix set definition."""
     yaml_content = """
 network:
   nodes:
@@ -214,19 +214,21 @@ network:
       attrs:
         role: "server"
 
-traffic_demands:
-  - source_path: "source.*"
-    sink_path: "sink.*"
-    demand: 100
-    mode: "combine"
-    priority: 1
-    attrs:
-      service_type: "web"
+traffic_matrix_set:
+  default:
+    - source_path: "source.*"
+      sink_path: "sink.*"
+      demand: 100
+      mode: "combine"
+      priority: 1
+      attrs:
+        service_type: "web"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert len(scenario.traffic_demands) == 1
-    demand = scenario.traffic_demands[0]
+    default_demands = scenario.traffic_matrix_set.get_default_matrix()
+    assert len(default_demands) == 1
+    demand = default_demands[0]
     assert demand.source_path == "source.*"
     assert demand.sink_path == "sink.*"
     assert demand.demand == 100

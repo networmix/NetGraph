@@ -55,7 +55,9 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     )
 
     # 7) Verify no traffic demands in this scenario
-    assert len(scenario.traffic_demands) == 0, "Expected zero traffic demands."
+    assert len(scenario.traffic_matrix_set.matrices) == 0, (
+        "Expected zero traffic demands."
+    )
 
     # 8) Verify the default failure policy is None
     policy: FailurePolicy = scenario.failure_policy

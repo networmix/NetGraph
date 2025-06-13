@@ -14,8 +14,10 @@ from ngraph.failure_policy import (
 )
 from ngraph.network import Network, RiskGroup
 from ngraph.results import Results
+from ngraph.results_artifacts import TrafficMatrixSet
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
+from ngraph.yaml_utils import normalize_yaml_dict_keys
 
 
 @dataclass
@@ -25,7 +27,7 @@ class Scenario:
     This scenario includes:
       - A network (nodes/links), constructed via blueprint expansion.
       - A failure policy (one or more rules).
-      - A set of traffic demands.
+      - A traffic matrix set containing one or more named traffic matrices.
       - A list of workflow steps to execute.
       - A results container for storing outputs.
       - A components_library for hardware/optics definitions.
@@ -39,8 +41,8 @@ class Scenario:
 
     network: Network
     failure_policy: Optional[FailurePolicy]
-    traffic_demands: List[TrafficDemand]
     workflow: List[WorkflowStep]
+    traffic_matrix_set: TrafficMatrixSet = field(default_factory=TrafficMatrixSet)
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
 
@@ -66,7 +68,7 @@ class Scenario:
           - blueprints
           - network
           - failure_policy
-          - traffic_demands
+          - traffic_matrix_set
           - workflow
           - components
           - risk_groups
@@ -100,7 +102,7 @@ class Scenario:
             "blueprints",
             "network",
             "failure_policy",
-            "traffic_demands",
+            "traffic_matrix_set",
             "workflow",
             "components",
             "risk_groups",
@@ -121,9 +123,22 @@ class Scenario:
         fp_data = data.get("failure_policy", {})
         failure_policy = cls._build_failure_policy(fp_data) if fp_data else None
 
-        # 3) Build traffic demands
-        traffic_demands_data = data.get("traffic_demands", [])
-        traffic_demands = [TrafficDemand(**td) for td in traffic_demands_data]
+        # 3) Build traffic matrix set
+        raw = data.get("traffic_matrix_set", {})
+        if not isinstance(raw, dict):
+            raise ValueError(
+                "'traffic_matrix_set' must be a mapping of name -> list[TrafficDemand]"
+            )
+
+        # Normalize dictionary keys to handle YAML boolean keys
+        normalized_raw = normalize_yaml_dict_keys(raw)
+        tms = TrafficMatrixSet()
+        for name, td_list in normalized_raw.items():
+            if not isinstance(td_list, list):
+                raise ValueError(
+                    f"Matrix '{name}' must map to a list of TrafficDemand dicts"
+                )
+            tms.add(name, [TrafficDemand(**d) for d in td_list])
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
@@ -154,8 +169,8 @@ class Scenario:
         return Scenario(
             network=network_obj,
             failure_policy=failure_policy,
-            traffic_demands=traffic_demands,
             workflow=workflow_steps,
+            traffic_matrix_set=tms,
             components_library=final_components,
         )
 
@@ -182,7 +197,7 @@ class Scenario:
             disabled = d.get("disabled", False)
             children_list = d.get("children", [])
             child_objs = [build_one(cd) for cd in children_list]
-            attrs = d.get("attrs", {})
+            attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
             return RiskGroup(
                 name=name, disabled=disabled, children=child_objs, attrs=attrs
             )
@@ -225,7 +240,7 @@ class Scenario:
         fail_srg = fp_data.get("fail_shared_risk_groups", False)
         fail_rg_children = fp_data.get("fail_risk_group_children", False)
         use_cache = fp_data.get("use_cache", False)
-        attrs = fp_data.get("attrs", {})
+        attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
 
         # Extract rules
         rules_data = fp_data.get("rules", [])
@@ -312,7 +327,9 @@ class Scenario:
                 raise ValueError(f"Unrecognized 'step_type': {step_type}")
 
             ctor_args = {k: v for k, v in step_info.items() if k != "step_type"}
-            step_obj = step_cls(**ctor_args)
+            # Normalize constructor argument keys to handle YAML boolean keys
+            normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
+            step_obj = step_cls(**normalized_ctor_args)
             steps.append(step_obj)
 
         return steps

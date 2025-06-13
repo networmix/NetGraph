@@ -50,7 +50,8 @@ def test_scenario_1_build_graph() -> None:
 
     # 7) Verify the traffic demands.
     expected_demands = 4
-    assert len(scenario.traffic_demands) == expected_demands, (
+    default_demands = scenario.traffic_matrix_set.get_default_matrix()
+    assert len(default_demands) == expected_demands, (
         f"Expected {expected_demands} traffic demands."
     )
 

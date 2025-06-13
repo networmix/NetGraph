@@ -106,13 +106,14 @@ failure_policy:
     - entity_scope: link
       logic: "any"
       rule_type: "all"
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 15
-  - source_path: NodeA
-    sink_path: NodeC
-    demand: 5
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 15
+    - source_path: NodeA
+      sink_path: NodeC
+      demand: 5
 workflow:
   - step_type: DoSmth
     name: Step1
@@ -141,10 +142,11 @@ network:
         capacity: 1
 failure_policy:
   rules: []
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 10
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 10
 workflow:
   - name: StepWithoutType
     some_param: 123
@@ -169,10 +171,11 @@ network:
         capacity: 1
 failure_policy:
   rules: []
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 10
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 10
 workflow:
   - step_type: NonExistentStep
     name: BadStep
@@ -196,7 +199,7 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-traffic_demands: []
+traffic_matrix_set: {}
 failure_policy:
   rules: []
 workflow:
@@ -211,7 +214,7 @@ workflow:
 def minimal_scenario_yaml() -> str:
     """
     Returns a YAML string with only a single workflow step, no network,
-    no failure_policy, and no traffic_demands. Should be valid but minimal.
+    no failure_policy, and no traffic_matrix_set. Should be valid but minimal.
     """
     return """
 workflow:
@@ -297,10 +300,13 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert rule2.entity_scope == "link"
     assert rule2.rule_type == "all"
 
-    # Check traffic demands
-    assert len(scenario.traffic_demands) == 2
-    d1 = scenario.traffic_demands[0]
-    d2 = scenario.traffic_demands[1]
+    # Check traffic matrix set
+    assert len(scenario.traffic_matrix_set.matrices) == 1
+    assert "default" in scenario.traffic_matrix_set.matrices
+    default_demands = scenario.traffic_matrix_set.matrices["default"]
+    assert len(default_demands) == 2
+    d1 = default_demands[0]
+    d2 = default_demands[1]
     assert d1.source_path == "NodeA"
     assert d1.sink_path == "NodeB"
     assert d1.demand == 15
@@ -380,7 +386,7 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     # If no failure_policy block, scenario.failure_policy => None
     assert scenario.failure_policy is None
 
-    assert scenario.traffic_demands == []
+    assert len(scenario.traffic_matrix_set.matrices) == 0
     assert len(scenario.workflow) == 1
     step = scenario.workflow[0]
     assert step.name == "JustStep"
@@ -397,7 +403,7 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
     assert scenario.failure_policy is None
-    assert scenario.traffic_demands == []
+    assert len(scenario.traffic_matrix_set.matrices) == 0
     assert scenario.workflow == []
 
 

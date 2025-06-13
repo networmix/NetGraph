@@ -9,7 +9,9 @@ from ngraph.transform.distribute_external import (
 
 
 def make_scenario_with_network(net):
-    return Scenario(network=net, failure_policy=None, traffic_demands=[], workflow=[])
+    return Scenario(
+        network=net, failure_policy=None, traffic_matrix_set={}, workflow=[]
+    )
 
 
 def test_stripe_chooser_stripes_and_select():

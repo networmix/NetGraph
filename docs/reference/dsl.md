@@ -14,7 +14,7 @@ The main sections of a scenario YAML file work together to define a complete net
 - `blueprints`: **[Optional]** Defines reusable network templates that can be instantiated multiple times within the network.
 - `components`: **[Optional]** A library of hardware and optics definitions with attributes like power consumption.
 - `risk_groups`: **[Optional]** Defines groups of components that might fail together (e.g., all components in a rack or multiple parallel links sharing the same DWDM transmission).
-- `traffic_demands`: **[Optional]** Defines traffic demands between network nodes with various placement policies.
+- `traffic_matrix_set`: **[Optional]** Defines traffic demand matrices between network nodes with various placement policies.
 - `failure_policy`: **[Optional]** Specifies availability parameters and rules for simulating network failures.
 - `workflow`: **[Optional]** A list of steps to be executed, such as building graphs, running simulations, or performing analyses.
 
@@ -368,21 +368,22 @@ risk_groups:
 
 Nodes and links can be associated with risk groups using their `risk_groups` attribute (a list of risk group names).
 
-## `traffic_demands` - Traffic Analysis
+## `traffic_matrix_set` - Traffic Analysis
 
-Specifies the traffic demands between different parts of the network. This section enables capacity analysis and flow optimization by defining traffic patterns.
+Specifies the traffic demand matrices between different parts of the network. This section enables capacity analysis and flow optimization by defining traffic patterns. Each matrix contains a collection of traffic demands that can be selected for analysis.
 
 ```yaml
-traffic_demands:
-  - name: "DemandName" # Optional
-    source_path: "regex/for/source_nodes"
-    sink_path: "regex/for/sink_nodes"
-    demand: X # Amount of traffic
-    mode: "combine" | "full_mesh" # Expansion mode for generating sub-demands
-    priority: P # Optional priority level
-    flow_policy_config: # Optional, defines how traffic is routed
-      # Available configurations:
-      # "SHORTEST_PATHS_ECMP" - hop-by-hop equal-cost balanced routing
+traffic_matrix_set:
+  matrix_name:
+    - name: "DemandName" # Optional
+      source_path: "regex/for/source_nodes"
+      sink_path: "regex/for/sink_nodes"
+      demand: X # Amount of traffic
+      mode: "combine" | "full_mesh" # Expansion mode for generating sub-demands
+      priority: P # Optional priority level
+      flow_policy_config: # Optional, defines how traffic is routed
+        # Available configurations:
+        # "SHORTEST_PATHS_ECMP" - hop-by-hop equal-cost balanced routing
       # "SHORTEST_PATHS_UCMP" - hop-by-hop proportional flow placement
       # "TE_UCMP_UNLIM" - unlimited MPLS LSPs with UCMP
       # "TE_ECMP_UP_TO_256_LSP" - up to 256 LSPs with ECMP
@@ -636,10 +637,11 @@ node_overrides:
     attrs:
       hw_type: "high_performance"
 
-# Traffic demands with capturing groups
-traffic_demands:
-  - source_path: "my_clos1/b.*/t1"    # Works in YAML
-    sink_path: "my_clos2/b.*/t1"
+# Traffic matrix set with capturing groups
+traffic_matrix_set:
+  default:
+    - source_path: "my_clos1/b.*/t1"    # Works in YAML
+      sink_path: "my_clos2/b.*/t1"
 ```
 
 **Python Code:**

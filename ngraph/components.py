@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+from ngraph.yaml_utils import normalize_yaml_dict_keys
+
 
 @dataclass
 class Component:
@@ -194,8 +196,10 @@ class ComponentsLibrary:
         Returns:
             ComponentsLibrary: A newly constructed library.
         """
+        # Normalize dictionary keys to handle YAML boolean keys
+        normalized_data = normalize_yaml_dict_keys(data)
         components_map: Dict[str, Component] = {}
-        for comp_name, comp_def in data.items():
+        for comp_name, comp_def in normalized_data.items():
             components_map[comp_name] = cls._build_component(comp_name, comp_def)
         return ComponentsLibrary(components=components_map)
 
@@ -219,8 +223,10 @@ class ComponentsLibrary:
         count = int(definition_data.get("count", 1))
 
         child_definitions = definition_data.get("children", {})
+        # Normalize child dictionary keys to handle YAML boolean keys
+        normalized_children = normalize_yaml_dict_keys(child_definitions)
         children_map: Dict[str, Component] = {}
-        for child_name, child_data in child_definitions.items():
+        for child_name, child_data in normalized_children.items():
             children_map[child_name] = cls._build_component(child_name, child_data)
 
         recognized_keys = {
@@ -236,9 +242,13 @@ class ComponentsLibrary:
             "description",
         }
         attrs: Dict[str, Any] = dict(definition_data.get("attrs", {}))
+        # Normalize attrs keys to handle YAML boolean keys
+        attrs = normalize_yaml_dict_keys(attrs)
         leftover_keys = {
             k: v for k, v in definition_data.items() if k not in recognized_keys
         }
+        # Normalize leftover keys too
+        leftover_keys = normalize_yaml_dict_keys(leftover_keys)
         attrs.update(leftover_keys)
 
         return Component(

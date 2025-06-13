@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 11, 2025 at 02:22 UTC
+**Generated from source code on:** June 13, 2025 at 03:15 UTC
 
-**Modules auto-discovered:** 35
+**Modules auto-discovered:** 37
 
 ---
 
@@ -312,7 +312,8 @@ repeats multiple times for Monte Carlo experiments.
 
 Attributes:
     network (Network): The underlying network to mutate (enable/disable nodes/links).
-    traffic_demands (List[TrafficDemand]): List of demands to place after failures.
+    traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after failures.
+    matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
     failure_policy (Optional[FailurePolicy]): The policy describing what fails.
     default_flow_policy_config: The default flow policy for any demands lacking one.
 
@@ -597,6 +598,93 @@ Example usage:
 
 ---
 
+## ngraph.results_artifacts
+
+### CapacityEnvelope
+
+Range of max-flow values measured between two node groups.
+
+This immutable dataclass stores capacity measurements and automatically
+computes statistical measures in __post_init__.
+
+Attributes:
+    source_pattern: Regex pattern for selecting source nodes.
+    sink_pattern: Regex pattern for selecting sink nodes.
+    mode: Flow computation mode (e.g., "combine").
+    capacity_values: List of measured capacity values.
+    min_capacity: Minimum capacity value (computed).
+    max_capacity: Maximum capacity value (computed).
+    mean_capacity: Mean capacity value (computed).
+    stdev_capacity: Standard deviation of capacity values (computed).
+
+**Attributes:**
+
+- `source_pattern` (str)
+- `sink_pattern` (str)
+- `mode` (str) = combine
+- `capacity_values` (list[float]) = []
+- `min_capacity` (float)
+- `max_capacity` (float)
+- `mean_capacity` (float)
+- `stdev_capacity` (float)
+
+**Methods:**
+
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### PlacementResultSet
+
+Aggregated traffic placement results from one or many runs.
+
+This immutable dataclass stores traffic placement results organized by case,
+with overall statistics and per-demand statistics.
+
+Attributes:
+    results_by_case: Dictionary mapping case names to TrafficResult lists.
+    overall_stats: Dictionary of overall statistics.
+    demand_stats: Dictionary mapping demand keys to per-demand statistics.
+
+**Attributes:**
+
+- `results_by_case` (dict[str, list[TrafficResult]]) = {}
+- `overall_stats` (dict[str, float]) = {}
+- `demand_stats` (dict[tuple[str, str, int], dict[str, float]]) = {}
+
+**Methods:**
+
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### TrafficMatrixSet
+
+Named collection of TrafficDemand lists.
+
+This mutable container maps scenario names to lists of TrafficDemand objects,
+allowing management of multiple traffic matrices for analysis.
+
+Attributes:
+    matrices: Dictionary mapping scenario names to TrafficDemand lists.
+
+**Attributes:**
+
+- `matrices` (dict[str, list[TrafficDemand]]) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'`
+  - Add a traffic matrix to the collection.
+- `get_all_demands(self) -> 'list[TrafficDemand]'`
+  - Get all traffic demands from all matrices combined.
+- `get_default_matrix(self) -> 'list[TrafficDemand]'`
+  - Get the default traffic matrix.
+- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'`
+  - Get a specific traffic matrix by name.
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+---
+
 ## ngraph.scenario
 
 ### Scenario
@@ -606,7 +694,7 @@ Represents a complete scenario for building and executing network workflows.
 This scenario includes:
   - A network (nodes/links), constructed via blueprint expansion.
   - A failure policy (one or more rules).
-  - A set of traffic demands.
+  - A traffic matrix set containing one or more named traffic matrices.
   - A list of workflow steps to execute.
   - A results container for storing outputs.
   - A components_library for hardware/optics definitions.
@@ -621,8 +709,8 @@ Typical usage example:
 
 - `network` (Network)
 - `failure_policy` (Optional[FailurePolicy])
-- `traffic_demands` (List[TrafficDemand])
 - `workflow` (List[WorkflowStep])
+- `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
 - `results` (Results) = Results(_store={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 
@@ -703,18 +791,20 @@ case no demands are created).
 
 Attributes:
     network (Network): The underlying network object.
-    traffic_demands (List[TrafficDemand]): The scenario-level demands.
+    traffic_matrix_set (TrafficMatrixSet): Traffic matrices containing demands.
+    matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
     default_flow_policy_config (FlowPolicyConfig): Default FlowPolicy if
         a TrafficDemand does not specify one.
     graph (StrictMultiDiGraph): Active graph built from the network.
-    demands (List[Demand]): All expanded demands from traffic_demands.
+    demands (List[Demand]): All expanded demands from the active matrix.
     _td_to_demands (Dict[str, List[Demand]]): Internal mapping from
         TrafficDemand.id to its expanded Demand objects.
 
 **Attributes:**
 
 - `network` (Network)
-- `traffic_demands` (List) = []
+- `traffic_matrix_set` (TrafficMatrixSet)
+- `matrix_name` (Optional)
 - `default_flow_policy_config` (FlowPolicyConfig) = 1
 - `graph` (Optional)
 - `demands` (List) = []
@@ -725,7 +815,7 @@ Attributes:
 - `build_graph(self, add_reverse: bool = True) -> None`
   - Builds or rebuilds the internal StrictMultiDiGraph from self.network.
 - `expand_demands(self) -> None`
-  - Converts each TrafficDemand in self.traffic_demands into one or more
+  - Converts each TrafficDemand in the active matrix into one or more
 - `get_flow_details(self) -> Dict[Tuple[int, int], Dict[str, object]]`
   - Summarizes flows from each Demand's FlowPolicy.
 - `get_traffic_results(self, detailed: bool = False) -> List[ngraph.traffic_manager.TrafficResult]`
@@ -748,6 +838,33 @@ Attributes:
     unplaced_volume (float): The volume not placed (total_volume - placed_volume).
     src (str): Source node/path.
     dst (str): Destination node/path.
+
+---
+
+## ngraph.yaml_utils
+
+Utilities for handling YAML parsing quirks and common operations.
+
+### normalize_yaml_dict_keys(data: Dict[Any, ~V]) -> Dict[str, ~V]
+
+Normalize dictionary keys from YAML parsing to ensure consistent string keys.
+
+YAML 1.1 boolean keys (e.g., true, false, yes, no, on, off) get converted to
+Python True/False boolean values. This function converts them to predictable
+string representations ("True"/"False") and ensures all keys are strings.
+
+Args:
+    data: Dictionary that may contain boolean or other non-string keys from YAML parsing
+
+Returns:
+    Dictionary with all keys converted to strings, boolean keys converted to "True"/"False"
+
+Examples:
+    >>> normalize_yaml_dict_keys({True: "value1", False: "value2", "normal": "value3"})
+    {"True": "value1", "False": "value2", "normal": "value3"}
+
+    >>> # In YAML: true:, yes:, on: all become Python True
+    >>> # In YAML: false:, no:, off: all become Python False
 
 ---
 

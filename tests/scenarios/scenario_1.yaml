@@ -117,19 +117,20 @@ failure_policy:
       rule_type: "choice"
       count: 1
 
-traffic_demands:
-  - source_path: SEA
-    sink_path: JFK
-    demand: 50
-  - source_path: SFO
-    sink_path: DCA
-    demand: 50
-  - source_path: SEA
-    sink_path: DCA
-    demand: 50
-  - source_path: SFO
-    sink_path: JFK
-    demand: 50
+traffic_matrix_set:
+  default:
+    - source_path: SEA
+      sink_path: JFK
+      demand: 50
+    - source_path: SFO
+      sink_path: DCA
+      demand: 50
+    - source_path: SEA
+      sink_path: DCA
+      demand: 50
+    - source_path: SFO
+      sink_path: JFK
+      demand: 50
 
 workflow:
   - step_type: BuildGraph

@@ -91,6 +91,58 @@ class TrafficMatrixSet:
         """
         self.matrices[name] = demands
 
+    def get_matrix(self, name: str) -> list[TrafficDemand]:
+        """Get a specific traffic matrix by name.
+
+        Args:
+            name: Name of the matrix to retrieve.
+
+        Returns:
+            List of TrafficDemand objects for the named matrix.
+
+        Raises:
+            KeyError: If the matrix name doesn't exist.
+        """
+        return self.matrices[name]
+
+    def get_default_matrix(self) -> list[TrafficDemand]:
+        """Get the default traffic matrix.
+
+        Returns the matrix named 'default' if it exists, otherwise returns
+        the first matrix if there's only one, otherwise raises an error.
+
+        Returns:
+            List of TrafficDemand objects for the default matrix.
+
+        Raises:
+            ValueError: If no matrices exist or multiple matrices exist
+                         without a 'default' matrix.
+        """
+        if not self.matrices:
+            return []
+
+        if "default" in self.matrices:
+            return self.matrices["default"]
+
+        if len(self.matrices) == 1:
+            return next(iter(self.matrices.values()))
+
+        raise ValueError(
+            f"Multiple matrices exist ({list(self.matrices.keys())}) but no 'default' matrix. "
+            f"Please specify which matrix to use or add a 'default' matrix."
+        )
+
+    def get_all_demands(self) -> list[TrafficDemand]:
+        """Get all traffic demands from all matrices combined.
+
+        Returns:
+            Flattened list of all TrafficDemand objects across all matrices.
+        """
+        all_demands = []
+        for demands in self.matrices.values():
+            all_demands.extend(demands)
+        return all_demands
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization.
 
