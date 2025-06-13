@@ -15,7 +15,7 @@ The main sections of a scenario YAML file work together to define a complete net
 - `components`: **[Optional]** A library of hardware and optics definitions with attributes like power consumption.
 - `risk_groups`: **[Optional]** Defines groups of components that might fail together (e.g., all components in a rack or multiple parallel links sharing the same DWDM transmission).
 - `traffic_matrix_set`: **[Optional]** Defines traffic demand matrices between network nodes with various placement policies.
-- `failure_policy`: **[Optional]** Specifies availability parameters and rules for simulating network failures.
+- `failure_policy_set`: **[Optional]** Specifies named failure policies and rules for simulating network failures.
 - `workflow`: **[Optional]** A list of steps to be executed, such as building graphs, running simulations, or performing analyses.
 
 ## `network` - Core Foundation
@@ -398,29 +398,44 @@ traffic_matrix_set:
 
 - **`full_mesh`**: Creates individual demands for each (source_node, sink_node) pair, excluding self-pairs (where source equals sink). The total demand volume is split evenly among all valid pairs. This is useful for modeling distributed traffic patterns where every source communicates with every sink.
 
-## `failure_policy` - Failure Simulation
+## `failure_policy_set` - Failure Simulation
 
-Defines how network failures are simulated to test resilience and analyze failure scenarios.
+Defines named failure policies for simulating network failures to test resilience and analyze failure scenarios. Each policy contains rules and configuration for how failures are applied.
 
 ```yaml
-failure_policy:
-  name: "PolicyName" # Optional
-  fail_shared_risk_groups: true | false
-  fail_risk_group_children: true | false
-  use_cache: true | false
-  attrs: # Optional custom attributes for the policy
-    custom_key: value
-  rules:
-    - entity_scope: "node" | "link" | "risk_group"
-      conditions: # Optional: list of conditions to select entities
-        - attr: "attribute_name"
-          operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
-          value: "some_value"
-      logic: "and" | "or" | "any" # How to combine conditions
-      rule_type: "all" | "choice" | "random" # How to select entities matching conditions
-      count: N # For 'choice' rule_type
-      probability: P # For 'random' rule_type (0.0 to 1.0)
+failure_policy_set:
+  policy_name_1:
+    name: "PolicyName" # Optional
+    fail_shared_risk_groups: true | false
+    fail_risk_group_children: true | false
+    use_cache: true | false
+    attrs: # Optional custom attributes for the policy
+      custom_key: value
+    rules:
+      - entity_scope: "node" | "link" | "risk_group"
+        conditions: # Optional: list of conditions to select entities
+          - attr: "attribute_name"
+            operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
+            value: "some_value"
+        logic: "and" | "or" | "any" # How to combine conditions
+        rule_type: "all" | "choice" | "random" # How to select entities matching conditions
+        count: N # For 'choice' rule_type
+        probability: P # For 'random' rule_type (0.0 to 1.0)
+  policy_name_2:
+    # Another failure policy...
+  default:
+    # Default failure policy (used when no specific policy is selected)
+    rules:
+      - entity_scope: "link"
+        rule_type: "choice"
+        count: 1
 ```
+
+**Policy Selection:**
+
+- If a `default` policy exists, it will be used when no specific policy is selected
+- If only one policy exists and no `default` is specified, that policy becomes the default
+- Multiple policies allow testing different failure scenarios in the same network
 
 ## `workflow` - Execution Steps
 

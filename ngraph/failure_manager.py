@@ -5,10 +5,9 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
-from ngraph.failure_policy import FailurePolicy
 from ngraph.lib.flow_policy import FlowPolicyConfig
 from ngraph.network import Network
-from ngraph.results_artifacts import TrafficMatrixSet
+from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
 from ngraph.traffic_manager import TrafficManager, TrafficResult
 
 
@@ -19,8 +18,9 @@ class FailureManager:
     Attributes:
         network (Network): The underlying network to mutate (enable/disable nodes/links).
         traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after failures.
+        failure_policy_set (FailurePolicySet): Set of named failure policies.
         matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
-        failure_policy (Optional[FailurePolicy]): The policy describing what fails.
+        policy_name (Optional[str]): Name of specific failure policy to use, or None for default.
         default_flow_policy_config: The default flow policy for any demands lacking one.
     """
 
@@ -28,8 +28,9 @@ class FailureManager:
         self,
         network: Network,
         traffic_matrix_set: TrafficMatrixSet,
+        failure_policy_set: FailurePolicySet,
         matrix_name: Optional[str] = None,
-        failure_policy: Optional[FailurePolicy] = None,
+        policy_name: Optional[str] = None,
         default_flow_policy_config: Optional[FlowPolicyConfig] = None,
     ) -> None:
         """Initialize a FailureManager.
@@ -37,29 +38,45 @@ class FailureManager:
         Args:
             network: The Network to be modified by failures.
             traffic_matrix_set: Traffic matrices containing demands to place after failures.
+            failure_policy_set: Set of named failure policies.
             matrix_name: Name of specific matrix to use. If None, uses default matrix.
-            failure_policy: A FailurePolicy specifying the rules of what fails.
+            policy_name: Name of specific failure policy to use. If None, uses default policy.
             default_flow_policy_config: Default FlowPolicyConfig if demands do not specify one.
         """
         self.network = network
         self.traffic_matrix_set = traffic_matrix_set
+        self.failure_policy_set = failure_policy_set
         self.matrix_name = matrix_name
-        self.failure_policy = failure_policy
+        self.policy_name = policy_name
         self.default_flow_policy_config = default_flow_policy_config
 
     def apply_failures(self) -> None:
-        """Apply the current failure_policy to self.network (in-place).
+        """Apply the current failure policy to self.network (in-place).
 
-        If failure_policy is None, this method does nothing.
+        If failure_policy_set is empty or no valid policy is found, this method does nothing.
         """
-        if not self.failure_policy:
-            return
+        # Check if we have any policies
+        if len(self.failure_policy_set.policies) == 0:
+            return  # No policies, do nothing
+
+        # Get the failure policy to use
+        if self.policy_name:
+            # Use specific named policy
+            try:
+                failure_policy = self.failure_policy_set.get_policy(self.policy_name)
+            except KeyError:
+                return  # Policy not found, do nothing
+        else:
+            # Use default policy
+            failure_policy = self.failure_policy_set.get_default_policy()
+            if failure_policy is None:
+                return  # No default policy, do nothing
 
         # Collect node/links as dicts {id: attrs}, matching FailurePolicy expectations
         node_map = {n_name: n.attrs for n_name, n in self.network.nodes.items()}
         link_map = {link_id: link.attrs for link_id, link in self.network.links.items()}
 
-        failed_ids = self.failure_policy.apply_failures(node_map, link_map)
+        failed_ids = failure_policy.apply_failures(node_map, link_map)
 
         # Disable the failed entities
         for f_id in failed_ids:

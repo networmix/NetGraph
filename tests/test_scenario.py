@@ -91,21 +91,22 @@ network:
         cost: 4
         attrs:
           type: link
-failure_policy:
-  attrs:
-    name: "multi_rule_example"
-    description: "Testing multi-rule approach."
-  fail_shared_risk_groups: false
-  fail_risk_group_children: false
-  use_cache: false
-  rules:
-    - entity_scope: node
-      logic: "any"
-      rule_type: "choice"
-      count: 1
-    - entity_scope: link
-      logic: "any"
-      rule_type: "all"
+failure_policy_set:
+  default:
+    attrs:
+      name: "multi_rule_example"
+      description: "Testing multi-rule approach."
+    fail_shared_risk_groups: false
+    fail_risk_group_children: false
+    use_cache: false
+    rules:
+      - entity_scope: node
+        logic: "any"
+        rule_type: "choice"
+        count: 1
+      - entity_scope: link
+        logic: "any"
+        rule_type: "all"
 traffic_matrix_set:
   default:
     - source_path: NodeA
@@ -140,8 +141,9 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-failure_policy:
-  rules: []
+failure_policy_set:
+  default:
+    rules: []
 traffic_matrix_set:
   default:
     - source_path: NodeA
@@ -169,8 +171,9 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-failure_policy:
-  rules: []
+failure_policy_set:
+  default:
+    rules: []
 traffic_matrix_set:
   default:
     - source_path: NodeA
@@ -200,8 +203,9 @@ network:
       link_params:
         capacity: 1
 traffic_matrix_set: {}
-failure_policy:
-  rules: []
+failure_policy_set:
+  default:
+    rules: []
 workflow:
   - step_type: DoSmth
     name: StepWithExtra
@@ -277,26 +281,24 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert link_bc.cost == 4
 
     # Check failure policy
-    assert isinstance(scenario.failure_policy, FailurePolicy)
-    assert not scenario.failure_policy.fail_shared_risk_groups
-    assert not scenario.failure_policy.fail_risk_group_children
-    assert not scenario.failure_policy.use_cache
+    default_policy = scenario.failure_policy_set.get_default_policy()
+    assert isinstance(default_policy, FailurePolicy)
+    assert not default_policy.fail_shared_risk_groups
+    assert not default_policy.fail_risk_group_children
+    assert not default_policy.use_cache
 
-    assert len(scenario.failure_policy.rules) == 2
-    assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
-    assert (
-        scenario.failure_policy.attrs.get("description")
-        == "Testing multi-rule approach."
-    )
+    assert len(default_policy.rules) == 2
+    assert default_policy.attrs.get("name") == "multi_rule_example"
+    assert default_policy.attrs.get("description") == "Testing multi-rule approach."
 
     # Rule1 => entity_scope=node, rule_type=choice, count=1
-    rule1 = scenario.failure_policy.rules[0]
+    rule1 = default_policy.rules[0]
     assert rule1.entity_scope == "node"
     assert rule1.rule_type == "choice"
     assert rule1.count == 1
 
     # Rule2 => entity_scope=link, rule_type=all
-    rule2 = scenario.failure_policy.rules[1]
+    rule2 = default_policy.rules[1]
     assert rule2.entity_scope == "link"
     assert rule2.rule_type == "all"
 
@@ -383,8 +385,8 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
 
-    # If no failure_policy block, scenario.failure_policy => None
-    assert scenario.failure_policy is None
+    # If no failure_policy_set block, scenario.failure_policy_set has no policies
+    assert scenario.failure_policy_set.get_default_policy() is None
 
     assert len(scenario.traffic_matrix_set.matrices) == 0
     assert len(scenario.workflow) == 1
@@ -402,7 +404,7 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert scenario.network is not None
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
-    assert scenario.failure_policy is None
+    assert scenario.failure_policy_set.get_default_policy() is None
     assert len(scenario.traffic_matrix_set.matrices) == 0
     assert scenario.workflow == []
 

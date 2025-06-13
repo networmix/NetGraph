@@ -125,16 +125,35 @@ demand = TrafficDemand(
 
 ## Failure Modeling
 
-### FailurePolicy
-Configure failure simulation parameters.
+### FailurePolicy and FailurePolicySet
+Configure failure simulation parameters using named policies.
 
 ```python
-from ngraph.failure_policy import FailurePolicy
+from ngraph.failure_policy import FailurePolicy, FailureRule
+from ngraph.results_artifacts import FailurePolicySet
 
-policy = FailurePolicy(
-    enable_failures=True,
-    max_concurrent_failures=2,
-    failure_probability=0.01
+# Create individual failure rules
+rule = FailureRule(
+    entity_scope="link",
+    rule_type="choice",
+    count=2
+)
+
+# Create failure policy
+policy = FailurePolicy(rules=[rule])
+
+# Create policy set to manage multiple policies
+policy_set = FailurePolicySet()
+policy_set.add("light_failures", policy)
+policy_set.add("default", policy)
+
+# Use with FailureManager
+from ngraph.failure_manager import FailureManager
+manager = FailureManager(
+    network=network,
+    traffic_matrix_set=traffic_matrix_set,
+    failure_policy_set=policy_set,
+    policy_name="light_failures"  # Optional: specify which policy to use
 )
 ```
 

@@ -86,32 +86,40 @@ def failure_manager(
     mock_failure_policy,
 ):
     """Factory fixture to create a FailureManager with default mocks."""
-    from ngraph.results_artifacts import TrafficMatrixSet
+    from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
 
     matrix_set = TrafficMatrixSet()
     matrix_set.add("default", mock_demands)
+
+    policy_set = FailurePolicySet()
+    policy_set.add("default", mock_failure_policy)
 
     return FailureManager(
         network=mock_network,
         traffic_matrix_set=matrix_set,
         matrix_name=None,
-        failure_policy=mock_failure_policy,
+        failure_policy_set=policy_set,
+        policy_name="default",
         default_flow_policy_config=None,
     )
 
 
 def test_apply_failures_no_policy(mock_network, mock_demands):
     """Test apply_failures does nothing if there is no failure_policy."""
-    from ngraph.results_artifacts import TrafficMatrixSet
+    from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
 
     matrix_set = TrafficMatrixSet()
     matrix_set.add("default", mock_demands)
+
+    # Create empty policy set
+    policy_set = FailurePolicySet()
 
     fmgr = FailureManager(
         network=mock_network,
         traffic_matrix_set=matrix_set,
         matrix_name=None,
-        failure_policy=None,
+        failure_policy_set=policy_set,
+        policy_name=None,
     )
     fmgr.apply_failures()
 

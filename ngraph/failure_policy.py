@@ -365,6 +365,37 @@ class FailurePolicy:
                     failed_rgs.add(child_name)
                     queue.append(child_name)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary representation with all fields as JSON-serializable primitives.
+        """
+        return {
+            "rules": [
+                {
+                    "entity_scope": rule.entity_scope,
+                    "conditions": [
+                        {
+                            "attr": cond.attr,
+                            "operator": cond.operator,
+                            "value": cond.value,
+                        }
+                        for cond in rule.conditions
+                    ],
+                    "logic": rule.logic,
+                    "rule_type": rule.rule_type,
+                    "probability": rule.probability,
+                    "count": rule.count,
+                }
+                for rule in self.rules
+            ],
+            "attrs": self.attrs,
+            "fail_shared_risk_groups": self.fail_shared_risk_groups,
+            "fail_risk_group_children": self.fail_risk_group_children,
+            "use_cache": self.use_cache,
+        }
+
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
     """Evaluate a single FailureCondition against entity attributes.

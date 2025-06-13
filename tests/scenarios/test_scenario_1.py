@@ -57,7 +57,8 @@ def test_scenario_1_build_graph() -> None:
 
     # 8) Check the multi-rule failure policy for "any single link".
     #    This should have exactly 1 rule that picks exactly 1 link from all links.
-    policy: FailurePolicy = scenario.failure_policy
+    policy: FailurePolicy = scenario.failure_policy_set.get_default_policy()
+    assert policy is not None, "Should have a default failure policy."
     assert len(policy.rules) == 1, "Should only have 1 rule for 'anySingleLink'."
 
     rule = policy.rules[0]

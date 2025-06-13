@@ -10,7 +10,7 @@ def make_scenario(nodes):
     for name, disabled in nodes:
         net.add_node(Node(name=name, disabled=disabled))
     return Scenario(
-        network=net, failure_policy=None, traffic_matrix_set={}, workflow=[]
+        network=net, workflow=[], traffic_matrix_set={}, failure_policy_set={}
     )
 
 

@@ -10,7 +10,7 @@ from ngraph.transform.distribute_external import (
 
 def make_scenario_with_network(net):
     return Scenario(
-        network=net, failure_policy=None, traffic_matrix_set={}, workflow=[]
+        network=net, workflow=[], traffic_matrix_set={}, failure_policy_set={}
     )
 
 

@@ -247,28 +247,31 @@ network:
       attrs:
         role: "leaf"
 
-failure_policy:
-  fail_shared_risk_groups: true
-  fail_risk_group_children: false
-  use_cache: true
-  attrs:
-    custom_key: "value"
-  rules:
-    - entity_scope: "node"
-      conditions:
-        - attr: "role"
-          operator: "=="
-          value: "spine"
-      logic: "and"
-      rule_type: "all"
+failure_policy_set:
+  default:
+    fail_shared_risk_groups: true
+    fail_risk_group_children: false
+    use_cache: true
+    attrs:
+      custom_key: "value"
+    rules:
+      - entity_scope: "node"
+        conditions:
+          - attr: "role"
+            operator: "=="
+            value: "spine"
+        logic: "and"
+        rule_type: "all"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert scenario.failure_policy is not None
-    assert scenario.failure_policy.fail_shared_risk_groups
-    assert not scenario.failure_policy.fail_risk_group_children
-    assert len(scenario.failure_policy.rules) == 1
-    rule = scenario.failure_policy.rules[0]
+    assert len(scenario.failure_policy_set.policies) == 1
+    default_policy = scenario.failure_policy_set.get_default_policy()
+    assert default_policy is not None
+    assert default_policy.fail_shared_risk_groups
+    assert not default_policy.fail_risk_group_children
+    assert len(default_policy.rules) == 1
+    rule = default_policy.rules[0]
     assert rule.entity_scope == "node"
     assert len(rule.conditions) == 1
 

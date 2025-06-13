@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from statistics import mean, stdev
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficResult
+
+if TYPE_CHECKING:
+    from ngraph.failure_policy import FailurePolicy
 
 
 @dataclass(frozen=True)
@@ -200,3 +203,82 @@ class PlacementResultSet:
             "cases": cases,
             "demand_stats": demand_stats,
         }
+
+
+@dataclass
+class FailurePolicySet:
+    """Named collection of FailurePolicy objects.
+
+    This mutable container maps failure policy names to FailurePolicy objects,
+    allowing management of multiple failure policies for analysis.
+
+    Attributes:
+        policies: Dictionary mapping failure policy names to FailurePolicy objects.
+    """
+
+    policies: dict[str, "FailurePolicy"] = field(default_factory=dict)
+
+    def add(self, name: str, policy: "FailurePolicy") -> None:
+        """Add a failure policy to the collection.
+
+        Args:
+            name: Failure policy name identifier.
+            policy: FailurePolicy object for this failure policy.
+        """
+        self.policies[name] = policy
+
+    def get_policy(self, name: str) -> "FailurePolicy":
+        """Get a specific failure policy by name.
+
+        Args:
+            name: Name of the policy to retrieve.
+
+        Returns:
+            FailurePolicy object for the named policy.
+
+        Raises:
+            KeyError: If the policy name doesn't exist.
+        """
+        return self.policies[name]
+
+    def get_default_policy(self) -> "FailurePolicy | None":
+        """Get the default failure policy.
+
+        Returns the policy named 'default' if it exists, otherwise returns
+        the first policy if there's only one, otherwise returns None.
+
+        Returns:
+            FailurePolicy object for the default policy, or None if no policies exist.
+
+        Raises:
+            ValueError: If multiple policies exist without a 'default' policy.
+        """
+        if not self.policies:
+            return None
+
+        if "default" in self.policies:
+            return self.policies["default"]
+
+        if len(self.policies) == 1:
+            return next(iter(self.policies.values()))
+
+        raise ValueError(
+            f"Multiple failure policies exist ({list(self.policies.keys())}) but no 'default' policy. "
+            f"Please specify which policy to use or add a 'default' policy."
+        )
+
+    def get_all_policies(self) -> list["FailurePolicy"]:
+        """Get all failure policies from the collection.
+
+        Returns:
+            List of all FailurePolicy objects.
+        """
+        return list(self.policies.values())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary mapping failure policy names to FailurePolicy dictionaries.
+        """
+        return {name: policy.to_dict() for name, policy in self.policies.items()}

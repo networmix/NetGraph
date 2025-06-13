@@ -14,7 +14,7 @@ from ngraph.failure_policy import (
 )
 from ngraph.network import Network, RiskGroup
 from ngraph.results import Results
-from ngraph.results_artifacts import TrafficMatrixSet
+from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 from ngraph.yaml_utils import normalize_yaml_dict_keys
@@ -26,7 +26,7 @@ class Scenario:
 
     This scenario includes:
       - A network (nodes/links), constructed via blueprint expansion.
-      - A failure policy (one or more rules).
+      - A failure policy set (one or more named failure policies).
       - A traffic matrix set containing one or more named traffic matrices.
       - A list of workflow steps to execute.
       - A results container for storing outputs.
@@ -40,8 +40,8 @@ class Scenario:
     """
 
     network: Network
-    failure_policy: Optional[FailurePolicy]
     workflow: List[WorkflowStep]
+    failure_policy_set: FailurePolicySet = field(default_factory=FailurePolicySet)
     traffic_matrix_set: TrafficMatrixSet = field(default_factory=TrafficMatrixSet)
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
@@ -67,14 +67,14 @@ class Scenario:
         Top-level YAML keys can include:
           - blueprints
           - network
-          - failure_policy
+          - failure_policy_set
           - traffic_matrix_set
           - workflow
           - components
           - risk_groups
 
         If no 'workflow' key is provided, the scenario has no steps to run.
-        If 'failure_policy' is omitted, scenario.failure_policy is None.
+        If 'failure_policy_set' is omitted, scenario.failure_policy_set is empty.
         If 'components' is provided, it is merged with default_components.
         If any unrecognized top-level key is found, a ValueError is raised.
 
@@ -101,7 +101,7 @@ class Scenario:
         recognized_keys = {
             "blueprints",
             "network",
-            "failure_policy",
+            "failure_policy_set",
             "traffic_matrix_set",
             "workflow",
             "components",
@@ -119,9 +119,23 @@ class Scenario:
         if network_obj is None:
             network_obj = Network()
 
-        # 2) Build the multi-rule failure policy (may be empty or None)
-        fp_data = data.get("failure_policy", {})
-        failure_policy = cls._build_failure_policy(fp_data) if fp_data else None
+        # 2) Build the failure policy set
+        fps_data = data.get("failure_policy_set", {})
+        if not isinstance(fps_data, dict):
+            raise ValueError(
+                "'failure_policy_set' must be a mapping of name -> FailurePolicy definition"
+            )
+
+        # Normalize dictionary keys to handle YAML boolean keys
+        normalized_fps = normalize_yaml_dict_keys(fps_data)
+        failure_policy_set = FailurePolicySet()
+        for name, fp_data in normalized_fps.items():
+            if not isinstance(fp_data, dict):
+                raise ValueError(
+                    f"Failure policy '{name}' must map to a FailurePolicy definition dict"
+                )
+            failure_policy = cls._build_failure_policy(fp_data)
+            failure_policy_set.add(name, failure_policy)
 
         # 3) Build traffic matrix set
         raw = data.get("traffic_matrix_set", {})
@@ -168,7 +182,7 @@ class Scenario:
 
         return Scenario(
             network=network_obj,
-            failure_policy=failure_policy,
+            failure_policy_set=failure_policy_set,
             workflow=workflow_steps,
             traffic_matrix_set=tms,
             components_library=final_components,
@@ -211,19 +225,20 @@ class Scenario:
         use_cache, and attrs.
 
         Example:
-            failure_policy:
-              name: "test"  # (Currently unused if present)
-              fail_shared_risk_groups: true
-              fail_risk_group_children: false
-              use_cache: true
-              attrs:
-                custom_key: custom_val
-              rules:
-                - entity_scope: "node"
-                  conditions:
-                    - attr: "capacity"
-                      operator: ">"
-                      value: 100
+            failure_policy_set:
+              default:
+                name: "test"  # (Currently unused if present)
+                fail_shared_risk_groups: true
+                fail_risk_group_children: false
+                use_cache: true
+                attrs:
+                  custom_key: custom_val
+                rules:
+                  - entity_scope: "node"
+                    conditions:
+                      - attr: "capacity"
+                        operator: ">"
+                        value: 100
                   logic: "and"
                   rule_type: "choice"
                   count: 2

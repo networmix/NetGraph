@@ -71,7 +71,8 @@ def test_scenario_2_build_graph() -> None:
     )
 
     # 8) Check the single-rule failure policy "anySingleLink"
-    policy: FailurePolicy = scenario.failure_policy
+    policy: FailurePolicy = scenario.failure_policy_set.get_default_policy()
+    assert policy is not None, "Should have a default failure policy."
     assert len(policy.rules) == 1, "Should only have 1 rule for 'anySingleLink'."
 
     rule = policy.rules[0]

@@ -60,7 +60,7 @@ def test_scenario_3_build_graph_and_capacity_probe() -> None:
     )
 
     # 8) Verify the default failure policy is None
-    policy: FailurePolicy = scenario.failure_policy
+    policy: FailurePolicy = scenario.failure_policy_set.get_default_policy()
     assert policy is None, "Expected no failure policy in this scenario."
 
     # 9) Check presence of some expanded nodes

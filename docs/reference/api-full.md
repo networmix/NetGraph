@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 13, 2025 at 03:15 UTC
+**Generated from source code on:** June 13, 2025 at 10:43 UTC
 
 **Modules auto-discovered:** 37
 
@@ -313,14 +313,15 @@ repeats multiple times for Monte Carlo experiments.
 Attributes:
     network (Network): The underlying network to mutate (enable/disable nodes/links).
     traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after failures.
+    failure_policy_set (FailurePolicySet): Set of named failure policies.
     matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
-    failure_policy (Optional[FailurePolicy]): The policy describing what fails.
+    policy_name (Optional[str]): Name of specific failure policy to use, or None for default.
     default_flow_policy_config: The default flow policy for any demands lacking one.
 
 **Methods:**
 
 - `apply_failures(self) -> 'None'`
-  - Apply the current failure_policy to self.network (in-place).
+  - Apply the current failure policy to self.network (in-place).
 - `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
   - Repeatedly applies (randomized) failures to the network and accumulates
 - `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
@@ -401,6 +402,8 @@ Attributes:
 
 - `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
   - Identify which entities fail given the defined rules, then optionally
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
 
 ### FailureRule
 
@@ -633,6 +636,33 @@ Attributes:
 - `to_dict(self) -> 'dict[str, Any]'`
   - Convert to dictionary for JSON serialization.
 
+### FailurePolicySet
+
+Named collection of FailurePolicy objects.
+
+This mutable container maps failure policy names to FailurePolicy objects,
+allowing management of multiple failure policies for analysis.
+
+Attributes:
+    policies: Dictionary mapping failure policy names to FailurePolicy objects.
+
+**Attributes:**
+
+- `policies` (dict[str, 'FailurePolicy']) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', policy: "'FailurePolicy'") -> 'None'`
+  - Add a failure policy to the collection.
+- `get_all_policies(self) -> "list['FailurePolicy']"`
+  - Get all failure policies from the collection.
+- `get_default_policy(self) -> "'FailurePolicy | None'"`
+  - Get the default failure policy.
+- `get_policy(self, name: 'str') -> "'FailurePolicy'"`
+  - Get a specific failure policy by name.
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
 ### PlacementResultSet
 
 Aggregated traffic placement results from one or many runs.
@@ -693,7 +723,7 @@ Represents a complete scenario for building and executing network workflows.
 
 This scenario includes:
   - A network (nodes/links), constructed via blueprint expansion.
-  - A failure policy (one or more rules).
+  - A failure policy set (one or more named failure policies).
   - A traffic matrix set containing one or more named traffic matrices.
   - A list of workflow steps to execute.
   - A results container for storing outputs.
@@ -708,8 +738,8 @@ Typical usage example:
 **Attributes:**
 
 - `network` (Network)
-- `failure_policy` (Optional[FailurePolicy])
 - `workflow` (List[WorkflowStep])
+- `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
 - `results` (Results) = Results(_store={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
