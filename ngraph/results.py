@@ -61,7 +61,15 @@ class Results:
     def to_dict(self) -> Dict[str, Dict[str, Any]]:
         """Return a dictionary representation of all stored results.
 
+        Automatically converts any stored objects that have a to_dict() method
+        to their dictionary representation for JSON serialization.
+
         Returns:
             Dict[str, Dict[str, Any]]: Dictionary representation of all stored results.
         """
-        return {step: data.copy() for step, data in self._store.items()}
+        out: Dict[str, Dict[str, Any]] = {}
+        for step, data in self._store.items():
+            out[step] = {}
+            for key, value in data.items():
+                out[step][key] = value.to_dict() if hasattr(value, "to_dict") else value
+        return out
