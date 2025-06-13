@@ -53,7 +53,7 @@ class Scenario:
         in scenario.results.
         """
         for step in self.workflow:
-            step.run(self)
+            step.execute(self)
 
     @classmethod
     def from_yaml(

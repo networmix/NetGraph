@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 13, 2025 at 17:13 UTC
+**Generated from source code on:** June 13, 2025 at 17:50 UTC
 
-**Modules auto-discovered:** 38
+**Modules auto-discovered:** 39
 
 ---
 
@@ -436,6 +436,55 @@ Attributes:
 - `rule_type` (Literal['random', 'choice', 'all']) = all
 - `probability` (float) = 1.0
 - `count` (int) = 1
+
+---
+
+## ngraph.logging
+
+Centralized logging configuration for NetGraph.
+
+### disable_debug_logging() -> None
+
+Disable debug logging, set to INFO level.
+
+### enable_debug_logging() -> None
+
+Enable debug logging for the entire package.
+
+### get_logger(name: str) -> logging.Logger
+
+Get a logger with NetGraph's standard configuration.
+
+This is the main function that should be used throughout the package.
+All loggers will inherit from the root 'ngraph' logger configuration.
+
+Args:
+    name: Logger name (typically __name__ from calling module).
+
+Returns:
+    Configured logger instance.
+
+### reset_logging() -> None
+
+Reset logging configuration (mainly for testing).
+
+### set_global_log_level(level: int) -> None
+
+Set the log level for all NetGraph loggers.
+
+Args:
+    level: Logging level (e.g., logging.DEBUG, logging.INFO).
+
+### setup_root_logger(level: int = 20, format_string: Optional[str] = None, handler: Optional[logging.Handler] = None) -> None
+
+Set up the root NetGraph logger with a single handler.
+
+This should only be called once to avoid duplicate handlers.
+
+Args:
+    level: Logging level (default: INFO).
+    format_string: Custom format string (optional).
+    handler: Custom handler (optional, defaults to StreamHandler).
 
 ---
 
@@ -1753,13 +1802,17 @@ Attributes:
 
 Base class for all workflow steps.
 
+All workflow steps are automatically logged with execution timing information.
+
 **Attributes:**
 
 - `name` (str)
 
 **Methods:**
 
-- `run(self, scenario: 'Scenario') -> 'None'`
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
+- `run(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step logic.
 
 ### register_workflow_step(step_type: 'str')
@@ -1780,6 +1833,8 @@ A workflow step that builds a StrictMultiDiGraph from scenario.network.
 
 **Methods:**
 
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Execute the workflow step logic.
 
@@ -1820,6 +1875,8 @@ Attributes:
 
 **Methods:**
 
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
 - `run(self, scenario: "'Scenario'") -> 'None'`
   - Execute the capacity envelope analysis workflow step.
 
@@ -1853,6 +1910,8 @@ Attributes:
 
 **Methods:**
 
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Executes the capacity probe by computing max flow between node groups
 
