@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 13, 2025 at 10:43 UTC
+**Generated from source code on:** June 13, 2025 at 17:13 UTC
 
-**Modules auto-discovered:** 37
+**Modules auto-discovered:** 38
 
 ---
 
@@ -1782,6 +1782,46 @@ A workflow step that builds a StrictMultiDiGraph from scenario.network.
 
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Execute the workflow step logic.
+
+---
+
+## ngraph.workflow.capacity_envelope_analysis
+
+### CapacityEnvelopeAnalysis
+
+A workflow step that samples maximum capacity between node groups across random failures.
+
+Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
+to build statistical envelopes of network resilience.
+
+Attributes:
+    source_path: Regex pattern to select source node groups.
+    sink_path: Regex pattern to select sink node groups.
+    mode: "combine" or "pairwise" flow analysis mode (default: "combine").
+    failure_policy: Name of failure policy in scenario.failure_policy_set (optional).
+    iterations: Number of Monte-Carlo trials (default: 1).
+    parallelism: Number of parallel worker processes (default: 1).
+    shortest_path: If True, use shortest paths only (default: False).
+    flow_placement: Flow placement strategy (default: PROPORTIONAL).
+    seed: Optional seed for deterministic results (for debugging).
+
+**Attributes:**
+
+- `name` (str)
+- `source_path` (str)
+- `sink_path` (str)
+- `mode` (str) = combine
+- `failure_policy` (str | None)
+- `iterations` (int) = 1
+- `parallelism` (int) = 1
+- `shortest_path` (bool) = False
+- `flow_placement` (FlowPlacement) = 1
+- `seed` (int | None)
+
+**Methods:**
+
+- `run(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the capacity envelope analysis workflow step.
 
 ---
 

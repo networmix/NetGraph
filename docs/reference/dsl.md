@@ -472,6 +472,18 @@ workflow:
     shortest_path: true | false # Use shortest path only vs full max flow
     flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # How to distribute flow
     # Additional probe parameters available
+
+  - step_type: CapacityEnvelopeAnalysis
+    name: "envelope_name"  # Optional: Name for the analysis step
+    source_path: "regex/for/source_nodes"
+    sink_path: "regex/for/sink_nodes"
+    mode: "combine" | "pairwise" # How to group sources and sinks
+    failure_policy: "policy_name" # Optional: Named failure policy from failure_policy_set
+    iterations: N # Number of Monte-Carlo trials (default: 1)
+    parallelism: P # Number of parallel worker processes (default: 1)
+    shortest_path: true | false # Use shortest path only (default: false)
+    flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # Flow placement strategy
+    seed: S # Optional: Seed for deterministic results
 ```
 
 **Available Workflow Steps:**
@@ -480,6 +492,7 @@ workflow:
 - **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
 - **`DistributeExternalConnectivity`**: Creates external connectivity across attachment points
 - **`CapacityProbe`**: Probes maximum flow capacity between node groups
+- **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
 
 ## Path Matching Regex Syntax - Reference
 
@@ -606,6 +619,35 @@ workflow:
     source_path: "^(dc\\d+)/client"  # Capturing group creates per-DC groups
     sink_path: "^(dc\\d+)/server"
     mode: pairwise  # Test dc1 client -> dc1 server, dc2 client -> dc2 server
+
+  - step_type: CapacityEnvelopeAnalysis
+    source_path: "(.+)"    # Captures each node as its own group
+    sink_path: "(.+)"      # Creates N×N any-to-any analysis
+    mode: pairwise         # Required for per-node analysis
+```
+
+### Any-to-Any Analysis Pattern
+
+The pattern `(.+)` is a useful regex for comprehensive network analysis in workflow steps like `CapacityProbe` and `CapacityEnvelopeAnalysis`:
+
+- **Individual Node Groups**: The capturing group `(.+)` matches each node name, creating separate groups for each node
+- **Automatic Combinations**: In pairwise mode, this creates N×N flow analysis for N nodes
+- **Comprehensive Coverage**: Tests connectivity between every pair of nodes in the network
+
+**Example Use Cases:**
+```yaml
+# Test capacity between every pair of nodes in the network
+- step_type: CapacityEnvelopeAnalysis
+  source_path: "(.+)"     # Every node as source
+  sink_path: "(.+)"       # Every node as sink
+  mode: pairwise          # Creates all node-to-node combinations
+  iterations: 100         # Monte-Carlo analysis across failures
+
+# Test capacity from all datacenter nodes to all others
+- step_type: CapacityProbe
+  source_path: "(datacenter.*)"  # Each datacenter node individually
+  sink_path: "(datacenter.*)"    # Each datacenter node individually
+  mode: pairwise                 # All datacenter-to-datacenter flows
 ```
 
 ### Best Practices
