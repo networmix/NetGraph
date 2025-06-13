@@ -116,10 +116,9 @@ Define and manage traffic demands between network segments.
 from ngraph.traffic_demand import TrafficDemand
 
 demand = TrafficDemand(
-    name="web_traffic",
     source_path="web_servers",
     sink_path="databases",
-    volume=1000,
+    demand=1000.0,
     mode="full_mesh"
 )
 ```
