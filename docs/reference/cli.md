@@ -15,12 +15,15 @@ pip install ngraph
 The primary command is `run`, which executes scenario files:
 
 ```bash
-# Run a scenario and output results to stdout as JSON
+# Run a scenario and write results to results.json
 python -m ngraph run scenario.yaml
 
-# Run a scenario and save results to a file
+# Write results to a custom file
 python -m ngraph run scenario.yaml --results output.json
 python -m ngraph run scenario.yaml -r output.json
+
+# Print results to stdout as well
+python -m ngraph run scenario.yaml --stdout
 ```
 
 ## Command Reference
@@ -41,6 +44,8 @@ python -m ngraph run <scenario_file> [options]
 **Options:**
 
 - `--results`, `-r`: Output file path for results (JSON format)
+- `--stdout`: Print results to stdout
+- `--keys`, `-k`: Space-separated list of workflow step names to include in output
 - `--help`, `-h`: Show help message
 
 ## Examples
@@ -48,7 +53,7 @@ python -m ngraph run <scenario_file> [options]
 ### Basic Execution
 
 ```bash
-# Run a scenario with output to console
+# Run a scenario (writes results.json)
 python -m ngraph run my_network.yaml
 ```
 
@@ -66,11 +71,39 @@ python -m ngraph run my_network.yaml --results analysis.json
 python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
 ```
 
+### Filtering Results by Step Names
+
+You can filter the output to include only specific workflow steps using the `--keys` option:
+
+```bash
+# Only include results from the capacity_probe step
+python -m ngraph run scenario.yaml --keys capacity_probe
+
+# Include multiple specific steps
+python -m ngraph run scenario.yaml --keys build_graph capacity_probe
+
+# Filter and print to stdout
+python -m ngraph run scenario.yaml --keys capacity_probe --stdout
+```
+
+The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
+
+```yaml
+workflow:
+  - step_type: BuildGraph
+    name: build_graph
+  - step_type: CapacityProbe
+    name: capacity_probe
+    # ... other parameters
+```
+
+Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_probe` will include only the CapacityProbe results.
+
 ## Output Format
 
 The CLI outputs results in JSON format. The structure depends on the workflow steps executed in your scenario:
 
-- **BuildGraph**: Returns graph information as a string representation
+- **BuildGraph**: Returns graph data in node-link JSON format
 - **CapacityProbe**: Returns max flow values with descriptive labels
 - **Other Steps**: Each step stores its results with step-specific keys
 
@@ -79,10 +112,40 @@ Example output structure:
 ```json
 {
   "build_graph": {
-    "graph": "StrictMultiDiGraph with 6 nodes and 20 edges"
+    "graph": {
+      "graph": {},
+      "nodes": [
+        {
+          "id": "SEA",
+          "attr": {
+            "coords": [47.6062, -122.3321],
+            "type": "node"
+          }
+        },
+        {
+          "id": "SFO",
+          "attr": {
+            "coords": [37.7749, -122.4194],
+            "type": "node"
+          }
+        }
+      ],
+      "links": [
+        {
+          "source": 0,
+          "target": 1,
+          "key": "SEA|SFO|example_edge_id",
+          "attr": {
+            "capacity": 200,
+            "cost": 8000,
+            "distance_km": 1600
+          }
+        }
+      ]
+    }
   },
   "capacity_probe": {
-    "max_flow:[SEA|SFO -> JFK|DCA]": 150.0
+    "max_flow:[SEA -> SFO]": 200.0
   }
 }
 ```

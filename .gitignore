@@ -149,6 +149,9 @@ exports/
 *.pickle
 *.pkl
 
+# CLI output files
+results.json
+
 # Generated visualizations
 plots/
 figures/

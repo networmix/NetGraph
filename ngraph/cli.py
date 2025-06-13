@@ -13,8 +13,21 @@ from ngraph.scenario import Scenario
 logger = get_logger(__name__)
 
 
-def _run_scenario(path: Path, output: Optional[Path]) -> None:
-    """Run a scenario file and store results as JSON."""
+def _run_scenario(
+    path: Path,
+    output: Path,
+    stdout: bool,
+    keys: Optional[list[str]] = None,
+) -> None:
+    """Run a scenario file and store results as JSON.
+
+    Args:
+        path: Scenario YAML file.
+        output: Path where results should be written.
+        stdout: Whether to also print results to stdout.
+        keys: Optional list of workflow step names to include. When ``None`` all steps are
+            exported.
+    """
     logger.info(f"Loading scenario from: {path}")
 
     try:
@@ -27,13 +40,21 @@ def _run_scenario(path: Path, output: Optional[Path]) -> None:
 
         logger.info("Serializing results to JSON")
         results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
+
+        if keys:
+            filtered: Dict[str, Dict[str, Any]] = {}
+            for step, data in results_dict.items():
+                if step in keys:
+                    filtered[step] = data
+            results_dict = filtered
+
         json_str = json.dumps(results_dict, indent=2, default=str)
 
-        if output:
-            logger.info(f"Writing results to: {output}")
-            output.write_text(json_str)
-            logger.info("Results written successfully")
-        else:
+        logger.info(f"Writing results to: {output}")
+        output.write_text(json_str)
+        logger.info("Results written successfully")
+
+        if stdout:
             print(json_str)
 
     except FileNotFoundError:
@@ -69,8 +90,19 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--results",
         "-r",
         type=Path,
-        default=None,
-        help="Write JSON results to this file instead of stdout",
+        default=Path("results.json"),
+        help="Path to write JSON results (default: results.json)",
+    )
+    run_parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Print results to stdout as well",
+    )
+    run_parser.add_argument(
+        "--keys",
+        "-k",
+        nargs="+",
+        help="Filter output to these workflow step names",
     )
 
     args = parser.parse_args(argv)
@@ -85,7 +117,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         set_global_log_level(logging.INFO)
 
     if args.command == "run":
-        _run_scenario(args.scenario, args.results)
+        _run_scenario(args.scenario, args.results, args.stdout, args.keys)
 
 
 if __name__ == "__main__":
