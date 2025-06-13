@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 13, 2025 at 17:50 UTC
+**Generated from source code on:** June 13, 2025 at 18:47 UTC
 
 **Modules auto-discovered:** 39
 
@@ -1138,6 +1138,8 @@ Inherits from:
   - Returns a SubGraph view of the subgraph induced on `nodes`.
 - `successors(self, n)`
   - Returns an iterator over successor nodes of n.
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert the graph to a dictionary representation suitable for JSON serialization.
 - `to_directed(self, as_view=False)`
   - Returns a directed representation of the graph.
 - `to_directed_class(self)`

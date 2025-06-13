@@ -380,3 +380,110 @@ def test_networkx_algorithm():
     )
     # Expect two equally short paths: A->B->C (10+4=14) and A->BB->C (10+4=14)
     assert sorted(all_sp) == sorted([["A", "B", "C"], ["A", "BB", "C"]])
+
+
+def test_to_dict():
+    """Test that to_dict() returns proper node-link format for JSON serialization."""
+    g = StrictMultiDiGraph()
+
+    # Test empty graph
+    result = g.to_dict()
+    assert result == {"graph": {}, "nodes": [], "links": []}
+
+    # Add nodes with attributes
+    g.add_node("A", type="router", location="rack1")
+    g.add_node("B", type="switch", location="rack2")
+    g.add_node("C", type="server")
+
+    # Add edges with attributes
+    e1 = g.add_edge("A", "B", capacity=100, cost=5)
+    e2 = g.add_edge("B", "C", capacity=50, cost=2)
+    e3 = g.add_edge("A", "C", capacity=25)  # No cost attribute
+
+    result = g.to_dict()
+
+    # Verify structure
+    assert "graph" in result
+    assert "nodes" in result
+    assert "links" in result
+
+    # Verify graph attributes (should be empty for this test)
+    assert result["graph"] == {}
+
+    # Verify nodes
+    assert len(result["nodes"]) == 3
+    node_ids = [node["id"] for node in result["nodes"]]
+    assert set(node_ids) == {"A", "B", "C"}
+
+    # Find specific nodes and verify their attributes
+    node_a = next(n for n in result["nodes"] if n["id"] == "A")
+    assert node_a["attr"] == {"type": "router", "location": "rack1"}
+
+    node_b = next(n for n in result["nodes"] if n["id"] == "B")
+    assert node_b["attr"] == {"type": "switch", "location": "rack2"}
+
+    node_c = next(n for n in result["nodes"] if n["id"] == "C")
+    assert node_c["attr"] == {"type": "server"}
+
+    # Verify edges
+    assert len(result["links"]) == 3
+
+    # Create a mapping from node ID to index for edge verification
+    node_indices = {node["id"]: i for i, node in enumerate(result["nodes"])}
+
+    # Find specific edges by their keys and verify attributes
+    edge_by_key = {link["key"]: link for link in result["links"]}
+
+    assert e1 in edge_by_key
+    e1_link = edge_by_key[e1]
+    assert e1_link["source"] == node_indices["A"]
+    assert e1_link["target"] == node_indices["B"]
+    assert e1_link["attr"] == {"capacity": 100, "cost": 5}
+
+    assert e2 in edge_by_key
+    e2_link = edge_by_key[e2]
+    assert e2_link["source"] == node_indices["B"]
+    assert e2_link["target"] == node_indices["C"]
+    assert e2_link["attr"] == {"capacity": 50, "cost": 2}
+
+    assert e3 in edge_by_key
+    e3_link = edge_by_key[e3]
+    assert e3_link["source"] == node_indices["A"]
+    assert e3_link["target"] == node_indices["C"]
+    assert e3_link["attr"] == {"capacity": 25}
+
+
+def test_to_dict_with_graph_attributes():
+    """Test to_dict() with graph-level attributes."""
+    g = StrictMultiDiGraph(name="test_network", version="1.0")
+    g.add_node("A")
+    g.add_node("B")
+    g.add_edge("A", "B")
+
+    result = g.to_dict()
+
+    # Verify graph attributes are included
+    assert result["graph"]["name"] == "test_network"
+    assert result["graph"]["version"] == "1.0"
+    assert len(result["nodes"]) == 2
+    assert len(result["links"]) == 1
+
+
+def test_to_dict_json_serializable():
+    """Test that to_dict() output is JSON serializable."""
+    import json
+
+    g = StrictMultiDiGraph()
+    g.add_node("A", value=42, active=True)
+    g.add_node("B", value=3.14, tags=["tag1", "tag2"])
+    g.add_edge("A", "B", weight=1.5, metadata={"created": "2025-06-13"})
+
+    result = g.to_dict()
+
+    # Should be able to serialize to JSON without errors
+    json_str = json.dumps(result)
+
+    # Should be able to round-trip
+    parsed = json.loads(json_str)
+    assert parsed["nodes"][0]["attr"]["value"] in [42, 3.14]  # Could be in any order
+    assert len(parsed["links"]) == 1

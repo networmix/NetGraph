@@ -340,3 +340,64 @@ def test_results_complex_nested_structures():
         )
     except TypeError:
         pass  # Expected - nested objects in dict don't get auto-converted
+
+
+def test_results_strict_multi_di_graph_serialization():
+    """Test that Results.to_dict() properly converts StrictMultiDiGraph objects."""
+    from ngraph.lib.graph import StrictMultiDiGraph
+
+    res = Results()
+
+    # Create a test graph
+    graph = StrictMultiDiGraph()
+    graph.add_node("A", type="router", location="datacenter1")
+    graph.add_node("B", type="switch", location="datacenter2")
+    edge_id = graph.add_edge("A", "B", capacity=100, cost=5)
+
+    # Store graph in results
+    res.put("build_graph", "graph", graph)
+    res.put("build_graph", "node_count", 2)
+
+    # Convert to dict
+    d = res.to_dict()
+
+    # Verify structure
+    assert "build_graph" in d
+    assert "graph" in d["build_graph"]
+    assert "node_count" in d["build_graph"]
+
+    # Verify the graph was converted to node-link format
+    graph_dict = d["build_graph"]["graph"]
+    assert isinstance(graph_dict, dict)
+    assert "nodes" in graph_dict
+    assert "links" in graph_dict
+    assert "graph" in graph_dict
+
+    # Verify nodes
+    assert len(graph_dict["nodes"]) == 2
+    node_ids = [node["id"] for node in graph_dict["nodes"]]
+    assert set(node_ids) == {"A", "B"}
+
+    # Find node A and verify its attributes
+    node_a = next(n for n in graph_dict["nodes"] if n["id"] == "A")
+    assert node_a["attr"]["type"] == "router"
+    assert node_a["attr"]["location"] == "datacenter1"
+
+    # Verify edges
+    assert len(graph_dict["links"]) == 1
+    edge = graph_dict["links"][0]
+    assert edge["key"] == edge_id
+    assert edge["attr"]["capacity"] == 100
+    assert edge["attr"]["cost"] == 5
+
+    # Verify scalar value is unchanged
+    assert d["build_graph"]["node_count"] == 2
+
+    # Verify the result is JSON serializable
+    json_str = json.dumps(d)
+
+    # Verify round-trip
+    parsed = json.loads(json_str)
+    assert parsed["build_graph"]["node_count"] == 2
+    assert len(parsed["build_graph"]["graph"]["nodes"]) == 2
+    assert len(parsed["build_graph"]["graph"]["links"]) == 1

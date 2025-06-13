@@ -298,3 +298,17 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         if key not in self._edges:
             raise ValueError(f"Edge with id='{key}' not found.")
         self._edges[key][3].update(attr)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the graph to a dictionary representation suitable for JSON serialization.
+
+        Returns a node-link format dictionary with graph attributes, nodes, and edges.
+        The format is compatible with visualization libraries like D3.js.
+
+        Returns:
+            Dict[str, Any]: Dictionary containing 'graph', 'nodes', and 'links' keys.
+        """
+        # Import here to avoid circular import
+        from ngraph.lib.io import graph_to_node_link
+
+        return graph_to_node_link(self)
