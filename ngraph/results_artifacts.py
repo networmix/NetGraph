@@ -1,9 +1,3 @@
-"""Immutable result containers for network analysis artifacts.
-
-This module provides dataclasses for storing and serializing network analysis results,
-including capacity envelopes, traffic matrices, and placement results.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
