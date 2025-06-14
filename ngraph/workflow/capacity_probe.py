@@ -14,15 +14,28 @@ if TYPE_CHECKING:
 class CapacityProbe(WorkflowStep):
     """A workflow step that probes capacity (max flow) between selected groups of nodes.
 
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: CapacityProbe
+            name: "capacity_probe_analysis"  # Optional: Custom name for this step
+            source_path: "^datacenter/.*"    # Regex pattern to select source node groups
+            sink_path: "^edge/.*"            # Regex pattern to select sink node groups
+            mode: "combine"                  # "combine" or "pairwise" flow analysis
+            probe_reverse: false             # Also compute flow in reverse direction
+            shortest_path: false             # Use shortest paths only
+            flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
+        ```
+
     Attributes:
-        source_path (str): A regex pattern to select source node groups.
-        sink_path (str): A regex pattern to select sink node groups.
-        mode (str): "combine" or "pairwise" (defaults to "combine").
+        source_path: A regex pattern to select source node groups.
+        sink_path: A regex pattern to select sink node groups.
+        mode: "combine" or "pairwise" (defaults to "combine").
             - "combine": All matched sources form one super-source; all matched sinks form one super-sink.
             - "pairwise": Compute flow for each (source_group, sink_group).
-        probe_reverse (bool): If True, also compute flow in the reverse direction (sink→source).
-        shortest_path (bool): If True, only use shortest paths when computing flow.
-        flow_placement (FlowPlacement): Handling strategy for parallel equal cost paths (default PROPORTIONAL).
+        probe_reverse: If True, also compute flow in the reverse direction (sink→source).
+        shortest_path: If True, only use shortest paths when computing flow.
+        flow_placement: Handling strategy for parallel equal cost paths (default PROPORTIONAL).
     """
 
     source_path: str = ""

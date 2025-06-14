@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 14, 2025 at 00:45 UTC
+**Generated from source code on:** June 14, 2025 at 01:14 UTC
 
 **Modules auto-discovered:** 39
 
@@ -1806,6 +1806,18 @@ Base class for all workflow steps.
 
 All workflow steps are automatically logged with execution timing information.
 
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: <StepTypeName>
+        name: "optional_step_name"  # Optional: Custom name for this step instance
+        # ... step-specific parameters ...
+    ```
+
+Attributes:
+    name: Optional custom identifier for this workflow step instance,
+        used for logging and result storage purposes.
+
 **Attributes:**
 
 - `name` (str)
@@ -1829,6 +1841,16 @@ A decorator that registers a WorkflowStep subclass under `step_type`.
 
 A workflow step that builds a StrictMultiDiGraph from scenario.network.
 
+This step converts the scenario's network definition into a graph structure
+suitable for analysis algorithms. No additional parameters are required.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: BuildGraph
+        name: "build_network_graph"  # Optional: Custom name for this step
+    ```
+
 **Attributes:**
 
 - `name` (str)
@@ -1850,6 +1872,22 @@ A workflow step that samples maximum capacity between node groups across random 
 
 Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
 to build statistical envelopes of network resilience.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: CapacityEnvelopeAnalysis
+        name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
+        source_path: "^datacenter/.*"             # Regex pattern for source node groups
+        sink_path: "^edge/.*"                     # Regex pattern for sink node groups
+        mode: "combine"                           # "combine" or "pairwise" flow analysis
+        failure_policy: "random_failures"        # Optional: Named failure policy to use
+        iterations: 1000                          # Number of Monte-Carlo trials
+        parallelism: 4                            # Number of parallel worker processes
+        shortest_path: false                      # Use shortest paths only
+        flow_placement: "PROPORTIONAL"            # Flow placement strategy
+        seed: 42                                  # Optional: Seed for reproducible results
+    ```
 
 Attributes:
     source_path: Regex pattern to select source node groups.
@@ -1890,15 +1928,28 @@ Attributes:
 
 A workflow step that probes capacity (max flow) between selected groups of nodes.
 
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: CapacityProbe
+        name: "capacity_probe_analysis"  # Optional: Custom name for this step
+        source_path: "^datacenter/.*"    # Regex pattern to select source node groups
+        sink_path: "^edge/.*"            # Regex pattern to select sink node groups
+        mode: "combine"                  # "combine" or "pairwise" flow analysis
+        probe_reverse: false             # Also compute flow in reverse direction
+        shortest_path: false             # Use shortest paths only
+        flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
+    ```
+
 Attributes:
-    source_path (str): A regex pattern to select source node groups.
-    sink_path (str): A regex pattern to select sink node groups.
-    mode (str): "combine" or "pairwise" (defaults to "combine").
+    source_path: A regex pattern to select source node groups.
+    sink_path: A regex pattern to select sink node groups.
+    mode: "combine" or "pairwise" (defaults to "combine").
         - "combine": All matched sources form one super-source; all matched sinks form one super-sink.
         - "pairwise": Compute flow for each (source_group, sink_group).
-    probe_reverse (bool): If True, also compute flow in the reverse direction (sink→source).
-    shortest_path (bool): If True, only use shortest paths when computing flow.
-    flow_placement (FlowPlacement): Handling strategy for parallel equal cost paths (default PROPORTIONAL).
+    probe_reverse: If True, also compute flow in the reverse direction (sink→source).
+    shortest_path: If True, only use shortest paths when computing flow.
+    flow_placement: Handling strategy for parallel equal cost paths (default PROPORTIONAL).
 
 **Attributes:**
 
@@ -1927,6 +1978,21 @@ Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
 
 Subclasses must override :meth:`apply`.
 
+Transform-based workflow steps are automatically registered and can be used
+in YAML workflow configurations. Each transform is wrapped as a WorkflowStep
+using the @register_transform decorator.
+
+YAML Configuration (Generic):
+    ```yaml
+    workflow:
+      - step_type: <TransformName>
+        name: "optional_step_name"  # Optional: Custom name for this step instance
+        # ... transform-specific parameters ...
+    ```
+
+Attributes:
+    label: Optional description string for this transform instance.
+
 **Methods:**
 
 - `apply(self, scenario: 'Scenario') -> 'None'`
@@ -1953,6 +2019,23 @@ Raises:
 
 Attach (or create) remote nodes and link them to attachment stripes.
 
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: DistributeExternalConnectivity
+        name: "external_connectivity"       # Optional: Custom name for this step
+        remote_locations:                   # List of remote node locations/names
+          - "denver"
+          - "seattle"
+          - "chicago"
+        attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
+        stripe_width: 3                     # Number of attachment nodes per stripe
+        link_count: 2                       # Number of links per remote node
+        capacity: 100.0                     # Capacity per link
+        cost: 10.0                          # Cost per link
+        remote_prefix: "external/"          # Prefix for remote node names
+    ```
+
 Args:
     remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.
     attachment_path: Regex matching nodes that accept the links.
@@ -1978,6 +2061,24 @@ Args:
 Enable *count* disabled nodes that match *path*.
 
 Ordering is configurable; default is lexical by node name.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: EnableNodes
+        name: "enable_edge_nodes"      # Optional: Custom name for this step
+        path: "^edge/.*"               # Regex pattern to match nodes to enable
+        count: 5                       # Number of nodes to enable
+        order: "name"                  # Selection order: "name", "random", or "reverse"
+    ```
+
+Args:
+    path: Regex pattern to match disabled nodes that should be enabled.
+    count: Number of nodes to enable (must be positive integer).
+    order: Selection strategy when multiple nodes match:
+        - "name": Sort by node name (lexical order)
+        - "reverse": Sort by node name in reverse order
+        - "random": Random selection order
 
 **Methods:**
 

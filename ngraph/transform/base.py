@@ -45,6 +45,21 @@ class NetworkTransform(abc.ABC):
     """Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
 
     Subclasses must override :meth:`apply`.
+
+    Transform-based workflow steps are automatically registered and can be used
+    in YAML workflow configurations. Each transform is wrapped as a WorkflowStep
+    using the @register_transform decorator.
+
+    YAML Configuration (Generic):
+        ```yaml
+        workflow:
+          - step_type: <TransformName>
+            name: "optional_step_name"  # Optional: Custom name for this step instance
+            # ... transform-specific parameters ...
+        ```
+
+    Attributes:
+        label: Optional description string for this transform instance.
     """
 
     label: str = ""

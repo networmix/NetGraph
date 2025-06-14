@@ -23,6 +23,23 @@ class _StripeChooser:
 class DistributeExternalConnectivity(NetworkTransform):
     """Attach (or create) remote nodes and link them to attachment stripes.
 
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: DistributeExternalConnectivity
+            name: "external_connectivity"       # Optional: Custom name for this step
+            remote_locations:                   # List of remote node locations/names
+              - "denver"
+              - "seattle"
+              - "chicago"
+            attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
+            stripe_width: 3                     # Number of attachment nodes per stripe
+            link_count: 2                       # Number of links per remote node
+            capacity: 100.0                     # Capacity per link
+            cost: 10.0                          # Cost per link
+            remote_prefix: "external/"          # Prefix for remote node names
+        ```
+
     Args:
         remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.
         attachment_path: Regex matching nodes that accept the links.

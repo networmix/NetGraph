@@ -12,6 +12,24 @@ class EnableNodesTransform(NetworkTransform):
     """Enable *count* disabled nodes that match *path*.
 
     Ordering is configurable; default is lexical by node name.
+
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: EnableNodes
+            name: "enable_edge_nodes"      # Optional: Custom name for this step
+            path: "^edge/.*"               # Regex pattern to match nodes to enable
+            count: 5                       # Number of nodes to enable
+            order: "name"                  # Selection order: "name", "random", or "reverse"
+        ```
+
+    Args:
+        path: Regex pattern to match disabled nodes that should be enabled.
+        count: Number of nodes to enable (must be positive integer).
+        order: Selection strategy when multiple nodes match:
+            - "name": Sort by node name (lexical order)
+            - "reverse": Sort by node name in reverse order
+            - "random": Random selection order
     """
 
     def __init__(

@@ -11,7 +11,18 @@ if TYPE_CHECKING:
 
 @dataclass
 class BuildGraph(WorkflowStep):
-    """A workflow step that builds a StrictMultiDiGraph from scenario.network."""
+    """A workflow step that builds a StrictMultiDiGraph from scenario.network.
+
+    This step converts the scenario's network definition into a graph structure
+    suitable for analysis algorithms. No additional parameters are required.
+
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: BuildGraph
+            name: "build_network_graph"  # Optional: Custom name for this step
+        ```
+    """
 
     def run(self, scenario: Scenario) -> None:
         graph = scenario.network.to_strict_multidigraph(add_reverse=True)

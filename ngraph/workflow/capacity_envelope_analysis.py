@@ -131,6 +131,22 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
     to build statistical envelopes of network resilience.
 
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: CapacityEnvelopeAnalysis
+            name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
+            source_path: "^datacenter/.*"             # Regex pattern for source node groups
+            sink_path: "^edge/.*"                     # Regex pattern for sink node groups
+            mode: "combine"                           # "combine" or "pairwise" flow analysis
+            failure_policy: "random_failures"        # Optional: Named failure policy to use
+            iterations: 1000                          # Number of Monte-Carlo trials
+            parallelism: 4                            # Number of parallel worker processes
+            shortest_path: false                      # Use shortest paths only
+            flow_placement: "PROPORTIONAL"            # Flow placement strategy
+            seed: 42                                  # Optional: Seed for reproducible results
+        ```
+
     Attributes:
         source_path: Regex pattern to select source node groups.
         sink_path: Regex pattern to select sink node groups.

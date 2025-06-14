@@ -31,6 +31,18 @@ class WorkflowStep(ABC):
     """Base class for all workflow steps.
 
     All workflow steps are automatically logged with execution timing information.
+
+    YAML Configuration:
+        ```yaml
+        workflow:
+          - step_type: <StepTypeName>
+            name: "optional_step_name"  # Optional: Custom name for this step instance
+            # ... step-specific parameters ...
+        ```
+
+    Attributes:
+        name: Optional custom identifier for this workflow step instance,
+            used for logging and result storage purposes.
     """
 
     name: str = ""
