@@ -13,7 +13,7 @@ Edge = Tuple[str, str, str]
 class FlowSummary:
     """Summary of max-flow computation results with detailed analytics.
 
-    This immutable data structure provides comprehensive information about
+    This immutable data structure provides information about
     the flow solution, including edge flows, residual capacities, and
     min-cut analysis.
 

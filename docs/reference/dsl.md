@@ -493,6 +493,16 @@ workflow:
 - **`DistributeExternalConnectivity`**: Creates external connectivity across attachment points
 - **`CapacityProbe`**: Probes maximum flow capacity between node groups
 - **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
+- **`NotebookExport`**: Saves scenario results to a Jupyter notebook with configurable content and visualizations
+
+  ```yaml
+  - step_type: NotebookExport
+    name: "export_analysis"           # Optional: Custom name for this step
+    output_path: "my_results.ipynb"   # Optional: Custom output path (default: "results_summary.ipynb")
+    include_visualizations: true      # Optional: Include plots (default: true)
+    include_data_tables: true         # Optional: Include data tables (default: true)
+    max_data_preview_rows: 100        # Optional: Max rows in data previews (default: 100)
+  ```
 
 ## Path Matching Regex Syntax - Reference
 
@@ -628,11 +638,11 @@ workflow:
 
 ### Any-to-Any Analysis Pattern
 
-The pattern `(.+)` is a useful regex for comprehensive network analysis in workflow steps like `CapacityProbe` and `CapacityEnvelopeAnalysis`:
+The pattern `(.+)` is a useful regex for network analysis in workflow steps like `CapacityProbe` and `CapacityEnvelopeAnalysis`:
 
 - **Individual Node Groups**: The capturing group `(.+)` matches each node name, creating separate groups for each node
 - **Automatic Combinations**: In pairwise mode, this creates N×N flow analysis for N nodes
-- **Comprehensive Coverage**: Tests connectivity between every pair of nodes in the network
+- **Full Coverage**: Tests connectivity between every pair of nodes in the network
 
 **Example Use Cases:**
 ```yaml

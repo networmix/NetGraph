@@ -147,9 +147,7 @@ def calc_max_flow(
             - If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
 
     Notes:
-        - For large graphs or performance-critical scenarios, consider specialized max-flow
-          algorithms (e.g., Dinic, Edmond-Karp) for better scaling.
-        - When using return_summary or return_graph, callers must unpack the returned tuple.
+        - When using return_summary or return_graph, the return value is a tuple.
 
     Examples:
         >>> g = StrictMultiDiGraph()

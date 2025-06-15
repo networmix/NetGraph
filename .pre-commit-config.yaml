@@ -11,7 +11,7 @@ repos:
     hooks:
       - id: pyright
         args: [--project, pyproject.toml]
-        additional_dependencies: ['geopy', 'networkx', 'pyyaml', 'numpy', 'pandas', 'matplotlib', 'seaborn']
+        additional_dependencies: ['networkx', 'pyyaml', 'pandas', 'matplotlib', 'seaborn', 'nbformat', 'itables', 'pandas-stubs']
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

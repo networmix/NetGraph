@@ -158,7 +158,7 @@ The exact keys and values depend on:
 
 ## Integration with Workflows
 
-The CLI executes the complete workflow defined in your scenario file, running all steps in sequence and accumulating results. This allows you to automate complex network analysis tasks without manual intervention.
+The CLI executes the complete workflow defined in your scenario file, running all steps in sequence and accumulating results. This automates complex network analysis tasks without manual intervention.
 
 ## See Also
 

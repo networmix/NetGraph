@@ -23,13 +23,13 @@ classifiers = [
 
 # Runtime deps
 dependencies = [
-    "geopy",
     "networkx",
     "pyyaml",
-    "numpy",
     "pandas",
     "matplotlib",
     "seaborn",
+    "nbformat",
+    "itables",
 ]
 
 # Dev / CI extras
@@ -47,6 +47,8 @@ dev = [
     # style + type checking
     "ruff==0.11.13",
     "pyright",
+    # type stubs
+    "pandas-stubs",
     # pre-commit hooks
     "pre-commit",
     # build

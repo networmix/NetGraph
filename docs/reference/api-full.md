@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 14, 2025 at 01:14 UTC
+**Generated from source code on:** June 15, 2025 at 18:31 UTC
 
-**Modules auto-discovered:** 39
+**Modules auto-discovered:** 42
 
 ---
 
@@ -1571,9 +1571,7 @@ Returns:
         - If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
 
 Notes:
-    - For large graphs or performance-critical scenarios, consider specialized max-flow
-      algorithms (e.g., Dinic, Edmond-Karp) for better scaling.
-    - When using return_summary or return_graph, callers must unpack the returned tuple.
+    - When using return_summary or return_graph, the return value is a tuple.
 
 Examples:
     >>> g = StrictMultiDiGraph()
@@ -1777,7 +1775,7 @@ Types and data structures for algorithm analytics.
 
 Summary of max-flow computation results with detailed analytics.
 
-This immutable data structure provides comprehensive information about
+This immutable data structure provides information about
 the flow solution, including edge flows, residual capacities, and
 min-cut analysis.
 
@@ -1967,6 +1965,198 @@ Attributes:
   - Execute the workflow step with automatic logging.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Executes the capacity probe by computing max flow between node groups
+
+---
+
+## ngraph.workflow.notebook_analysis
+
+Notebook analysis components.
+
+### AnalysisContext
+
+Context information for analysis execution.
+
+**Attributes:**
+
+- `step_name` (str)
+- `results` (Dict)
+- `config` (Dict)
+
+### CapacityMatrixAnalyzer
+
+Analyzes capacity envelope data and creates matrices.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze capacity envelopes and create matrix visualization.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all_steps(self, results: Dict[str, Any]) -> None`
+  - Analyze and display capacity matrices for all relevant steps.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display capacity matrix analysis results.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+### DataLoader
+
+Handles loading and validation of analysis results.
+
+**Methods:**
+
+- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
+  - Load results from JSON file with comprehensive error handling.
+
+### FlowAnalyzer
+
+Analyzes maximum flow results.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze flow results and create visualizations.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
+  - Analyze and display all flow results.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display flow analysis results.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+### NotebookAnalyzer
+
+Base class for notebook analysis components.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Perform the analysis and return results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display analysis results in notebook format.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+### PackageManager
+
+Manages package installation and imports for notebooks.
+
+**Methods:**
+
+- `check_and_install_packages() -> Dict[str, Any]`
+  - Check for required packages and install if missing.
+- `setup_environment() -> Dict[str, Any]`
+  - Set up the complete notebook environment.
+
+### SummaryAnalyzer
+
+Provides summary analysis of all results.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze and summarize all results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_summary(self, results: Dict[str, Any]) -> None`
+  - Analyze and display summary.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display summary analysis.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+### example_usage()
+
+Example of how the new approach works.
+
+---
+
+## ngraph.workflow.notebook_export
+
+### NotebookExport
+
+Export scenario results to a Jupyter notebook with external JSON data file.
+
+Creates a Jupyter notebook containing analysis code and visualizations,
+with results data stored in a separate JSON file. This separation improves
+performance and maintainability for large datasets.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: NotebookExport
+        name: "export_analysis"              # Optional: Custom name for this step
+        notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
+        json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
+        output_path: "analysis.ipynb"        # Optional: Backward compatibility alias for notebook_path
+        include_visualizations: true         # Optional: Include plots (default: true)
+        include_data_tables: true            # Optional: Include data tables (default: true)
+        max_data_preview_rows: 100           # Optional: Max rows in data previews
+        allow_empty_results: false           # Optional: Allow notebook creation with no results
+    ```
+
+Attributes:
+    notebook_path: Destination notebook file path (default: "results.ipynb").
+    json_path: Destination JSON data file path (default: "results.json").
+    output_path: Backward compatibility alias for notebook_path (default: "results.ipynb").
+    include_visualizations: Whether to include visualization cells (default: True).
+    include_data_tables: Whether to include data table displays (default: True).
+    max_data_preview_rows: Maximum number of rows to show in data previews (default: 100).
+    allow_empty_results: Whether to create a notebook when no results exist (default: False).
+                       If False, raises ValueError when results are empty.
+
+**Attributes:**
+
+- `name` (str)
+- `notebook_path` (str) = results.ipynb
+- `json_path` (str) = results.json
+- `output_path` (str) = results.ipynb
+- `include_visualizations` (bool) = True
+- `include_data_tables` (bool) = True
+- `max_data_preview_rows` (int) = 100
+- `allow_empty_results` (bool) = False
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
+- `run(self, scenario: "'Scenario'") -> 'None'`
+  - Create notebook and JSON files with the current scenario results.
+
+---
+
+## ngraph.workflow.notebook_serializer
+
+Code serialization for notebook generation.
+
+### ExecutableNotebookExport
+
+Notebook export using executable Python classes.
+
+**Methods:**
+
+- `create_notebook(self, results_dict: Dict[str, Any]) -> nbformat.notebooknode.NotebookNode`
+  - Create notebook using executable classes.
+
+### NotebookCodeSerializer
+
+Converts Python classes into notebook cells.
+
+**Methods:**
+
+- `create_capacity_analysis_cell() -> nbformat.notebooknode.NotebookNode`
+  - Create capacity analysis cell.
+- `create_data_loading_cell(json_path: str) -> nbformat.notebooknode.NotebookNode`
+  - Create data loading cell.
+- `create_flow_analysis_cell() -> nbformat.notebooknode.NotebookNode`
+  - Create flow analysis cell.
+- `create_setup_cell() -> nbformat.notebooknode.NotebookNode`
+  - Create setup cell.
+- `create_summary_cell() -> nbformat.notebooknode.NotebookNode`
+  - Create analysis summary cell.
 
 ---
 

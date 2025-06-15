@@ -4,7 +4,7 @@ This section provides detailed documentation for NetGraph's Python API.
 
 > **📚 Quick Navigation:**
 
-> - **[Complete Auto-Generated API Reference](api-full.md)** - Comprehensive class and method documentation
+> - **[Complete Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line interface documentation
 > - **[DSL Reference](dsl.md)** - YAML DSL syntax reference
 
