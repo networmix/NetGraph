@@ -244,11 +244,16 @@ class TestCapacityMatrixAnalyzer:
         stats = self.analyzer._calculate_statistics(capacity_matrix)
 
         assert stats["has_data"] is True
-        assert stats["total_connections"] == 4  # Non-zero values
-        assert stats["total_possible"] == 9  # 3x3 matrix
+        assert (
+            stats["total_connections"] == 6
+        )  # All non-self-loop positions: A->B, A->C, B->A, B->C, C->A, C->B
+        assert stats["total_possible"] == 6  # 3x(3-1) excluding self-loops
         assert stats["capacity_min"] == 50.0
-        assert stats["capacity_max"] == 200.0
+        assert stats["capacity_max"] == 200.0  # Includes all non-zero values
         assert "capacity_mean" in stats
+        assert "capacity_p25" in stats
+        assert "capacity_p50" in stats
+        assert "capacity_p75" in stats
         assert stats["num_sources"] == 3
         assert stats["num_destinations"] == 3
 
@@ -312,6 +317,9 @@ class TestCapacityMatrixAnalyzer:
                 "capacity_min": 50.0,
                 "capacity_max": 200.0,
                 "capacity_mean": 125.0,
+                "capacity_p25": 75.0,
+                "capacity_p50": 125.0,
+                "capacity_p75": 175.0,
             },
             "visualization_data": {
                 "has_data": True,

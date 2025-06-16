@@ -168,14 +168,34 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         if len(non_zero_values) == 0:
             return {"has_data": False}
 
+        # Count all non-self-loop connections for flow analysis
+        non_self_loop_connections = 0
+
+        for source in capacity_matrix.index:
+            for dest in capacity_matrix.columns:
+                if source != dest:  # Exclude self-loops
+                    non_self_loop_connections += 1
+
+        # Calculate meaningful connection density
+        num_nodes = len(capacity_matrix.index)
+        total_possible_connections = num_nodes * (num_nodes - 1)  # Exclude self-loops
+        connection_density = (
+            non_self_loop_connections / total_possible_connections * 100
+            if total_possible_connections > 0
+            else 0
+        )
+
         return {
             "has_data": True,
-            "total_connections": len(non_zero_values),
-            "total_possible": capacity_matrix.size,
-            "connection_density": len(non_zero_values) / capacity_matrix.size * 100,
+            "total_connections": non_self_loop_connections,
+            "total_possible": total_possible_connections,
+            "connection_density": connection_density,
             "capacity_min": float(non_zero_values.min()),
             "capacity_max": float(non_zero_values.max()),
             "capacity_mean": float(non_zero_values.mean()),
+            "capacity_p25": float(pd.Series(non_zero_values).quantile(0.25)),
+            "capacity_p50": float(pd.Series(non_zero_values).quantile(0.50)),
+            "capacity_p75": float(pd.Series(non_zero_values).quantile(0.75)),
             "num_sources": len(capacity_matrix.index),
             "num_destinations": len(capacity_matrix.columns),
         }
@@ -207,15 +227,19 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             return
 
         print("Matrix Statistics:")
-        print(f"  Sources: {stats['num_sources']} nodes")
-        print(f"  Destinations: {stats['num_destinations']} nodes")
+        print(f"  Sources: {stats['num_sources']:,} nodes")
+        print(f"  Destinations: {stats['num_destinations']:,} nodes")
         print(
-            f"  Connections: {stats['total_connections']}/{stats['total_possible']} ({stats['connection_density']:.1f}%)"
+            f"  Connections: {stats['total_connections']:,}/{stats['total_possible']:,} ({stats['connection_density']:.1f}%)"
         )
         print(
-            f"  Capacity range: {stats['capacity_min']:.2f} - {stats['capacity_max']:.2f}"
+            f"  Capacity range: {stats['capacity_min']:,.2f} - {stats['capacity_max']:,.2f}"
         )
-        print(f"  Average capacity: {stats['capacity_mean']:.2f}")
+        print("  Capacity statistics:")
+        print(f"    Mean: {stats['capacity_mean']:,.2f}")
+        print(f"    P25: {stats['capacity_p25']:,.2f}")
+        print(f"    P50 (median): {stats['capacity_p50']:,.2f}")
+        print(f"    P75: {stats['capacity_p75']:,.2f}")
 
         viz_data = analysis["visualization_data"]
         if viz_data["has_data"]:
@@ -316,11 +340,11 @@ class FlowAnalyzer(NotebookAnalyzer):
 
         stats = analysis["statistics"]
         print("Flow Statistics:")
-        print(f"  Total flows: {stats['total_flows']}")
-        print(f"  Analysis steps: {stats['unique_steps']}")
-        print(f"  Flow range: {stats['min_flow']:.2f} - {stats['max_flow']:.2f}")
-        print(f"  Average flow: {stats['avg_flow']:.2f}")
-        print(f"  Total capacity: {stats['total_capacity']:.2f}")
+        print(f"  Total flows: {stats['total_flows']:,}")
+        print(f"  Analysis steps: {stats['unique_steps']:,}")
+        print(f"  Flow range: {stats['min_flow']:,.2f} - {stats['max_flow']:,.2f}")
+        print(f"  Average flow: {stats['avg_flow']:,.2f}")
+        print(f"  Total capacity: {stats['total_capacity']:,.2f}")
 
         flow_df = analysis["dataframe"]
 
@@ -477,7 +501,7 @@ class DataLoader:
                 {
                     "success": True,
                     "results": results,
-                    "message": f"Loaded {len(results)} analysis steps from {json_path.name}",
+                    "message": f"Loaded {len(results):,} analysis steps from {json_path.name}",
                     "step_count": len(results),
                     "step_names": list(results.keys()),
                 }
@@ -531,14 +555,14 @@ class SummaryAnalyzer(NotebookAnalyzer):
         print("=" * 40)
 
         stats = analysis
-        print(f"Total Analysis Steps: {stats['total_steps']}")
-        print(f"Capacity Envelope Steps: {stats['capacity_steps']}")
-        print(f"Flow Analysis Steps: {stats['flow_steps']}")
-        print(f"Other Data Steps: {stats['other_steps']}")
+        print(f"Total Analysis Steps: {stats['total_steps']:,}")
+        print(f"Capacity Envelope Steps: {stats['capacity_steps']:,}")
+        print(f"Flow Analysis Steps: {stats['flow_steps']:,}")
+        print(f"Other Data Steps: {stats['other_steps']:,}")
 
         if stats["total_steps"] > 0:
             print(
-                f"\n✅ Analysis complete. Processed {stats['total_steps']} workflow steps."
+                f"\n✅ Analysis complete. Processed {stats['total_steps']:,} workflow steps."
             )
         else:
             print("\n❌ No analysis results found.")
