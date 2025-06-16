@@ -1,3 +1,5 @@
+"""Capacity calculation algorithms for network analysis."""
+
 from __future__ import annotations
 
 from collections import defaultdict, deque

@@ -1,3 +1,5 @@
+"""Path class for representing network routing paths."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

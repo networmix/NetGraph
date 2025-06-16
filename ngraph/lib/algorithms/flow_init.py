@@ -1,3 +1,5 @@
+"""Flow graph initialization and setup utilities."""
+
 from __future__ import annotations
 
 from ngraph.lib.graph import StrictMultiDiGraph

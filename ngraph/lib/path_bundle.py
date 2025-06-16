@@ -1,3 +1,5 @@
+"""PathBundle class for managing parallel routing paths."""
+
 from __future__ import annotations
 
 from collections import deque

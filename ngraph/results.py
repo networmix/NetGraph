@@ -1,3 +1,5 @@
+"""Results class for storing workflow step outputs."""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict
 

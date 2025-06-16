@@ -1,3 +1,5 @@
+"""Maximum flow algorithms and network flow computations."""
+
 from typing import Literal, Union, overload
 
 from ngraph.lib.algorithms.base import EdgeSelect, FlowPlacement

@@ -1,3 +1,5 @@
+"""Base classes and utilities for workflow components."""
+
 from __future__ import annotations
 
 import time

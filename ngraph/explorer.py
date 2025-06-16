@@ -1,3 +1,5 @@
+"""NetworkExplorer class for analyzing network hierarchy and structure."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

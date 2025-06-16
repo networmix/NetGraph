@@ -1,3 +1,5 @@
+"""Graph conversion utilities between StrictMultiDiGraph and NetworkX graphs."""
+
 from typing import Callable, Optional
 
 import networkx as nx

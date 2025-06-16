@@ -1,3 +1,5 @@
+"""Command-line interface for NetGraph."""
+
 from __future__ import annotations
 
 import argparse

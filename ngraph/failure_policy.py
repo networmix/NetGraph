@@ -1,3 +1,5 @@
+"""FailurePolicy, FailureRule, and FailureCondition classes for failure modeling."""
+
 from __future__ import annotations
 
 from collections import defaultdict, deque

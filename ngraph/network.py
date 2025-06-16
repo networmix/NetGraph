@@ -1,3 +1,5 @@
+"""Network topology modeling with Node, Link, RiskGroup, and Network classes."""
+
 from __future__ import annotations
 
 import base64

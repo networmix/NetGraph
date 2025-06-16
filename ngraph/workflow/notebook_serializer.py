@@ -1,6 +1,6 @@
 """Code serialization for notebook generation."""
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
 
 import nbformat
 
@@ -89,65 +89,3 @@ else:
     print("❌ No results data loaded")"""
 
         return nbformat.v4.new_code_cell(summary_code)
-
-
-class ExecutableNotebookExport:
-    """Notebook export using executable Python classes."""
-
-    def __init__(
-        self, notebook_path: str = "results.ipynb", json_path: str = "results.json"
-    ):
-        self.notebook_path = notebook_path
-        self.json_path = json_path
-        self.serializer = NotebookCodeSerializer()
-
-    def create_notebook(self, results_dict: Dict[str, Any]) -> nbformat.NotebookNode:
-        """Create notebook using executable classes."""
-        nb = nbformat.v4.new_notebook()
-
-        # Header
-        header = nbformat.v4.new_markdown_cell("# NetGraph Results Analysis")
-        nb.cells.append(header)
-
-        # Setup environment
-        setup_cell = self.serializer.create_setup_cell()
-        nb.cells.append(setup_cell)
-
-        # Load data
-        data_cell = self.serializer.create_data_loading_cell(self.json_path)
-        nb.cells.append(data_cell)
-
-        # Add analysis sections based on available data
-        if self._has_capacity_data(results_dict):
-            capacity_header = nbformat.v4.new_markdown_cell(
-                "## Capacity Matrix Analysis"
-            )
-            nb.cells.append(capacity_header)
-            nb.cells.append(self.serializer.create_capacity_analysis_cell())
-
-        if self._has_flow_data(results_dict):
-            flow_header = nbformat.v4.new_markdown_cell("## Flow Analysis")
-            nb.cells.append(flow_header)
-            nb.cells.append(self.serializer.create_flow_analysis_cell())
-
-        # Summary
-        summary_header = nbformat.v4.new_markdown_cell("## Summary")
-        nb.cells.append(summary_header)
-        nb.cells.append(self.serializer.create_summary_cell())
-
-        return nb
-
-    def _has_capacity_data(self, results_dict: Dict[str, Any]) -> bool:
-        """Check if results contain capacity envelope data."""
-        return any(
-            isinstance(data, dict) and "capacity_envelopes" in data
-            for data in results_dict.values()
-        )
-
-    def _has_flow_data(self, results_dict: Dict[str, Any]) -> bool:
-        """Check if results contain flow analysis data."""
-        return any(
-            isinstance(data, dict)
-            and any(k.startswith("max_flow:") for k in data.keys())
-            for data in results_dict.values()
-        )

@@ -1,3 +1,5 @@
+"""Component and ComponentsLibrary classes for hardware cost modeling."""
+
 from __future__ import annotations
 
 from copy import deepcopy

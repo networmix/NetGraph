@@ -1,3 +1,5 @@
+"""Base classes and enums for network analysis algorithms."""
+
 from __future__ import annotations
 
 from enum import IntEnum

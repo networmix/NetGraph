@@ -1,3 +1,5 @@
+"""Network transformation components and registry."""
+
 from __future__ import annotations
 
 from ngraph.transform.base import (

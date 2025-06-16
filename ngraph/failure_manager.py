@@ -1,3 +1,5 @@
+"""FailureManager class for running Monte Carlo failure simulations."""
+
 from __future__ import annotations
 
 import statistics

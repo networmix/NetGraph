@@ -1,3 +1,5 @@
+"""TrafficManager class for placing traffic demands on network topology."""
+
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field

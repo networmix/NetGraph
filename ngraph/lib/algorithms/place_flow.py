@@ -1,3 +1,5 @@
+"""Flow placement algorithms for traffic routing."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

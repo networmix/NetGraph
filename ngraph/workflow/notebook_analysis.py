@@ -111,19 +111,19 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     def _parse_flow_path(self, flow_path: str) -> Optional[Dict[str, str]]:
         """Parse flow path to extract source and destination."""
-        if "->" in flow_path:
-            source, destination = flow_path.split("->", 1)
-            return {
-                "source": source.strip(),
-                "destination": destination.strip(),
-                "direction": "directed",
-            }
-        elif "<->" in flow_path:
+        if "<->" in flow_path:
             source, destination = flow_path.split("<->", 1)
             return {
                 "source": source.strip(),
                 "destination": destination.strip(),
                 "direction": "bidirectional",
+            }
+        elif "->" in flow_path:
+            source, destination = flow_path.split("->", 1)
+            return {
+                "source": source.strip(),
+                "destination": destination.strip(),
+                "direction": "directed",
             }
         return None
 

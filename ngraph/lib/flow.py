@@ -1,3 +1,5 @@
+"""Flow and FlowIndex classes for traffic flow representation."""
+
 from __future__ import annotations
 
 from typing import Hashable, NamedTuple, Optional, Set, Tuple

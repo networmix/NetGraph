@@ -1,3 +1,5 @@
+"""Scenario class for defining network analysis workflows from YAML."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

@@ -1,3 +1,5 @@
+"""Capacity envelope analysis workflow component."""
+
 from __future__ import annotations
 
 import copy

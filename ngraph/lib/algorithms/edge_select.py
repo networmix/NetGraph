@@ -1,3 +1,5 @@
+"""Edge selection algorithms for network routing."""
+
 from math import isclose
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 

@@ -1,3 +1,5 @@
+"""Demand class for modeling traffic flows between node groups."""
+
 from __future__ import annotations
 
 import math

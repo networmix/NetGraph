@@ -16,7 +16,7 @@ def test_notebook_export_creates_file(tmp_path: Path) -> None:
     scenario.results.put("step1", "value", 123)
 
     output_file = tmp_path / "out.ipynb"
-    step = NotebookExport(name="nb", output_path=str(output_file))
+    step = NotebookExport(name="nb", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -34,7 +34,7 @@ def test_notebook_export_empty_results_throws_exception(tmp_path: Path) -> None:
     scenario.results = Results()
 
     output_file = tmp_path / "empty.ipynb"
-    step = NotebookExport(name="empty_nb", output_path=str(output_file))
+    step = NotebookExport(name="empty_nb", notebook_path=str(output_file))
 
     with pytest.raises(ValueError, match="No analysis results found"):
         step.run(scenario)
@@ -50,7 +50,7 @@ def test_notebook_export_empty_results_with_allow_flag(tmp_path: Path) -> None:
 
     output_file = tmp_path / "empty.ipynb"
     step = NotebookExport(
-        name="empty_nb", output_path=str(output_file), allow_empty_results=True
+        name="empty_nb", notebook_path=str(output_file), allow_empty_results=True
     )
     step.run(scenario)
 
@@ -74,7 +74,7 @@ def test_notebook_export_with_capacity_envelopes(tmp_path: Path) -> None:
     scenario.results.put("CapacityAnalysis", "capacity_envelopes", envelope_data)
 
     output_file = tmp_path / "envelopes.ipynb"
-    step = NotebookExport(name="env_nb", output_path=str(output_file))
+    step = NotebookExport(name="env_nb", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -98,7 +98,7 @@ def test_notebook_export_with_flow_data(tmp_path: Path) -> None:
     scenario.results.put("FlowProbe", "max_flow:[node2 -> node3]", 200.0)
 
     output_file = tmp_path / "flows.ipynb"
-    step = NotebookExport(name="flow_nb", output_path=str(output_file))
+    step = NotebookExport(name="flow_nb", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -129,7 +129,7 @@ def test_notebook_export_mixed_data(tmp_path: Path) -> None:
     scenario.results.put("MaxFlowProbe", "max_flow:[source -> sink]", 250.0)
 
     output_file = tmp_path / "mixed.ipynb"
-    step = NotebookExport(name="mixed_nb", output_path=str(output_file))
+    step = NotebookExport(name="mixed_nb", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -153,7 +153,7 @@ def test_notebook_export_creates_output_directory(tmp_path: Path) -> None:
     nested_dir = tmp_path / "nested" / "path"
     output_file = nested_dir / "output.ipynb"
 
-    step = NotebookExport(name="dir_test", output_path=str(output_file))
+    step = NotebookExport(name="dir_test", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -169,10 +169,7 @@ def test_notebook_export_configuration_options(tmp_path: Path) -> None:
     output_file = tmp_path / "config.ipynb"
     step = NotebookExport(
         name="config_nb",
-        output_path=str(output_file),
-        include_visualizations=False,
-        include_data_tables=True,
-        max_data_preview_rows=50,
+        notebook_path=str(output_file),
     )
     step.run(scenario)
 
@@ -200,7 +197,7 @@ def test_notebook_export_large_dataset(tmp_path: Path) -> None:
     scenario.results.put("LargeDataStep", "large_dict", large_data)
 
     output_file = tmp_path / "large.ipynb"
-    step = NotebookExport(name="large_nb", output_path=str(output_file))
+    step = NotebookExport(name="large_nb", notebook_path=str(output_file))
     step.run(scenario)
 
     assert output_file.exists()
@@ -223,7 +220,7 @@ def test_notebook_export_invalid_paths(bad_path: str) -> None:
     scenario.results = Results()
     scenario.results.put("test", "data", "value")
 
-    step = NotebookExport(name="bad_path", output_path=bad_path)
+    step = NotebookExport(name="bad_path", notebook_path=bad_path)
 
     # Should handle gracefully or raise appropriate exception
     if bad_path == "":
@@ -250,7 +247,7 @@ def test_notebook_export_serialization_error_handling(tmp_path: Path) -> None:
     scenario.results.put("problem_step", "unserializable", UnserializableClass())
 
     output_file = tmp_path / "serialization.ipynb"
-    step = NotebookExport(name="ser_nb", output_path=str(output_file))
+    step = NotebookExport(name="ser_nb", notebook_path=str(output_file))
 
     # Should handle gracefully with default=str in json.dumps
     step.run(scenario)

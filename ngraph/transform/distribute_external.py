@@ -1,3 +1,5 @@
+"""Network transformation for distributing external connectivity."""
+
 from dataclasses import dataclass
 from typing import List, Sequence
 

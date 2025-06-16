@@ -1,3 +1,5 @@
+"""Network transformation for enabling/disabling nodes."""
+
 from __future__ import annotations
 
 import itertools

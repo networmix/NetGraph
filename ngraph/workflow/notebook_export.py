@@ -1,3 +1,5 @@
+"""Jupyter notebook export and generation functionality."""
+
 from __future__ import annotations
 
 import json
@@ -32,46 +34,19 @@ class NotebookExport(WorkflowStep):
             name: "export_analysis"              # Optional: Custom name for this step
             notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
             json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
-            output_path: "analysis.ipynb"        # Optional: Backward compatibility alias for notebook_path
-            include_visualizations: true         # Optional: Include plots (default: true)
-            include_data_tables: true            # Optional: Include data tables (default: true)
-            max_data_preview_rows: 100           # Optional: Max rows in data previews
             allow_empty_results: false           # Optional: Allow notebook creation with no results
         ```
 
     Attributes:
         notebook_path: Destination notebook file path (default: "results.ipynb").
         json_path: Destination JSON data file path (default: "results.json").
-        output_path: Backward compatibility alias for notebook_path (default: "results.ipynb").
-        include_visualizations: Whether to include visualization cells (default: True).
-        include_data_tables: Whether to include data table displays (default: True).
-        max_data_preview_rows: Maximum number of rows to show in data previews (default: 100).
         allow_empty_results: Whether to create a notebook when no results exist (default: False).
                            If False, raises ValueError when results are empty.
     """
 
     notebook_path: str = "results.ipynb"
     json_path: str = "results.json"
-    output_path: str = "results.ipynb"  # Backward compatibility
-    include_visualizations: bool = True
-    include_data_tables: bool = True
-    max_data_preview_rows: int = 100
     allow_empty_results: bool = False
-
-    def __post_init__(self) -> None:
-        """Ensure backward compatibility between output_path and notebook_path."""
-        # If output_path was set but not notebook_path, use output_path
-        if (
-            self.output_path != "results.ipynb"
-            and self.notebook_path == "results.ipynb"
-        ):
-            self.notebook_path = self.output_path
-        # If notebook_path was set but not output_path, use notebook_path
-        elif (
-            self.notebook_path != "results.ipynb"
-            and self.output_path == "results.ipynb"
-        ):
-            self.output_path = self.notebook_path
 
     def run(self, scenario: "Scenario") -> None:
         """Create notebook and JSON files with the current scenario results.
@@ -110,9 +85,7 @@ class NotebookExport(WorkflowStep):
             self._save_results_json(results_dict, json_output_path)
 
             # Create notebook that references the JSON file
-            nb = self._create_data_notebook(
-                results_dict, json_output_path, notebook_output_path
-            )
+            nb = self._create_data_notebook(results_dict, json_output_path)
 
         try:
             self._write_notebook(nb, scenario, notebook_output_path, json_output_path)
@@ -180,7 +153,6 @@ class NotebookExport(WorkflowStep):
         self,
         results_dict: dict[str, dict[str, Any]],
         json_path: Path,
-        notebook_path: Path,
     ) -> nbformat.NotebookNode:
         """Create notebook with content based on results structure."""
         serializer = NotebookCodeSerializer()
@@ -248,18 +220,6 @@ class NotebookExport(WorkflowStep):
             return f"{size_bytes / (1024 * 1024):.1f} MB"
         else:
             return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
-
-    def _create_robust_code_cell(
-        self, code: str, context: str
-    ) -> nbformat.NotebookNode:
-        """Create a code cell with error handling wrapper."""
-        wrapped_code = f"""try:
-{code}
-except Exception as e:
-    print(f"Error in {context}: {{e}}")
-    import traceback
-    traceback.print_exc()"""
-        return nbformat.v4.new_code_cell(wrapped_code)
 
     def _has_capacity_data(self, results_dict: dict[str, dict[str, Any]]) -> bool:
         """Check if results contain capacity matrix data."""

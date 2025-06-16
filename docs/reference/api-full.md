@@ -10,13 +10,15 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 16, 2025 at 17:06 UTC
+**Generated from source code on:** June 16, 2025 at 20:37 UTC
 
 **Modules auto-discovered:** 42
 
 ---
 
 ## ngraph.blueprints
+
+Network topology blueprints and generation.
 
 ### Blueprint
 
@@ -92,6 +94,8 @@ Returns:
 
 ## ngraph.cli
 
+Command-line interface for NetGraph.
+
 ### main(argv: 'Optional[List[str]]' = None) -> 'None'
 
 Entry point for the ``ngraph`` command.
@@ -103,6 +107,8 @@ Args:
 ---
 
 ## ngraph.components
+
+Component and ComponentsLibrary classes for hardware cost modeling.
 
 ### Component
 
@@ -196,7 +202,7 @@ Example (YAML-like):
 
 ## ngraph.config
 
-Configuration for NetGraph.
+Configuration classes for NetGraph components.
 
 ### TrafficManagerConfig
 
@@ -218,6 +224,8 @@ Configuration for traffic demand placement estimation.
 ---
 
 ## ngraph.explorer
+
+NetworkExplorer class for analyzing network hierarchy and structure.
 
 ### ExternalLinkBreakdown
 
@@ -305,6 +313,8 @@ Attributes:
 
 ## ngraph.failure_manager
 
+FailureManager class for running Monte Carlo failure simulations.
+
 ### FailureManager
 
 Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
@@ -330,6 +340,8 @@ Attributes:
 ---
 
 ## ngraph.failure_policy
+
+FailurePolicy, FailureRule, and FailureCondition classes for failure modeling.
 
 ### FailureCondition
 
@@ -490,6 +502,8 @@ Args:
 
 ## ngraph.network
 
+Network topology modeling with Node, Link, RiskGroup, and Network classes.
+
 ### Link
 
 Represents a directed link between two nodes in the network.
@@ -623,6 +637,8 @@ Returns:
 
 ## ngraph.results
 
+Results class for storing workflow step outputs.
+
 ### Results
 
 A container for storing arbitrary key-value data that arises during workflow steps.
@@ -651,6 +667,8 @@ Example usage:
 ---
 
 ## ngraph.results_artifacts
+
+CapacityEnvelope, TrafficMatrixSet, PlacementResultSet, and FailurePolicySet classes.
 
 ### CapacityEnvelope
 
@@ -766,6 +784,8 @@ Attributes:
 
 ## ngraph.scenario
 
+Scenario class for defining network analysis workflows from YAML.
+
 ### Scenario
 
 Represents a complete scenario for building and executing network workflows.
@@ -804,6 +824,8 @@ Typical usage example:
 
 ## ngraph.traffic_demand
 
+TrafficDemand class for modeling network traffic flows.
+
 ### TrafficDemand
 
 Represents a single traffic demand in a network.
@@ -837,6 +859,8 @@ Attributes:
 ---
 
 ## ngraph.traffic_manager
+
+TrafficManager class for placing traffic demands on network topology.
 
 ### TrafficManager
 
@@ -949,6 +973,8 @@ Examples:
 
 ## ngraph.lib.demand
 
+Demand class for modeling traffic flows between node groups.
+
 ### Demand
 
 Represents a network demand between two nodes. It is realized via one or more
@@ -971,6 +997,8 @@ flows through a single FlowPolicy.
 ---
 
 ## ngraph.lib.flow
+
+Flow and FlowIndex classes for traffic flow representation.
 
 ### Flow
 
@@ -1002,6 +1030,8 @@ Attributes:
 ---
 
 ## ngraph.lib.flow_policy
+
+FlowPolicy and FlowPolicyConfig classes for traffic routing algorithms.
 
 ### FlowPolicy
 
@@ -1042,6 +1072,8 @@ Raises:
 ---
 
 ## ngraph.lib.graph
+
+StrictMultiDiGraph class extending NetworkX with validation and utilities.
 
 ### StrictMultiDiGraph
 
@@ -1166,6 +1198,8 @@ Returns:
 
 ## ngraph.lib.io
 
+Graph serialization functions for node-link and edge-list formats.
+
 ### edgelist_to_graph(lines: 'Iterable[str]', columns: 'List[str]', separator: 'str' = ' ', graph: 'Optional[StrictMultiDiGraph]' = None, source: 'str' = 'src', target: 'str' = 'dst', key: 'str' = 'key') -> 'StrictMultiDiGraph'
 
 Builds or updates a StrictMultiDiGraph from an edge list.
@@ -1271,6 +1305,8 @@ Returns:
 
 ## ngraph.lib.path
 
+Path class for representing network routing paths.
+
 ### Path
 
 Represents a single path in the network.
@@ -1304,6 +1340,8 @@ Attributes:
 ---
 
 ## ngraph.lib.path_bundle
+
+PathBundle class for managing parallel routing paths.
 
 ### PathBundle
 
@@ -1340,6 +1378,8 @@ If it's not a DAG, the behavior is... an infinite loop. Oops.
 ---
 
 ## ngraph.lib.util
+
+Graph conversion utilities between StrictMultiDiGraph and NetworkX graphs.
 
 ### from_digraph(nx_graph: networkx.classes.digraph.DiGraph) -> ngraph.lib.graph.StrictMultiDiGraph
 
@@ -1403,6 +1443,8 @@ Returns:
 
 ## ngraph.lib.algorithms.base
 
+Base classes and enums for network analysis algorithms.
+
 ### EdgeSelect
 
 Edge selection criteria determining which edges are considered
@@ -1419,6 +1461,8 @@ Types of path finding algorithms
 ---
 
 ## ngraph.lib.algorithms.calc_capacity
+
+Capacity calculation algorithms for network analysis.
 
 ### calc_graph_capacity(flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, capacity_attr: 'str' = 'capacity', flow_attr: 'str' = 'flow') -> 'Tuple[float, Dict[NodeID, Dict[NodeID, float]]]'
 
@@ -1464,6 +1508,8 @@ Raises:
 
 ## ngraph.lib.algorithms.edge_select
 
+Edge selection algorithms for network routing.
+
 ### edge_select_fabric(edge_select: ngraph.lib.algorithms.base.EdgeSelect, select_value: Optional[Any] = None, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]] = None, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None, cost_attr: str = 'cost', capacity_attr: str = 'capacity', flow_attr: str = 'flow') -> Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]
 
 Creates a function that selects edges between two nodes according
@@ -1491,6 +1537,8 @@ Returns:
 
 ## ngraph.lib.algorithms.flow_init
 
+Flow graph initialization and setup utilities.
+
 ### init_flow_graph(flow_graph: 'StrictMultiDiGraph', flow_attr: 'str' = 'flow', flows_attr: 'str' = 'flows', reset_flow_graph: 'bool' = True) -> 'StrictMultiDiGraph'
 
 Ensure that every node and edge in the provided `flow_graph` has
@@ -1516,6 +1564,8 @@ Returns:
 ---
 
 ## ngraph.lib.algorithms.max_flow
+
+Maximum flow algorithms and network flow computations.
 
 ### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True) -> Union[float, tuple]
 
@@ -1636,6 +1686,8 @@ Returns:
 
 ## ngraph.lib.algorithms.path_utils
 
+Path manipulation and utility functions.
+
 ### resolve_to_paths(src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', split_parallel_edges: 'bool' = False) -> 'Iterator[PathTuple]'
 
 Enumerate all source->destination paths from a predecessor map.
@@ -1652,6 +1704,8 @@ Yields:
 ---
 
 ## ngraph.lib.algorithms.place_flow
+
+Flow placement algorithms for traffic routing.
 
 ### FlowPlacementMeta
 
@@ -1707,6 +1761,8 @@ Args:
 ---
 
 ## ngraph.lib.algorithms.spf
+
+Shortest path first (SPF) algorithms and implementations.
 
 ### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
 
@@ -1798,6 +1854,8 @@ Attributes:
 
 ## ngraph.workflow.base
 
+Base classes and utilities for workflow components.
+
 ### WorkflowStep
 
 Base class for all workflow steps.
@@ -1835,6 +1893,8 @@ A decorator that registers a WorkflowStep subclass under `step_type`.
 
 ## ngraph.workflow.build_graph
 
+Graph building workflow component.
+
 ### BuildGraph
 
 A workflow step that builds a StrictMultiDiGraph from scenario.network.
@@ -1863,6 +1923,8 @@ YAML Configuration:
 ---
 
 ## ngraph.workflow.capacity_envelope_analysis
+
+Capacity envelope analysis workflow component.
 
 ### CapacityEnvelopeAnalysis
 
@@ -1921,6 +1983,8 @@ Attributes:
 ---
 
 ## ngraph.workflow.capacity_probe
+
+Capacity probing workflow component.
 
 ### CapacityProbe
 
@@ -2076,6 +2140,8 @@ Example of how the new approach works.
 
 ## ngraph.workflow.notebook_export
 
+Jupyter notebook export and generation functionality.
+
 ### NotebookExport
 
 Export scenario results to a Jupyter notebook with external JSON data file.
@@ -2091,20 +2157,12 @@ YAML Configuration:
         name: "export_analysis"              # Optional: Custom name for this step
         notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
         json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
-        output_path: "analysis.ipynb"        # Optional: Backward compatibility alias for notebook_path
-        include_visualizations: true         # Optional: Include plots (default: true)
-        include_data_tables: true            # Optional: Include data tables (default: true)
-        max_data_preview_rows: 100           # Optional: Max rows in data previews
         allow_empty_results: false           # Optional: Allow notebook creation with no results
     ```
 
 Attributes:
     notebook_path: Destination notebook file path (default: "results.ipynb").
     json_path: Destination JSON data file path (default: "results.json").
-    output_path: Backward compatibility alias for notebook_path (default: "results.ipynb").
-    include_visualizations: Whether to include visualization cells (default: True).
-    include_data_tables: Whether to include data table displays (default: True).
-    max_data_preview_rows: Maximum number of rows to show in data previews (default: 100).
     allow_empty_results: Whether to create a notebook when no results exist (default: False).
                        If False, raises ValueError when results are empty.
 
@@ -2113,10 +2171,6 @@ Attributes:
 - `name` (str)
 - `notebook_path` (str) = results.ipynb
 - `json_path` (str) = results.json
-- `output_path` (str) = results.ipynb
-- `include_visualizations` (bool) = True
-- `include_data_tables` (bool) = True
-- `max_data_preview_rows` (int) = 100
 - `allow_empty_results` (bool) = False
 
 **Methods:**
@@ -2131,15 +2185,6 @@ Attributes:
 ## ngraph.workflow.notebook_serializer
 
 Code serialization for notebook generation.
-
-### ExecutableNotebookExport
-
-Notebook export using executable Python classes.
-
-**Methods:**
-
-- `create_notebook(self, results_dict: Dict[str, Any]) -> nbformat.notebooknode.NotebookNode`
-  - Create notebook using executable classes.
 
 ### NotebookCodeSerializer
 
@@ -2161,6 +2206,8 @@ Converts Python classes into notebook cells.
 ---
 
 ## ngraph.transform.base
+
+Base classes for network transformations.
 
 ### NetworkTransform
 
@@ -2205,6 +2252,8 @@ Raises:
 
 ## ngraph.transform.distribute_external
 
+Network transformation for distributing external connectivity.
+
 ### DistributeExternalConnectivity
 
 Attach (or create) remote nodes and link them to attachment stripes.
@@ -2245,6 +2294,8 @@ Args:
 ---
 
 ## ngraph.transform.enable_nodes
+
+Network transformation for enabling/disabling nodes.
 
 ### EnableNodesTransform
 
