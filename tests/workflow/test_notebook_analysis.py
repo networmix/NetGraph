@@ -334,9 +334,7 @@ class TestCapacityMatrixAnalyzer:
         self.analyzer.display_analysis(analysis)
 
         mock_print.assert_any_call("✅ Analyzing capacity matrix for test_step")
-        assert (
-            mock_show.call_count == 2
-        )  # Two calls: capacity ranking and matrix display
+        assert mock_show.call_count == 1  # One call: matrix display only
 
     @patch("builtins.print")
     def test_analyze_and_display_all_steps_no_data(self, mock_print: MagicMock) -> None:

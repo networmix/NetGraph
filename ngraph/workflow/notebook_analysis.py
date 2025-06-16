@@ -248,6 +248,29 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     def get_description(self) -> str:
         return "Analyzes network capacity envelopes"
 
+    def _format_dataframe_for_display(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Format numeric columns in DataFrame with thousands separators for display.
+
+        Args:
+            df: Input DataFrame to format.
+
+        Returns:
+            A copy of the DataFrame with numeric values formatted with commas.
+        """
+        if df.empty:
+            return df
+
+        df_formatted = df.copy()
+        for col in df_formatted.select_dtypes(include=["number"]):
+            df_formatted[col] = df_formatted[col].map(
+                lambda x: f"{x:,.0f}"
+                if pd.notna(x) and x == int(x)
+                else f"{x:,.1f}"
+                if pd.notna(x)
+                else x
+            )
+        return df_formatted
+
     def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:
         """Display capacity matrix analysis results."""
         if analysis["status"] != "success":
@@ -279,25 +302,14 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
         viz_data = analysis["visualization_data"]
         if viz_data["has_data"]:
-            # Display capacity ranking table (max to min)
-            if viz_data["has_ranking_data"]:
-                capacity_ranking = viz_data["capacity_ranking"]
-
-                print(f"\n📊 Flow Capacities Ranking ({len(capacity_ranking)} flows):")
-                show(
-                    capacity_ranking,
-                    caption=f"Flow Capacities (Max to Min) - {step_name}",
-                    scrollY="300px",
-                    scrollCollapse=True,
-                    paging=True,
-                    lengthMenu=[10, 25, 50, 100],
-                )
-
             # Display full capacity matrix
             matrix_display = viz_data["matrix_display"]
+            matrix_display_formatted = self._format_dataframe_for_display(
+                matrix_display
+            )
             print("\n🔢 Full Capacity Matrix:")
             show(
-                matrix_display,
+                matrix_display_formatted,
                 caption=f"Capacity Matrix - {step_name}",
                 scrollY="400px",
                 scrollX=True,
