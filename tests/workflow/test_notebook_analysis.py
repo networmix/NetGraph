@@ -245,8 +245,8 @@ class TestCapacityMatrixAnalyzer:
 
         assert stats["has_data"] is True
         assert (
-            stats["total_connections"] == 6
-        )  # All non-self-loop positions: A->B, A->C, B->A, B->C, C->A, C->B
+            stats["total_flows"] == 6
+        )  # All non-self-loop positions (including zero flows): A->B, A->C, B->A, B->C, C->A, C->B
         assert stats["total_possible"] == 6  # 3x(3-1) excluding self-loops
         assert stats["capacity_min"] == 50.0
         assert stats["capacity_max"] == 200.0  # Includes all non-zero values
@@ -311,9 +311,9 @@ class TestCapacityMatrixAnalyzer:
                 "has_data": True,
                 "num_sources": 3,
                 "num_destinations": 3,
-                "total_connections": 4,
+                "total_flows": 4,
                 "total_possible": 9,
-                "connection_density": 44.4,
+                "flow_density": 44.4,
                 "capacity_min": 50.0,
                 "capacity_max": 200.0,
                 "capacity_mean": 125.0,
@@ -324,13 +324,19 @@ class TestCapacityMatrixAnalyzer:
             "visualization_data": {
                 "has_data": True,
                 "matrix_display": pd.DataFrame([[1, 2]]),
+                "capacity_ranking": pd.DataFrame(
+                    [{"Source": "A", "Destination": "B", "Capacity": 100}]
+                ),
+                "has_ranking_data": True,
             },
         }
 
         self.analyzer.display_analysis(analysis)
 
         mock_print.assert_any_call("✅ Analyzing capacity matrix for test_step")
-        mock_show.assert_called_once()
+        assert (
+            mock_show.call_count == 2
+        )  # Two calls: capacity ranking and matrix display
 
     @patch("builtins.print")
     def test_analyze_and_display_all_steps_no_data(self, mock_print: MagicMock) -> None:

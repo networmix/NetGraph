@@ -168,28 +168,36 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         if len(non_zero_values) == 0:
             return {"has_data": False}
 
-        # Count all non-self-loop connections for flow analysis
-        non_self_loop_connections = 0
+        # Count all non-self-loop flows for analysis (including zero flows)
+        non_self_loop_flows = 0
 
         for source in capacity_matrix.index:
             for dest in capacity_matrix.columns:
-                if source != dest:  # Exclude self-loops
-                    non_self_loop_connections += 1
+                if source != dest:  # Exclude only self-loops, include zero flows
+                    capacity_val = capacity_matrix.loc[source, dest]
+                    try:
+                        numeric_val = pd.to_numeric(capacity_val, errors="coerce")
+                        if pd.notna(
+                            numeric_val
+                        ):  # Include zero flows, exclude only NaN
+                            non_self_loop_flows += 1
+                    except (ValueError, TypeError):
+                        continue
 
-        # Calculate meaningful connection density
+        # Calculate meaningful flow density
         num_nodes = len(capacity_matrix.index)
-        total_possible_connections = num_nodes * (num_nodes - 1)  # Exclude self-loops
-        connection_density = (
-            non_self_loop_connections / total_possible_connections * 100
-            if total_possible_connections > 0
+        total_possible_flows = num_nodes * (num_nodes - 1)  # Exclude self-loops
+        flow_density = (
+            non_self_loop_flows / total_possible_flows * 100
+            if total_possible_flows > 0
             else 0
         )
 
         return {
             "has_data": True,
-            "total_connections": non_self_loop_connections,
-            "total_possible": total_possible_connections,
-            "connection_density": connection_density,
+            "total_flows": non_self_loop_flows,
+            "total_possible": total_possible_flows,
+            "flow_density": flow_density,
             "capacity_min": float(non_zero_values.min()),
             "capacity_max": float(non_zero_values.max()),
             "capacity_mean": float(non_zero_values.mean()),
@@ -204,9 +212,37 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         self, capacity_matrix: pd.DataFrame
     ) -> Dict[str, Any]:
         """Prepare data for visualization."""
+        # Create capacity ranking table (max to min, including zero flows)
+        capacity_ranking = []
+        for source in capacity_matrix.index:
+            for dest in capacity_matrix.columns:
+                if source != dest:  # Exclude only self-loops, include zero flows
+                    capacity_val = capacity_matrix.loc[source, dest]
+                    try:
+                        numeric_val = pd.to_numeric(capacity_val, errors="coerce")
+                        if pd.notna(
+                            numeric_val
+                        ):  # Include zero flows, exclude only NaN
+                            capacity_ranking.append(
+                                {
+                                    "Source": source,
+                                    "Destination": dest,
+                                    "Capacity": float(numeric_val),
+                                    "Flow Path": f"{source} -> {dest}",
+                                }
+                            )
+                    except (ValueError, TypeError):
+                        continue
+
+        # Sort by capacity (descending)
+        capacity_ranking.sort(key=lambda x: x["Capacity"], reverse=True)
+        capacity_ranking_df = pd.DataFrame(capacity_ranking)
+
         return {
             "matrix_display": capacity_matrix.reset_index(),
+            "capacity_ranking": capacity_ranking_df,
             "has_data": capacity_matrix.sum().sum() > 0,
+            "has_ranking_data": len(capacity_ranking) > 0,
         }
 
     def get_description(self) -> str:
@@ -230,7 +266,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         print(f"  Sources: {stats['num_sources']:,} nodes")
         print(f"  Destinations: {stats['num_destinations']:,} nodes")
         print(
-            f"  Connections: {stats['total_connections']:,}/{stats['total_possible']:,} ({stats['connection_density']:.1f}%)"
+            f"  Flows: {stats['total_flows']:,}/{stats['total_possible']:,} ({stats['flow_density']:.1f}%)"
         )
         print(
             f"  Capacity range: {stats['capacity_min']:,.2f} - {stats['capacity_max']:,.2f}"
@@ -243,8 +279,23 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
         viz_data = analysis["visualization_data"]
         if viz_data["has_data"]:
-            matrix_display = viz_data["matrix_display"]
+            # Display capacity ranking table (max to min)
+            if viz_data["has_ranking_data"]:
+                capacity_ranking = viz_data["capacity_ranking"]
 
+                print(f"\n📊 Flow Capacities Ranking ({len(capacity_ranking)} flows):")
+                show(
+                    capacity_ranking,
+                    caption=f"Flow Capacities (Max to Min) - {step_name}",
+                    scrollY="300px",
+                    scrollCollapse=True,
+                    paging=True,
+                    lengthMenu=[10, 25, 50, 100],
+                )
+
+            # Display full capacity matrix
+            matrix_display = viz_data["matrix_display"]
+            print("\n🔢 Full Capacity Matrix:")
             show(
                 matrix_display,
                 caption=f"Capacity Matrix - {step_name}",
