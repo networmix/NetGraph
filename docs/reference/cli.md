@@ -15,15 +15,21 @@ pip install ngraph
 The primary command is `run`, which executes scenario files:
 
 ```bash
-# Run a scenario and write results to results.json
+# Run a scenario (execution only, no file output)
 python -m ngraph run scenario.yaml
 
-# Write results to a custom file
+# Run a scenario and export results to results.json
+python -m ngraph run scenario.yaml --results
+
+# Export results to a custom file
 python -m ngraph run scenario.yaml --results output.json
 python -m ngraph run scenario.yaml -r output.json
 
-# Print results to stdout as well
+# Print results to stdout only (no file)
 python -m ngraph run scenario.yaml --stdout
+
+# Export to file AND print to stdout
+python -m ngraph run scenario.yaml --results --stdout
 ```
 
 ## Command Reference
@@ -33,6 +39,7 @@ python -m ngraph run scenario.yaml --stdout
 Execute a NetGraph scenario file.
 
 **Syntax:**
+
 ```bash
 python -m ngraph run <scenario_file> [options]
 ```
@@ -43,7 +50,7 @@ python -m ngraph run <scenario_file> [options]
 
 **Options:**
 
-- `--results`, `-r`: Output file path for results (JSON format)
+- `--results`, `-r`: Optional path to export results as JSON. If provided without a path, defaults to "results.json"
 - `--stdout`: Print results to stdout
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
 - `--help`, `-h`: Show help message
@@ -53,21 +60,27 @@ python -m ngraph run <scenario_file> [options]
 ### Basic Execution
 
 ```bash
-# Run a scenario (writes results.json)
+# Run a scenario (execution only, no output files)
 python -m ngraph run my_network.yaml
+
+# Run a scenario and export results to default file
+python -m ngraph run my_network.yaml --results
 ```
 
 ### Save Results to File
 
 ```bash
-# Save results to a JSON file
+# Save results to a custom JSON file
 python -m ngraph run my_network.yaml --results analysis.json
+
+# Save to file AND print to stdout
+python -m ngraph run my_network.yaml --results analysis.json --stdout
 ```
 
 ### Running Test Scenarios
 
 ```bash
-# Run one of the included test scenarios
+# Run one of the included test scenarios with results export
 python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
 ```
 
@@ -76,14 +89,14 @@ python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
 You can filter the output to include only specific workflow steps using the `--keys` option:
 
 ```bash
-# Only include results from the capacity_probe step
-python -m ngraph run scenario.yaml --keys capacity_probe
-
-# Include multiple specific steps
-python -m ngraph run scenario.yaml --keys build_graph capacity_probe
-
-# Filter and print to stdout
+# Only include results from the capacity_probe step (stdout only)
 python -m ngraph run scenario.yaml --keys capacity_probe --stdout
+
+# Include multiple specific steps and export to file
+python -m ngraph run scenario.yaml --keys build_graph capacity_probe --results filtered.json
+
+# Filter and print to stdout while also saving to default file
+python -m ngraph run scenario.yaml --keys capacity_probe --results --stdout
 ```
 
 The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
@@ -155,6 +168,44 @@ The exact keys and values depend on:
 - Which workflow steps are defined in your scenario
 - The parameters and results of each step
 - The network topology and analysis performed
+
+## Output Behavior
+
+**NetGraph CLI output behavior changed in recent versions** to provide more flexibility:
+
+### Default Behavior (No Output Flags)
+```bash
+python -m ngraph run scenario.yaml
+```
+- Executes the scenario
+- Logs execution progress to the terminal
+- **Does not create any output files**
+- **Does not print results to stdout**
+
+### Export to File
+```bash
+# Export to default file (results.json)
+python -m ngraph run scenario.yaml --results
+
+# Export to custom file
+python -m ngraph run scenario.yaml --results my_analysis.json
+```
+
+### Print to Terminal
+```bash
+python -m ngraph run scenario.yaml --stdout
+```
+- Prints JSON results to stdout
+- **Does not create any files**
+
+### Combined Output
+```bash
+python -m ngraph run scenario.yaml --results analysis.json --stdout
+```
+- Creates a JSON file AND prints to stdout
+- Useful for viewing results immediately while also saving them
+
+**Migration Note:** If you were relying on automatic `results.json` creation, add the `--results` flag to your commands.
 
 ## Integration with Workflows
 

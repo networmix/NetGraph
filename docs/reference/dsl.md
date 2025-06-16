@@ -587,6 +587,7 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 **Adjacency Matching:**
 
 In `adjacency` blocks (both in blueprints and top-level network):
+
 - `source` and `target` fields accept regex patterns
 - Blueprint paths can be relative (no leading `/`) or absolute (with leading `/`)
 - Relative paths are resolved relative to the blueprint instance's path

@@ -101,6 +101,7 @@ print(f"Maximum flow with ECMP: {max_flow_ecmp}")
 ## Understanding the Results
 
 The result `{('b1|b2', 'b1|b2'): 256.0}` means:
+
 - **Source**: All t1 nodes in both b1 and b2 segments of my_clos1
 - **Sink**: All t1 nodes in both b1 and b2 segments of my_clos2
 - **Capacity**: Maximum flow of 256.0 units

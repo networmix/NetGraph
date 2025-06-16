@@ -15,15 +15,15 @@ logger = get_logger(__name__)
 
 def _run_scenario(
     path: Path,
-    output: Path,
+    output: Optional[Path],
     stdout: bool,
     keys: Optional[list[str]] = None,
 ) -> None:
-    """Run a scenario file and store results as JSON.
+    """Run a scenario file and optionally export results as JSON.
 
     Args:
         path: Scenario YAML file.
-        output: Path where results should be written.
+        output: Optional path where JSON results should be written. If None, no JSON export.
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
             exported.
@@ -38,23 +38,36 @@ def _run_scenario(
         scenario.run()
         logger.info("Scenario execution completed successfully")
 
-        logger.info("Serializing results to JSON")
-        results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
+        # Only export JSON if output path is provided
+        if output:
+            logger.info("Serializing results to JSON")
+            results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
 
-        if keys:
-            filtered: Dict[str, Dict[str, Any]] = {}
-            for step, data in results_dict.items():
-                if step in keys:
-                    filtered[step] = data
-            results_dict = filtered
+            if keys:
+                filtered: Dict[str, Dict[str, Any]] = {}
+                for step, data in results_dict.items():
+                    if step in keys:
+                        filtered[step] = data
+                results_dict = filtered
 
-        json_str = json.dumps(results_dict, indent=2, default=str)
+            json_str = json.dumps(results_dict, indent=2, default=str)
 
-        logger.info(f"Writing results to: {output}")
-        output.write_text(json_str)
-        logger.info("Results written successfully")
+            logger.info(f"Writing results to: {output}")
+            output.write_text(json_str)
+            logger.info("Results written successfully")
 
-        if stdout:
+            if stdout:
+                print(json_str)
+        elif stdout:
+            # Print to stdout even without file export
+            results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
+            if keys:
+                filtered: Dict[str, Dict[str, Any]] = {}
+                for step, data in results_dict.items():
+                    if step in keys:
+                        filtered[step] = data
+                results_dict = filtered
+            json_str = json.dumps(results_dict, indent=2, default=str)
             print(json_str)
 
     except FileNotFoundError:
@@ -90,13 +103,14 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--results",
         "-r",
         type=Path,
-        default=Path("results.json"),
-        help="Path to write JSON results (default: results.json)",
+        nargs="?",
+        const=Path("results.json"),
+        help="Export results to JSON file (default: results.json if no path specified)",
     )
     run_parser.add_argument(
         "--stdout",
         action="store_true",
-        help="Print results to stdout as well",
+        help="Print results to stdout",
     )
     run_parser.add_argument(
         "--keys",

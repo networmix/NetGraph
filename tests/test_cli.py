@@ -25,7 +25,8 @@ def test_cli_run_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert "build_graph" in data
-    assert (tmp_path / "results.json").exists()
+    # With new behavior, --stdout alone should NOT create a file
+    assert not (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -463,3 +464,58 @@ workflow:
 
         # The probe step should have actual data
         assert len(data["probe_step"]) > 0
+
+
+def test_cli_run_results_default(tmp_path: Path, monkeypatch) -> None:
+    """Test that --results with no path creates results.json."""
+    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    monkeypatch.chdir(tmp_path)
+    cli.main(["run", str(scenario), "--results"])
+    assert (tmp_path / "results.json").exists()
+    data = json.loads((tmp_path / "results.json").read_text())
+    assert "build_graph" in data
+
+
+def test_cli_run_results_custom_path(tmp_path: Path, monkeypatch) -> None:
+    """Test that --results with custom path creates file at that location."""
+    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    monkeypatch.chdir(tmp_path)
+    cli.main(["run", str(scenario), "--results", "custom_output.json"])
+    assert (tmp_path / "custom_output.json").exists()
+    assert not (tmp_path / "results.json").exists()
+    data = json.loads((tmp_path / "custom_output.json").read_text())
+    assert "build_graph" in data
+
+
+def test_cli_run_results_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
+    """Test that --results and --stdout work together."""
+    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    monkeypatch.chdir(tmp_path)
+    cli.main(["run", str(scenario), "--results", "--stdout"])
+
+    # Check stdout output
+    captured = capsys.readouterr()
+    stdout_data = json.loads(captured.out)
+    assert "build_graph" in stdout_data
+
+    # Check file output
+    assert (tmp_path / "results.json").exists()
+    file_data = json.loads((tmp_path / "results.json").read_text())
+    assert "build_graph" in file_data
+
+    # Should be the same data
+    assert stdout_data == file_data
+
+
+def test_cli_run_no_output(tmp_path: Path, capsys, monkeypatch) -> None:
+    """Test that running without --results or --stdout creates no files."""
+    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    monkeypatch.chdir(tmp_path)
+    cli.main(["run", str(scenario)])
+
+    # No files should be created
+    assert not (tmp_path / "results.json").exists()
+
+    # No stdout output should be produced
+    captured = capsys.readouterr()
+    assert captured.out == ""

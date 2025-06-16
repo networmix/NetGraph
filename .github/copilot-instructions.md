@@ -34,14 +34,16 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 
 ---
 
-# Contribution Guidelines for NetGraph
+## Contribution Guidelines for NetGraph
 
 ### 1 – Style & Linting
+
 - Follow **PEP 8** with an 88-character line length.
 - All linting/formatting is handled by **ruff**; import order is automatic.
 - Do not run `black`, `isort`, or other formatters manually—use `make format` instead.
 
 ### 2 – Docstrings
+
 - Use **Google-style** docstrings for every public module, class, function, and method.
 - Single-line docstrings are acceptable for simple private helpers.
 - Keep the prose concise and factual—no marketing fluff or AI verbosity.
@@ -138,6 +140,7 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 * Update `docs/` when adding features.
 * Run `make docs` to generate `docs/reference/api-full.md` from source code.
 * Always check all doc files for accuracy, absence of marketing language, and AI verbosity.
+* **Markdown formatting**: Lists, code blocks, and block quotes require a blank line before them to render correctly.
 
 ## Output rules for the assistant
 
@@ -145,4 +148,6 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 2. Include Google-style docstrings and type hints.
 3. Write or update unit tests for new functionality; fix code (not tests) when existing tests fail. Exception: tests may be changed after thorough analysis if they are genuinely flawed, requirements have changed, or breaking changes are approved.
 4. Respect existing public API signatures unless the user approves breaking changes.
-5. If you need more information, ask concise clarification questions.
+5. Document all new features and changes in the codebase. Run `make docs` to generate the full API reference.
+6. Run `make check` before finishing to ensure all code passes linting, type checking, and tests.
+7. If you need more information, ask concise clarification questions.

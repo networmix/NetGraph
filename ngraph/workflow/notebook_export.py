@@ -86,9 +86,14 @@ class NotebookExport(WorkflowStep):
 
         if not results_dict:
             if self.allow_empty_results:
-                logger.info("No results found - creating minimal notebook")
+                logger.warning(
+                    "No analysis results found, but proceeding with empty notebook "
+                    "because 'allow_empty_results=True'. This may indicate missing "
+                    "analysis steps in the scenario workflow."
+                )
+                # Always export JSON file, even if empty, for consistency
+                self._save_results_json({}, json_output_path)
                 nb = self._create_empty_notebook()
-                json_output_path = None
             else:
                 raise ValueError(
                     "No analysis results found. Cannot create notebook without data. "
@@ -116,7 +121,9 @@ class NotebookExport(WorkflowStep):
             # Create error notebook as fallback for write errors
             try:
                 nb = self._create_error_notebook(str(e))
-                self._write_notebook(nb, scenario, notebook_output_path, None)
+                self._write_notebook(
+                    nb, scenario, notebook_output_path, json_output_path
+                )
             except Exception as write_error:
                 logger.error(f"Failed to write error notebook: {write_error}")
                 raise

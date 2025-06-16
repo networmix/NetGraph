@@ -143,6 +143,7 @@ print(f"Sensitivity to capacity decreases: {sensitivity_decrease}")
 ```
 
 This analysis helps identify:
+
 - **Bottleneck edges**: Links that are fully utilized and limit overall flow
 - **High-impact upgrades**: Which capacity increases provide the most benefit
 - **Vulnerability assessment**: How flow decreases when links are degraded
