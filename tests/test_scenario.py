@@ -447,3 +447,242 @@ risk_groups:
     with pytest.raises(ValueError) as excinfo:
         Scenario.from_yaml(scenario_yaml)
     assert "RiskGroup entry missing 'name' field" in str(excinfo.value)
+
+
+def test_failure_policy_docstring_yaml_integration():
+    """Integration test: Parse the exact YAML from the FailurePolicy docstring and verify it works."""
+    from unittest.mock import patch
+
+    import yaml
+
+    # Extract the exact YAML from the docstring
+    yaml_content = """
+failure_policy:
+  attrs:
+    name: "Texas Grid Outage Scenario"
+    description: "Regional power grid failure affecting telecom infrastructure"
+  fail_shared_risk_groups: true
+  rules:
+    # Fail all nodes in Texas electrical grid
+    - entity_scope: "node"
+      conditions:
+        - attr: "electric_grid"
+          operator: "=="
+          value: "texas"
+      logic: "and"
+      rule_type: "all"
+
+    # Randomly fail 40% of underground fiber links in affected region
+    - entity_scope: "link"
+      conditions:
+        - attr: "region"
+          operator: "=="
+          value: "southwest"
+        - attr: "type"
+          operator: "=="
+          value: "underground"
+      logic: "and"
+      rule_type: "random"
+      probability: 0.4
+
+    # Choose exactly 2 risk groups to fail (e.g., data centers)
+    - entity_scope: "risk_group"
+      logic: "any"
+      rule_type: "choice"
+      count: 2
+"""
+
+    # Parse the YAML
+    parsed_data = yaml.safe_load(yaml_content)
+    failure_policy_data = parsed_data["failure_policy"]
+
+    # Use the internal _build_failure_policy method to create the policy
+    policy = Scenario._build_failure_policy(failure_policy_data)
+
+    # Verify the policy was created correctly
+    assert policy.attrs["name"] == "Texas Grid Outage Scenario"
+    assert (
+        policy.attrs["description"]
+        == "Regional power grid failure affecting telecom infrastructure"
+    )
+    assert policy.fail_shared_risk_groups is True
+    assert len(policy.rules) == 3
+
+    # Rule 1: Texas electrical grid nodes
+    rule1 = policy.rules[0]
+    assert rule1.entity_scope == "node"
+    assert len(rule1.conditions) == 1
+    assert rule1.conditions[0].attr == "electric_grid"
+    assert rule1.conditions[0].operator == "=="
+    assert rule1.conditions[0].value == "texas"
+    assert rule1.logic == "and"
+    assert rule1.rule_type == "all"
+
+    # Rule 2: Random underground fiber links in southwest region
+    rule2 = policy.rules[1]
+    assert rule2.entity_scope == "link"
+    assert len(rule2.conditions) == 2
+    assert rule2.conditions[0].attr == "region"
+    assert rule2.conditions[0].operator == "=="
+    assert rule2.conditions[0].value == "southwest"
+    assert rule2.conditions[1].attr == "type"
+    assert rule2.conditions[1].operator == "=="
+    assert rule2.conditions[1].value == "underground"
+    assert rule2.logic == "and"
+    assert rule2.rule_type == "random"
+    assert rule2.probability == 0.4
+
+    # Rule 3: Risk group choice
+    rule3 = policy.rules[2]
+    assert rule3.entity_scope == "risk_group"
+    assert len(rule3.conditions) == 0
+    assert rule3.logic == "any"
+    assert rule3.rule_type == "choice"
+    assert rule3.count == 2
+
+    # Test that the policy actually works with real data
+    nodes = {
+        "N1": {
+            "electric_grid": "texas",
+            "region": "southwest",
+        },  # Should fail from rule 1
+        "N2": {
+            "electric_grid": "california",
+            "region": "west",
+        },  # Should not fail from rule 1
+        "N3": {
+            "electric_grid": "pjm",
+            "region": "northeast",
+        },  # Should not fail from rule 1
+    }
+
+    links = {
+        "L1": {"type": "underground", "region": "southwest"},  # Eligible for rule 2
+        "L2": {"type": "opgw", "region": "southwest"},  # Not eligible (wrong type)
+        "L3": {
+            "type": "underground",
+            "region": "northeast",
+        },  # Not eligible (wrong region)
+    }
+
+    risk_groups = {
+        "RG1": {"name": "DataCenter_Dallas"},
+        "RG2": {"name": "DataCenter_Houston"},
+        "RG3": {"name": "DataCenter_Austin"},
+    }
+
+    # Test with mocked randomness for deterministic results
+    with (
+        patch("ngraph.failure_policy.random", return_value=0.3),
+        patch("ngraph.failure_policy.sample", return_value=["RG1", "RG2"]),
+    ):
+        failed = policy.apply_failures(nodes, links, risk_groups)
+
+        # Verify expected failures
+        assert "N1" in failed  # Texas grid node
+        assert "N2" not in failed  # California grid node
+        assert "N3" not in failed  # PJM grid node
+
+
+def test_failure_policy_docstring_yaml_full_scenario_integration():
+    """Test the docstring YAML example in a complete scenario context."""
+    from unittest.mock import patch
+
+    # Create a complete scenario with our failure policy
+    scenario_yaml = """
+network:
+  nodes:
+    N1:
+      attrs:
+        electric_grid: "texas"
+        region: "southwest"
+    N2:
+      attrs:
+        electric_grid: "california"
+        region: "west"
+    N3:
+      attrs:
+        electric_grid: "pjm"
+        region: "northeast"
+  links:
+    - source: "N1"
+      target: "N2"
+      link_params:
+        capacity: 1000
+        attrs:
+          type: "underground"
+          region: "southwest"
+    - source: "N2"
+      target: "N3"
+      link_params:
+        capacity: 500
+        attrs:
+          type: "opgw"
+          region: "west"
+
+failure_policy_set:
+  docstring_example:
+    attrs:
+      name: "Texas Grid Outage Scenario"
+      description: "Regional power grid failure affecting telecom infrastructure"
+    fail_shared_risk_groups: true
+    rules:
+      # Fail all nodes in Texas electrical grid
+      - entity_scope: "node"
+        conditions:
+          - attr: "electric_grid"
+            operator: "=="
+            value: "texas"
+        logic: "and"
+        rule_type: "all"
+
+      # Randomly fail 40% of underground fiber links in affected region
+      - entity_scope: "link"
+        conditions:
+          - attr: "region"
+            operator: "=="
+            value: "southwest"
+          - attr: "type"
+            operator: "=="
+            value: "underground"
+        logic: "and"
+        rule_type: "random"
+        probability: 0.4
+
+      # Choose exactly 2 risk groups to fail (e.g., data centers)
+      - entity_scope: "risk_group"
+        logic: "any"
+        rule_type: "choice"
+        count: 2
+
+traffic_matrix_set:
+  default: []
+"""
+
+    # Load the complete scenario
+    scenario = Scenario.from_yaml(scenario_yaml)
+
+    # Get the failure policy
+    policy = scenario.failure_policy_set.get_policy("docstring_example")
+    assert policy is not None
+
+    # Verify it matches our expectations
+    assert policy.attrs["name"] == "Texas Grid Outage Scenario"
+    assert policy.fail_shared_risk_groups is True
+    assert len(policy.rules) == 3
+
+    # Verify it works with the scenario's network
+    network = scenario.network
+    nodes_dict = {name: node.attrs for name, node in network.nodes.items()}
+    links_dict = {link_id: link.attrs for link_id, link in network.links.items()}
+
+    with (
+        patch("ngraph.failure_policy.random", return_value=0.3),
+        patch("ngraph.failure_policy.sample", return_value=["RG1"]),
+    ):
+        failed = policy.apply_failures(nodes_dict, links_dict, {})
+
+        # Texas grid node N1 should fail
+        assert "N1" in failed
+        assert "N2" not in failed  # California grid
+        assert "N3" not in failed  # PJM grid

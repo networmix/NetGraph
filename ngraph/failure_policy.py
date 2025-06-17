@@ -94,6 +94,43 @@ class FailurePolicy:
         network hasn't changed. If your network changes between calls,
         you should clear the cache or re-initialize the policy.
 
+    Example YAML configuration:
+        ```yaml
+        failure_policy:
+          attrs:
+            name: "Texas Grid Outage Scenario"
+            description: "Regional power grid failure affecting telecom infrastructure"
+          fail_shared_risk_groups: true
+          rules:
+            # Fail all nodes in Texas electrical grid
+            - entity_scope: "node"
+              conditions:
+                - attr: "electric_grid"
+                  operator: "=="
+                  value: "texas"
+              logic: "and"
+              rule_type: "all"
+
+            # Randomly fail 40% of underground fiber links in affected region
+            - entity_scope: "link"
+              conditions:
+                - attr: "region"
+                  operator: "=="
+                  value: "southwest"
+                - attr: "installation"
+                  operator: "=="
+                  value: "underground"
+              logic: "and"
+              rule_type: "random"
+              probability: 0.4
+
+            # Choose exactly 2 risk groups to fail (e.g., data centers)
+            - entity_scope: "risk_group"
+              logic: "any"
+              rule_type: "choice"
+              count: 2
+        ```
+
     Attributes:
         rules (List[FailureRule]):
             A list of FailureRules to apply.
