@@ -1,0 +1,159 @@
+network:
+  name: Simple Random Network
+  version: 1.0
+  nodes:
+    node_1:
+      attrs: {}
+    node_2:
+      attrs: {}
+    node_3:
+      attrs: {}
+    node_4:
+      attrs: {}
+    node_5:
+      attrs: {}
+    node_6:
+      attrs: {}
+    node_7:
+      attrs: {}
+    node_8:
+      attrs: {}
+    node_9:
+      attrs: {}
+    node_10:
+      attrs: {}
+  links:
+  # Create a connected random topology
+  # Ring to ensure connectivity
+  - source: node_1
+    target: node_2
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_2
+    target: node_3
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_3
+    target: node_4
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_4
+    target: node_5
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_5
+    target: node_6
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_6
+    target: node_7
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_7
+    target: node_8
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_8
+    target: node_9
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_9
+    target: node_10
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  - source: node_10
+    target: node_1
+    link_params:
+      capacity: 10000.0
+      cost: 10
+  # Additional random connections for more realistic topology
+  - source: node_1
+    target: node_5
+    link_params:
+      capacity: 8000.0
+      cost: 15
+  - source: node_2
+    target: node_7
+    link_params:
+      capacity: 8000.0
+      cost: 15
+  - source: node_3
+    target: node_8
+    link_params:
+      capacity: 8000.0
+      cost: 15
+  - source: node_4
+    target: node_9
+    link_params:
+      capacity: 8000.0
+      cost: 15
+  - source: node_6
+    target: node_10
+    link_params:
+      capacity: 8000.0
+      cost: 15
+  - source: node_1
+    target: node_6
+    link_params:
+      capacity: 6000.0
+      cost: 20
+  - source: node_2
+    target: node_8
+    link_params:
+      capacity: 6000.0
+      cost: 20
+  - source: node_3
+    target: node_9
+    link_params:
+      capacity: 6000.0
+      cost: 20
+  - source: node_4
+    target: node_7
+    link_params:
+      capacity: 6000.0
+      cost: 20
+  - source: node_5
+    target: node_10
+    link_params:
+      capacity: 6000.0
+      cost: 20
+
+failure_policy_set:
+  default:
+    attrs:
+      name: "single_random_link_failure"
+      description: "Fails exactly one random link to test network resilience"
+    rules:
+      - entity_scope: "link"
+        logic: "any"
+        rule_type: "choice"
+        count: 1
+
+workflow:
+- step_type: BuildGraph
+  name: build_graph
+- step_type: CapacityEnvelopeAnalysis
+  name: "ce_1"
+  source_path: "^(.+)"
+  sink_path: "^(.+)"
+  mode: "pairwise"
+  parallelism: 8
+  shortest_path: false
+  flow_placement: "PROPORTIONAL"
+  seed: 42
+  iterations: 500
+  failure_policy: "default"
+- step_type: NotebookExport
+  name: "export_analysis"
+  notebook_path: "analysis.ipynb"
+  json_path: "results.json"
+  allow_empty_results: false

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.logging import get_logger
 from ngraph.results_artifacts import CapacityEnvelope
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
     from ngraph.failure_policy import FailurePolicy
     from ngraph.network import Network
     from ngraph.scenario import Scenario
+
+logger = get_logger(__name__)
 
 
 def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
@@ -31,6 +34,9 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
     Returns:
         List of (src_label, dst_label, flow_value) tuples from max_flow results.
     """
+    # Set up worker-specific logger
+    worker_logger = get_logger(f"{__name__}.worker")
+
     (
         base_network,
         base_policy,
@@ -42,25 +48,40 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
         seed_offset,
     ) = args
 
+    worker_pid = os.getpid()
+    worker_logger.debug(f"Worker {worker_pid} started with seed_offset={seed_offset}")
+
     # Set up unique random seed for this worker iteration
     if seed_offset is not None:
         random.seed(seed_offset)
+        worker_logger.debug(
+            f"Worker {worker_pid} using provided seed offset: {seed_offset}"
+        )
     else:
         # Use pid ^ time_ns for statistical independence when no seed provided
-        random.seed(os.getpid() ^ time.time_ns())
+        actual_seed = worker_pid ^ time.time_ns()
+        random.seed(actual_seed)
+        worker_logger.debug(f"Worker {worker_pid} generated seed: {actual_seed}")
 
     # Work on deep copies to avoid modifying shared data
+    worker_logger.debug(
+        f"Worker {worker_pid} creating deep copies of network and policy"
+    )
     net = copy.deepcopy(base_network)
     pol = copy.deepcopy(base_policy) if base_policy else None
 
     if pol:
         pol.use_cache = False  # Local run, no benefit to caching
+        worker_logger.debug(f"Worker {worker_pid} applying failure policy")
 
         # Apply failures to the network
         node_map = {n_name: n.attrs for n_name, n in net.nodes.items()}
         link_map = {link_name: link.attrs for link_name, link in net.links.items()}
 
         failed_ids = pol.apply_failures(node_map, link_map, net.risk_groups)
+        worker_logger.debug(
+            f"Worker {worker_pid} applied failures: {len(failed_ids)} entities failed"
+        )
 
         # Disable the failed entities
         for f_id in failed_ids:
@@ -71,7 +92,15 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
             elif f_id in net.risk_groups:
                 net.disable_risk_group(f_id, recursive=True)
 
+        if failed_ids:
+            worker_logger.debug(
+                f"Worker {worker_pid} disabled failed entities: {failed_ids}"
+            )
+
     # Compute max flow using the configured parameters
+    worker_logger.debug(
+        f"Worker {worker_pid} computing max flow: source={source_regex}, sink={sink_regex}, mode={mode}"
+    )
     flows = net.max_flow(
         source_regex,
         sink_regex,
@@ -81,7 +110,15 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
     )
 
     # Flatten to a pickle-friendly list
-    return [(src, dst, val) for (src, dst), val in flows.items()]
+    result = [(src, dst, val) for (src, dst), val in flows.items()]
+    worker_logger.debug(f"Worker {worker_pid} computed {len(result)} flow results")
+
+    # Log summary of results for debugging
+    if result:
+        total_flow = sum(val for _, _, val in result)
+        worker_logger.debug(f"Worker {worker_pid} total flow: {total_flow:.2f}")
+
+    return result
 
 
 def _run_single_iteration(
@@ -108,6 +145,7 @@ def _run_single_iteration(
         samples: Dictionary to accumulate results into
         seed_offset: Optional seed offset for deterministic results
     """
+    logger.debug(f"Running single iteration with seed_offset={seed_offset}")
     res = _worker(
         (
             base_network,
@@ -120,6 +158,7 @@ def _run_single_iteration(
             seed_offset,
         )
     )
+    logger.debug(f"Single iteration produced {len(res)} flow results")
     for src, dst, val in res:
         if (src, dst) not in samples:
             samples[(src, dst)] = []
@@ -197,23 +236,39 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         Args:
             scenario: The scenario containing network, failure policies, and results.
         """
+        # Log analysis parameters (base class handles start/end timing)
+        logger.debug(
+            f"Analysis parameters: source_path={self.source_path}, sink_path={self.sink_path}, "
+            f"mode={self.mode}, iterations={self.iterations}, parallelism={self.parallelism}, "
+            f"failure_policy={self.failure_policy}"
+        )
+
         # Get the failure policy to use
         base_policy = self._get_failure_policy(scenario)
+        if base_policy:
+            logger.debug(
+                f"Using failure policy: {self.failure_policy} with {len(base_policy.rules)} rules"
+            )
+        else:
+            logger.debug("No failure policy specified - running baseline analysis only")
 
         # Validate iterations parameter based on failure policy
         self._validate_iterations_parameter(base_policy)
 
         # Determine actual number of iterations to run
         mc_iters = self._get_monte_carlo_iterations(base_policy)
+        logger.info(f"Running {mc_iters} Monte-Carlo iterations")
 
         # Run analysis (serial or parallel)
         samples = self._run_capacity_analysis(scenario.network, base_policy, mc_iters)
 
         # Build capacity envelopes from samples
         envelopes = self._build_capacity_envelopes(samples)
+        logger.info(f"Generated {len(envelopes)} capacity envelopes")
 
         # Store results in scenario
         scenario.results.put(self.name, "capacity_envelopes", envelopes)
+        logger.info(f"Capacity envelope analysis completed: {self.name}")
 
     def _get_failure_policy(self, scenario: "Scenario") -> "FailurePolicy | None":
         """Get the failure policy to use for this analysis.
@@ -284,10 +339,15 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         use_parallel = self.parallelism > 1 and mc_iters > 1
 
         if use_parallel:
+            logger.info(
+                f"Running capacity analysis in parallel with {self.parallelism} workers"
+            )
             self._run_parallel_analysis(network, policy, mc_iters, samples)
         else:
+            logger.info("Running capacity analysis serially")
             self._run_serial_analysis(network, policy, mc_iters, samples)
 
+        logger.debug(f"Collected samples for {len(samples)} flow pairs")
         return samples
 
     def _run_parallel_analysis(
@@ -307,6 +367,9 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         """
         # Limit workers to available iterations
         workers = min(self.parallelism, mc_iters)
+        logger.info(
+            f"Starting parallel analysis with {workers} workers for {mc_iters} iterations"
+        )
 
         # Build worker arguments
         worker_args = []
@@ -328,11 +391,56 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 )
             )
 
+        logger.debug(f"Created {len(worker_args)} worker argument sets")
+
         # Execute in parallel
+        start_time = time.time()
+        completed_tasks = 0
+
+        logger.debug(f"Submitting {len(worker_args)} tasks to process pool")
+        logger.debug(
+            f"Network size: {len(network.nodes)} nodes, {len(network.links)} links"
+        )
+
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            for result in pool.map(_worker, worker_args, chunksize=1):
-                for src, dst, val in result:
-                    samples[(src, dst)].append(val)
+            logger.debug(f"ProcessPoolExecutor created with {workers} workers")
+            logger.info(f"Starting parallel execution of {mc_iters} iterations")
+
+            try:
+                for result in pool.map(_worker, worker_args, chunksize=1):
+                    completed_tasks += 1
+
+                    # Add results to samples
+                    result_count = len(result)
+                    for src, dst, val in result:
+                        samples[(src, dst)].append(val)
+
+                    # Progress logging
+                    if (
+                        completed_tasks % max(1, mc_iters // 10) == 0
+                    ):  # Log every 10% completion
+                        logger.info(
+                            f"Parallel analysis progress: {completed_tasks}/{mc_iters} tasks completed"
+                        )
+                        logger.debug(
+                            f"Latest task produced {result_count} flow results"
+                        )
+
+            except Exception as e:
+                logger.error(
+                    f"Error during parallel execution: {type(e).__name__}: {e}"
+                )
+                logger.debug(f"Failed after {completed_tasks} completed tasks")
+                raise
+
+        elapsed_time = time.time() - start_time
+        logger.info(f"Parallel analysis completed in {elapsed_time:.2f} seconds")
+        logger.debug(
+            f"Average time per iteration: {elapsed_time / mc_iters:.3f} seconds"
+        )
+        logger.debug(
+            f"Total samples collected: {sum(len(vals) for vals in samples.values())}"
+        )
 
     def _run_serial_analysis(
         self,
@@ -349,10 +457,19 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             mc_iters: Number of Monte-Carlo iterations
             samples: Dictionary to accumulate results into
         """
+        logger.debug("Starting serial analysis")
+        start_time = time.time()
+
         for i in range(mc_iters):
+            iter_start = time.time()
             seed_offset = None
             if self.seed is not None:
                 seed_offset = self.seed + i
+                logger.debug(
+                    f"Serial iteration {i + 1}/{mc_iters} with seed offset {seed_offset}"
+                )
+            else:
+                logger.debug(f"Serial iteration {i + 1}/{mc_iters}")
 
             _run_single_iteration(
                 network,
@@ -366,6 +483,28 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 seed_offset,
             )
 
+            iter_time = time.time() - iter_start
+            if mc_iters <= 10:  # Log individual iteration times for small runs
+                logger.debug(
+                    f"Serial iteration {i + 1} completed in {iter_time:.3f} seconds"
+                )
+
+            if (
+                mc_iters > 1 and (i + 1) % max(1, mc_iters // 10) == 0
+            ):  # Log every 10% completion
+                logger.info(
+                    f"Serial analysis progress: {i + 1}/{mc_iters} iterations completed"
+                )
+                avg_time = (time.time() - start_time) / (i + 1)
+                logger.debug(f"Average iteration time so far: {avg_time:.3f} seconds")
+
+        elapsed_time = time.time() - start_time
+        logger.info(f"Serial analysis completed in {elapsed_time:.2f} seconds")
+        if mc_iters > 1:
+            logger.debug(
+                f"Average time per iteration: {elapsed_time / mc_iters:.3f} seconds"
+            )
+
     def _build_capacity_envelopes(
         self, samples: dict[tuple[str, str], list[float]]
     ) -> dict[str, dict[str, Any]]:
@@ -377,9 +516,16 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         Returns:
             Dictionary mapping flow keys to serialized CapacityEnvelope data.
         """
+        logger.debug(f"Building capacity envelopes from {len(samples)} flow pairs")
         envelopes = {}
 
         for (src_label, dst_label), capacity_values in samples.items():
+            if not capacity_values:
+                logger.warning(
+                    f"No capacity values found for flow {src_label}->{dst_label}"
+                )
+                continue
+
             # Create capacity envelope
             envelope = CapacityEnvelope(
                 source_pattern=self.source_path,
@@ -392,6 +538,16 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             flow_key = f"{src_label}->{dst_label}"
             envelopes[flow_key] = envelope.to_dict()
 
+            # Enhanced logging with statistics
+            min_val = min(capacity_values)
+            max_val = max(capacity_values)
+            mean_val = sum(capacity_values) / len(capacity_values)
+            logger.debug(
+                f"Created envelope for {flow_key}: {len(capacity_values)} samples, "
+                f"min={min_val:.2f}, max={max_val:.2f}, mean={mean_val:.2f}"
+            )
+
+        logger.debug(f"Successfully created {len(envelopes)} capacity envelopes")
         return envelopes
 
 
