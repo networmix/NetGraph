@@ -1,6 +1,6 @@
 """Code serialization for notebook generation."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import nbformat
 
@@ -89,3 +89,35 @@ else:
     print("❌ No results data loaded")"""
 
         return nbformat.v4.new_code_cell(summary_code)
+
+    @staticmethod
+    def create_flow_availability_cells() -> List[nbformat.NotebookNode]:
+        """Create flow availability analysis cells (markdown header + code)."""
+        # Markdown header cell
+        header_cell = nbformat.v4.new_markdown_cell("## Flow Availability Analysis")
+
+        # Code analysis cell
+        flow_code = """# Flow Availability Distribution Analysis
+if results:
+    capacity_analyzer = CapacityMatrixAnalyzer()
+
+    # Find steps with total flow samples (total_capacity_samples)
+    flow_steps = []
+    for step_name, step_data in results.items():
+        if isinstance(step_data, dict) and 'total_capacity_samples' in step_data:
+            samples = step_data['total_capacity_samples']
+            if isinstance(samples, list) and len(samples) > 0:
+                flow_steps.append(step_name)
+
+    if flow_steps:
+        for step_name in flow_steps:
+            capacity_analyzer.analyze_and_display_flow_availability(results, step_name)
+    else:
+        print("ℹ️  No flow availability data found")
+        print("   To generate this analysis, run CapacityEnvelopeAnalysis with baseline=True")
+else:
+    print("❌ No results data available")"""
+
+        code_cell = nbformat.v4.new_code_cell(flow_code)
+
+        return [header_cell, code_cell]

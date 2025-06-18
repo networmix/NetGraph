@@ -24,15 +24,17 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
+def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]:
     """Worker function for parallel capacity envelope analysis.
 
     Args:
         args: Tuple containing (base_network, base_policy, source_regex, sink_regex,
-              mode, shortest_path, flow_placement, seed_offset)
+              mode, shortest_path, flow_placement, seed_offset, is_baseline)
 
     Returns:
-        List of (src_label, dst_label, flow_value) tuples from max_flow results.
+        Tuple of (flow_results, total_capacity) where:
+        - flow_results: List of (src_label, dst_label, flow_value) tuples
+        - total_capacity: Sum of all flow values for this iteration
     """
     # Set up worker-specific logger
     worker_logger = get_logger(f"{__name__}.worker")
@@ -46,6 +48,7 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
         shortest_path,
         flow_placement,
         seed_offset,
+        is_baseline,
     ) = args
 
     worker_pid = os.getpid()
@@ -70,7 +73,8 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
     net = copy.deepcopy(base_network)
     pol = copy.deepcopy(base_policy) if base_policy else None
 
-    if pol:
+    # Apply failures unless this is a baseline iteration
+    if pol and not is_baseline:
         pol.use_cache = False  # Local run, no benefit to caching
         worker_logger.debug(f"Worker {worker_pid} applying failure policy")
 
@@ -96,6 +100,12 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
             worker_logger.debug(
                 f"Worker {worker_pid} disabled failed entities: {failed_ids}"
             )
+    elif is_baseline:
+        worker_logger.debug(
+            f"Worker {worker_pid} running baseline iteration (no failures)"
+        )
+    else:
+        worker_logger.debug(f"Worker {worker_pid} no failure policy provided")
 
     # Compute max flow using the configured parameters
     worker_logger.debug(
@@ -109,16 +119,14 @@ def _worker(args: tuple[Any, ...]) -> list[tuple[str, str, float]]:
         flow_placement=flow_placement,
     )
 
-    # Flatten to a pickle-friendly list
+    # Flatten to a pickle-friendly list and calculate total capacity
     result = [(src, dst, val) for (src, dst), val in flows.items()]
+    total_capacity = sum(val for _, _, val in result)
+
     worker_logger.debug(f"Worker {worker_pid} computed {len(result)} flow results")
+    worker_logger.debug(f"Worker {worker_pid} total capacity: {total_capacity:.2f}")
 
-    # Log summary of results for debugging
-    if result:
-        total_flow = sum(val for _, _, val in result)
-        worker_logger.debug(f"Worker {worker_pid} total flow: {total_flow:.2f}")
-
-    return result
+    return result, total_capacity
 
 
 def _run_single_iteration(
@@ -130,7 +138,9 @@ def _run_single_iteration(
     shortest_path: bool,
     flow_placement: FlowPlacement,
     samples: dict[tuple[str, str], list[float]],
+    total_capacity_samples: list[float],
     seed_offset: int | None = None,
+    is_baseline: bool = False,
 ) -> None:
     """Run a single iteration of capacity analysis (for serial execution).
 
@@ -142,11 +152,16 @@ def _run_single_iteration(
         mode: Flow analysis mode ("combine" or "pairwise")
         shortest_path: Whether to use shortest path only
         flow_placement: Flow placement strategy
-        samples: Dictionary to accumulate results into
+        samples: Dictionary to accumulate flow results into
+        total_capacity_samples: List to accumulate total capacity values into
         seed_offset: Optional seed offset for deterministic results
+        is_baseline: Whether this is a baseline iteration (no failures)
     """
-    logger.debug(f"Running single iteration with seed_offset={seed_offset}")
-    res = _worker(
+    baseline_msg = " (baseline)" if is_baseline else ""
+    logger.debug(
+        f"Running single iteration{baseline_msg} with seed_offset={seed_offset}"
+    )
+    flow_results, total_capacity = _worker(
         (
             base_network,
             base_policy,
@@ -156,13 +171,21 @@ def _run_single_iteration(
             shortest_path,
             flow_placement,
             seed_offset,
+            is_baseline,
         )
     )
-    logger.debug(f"Single iteration produced {len(res)} flow results")
-    for src, dst, val in res:
+    logger.debug(
+        f"Single iteration{baseline_msg} produced {len(flow_results)} flow results, total capacity: {total_capacity:.2f}"
+    )
+
+    # Store individual flow results
+    for src, dst, val in flow_results:
         if (src, dst) not in samples:
             samples[(src, dst)] = []
         samples[(src, dst)].append(val)
+
+    # Store total capacity for this iteration
+    total_capacity_samples.append(total_capacity)
 
 
 @dataclass
@@ -170,7 +193,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     """A workflow step that samples maximum capacity between node groups across random failures.
 
     Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
-    to build statistical envelopes of network resilience.
+    to build statistical envelopes of network resilience. Results include both individual
+    flow capacity envelopes and total capacity samples per iteration.
 
     YAML Configuration:
         ```yaml
@@ -185,8 +209,13 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             parallelism: 4                            # Number of parallel worker processes
             shortest_path: false                      # Use shortest paths only
             flow_placement: "PROPORTIONAL"            # Flow placement strategy
+            baseline: true                            # Optional: Run first iteration without failures
             seed: 42                                  # Optional: Seed for reproducible results
         ```
+
+    Results stored in scenario.results:
+        - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
+        - `total_capacity_samples`: List of total capacity values per iteration
 
     Attributes:
         source_path: Regex pattern to select source node groups.
@@ -197,6 +226,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         parallelism: Number of parallel worker processes (default: 1).
         shortest_path: If True, use shortest paths only (default: False).
         flow_placement: Flow placement strategy (default: PROPORTIONAL).
+        baseline: If True, run first iteration without failures as baseline (default: False).
         seed: Optional seed for deterministic results (for debugging).
     """
 
@@ -208,6 +238,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     parallelism: int = 1
     shortest_path: bool = False
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL
+    baseline: bool = False
     seed: int | None = None
 
     def __post_init__(self):
@@ -218,6 +249,11 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             raise ValueError("parallelism must be >= 1")
         if self.mode not in {"combine", "pairwise"}:
             raise ValueError("mode must be 'combine' or 'pairwise'")
+        if self.baseline and self.iterations < 2:
+            raise ValueError(
+                "baseline=True requires iterations >= 2 "
+                "(first iteration is baseline, remaining are with failures)"
+            )
 
         # Convert string flow_placement to enum if needed (like CapacityProbe)
         if isinstance(self.flow_placement, str):
@@ -240,7 +276,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         logger.debug(
             f"Analysis parameters: source_path={self.source_path}, sink_path={self.sink_path}, "
             f"mode={self.mode}, iterations={self.iterations}, parallelism={self.parallelism}, "
-            f"failure_policy={self.failure_policy}"
+            f"failure_policy={self.failure_policy}, baseline={self.baseline}"
         )
 
         # Get the failure policy to use
@@ -252,6 +288,11 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         else:
             logger.debug("No failure policy specified - running baseline analysis only")
 
+        if self.baseline:
+            logger.info(
+                "Baseline mode enabled: first iteration will run without failures"
+            )
+
         # Validate iterations parameter based on failure policy
         self._validate_iterations_parameter(base_policy)
 
@@ -260,7 +301,9 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         logger.info(f"Running {mc_iters} Monte-Carlo iterations")
 
         # Run analysis (serial or parallel)
-        samples = self._run_capacity_analysis(scenario.network, base_policy, mc_iters)
+        samples, total_capacity_samples = self._run_capacity_analysis(
+            scenario.network, base_policy, mc_iters
+        )
 
         # Build capacity envelopes from samples
         envelopes = self._build_capacity_envelopes(samples)
@@ -268,6 +311,20 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
         # Store results in scenario
         scenario.results.put(self.name, "capacity_envelopes", envelopes)
+        scenario.results.put(
+            self.name, "total_capacity_samples", total_capacity_samples
+        )
+
+        # Log summary statistics for total capacity
+        if total_capacity_samples:
+            min_capacity = min(total_capacity_samples)
+            max_capacity = max(total_capacity_samples)
+            mean_capacity = sum(total_capacity_samples) / len(total_capacity_samples)
+            logger.info(
+                f"Total capacity statistics: min={min_capacity:.2f}, max={max_capacity:.2f}, "
+                f"mean={mean_capacity:.2f} (from {len(total_capacity_samples)} samples)"
+            )
+
         logger.info(f"Capacity envelope analysis completed: {self.name}")
 
     def _get_failure_policy(self, scenario: "Scenario") -> "FailurePolicy | None":
@@ -311,18 +368,22 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             policy: The failure policy to use (if any).
 
         Raises:
-            ValueError: If iterations > 1 when no failure policy is provided.
+            ValueError: If iterations > 1 when no failure policy is provided and baseline=False.
         """
-        if (policy is None or not policy.rules) and self.iterations > 1:
+        if (
+            (policy is None or not policy.rules)
+            and self.iterations > 1
+            and not self.baseline
+        ):
             raise ValueError(
                 f"iterations={self.iterations} is meaningless without a failure policy. "
                 f"Without failures, all iterations produce identical results. "
-                f"Either set iterations=1 or provide a failure_policy with rules."
+                f"Either set iterations=1, provide a failure_policy with rules, or set baseline=True."
             )
 
     def _run_capacity_analysis(
         self, network: "Network", policy: "FailurePolicy | None", mc_iters: int
-    ) -> dict[tuple[str, str], list[float]]:
+    ) -> tuple[dict[tuple[str, str], list[float]], list[float]]:
         """Run the capacity analysis iterations.
 
         Args:
@@ -331,9 +392,12 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             mc_iters: Number of Monte-Carlo iterations
 
         Returns:
-            Dictionary mapping (src_label, dst_label) to list of capacity samples.
+            Tuple of (samples, total_capacity_samples) where:
+            - samples: Dictionary mapping (src_label, dst_label) to list of capacity samples
+            - total_capacity_samples: List of total capacity values per iteration
         """
         samples: dict[tuple[str, str], list[float]] = defaultdict(list)
+        total_capacity_samples: list[float] = []
 
         # Determine if we should run in parallel
         use_parallel = self.parallelism > 1 and mc_iters > 1
@@ -342,13 +406,18 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             logger.info(
                 f"Running capacity analysis in parallel with {self.parallelism} workers"
             )
-            self._run_parallel_analysis(network, policy, mc_iters, samples)
+            self._run_parallel_analysis(
+                network, policy, mc_iters, samples, total_capacity_samples
+            )
         else:
             logger.info("Running capacity analysis serially")
-            self._run_serial_analysis(network, policy, mc_iters, samples)
+            self._run_serial_analysis(
+                network, policy, mc_iters, samples, total_capacity_samples
+            )
 
         logger.debug(f"Collected samples for {len(samples)} flow pairs")
-        return samples
+        logger.debug(f"Collected {len(total_capacity_samples)} total capacity samples")
+        return samples, total_capacity_samples
 
     def _run_parallel_analysis(
         self,
@@ -356,6 +425,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         policy: "FailurePolicy | None",
         mc_iters: int,
         samples: dict[tuple[str, str], list[float]],
+        total_capacity_samples: list[float],
     ) -> None:
         """Run capacity analysis in parallel using ProcessPoolExecutor.
 
@@ -363,7 +433,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             network: Network to analyze
             policy: Failure policy to apply
             mc_iters: Number of Monte-Carlo iterations
-            samples: Dictionary to accumulate results into
+            samples: Dictionary to accumulate flow results into
+            total_capacity_samples: List to accumulate total capacity values into
         """
         # Limit workers to available iterations
         workers = min(self.parallelism, mc_iters)
@@ -378,6 +449,9 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             if self.seed is not None:
                 seed_offset = self.seed + i
 
+            # First iteration is baseline if baseline=True
+            is_baseline = self.baseline and i == 0
+
             worker_args.append(
                 (
                     network,
@@ -388,6 +462,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                     self.shortest_path,
                     self.flow_placement,
                     seed_offset,
+                    is_baseline,
                 )
             )
 
@@ -407,13 +482,18 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             logger.info(f"Starting parallel execution of {mc_iters} iterations")
 
             try:
-                for result in pool.map(_worker, worker_args, chunksize=1):
+                for flow_results, total_capacity in pool.map(
+                    _worker, worker_args, chunksize=1
+                ):
                     completed_tasks += 1
 
-                    # Add results to samples
-                    result_count = len(result)
-                    for src, dst, val in result:
+                    # Add flow results to samples
+                    result_count = len(flow_results)
+                    for src, dst, val in flow_results:
                         samples[(src, dst)].append(val)
+
+                    # Add total capacity to samples
+                    total_capacity_samples.append(total_capacity)
 
                     # Progress logging
                     if (
@@ -423,7 +503,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                             f"Parallel analysis progress: {completed_tasks}/{mc_iters} tasks completed"
                         )
                         logger.debug(
-                            f"Latest task produced {result_count} flow results"
+                            f"Latest task produced {result_count} flow results, total capacity: {total_capacity:.2f}"
                         )
 
             except Exception as e:
@@ -448,6 +528,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         policy: "FailurePolicy | None",
         mc_iters: int,
         samples: dict[tuple[str, str], list[float]],
+        total_capacity_samples: list[float],
     ) -> None:
         """Run capacity analysis serially.
 
@@ -455,7 +536,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             network: Network to analyze
             policy: Failure policy to apply
             mc_iters: Number of Monte-Carlo iterations
-            samples: Dictionary to accumulate results into
+            samples: Dictionary to accumulate flow results into
+            total_capacity_samples: List to accumulate total capacity values into
         """
         logger.debug("Starting serial analysis")
         start_time = time.time()
@@ -465,11 +547,17 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             seed_offset = None
             if self.seed is not None:
                 seed_offset = self.seed + i
+
+            # First iteration is baseline if baseline=True
+            is_baseline = self.baseline and i == 0
+            baseline_msg = " (baseline)" if is_baseline else ""
+
+            if seed_offset is not None:
                 logger.debug(
-                    f"Serial iteration {i + 1}/{mc_iters} with seed offset {seed_offset}"
+                    f"Serial iteration {i + 1}/{mc_iters}{baseline_msg} with seed offset {seed_offset}"
                 )
             else:
-                logger.debug(f"Serial iteration {i + 1}/{mc_iters}")
+                logger.debug(f"Serial iteration {i + 1}/{mc_iters}{baseline_msg}")
 
             _run_single_iteration(
                 network,
@@ -480,7 +568,9 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 self.shortest_path,
                 self.flow_placement,
                 samples,
+                total_capacity_samples,
                 seed_offset,
+                is_baseline,
             )
 
             iter_time = time.time() - iter_start

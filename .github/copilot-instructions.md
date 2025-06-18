@@ -88,10 +88,11 @@ Prefer stability over cosmetic change.
 **Performance** – generator expressions, set operations, dict comprehensions; `functools.cached_property` for expensive computations.
 **File handling** – `pathlib.Path` objects for all file operations; avoid raw strings for filesystem paths.
 **Type clarity** – Type aliases for complex signatures; modern syntax (`list[int]`, `dict[str, Any]`); `typing.Protocol` for interface definitions.
-**Logging** – `ngraph.logging.get_logger(__name__)` consistently; avoid `print()` statements.
+**Logging** – `ngraph.logging.get_logger(__name__)` for business logic, servers, and internal operations; `print()` statements are acceptable for interactive notebook output and user-facing display methods in notebook analysis modules.
 **Immutability** – Default to `tuple`, `frozenset` for collections that won't change after construction; use `frozen=True` for immutable dataclasses.
 **Pattern matching** – Use `match/case` for clean branching on enums or structured data (Python ≥3.10).
 **Visualization** – Use `seaborn` for statistical plots and network analysis visualizations; combine with `matplotlib` for custom styling and `itables` for interactive data display in notebooks.
+**Notebook tables** – Use `itables.show()` for displaying DataFrames in notebooks to provide interactive sorting, filtering, and pagination; configure `itables.options` for optimal display settings.
 **Organisation** – Factory functions for workflow steps; YAML for configs; `attrs` dictionaries for extensible metadata.
 
 ### 6 – Comments
@@ -107,7 +108,8 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 
 * Use specific exception types; avoid bare `except:` clauses.
 * Validate inputs at public API boundaries; use type hints for internal functions.
-* Use `ngraph.logging.get_logger(__name__)` for all logging; avoid `print()` statements.
+* Use `ngraph.logging.get_logger(__name__)` for business logic, server operations, and internal processes.
+* Use `print()` statements for interactive notebook output, user-facing display methods, and visualization feedback in notebook analysis modules.
 * For network analysis operations, provide meaningful error messages with context.
 * Log important events at appropriate levels (DEBUG for detailed tracing, INFO for workflow steps, WARNING for recoverable issues, ERROR for failures).
 * **No fallbacks for dependencies**: Do not use try/except blocks to gracefully handle missing optional dependencies. All required dependencies must be declared in `pyproject.toml`. If a dependency is missing, the code should fail fast with a clear ImportError rather than falling back to inferior alternatives.

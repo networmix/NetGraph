@@ -214,6 +214,14 @@ class TestCapacityEnvelopeAnalysis:
         assert envelopes is not None
         assert isinstance(envelopes, dict)
 
+        # Verify total capacity samples were stored
+        total_capacity_samples = mock_scenario.results.get(
+            "test_step", "total_capacity_samples"
+        )
+        assert total_capacity_samples is not None
+        assert isinstance(total_capacity_samples, list)
+        assert len(total_capacity_samples) == 1  # Single iteration for no-failure case
+
         # Should have exactly one flow key
         assert len(envelopes) == 1
 
@@ -237,6 +245,14 @@ class TestCapacityEnvelopeAnalysis:
         envelopes = mock_scenario.results.get("test_step", "capacity_envelopes")
         assert envelopes is not None
         assert isinstance(envelopes, dict)
+
+        # Verify total capacity samples were stored
+        total_capacity_samples = mock_scenario.results.get(
+            "test_step", "total_capacity_samples"
+        )
+        assert total_capacity_samples is not None
+        assert isinstance(total_capacity_samples, list)
+        assert len(total_capacity_samples) == 3  # 3 iterations
 
         # Should have exactly one flow key
         assert len(envelopes) == 1
@@ -389,17 +405,23 @@ workflow:
             False,
             FlowPlacement.PROPORTIONAL,
             42,  # seed
+            False,  # is_baseline
         )
 
-        result = _worker(args)
-        assert isinstance(result, list)
-        assert len(result) >= 1
+        flow_results, total_capacity = _worker(args)
+        assert isinstance(flow_results, list)
+        assert isinstance(total_capacity, (int, float))
+        assert len(flow_results) >= 1
 
         # Check result format
-        src, dst, flow_val = result[0]
+        src, dst, flow_val = flow_results[0]
         assert isinstance(src, str)
         assert isinstance(dst, str)
         assert isinstance(flow_val, (int, float))
+
+        # Total capacity should be sum of individual flows
+        expected_total = sum(val for _, _, val in flow_results)
+        assert total_capacity == expected_total
 
     def test_worker_with_failures(self, simple_network, simple_failure_policy):
         """Test worker function with failures."""
@@ -412,17 +434,20 @@ workflow:
             False,
             FlowPlacement.PROPORTIONAL,
             42,  # seed
+            False,  # is_baseline
         )
 
-        result = _worker(args)
-        assert isinstance(result, list)
-        assert len(result) >= 1
+        flow_results, total_capacity = _worker(args)
+        assert isinstance(flow_results, list)
+        assert isinstance(total_capacity, (int, float))
+        assert len(flow_results) >= 1
 
     def test_run_single_iteration(self, simple_network):
         """Test single iteration helper function."""
         from collections import defaultdict
 
         samples = defaultdict(list)
+        total_capacity_samples = []
 
         _run_single_iteration(
             simple_network,
@@ -433,12 +458,18 @@ workflow:
             False,
             FlowPlacement.PROPORTIONAL,
             samples,
+            total_capacity_samples,
             42,  # seed
+            False,  # is_baseline
         )
 
         assert len(samples) >= 1
         for values in samples.values():
             assert len(values) == 1
+
+        # Check that total capacity was recorded
+        assert len(total_capacity_samples) == 1
+        assert isinstance(total_capacity_samples[0], (int, float))
 
 
 class TestIntegration:
@@ -568,9 +599,9 @@ workflow:
         mock_executor = MagicMock()
         mock_executor.__enter__.return_value = mock_executor
         mock_executor.map.return_value = [
-            [("A", "C", 5.0)],
-            [("A", "C", 4.0)],
-            [("A", "C", 6.0)],
+            ([("A", "C", 5.0)], 5.0),
+            ([("A", "C", 4.0)], 4.0),
+            ([("A", "C", 6.0)], 6.0),
         ]
         mock_executor_class.return_value = mock_executor
 
@@ -603,7 +634,80 @@ workflow:
             # Should not use ProcessPoolExecutor for single iteration
             mock_executor_class.assert_not_called()
 
+    def test_baseline_validation_error(self):
+        """Test that baseline=True requires iterations >= 2."""
+        with pytest.raises(ValueError, match="baseline=True requires iterations >= 2"):
+            CapacityEnvelopeAnalysis(
+                source_path="A",
+                sink_path="C",
+                baseline=True,
+                iterations=1,
+            )
 
-if __name__ == "__mp_main__":
-    # Guard for Windows multiprocessing
-    pytest.main([__file__])
+    def test_worker_baseline_iteration(self, simple_network, simple_failure_policy):
+        """Test worker function with baseline=True skips failures."""
+        args = (
+            simple_network,
+            simple_failure_policy,
+            "A",
+            "C",
+            "combine",
+            False,
+            FlowPlacement.PROPORTIONAL,
+            42,  # seed
+            True,  # is_baseline - should skip failures
+        )
+
+        flow_results, total_capacity = _worker(args)
+        assert isinstance(flow_results, list)
+        assert isinstance(total_capacity, (int, float))
+        assert len(flow_results) >= 1
+
+        # With baseline=True and a simple network, should get full capacity
+        # This should be the same as running without a failure policy
+        args_no_policy = (
+            simple_network,
+            None,
+            "A",
+            "C",
+            "combine",
+            False,
+            FlowPlacement.PROPORTIONAL,
+            42,  # seed
+            False,  # is_baseline
+        )
+
+        baseline_results, baseline_capacity = _worker(args)
+        no_policy_results, no_policy_capacity = _worker(args_no_policy)
+
+        # Results should be the same since baseline skips failures
+        assert baseline_capacity == no_policy_capacity
+
+    def test_baseline_mode_integration(self, mock_scenario):
+        """Test baseline mode in full integration."""
+        step = CapacityEnvelopeAnalysis(
+            source_path="A",
+            sink_path="C",
+            iterations=3,
+            baseline=True,  # First iteration should be baseline
+            name="test_step",
+        )
+
+        step.run(mock_scenario)
+
+        # Verify results were stored
+        envelopes = mock_scenario.results.get("test_step", "capacity_envelopes")
+        total_capacity_samples = mock_scenario.results.get(
+            "test_step", "total_capacity_samples"
+        )
+
+        assert envelopes is not None
+        assert total_capacity_samples is not None
+        assert len(total_capacity_samples) == 3  # 3 iterations total
+
+        # First value should be baseline (likely highest since no failures)
+        # This is somewhat network-dependent, but generally baseline should be >= other values
+        baseline_capacity = total_capacity_samples[0]
+        assert all(
+            baseline_capacity >= capacity for capacity in total_capacity_samples[1:]
+        )

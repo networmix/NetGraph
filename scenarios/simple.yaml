@@ -150,7 +150,8 @@ workflow:
   shortest_path: false
   flow_placement: "PROPORTIONAL"
   seed: 42
-  iterations: 500
+  iterations: 100
+  baseline: true           # Enable baseline mode
   failure_policy: "default"
 - step_type: NotebookExport
   name: "export_analysis"

@@ -180,6 +180,12 @@ class NotebookExport(WorkflowStep):
             capacity_cell = serializer.create_capacity_analysis_cell()
             nb.cells.append(capacity_cell)
 
+            # Add flow availability analysis if total flow samples exist
+            if self._has_flow_availability_data(results_dict):
+                # Create flow availability analysis cells (header + code)
+                flow_cells = serializer.create_flow_availability_cells()
+                nb.cells.extend(flow_cells)
+
         if self._has_flow_data(results_dict):
             flow_header = nbformat.v4.new_markdown_cell("## Flow Analysis")
             nb.cells.append(flow_header)
@@ -234,6 +240,18 @@ class NotebookExport(WorkflowStep):
             if isinstance(step_data, dict):
                 flow_keys = [k for k in step_data.keys() if k.startswith("max_flow:")]
                 if flow_keys:
+                    return True
+        return False
+
+    def _has_flow_availability_data(
+        self, results_dict: dict[str, dict[str, Any]]
+    ) -> bool:
+        """Check if results contain flow availability data (total_capacity_samples)."""
+        for _step_name, step_data in results_dict.items():
+            if isinstance(step_data, dict) and "total_capacity_samples" in step_data:
+                # Make sure it's not empty
+                samples = step_data["total_capacity_samples"]
+                if isinstance(samples, list) and len(samples) > 0:
                     return True
         return False
 

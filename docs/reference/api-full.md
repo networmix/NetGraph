@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 17, 2025 at 01:50 UTC
+**Generated from source code on:** June 19, 2025 at 00:16 UTC
 
 **Modules auto-discovered:** 42
 
@@ -1968,7 +1968,8 @@ Capacity envelope analysis workflow component.
 A workflow step that samples maximum capacity between node groups across random failures.
 
 Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
-to build statistical envelopes of network resilience.
+to build statistical envelopes of network resilience. Results include both individual
+flow capacity envelopes and total capacity samples per iteration.
 
 YAML Configuration:
     ```yaml
@@ -1983,8 +1984,13 @@ YAML Configuration:
         parallelism: 4                            # Number of parallel worker processes
         shortest_path: false                      # Use shortest paths only
         flow_placement: "PROPORTIONAL"            # Flow placement strategy
+        baseline: true                            # Optional: Run first iteration without failures
         seed: 42                                  # Optional: Seed for reproducible results
     ```
+
+Results stored in scenario.results:
+    - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
+    - `total_capacity_samples`: List of total capacity values per iteration
 
 Attributes:
     source_path: Regex pattern to select source node groups.
@@ -1995,6 +2001,7 @@ Attributes:
     parallelism: Number of parallel worker processes (default: 1).
     shortest_path: If True, use shortest paths only (default: False).
     flow_placement: Flow placement strategy (default: PROPORTIONAL).
+    baseline: If True, run first iteration without failures as baseline (default: False).
     seed: Optional seed for deterministic results (for debugging).
 
 **Attributes:**
@@ -2008,6 +2015,7 @@ Attributes:
 - `parallelism` (int) = 1
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement) = 1
+- `baseline` (bool) = False
 - `seed` (int | None)
 
 **Methods:**
@@ -2071,7 +2079,45 @@ Attributes:
 
 ## ngraph.workflow.notebook_analysis
 
-Notebook analysis components.
+Notebook analysis components for NetGraph workflow results.
+
+This module provides specialized analyzers for processing and visualizing network analysis
+results in Jupyter notebooks. Each component handles specific data types and provides
+both programmatic analysis and interactive display capabilities.
+
+Core Components:
+    NotebookAnalyzer: Abstract base class defining the analysis interface. All analyzers
+        implement analyze() for data processing and display_analysis() for notebook output.
+        Provides analyze_and_display() convenience method that chains analysis and display.
+
+    AnalysisContext: Immutable dataclass containing execution context (step name, results,
+        config) passed between analysis components for state management.
+
+Utility Components:
+    PackageManager: Handles runtime dependency verification and installation. Checks
+        for required packages (itables, matplotlib) using importlib, installs missing
+        packages via subprocess, and configures visualization environments (seaborn
+        styling, itables display options, matplotlib backends).
+
+    DataLoader: Provides robust JSON file loading with comprehensive error handling.
+        Validates file existence, JSON format correctness, and expected data structure.
+        Returns detailed status information including step counts and validation results.
+
+Data Analyzers:
+    CapacityMatrixAnalyzer: Processes capacity envelope data from network flow analysis.
+        Extracts flow path information (source->destination, bidirectional), parses
+        capacity values from various data structures, creates pivot tables for matrix
+        visualization, and calculates flow density statistics. Handles self-loop exclusion
+        and zero-flow inclusion for accurate network topology representation.
+
+    FlowAnalyzer: Processes maximum flow calculation results. Extracts flow paths and
+        values from workflow step data, computes flow statistics (min/max/avg/total),
+        and generates comparative visualizations across multiple analysis steps using
+        matplotlib bar charts.
+
+    SummaryAnalyzer: Aggregates results across all workflow steps. Categorizes steps
+        by analysis type (capacity envelopes, flow calculations, other), provides
+        high-level metrics for workflow completion status and data distribution.
 
 ### AnalysisContext
 
@@ -2095,6 +2141,10 @@ Analyzes capacity envelope data and creates matrices.
   - Analyze results and display them in notebook format.
 - `analyze_and_display_all_steps(self, results: Dict[str, Any]) -> None`
   - Analyze and display capacity matrices for all relevant steps.
+- `analyze_and_display_flow_availability(self, results: Dict[str, Any], step_name: str) -> None`
+  - Analyze and display flow availability distribution with CDF visualization.
+- `analyze_flow_availability(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze total flow samples to create flow availability distribution (CDF).
 - `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
   - Display capacity matrix analysis results.
 - `get_description(self) -> str`
@@ -2169,10 +2219,6 @@ Provides summary analysis of all results.
 - `get_description(self) -> str`
   - Get a description of what this analyzer does.
 
-### example_usage()
-
-Example of how the new approach works.
-
 ---
 
 ## ngraph.workflow.notebook_export
@@ -2235,6 +2281,8 @@ Converts Python classes into notebook cells.
   - Create data loading cell.
 - `create_flow_analysis_cell() -> nbformat.notebooknode.NotebookNode`
   - Create flow analysis cell.
+- `create_flow_availability_cells() -> List[nbformat.notebooknode.NotebookNode]`
+  - Create flow availability analysis cells (markdown header + code).
 - `create_setup_cell() -> nbformat.notebooknode.NotebookNode`
   - Create setup cell.
 - `create_summary_cell() -> nbformat.notebooknode.NotebookNode`

@@ -366,6 +366,135 @@ class TestCapacityMatrixAnalyzer:
             assert mock_analyze.call_count == 2
             assert mock_display.call_count == 2
 
+    def test_analyze_flow_availability_success(self):
+        """Test successful bandwidth availability analysis."""
+        results = {
+            "capacity_step": {"total_capacity_samples": [100.0, 90.0, 85.0, 80.0, 75.0]}
+        }
+
+        analyzer = CapacityMatrixAnalyzer()
+        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
+
+        assert result["status"] == "success"
+        assert result["step_name"] == "capacity_step"
+        assert result["maximum_flow"] == 100.0
+        assert result["total_samples"] == 5
+
+        # Check CDF structure - should be (relative_flow, cumulative_probability)
+        curve = result["flow_cdf"]
+        assert len(curve) == 5
+        assert curve[0] == (0.75, 0.2)  # 20% of samples are <= 0.75 relative flow
+        assert curve[-1] == (1.0, 1.0)  # 100% of samples are <= 1.0 relative flow
+
+        # Check statistics
+        stats = result["statistics"]
+        assert stats["has_data"] is True
+        assert stats["maximum_flow"] == 100.0
+        assert stats["minimum_flow"] == 75.0  # Updated field name
+        assert "flow_percentiles" in stats  # Updated field name
+
+        # Check visualization data
+        viz_data = result["visualization_data"]
+        assert viz_data["has_data"] is True
+        assert len(viz_data["cdf_data"]["flow_values"]) == 5
+
+    def test_analyze_flow_availability_no_step_name(self):
+        """Test bandwidth availability analysis without step name."""
+        analyzer = CapacityMatrixAnalyzer()
+        result = analyzer.analyze_flow_availability({})
+
+        assert result["status"] == "error"
+        assert "step_name required" in result["message"]
+
+    def test_analyze_flow_availability_no_data(self):
+        """Test bandwidth availability analysis with no data."""
+        results = {"capacity_step": {}}
+
+        analyzer = CapacityMatrixAnalyzer()
+        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
+
+        assert result["status"] == "no_data"
+        assert "No total flow samples" in result["message"]
+
+    def test_analyze_flow_availability_zero_capacity(self):
+        """Test bandwidth availability analysis with all zero capacity."""
+        results = {"capacity_step": {"total_capacity_samples": [0.0, 0.0, 0.0]}}
+
+        analyzer = CapacityMatrixAnalyzer()
+        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
+
+        assert result["status"] == "invalid_data"
+        assert "All flow samples are zero" in result["message"]
+
+    def test_analyze_flow_availability_single_sample(self):
+        """Test bandwidth availability analysis with single sample."""
+        results = {"capacity_step": {"total_capacity_samples": [50.0]}}
+
+        analyzer = CapacityMatrixAnalyzer()
+        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
+
+        assert result["status"] == "success"
+        assert result["maximum_flow"] == 50.0
+        assert result["total_samples"] == 1
+
+        # Single sample should result in 100% CDF at that relative value
+        curve = result["flow_cdf"]
+        assert len(curve) == 1
+        assert curve[0] == (1.0, 1.0)  # 100% of samples are <= 1.0 relative flow
+
+    def test_bandwidth_availability_statistics_calculation(self):
+        """Test detailed statistics calculation for bandwidth availability."""
+        # Use a realistic sample set
+        samples = [100.0, 95.0, 90.0, 85.0, 80.0, 75.0, 70.0, 65.0, 60.0, 50.0]
+        baseline = 100.0
+
+        analyzer = CapacityMatrixAnalyzer()
+        stats = analyzer._calculate_flow_statistics(samples, baseline)
+
+        assert stats["has_data"] is True
+        assert stats["maximum_flow"] == 100.0
+        assert stats["minimum_flow"] == 50.0  # Updated to flow terminology
+        assert stats["total_samples"] == 10
+
+        # Check that we have basic statistics
+        assert "mean_flow" in stats
+        assert "flow_std" in stats  # Updated field name
+
+    def test_bandwidth_availability_visualization_data(self):
+        """Test visualization data preparation for bandwidth availability."""
+        # Create CDF data and availability curve data
+        flow_cdf = [(50.0, 0.1), (60.0, 0.2), (70.0, 0.5), (80.0, 0.8), (100.0, 1.0)]
+        availability_curve = [
+            (0.9, 100.0),
+            (0.8, 80.0),
+            (0.5, 70.0),
+            (0.2, 60.0),
+            (0.1, 50.0),
+        ]
+        maximum_flow = 100.0
+
+        analyzer = CapacityMatrixAnalyzer()
+        viz_data = analyzer._prepare_flow_cdf_visualization_data(
+            flow_cdf, availability_curve, maximum_flow
+        )
+
+        assert viz_data["has_data"] is True
+        assert len(viz_data["cdf_data"]["flow_values"]) == 5
+        assert len(viz_data["cdf_data"]["cumulative_probabilities"]) == 5
+
+        # Check that we have expected data structure
+        assert "percentile_data" in viz_data
+        assert "reliability_thresholds" in viz_data
+
+        # Check percentile data structure
+        percentile_data = viz_data["percentile_data"]
+        assert "percentiles" in percentile_data
+        assert "flow_at_percentiles" in percentile_data
+        assert len(percentile_data["percentiles"]) == 5
+        assert len(percentile_data["flow_at_percentiles"]) == 5
+
+    # ...existing code...
+
 
 class TestFlowAnalyzer:
     """Test FlowAnalyzer."""
@@ -923,64 +1052,6 @@ class TestNotebookAnalyzer:
             mock_display.assert_called_once_with(
                 {"test": "result"}, step_name="test_step"
             )
-
-
-class TestExampleUsage:
-    """Test the example usage function."""
-
-    @patch("builtins.print")
-    def test_example_usage_success(self, mock_print: MagicMock) -> None:
-        """Test example_usage function with successful execution."""
-        from ngraph.workflow.notebook_analysis import example_usage
-
-        # Mock the DataLoader and analyzers
-        with (
-            patch("ngraph.workflow.notebook_analysis.DataLoader") as mock_loader_class,
-            patch(
-                "ngraph.workflow.notebook_analysis.CapacityMatrixAnalyzer"
-            ) as mock_capacity_class,
-            patch("ngraph.workflow.notebook_analysis.FlowAnalyzer") as mock_flow_class,
-        ):
-            # Setup mocks
-            mock_loader = mock_loader_class.return_value
-            mock_loader.load_results.return_value = {
-                "success": True,
-                "results": {"step1": {"capacity_envelopes": {"A->B": 100}}},
-            }
-
-            mock_capacity_analyzer = mock_capacity_class.return_value
-            mock_capacity_analyzer.analyze.return_value = {
-                "status": "success",
-                "statistics": {"total_connections": 1},
-            }
-
-            mock_flow_analyzer = mock_flow_class.return_value
-            mock_flow_analyzer.analyze.return_value = {
-                "status": "success",
-                "statistics": {"total_flows": 1},
-            }
-
-            # Run the example
-            example_usage()
-
-            # Verify it ran without errors
-            mock_loader.load_results.assert_called_once()
-
-    @patch("builtins.print")
-    def test_example_usage_load_failure(self, mock_print: MagicMock) -> None:
-        """Test example_usage function with load failure."""
-        from ngraph.workflow.notebook_analysis import example_usage
-
-        with patch("ngraph.workflow.notebook_analysis.DataLoader") as mock_loader_class:
-            mock_loader = mock_loader_class.return_value
-            mock_loader.load_results.return_value = {
-                "success": False,
-                "message": "File not found",
-            }
-
-            example_usage()
-
-            mock_print.assert_any_call("❌ File not found")
 
 
 # Add tests for additional edge cases

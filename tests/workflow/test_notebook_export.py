@@ -287,3 +287,73 @@ def test_notebook_export_serialization_error_handling(tmp_path: Path) -> None:
     assert output_file.exists()
     nb = nbformat.read(output_file, as_version=4)
     assert len(nb.cells) > 0
+
+
+def test_flow_availability_detection() -> None:
+    """Test detection of flow availability data."""
+    export_step = NotebookExport()
+
+    # Results with bandwidth availability data
+    results_with_bandwidth = {
+        "capacity_analysis": {
+            "capacity_envelopes": {"flow1": {"percentiles": [10, 20, 30]}},
+            "total_capacity_samples": [100.0, 90.0, 80.0],
+        }
+    }
+
+    # Results without bandwidth availability data
+    results_without_bandwidth = {
+        "capacity_analysis": {
+            "capacity_envelopes": {"flow1": {"percentiles": [10, 20, 30]}}
+        }
+    }
+
+    # Results with empty bandwidth availability data
+    results_empty_bandwidth = {
+        "capacity_analysis": {
+            "capacity_envelopes": {"flow1": {"percentiles": [10, 20, 30]}},
+            "total_capacity_samples": [],
+        }
+    }
+
+    # Test detection
+    assert export_step._has_flow_availability_data(results_with_bandwidth) is True
+    assert export_step._has_flow_availability_data(results_without_bandwidth) is False
+    assert export_step._has_flow_availability_data(results_empty_bandwidth) is False
+
+
+def test_notebook_includes_flow_availability(tmp_path: Path) -> None:
+    """Test that notebook includes flow availability analysis when data is present."""
+    scenario = MagicMock(spec=Scenario)
+    scenario.results = Results()
+    scenario.results.put(
+        "capacity_envelope",
+        "capacity_envelopes",
+        {"dc1->edge1": {"percentiles": [80, 85, 90, 95, 100]}},
+    )
+    scenario.results.put(
+        "capacity_envelope",
+        "total_capacity_samples",
+        [100.0, 95.0, 90.0, 85.0, 80.0, 75.0],
+    )
+
+    export_step = NotebookExport(
+        name="test_export",
+        notebook_path=str(tmp_path / "test.ipynb"),
+        json_path=str(tmp_path / "test.json"),
+    )
+
+    # Run the export
+    export_step.run(scenario)
+
+    # Check that notebook was created
+    notebook_path = tmp_path / "test.ipynb"
+    assert notebook_path.exists()
+
+    # Read and verify notebook content
+    with open(notebook_path, "r") as f:
+        nb_content = f.read()
+
+    # Should contain flow availability analysis
+    assert "Flow Availability Analysis" in nb_content
+    assert "analyze_and_display_flow_availability" in nb_content

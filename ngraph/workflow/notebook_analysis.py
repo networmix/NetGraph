@@ -1,4 +1,43 @@
-"""Notebook analysis components."""
+"""Notebook analysis components for NetGraph workflow results.
+
+This module provides specialized analyzers for processing and visualizing network analysis
+results in Jupyter notebooks. Each component handles specific data types and provides
+both programmatic analysis and interactive display capabilities.
+
+Core Components:
+    NotebookAnalyzer: Abstract base class defining the analysis interface. All analyzers
+        implement analyze() for data processing and display_analysis() for notebook output.
+        Provides analyze_and_display() convenience method that chains analysis and display.
+
+    AnalysisContext: Immutable dataclass containing execution context (step name, results,
+        config) passed between analysis components for state management.
+
+Utility Components:
+    PackageManager: Handles runtime dependency verification and installation. Checks
+        for required packages (itables, matplotlib) using importlib, installs missing
+        packages via subprocess, and configures visualization environments (seaborn
+        styling, itables display options, matplotlib backends).
+
+    DataLoader: Provides robust JSON file loading with comprehensive error handling.
+        Validates file existence, JSON format correctness, and expected data structure.
+        Returns detailed status information including step counts and validation results.
+
+Data Analyzers:
+    CapacityMatrixAnalyzer: Processes capacity envelope data from network flow analysis.
+        Extracts flow path information (source->destination, bidirectional), parses
+        capacity values from various data structures, creates pivot tables for matrix
+        visualization, and calculates flow density statistics. Handles self-loop exclusion
+        and zero-flow inclusion for accurate network topology representation.
+
+    FlowAnalyzer: Processes maximum flow calculation results. Extracts flow paths and
+        values from workflow step data, computes flow statistics (min/max/avg/total),
+        and generates comparative visualizations across multiple analysis steps using
+        matplotlib bar charts.
+
+    SummaryAnalyzer: Aggregates results across all workflow steps. Categorizes steps
+        by analysis type (capacity envelopes, flow calculations, other), provides
+        high-level metrics for workflow completion status and data distribution.
+"""
 
 import json
 from abc import ABC, abstractmethod
@@ -331,6 +370,423 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         if not found_data:
             print("No capacity envelope data found in results")
 
+    def analyze_flow_availability(
+        self, results: Dict[str, Any], **kwargs
+    ) -> Dict[str, Any]:
+        """Analyze total flow samples to create flow availability distribution (CDF).
+
+        This method creates a cumulative distribution function (CDF) showing the
+        probability that network flow performance is at or below a given level.
+        The analysis processes total_flow_samples from Monte Carlo simulations
+        to characterize network performance under failure scenarios.
+
+        Args:
+            results: Analysis results containing total_capacity_samples
+            **kwargs: Additional parameters including step_name
+
+        Returns:
+            Dictionary containing:
+            - flow_cdf: List of (flow_value, cumulative_probability) tuples
+            - statistics: Summary statistics including percentiles
+            - maximum_flow: Peak flow value observed (typically baseline)
+            - status: Analysis status
+        """
+        step_name = kwargs.get("step_name")
+        if not step_name:
+            return {"status": "error", "message": "step_name required"}
+
+        step_data = results.get(step_name, {})
+        total_flow_samples = step_data.get("total_capacity_samples", [])
+
+        if not total_flow_samples:
+            return {
+                "status": "no_data",
+                "message": f"No total flow samples for {step_name}",
+            }
+
+        try:
+            # Sort samples in ascending order for CDF construction
+            sorted_samples = sorted(total_flow_samples)
+            n_samples = len(sorted_samples)
+
+            # Get maximum flow for normalization
+            maximum_flow = max(sorted_samples)
+
+            if maximum_flow == 0:
+                return {
+                    "status": "invalid_data",
+                    "message": "All flow samples are zero",
+                }
+
+            # Create CDF: (relative_flow_fraction, cumulative_probability)
+            flow_cdf = []
+            for i, flow in enumerate(sorted_samples):
+                # Cumulative probability that flow ≤ current value
+                cumulative_prob = (i + 1) / n_samples
+                relative_flow = flow / maximum_flow  # As fraction 0-1
+                flow_cdf.append((relative_flow, cumulative_prob))
+
+            # Create complementary CDF for availability analysis
+            # (relative_flow_fraction, probability_of_achieving_at_least_this_flow)
+            availability_curve = []
+            for relative_flow, cum_prob in flow_cdf:
+                availability_prob = 1 - cum_prob  # P(Flow ≥ flow) as fraction
+                availability_curve.append((relative_flow, availability_prob))
+
+            # Calculate key statistics
+            statistics = self._calculate_flow_statistics(
+                total_flow_samples, maximum_flow
+            )
+
+            # Prepare data for visualization
+            viz_data = self._prepare_flow_cdf_visualization_data(
+                flow_cdf, availability_curve, maximum_flow
+            )
+
+            return {
+                "status": "success",
+                "step_name": step_name,
+                "flow_cdf": flow_cdf,
+                "availability_curve": availability_curve,
+                "statistics": statistics,
+                "maximum_flow": maximum_flow,
+                "total_samples": n_samples,
+                "visualization_data": viz_data,
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error analyzing flow availability: {str(e)}",
+                "step_name": step_name,
+            }
+
+    def _calculate_flow_statistics(
+        self, samples: List[float], maximum_flow: float
+    ) -> Dict[str, Any]:
+        """Calculate statistics for flow availability analysis."""
+        if not samples or maximum_flow == 0:
+            return {"has_data": False}
+
+        # Key percentiles for flow distribution
+        percentiles = [5, 10, 25, 50, 75, 90, 95, 99]
+        flow_percentiles = {}
+
+        sorted_samples = sorted(samples)
+        n_samples = len(samples)
+
+        for p in percentiles:
+            # What flow value is exceeded (100-p)% of the time?
+            idx = int((p / 100) * n_samples)
+            if idx >= n_samples:
+                idx = n_samples - 1
+            elif idx < 0:
+                idx = 0
+
+            flow_at_percentile = sorted_samples[idx]
+            relative_flow = (flow_at_percentile / maximum_flow) * 100
+            flow_percentiles[f"p{p}"] = {
+                "absolute": flow_at_percentile,
+                "relative": relative_flow,
+            }
+
+        # Calculate additional statistics
+        mean_flow = sum(samples) / len(samples)
+        std_flow = pd.Series(samples).std()
+
+        return {
+            "has_data": True,
+            "maximum_flow": maximum_flow,
+            "minimum_flow": min(samples),
+            "mean_flow": mean_flow,
+            "median_flow": flow_percentiles["p50"]["absolute"],
+            "flow_range": maximum_flow - min(samples),
+            "flow_std": std_flow,
+            "relative_mean": (mean_flow / maximum_flow) * 100,
+            "relative_min": (min(samples) / maximum_flow) * 100,
+            "relative_std": (std_flow / maximum_flow) * 100,
+            "flow_percentiles": flow_percentiles,
+            "total_samples": len(samples),
+            "coefficient_of_variation": (std_flow / mean_flow) * 100
+            if mean_flow > 0
+            else 0,
+        }
+
+    def _prepare_flow_cdf_visualization_data(
+        self,
+        flow_cdf: List[tuple[float, float]],
+        availability_curve: List[tuple[float, float]],
+        maximum_flow: float,
+    ) -> Dict[str, Any]:
+        """Prepare data structure for flow CDF and percentile plot visualization."""
+        if not flow_cdf or not availability_curve:
+            return {"has_data": False}
+
+        # Extract data for CDF plotting
+        flow_values = [point[0] for point in flow_cdf]
+        cumulative_probs = [point[1] for point in flow_cdf]
+
+        # Create percentile plot data (percentile → flow value at that percentile)
+        # Lower percentiles show higher flows (flows exceeded most of the time)
+        percentiles = []
+        flow_at_percentiles = []
+
+        for rel_flow, avail_prob in availability_curve:
+            # avail_prob = P(Flow ≥ rel_flow) = reliability/availability
+            # percentile = (1 - avail_prob) = P(Flow < rel_flow)
+            # But for network reliability, we want the exceedance percentile
+            # So percentile = avail_prob (probability this flow is exceeded)
+            percentile = avail_prob  # As fraction 0-1
+            percentiles.append(percentile)
+            flow_at_percentiles.append(rel_flow)
+
+        # Create reliability thresholds for analysis
+        reliability_thresholds = [99, 95, 90, 80, 70, 50]  # Reliability levels (%)
+        threshold_flows = {}
+
+        for threshold in reliability_thresholds:
+            # Find flow value that is exceeded at this reliability level
+            target_availability = threshold / 100  # Convert percentage to fraction
+            flow_at_threshold = 0
+
+            for rel_flow, avail_prob in availability_curve:
+                if avail_prob >= target_availability:  # avail_prob is now a fraction
+                    flow_at_threshold = rel_flow
+                    break
+
+            threshold_flows[f"{threshold}%"] = flow_at_threshold
+
+        # Statistical measures for academic analysis
+        # Gini coefficient for inequality measurement
+        sorted_flows = sorted(flow_values)
+        n = len(sorted_flows)
+        cumsum = sum((i + 1) * flow for i, flow in enumerate(sorted_flows))
+        total_sum = sum(sorted_flows)
+        gini = (2 * cumsum) / (n * total_sum) - (n + 1) / n if total_sum > 0 else 0
+
+        return {
+            "has_data": True,
+            "cdf_data": {
+                "flow_values": flow_values,
+                "cumulative_probabilities": cumulative_probs,
+            },
+            "percentile_data": {
+                "percentiles": percentiles,
+                "flow_at_percentiles": flow_at_percentiles,
+            },
+            "reliability_thresholds": threshold_flows,
+            "distribution_metrics": {
+                "gini_coefficient": gini,
+                "flow_range_ratio": max(flow_values)
+                - min(flow_values),  # Already relative
+                "quartile_coefficient": self._calculate_quartile_coefficient(
+                    sorted_flows
+                ),
+            },
+        }
+
+    def _calculate_quartile_coefficient(self, sorted_values: List[float]) -> float:
+        """Calculate quartile coefficient of dispersion."""
+        if len(sorted_values) < 4:
+            return 0.0
+
+        n = len(sorted_values)
+        q1_idx = n // 4
+        q3_idx = 3 * n // 4
+
+        q1 = sorted_values[q1_idx]
+        q3 = sorted_values[q3_idx]
+
+        return (q3 - q1) / (q3 + q1) if (q3 + q1) > 0 else 0.0
+
+    def analyze_and_display_flow_availability(
+        self, results: Dict[str, Any], step_name: str
+    ) -> None:
+        """Analyze and display flow availability distribution with CDF visualization."""
+        print(f"📊 Flow Availability Distribution Analysis: {step_name}")
+        print("=" * 70)
+
+        result = self.analyze_flow_availability(results, step_name=step_name)
+
+        if result["status"] != "success":
+            print(f"❌ Analysis failed: {result.get('message', 'Unknown error')}")
+            return
+
+        # Extract results
+        stats = result["statistics"]
+        viz_data = result["visualization_data"]
+        maximum_flow = result["maximum_flow"]
+        total_samples = result["total_samples"]
+
+        # Display summary statistics
+        print(f"🔢 Sample Statistics (n={total_samples}):")
+        print(f"   Maximum Flow: {maximum_flow:.2f}")
+        print(
+            f"   Mean Flow:    {stats['mean_flow']:.2f} ({stats['relative_mean']:.1f}%)"
+        )
+        print(
+            f"   Median Flow:  {stats['median_flow']:.2f} ({stats['flow_percentiles']['p50']['relative']:.1f}%)"
+        )
+        print(
+            f"   Std Dev:      {stats['flow_std']:.2f} ({stats['relative_std']:.1f}%)"
+        )
+        print(f"   CV:           {stats['coefficient_of_variation']:.1f}%")
+        print()
+
+        # Display key percentiles
+        print("📈 Flow Distribution Percentiles:")
+        key_percentiles = ["p5", "p10", "p25", "p50", "p75", "p90", "p95", "p99"]
+        for p_name in key_percentiles:
+            if p_name in stats["flow_percentiles"]:
+                p_data = stats["flow_percentiles"][p_name]
+                percentile_num = p_name[1:]
+                print(
+                    f"   {percentile_num:>2}th percentile: {p_data['absolute']:8.2f} ({p_data['relative']:5.1f}%)"
+                )
+        print()
+
+        # Display reliability analysis
+        print("🎯 Network Reliability Analysis:")
+        thresholds = viz_data["reliability_thresholds"]
+        for reliability in ["99%", "95%", "90%", "80%"]:
+            if reliability in thresholds:
+                flow_fraction = thresholds[reliability]
+                flow_pct = (
+                    flow_fraction * 100
+                )  # Convert fraction to percentage for display
+                print(
+                    f"   {reliability} reliability: ≥{flow_pct:5.1f}% of maximum flow"
+                )
+        print()
+
+        # Display distribution characteristics
+        print("📐 Distribution Characteristics:")
+        dist_metrics = viz_data["distribution_metrics"]
+        print(f"   Gini Coefficient:     {dist_metrics['gini_coefficient']:.3f}")
+        print(f"   Quartile Coefficient: {dist_metrics['quartile_coefficient']:.3f}")
+        print(f"   Range Ratio:          {dist_metrics['flow_range_ratio']:.3f}")
+        print()
+
+        # Create CDF visualization
+        self._display_flow_cdf_plot(result)
+
+        # Academic interpretation
+        self._display_flow_distribution_interpretation(stats, viz_data)
+
+    def _display_flow_cdf_plot(self, analysis_result: Dict[str, Any]) -> None:
+        """Display flow CDF and percentile plots using matplotlib."""
+        try:
+            import matplotlib.pyplot as plt
+
+            viz_data = analysis_result["visualization_data"]
+            cdf_data = viz_data["cdf_data"]
+            percentile_data = viz_data["percentile_data"]
+
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+            # Plot CDF
+            ax1.plot(
+                cdf_data["flow_values"],
+                cdf_data["cumulative_probabilities"],
+                "b-",
+                linewidth=2,
+                label="Empirical CDF",
+            )
+            ax1.set_xlabel("Relative Flow")
+            ax1.set_ylabel("Cumulative Probability")
+            ax1.set_title("Flow Distribution (CDF)")
+            ax1.grid(True, alpha=0.3)
+            ax1.legend()
+
+            # Plot percentile curve (percentile → flow at that percentile)
+            ax2.plot(
+                percentile_data["percentiles"],
+                percentile_data["flow_at_percentiles"],
+                "r-",
+                linewidth=2,
+                label="Reliability Curve",
+            )
+            ax2.set_xlabel("Reliability Level")
+            ax2.set_ylabel("Relative Flow")
+            ax2.set_title("Flow at Reliability Levels")
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+
+            plt.tight_layout()
+            plt.show()
+
+        except ImportError:
+            print(
+                "📊 Visualization requires matplotlib. Install with: pip install matplotlib"
+            )
+        except Exception as e:
+            print(f"⚠️  Visualization error: {e}")
+
+    def _display_flow_distribution_interpretation(
+        self, stats: Dict[str, Any], viz_data: Dict[str, Any]
+    ) -> None:
+        """Provide academic interpretation of flow distribution characteristics."""
+        print("🎓 Statistical Interpretation:")
+
+        # Coefficient of variation analysis
+        cv = stats["coefficient_of_variation"]
+        if cv < 10:
+            variability = "low variability"
+        elif cv < 25:
+            variability = "moderate variability"
+        elif cv < 50:
+            variability = "high variability"
+        else:
+            variability = "very high variability"
+
+        print(f"   • Flow distribution exhibits {variability} (CV = {cv:.1f}%)")
+
+        # Gini coefficient analysis
+        gini = viz_data["distribution_metrics"]["gini_coefficient"]
+        if gini < 0.2:
+            inequality = "relatively uniform"
+        elif gini < 0.4:
+            inequality = "moderate inequality"
+        elif gini < 0.6:
+            inequality = "substantial inequality"
+        else:
+            inequality = "high inequality"
+
+        print(f"   • Performance distribution is {inequality} (Gini = {gini:.3f})")
+
+        # Reliability assessment
+        p95_rel = stats["flow_percentiles"]["p95"]["relative"]
+        p5_rel = stats["flow_percentiles"]["p5"]["relative"]
+        reliability_range = p95_rel - p5_rel
+
+        if reliability_range < 10:
+            reliability = "highly reliable"
+        elif reliability_range < 25:
+            reliability = "moderately reliable"
+        elif reliability_range < 50:
+            reliability = "variable performance"
+        else:
+            reliability = "unreliable performance"
+
+        print(
+            f"   • Network demonstrates {reliability} (90% range: {reliability_range:.1f}%)"
+        )
+
+        # Tail risk analysis
+        p5_absolute = stats["flow_percentiles"]["p5"]["relative"]
+        if p5_absolute < 25:
+            tail_risk = "significant tail risk"
+        elif p5_absolute < 50:
+            tail_risk = "moderate tail risk"
+        elif p5_absolute < 75:
+            tail_risk = "limited tail risk"
+        else:
+            tail_risk = "minimal tail risk"
+
+        print(
+            f"   • Analysis indicates {tail_risk} (5th percentile at {p5_absolute:.1f}%)"
+        )
+
 
 class FlowAnalyzer(NotebookAnalyzer):
     """Analyzes maximum flow results."""
@@ -634,34 +1090,3 @@ class SummaryAnalyzer(NotebookAnalyzer):
         """Analyze and display summary."""
         analysis = self.analyze(results)
         self.display_analysis(analysis)
-
-
-# Example of how to use these classes:
-def example_usage():
-    """Example of how the new approach works."""
-
-    # Load data (this is actual Python code, not a string template!)
-    loader = DataLoader()
-    load_result = loader.load_results("results.json")
-
-    if load_result["success"]:
-        results = load_result["results"]
-
-        # Analyze capacity matrices
-        capacity_analyzer = CapacityMatrixAnalyzer()
-        for step_name in results.keys():
-            analysis = capacity_analyzer.analyze(results, step_name=step_name)
-
-            if analysis["status"] == "success":
-                print(f"✅ Capacity analysis for {step_name}: {analysis['statistics']}")
-            else:
-                print(f"❌ {analysis['message']}")
-
-        # Analyze flows
-        flow_analyzer = FlowAnalyzer()
-        flow_analysis = flow_analyzer.analyze(results)
-
-        if flow_analysis["status"] == "success":
-            print(f"✅ Flow analysis: {flow_analysis['statistics']}")
-    else:
-        print(f"❌ {load_result['message']}")
