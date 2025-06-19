@@ -19,7 +19,7 @@ class NotebookCodeSerializer:
     def create_setup_cell() -> nbformat.NotebookNode:
         """Create setup cell."""
         setup_code = """# Setup analysis environment
-from ngraph.workflow.notebook_analysis import (
+from ngraph.workflow.analysis import (
     CapacityMatrixAnalyzer,
     FlowAnalyzer,
     SummaryAnalyzer,

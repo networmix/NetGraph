@@ -1,6 +1,6 @@
 import pytest
 
-from ngraph.transform.base import (
+from ngraph.workflow.transform.base import (
     TRANSFORM_REGISTRY,
     NetworkTransform,
     register_transform,
@@ -14,7 +14,7 @@ def test_registry_contains_transforms():
 
 def test_create_known_transform():
     transform = NetworkTransform.create("EnableNodes", path="dummy", count=1)
-    from ngraph.transform.enable_nodes import EnableNodesTransform
+    from ngraph.workflow.transform.enable_nodes import EnableNodesTransform
 
     assert isinstance(transform, EnableNodesTransform)
 

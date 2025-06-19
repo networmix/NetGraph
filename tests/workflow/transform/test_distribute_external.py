@@ -2,7 +2,7 @@ import pytest
 
 from ngraph.network import Network, Node
 from ngraph.scenario import Scenario
-from ngraph.transform.distribute_external import (
+from ngraph.workflow.transform.distribute_external import (
     DistributeExternalConnectivity,
     _StripeChooser,
 )

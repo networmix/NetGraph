@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
-from ngraph.workflow.notebook_analysis import (
+from ngraph.workflow.analysis import (
     AnalysisContext,
     CapacityMatrixAnalyzer,
     DataLoader,
@@ -298,7 +298,7 @@ class TestCapacityMatrixAnalyzer:
         mock_print.assert_any_call("✅ Analyzing capacity matrix for test_step")
         mock_print.assert_any_call("No capacity data available")
 
-    @patch("ngraph.workflow.notebook_analysis.show")
+    @patch("ngraph.workflow.analysis.show")
     @patch("builtins.print")
     def test_display_analysis_success(
         self, mock_print: MagicMock, mock_show: MagicMock
@@ -610,7 +610,7 @@ class TestFlowAnalyzer:
         self.analyzer.display_analysis(analysis)
         mock_print.assert_called_with("❌ Test error")
 
-    @patch("ngraph.workflow.notebook_analysis.show")
+    @patch("ngraph.workflow.analysis.show")
     @patch("builtins.print")
     def test_display_analysis_success(
         self, mock_print: MagicMock, mock_show: MagicMock
@@ -646,7 +646,7 @@ class TestFlowAnalyzer:
 
     @patch("matplotlib.pyplot.show")
     @patch("matplotlib.pyplot.tight_layout")
-    @patch("ngraph.workflow.notebook_analysis.show")
+    @patch("ngraph.workflow.analysis.show")
     @patch("builtins.print")
     def test_display_analysis_with_visualization(
         self,
@@ -771,8 +771,8 @@ class TestPackageManager:
             assert "error" in result
 
     @patch("warnings.filterwarnings")
-    @patch("ngraph.workflow.notebook_analysis.plt.style.use")
-    @patch("ngraph.workflow.notebook_analysis.itables_opt")
+    @patch("ngraph.workflow.analysis.plt.style.use")
+    @patch("ngraph.workflow.analysis.itables_opt")
     def test_setup_environment_success(
         self,
         mock_itables_opt: MagicMock,
@@ -803,7 +803,7 @@ class TestPackageManager:
             assert result["message"] == "Installation failed"
 
     @patch("warnings.filterwarnings")
-    @patch("ngraph.workflow.notebook_analysis.plt.style.use")
+    @patch("ngraph.workflow.analysis.plt.style.use")
     def test_setup_environment_exception(
         self, mock_plt_style: MagicMock, mock_warnings: MagicMock
     ) -> None:
@@ -1165,7 +1165,7 @@ class TestExceptionHandling:
 
     @patch("matplotlib.pyplot.show")
     @patch("matplotlib.pyplot.tight_layout")
-    @patch("ngraph.workflow.notebook_analysis.show")
+    @patch("ngraph.workflow.analysis.show")
     @patch("builtins.print")
     def test_flow_analyzer_matplotlib_scenario(
         self,

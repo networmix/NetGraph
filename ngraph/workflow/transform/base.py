@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Dict, Self, Type
+from typing import TYPE_CHECKING, Any, Dict, Self, Type
 
-from ngraph.scenario import Scenario
+if TYPE_CHECKING:
+    from ngraph.scenario import Scenario
+
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 TRANSFORM_REGISTRY: Dict[str, Type["NetworkTransform"]] = {}
@@ -35,7 +37,7 @@ def register_transform(name: str) -> Any:
                 super().__init__(name=name)
                 self._transform = cls(**kwargs)
 
-            def run(self, scenario: Scenario) -> None:  # noqa: D401
+            def run(self, scenario: "Scenario") -> None:  # noqa: D401
                 self._transform.apply(scenario)
 
         return cls
@@ -67,7 +69,7 @@ class NetworkTransform(abc.ABC):
     label: str = ""
 
     @abc.abstractmethod
-    def apply(self, scenario: Scenario) -> None:
+    def apply(self, scenario: "Scenario") -> None:
         """Modify *scenario.network* in-place."""
         ...
 

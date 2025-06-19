@@ -2,7 +2,7 @@ import random
 
 from ngraph.network import Network, Node
 from ngraph.scenario import Scenario
-from ngraph.transform.enable_nodes import EnableNodesTransform
+from ngraph.workflow.transform.enable_nodes import EnableNodesTransform
 
 
 def make_scenario(nodes):

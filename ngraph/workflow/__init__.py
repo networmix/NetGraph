@@ -1,5 +1,6 @@
 """Workflow components for NetGraph analysis pipelines."""
 
+from . import transform
 from .base import WorkflowStep, register_workflow_step
 from .build_graph import BuildGraph
 from .capacity_envelope_analysis import CapacityEnvelopeAnalysis
@@ -13,4 +14,5 @@ __all__ = [
     "CapacityEnvelopeAnalysis",
     "CapacityProbe",
     "NotebookExport",
+    "transform",
 ]

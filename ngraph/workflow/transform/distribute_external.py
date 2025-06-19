@@ -1,11 +1,13 @@
 """Network transformation for distributing external connectivity."""
 
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import TYPE_CHECKING, List, Sequence
+
+if TYPE_CHECKING:
+    from ngraph.scenario import Scenario
 
 from ngraph.network import Link, Network, Node
-from ngraph.scenario import Scenario
-from ngraph.transform.base import NetworkTransform, register_transform
+from ngraph.workflow.transform.base import NetworkTransform, register_transform
 
 
 @dataclass
@@ -73,7 +75,7 @@ class DistributeExternalConnectivity(NetworkTransform):
         self.chooser = _StripeChooser(width=stripe_width)
         self.label = f"Distribute {len(self.remotes)} remotes"
 
-    def apply(self, scenario: Scenario) -> None:
+    def apply(self, scenario: "Scenario") -> None:
         net: Network = scenario.network
 
         attachments = [

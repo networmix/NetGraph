@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 19, 2025 at 00:16 UTC
+**Generated from source code on:** June 19, 2025 at 02:05 UTC
 
-**Modules auto-discovered:** 42
+**Modules auto-discovered:** 47
 
 ---
 
@@ -2077,150 +2077,6 @@ Attributes:
 
 ---
 
-## ngraph.workflow.notebook_analysis
-
-Notebook analysis components for NetGraph workflow results.
-
-This module provides specialized analyzers for processing and visualizing network analysis
-results in Jupyter notebooks. Each component handles specific data types and provides
-both programmatic analysis and interactive display capabilities.
-
-Core Components:
-    NotebookAnalyzer: Abstract base class defining the analysis interface. All analyzers
-        implement analyze() for data processing and display_analysis() for notebook output.
-        Provides analyze_and_display() convenience method that chains analysis and display.
-
-    AnalysisContext: Immutable dataclass containing execution context (step name, results,
-        config) passed between analysis components for state management.
-
-Utility Components:
-    PackageManager: Handles runtime dependency verification and installation. Checks
-        for required packages (itables, matplotlib) using importlib, installs missing
-        packages via subprocess, and configures visualization environments (seaborn
-        styling, itables display options, matplotlib backends).
-
-    DataLoader: Provides robust JSON file loading with comprehensive error handling.
-        Validates file existence, JSON format correctness, and expected data structure.
-        Returns detailed status information including step counts and validation results.
-
-Data Analyzers:
-    CapacityMatrixAnalyzer: Processes capacity envelope data from network flow analysis.
-        Extracts flow path information (source->destination, bidirectional), parses
-        capacity values from various data structures, creates pivot tables for matrix
-        visualization, and calculates flow density statistics. Handles self-loop exclusion
-        and zero-flow inclusion for accurate network topology representation.
-
-    FlowAnalyzer: Processes maximum flow calculation results. Extracts flow paths and
-        values from workflow step data, computes flow statistics (min/max/avg/total),
-        and generates comparative visualizations across multiple analysis steps using
-        matplotlib bar charts.
-
-    SummaryAnalyzer: Aggregates results across all workflow steps. Categorizes steps
-        by analysis type (capacity envelopes, flow calculations, other), provides
-        high-level metrics for workflow completion status and data distribution.
-
-### AnalysisContext
-
-Context information for analysis execution.
-
-**Attributes:**
-
-- `step_name` (str)
-- `results` (Dict)
-- `config` (Dict)
-
-### CapacityMatrixAnalyzer
-
-Analyzes capacity envelope data and creates matrices.
-
-**Methods:**
-
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze capacity envelopes and create matrix visualization.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_and_display_all_steps(self, results: Dict[str, Any]) -> None`
-  - Analyze and display capacity matrices for all relevant steps.
-- `analyze_and_display_flow_availability(self, results: Dict[str, Any], step_name: str) -> None`
-  - Analyze and display flow availability distribution with CDF visualization.
-- `analyze_flow_availability(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze total flow samples to create flow availability distribution (CDF).
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display capacity matrix analysis results.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
-
-### DataLoader
-
-Handles loading and validation of analysis results.
-
-**Methods:**
-
-- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
-  - Load results from JSON file with comprehensive error handling.
-
-### FlowAnalyzer
-
-Analyzes maximum flow results.
-
-**Methods:**
-
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze flow results and create visualizations.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
-  - Analyze and display all flow results.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display flow analysis results.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
-
-### NotebookAnalyzer
-
-Base class for notebook analysis components.
-
-**Methods:**
-
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Perform the analysis and return results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display analysis results in notebook format.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
-
-### PackageManager
-
-Manages package installation and imports for notebooks.
-
-**Methods:**
-
-- `check_and_install_packages() -> Dict[str, Any]`
-  - Check for required packages and install if missing.
-- `setup_environment() -> Dict[str, Any]`
-  - Set up the complete notebook environment.
-
-### SummaryAnalyzer
-
-Provides summary analysis of all results.
-
-**Methods:**
-
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze and summarize all results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_and_display_summary(self, results: Dict[str, Any]) -> None`
-  - Analyze and display summary.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display summary analysis.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
-
----
-
 ## ngraph.workflow.notebook_export
 
 Jupyter notebook export and generation functionality.
@@ -2290,7 +2146,146 @@ Converts Python classes into notebook cells.
 
 ---
 
-## ngraph.transform.base
+## ngraph.workflow.analysis.base
+
+Base classes for notebook analysis components.
+
+### AnalysisContext
+
+Context information for analysis execution.
+
+**Attributes:**
+
+- `step_name` (str)
+- `results` (Dict)
+- `config` (Dict)
+
+### NotebookAnalyzer
+
+Base class for notebook analysis components.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Perform the analysis and return results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display analysis results in notebook format.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.capacity_matrix
+
+Capacity envelope analysis utilities.
+
+This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
+envelope results, computing comprehensive statistics, and generating notebook-friendly
+visualizations.
+
+### CapacityMatrixAnalyzer
+
+Analyzes capacity envelope data and creates matrices.
+
+**Methods:**
+
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
+  - Analyze capacity envelopes and create matrix visualisation.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'`
+  - Run analyse/display on every step containing *capacity_envelopes*.
+- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', step_name: 'str') -> 'None'`
+- `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
+  - Create CDF/availability distribution for *total_capacity_samples*.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Pretty-print *analysis* to the notebook/stdout.
+- `get_description(self) -> 'str'`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.data_loader
+
+Data loading utilities for notebook analysis.
+
+### DataLoader
+
+Handles loading and validation of analysis results.
+
+**Methods:**
+
+- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
+  - Load results from JSON file with comprehensive error handling.
+
+---
+
+## ngraph.workflow.analysis.flow_analyzer
+
+Flow analysis for notebook results.
+
+### FlowAnalyzer
+
+Analyzes maximum flow results.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze flow results and create visualizations.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
+  - Analyze and display all flow results.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display flow analysis results.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.package_manager
+
+Package management for notebook analysis components.
+
+### PackageManager
+
+Manages package installation and imports for notebooks.
+
+**Methods:**
+
+- `check_and_install_packages() -> Dict[str, Any]`
+  - Check for required packages and install if missing.
+- `setup_environment() -> Dict[str, Any]`
+  - Set up the complete notebook environment.
+
+---
+
+## ngraph.workflow.analysis.summary
+
+Summary analysis for notebook results.
+
+### SummaryAnalyzer
+
+Provides summary analysis of all results.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze and summarize all results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_summary(self, results: Dict[str, Any]) -> None`
+  - Analyze and display summary.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display summary analysis.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.transform.base
 
 Base classes for network transformations.
 
@@ -2317,7 +2312,7 @@ Attributes:
 
 **Methods:**
 
-- `apply(self, scenario: 'Scenario') -> 'None'`
+- `apply(self, scenario: "'Scenario'") -> 'None'`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
@@ -2335,7 +2330,7 @@ Raises:
 
 ---
 
-## ngraph.transform.distribute_external
+## ngraph.workflow.transform.distribute_external
 
 Network transformation for distributing external connectivity.
 
@@ -2371,14 +2366,14 @@ Args:
 
 **Methods:**
 
-- `apply(self, scenario: ngraph.scenario.Scenario) -> None`
+- `apply(self, scenario: 'Scenario') -> None`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
 
 ---
 
-## ngraph.transform.enable_nodes
+## ngraph.workflow.transform.enable_nodes
 
 Network transformation for enabling/disabling nodes.
 
@@ -2408,7 +2403,7 @@ Args:
 
 **Methods:**
 
-- `apply(self, scenario: 'Scenario') -> 'None'`
+- `apply(self, scenario: "'Scenario'") -> 'None'`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.

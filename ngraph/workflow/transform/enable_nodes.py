@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import itertools
-from typing import List
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from ngraph.scenario import Scenario
 
 from ngraph.network import Network, Node
-from ngraph.transform.base import NetworkTransform, Scenario, register_transform
+from ngraph.workflow.transform.base import NetworkTransform, register_transform
 
 
 @register_transform("EnableNodes")
@@ -45,7 +48,7 @@ class EnableNodesTransform(NetworkTransform):
         self.order = order
         self.label = f"Enable {count} nodes @ '{path}'"
 
-    def apply(self, scenario: Scenario) -> None:
+    def apply(self, scenario: "Scenario") -> None:
         net: Network = scenario.network
         groups = net.select_node_groups_by_path(self.path)
         candidates: List[Node] = [
