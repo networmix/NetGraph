@@ -41,6 +41,7 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 - Follow **PEP 8** with an 88-character line length.
 - All linting/formatting is handled by **ruff**; import order is automatic.
 - Do not run `black`, `isort`, or other formatters manually—use `make format` instead.
+- Prefer ASCII characters over Unicode alternatives in code, comments, and docstrings for consistency and tool compatibility.
 
 ### 2 – Docstrings
 

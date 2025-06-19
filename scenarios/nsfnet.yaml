@@ -1,0 +1,115 @@
+network:
+  name: "NSFNET T3 (1992)"
+  version: 1.0
+  nodes:
+    Seattle: {attrs: {}}
+    SaltLakeCity: {attrs: {}}
+    SanFrancisco: {attrs: {}}
+    LosAngeles: {attrs: {}}
+    Denver: {attrs: {}}
+    Houston: {attrs: {}}
+    Atlanta: {attrs: {}}
+    Chicago: {attrs: {}}
+    AnnArbor: {attrs: {}}
+    WashingtonDC: {attrs: {}}
+    NewYork: {attrs: {}}
+    Princeton: {attrs: {}}
+    Ithaca: {attrs: {}}
+    CollegePark: {attrs: {}}
+  links:
+    # Backbone connections (approximate 1992 NSFNET T3)
+    - source: Seattle
+      target: SaltLakeCity
+      link_params: {capacity: 45000.0, cost: 10}
+    - source: Seattle
+      target: Chicago
+      link_params: {capacity: 45000.0, cost: 12}
+    - source: SanFrancisco
+      target: LosAngeles
+      link_params: {capacity: 45000.0, cost: 8}
+    - source: SanFrancisco
+      target: SaltLakeCity
+      link_params: {capacity: 45000.0, cost: 10}
+    - source: SaltLakeCity
+      target: Denver
+      link_params: {capacity: 45000.0, cost: 9}
+    - source: LosAngeles
+      target: Denver
+      link_params: {capacity: 45000.0, cost: 11}
+    - source: LosAngeles
+      target: Houston
+      link_params: {capacity: 45000.0, cost: 14}
+    - source: Denver
+      target: Chicago
+      link_params: {capacity: 45000.0, cost: 10}
+    - source: Chicago
+      target: AnnArbor
+      link_params: {capacity: 45000.0, cost: 5}
+    - source: Chicago
+      target: Seattle
+      link_params: {capacity: 45000.0, cost: 12}
+    - source: Houston
+      target: Atlanta
+      link_params: {capacity: 45000.0, cost: 10}
+    - source: Atlanta
+      target: WashingtonDC
+      link_params: {capacity: 45000.0, cost: 7}
+    - source: WashingtonDC
+      target: NewYork
+      link_params: {capacity: 45000.0, cost: 4}
+    - source: NewYork
+      target: Princeton
+      link_params: {capacity: 45000.0, cost: 3}
+    - source: Princeton
+      target: Ithaca
+      link_params: {capacity: 45000.0, cost: 5}
+    - source: Princeton
+      target: WashingtonDC
+      link_params: {capacity: 45000.0, cost: 4}
+    - source: CollegePark
+      target: WashingtonDC
+      link_params: {capacity: 45000.0, cost: 3}
+    - source: CollegePark
+      target: NewYork
+      link_params: {capacity: 45000.0, cost: 5}
+    - source: AnnArbor
+      target: NewYork
+      link_params: {capacity: 45000.0, cost: 6}
+    - source: Denver
+      target: SaltLakeCity
+      link_params: {capacity: 45000.0, cost: 9}
+    - source: Houston
+      target: LosAngeles
+      link_params: {capacity: 45000.0, cost: 14}
+
+failure_policy_set:
+  default:
+    attrs:
+      name: "single_random_link_failure"
+      description: "Fails exactly one random link to test network resilience"
+    rules:
+      - entity_scope: "link"
+        logic: "any"
+        rule_type: "choice"
+        count: 1
+
+workflow:
+  - step_type: BuildGraph
+    name: build_graph
+  - step_type: CapacityEnvelopeAnalysis
+    name: "ce_1"
+    source_path: "^(.+)"
+    sink_path: "^(.+)"
+    mode: "pairwise"
+    parallelism: 8
+    shortest_path: false
+    flow_placement: "PROPORTIONAL"
+    seed: 42
+    iterations: 100
+    baseline: true
+    failure_policy: "default"
+  - step_type: NotebookExport
+    name: "export_analysis"
+    notebook_path: "analysis.ipynb"
+    json_path: "results.json"
+    allow_empty_results: false

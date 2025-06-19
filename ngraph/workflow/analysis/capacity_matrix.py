@@ -488,6 +488,33 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     def analyze_and_display_flow_availability(
         self, results: Dict[str, Any], step_name: str
     ) -> None:  # type: ignore[override]
+        """Analyse flow availability and render summary statistics & plots.
+
+        The method computes distribution statistics for the simulated flow
+        samples, prints an annotated textual summary, and generates two plots:
+
+        1. Empirical cumulative-distribution function (CDF) of delivered flow.
+           - Title: "Empirical CDF of Delivered Flow".
+           - x-axis: "Relative flow f" (fraction of maximum, F / Fₘₐₓ).
+           - y-axis: "Cumulative probability P(Flow ≤ f)".
+
+           The CDF shows, for any flow value *f*, the probability that the
+           delivered flow is less than or equal to *f*. Reading the curve at
+           f = 0.8, for instance, reveals the fraction of simulation runs in
+           which the network achieved at most 80 % of its maximum flow.
+
+        2. Flow Reliability Curve F(p) - the guaranteed / p-quantile flow that
+           can be delivered with probability ≥ *p*.
+           - Title: "Flow Reliability Curve (F(p))".
+           - x-axis: "Reliability level p".
+           - y-axis: "Guaranteed flow F(p)".
+
+           This plot is referred to as the *probability-guaranteed capacity curve*.
+           Its y-value F(p) represents the flow that the network can sustain with
+           reliability level *p*. Reading the curve at p = 0.95, for example,
+           shows the flow level that is guaranteed to be delivered in at least
+           95% of simulation runs.
+        """
         print(f"📊 Flow Availability Distribution Analysis: {step_name}")
         print("=" * 70)
         result = self.analyze_flow_availability(results, step_name=step_name)
@@ -551,9 +578,9 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
                 linewidth=2,
                 label="Empirical CDF",
             )
-            ax1.set_xlabel("Relative Flow")
-            ax1.set_ylabel("Cumulative Probability")
-            ax1.set_title("Flow Distribution (CDF)")
+            ax1.set_xlabel("Relative flow f")
+            ax1.set_ylabel("Cumulative probability P(Flow ≤ f)")
+            ax1.set_title("Empirical CDF of Delivered Flow")
             ax1.grid(True, alpha=0.3)
             ax1.legend()
 
@@ -562,11 +589,13 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
                 percentile_data["flow_at_percentiles"],
                 "r-",
                 linewidth=2,
-                label="Reliability Curve",
+                label="Flow Reliability Curve",
             )
-            ax2.set_xlabel("Reliability Level")
-            ax2.set_ylabel("Relative Flow")
-            ax2.set_title("Flow at Reliability Levels")
+            # Flow Reliability Curve (F(p)): shows the flow that can be
+            # delivered with probability ≥ p.
+            ax2.set_xlabel("Reliability level p")
+            ax2.set_ylabel("Guaranteed flow F(p)")
+            ax2.set_title("Flow Reliability Curve (F(p))")
             ax2.grid(True, alpha=0.3)
             ax2.legend()
 
