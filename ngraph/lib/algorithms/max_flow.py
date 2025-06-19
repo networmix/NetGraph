@@ -383,7 +383,11 @@ def saturated_edges(
     )
     # Ensure we have a tuple to unpack
     if isinstance(result, tuple) and len(result) >= 2:
-        _, summary = result
+        # Handle tuple unpacking - could be 2 or 3 elements
+        if len(result) == 2:
+            _, summary = result
+        else:
+            _, summary, _ = result
     else:
         raise ValueError(
             "Expected tuple return from calc_max_flow with return_summary=True"
