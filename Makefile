@@ -1,7 +1,7 @@
 # NetGraph Development Makefile
 # This Makefile provides convenient shortcuts for common development tasks
 
-.PHONY: help setup install dev-install check test clean docs build check-dist publish-test publish docker-build docker-run
+.PHONY: help setup install dev-install check test clean docs build check-dist publish-test publish docker-build docker-run validate
 
 # Default target - show help
 .DEFAULT_GOAL := help
@@ -20,6 +20,7 @@ help:
 	@echo "  make format        - Auto-format code with ruff"
 	@echo "  make test          - Run tests with coverage"
 	@echo "  make test-quick    - Run tests without coverage"
+	@echo "  make validate      - Validate YAML files against JSON schema"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs          - Generate API documentation"
@@ -76,6 +77,18 @@ test:
 test-quick:
 	@echo "⚡ Running tests without coverage..."
 	@pytest --no-cov
+
+validate:
+	@echo "📋 Validating YAML schemas..."
+	@if python -c "import jsonschema" >/dev/null 2>&1; then \
+		python -c "import json, yaml, jsonschema, pathlib; \
+		schema = json.load(open('schemas/scenario.json')); \
+		scenarios = list(pathlib.Path('scenarios').glob('*.yaml')); \
+		[jsonschema.validate(yaml.safe_load(open(f)), schema) for f in scenarios]; \
+		print(f'✅ Validated {len(scenarios)} scenario files against schema')"; \
+	else \
+		echo "⚠️  jsonschema not installed. Skipping schema validation"; \
+	fi
 
 # Documentation
 docs:

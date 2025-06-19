@@ -55,6 +55,8 @@ dev = [
     "build",
     # publishing
     "twine",
+    # schema validation
+    "jsonschema",
 ]
 
 [project.scripts]

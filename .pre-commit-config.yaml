@@ -22,3 +22,12 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
+
+  - repo: local
+    hooks:
+      - id: validate-schema
+        name: Validate YAML schemas
+        entry: make validate
+        language: system
+        files: ^scenarios/.*\.yaml$
+        pass_filenames: false

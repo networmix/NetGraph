@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 19, 2025 at 19:59 UTC
+**Generated from source code on:** June 20, 2025 at 00:38 UTC
 
 **Modules auto-discovered:** 47
 
@@ -2307,7 +2307,7 @@ Base class for notebook analysis components.
 Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing comprehensive statistics, and generating notebook-friendly
+envelope results, computing statistics, and generating notebook-friendly
 visualizations.
 
 ### CapacityMatrixAnalyzer
@@ -2344,7 +2344,7 @@ Handles loading and validation of analysis results.
 **Methods:**
 
 - `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
-  - Load results from JSON file with comprehensive error handling.
+  - Load results from JSON file with error handling.
 
 ---
 

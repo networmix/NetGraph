@@ -115,7 +115,7 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 - **"True" MaxFlow**: Uses all available paths regardless of their cost
 - **Shortest Path**: Only uses paths with the minimum cost
-- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The toal flow can be limited by the smallest capacity path.
+- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The total flow can be limited by the smallest capacity path.
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
@@ -150,7 +150,7 @@ This analysis helps identify:
 
 ## Next Steps
 
-- **[Tutorial](../getting-started/tutorial.md)** - Build complete network scenarios
+- **[Tutorial](../getting-started/tutorial.md)** - Build network scenarios
 - **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
 - **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
 - **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage

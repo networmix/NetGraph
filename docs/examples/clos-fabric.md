@@ -172,5 +172,5 @@ print(f"Found {len(paths)} paths between segments")
 
 ## Next Steps
 
-- **[DSL Reference](../reference/dsl.md)** - Learn the complete YAML syntax
+- **[DSL Reference](../reference/dsl.md)** - YAML syntax reference
 - **[API Reference](../reference/api.md)** - Explore the Python API in detail

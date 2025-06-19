@@ -124,13 +124,13 @@ exports/
 *.pkl
 
 # Temporary analysis & CLI output
-results.json
+results*.json
 scratch/
 temp/
 temporary/
 analysis_temp/
 tmp/
-analysis.ipynb
+analysis*.ipynb
 
 # -----------------------------------------------------------------------------
 # Special

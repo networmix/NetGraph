@@ -4,7 +4,7 @@ This section provides detailed documentation for NetGraph's Python API.
 
 > **📚 Quick Navigation:**
 
-> - **[Complete Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+> - **[Auto-Generated API Reference](api-full.md)** - Auto-generated class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line interface documentation
 > - **[DSL Reference](dsl.md)** - YAML DSL syntax reference
 
@@ -265,7 +265,7 @@ except Exception as e:
     print(f"General error: {e}")
 ```
 
-For complete API documentation with method signatures, parameters, and return types, see the auto-generated API docs or use Python's help system:
+For full API documentation with method signatures, parameters, and return types, see the auto-generated API docs or use Python's help system:
 
 ```python
 help(Scenario)

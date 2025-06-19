@@ -30,102 +30,144 @@ network:
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_1"]
   - source: node_2
     target: node_3
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_2"]
   - source: node_3
     target: node_4
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_3"]
   - source: node_4
     target: node_5
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_4"]
   - source: node_5
     target: node_6
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_5"]
   - source: node_6
     target: node_7
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_6"]
   - source: node_7
     target: node_8
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_7"]
   - source: node_8
     target: node_9
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_8"]
   - source: node_9
     target: node_10
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_9"]
   - source: node_10
     target: node_1
     link_params:
       capacity: 10000.0
       cost: 10
+      risk_groups: ["srlg_10"]
   # Additional random connections for more realistic topology
   - source: node_1
     target: node_5
     link_params:
       capacity: 8000.0
       cost: 15
+      risk_groups: ["srlg_11"]
   - source: node_2
     target: node_7
     link_params:
       capacity: 8000.0
       cost: 15
+      risk_groups: ["srlg_12"]
   - source: node_3
     target: node_8
     link_params:
       capacity: 8000.0
       cost: 15
+      risk_groups: ["srlg_13"]
   - source: node_4
     target: node_9
     link_params:
       capacity: 8000.0
       cost: 15
+      risk_groups: ["srlg_14"]
   - source: node_6
     target: node_10
     link_params:
       capacity: 8000.0
       cost: 15
+      risk_groups: ["srlg_15"]
   - source: node_1
     target: node_6
     link_params:
       capacity: 6000.0
       cost: 20
+      risk_groups: ["srlg_16"]
   - source: node_2
     target: node_8
     link_params:
       capacity: 6000.0
       cost: 20
+      risk_groups: ["srlg_17"]
   - source: node_3
     target: node_9
     link_params:
       capacity: 6000.0
       cost: 20
+      risk_groups: ["srlg_18"]
   - source: node_4
     target: node_7
     link_params:
       capacity: 6000.0
       cost: 20
+      risk_groups: ["srlg_19"]
   - source: node_5
     target: node_10
     link_params:
       capacity: 6000.0
       cost: 20
+      risk_groups: ["srlg_20"]
+
+risk_groups:
+  - name: srlg_1
+  - name: srlg_2
+  - name: srlg_3
+  - name: srlg_4
+  - name: srlg_5
+  - name: srlg_6
+  - name: srlg_7
+  - name: srlg_8
+  - name: srlg_9
+  - name: srlg_10
+  - name: srlg_11
+  - name: srlg_12
+  - name: srlg_13
+  - name: srlg_14
+  - name: srlg_15
+  - name: srlg_16
+  - name: srlg_17
+  - name: srlg_18
+  - name: srlg_19
+  - name: srlg_20
 
 failure_policy_set:
   default:
@@ -134,6 +176,15 @@ failure_policy_set:
       description: "Fails exactly one random link to test network resilience"
     rules:
       - entity_scope: "link"
+        logic: "any"
+        rule_type: "choice"
+        count: 1
+  single_shared_risk_group_failure:
+    attrs:
+      name: "single_shared_risk_group_failure"
+      description: "Fails exactly one random shared risk group to test network resilience"
+    rules:
+      - entity_scope: "risk_group"
         logic: "any"
         rule_type: "choice"
         count: 1
@@ -153,6 +204,18 @@ workflow:
   iterations: 100
   baseline: true           # Enable baseline mode
   failure_policy: "default"
+- step_type: CapacityEnvelopeAnalysis
+  name: "ce_2"
+  source_path: "^(.+)"
+  sink_path: "^(.+)"
+  mode: "pairwise"
+  parallelism: 8
+  shortest_path: false
+  flow_placement: "PROPORTIONAL"
+  seed: 42
+  iterations: 10
+  baseline: true           # Enable baseline mode
+  failure_policy: "single_shared_risk_group_failure"
 - step_type: NotebookExport
   name: "export_analysis"
   notebook_path: "analysis.ipynb"
