@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 20, 2025 at 01:48 UTC
+**Generated from source code on:** June 20, 2025 at 02:06 UTC
 
 **Modules auto-discovered:** 48
 
@@ -1638,7 +1638,7 @@ Returns:
 
 Maximum flow algorithms and network flow computations.
 
-### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True) -> Union[float, tuple]
+### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True, tolerance: float = 1e-10) -> Union[float, tuple]
 
 Compute the maximum flow between two nodes in a directed multi-graph,
 using an iterative shortest-path augmentation approach.
@@ -1684,6 +1684,9 @@ Args:
     copy_graph (bool):
         If True, work on a copy of the original graph so it remains unmodified.
         Defaults to True.
+    tolerance (float):
+        Tolerance for floating-point comparisons when determining saturated edges
+        and residual capacity. Defaults to 1e-10.
 
 Returns:
     Union[float, tuple]:

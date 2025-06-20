@@ -10,6 +10,9 @@ from ngraph.lib.algorithms.types import FlowSummary
 from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
 
+# Use @overload to provide precise static type safety for conditional return types.
+# The function returns different types based on boolean flags: float, tuple[float, FlowSummary],
+# tuple[float, StrictMultiDiGraph], or tuple[float, FlowSummary, StrictMultiDiGraph].
 @overload
 def calc_max_flow(
     graph: StrictMultiDiGraph,
@@ -25,6 +28,7 @@ def calc_max_flow(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     copy_graph: bool = True,
+    tolerance: float = 1e-10,
 ) -> float: ...
 
 
@@ -43,6 +47,7 @@ def calc_max_flow(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     copy_graph: bool = True,
+    tolerance: float = 1e-10,
 ) -> tuple[float, FlowSummary]: ...
 
 
@@ -61,6 +66,7 @@ def calc_max_flow(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     copy_graph: bool = True,
+    tolerance: float = 1e-10,
 ) -> tuple[float, StrictMultiDiGraph]: ...
 
 
@@ -79,6 +85,7 @@ def calc_max_flow(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     copy_graph: bool = True,
+    tolerance: float = 1e-10,
 ) -> tuple[float, FlowSummary, StrictMultiDiGraph]: ...
 
 
@@ -96,6 +103,7 @@ def calc_max_flow(
     flow_attr: str = "flow",
     flows_attr: str = "flows",
     copy_graph: bool = True,
+    tolerance: float = 1e-10,
 ) -> Union[float, tuple]:
     """Compute the maximum flow between two nodes in a directed multi-graph,
     using an iterative shortest-path augmentation approach.
@@ -141,6 +149,9 @@ def calc_max_flow(
         copy_graph (bool):
             If True, work on a copy of the original graph so it remains unmodified.
             Defaults to True.
+        tolerance (float):
+            Tolerance for floating-point comparisons when determining saturated edges
+            and residual capacity. Defaults to 1e-10.
 
     Returns:
         Union[float, tuple]:
@@ -196,6 +207,7 @@ def calc_max_flow(
                 return_graph,
                 capacity_attr,
                 flow_attr,
+                tolerance,
             )
         else:
             return 0.0
@@ -234,6 +246,7 @@ def calc_max_flow(
             return_graph,
             capacity_attr,
             flow_attr,
+            tolerance,
         )
 
     # Otherwise, repeatedly find augmenting paths until no new flow can be placed.
@@ -255,8 +268,8 @@ def calc_max_flow(
             flow_attr=flow_attr,
             flows_attr=flows_attr,
         )
-        if flow_meta.placed_flow <= 0:
-            # No additional flow could be placed; at capacity.
+        if flow_meta.placed_flow <= tolerance:
+            # No significant additional flow could be placed; at capacity.
             break
 
         max_flow += flow_meta.placed_flow
@@ -269,6 +282,7 @@ def calc_max_flow(
         return_graph,
         capacity_attr,
         flow_attr,
+        tolerance,
     )
 
 
@@ -280,6 +294,7 @@ def _build_return_value(
     return_graph: bool,
     capacity_attr: str,
     flow_attr: str,
+    tolerance: float,
 ) -> Union[float, tuple]:
     """Build the appropriate return value based on the requested flags."""
     if not (return_summary or return_graph):
@@ -288,7 +303,7 @@ def _build_return_value(
     summary = None
     if return_summary:
         summary = _build_flow_summary(
-            max_flow, flow_graph, src_node, capacity_attr, flow_attr
+            max_flow, flow_graph, src_node, capacity_attr, flow_attr, tolerance
         )
 
     ret: list = [max_flow]
@@ -306,6 +321,7 @@ def _build_flow_summary(
     src_node: NodeID,
     capacity_attr: str,
     flow_attr: str,
+    tolerance: float,
 ) -> FlowSummary:
     """Build a FlowSummary from the flow graph state."""
     edge_flow = {}
@@ -327,7 +343,10 @@ def _build_flow_summary(
             continue
         reachable.add(n)
         for _, nbr, _, d in flow_graph.out_edges(n, data=True, keys=True):
-            if d[capacity_attr] - d.get(flow_attr, 0.0) > 0 and nbr not in reachable:
+            if (
+                d[capacity_attr] - d.get(flow_attr, 0.0) > tolerance
+                and nbr not in reachable
+            ):
                 stack.append(nbr)
 
     # Find min-cut edges (saturated edges crossing the cut)
@@ -336,7 +355,7 @@ def _build_flow_summary(
         for u, v, k, d in flow_graph.edges(data=True, keys=True)
         if u in reachable
         and v not in reachable
-        and d[capacity_attr] - d.get(flow_attr, 0.0) == 0
+        and d[capacity_attr] - d.get(flow_attr, 0.0) <= tolerance
     ]
 
     return FlowSummary(
