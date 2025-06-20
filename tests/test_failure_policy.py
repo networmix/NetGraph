@@ -83,7 +83,7 @@ def test_link_scope_choice():
         "L3": {"installation": "aerial", "link_type": "fiber"},
     }
 
-    with patch("ngraph.failure_policy.sample", return_value=["L2"]):
+    with patch("ngraph.failure_policy._random.sample", return_value=["L2"]):
         failed = policy.apply_failures(nodes, links)
     # Matches L1, L2 (underground installation), picks exactly 1 => "L2"
     assert set(failed) == {"L2"}
@@ -125,7 +125,7 @@ def test_risk_group_scope_random():
     # We'll mock random => [0.4, 0.6] so that one match is picked (0.4 < 0.5)
     # and the other is skipped (0.6 >= 0.5). The set iteration order is not guaranteed,
     # so we only check that exactly 1 RG is chosen, and it must be from the matched set.
-    with patch("ngraph.failure_policy.random") as mock_random:
+    with patch("ngraph.failure_policy._random.random") as mock_random:
         mock_random.side_effect = [0.4, 0.6]
         failed = policy.apply_failures(nodes, links, risk_groups)
 
@@ -166,7 +166,7 @@ def test_multi_rule_union():
         "L2": {"installation": "aerial"},  # matches rule2
         "L3": {"installation": "underground"},
     }
-    with patch("ngraph.failure_policy.sample", return_value=["L1"]):
+    with patch("ngraph.failure_policy._random.sample", return_value=["L1"]):
         failed = policy.apply_failures(nodes, links)
     # fails N2 from rule1, fails L1 from rule2 => union
     assert set(failed) == {"N2", "L1"}
@@ -223,7 +223,7 @@ def test_fail_shared_risk_groups():
         },
     }
 
-    with patch("ngraph.failure_policy.sample", return_value=["L2"]):
+    with patch("ngraph.failure_policy._random.sample", return_value=["L2"]):
         failed = policy.apply_failures(nodes, links)
     # L2 fails => shares risk_groups "PowerGrid_Texas" => that includes N1, N2, L3
     # so they all fail
@@ -495,7 +495,7 @@ def test_docstring_policy_individual_rules():
     }
 
     # Test with deterministic random values
-    with patch("ngraph.failure_policy.random") as mock_random:
+    with patch("ngraph.failure_policy._random.random") as mock_random:
         # Only L1 and L4 match the conditions, so we need 2 random calls
         mock_random.side_effect = [
             0.3,  # L1 fails (0.3 < 0.4)
@@ -537,7 +537,7 @@ def test_docstring_policy_individual_rules():
         "RG4": {"name": "RG4"},
     }
 
-    with patch("ngraph.failure_policy.sample") as mock_sample:
+    with patch("ngraph.failure_policy._random.sample") as mock_sample:
         mock_sample.return_value = ["RG1", "RG3"]
         failed = policy.apply_failures({}, {}, risk_groups)
         assert "RG1" in failed

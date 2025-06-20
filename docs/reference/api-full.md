@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 20, 2025 at 00:38 UTC
+**Generated from source code on:** June 20, 2025 at 01:48 UTC
 
-**Modules auto-discovered:** 47
+**Modules auto-discovered:** 48
 
 ---
 
@@ -437,6 +437,9 @@ Attributes:
         If True, match results for each rule are cached to speed up
         repeated calls. If the network changes, the cached results
         may be stale.
+    seed (Optional[int]):
+        Seed for reproducible random operations. If None, operations
+        will be non-deterministic.
 
 **Attributes:**
 
@@ -445,6 +448,7 @@ Attributes:
 - `fail_shared_risk_groups` (bool) = False
 - `fail_risk_group_children` (bool) = False
 - `use_cache` (bool) = False
+- `seed` (Optional[int])
 - `_match_cache` (Dict[int, Set[str]]) = {}
 
 **Methods:**
@@ -834,6 +838,7 @@ This scenario includes:
   - A list of workflow steps to execute.
   - A results container for storing outputs.
   - A components_library for hardware/optics definitions.
+  - A seed for reproducible random operations (optional).
 
 Typical usage example:
 
@@ -849,6 +854,7 @@ Typical usage example:
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
 - `results` (Results) = Results(_store={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
+- `seed` (Optional[int])
 
 **Methods:**
 
@@ -856,6 +862,34 @@ Typical usage example:
   - Constructs a Scenario from a YAML string, optionally merging
 - `run(self) -> 'None'`
   - Executes the scenario's workflow steps in order.
+
+---
+
+## ngraph.seed_manager
+
+Deterministic seed derivation to avoid global random.seed() order dependencies.
+
+### SeedManager
+
+Manages deterministic seed derivation for isolated component reproducibility.
+
+Global random.seed() creates order dependencies and component interference.
+SeedManager derives unique seeds per component from a master seed using SHA-256,
+ensuring reproducible results regardless of execution order or parallelism.
+
+Usage:
+    seed_mgr = SeedManager(42)
+    failure_seed = seed_mgr.derive_seed("failure_policy", "default")
+    transform_seed = seed_mgr.derive_seed("transform", "enable_nodes", 0)
+
+**Methods:**
+
+- `create_random_state(self, *components: 'Any') -> 'random.Random'`
+  - Create a new Random instance with derived seed.
+- `derive_seed(self, *components: 'Any') -> 'Optional[int]'`
+  - Derive a deterministic seed from master seed and component identifiers.
+- `seed_global_random(self, *components: 'Any') -> 'None'`
+  - Seed the global random module with derived seed.
 
 ---
 
@@ -1898,22 +1932,27 @@ Base classes and utilities for workflow components.
 Base class for all workflow steps.
 
 All workflow steps are automatically logged with execution timing information.
+All workflow steps support seeding for reproducible random operations.
 
 YAML Configuration:
     ```yaml
     workflow:
       - step_type: <StepTypeName>
         name: "optional_step_name"  # Optional: Custom name for this step instance
+        seed: 42                    # Optional: Seed for reproducible random operations
         # ... step-specific parameters ...
     ```
 
 Attributes:
     name: Optional custom identifier for this workflow step instance,
         used for logging and result storage purposes.
+    seed: Optional seed for reproducible random operations. If None,
+        random operations will be non-deterministic.
 
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 
 **Methods:**
 
@@ -1949,6 +1988,7 @@ YAML Configuration:
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 
 **Methods:**
 
@@ -2007,6 +2047,7 @@ Attributes:
 **Attributes:**
 
 - `name` (str)
+- `seed` (int | None)
 - `source_path` (str)
 - `sink_path` (str)
 - `mode` (str) = combine
@@ -2016,7 +2057,6 @@ Attributes:
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement) = 1
 - `baseline` (bool) = False
-- `seed` (int | None)
 
 **Methods:**
 
@@ -2061,6 +2101,7 @@ Attributes:
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 - `source_path` (str)
 - `sink_path` (str)
 - `mode` (str) = combine
@@ -2108,6 +2149,7 @@ Attributes:
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 - `notebook_path` (str) = results.ipynb
 - `json_path` (str) = results.json
 - `allow_empty_results` (bool) = False
@@ -2252,6 +2294,7 @@ YAML Configuration:
         path: "^edge/.*"               # Regex pattern to match nodes to enable
         count: 5                       # Number of nodes to enable
         order: "name"                  # Selection order: "name", "random", or "reverse"
+        seed: 42                       # Optional: Seed for reproducible random selection
     ```
 
 Args:
@@ -2261,6 +2304,14 @@ Args:
         - "name": Sort by node name (lexical order)
         - "reverse": Sort by node name in reverse order
         - "random": Random selection order
+    seed: Optional seed for reproducible random operations when order="random".
+
+**Attributes:**
+
+- `path` (str)
+- `count` (int)
+- `order` (str) = name
+- `seed` (Optional[int])
 
 **Methods:**
 
@@ -2307,7 +2358,7 @@ Base class for notebook analysis components.
 Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing statistics, and generating notebook-friendly
+envelope results, computing comprehensive statistics, and generating notebook-friendly
 visualizations.
 
 ### CapacityMatrixAnalyzer
@@ -2344,7 +2395,7 @@ Handles loading and validation of analysis results.
 **Methods:**
 
 - `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
-  - Load results from JSON file with error handling.
+  - Load results from JSON file with comprehensive error handling.
 
 ---
 

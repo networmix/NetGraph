@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import random as _random
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from random import random, sample
-from typing import Any, Dict, List, Literal, Set
+from typing import Any, Dict, List, Literal, Optional, Set
 
 
 @dataclass
@@ -146,6 +146,9 @@ class FailurePolicy:
             If True, match results for each rule are cached to speed up
             repeated calls. If the network changes, the cached results
             may be stale.
+        seed (Optional[int]):
+            Seed for reproducible random operations. If None, operations
+            will be non-deterministic.
 
     """
 
@@ -154,6 +157,7 @@ class FailurePolicy:
     fail_shared_risk_groups: bool = False
     fail_risk_group_children: bool = False
     use_cache: bool = False
+    seed: Optional[int] = None
 
     # Internal cache for matched sets:  (rule_index -> set_of_entities)
     _match_cache: Dict[int, Set[str]] = field(default_factory=dict, init=False)
@@ -195,7 +199,7 @@ class FailurePolicy:
                 network_risk_groups,
             )
             # Then select a subset from matched_ids according to rule_type
-            selected = self._select_entities(matched_ids, rule)
+            selected = self._select_entities(matched_ids, rule, self.seed)
 
             # Add them to the respective fail sets
             if rule.entity_scope == "node":
@@ -297,17 +301,42 @@ class FailurePolicy:
             raise ValueError(f"Unsupported logic: {logic}")
 
     @staticmethod
-    def _select_entities(entity_ids: Set[str], rule: FailureRule) -> Set[str]:
-        """From the matched IDs, pick which entities fail under the given rule_type."""
+    def _select_entities(
+        entity_ids: Set[str], rule: FailureRule, seed: Optional[int] = None
+    ) -> Set[str]:
+        """From the matched IDs, pick which entities fail under the given rule_type.
+
+        Args:
+            entity_ids: Set of entity IDs that matched the rule conditions.
+            rule: The FailureRule specifying how to select from matched entities.
+            seed: Optional seed for reproducible random operations.
+
+        Returns:
+            Set of entity IDs selected for failure.
+        """
         if not entity_ids:
             return set()
 
         if rule.rule_type == "random":
-            return {eid for eid in entity_ids if random() < rule.probability}
+            if seed is not None:
+                # Use seeded random state for deterministic results
+                rng = _random.Random(seed)
+                return {eid for eid in entity_ids if rng.random() < rule.probability}
+            else:
+                # Use global random state for backward compatibility
+                return {
+                    eid for eid in entity_ids if _random.random() < rule.probability
+                }
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
-            # sample needs a list
-            return set(sample(list(entity_ids), k=count))
+            entity_list = list(entity_ids)
+            if seed is not None:
+                # Use seeded random state for deterministic results
+                rng = _random.Random(seed)
+                return set(rng.sample(entity_list, k=count))
+            else:
+                # Use global random state for backward compatibility
+                return set(_random.sample(entity_list, k=count))
         elif rule.rule_type == "all":
             return entity_ids
         else:
@@ -433,6 +462,7 @@ class FailurePolicy:
             "fail_shared_risk_groups": self.fail_shared_risk_groups,
             "fail_risk_group_children": self.fail_risk_group_children,
             "use_cache": self.use_cache,
+            "seed": self.seed,
         }
 
 

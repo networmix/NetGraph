@@ -34,7 +34,13 @@ def register_transform(name: str) -> Any:
             """Auto-generated wrapper that executes *cls.apply*."""
 
             def __init__(self, **kwargs: Any) -> None:
-                super().__init__(name=name)
+                # Extract seed and name for the WorkflowStep base class
+                seed = kwargs.pop("seed", None)
+                step_name = kwargs.pop("name", "")
+                super().__init__(name=step_name, seed=seed)
+
+                # Pass remaining kwargs and seed to transform
+                kwargs["seed"] = seed
                 self._transform = cls(**kwargs)
 
             def run(self, scenario: "Scenario") -> None:  # noqa: D401

@@ -1,3 +1,7 @@
+# Simple random network scenario with 10 nodes
+# Tests basic network functionality, random failures, and capacity analysis
+seed: 1234
+
 network:
   name: Simple Random Network
   version: 1.0

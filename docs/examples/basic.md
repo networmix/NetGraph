@@ -27,6 +27,7 @@ from ngraph.lib.algorithms.base import FlowPlacement
 scenario_yaml = """
 network:
   name: "fundamentals_example"
+  seed: 1234  # Optional: ensures reproducible results
 
   # Create individual nodes
   nodes:
@@ -79,7 +80,7 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 ```
 
-Note that here we used a simple `nodes` and `links` structure to directly define the network topology. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
+Note that here we used a simple `nodes` and `links` structure to directly define the network topology. The optional `seed` parameter ensures reproducible results when using randomized workflow steps. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
 
 ### Flow Analysis Variants
 

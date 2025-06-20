@@ -1,3 +1,7 @@
+# Test scenario 1: 6-node L3 US backbone network
+# Tests basic single link failure scenarios
+seed: 1001
+
 network:
   name: "6-node-l3-us-backbone"
   version: "1.0"

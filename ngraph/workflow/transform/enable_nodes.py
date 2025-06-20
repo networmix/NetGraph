@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, List
+import random
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -13,6 +15,7 @@ from ngraph.workflow.transform.base import NetworkTransform, register_transform
 
 
 @register_transform("EnableNodes")
+@dataclass
 class EnableNodesTransform(NetworkTransform):
     """Enable *count* disabled nodes that match *path*.
 
@@ -26,6 +29,7 @@ class EnableNodesTransform(NetworkTransform):
             path: "^edge/.*"               # Regex pattern to match nodes to enable
             count: 5                       # Number of nodes to enable
             order: "name"                  # Selection order: "name", "random", or "reverse"
+            seed: 42                       # Optional: Seed for reproducible random selection
         ```
 
     Args:
@@ -35,18 +39,16 @@ class EnableNodesTransform(NetworkTransform):
             - "name": Sort by node name (lexical order)
             - "reverse": Sort by node name in reverse order
             - "random": Random selection order
+        seed: Optional seed for reproducible random operations when order="random".
     """
 
-    def __init__(
-        self,
-        path: str,
-        count: int,
-        order: str = "name",  # 'name' | 'random' | 'reverse'
-    ):
-        self.path = path
-        self.count = count
-        self.order = order
-        self.label = f"Enable {count} nodes @ '{path}'"
+    path: str
+    count: int
+    order: str = "name"  # 'name' | 'random' | 'reverse'
+    seed: Optional[int] = None
+
+    def __post_init__(self):
+        self.label = f"Enable {self.count} nodes @ '{self.path}'"
 
     def apply(self, scenario: "Scenario") -> None:
         net: Network = scenario.network
@@ -58,9 +60,13 @@ class EnableNodesTransform(NetworkTransform):
         if self.order == "reverse":
             candidates.sort(key=lambda n: n.name, reverse=True)
         elif self.order == "random":
-            import random as _rnd
-
-            _rnd.shuffle(candidates)
+            if self.seed is not None:
+                # Use seeded random state for deterministic results
+                rng = random.Random(self.seed)
+                rng.shuffle(candidates)
+            else:
+                # Use global random state
+                random.shuffle(candidates)
         else:  # default 'name'
             candidates.sort(key=lambda n: n.name)
 

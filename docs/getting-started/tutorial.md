@@ -78,6 +78,7 @@ blueprints:
 
 network:
   name: "Three-Tier Clos Fabric"
+  seed: 42  # Optional: ensures reproducible results for debugging/testing
   groups:
     pod[1-2]:  # Creates pod1 and pod2
       use_blueprint: clos_pod
@@ -107,6 +108,8 @@ This creates a three-tier Clos fabric with the following structure:
 - Each server connects with two parallel links to its leaf switch
 - Leaf switches connect to spine switches in a full mesh
 - Spines connect to super-spines in respective columns in one-to-one fashion
+
+The `seed` parameter ensures reproducible results when using randomized workflow steps like failure simulation or random node selection - useful for debugging and testing.
 
 ## Network Topology Exploration
 

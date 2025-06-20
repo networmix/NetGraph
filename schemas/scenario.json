@@ -5,6 +5,10 @@
   "description": "JSON Schema for NetGraph network scenario YAML files",
   "type": "object",
   "properties": {
+    "seed": {
+      "type": "integer",
+      "description": "Master seed for reproducible random operations across the scenario"
+    },
     "network": {
       "type": "object",
       "description": "Network topology definition",

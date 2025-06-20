@@ -1,3 +1,7 @@
+# Test scenario 2: Hierarchical DSL with blueprints and multi-node expansions
+# Tests complex network blueprints with mesh patterns and sub-topologies
+seed: 2002
+
 # Hierarchical DSL describing sub-topologies and multi-node expansions.
 #
 # Paths and Scopes:

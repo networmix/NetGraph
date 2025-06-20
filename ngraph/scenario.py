@@ -17,6 +17,7 @@ from ngraph.failure_policy import (
 from ngraph.network import Network, RiskGroup
 from ngraph.results import Results
 from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
+from ngraph.seed_manager import SeedManager
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 from ngraph.yaml_utils import normalize_yaml_dict_keys
@@ -33,6 +34,7 @@ class Scenario:
       - A list of workflow steps to execute.
       - A results container for storing outputs.
       - A components_library for hardware/optics definitions.
+      - A seed for reproducible random operations (optional).
 
     Typical usage example:
 
@@ -47,6 +49,16 @@ class Scenario:
     traffic_matrix_set: TrafficMatrixSet = field(default_factory=TrafficMatrixSet)
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
+    seed: Optional[int] = None
+
+    @property
+    def seed_manager(self) -> SeedManager:
+        """Get the seed manager for this scenario.
+
+        Returns:
+            SeedManager instance configured with this scenario's seed.
+        """
+        return SeedManager(self.seed)
 
     def run(self) -> None:
         """Executes the scenario's workflow steps in order.
@@ -74,10 +86,12 @@ class Scenario:
           - workflow
           - components
           - risk_groups
+          - seed
 
         If no 'workflow' key is provided, the scenario has no steps to run.
         If 'failure_policy_set' is omitted, scenario.failure_policy_set is empty.
         If 'components' is provided, it is merged with default_components.
+        If 'seed' is provided, it enables reproducible random operations.
         If any unrecognized top-level key is found, a ValueError is raised.
 
         Args:
@@ -108,6 +122,7 @@ class Scenario:
             "workflow",
             "components",
             "risk_groups",
+            "seed",
         }
         extra_keys = set(data.keys()) - recognized_keys
         if extra_keys:
@@ -115,6 +130,11 @@ class Scenario:
                 f"Unrecognized top-level key(s) in scenario: {', '.join(sorted(extra_keys))}. "
                 f"Allowed keys are {sorted(recognized_keys)}"
             )
+
+        # Extract seed first as it may be used by other components
+        seed = data.get("seed")
+        if seed is not None and not isinstance(seed, int):
+            raise ValueError("'seed' must be an integer if provided.")
 
         # 1) Build the network using blueprint expansion logic
         network_obj = expand_network_dsl(data)
@@ -131,12 +151,13 @@ class Scenario:
         # Normalize dictionary keys to handle YAML boolean keys
         normalized_fps = normalize_yaml_dict_keys(fps_data)
         failure_policy_set = FailurePolicySet()
+        seed_manager = SeedManager(seed)
         for name, fp_data in normalized_fps.items():
             if not isinstance(fp_data, dict):
                 raise ValueError(
                     f"Failure policy '{name}' must map to a FailurePolicy definition dict"
                 )
-            failure_policy = cls._build_failure_policy(fp_data)
+            failure_policy = cls._build_failure_policy(fp_data, seed_manager, name)
             failure_policy_set.add(name, failure_policy)
 
         # 3) Build traffic matrix set
@@ -158,7 +179,7 @@ class Scenario:
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
-        workflow_steps = cls._build_workflow_steps(workflow_data)
+        workflow_steps = cls._build_workflow_steps(workflow_data, seed_manager)
 
         # 5) Build/merge components library
         scenario_comps_data = data.get("components", {})
@@ -188,6 +209,7 @@ class Scenario:
             workflow=workflow_steps,
             traffic_matrix_set=tms,
             components_library=final_components,
+            seed=seed,
         )
 
     @staticmethod
@@ -221,7 +243,9 @@ class Scenario:
         return [build_one(entry) for entry in rg_data]
 
     @staticmethod
-    def _build_failure_policy(fp_data: Dict[str, Any]) -> FailurePolicy:
+    def _build_failure_policy(
+        fp_data: Dict[str, Any], seed_manager: SeedManager, policy_name: str
+    ) -> FailurePolicy:
         """Constructs a FailurePolicy from data that may specify multiple rules plus
         optional top-level fields like fail_shared_risk_groups, fail_risk_group_children,
         use_cache, and attrs.
@@ -247,6 +271,8 @@ class Scenario:
 
         Args:
             fp_data (Dict[str, Any]): Dictionary from the 'failure_policy' section of the YAML.
+            seed_manager (SeedManager): Seed manager for reproducible operations.
+            policy_name (str): Name of the policy for seed derivation.
 
         Returns:
             FailurePolicy: The constructed policy. If no rules exist, it's an empty policy.
@@ -290,17 +316,22 @@ class Scenario:
             )
             rules.append(rule)
 
+        # Derive seed for this failure policy
+        policy_seed = seed_manager.derive_seed("failure_policy", policy_name)
+
         return FailurePolicy(
             rules=rules,
             attrs=attrs,
             fail_shared_risk_groups=fail_srg,
             fail_risk_group_children=fail_rg_children,
             use_cache=use_cache,
+            seed=policy_seed,
         )
 
     @staticmethod
     def _build_workflow_steps(
         workflow_data: List[Dict[str, Any]],
+        seed_manager: SeedManager,
     ) -> List[WorkflowStep]:
         """Converts workflow step dictionaries into WorkflowStep objects.
 
@@ -319,6 +350,7 @@ class Scenario:
                   },
                   ...
                 ]
+            seed_manager (SeedManager): Seed manager for reproducible operations.
 
         Returns:
             List[WorkflowStep]: A list of instantiated WorkflowStep objects.
@@ -331,7 +363,7 @@ class Scenario:
             raise ValueError("'workflow' must be a list if present.")
 
         steps: List[WorkflowStep] = []
-        for step_info in workflow_data:
+        for step_index, step_info in enumerate(workflow_data):
             step_type = step_info.get("step_type")
             if not step_type:
                 raise ValueError(
@@ -346,6 +378,14 @@ class Scenario:
             ctor_args = {k: v for k, v in step_info.items() if k != "step_type"}
             # Normalize constructor argument keys to handle YAML boolean keys
             normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
+
+            # Add seed derivation for workflow steps that don't have explicit seed
+            step_name = normalized_ctor_args.get("name", f"{step_type}_{step_index}")
+            if "seed" not in normalized_ctor_args:
+                derived_seed = seed_manager.derive_seed("workflow_step", step_name)
+                if derived_seed is not None:
+                    normalized_ctor_args["seed"] = derived_seed
+
             step_obj = step_cls(**normalized_ctor_args)
             steps.append(step_obj)
 

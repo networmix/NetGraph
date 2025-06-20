@@ -14,6 +14,7 @@ NetGraph is a scenario-based network modeling and analysis framework written in 
 - ✅ **JupyterLab Support**: Run NetGraph in a containerized environment with JupyterLab for interactive analysis
 - ✅ **Demand Placement**: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
 - ✅ **Capacity Calculation**: Calculate MaxFlow with different flow placement strategies
+- ✅ **Reproducible Analysis**: Seed-based deterministic random operations for reliable testing and debugging
 - 🚧 **Failure Simulation**: Model component and risk groups failures for availability analysis with Monte Carlo simulation
 - 🚧 **Network Analysis**: Workflow steps and tools to analyze capacity, failure tolerance, and power/cost efficiency of network designs
 - 🚧 **Command Line Interface**: Execute scenarios from terminal with JSON output for simple automation
@@ -58,6 +59,8 @@ from ngraph.lib.flow_policy import FlowPlacement
 
 # Define two 3-tier Clos networks with inter-fabric connectivity
 clos_scenario_yaml = """
+seed: 42  # Ensures reproducible results across runs
+
 blueprints:
   brick_2tier:
     groups:

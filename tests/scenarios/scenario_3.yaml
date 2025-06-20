@@ -1,3 +1,7 @@
+# Test scenario 3: Complex 3-tier Clos network with nested blueprints
+# Tests advanced blueprint nesting, node/link overrides, and capacity probing
+seed: 3003
+
 blueprints:
   brick_2tier:
     groups:

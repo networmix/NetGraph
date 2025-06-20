@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Type
+from typing import TYPE_CHECKING, Dict, Optional, Type
 
 from ngraph.logging import get_logger
 
@@ -33,21 +33,26 @@ class WorkflowStep(ABC):
     """Base class for all workflow steps.
 
     All workflow steps are automatically logged with execution timing information.
+    All workflow steps support seeding for reproducible random operations.
 
     YAML Configuration:
         ```yaml
         workflow:
           - step_type: <StepTypeName>
             name: "optional_step_name"  # Optional: Custom name for this step instance
+            seed: 42                    # Optional: Seed for reproducible random operations
             # ... step-specific parameters ...
         ```
 
     Attributes:
         name: Optional custom identifier for this workflow step instance,
             used for logging and result storage purposes.
+        seed: Optional seed for reproducible random operations. If None,
+            random operations will be non-deterministic.
     """
 
     name: str = ""
+    seed: Optional[int] = None
 
     def execute(self, scenario: "Scenario") -> None:
         """Execute the workflow step with automatic logging.
