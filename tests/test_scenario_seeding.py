@@ -133,9 +133,7 @@ workflow:
             network.add_node(Node(f"n{i}", attrs={"type": "router"}))
 
         # Create policy with seed
-        rule = FailureRule(
-            entity_scope="node", logic="any", rule_type="choice", count=3
-        )
+        rule = FailureRule(entity_scope="node", rule_type="choice", count=3)
         policy = FailurePolicy(rules=[rule], seed=42)
 
         nodes = {n.name: n.attrs for n in network.nodes.values()}
@@ -159,7 +157,6 @@ workflow:
         # Create policies with different seeds
         rule = FailureRule(
             entity_scope="node",
-            logic="any",
             rule_type="choice",
             count=5,  # More selections
         )

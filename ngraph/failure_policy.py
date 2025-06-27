@@ -46,10 +46,9 @@ class FailureRule:
             The type of entities this rule applies to: "node", "link", or "risk_group".
         conditions (List[FailureCondition]):
             A list of conditions to filter matching entities.
-        logic (Literal["and", "or", "any"]):
+        logic (Literal["and", "or"]):
             "and": All conditions must be true for a match.
-            "or": At least one condition is true for a match.
-            "any": Skip condition checks and match all.
+            "or": At least one condition is true for a match (default).
         rule_type (Literal["random", "choice", "all"]):
             The selection strategy among the matched set:
               - "random": each matched entity is chosen with probability = `probability`.
@@ -63,7 +62,7 @@ class FailureRule:
 
     entity_scope: EntityScope
     conditions: List[FailureCondition] = field(default_factory=list)
-    logic: Literal["and", "or", "any"] = "and"
+    logic: Literal["and", "or"] = "or"
     rule_type: Literal["random", "choice", "all"] = "all"
     probability: float = 1.0
     count: int = 1
@@ -83,7 +82,7 @@ class FailurePolicy:
 
     The main entry point is `apply_failures`, which:
       1) For each rule, gather the relevant entities (node, link, or risk_group).
-      2) Match them based on rule conditions (or skip if 'logic=any').
+              2) Match them based on rule conditions using 'and' or 'or' logic.
       3) Apply the selection strategy (all, random, or choice).
       4) Collect the union of all failed entities across all rules.
       5) Optionally expand failures by shared-risk groups or sub-risks.
@@ -125,8 +124,8 @@ class FailurePolicy:
               probability: 0.4
 
             # Choose exactly 2 risk groups to fail (e.g., data centers)
+            # Note: logic defaults to "or" when not specified
             - entity_scope: "risk_group"
-              logic: "any"
               rule_type: "choice"
               count: 2
         ```
@@ -260,22 +259,19 @@ class FailurePolicy:
         conditions: List[FailureCondition],
         logic: str,
     ) -> Set[str]:
-        """Return all entity IDs that match the given conditions based on 'and'/'or'/'any' logic.
+        """Return all entity IDs that match the given conditions based on 'and'/'or' logic.
 
         entity_map is either nodes, links, or risk_groups:
           {entity_id -> {top_level_attr: value, ...}}
 
-        If logic='any', skip condition checks and return everything.
-        If no conditions and logic!='any', return empty set.
+        If no conditions, return everything (no restrictions means all match).
 
         Returns:
             A set of matching entity IDs.
         """
-        if logic == "any":
-            return set(entity_map.keys())
-
         if not conditions:
-            return set()
+            # No conditions means match all entities regardless of logic
+            return set(entity_map.keys())
 
         matched = set()
         for entity_id, attrs in entity_map.items():

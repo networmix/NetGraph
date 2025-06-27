@@ -376,7 +376,7 @@
                   },
                   "logic": {
                     "type": "string",
-                    "enum": ["and", "or", "any"],
+                    "enum": ["and", "or"],
                     "description": "Logic for combining conditions"
                   },
                   "rule_type": {

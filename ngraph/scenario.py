@@ -309,7 +309,7 @@ class Scenario:
             rule = FailureRule(
                 entity_scope=entity_scope,
                 conditions=conditions,
-                logic=rule_dict.get("logic", "and"),
+                logic=rule_dict.get("logic", "or"),
                 rule_type=rule_dict.get("rule_type", "all"),
                 probability=rule_dict.get("probability", 1.0),
                 count=rule_dict.get("count", 1),

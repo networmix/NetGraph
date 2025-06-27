@@ -101,11 +101,9 @@ failure_policy_set:
     use_cache: false
     rules:
       - entity_scope: node
-        logic: "any"
         rule_type: "choice"
         count: 1
       - entity_scope: link
-        logic: "any"
         rule_type: "all"
 traffic_matrix_set:
   default:
@@ -488,7 +486,6 @@ failure_policy:
 
     # Choose exactly 2 risk groups to fail (e.g., data centers)
     - entity_scope: "risk_group"
-      logic: "any"
       rule_type: "choice"
       count: 2
 """
@@ -597,7 +594,6 @@ failure_policy_set:
 
       # Choose exactly 2 risk groups to fail (e.g., data centers)
       - entity_scope: "risk_group"
-        logic: "any"
         rule_type: "choice"
         count: 2
 

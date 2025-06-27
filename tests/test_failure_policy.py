@@ -392,7 +392,6 @@ def test_docstring_yaml_example_policy():
             # Rule 3: Choose exactly 2 risk groups to fail
             FailureRule(
                 entity_scope="risk_group",
-                logic="any",
                 rule_type="choice",
                 count=2,
             ),
@@ -436,7 +435,7 @@ def test_docstring_yaml_example_policy():
     rule3 = policy.rules[2]
     assert rule3.entity_scope == "risk_group"
     assert len(rule3.conditions) == 0
-    assert rule3.logic == "any"
+    assert rule3.logic == "or"
     assert rule3.rule_type == "choice"
     assert rule3.count == 2
 
@@ -524,7 +523,6 @@ def test_docstring_policy_individual_rules():
     # Test rule 3: Choice of exactly 2 risk groups
     risk_group_rule = FailureRule(
         entity_scope="risk_group",
-        logic="any",
         rule_type="choice",
         count=2,
     )

@@ -117,8 +117,7 @@ failure_policy_set:
       name: "anySingleLink"
       description: "Evaluate traffic routing under any single link failure."
     rules:
-      - logic: "any"
-        entity_scope: "link"
+      - entity_scope: "link"
         rule_type: "choice"
         count: 1
 

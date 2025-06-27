@@ -63,7 +63,7 @@ def test_scenario_1_build_graph() -> None:
 
     rule = policy.rules[0]
     assert rule.entity_scope == "link"
-    assert rule.logic == "any"
+    assert rule.logic == "or"
     assert rule.rule_type == "choice"
     assert rule.count == 1
 

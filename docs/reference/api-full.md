@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 20, 2025 at 02:06 UTC
+**Generated from source code on:** June 27, 2025 at 20:36 UTC
 
 **Modules auto-discovered:** 48
 
@@ -374,7 +374,7 @@ A container for multiple FailureRules plus optional metadata in `attrs`.
 
 The main entry point is `apply_failures`, which:
   1) For each rule, gather the relevant entities (node, link, or risk_group).
-  2) Match them based on rule conditions (or skip if 'logic=any').
+          2) Match them based on rule conditions using 'and' or 'or' logic.
   3) Apply the selection strategy (all, random, or choice).
   4) Collect the union of all failed entities across all rules.
   5) Optionally expand failures by shared-risk groups or sub-risks.
@@ -416,8 +416,8 @@ Example YAML configuration:
           probability: 0.4
 
         # Choose exactly 2 risk groups to fail (e.g., data centers)
+        # Note: logic defaults to "or" when not specified
         - entity_scope: "risk_group"
-          logic: "any"
           rule_type: "choice"
           count: 2
     ```
@@ -467,10 +467,9 @@ Attributes:
         The type of entities this rule applies to: "node", "link", or "risk_group".
     conditions (List[FailureCondition]):
         A list of conditions to filter matching entities.
-    logic (Literal["and", "or", "any"]):
+    logic (Literal["and", "or"]):
         "and": All conditions must be true for a match.
-        "or": At least one condition is true for a match.
-        "any": Skip condition checks and match all.
+        "or": At least one condition is true for a match (default).
     rule_type (Literal["random", "choice", "all"]):
         The selection strategy among the matched set:
           - "random": each matched entity is chosen with probability = `probability`.
@@ -485,7 +484,7 @@ Attributes:
 
 - `entity_scope` (EntityScope)
 - `conditions` (List[FailureCondition]) = []
-- `logic` (Literal['and', 'or', 'any']) = and
+- `logic` (Literal['and', 'or']) = or
 - `rule_type` (Literal['random', 'choice', 'all']) = all
 - `probability` (float) = 1.0
 - `count` (int) = 1

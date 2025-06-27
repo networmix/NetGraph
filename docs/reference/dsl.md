@@ -417,7 +417,7 @@ failure_policy_set:
           - attr: "attribute_name"
             operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
             value: "some_value"
-        logic: "and" | "or" | "any" # How to combine conditions
+        logic: "and" | "or" # How to combine conditions (default: "or")
         rule_type: "all" | "choice" | "random" # How to select entities matching conditions
         count: N # For 'choice' rule_type
         probability: P # For 'random' rule_type (0.0 to 1.0)

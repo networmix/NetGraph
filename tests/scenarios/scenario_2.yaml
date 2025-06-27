@@ -190,7 +190,6 @@ failure_policy_set:
       description: "Evaluate traffic routing under any single link failure."
     rules:
       - entity_scope: "link"
-        logic: "any"
         rule_type: "choice"
         count: 1
 

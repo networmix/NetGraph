@@ -180,7 +180,6 @@ failure_policy_set:
       description: "Fails exactly one random link to test network resilience"
     rules:
       - entity_scope: "link"
-        logic: "any"
         rule_type: "choice"
         count: 1
   single_shared_risk_group_failure:
@@ -189,7 +188,6 @@ failure_policy_set:
       description: "Fails exactly one random shared risk group to test network resilience"
     rules:
       - entity_scope: "risk_group"
-        logic: "any"
         rule_type: "choice"
         count: 1
 
