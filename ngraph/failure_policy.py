@@ -99,7 +99,7 @@ class FailurePolicy:
           attrs:
             name: "Texas Grid Outage Scenario"
             description: "Regional power grid failure affecting telecom infrastructure"
-          fail_shared_risk_groups: true
+          fail_risk_groups: true
           rules:
             # Fail all nodes in Texas electrical grid
             - entity_scope: "node"
@@ -135,7 +135,7 @@ class FailurePolicy:
             A list of FailureRules to apply.
         attrs (Dict[str, Any]):
             Arbitrary metadata about this policy (e.g. "name", "description").
-        fail_shared_risk_groups (bool):
+        fail_risk_groups (bool):
             If True, after initial selection, expand failures among any
             node/link that shares a risk group with a failed entity.
         fail_risk_group_children (bool):
@@ -153,7 +153,7 @@ class FailurePolicy:
 
     rules: List[FailureRule] = field(default_factory=list)
     attrs: Dict[str, Any] = field(default_factory=dict)
-    fail_shared_risk_groups: bool = False
+    fail_risk_groups: bool = False
     fail_risk_group_children: bool = False
     use_cache: bool = False
     seed: Optional[int] = None
@@ -208,9 +208,9 @@ class FailurePolicy:
             elif rule.entity_scope == "risk_group":
                 failed_risk_groups |= set(selected)
 
-        # 2) Optionally expand failures by shared-risk groups
-        if self.fail_shared_risk_groups:
-            self._expand_shared_risk_groups(
+        # 2) Optionally expand failures by risk groups
+        if self.fail_risk_groups:
+            self._expand_risk_groups(
                 failed_nodes, failed_links, network_nodes, network_links
             )
 
@@ -338,7 +338,7 @@ class FailurePolicy:
         else:
             raise ValueError(f"Unsupported rule_type: {rule.rule_type}")
 
-    def _expand_shared_risk_groups(
+    def _expand_risk_groups(
         self,
         failed_nodes: Set[str],
         failed_links: Set[str],
@@ -455,7 +455,7 @@ class FailurePolicy:
                 for rule in self.rules
             ],
             "attrs": self.attrs,
-            "fail_shared_risk_groups": self.fail_shared_risk_groups,
+            "fail_risk_groups": self.fail_risk_groups,
             "fail_risk_group_children": self.fail_risk_group_children,
             "use_cache": self.use_cache,
             "seed": self.seed,

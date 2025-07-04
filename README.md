@@ -20,14 +20,14 @@ NetGraph is a scenario-based network modeling and analysis framework written in 
 - 🚧 **Command Line Interface**: Execute scenarios from terminal with JSON output for simple automation
 - 🚧 **Python API**: API for programmatic access to scenario components and network analysis tools
 - 🚧 **Documentation and Examples**: Guides and use cases
-- ❌ **Components Library**: Hardware/optics modeling with cost, power consumption, and capacity specifications
+- 🔜 **Components Library**: Hardware/optics modeling with cost, power consumption, and capacity specifications
 - ❓ **Visualization**: Graphical representation of scenarios and results
 
 ### Status Legend
 
 - ✅ **Done**: Feature implemented and tested
 - 🚧 **In Progress**: Feature under development
-- ❌ **Planned**: Feature planned but not yet started
+- 🔜 **Planned**: Feature planned but not yet started
 - ❓ **Future Consideration**: Feature may be added later
 
 ## Quick Start

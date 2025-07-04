@@ -247,14 +247,14 @@ class Scenario:
         fp_data: Dict[str, Any], seed_manager: SeedManager, policy_name: str
     ) -> FailurePolicy:
         """Constructs a FailurePolicy from data that may specify multiple rules plus
-        optional top-level fields like fail_shared_risk_groups, fail_risk_group_children,
+        optional top-level fields like fail_risk_groups, fail_risk_group_children,
         use_cache, and attrs.
 
         Example:
             failure_policy_set:
               default:
                 name: "test"  # (Currently unused if present)
-                fail_shared_risk_groups: true
+                fail_risk_groups: true
                 fail_risk_group_children: false
                 use_cache: true
                 attrs:
@@ -280,7 +280,7 @@ class Scenario:
         Raises:
             ValueError: If 'rules' is present but not a list, or if conditions are not lists.
         """
-        fail_srg = fp_data.get("fail_shared_risk_groups", False)
+        fail_srg = fp_data.get("fail_risk_groups", False)
         fail_rg_children = fp_data.get("fail_risk_group_children", False)
         use_cache = fp_data.get("use_cache", False)
         attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
@@ -322,7 +322,7 @@ class Scenario:
         return FailurePolicy(
             rules=rules,
             attrs=attrs,
-            fail_shared_risk_groups=fail_srg,
+            fail_risk_groups=fail_srg,
             fail_risk_group_children=fail_rg_children,
             use_cache=use_cache,
             seed=policy_seed,

@@ -334,9 +334,9 @@
               "type": "object",
               "description": "Policy metadata"
             },
-            "fail_shared_risk_groups": {
+            "fail_risk_groups": {
               "type": "boolean",
-              "description": "Whether to fail shared risk groups"
+              "description": "Whether to fail risk groups"
             },
             "fail_risk_group_children": {
               "type": "boolean",

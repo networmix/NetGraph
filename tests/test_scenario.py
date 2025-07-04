@@ -96,7 +96,7 @@ failure_policy_set:
     attrs:
       name: "multi_rule_example"
       description: "Testing multi-rule approach."
-    fail_shared_risk_groups: false
+    fail_risk_groups: false
     fail_risk_group_children: false
     use_cache: false
     rules:
@@ -281,7 +281,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     # Check failure policy
     default_policy = scenario.failure_policy_set.get_default_policy()
     assert isinstance(default_policy, FailurePolicy)
-    assert not default_policy.fail_shared_risk_groups
+    assert not default_policy.fail_risk_groups
     assert not default_policy.fail_risk_group_children
     assert not default_policy.use_cache
 
@@ -417,7 +417,23 @@ network:
   nodes:
     NodeA: {}
     NodeB: {}
-  links: []
+    NodeC: {}
+  links:
+    - source: NodeA
+      target: NodeB
+      link_params:
+        capacity: 10
+        cost: 5
+        attrs:
+          type: link
+          some_attr: some_value
+    - source: NodeB
+      target: NodeC
+      link_params:
+        capacity: 20
+        cost: 4
+        attrs:
+          type: link
 risk_groups:
   - name: "RG1"
     disabled: false
@@ -460,7 +476,7 @@ failure_policy:
   attrs:
     name: "Texas Grid Outage Scenario"
     description: "Regional power grid failure affecting telecom infrastructure"
-  fail_shared_risk_groups: true
+  fail_risk_groups: true
   rules:
     # Fail all nodes in Texas electrical grid
     - entity_scope: "node"
@@ -502,7 +518,7 @@ failure_policy:
 
     # Verify structure
     assert policy.attrs["name"] == "Texas Grid Outage Scenario"
-    assert policy.fail_shared_risk_groups is True
+    assert policy.fail_risk_groups is True
     assert len(policy.rules) == 3
     assert policy.seed is not None  # Should have derived seed
 
@@ -568,7 +584,7 @@ failure_policy_set:
     attrs:
       name: "Texas Grid Outage Scenario"
       description: "Regional power grid failure affecting telecom infrastructure"
-    fail_shared_risk_groups: true
+    fail_risk_groups: true
     rules:
       # Fail all nodes in Texas electrical grid
       - entity_scope: "node"
@@ -610,7 +626,7 @@ traffic_matrix_set:
 
     # Verify it matches our expectations
     assert policy.attrs["name"] == "Texas Grid Outage Scenario"
-    assert policy.fail_shared_risk_groups is True
+    assert policy.fail_risk_groups is True
     assert len(policy.rules) == 3
 
     # Verify it works with the scenario's network

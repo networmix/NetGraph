@@ -172,9 +172,9 @@ def test_multi_rule_union():
     assert set(failed) == {"N2", "L1"}
 
 
-def test_fail_shared_risk_groups():
+def test_fail_risk_groups():
     """
-    If fail_shared_risk_groups=True, failing any node/link also fails
+    If fail_risk_groups=True, failing any node/link also fails
     all node/links that share a risk group with it.
     """
     rule = FailureRule(
@@ -190,7 +190,7 @@ def test_fail_shared_risk_groups():
     # We pick exactly 1 => "L2"
     policy = FailurePolicy(
         rules=[rule],
-        fail_shared_risk_groups=True,
+        fail_risk_groups=True,
     )
 
     nodes = {
@@ -365,7 +365,7 @@ def test_docstring_yaml_example_policy():
             "name": "Texas Grid Outage Scenario",
             "description": "Regional power grid failure affecting telecom infrastructure",
         },
-        fail_shared_risk_groups=True,
+        fail_risk_groups=True,
         rules=[
             # Rule 1: Fail all nodes in Texas electrical grid
             FailureRule(
@@ -404,7 +404,7 @@ def test_docstring_yaml_example_policy():
         policy.attrs["description"]
         == "Regional power grid failure affecting telecom infrastructure"
     )
-    assert policy.fail_shared_risk_groups is True
+    assert policy.fail_risk_groups is True
     assert len(policy.rules) == 3
 
     # Verify rule 1 structure

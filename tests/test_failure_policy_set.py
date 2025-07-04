@@ -88,7 +88,7 @@ class TestFailurePolicySet:
         policy = FailurePolicy(
             rules=[rule],
             attrs={"name": "test_policy", "description": "Test policy"},
-            fail_shared_risk_groups=True,
+            fail_risk_groups=True,
             use_cache=False,
         )
 
@@ -99,7 +99,7 @@ class TestFailurePolicySet:
         assert "test" in result
         assert "rules" in result["test"]
         assert "attrs" in result["test"]
-        assert result["test"]["fail_shared_risk_groups"] is True
+        assert result["test"]["fail_risk_groups"] is True
         assert result["test"]["use_cache"] is False
         assert len(result["test"]["rules"]) == 1
 

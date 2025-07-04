@@ -194,8 +194,8 @@ network:
       target: ".*/spine/.*"
       any_direction: true  # Match both directions of the link
       link_params:
+        risk_groups: ["SpineSRG"]
         attrs:
-          shared_risk_groups: ["SpineSRG"]
           hw_component: "400G-LR4"
 ```
 
@@ -406,7 +406,7 @@ Defines named failure policies for simulating network failures to test resilienc
 failure_policy_set:
   policy_name_1:
     name: "PolicyName" # Optional
-    fail_shared_risk_groups: true | false
+    fail_risk_groups: true | false
     fail_risk_group_children: true | false
     use_cache: true | false
     attrs: # Optional custom attributes for the policy

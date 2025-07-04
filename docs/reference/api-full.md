@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 27, 2025 at 20:37 UTC
+**Generated from source code on:** July 04, 2025 at 16:12 UTC
 
 **Modules auto-discovered:** 48
 
@@ -391,7 +391,7 @@ Example YAML configuration:
       attrs:
         name: "Texas Grid Outage Scenario"
         description: "Regional power grid failure affecting telecom infrastructure"
-      fail_shared_risk_groups: true
+      fail_risk_groups: true
       rules:
         # Fail all nodes in Texas electrical grid
         - entity_scope: "node"
@@ -427,7 +427,7 @@ Attributes:
         A list of FailureRules to apply.
     attrs (Dict[str, Any]):
         Arbitrary metadata about this policy (e.g. "name", "description").
-    fail_shared_risk_groups (bool):
+    fail_risk_groups (bool):
         If True, after initial selection, expand failures among any
         node/link that shares a risk group with a failed entity.
     fail_risk_group_children (bool):
@@ -445,7 +445,7 @@ Attributes:
 
 - `rules` (List[FailureRule]) = []
 - `attrs` (Dict[str, Any]) = {}
-- `fail_shared_risk_groups` (bool) = False
+- `fail_risk_groups` (bool) = False
 - `fail_risk_group_children` (bool) = False
 - `use_cache` (bool) = False
 - `seed` (Optional[int])
