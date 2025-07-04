@@ -198,6 +198,7 @@ NetGraph provides workflow steps for automated analysis sequences.
 # Available workflow steps:
 # - BuildGraph: Builds a StrictMultiDiGraph from scenario.network
 # - CapacityProbe: Probes capacity (max flow) between selected groups of nodes
+# - NetworkStats: Computes basic capacity and degree statistics
 
 # Example workflow configuration:
 workflow = [
