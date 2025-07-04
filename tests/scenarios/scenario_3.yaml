@@ -17,7 +17,7 @@ blueprints:
         target: /t2
         pattern: mesh
         link_params:
-          capacity: 2
+          capacity: 100.0 # 100 Gb/s tier1-tier2 links
           cost: 1
 
   3tier_clos:
@@ -35,13 +35,13 @@ blueprints:
         target: spine
         pattern: one_to_one
         link_params:
-          capacity: 2
+          capacity: 400.0 # 400 Gb/s tier2-spine links
           cost: 1
       - source: b2/t2
         target: spine
         pattern: one_to_one
         link_params:
-          capacity: 2
+          capacity: 400.0 # 400 Gb/s tier2-spine links
           cost: 1
 
 network:
@@ -60,7 +60,7 @@ network:
       target: my_clos2/spine
       pattern: one_to_one
       link_params:
-        capacity: 2
+        capacity: 400.0 # 400 Gb/s inter-CLOS spine links
         cost: 1
 
   link_overrides:
@@ -68,10 +68,10 @@ network:
     - source: my_clos1/spine/t3-1$
       target: my_clos2/spine/t3-1$
       link_params:
-        capacity: 1
+        capacity: 200.0 # Override capacity to 200 Gb/s
         cost: 1
 
-    # Demonstrates setting risk groups and hw_component on all spine to spine links.
+    # Set risk groups and hw_component on all spine to spine links
     - source: .*/spine/.*
       target: .*/spine/.*
       any_direction: True
@@ -80,7 +80,7 @@ network:
         attrs:
           hw_component: "400G-LR4"
 
-  # Example node overrides that assign risk groups and hardware types
+  # Node overrides for risk groups and hardware types
   node_overrides:
     - path: my_clos1/b1/t1
       risk_groups: ["clos1-b1t1-SRG"]

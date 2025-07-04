@@ -63,6 +63,7 @@ class DistributeExternalConnectivity(NetworkTransform):
         capacity: float = 1.0,
         cost: float = 1.0,
         remote_prefix: str = "",
+        seed: int | None = None,  # Accept seed parameter but don't use it
     ) -> None:
         if stripe_width < 1:
             raise ValueError("stripe_width must be ≥ 1")

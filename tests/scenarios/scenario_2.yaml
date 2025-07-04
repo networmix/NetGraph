@@ -40,7 +40,7 @@ blueprints:
         # Uses the 'clos_2tier' blueprint but overrides some parameters.
         use_blueprint: clos_2tier
         parameters:
-          # Example override: more spine nodes and a new naming convention.
+          # Override: more spine nodes and custom naming convention
           spine.node_count: 6
           spine.name_template: "myspine-{node_num}"
 

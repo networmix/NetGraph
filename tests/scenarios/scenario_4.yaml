@@ -1,0 +1,376 @@
+# Test scenario 4: Advanced DSL features demonstration
+# Tests components system, variable expansion, bracket expansion, complex overrides
+# and risk groups in a realistic data center fabric scenario
+seed: 4004
+
+# Component library for hardware modeling
+components:
+  ToRSwitch48p:
+    component_type: "switch"
+    description: "48-port Top of Rack switch"
+    cost: 8000.0
+    power_watts: 350.0
+    power_watts_max: 600.0
+    capacity: 2400.0 # 48 * 50G aggregate
+    ports: 48
+    count: 1
+    attrs:
+      vendor: "Arista"
+      model: "7050SX3-48YC8"
+      form_factor: "1RU"
+    children:
+      SFP28_25G:
+        component_type: "optic"
+        description: "25G SFP28 optic"
+        cost: 150.0
+        power_watts: 1.5
+        capacity: 25.0
+        count: 48
+        attrs:
+          reach: "100m"
+          wavelength: "850nm"
+
+  SpineSwitch32p:
+    component_type: "switch"
+    description: "32-port spine switch"
+    cost: 25000.0
+    power_watts: 800.0
+    power_watts_max: 1000.0
+    capacity: 12800.0 # 32 * 400G aggregate
+    ports: 32
+    count: 1
+    attrs:
+      vendor: "Arista"
+      model: "7800R3-36DM"
+      form_factor: "2RU"
+    children:
+      QSFP_DD_400G:
+        component_type: "optic"
+        description: "400G QSFP-DD optic"
+        cost: 2500.0
+        power_watts: 15.0
+        capacity: 400.0
+        count: 32
+        attrs:
+          reach: "2km"
+          wavelength: "1310nm"
+
+  ServerNode:
+    component_type: "server"
+    description: "Dual-socket server node"
+    cost: 12000.0
+    power_watts: 400.0
+    power_watts_max: 500.0
+    ports: 2
+    count: 1
+    attrs:
+      cpu_cores: 64
+      memory_gb: 512
+      storage_tb: 4
+
+# Risk groups for realistic failure modeling
+risk_groups:
+  - name: "DC1_PowerSupply_A"
+    attrs:
+      location: "DC1_Row1_PSU_A"
+      criticality: "high"
+    children:
+      - name: "DC1_R1_Rack[1-2]_PSU_A"
+        attrs:
+          location: "DC1_Row1"
+
+  - name: "DC1_NetworkUplink"
+    attrs:
+      location: "DC1_Core_Network"
+      criticality: "critical"
+
+  - name: "Spine_Fabric_SRG"
+    attrs:
+      description: "Spine fabric shared risk group"
+      criticality: "high"
+
+blueprints:
+  # Basic server rack with ToR switch
+  server_rack:
+    groups:
+      tor:
+        node_count: 1
+        name_template: "tor-{node_num}"
+        attrs:
+          hw_component: "ToRSwitch48p"
+          role: "top_of_rack"
+        risk_groups: ["RackSRG"]
+      servers:
+        node_count: 8 # 8 servers per rack for test efficiency
+        name_template: "srv-{node_num}"
+        attrs:
+          hw_component: "ServerNode"
+          role: "compute"
+        risk_groups: ["RackSRG"]
+    adjacency:
+      - source: /servers
+        target: /tor
+        pattern: "one_to_one"
+        link_params:
+          capacity: 25.0 # 25 Gb/s server uplinks
+          cost: 1
+          attrs:
+            media_type: "copper"
+
+  # Spine-leaf fabric with variable expansion
+  leaf_spine_fabric:
+    groups:
+      leaf:
+        node_count: 2 # 2 leaf switches per fabric
+        name_template: "leaf-{node_num}"
+        attrs:
+          hw_component: "ToRSwitch48p"
+          role: "leaf"
+        risk_groups: ["LeafSRG"]
+      spine:
+        node_count: 2 # 2 spine switches per fabric
+        name_template: "spine-{node_num}"
+        attrs:
+          hw_component: "SpineSwitch32p"
+          role: "spine"
+        risk_groups: ["Spine_Fabric_SRG"]
+    adjacency:
+      # Variable expansion for leaf-spine connectivity
+      - source: "leaf-{leaf_id}"
+        target: "spine-{spine_id}"
+        expand_vars:
+          leaf_id: [1, 2]
+          spine_id: [1, 2]
+        expansion_mode: "cartesian"
+        pattern: "mesh"
+        link_params:
+          capacity: 400.0 # 400 Gb/s leaf-spine links
+          cost: 1
+          risk_groups: ["Spine_Fabric_SRG"]
+          attrs:
+            media_type: "fiber"
+            link_type: "leaf_spine"
+
+network:
+  name: "Advanced DSL Demonstration"
+  version: "2.0"
+
+  groups:
+    # Multi-datacenter pod and rack expansion
+    dc[1-2]_pod[a,b]_rack[1-2]:
+      use_blueprint: server_rack
+      attrs:
+        datacenter: "dc1"
+        pod: "poda"
+        rack: "rack1"
+      risk_groups: ["DC1_PowerSupply_A"]
+
+    # Fabric per DC using bracket expansion
+    dc[1-2]_fabric:
+      use_blueprint: leaf_spine_fabric
+      attrs:
+        datacenter: "dc1"
+      risk_groups: ["DC1_NetworkUplink"]
+
+  # Top-level adjacency with variable expansion
+  adjacency:
+    # Connect racks to fabric using variable expansion
+    - source: "dc{dc}_pod{pod}_rack{rack}/tor"
+      target: "dc{dc}_fabric/leaf"
+      expand_vars:
+        dc: [1, 2]
+        pod: ["a", "b"]
+        rack: [1, 2]
+      expansion_mode: "cartesian"
+      pattern: "one_to_one"
+      link_params:
+        capacity: 100.0 # 100 Gb/s rack-to-fabric uplinks
+        cost: 2
+        attrs:
+          connection_type: "rack_to_fabric"
+
+    # Inter-DC spine connectivity
+    - source: "dc1_fabric/spine"
+      target: "dc2_fabric/spine"
+      pattern: "mesh"
+      link_params:
+        capacity: 400.0 # 400 Gb/s inter-DC links
+        cost: 10
+        risk_groups: ["InterDC_Links"]
+        attrs:
+          connection_type: "inter_dc"
+          distance_km: 50
+
+  # Complex node overrides with regex patterns
+  node_overrides:
+    # Override all spine switches with specific hardware model
+    - path: ".*/fabric/spine/spine-[1-2]"
+      attrs:
+        hw_component: "SpineSwitch32p"
+        role: "spine"
+      risk_groups: ["Spine_Fabric_SRG"]
+
+    # Override servers in specific pods for GPU workloads
+    - path: "dc1_pod[ab]_rack[12]/servers/srv-[1-4]"
+      attrs:
+        role: "gpu_compute"
+        gpu_count: 8
+        hw_component: "ServerNode"
+
+    # Mark certain racks as disabled for maintenance
+    - path: "dc2_podb_rack2/.*"
+      disabled: true
+      attrs:
+        maintenance_status: "scheduled"
+
+  # Complex link overrides
+  link_overrides:
+    # Higher capacity for inter-DC links
+    - source: "dc1_fabric/spine/.*"
+      target: "dc2_fabric/spine/.*"
+      any_direction: true
+      link_params:
+        capacity: 800.0 # 800 Gb/s inter-DC links
+        cost: 5
+        risk_groups: ["InterDC_Links", "WAN_SRG"]
+        attrs:
+          link_class: "inter_dc"
+          encryption: "enabled"
+
+    # Higher capacity uplinks for specific racks
+    - source: "dc1_pod[ab]_rack1/tor/.*"
+      target: "dc1_fabric/leaf/.*"
+      link_params:
+        capacity: 200.0 # 200 Gb/s uplinks
+        cost: 1
+
+# Traffic patterns for realistic workloads
+traffic_matrix_set:
+  default:
+    # East-west traffic within DC
+    - source_path: "dc1_pod[ab]_rack.*/servers/.*"
+      sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+      demand: 5.0 # 5 Gb/s east-west traffic
+      mode: "full_mesh"
+      attrs:
+        traffic_type: "east_west"
+
+    # North-south traffic to external
+    - source_path: "dc1_.*servers/.*"
+      sink_path: "dc2_.*servers/.*"
+      demand: 10.0 # 10 Gb/s inter-DC traffic
+      mode: "combine"
+      attrs:
+        traffic_type: "inter_dc"
+
+  # High-performance computing workload
+  hpc_workload:
+    - source_path: "dc1_poda_rack1/servers/srv-[1-4]"
+      sink_path: "dc1_poda_rack1/servers/srv-[1-4]"
+      demand: 20.0 # 20 Gb/s HPC collective communication
+      mode: "full_mesh"
+      attrs:
+        traffic_type: "hpc_collective"
+
+# Failure policies for realistic failure scenarios
+failure_policy_set:
+  single_link_failure:
+    attrs:
+      name: "single_link_failure"
+      description: "Single link failure"
+    rules:
+      - entity_scope: "link"
+        rule_type: "choice"
+        count: 1
+
+  single_node_failure:
+    attrs:
+      name: "single_node_failure"
+      description: "Single node failure"
+    rules:
+      - entity_scope: "node"
+        rule_type: "choice"
+        count: 1
+
+  default:
+    attrs:
+      name: "random_link_failure"
+      description: "Random single link failure"
+    rules:
+      - entity_scope: "link"
+        rule_type: "choice"
+        count: 1
+
+# Comprehensive workflow demonstrating multiple steps
+workflow:
+  - step_type: BuildGraph
+    name: build_graph
+
+  # Enable nodes that were disabled for maintenance
+  - step_type: EnableNodes
+    name: enable_maintenance_racks
+    path: "dc2_podb_rack2/.*"
+    count: 10 # Enable 10 nodes
+    order: "name"
+
+  # Add external connectivity
+  - step_type: DistributeExternalConnectivity
+    name: add_wan_connectivity
+    remote_locations:
+      - "WAN_NYC"
+      - "WAN_CHI" # 2 WAN locations for test efficiency
+    attachment_path: "dc[12]_fabric/spine/spine-[12]"
+    stripe_width: 2
+    link_count: 1 # 1 link per location
+    capacity: 100.0 # 100 Gb/s WAN links
+    cost: 50
+    remote_prefix: "wan/"
+
+  # Capacity analysis with different traffic patterns
+  - step_type: CapacityProbe
+    name: intra_dc_capacity
+    source_path: "dc1_pod[ab]_rack.*/servers/.*"
+    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    mode: "combine"
+    probe_reverse: true
+    shortest_path: false
+    flow_placement: "PROPORTIONAL"
+
+  - step_type: CapacityProbe
+    name: inter_dc_capacity
+    source_path: "dc1_.*servers/.*"
+    sink_path: "dc2_.*servers/.*"
+    mode: "combine"
+    probe_reverse: true
+    shortest_path: false
+    flow_placement: "EQUAL_BALANCED"
+
+  # Failure analysis with different policies
+  - step_type: CapacityEnvelopeAnalysis
+    name: rack_failure_analysis
+    source_path: "dc1_pod[ab]_rack.*/servers/.*"
+    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    mode: "combine"
+    failure_policy: "single_link_failure"
+    iterations: 10 # 10 iterations for test efficiency
+    parallelism: 2 # 2-way parallelism
+    shortest_path: false
+    flow_placement: "PROPORTIONAL"
+
+  - step_type: CapacityEnvelopeAnalysis
+    name: spine_failure_analysis
+    source_path: "dc1_.*servers/.*"
+    sink_path: "dc2_.*servers/.*"
+    mode: "combine"
+    failure_policy: "single_node_failure"
+    iterations: 20 # 20 iterations for test efficiency
+    parallelism: 2 # 2-way parallelism
+    shortest_path: false
+    flow_placement: "EQUAL_BALANCED"
+
+  # Export results to notebook
+  - step_type: NotebookExport
+    name: export_advanced_analysis
+    notebook_path: "advanced_dsl_analysis.ipynb"
+    json_path: "advanced_dsl_results.json"
+    allow_empty_results: false
