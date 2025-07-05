@@ -1,7 +1,7 @@
 """Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing comprehensive statistics, and generating notebook-friendly
+envelope results, computing detailed statistics, and generating notebook-friendly
 visualizations.
 """
 

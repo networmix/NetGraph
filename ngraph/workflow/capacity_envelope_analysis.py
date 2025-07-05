@@ -664,7 +664,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             flow_key = f"{src_label}->{dst_label}"
             envelopes[flow_key] = envelope.to_dict()
 
-            # Enhanced logging with statistics
+            # Detailed logging with statistics
             min_val = min(capacity_values)
             max_val = max(capacity_values)
             mean_val = sum(capacity_values) / len(capacity_values)

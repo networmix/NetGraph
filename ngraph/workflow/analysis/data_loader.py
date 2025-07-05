@@ -10,7 +10,7 @@ class DataLoader:
 
     @staticmethod
     def load_results(json_path: Union[str, Path]) -> Dict[str, Any]:
-        """Load results from JSON file with comprehensive error handling."""
+        """Load results from JSON file with detailed error handling."""
         json_path = Path(json_path)
 
         result = {

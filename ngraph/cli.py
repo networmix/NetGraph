@@ -414,7 +414,7 @@ def _run_scenario(
 
         if profile:
             logger.info("Performance profiling enabled")
-            # Initialize comprehensive profiler
+            # Initialize detailed profiler
             profiler = PerformanceProfiler()
 
             # Start scenario-level profiling

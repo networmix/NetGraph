@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 05, 2025 at 15:08 UTC
+**Generated from source code on:** July 05, 2025 at 16:54 UTC
 
 **Modules auto-discovered:** 50
 
@@ -578,6 +578,8 @@ Attributes:
     links (Dict[str, Link]): Mapping from link ID -> Link object.
     risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
     attrs (Dict[str, Any]): Optional metadata about the network.
+    _cached_graph (Optional[StrictMultiDiGraph]): Cached graph representation of the network.
+    _graph_cache_valid (bool): Indicates whether the cached graph is valid.
 
 **Attributes:**
 
@@ -695,6 +697,8 @@ Profiles workflow steps using cProfile and identifies bottlenecks.
   - End profiling for the entire scenario execution.
 - `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'`
   - Get the top CPU-consuming functions for a specific step.
+- `merge_child_profiles(self, profile_dir: 'Path', step_name: 'str') -> 'None'`
+  - Merge child worker profiles into the parent step profile.
 - `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'`
   - Context manager for profiling individual workflow steps.
 - `save_detailed_profile(self, output_path: 'Path', step_name: 'Optional[str]' = None) -> 'None'`
@@ -746,6 +750,7 @@ Attributes:
     function_calls: Number of function calls during execution.
     memory_peak: Peak memory usage during step (if available).
     cprofile_stats: Detailed cProfile statistics object.
+    worker_profiles_merged: Number of worker profiles merged into this step.
 
 **Attributes:**
 
@@ -756,6 +761,7 @@ Attributes:
 - `function_calls` (int)
 - `memory_peak` (Optional[float])
 - `cprofile_stats` (Optional[pstats.Stats])
+- `worker_profiles_merged` (int) = 0
 
 ---
 
@@ -2471,7 +2477,7 @@ Base class for notebook analysis components.
 Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing comprehensive statistics, and generating notebook-friendly
+envelope results, computing detailed statistics, and generating notebook-friendly
 visualizations.
 
 ### CapacityMatrixAnalyzer
@@ -2508,7 +2514,7 @@ Handles loading and validation of analysis results.
 **Methods:**
 
 - `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
-  - Load results from JSON file with comprehensive error handling.
+  - Load results from JSON file with detailed error handling.
 
 ---
 

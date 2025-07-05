@@ -102,6 +102,8 @@ class Network:
         links (Dict[str, Link]): Mapping from link ID -> Link object.
         risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
         attrs (Dict[str, Any]): Optional metadata about the network.
+        _cached_graph (Optional[StrictMultiDiGraph]): Cached graph representation of the network.
+        _graph_cache_valid (bool): Indicates whether the cached graph is valid.
     """
 
     nodes: Dict[str, Node] = field(default_factory=dict)
@@ -254,6 +256,9 @@ class Network:
         if not snk_groups:
             raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
+        # Build the graph once for all computations - avoids repeated to_strict_multidigraph() calls
+        base_graph = self.to_strict_multidigraph()
+
         if mode == "combine":
             combined_src_nodes: List[Node] = []
             combined_snk_nodes: List[Node] = []
@@ -281,6 +286,7 @@ class Network:
                     combined_snk_nodes,
                     shortest_path,
                     flow_placement,
+                    prebuilt_graph=base_graph,
                 )
             return {(combined_src_label, combined_snk_label): flow_val}
 
@@ -298,7 +304,11 @@ class Network:
                             flow_val = 0.0
                         else:
                             flow_val = self._compute_flow_single_group(
-                                src_nodes, snk_nodes, shortest_path, flow_placement
+                                src_nodes,
+                                snk_nodes,
+                                shortest_path,
+                                flow_placement,
+                                prebuilt_graph=base_graph,
                             )
                     else:
                         flow_val = 0.0
@@ -314,6 +324,7 @@ class Network:
         sinks: List[Node],
         shortest_path: bool,
         flow_placement: Optional[FlowPlacement],
+        prebuilt_graph: Optional[StrictMultiDiGraph] = None,
     ) -> float:
         """Attach a pseudo-source and pseudo-sink to the provided node lists,
         then run calc_max_flow. Returns the resulting flow from all
@@ -327,6 +338,8 @@ class Network:
             shortest_path (bool): If True, restrict flows to shortest paths only.
             flow_placement (Optional[FlowPlacement]): Strategy for placing flow among
                 parallel equal-cost paths. If None, defaults to FlowPlacement.PROPORTIONAL.
+            prebuilt_graph (Optional[StrictMultiDiGraph]): If provided, use this graph
+                instead of creating a new one. The graph will be copied to avoid modification.
 
         Returns:
             float: The computed max flow value, or 0.0 if no active sources or sinks.
@@ -340,7 +353,12 @@ class Network:
         if not active_sources or not active_sinks:
             return 0.0
 
-        graph = self.to_strict_multidigraph()
+        # Use prebuilt graph if provided, otherwise create new one
+        if prebuilt_graph is not None:
+            graph = prebuilt_graph.copy()
+        else:
+            graph = self.to_strict_multidigraph()
+
         graph.add_node("source")
         graph.add_node("sink")
 

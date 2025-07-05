@@ -15,7 +15,7 @@ Data Analyzers:
 
 Utility Components:
     PackageManager: Handles runtime dependency verification and installation.
-    DataLoader: Provides robust JSON file loading with comprehensive error handling.
+    DataLoader: Provides JSON file loading with detailed error handling.
 """
 
 import itables.options as itables_opt
