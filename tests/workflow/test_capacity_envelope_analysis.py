@@ -100,7 +100,9 @@ class TestCapacityEnvelopeAnalysis:
     def test_string_flow_placement_conversion(self):
         """Test automatic conversion of string flow_placement to enum."""
         step = CapacityEnvelopeAnalysis(
-            source_path="^A", sink_path="^C", flow_placement="EQUAL_BALANCED"
+            source_path="^A",
+            sink_path="^C",
+            flow_placement="EQUAL_BALANCED",  # type: ignore[arg-type]
         )
         assert step.flow_placement == FlowPlacement.EQUAL_BALANCED
 
@@ -121,7 +123,9 @@ class TestCapacityEnvelopeAnalysis:
         # Test invalid flow_placement string
         with pytest.raises(ValueError, match="Invalid flow_placement"):
             CapacityEnvelopeAnalysis(
-                source_path="^A", sink_path="^C", flow_placement="INVALID"
+                source_path="^A",
+                sink_path="^C",
+                flow_placement="INVALID",  # type: ignore[arg-type]
             )
 
     def test_validation_iterations_without_failure_policy(self):
@@ -406,6 +410,7 @@ workflow:
             FlowPlacement.PROPORTIONAL,
             42,  # seed
             False,  # is_baseline
+            "test_step",  # step_name
         )
 
         flow_results, total_capacity = _worker(args)
@@ -435,6 +440,7 @@ workflow:
             FlowPlacement.PROPORTIONAL,
             42,  # seed
             False,  # is_baseline
+            "test_step",  # step_name
         )
 
         flow_results, total_capacity = _worker(args)
@@ -656,6 +662,7 @@ workflow:
             FlowPlacement.PROPORTIONAL,
             42,  # seed
             True,  # is_baseline - should skip failures
+            "test_step",  # step_name
         )
 
         flow_results, total_capacity = _worker(args)
@@ -675,6 +682,7 @@ workflow:
             FlowPlacement.PROPORTIONAL,
             42,  # seed
             False,  # is_baseline
+            "test_step",  # step_name
         )
 
         baseline_results, baseline_capacity = _worker(args)

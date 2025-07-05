@@ -29,7 +29,7 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
 
     Args:
         args: Tuple containing (base_network, base_policy, source_regex, sink_regex,
-              mode, shortest_path, flow_placement, seed_offset, is_baseline)
+              mode, shortest_path, flow_placement, seed_offset, is_baseline, step_name)
 
     Returns:
         Tuple of (flow_results, total_capacity) where:
@@ -49,7 +49,19 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
         flow_placement,
         seed_offset,
         is_baseline,
+        step_name,
     ) = args
+
+    # Optional per-worker profiling -------------------------------------------------
+    profile_dir_env = os.getenv("NGRAPH_PROFILE_DIR")
+    collect_profile: bool = bool(profile_dir_env)
+
+    profiler: "cProfile.Profile | None" = None  # Lazy init to avoid overhead
+    if collect_profile:
+        import cProfile  # Local import to avoid cost when profiling disabled
+
+        profiler = cProfile.Profile()
+        profiler.enable()
 
     worker_pid = os.getpid()
     worker_logger.debug(f"Worker {worker_pid} started with seed_offset={seed_offset}")
@@ -126,6 +138,28 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
     worker_logger.debug(f"Worker {worker_pid} computed {len(result)} flow results")
     worker_logger.debug(f"Worker {worker_pid} total capacity: {total_capacity:.2f}")
 
+    # Dump profile if enabled ------------------------------------------------------
+    if profiler is not None:
+        profiler.disable()
+        try:
+            import pstats
+            import uuid
+            from pathlib import Path
+
+            profile_dir = Path(profile_dir_env) if profile_dir_env else None
+            if profile_dir is not None:
+                profile_dir.mkdir(parents=True, exist_ok=True)
+                unique_id = uuid.uuid4().hex[:8]
+                profile_path = (
+                    profile_dir / f"{step_name}_worker_{worker_pid}_{unique_id}.pstats"
+                )
+                pstats.Stats(profiler).dump_stats(profile_path)
+                worker_logger.debug("Saved worker profile to %s", profile_path.name)
+        except Exception as exc:  # pragma: no cover – best-effort profiling
+            worker_logger.warning(
+                "Failed to save worker profile: %s: %s", type(exc).__name__, exc
+            )
+
     return result, total_capacity
 
 
@@ -172,6 +206,7 @@ def _run_single_iteration(
             flow_placement,
             seed_offset,
             is_baseline,
+            "",  # step_name not available in serial execution
         )
     )
     logger.debug(
@@ -463,6 +498,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                     self.flow_placement,
                     seed_offset,
                     is_baseline,
+                    self.name or self.__class__.__name__,
                 )
             )
 

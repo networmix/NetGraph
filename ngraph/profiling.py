@@ -31,6 +31,7 @@ class StepProfile:
         function_calls: Number of function calls during execution.
         memory_peak: Peak memory usage during step (if available).
         cprofile_stats: Detailed cProfile statistics object.
+        worker_profiles_merged: Number of worker profiles merged into this step.
     """
 
     step_name: str
@@ -40,6 +41,7 @@ class StepProfile:
     function_calls: int
     memory_peak: Optional[float] = None
     cprofile_stats: Optional[pstats.Stats] = None
+    worker_profiles_merged: int = 0
 
 
 @dataclass
@@ -167,6 +169,61 @@ class PerformanceProfiler:
                 f"Completed profiling for step: {step_name} "
                 f"({wall_time:.3f}s wall, {cpu_time:.3f}s CPU, {function_calls:,} calls)"
             )
+
+    def merge_child_profiles(self, profile_dir: Path, step_name: str) -> None:
+        """Merge child worker profiles into the parent step profile.
+
+        Args:
+            profile_dir: Directory containing worker profile files.
+            step_name: Name of the workflow step these workers belong to.
+        """
+        # Find the step profile to merge into
+        step_profile = None
+        for profile in self.results.step_profiles:
+            if profile.step_name == step_name:
+                step_profile = profile
+                break
+
+        if not step_profile or not step_profile.cprofile_stats:
+            logger.warning(f"No parent profile found for step: {step_name}")
+            return
+
+        # Find all worker profile files for this step
+        worker_files = list(profile_dir.glob("*_worker_*.pstats"))
+        if not worker_files:
+            logger.debug(f"No worker profiles found in {profile_dir}")
+            return
+
+        logger.debug(f"Found {len(worker_files)} worker profiles to merge")
+
+        # Merge all worker stats into the parent stats
+        try:
+            merged_count = 0
+            for worker_file in worker_files:
+                step_profile.cprofile_stats.add(str(worker_file))
+                logger.debug(f"Merged worker profile: {worker_file.name}")
+                merged_count += 1
+
+            # Update function call count after merge
+            stats_data = getattr(step_profile.cprofile_stats, "stats", {})
+            step_profile.function_calls = sum(
+                stat_tuple[0] for stat_tuple in stats_data.values()
+            )
+            step_profile.worker_profiles_merged = merged_count
+
+            logger.info(
+                f"Merged {len(worker_files)} worker profiles into step '{step_name}'"
+            )
+
+            # Clean up worker files after successful merge
+            for worker_file in worker_files:
+                try:
+                    worker_file.unlink()
+                except Exception:
+                    pass  # Best effort cleanup
+
+        except Exception as e:
+            logger.warning(f"Failed to merge worker profiles: {type(e).__name__}: {e}")
 
     def analyze_performance(self) -> None:
         """Analyze profiling results and identify bottlenecks.
@@ -332,8 +389,8 @@ class PerformanceReporter:
             ["=" * 80, "NETGRAPH PERFORMANCE PROFILING REPORT", "=" * 80, ""]
         )
 
-        # Executive summary
-        report_lines.extend(self._generate_executive_summary())
+        # Summary
+        report_lines.extend(self._generate_summary())
 
         # Step-by-step timing analysis
         report_lines.extend(self._generate_timing_analysis())
@@ -350,8 +407,8 @@ class PerformanceReporter:
 
         return "\n".join(report_lines)
 
-    def _generate_executive_summary(self) -> List[str]:
-        """Generate executive summary section of the report."""
+    def _generate_summary(self) -> List[str]:
+        """Generate summary section of the report."""
         summary = self.results.analysis_summary
 
         lines = [
@@ -385,7 +442,15 @@ class PerformanceReporter:
         )
 
         # Create formatted table
-        headers = ["Step Name", "Type", "Wall Time", "CPU Time", "Calls", "% Total"]
+        headers = [
+            "Step Name",
+            "Type",
+            "Wall Time",
+            "CPU Time",
+            "Calls",
+            "% Total",
+            "Workers",
+        ]
 
         # Calculate column widths
         col_widths = [len(h) for h in headers]
@@ -404,6 +469,9 @@ class PerformanceReporter:
                 f"{step.cpu_time:.3f}s",
                 f"{step.function_calls:,}",
                 f"{percentage:.1f}%",
+                f"{step.worker_profiles_merged}"
+                if step.worker_profiles_merged > 0
+                else "-",
             ]
             table_data.append(row)
 
