@@ -46,6 +46,37 @@ network = Network()
 - `add_node(name, **attrs)` - Add network node
 - `add_link(source, target, **params)` - Add network link
 
+### NetworkView
+Provides a read-only filtered view of a Network for failure analysis without modifying the base network.
+
+```python
+from ngraph.network_view import NetworkView
+
+# Create view with specific nodes/links excluded (failure simulation)
+view = NetworkView.from_failure_sets(
+    network,
+    failed_nodes=["spine1", "spine2"],
+    failed_links=["link_id_123"]
+)
+
+# Run analysis on filtered topology
+max_flow = view.max_flow("source_path", "sink_path")
+```
+
+**Key Features:**
+
+- Read-only overlay that hides disabled and excluded elements
+- Supports concurrent analysis with different failure scenarios
+- Identical API to Network for flow analysis methods
+- Cached graph building for performance
+
+**Key Methods:**
+
+- `from_failure_sets(network, failed_nodes, failed_links)` - Create view with exclusions
+- `max_flow()`, `saturated_edges()`, `sensitivity_analysis()` - Same as Network
+- `is_node_hidden(name)` - Check if node is visible in this view
+- `is_link_hidden(link_id)` - Check if link is visible in this view
+
 ### NetworkExplorer
 Provides network visualization and exploration capabilities.
 
@@ -156,6 +187,8 @@ manager = FailureManager(
     policy_name="light_failures"  # Optional: specify which policy to use
 )
 ```
+
+**Note:** For failure analysis without modifying the base network, consider using `NetworkView` instead of directly disabling nodes/links. This allows concurrent analysis of different failure scenarios.
 
 ### Risk Groups
 Model correlated component failures.

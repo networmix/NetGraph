@@ -488,13 +488,17 @@ workflow:
 
 **Available Workflow Steps:**
 
-- **`BuildGraph`**: Builds the network graph from the scenario definition
+- **`BuildGraph`**: Builds a StrictMultiDiGraph from scenario.network
+- **`CapacityProbe`**: Probes capacity (max flow) between selected groups of nodes
+- **`NetworkStats`**: Computes basic capacity and degree statistics
 - **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
-- **`DistributeExternalConnectivity`**: Creates external connectivity across attachment points
-- **`CapacityProbe`**: Probes maximum flow capacity between node groups
+- **`DistributeExternalConnectivity`**: Distributes external connectivity to attachment nodes
 - **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
-- **`NetworkStats`**: Computes basic node/link capacity and degree statistics
-- **`NotebookExport`**: Saves scenario results to a Jupyter notebook with configurable content and visualizations
+
+**Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
+
+- **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state
+- **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) should use NetworkView for temporary failure simulation to avoid corrupting the scenario
 
   ```yaml
   - step_type: NotebookExport
@@ -581,140 +585,4 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 # Pattern: SEA/spine/switch-\d+
 # All matching nodes are grouped under the original pattern string:
 #   "SEA/spine/switch-\\d+": [SEA/spine/switch-1, SEA/spine/switch-2, ...]
-```
-
-### Usage in Different DSL Sections
-
-**Adjacency Matching:**
-
-In `adjacency` blocks (both in blueprints and top-level network):
-
-- `source` and `target` fields accept regex patterns
-- Blueprint paths can be relative (no leading `/`) or absolute (with leading `/`)
-- Relative paths are resolved relative to the blueprint instance's path
-
-```yaml
-adjacency:
-  - source: "^my_clos1/leaf/switch-\\d+$"
-    target: "^my_clos1/spine/switch-\\d+$"
-    pattern: mesh
-```
-
-**Node and Link Overrides:**
-
-Use `path` field for nodes or `source`/`target` for links:
-
-```yaml
-node_overrides:
-  - path: ^my_clos1/spine/switch-(1|3|5)$  # Specific switches
-    disabled: true
-    attrs:
-      maintenance_mode: "active"
-
-link_overrides:
-  - source: ^my_clos1/leaf/switch-1$
-    target: ^my_clos1/spine/switch-1$
-    disabled: true
-```
-
-**Workflow Steps:**
-
-Workflow steps like `EnableNodes`, `CapacityProbe`, etc., use path patterns:
-
-```yaml
-workflow:
-  - step_type: EnableNodes
-    path: "^my_clos2/leaf/switch-\\d+$"  # All leaf switches
-    count: 4
-
-  - step_type: CapacityProbe
-    source_path: "^(dc\\d+)/client"  # Capturing group creates per-DC groups
-    sink_path: "^(dc\\d+)/server"
-    mode: pairwise  # Test dc1 client -> dc1 server, dc2 client -> dc2 server
-
-  - step_type: CapacityEnvelopeAnalysis
-    source_path: "(.+)"    # Captures each node as its own group
-    sink_path: "(.+)"      # Creates N×N any-to-any analysis
-    mode: pairwise         # Required for per-node analysis
-```
-
-### Any-to-Any Analysis Pattern
-
-The pattern `(.+)` is a useful regex for network analysis in workflow steps like `CapacityProbe` and `CapacityEnvelopeAnalysis`:
-
-- **Individual Node Groups**: The capturing group `(.+)` matches each node name, creating separate groups for each node
-- **Automatic Combinations**: In pairwise mode, this creates N×N flow analysis for N nodes
-- **Full Coverage**: Tests connectivity between every pair of nodes in the network
-
-**Example Use Cases:**
-```yaml
-# Test capacity between every pair of nodes in the network
-- step_type: CapacityEnvelopeAnalysis
-  source_path: "(.+)"     # Every node as source
-  sink_path: "(.+)"       # Every node as sink
-  mode: pairwise          # Creates all node-to-node combinations
-  iterations: 100         # Monte-Carlo analysis across failures
-
-# Test capacity from all datacenter nodes to all others
-- step_type: CapacityProbe
-  source_path: "(datacenter.*)"  # Each datacenter node individually
-  sink_path: "(datacenter.*)"    # Each datacenter node individually
-  mode: pairwise                 # All datacenter-to-datacenter flows
-```
-
-### Best Practices
-
-1. **Use anchors for precision**: Always use `$` at the end if you want exact matches
-2. **Escape special characters in YAML**:
-   - For digit patterns: Use `\\d+` instead of `\d+` in quoted YAML strings
-   - For simple wildcards: `.*/spine/.*` works directly in YAML
-   - In Python code: Use raw strings `r"pattern"` or double escaping `"\\d+"`
-3. **Test patterns**: Use capturing groups strategically to create meaningful node groups
-4. **Relative vs absolute paths**: In blueprints, prefer relative paths for reusability
-5. **Group meaningfully**: Design capturing groups to create logical node groupings for workflow steps
-
-### Common Pitfalls
-
-1. **Missing end anchors**: `switch-1` matches `switch-10`, `switch-11`, etc.
-   - Fix: Use `switch-1$` for exact match
-
-2. **YAML escaping inconsistencies**:
-   - Simple patterns like `.*` work directly: `path: .*/spine/.*`
-   - Complex patterns need escaping: `path: "spine-\\d+$"`
-   - Python code always needs proper escaping: `"(SEA/leaf\\d)"`
-
-3. **Greedy matching**: `.*` can match more than intended
-   - Fix: Use specific patterns like `[^/]+` to match within path segments
-
-4. **Empty groups**: Patterns that don't match any nodes create empty results
-   - Fix: Test patterns against your actual node names
-
-### Regex Escaping Reference
-
-NetGraph processes regex patterns differently depending on context:
-
-**YAML Files (Scenarios):**
-```yaml
-# Simple wildcards - no escaping needed
-adjacency:
-  - source: .*/spine/.*    # Matches any spine nodes
-    target: .*/spine/.*
-
-# Complex patterns - use quotes and double backslashes
-node_overrides:
-  - path: "spine-\\d+$"    # Matches spine-1, spine-2, etc.
-    attrs:
-      hw_type: "high_performance"
-
-# Traffic matrix set with capturing groups
-traffic_matrix_set:
-  default:
-    - source_path: "my_clos1/b.*/t1"    # Works in YAML
-      sink_path: "my_clos2/b.*/t1"
-```
-
-**Python Code:**
-```python
-# Use raw strings (preferred)
-pattern = r"^S(\d+)$"
 ```

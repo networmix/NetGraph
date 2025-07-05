@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import re
 import uuid
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -36,7 +37,7 @@ class Node:
 
     Attributes:
         name (str): Unique identifier for the node.
-        disabled (bool): Whether the node is disabled (excluded from calculations).
+        disabled (bool): Whether the node is disabled in the scenario configuration.
         risk_groups (Set[str]): Set of risk group names this node belongs to.
         attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
     """
@@ -102,8 +103,6 @@ class Network:
         links (Dict[str, Link]): Mapping from link ID -> Link object.
         risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
         attrs (Dict[str, Any]): Optional metadata about the network.
-        _cached_graph (Optional[StrictMultiDiGraph]): Cached graph representation of the network.
-        _graph_cache_valid (bool): Indicates whether the cached graph is valid.
     """
 
     nodes: Dict[str, Node] = field(default_factory=dict)
@@ -143,7 +142,8 @@ class Network:
     def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
         """Create a StrictMultiDiGraph representation of this Network.
 
-        Skips disabled nodes/links. Optionally adds reverse edges.
+        Only includes nodes and links that are not disabled in the scenario.
+        Optionally adds reverse edges.
 
         Args:
             add_reverse (bool): If True, also add a reverse edge for each link.
@@ -151,42 +151,70 @@ class Network:
         Returns:
             StrictMultiDiGraph: A directed multigraph representation of the network.
         """
+        return self._build_graph(add_reverse=add_reverse)
+
+    def _build_graph(
+        self,
+        add_reverse: bool = True,
+        excluded_nodes: Optional[AbstractSet[str]] = None,
+        excluded_links: Optional[AbstractSet[str]] = None,
+    ) -> StrictMultiDiGraph:
+        """Create a StrictMultiDiGraph with optional exclusions.
+
+        Args:
+            add_reverse: If True, add reverse edges for each link.
+            excluded_nodes: Additional nodes to exclude beyond disabled ones.
+            excluded_links: Additional links to exclude beyond disabled ones.
+
+        Returns:
+            StrictMultiDiGraph with specified exclusions applied.
+        """
+        if excluded_nodes is None:
+            excluded_nodes = set()
+        if excluded_links is None:
+            excluded_links = set()
+
         graph = StrictMultiDiGraph()
-        disabled_nodes = {name for name, nd in self.nodes.items() if nd.disabled}
+
+        # Collect all nodes to exclude (scenario-disabled + analysis exclusions)
+        all_excluded_nodes = excluded_nodes | {
+            name for name, nd in self.nodes.items() if nd.disabled
+        }
 
         # Add enabled nodes
         for node_name, node in self.nodes.items():
-            if not node.disabled:
+            if node_name not in all_excluded_nodes:
                 graph.add_node(node_name, **node.attrs)
 
         # Add enabled links
         for link_id, link in self.links.items():
-            if link.disabled:
-                continue
-            if link.source in disabled_nodes or link.target in disabled_nodes:
-                continue
-
-            # Add forward edge
-            graph.add_edge(
-                link.source,
-                link.target,
-                key=link_id,
-                capacity=link.capacity,
-                cost=link.cost,
-                **link.attrs,
-            )
-
-            # Optionally add reverse edge
-            if add_reverse:
-                reverse_id = f"{link_id}_rev"
+            if (
+                link_id not in excluded_links
+                and not link.disabled
+                and link.source not in all_excluded_nodes
+                and link.target not in all_excluded_nodes
+            ):
+                # Add forward edge
                 graph.add_edge(
-                    link.target,
                     link.source,
-                    key=reverse_id,
+                    link.target,
+                    key=link_id,
                     capacity=link.capacity,
                     cost=link.cost,
                     **link.attrs,
                 )
+
+                # Optionally add reverse edge
+                if add_reverse:
+                    reverse_id = f"{link_id}_rev"
+                    graph.add_edge(
+                        link.target,
+                        link.source,
+                        key=reverse_id,
+                        capacity=link.capacity,
+                        cost=link.cost,
+                        **link.attrs,
+                    )
 
         return graph
 
@@ -248,16 +276,33 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups are found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
+        return self._max_flow_internal(
+            self, source_path, sink_path, mode, shortest_path, flow_placement
+        )
+
+    def _max_flow_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], float]:
+        """Internal max flow computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source_path}'.")
         if not snk_groups:
             raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-        # Build the graph once for all computations - avoids repeated to_strict_multidigraph() calls
-        base_graph = self.to_strict_multidigraph()
+        # Build the graph once for all computations
+        base_graph = context.to_strict_multidigraph()
 
         if mode == "combine":
             combined_src_nodes: List[Node] = []
@@ -276,9 +321,7 @@ class Network:
             # Check for overlapping nodes in combined mode
             combined_src_names = {node.name for node in combined_src_nodes}
             combined_snk_names = {node.name for node in combined_snk_nodes}
-            if combined_src_names & combined_snk_names:  # If there's any overlap
-                # When source and sink groups overlap, flow is 0
-                # due to flow conservation - no net flow from a set to itself
+            if combined_src_names & combined_snk_names:
                 flow_val = 0.0
             else:
                 flow_val = self._compute_flow_single_group(
@@ -295,12 +338,9 @@ class Network:
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
                         src_names = {node.name for node in src_nodes}
                         snk_names = {node.name for node in snk_nodes}
-                        if src_names & snk_names:  # If there's any overlap
-                            # When source and sink groups overlap, flow is 0
-                            # due to flow conservation - no net flow from a set to itself
+                        if src_names & snk_names:
                             flow_val = 0.0
                         else:
                             flow_val = self._compute_flow_single_group(
@@ -330,7 +370,7 @@ class Network:
         then run calc_max_flow. Returns the resulting flow from all
         sources to all sinks as a single float.
 
-        Disabled nodes are excluded from flow computation.
+        Scenario-disabled nodes are excluded from flow computation.
 
         Args:
             sources (List[Node]): List of source nodes.
@@ -508,26 +548,22 @@ class Network:
         shortest_path: bool,
         flow_placement: Optional[FlowPlacement],
     ) -> Tuple[float, FlowSummary, StrictMultiDiGraph]:
-        """Compute maximum flow with both analytics summary and flow-assigned graph for a single group.
+        """Compute maximum flow with complete analytics and graph.
 
-        Creates pseudo-source and pseudo-sink nodes, connects them to the provided
-        source and sink nodes, then computes the maximum flow and returns the flow value,
-        detailed analytics summary, and the graph with flow assignments.
+        Returns flow values, detailed analytics summary, and flow-assigned graphs.
 
         Args:
             sources (List[Node]): List of source nodes.
             sinks (List[Node]): List of sink nodes.
-            shortest_path (bool): If True, restrict flows to shortest paths only.
-            flow_placement (Optional[FlowPlacement]): Strategy for placing flow among
-                parallel equal-cost paths. If None, defaults to FlowPlacement.PROPORTIONAL.
+            shortest_path (bool): If True, flows are constrained to shortest paths.
+            flow_placement (FlowPlacement): How parallel equal-cost paths are handled.
 
         Returns:
-            Tuple[float, FlowSummary, StrictMultiDiGraph]: A tuple containing:
-                - float: The computed maximum flow value
-                - FlowSummary: Detailed analytics including edge flows, residual capacities,
-                  reachable nodes, and min-cut edges
-                - StrictMultiDiGraph: The graph with flow assignments on edges, including
-                  the pseudo-source and pseudo-sink nodes
+            Tuple[float, FlowSummary, StrictMultiDiGraph]:
+                Mapping from (src_label, snk_label) to (flow_value, summary, flow_graph) tuples.
+
+        Raises:
+            ValueError: If no matching source or sink groups found, or invalid mode.
         """
         if flow_placement is None:
             flow_placement = FlowPlacement.PROPORTIONAL
@@ -786,70 +822,9 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups are found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
-
-        if not src_groups:
-            raise ValueError(f"No source nodes found matching '{source_path}'.")
-        if not snk_groups:
-            raise ValueError(f"No sink nodes found matching '{sink_path}'.")
-
-        if mode == "combine":
-            combined_src_nodes: List[Node] = []
-            combined_snk_nodes: List[Node] = []
-            combined_src_label = "|".join(sorted(src_groups.keys()))
-            combined_snk_label = "|".join(sorted(snk_groups.keys()))
-
-            for group_nodes in src_groups.values():
-                combined_src_nodes.extend(group_nodes)
-            for group_nodes in snk_groups.values():
-                combined_snk_nodes.extend(group_nodes)
-
-            if not combined_src_nodes or not combined_snk_nodes:
-                return {(combined_src_label, combined_snk_label): []}
-
-            # Check for overlapping nodes in combined mode
-            combined_src_names = {node.name for node in combined_src_nodes}
-            combined_snk_names = {node.name for node in combined_snk_nodes}
-            if combined_src_names & combined_snk_names:
-                # When source and sink groups overlap, no saturated edges
-                saturated_list = []
-            else:
-                saturated_list = self._compute_saturated_edges_single_group(
-                    combined_src_nodes,
-                    combined_snk_nodes,
-                    tolerance,
-                    shortest_path,
-                    flow_placement,
-                )
-            return {(combined_src_label, combined_snk_label): saturated_list}
-
-        elif mode == "pairwise":
-            results: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
-            for src_label, src_nodes in src_groups.items():
-                for snk_label, snk_nodes in snk_groups.items():
-                    if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
-                        src_names = {node.name for node in src_nodes}
-                        snk_names = {node.name for node in snk_nodes}
-                        if src_names & snk_names:
-                            # When source and sink groups overlap, no saturated edges
-                            saturated_list = []
-                        else:
-                            saturated_list = self._compute_saturated_edges_single_group(
-                                src_nodes,
-                                snk_nodes,
-                                tolerance,
-                                shortest_path,
-                                flow_placement,
-                            )
-                    else:
-                        saturated_list = []
-                    results[(src_label, snk_label)] = saturated_list
-            return results
-
-        else:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
+        return self._saturated_edges_internal(
+            self, source_path, sink_path, mode, tolerance, shortest_path, flow_placement
+        )
 
     def sensitivity_analysis(
         self,
@@ -886,8 +861,32 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups are found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
+        return self._sensitivity_analysis_internal(
+            self,
+            source_path,
+            sink_path,
+            mode,
+            change_amount,
+            shortest_path,
+            flow_placement,
+        )
+
+    def _saturated_edges_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        tolerance: float = 1e-10,
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], List[Tuple[str, str, str]]]:
+        """Internal saturated edges computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source_path}'.")
@@ -906,46 +905,43 @@ class Network:
                 combined_snk_nodes.extend(group_nodes)
 
             if not combined_src_nodes or not combined_snk_nodes:
-                return {(combined_src_label, combined_snk_label): {}}
+                return {(combined_src_label, combined_snk_label): []}
 
             # Check for overlapping nodes in combined mode
             combined_src_names = {node.name for node in combined_src_nodes}
             combined_snk_names = {node.name for node in combined_snk_nodes}
             if combined_src_names & combined_snk_names:
-                # When source and sink groups overlap, no sensitivity results
-                sensitivity_dict = {}
+                saturated_list = []
             else:
-                sensitivity_dict = self._compute_sensitivity_single_group(
+                saturated_list = self._compute_saturated_edges_single_group(
                     combined_src_nodes,
                     combined_snk_nodes,
-                    change_amount,
+                    tolerance,
                     shortest_path,
                     flow_placement,
                 )
-            return {(combined_src_label, combined_snk_label): sensitivity_dict}
+            return {(combined_src_label, combined_snk_label): saturated_list}
 
         elif mode == "pairwise":
-            results: Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]] = {}
+            results: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
                         src_names = {node.name for node in src_nodes}
                         snk_names = {node.name for node in snk_nodes}
                         if src_names & snk_names:
-                            # When source and sink groups overlap, no sensitivity results
-                            sensitivity_dict = {}
+                            saturated_list = []
                         else:
-                            sensitivity_dict = self._compute_sensitivity_single_group(
+                            saturated_list = self._compute_saturated_edges_single_group(
                                 src_nodes,
                                 snk_nodes,
-                                change_amount,
+                                tolerance,
                                 shortest_path,
                                 flow_placement,
                             )
                     else:
-                        sensitivity_dict = {}
-                    results[(src_label, snk_label)] = sensitivity_dict
+                        saturated_list = []
+                    results[(src_label, snk_label)] = saturated_list
             return results
 
         else:
@@ -1055,6 +1051,82 @@ class Network:
             copy_graph=False,
         )
 
+    def _sensitivity_analysis_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        change_amount: float = 1.0,
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]:
+        """Internal sensitivity analysis computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
+
+        if not src_groups:
+            raise ValueError(f"No source nodes found matching '{source_path}'.")
+        if not snk_groups:
+            raise ValueError(f"No sink nodes found matching '{sink_path}'.")
+
+        if mode == "combine":
+            combined_src_nodes: List[Node] = []
+            combined_snk_nodes: List[Node] = []
+            combined_src_label = "|".join(sorted(src_groups.keys()))
+            combined_snk_label = "|".join(sorted(snk_groups.keys()))
+
+            for group_nodes in src_groups.values():
+                combined_src_nodes.extend(group_nodes)
+            for group_nodes in snk_groups.values():
+                combined_snk_nodes.extend(group_nodes)
+
+            if not combined_src_nodes or not combined_snk_nodes:
+                return {(combined_src_label, combined_snk_label): {}}
+
+            # Check for overlapping nodes in combined mode
+            combined_src_names = {node.name for node in combined_src_nodes}
+            combined_snk_names = {node.name for node in combined_snk_nodes}
+            if combined_src_names & combined_snk_names:
+                sensitivity_dict = {}
+            else:
+                sensitivity_dict = self._compute_sensitivity_single_group(
+                    combined_src_nodes,
+                    combined_snk_nodes,
+                    change_amount,
+                    shortest_path,
+                    flow_placement,
+                )
+            return {(combined_src_label, combined_snk_label): sensitivity_dict}
+
+        elif mode == "pairwise":
+            results: Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]] = {}
+            for src_label, src_nodes in src_groups.items():
+                for snk_label, snk_nodes in snk_groups.items():
+                    if src_nodes and snk_nodes:
+                        src_names = {node.name for node in src_nodes}
+                        snk_names = {node.name for node in snk_nodes}
+                        if src_names & snk_names:
+                            sensitivity_dict = {}
+                        else:
+                            sensitivity_dict = self._compute_sensitivity_single_group(
+                                src_nodes,
+                                snk_nodes,
+                                change_amount,
+                                shortest_path,
+                                flow_placement,
+                            )
+                    else:
+                        sensitivity_dict = {}
+                    results[(src_label, snk_label)] = sensitivity_dict
+            return results
+
+        else:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
+
     def max_flow_with_summary(
         self,
         source_path: str,
@@ -1082,8 +1154,25 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
+        return self._max_flow_with_summary_internal(
+            self, source_path, sink_path, mode, shortest_path, flow_placement
+        )
+
+    def _max_flow_with_summary_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], Tuple[float, FlowSummary]]:
+        """Internal max flow with summary computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source_path}'.")
@@ -1102,7 +1191,6 @@ class Network:
                 combined_snk_nodes.extend(group_nodes)
 
             if not combined_src_nodes or not combined_snk_nodes:
-                # Return empty FlowSummary for zero flow case
                 empty_summary = FlowSummary(
                     total_flow=0.0,
                     edge_flow={},
@@ -1115,7 +1203,7 @@ class Network:
             # Check for overlapping nodes in combined mode
             combined_src_names = {node.name for node in combined_src_nodes}
             combined_snk_names = {node.name for node in combined_snk_nodes}
-            if combined_src_names & combined_snk_names:  # If there's any overlap
+            if combined_src_names & combined_snk_names:
                 empty_summary = FlowSummary(
                     total_flow=0.0,
                     edge_flow={},
@@ -1138,10 +1226,9 @@ class Network:
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
                         src_names = {node.name for node in src_nodes}
                         snk_names = {node.name for node in snk_nodes}
-                        if src_names & snk_names:  # If there's any overlap
+                        if src_names & snk_names:
                             empty_summary = FlowSummary(
                                 total_flow=0.0,
                                 edge_flow={},
@@ -1197,8 +1284,25 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
+        return self._max_flow_with_graph_internal(
+            self, source_path, sink_path, mode, shortest_path, flow_placement
+        )
+
+    def _max_flow_with_graph_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], Tuple[float, StrictMultiDiGraph]]:
+        """Internal max flow with graph computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source_path}'.")
@@ -1217,15 +1321,14 @@ class Network:
                 combined_snk_nodes.extend(group_nodes)
 
             if not combined_src_nodes or not combined_snk_nodes:
-                # Return base graph for zero flow case
-                base_graph = self.to_strict_multidigraph()
+                base_graph = context.to_strict_multidigraph()
                 return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
 
             # Check for overlapping nodes in combined mode
             combined_src_names = {node.name for node in combined_src_nodes}
             combined_snk_names = {node.name for node in combined_snk_nodes}
-            if combined_src_names & combined_snk_names:  # If there's any overlap
-                base_graph = self.to_strict_multidigraph()
+            if combined_src_names & combined_snk_names:
+                base_graph = context.to_strict_multidigraph()
                 return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
             else:
                 flow_val, flow_graph = self._compute_flow_with_graph_single_group(
@@ -1241,11 +1344,10 @@ class Network:
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
                         src_names = {node.name for node in src_nodes}
                         snk_names = {node.name for node in snk_nodes}
-                        if src_names & snk_names:  # If there's any overlap
-                            base_graph = self.to_strict_multidigraph()
+                        if src_names & snk_names:
+                            base_graph = context.to_strict_multidigraph()
                             flow_val, flow_graph = 0.0, base_graph
                         else:
                             flow_val, flow_graph = (
@@ -1254,7 +1356,7 @@ class Network:
                                 )
                             )
                     else:
-                        base_graph = self.to_strict_multidigraph()
+                        base_graph = context.to_strict_multidigraph()
                         flow_val, flow_graph = 0.0, base_graph
                     results[(src_label, snk_label)] = (flow_val, flow_graph)
             return results
@@ -1288,8 +1390,25 @@ class Network:
         Raises:
             ValueError: If no matching source or sink groups found, or invalid mode.
         """
-        src_groups = self.select_node_groups_by_path(source_path)
-        snk_groups = self.select_node_groups_by_path(sink_path)
+        return self._max_flow_detailed_internal(
+            self, source_path, sink_path, mode, shortest_path, flow_placement
+        )
+
+    def _max_flow_detailed_internal(
+        self,
+        context: Any,  # Network or NetworkView
+        source_path: str,
+        sink_path: str,
+        mode: str = "combine",
+        shortest_path: bool = False,
+        flow_placement: Optional[FlowPlacement] = None,
+    ) -> Dict[Tuple[str, str], Tuple[float, FlowSummary, StrictMultiDiGraph]]:
+        """Internal max flow detailed computation that works with Network or NetworkView."""
+        if flow_placement is None:
+            flow_placement = FlowPlacement.PROPORTIONAL
+
+        src_groups = context.select_node_groups_by_path(source_path)
+        snk_groups = context.select_node_groups_by_path(sink_path)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source_path}'.")
@@ -1308,8 +1427,7 @@ class Network:
                 combined_snk_nodes.extend(group_nodes)
 
             if not combined_src_nodes or not combined_snk_nodes:
-                # Return empty results for zero flow case
-                base_graph = self.to_strict_multidigraph()
+                base_graph = context.to_strict_multidigraph()
                 empty_summary = FlowSummary(
                     total_flow=0.0,
                     edge_flow={},
@@ -1328,8 +1446,8 @@ class Network:
             # Check for overlapping nodes in combined mode
             combined_src_names = {node.name for node in combined_src_nodes}
             combined_snk_names = {node.name for node in combined_snk_nodes}
-            if combined_src_names & combined_snk_names:  # If there's any overlap
-                base_graph = self.to_strict_multidigraph()
+            if combined_src_names & combined_snk_names:
+                base_graph = context.to_strict_multidigraph()
                 empty_summary = FlowSummary(
                     total_flow=0.0,
                     edge_flow={},
@@ -1368,11 +1486,10 @@ class Network:
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
                     if src_nodes and snk_nodes:
-                        # Check for overlapping nodes (potential self-loops)
                         src_names = {node.name for node in src_nodes}
                         snk_names = {node.name for node in snk_nodes}
-                        if src_names & snk_names:  # If there's any overlap
-                            base_graph = self.to_strict_multidigraph()
+                        if src_names & snk_names:
+                            base_graph = context.to_strict_multidigraph()
                             empty_summary = FlowSummary(
                                 total_flow=0.0,
                                 edge_flow={},
@@ -1392,7 +1509,7 @@ class Network:
                                 )
                             )
                     else:
-                        base_graph = self.to_strict_multidigraph()
+                        base_graph = context.to_strict_multidigraph()
                         empty_summary = FlowSummary(
                             total_flow=0.0,
                             edge_flow={},

@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 05, 2025 at 16:54 UTC
+**Generated from source code on:** July 05, 2025 at 19:29 UTC
 
-**Modules auto-discovered:** 50
+**Modules auto-discovered:** 51
 
 ---
 
@@ -578,8 +578,6 @@ Attributes:
     links (Dict[str, Link]): Mapping from link ID -> Link object.
     risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
     attrs (Dict[str, Any]): Optional metadata about the network.
-    _cached_graph (Optional[StrictMultiDiGraph]): Cached graph representation of the network.
-    _graph_cache_valid (bool): Indicates whether the cached graph is valid.
 
 **Attributes:**
 
@@ -640,7 +638,7 @@ the key in the Network's node dictionary.
 
 Attributes:
     name (str): Unique identifier for the node.
-    disabled (bool): Whether the node is disabled (excluded from calculations).
+    disabled (bool): Whether the node is disabled in the scenario configuration.
     risk_groups (Set[str]): Set of risk group names this node belongs to.
     attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
 
@@ -674,6 +672,73 @@ Generate a Base64-encoded, URL-safe UUID (22 characters, no padding).
 
 Returns:
     str: A 22-character Base64 URL-safe string with trailing '=' removed.
+
+---
+
+## ngraph.network_view
+
+NetworkView class for read-only filtered access to Network objects.
+
+### NetworkView
+
+Read-only overlay that hides selected nodes/links from a base Network.
+
+NetworkView provides filtered access to a Network where both scenario-disabled
+elements (Node.disabled, Link.disabled) and analysis-excluded elements are
+hidden from algorithms. This enables failure simulation and what-if analysis
+without mutating the base Network.
+
+Multiple NetworkView instances can safely operate on the same base Network
+concurrently, each with different exclusion sets.
+
+Example:
+    ```python
+    # Create view excluding specific nodes for failure analysis
+    view = NetworkView.from_failure_sets(
+        base_network,
+        failed_nodes=["node1", "node2"],
+        failed_links=["link1"]
+    )
+
+    # Run analysis on filtered topology
+    flows = view.max_flow("source.*", "sink.*")
+    ```
+
+Attributes:
+    _base: The underlying Network object.
+    _excluded_nodes: Frozen set of node names to exclude from analysis.
+    _excluded_links: Frozen set of link IDs to exclude from analysis.
+
+**Attributes:**
+
+- `_base` ('Network')
+- `_excluded_nodes` (frozenset[str]) = frozenset()
+- `_excluded_links` (frozenset[str]) = frozenset()
+
+**Methods:**
+
+- `from_failure_sets(base: "'Network'", failed_nodes: 'Iterable[str]' = (), failed_links: 'Iterable[str]' = ()) -> "'NetworkView'"`
+  - Create a NetworkView with specified failure exclusions.
+- `is_link_hidden(self, link_id: 'str') -> 'bool'`
+  - Check if a link is hidden in this view.
+- `is_node_hidden(self, name: 'str') -> 'bool'`
+  - Check if a node is hidden in this view.
+- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], float]'`
+  - Compute maximum flow between node groups in this view.
+- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary', 'StrictMultiDiGraph']]"`
+  - Compute maximum flow with complete analytics and graph.
+- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'StrictMultiDiGraph']]"`
+  - Compute maximum flow and return flow-assigned graph.
+- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary']]"`
+  - Compute maximum flow with detailed analytics summary.
+- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'`
+  - Identify saturated edges in max flow solutions.
+- `select_node_groups_by_path(self, path: 'str') -> "Dict[str, List['Node']]"`
+  - Select and group visible nodes matching a regex pattern.
+- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'`
+  - Perform sensitivity analysis on capacity changes.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> "'StrictMultiDiGraph'"`
+  - Create a StrictMultiDiGraph representation of this view.
 
 ---
 
