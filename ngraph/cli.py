@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger, set_global_log_level
+from ngraph.profiling import PerformanceProfiler, PerformanceReporter
 from ngraph.scenario import Scenario
 
 logger = get_logger(__name__)
@@ -392,6 +393,7 @@ def _run_scenario(
     output: Optional[Path],
     stdout: bool,
     keys: Optional[list[str]] = None,
+    profile: bool = False,
 ) -> None:
     """Run a scenario file and optionally export results as JSON.
 
@@ -401,6 +403,7 @@ def _run_scenario(
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
             exported.
+        profile: Whether to enable performance profiling with CPU analysis.
     """
     logger.info(f"Loading scenario from: {path}")
 
@@ -408,9 +411,39 @@ def _run_scenario(
         yaml_text = path.read_text()
         scenario = Scenario.from_yaml(yaml_text)
 
-        logger.info("Starting scenario execution")
-        scenario.run()
-        logger.info("Scenario execution completed successfully")
+        if profile:
+            logger.info("Performance profiling enabled")
+            # Initialize comprehensive profiler
+            profiler = PerformanceProfiler()
+
+            # Start scenario-level profiling
+            profiler.start_scenario()
+
+            logger.info("Starting scenario execution with profiling")
+
+            # Manual execution of workflow steps with profiling
+            for step in scenario.workflow:
+                step_name = step.name or step.__class__.__name__
+                step_type = step.__class__.__name__
+
+                with profiler.profile_step(step_name, step_type):
+                    step.execute(scenario)
+
+            logger.info("Scenario execution completed successfully")
+
+            # End scenario profiling and analyze results
+            profiler.end_scenario()
+            profiler.analyze_performance()
+
+            # Generate and display performance report
+            reporter = PerformanceReporter(profiler.results)
+            performance_report = reporter.generate_report()
+            print("\n" + performance_report)
+
+        else:
+            logger.info("Starting scenario execution")
+            scenario.run()
+            logger.info("Scenario execution completed successfully")
 
         # Only export JSON if output path is provided
         if output:
@@ -493,6 +526,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         nargs="+",
         help="Filter output to these workflow step names",
     )
+    run_parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable performance profiling with CPU analysis and bottleneck detection",
+    )
 
     # Inspect command
     inspect_parser = subparsers.add_parser(
@@ -518,7 +556,13 @@ def main(argv: Optional[List[str]] = None) -> None:
         set_global_log_level(logging.INFO)
 
     if args.command == "run":
-        _run_scenario(args.scenario, args.results, args.stdout, args.keys)
+        _run_scenario(
+            args.scenario,
+            args.results,
+            args.stdout,
+            args.keys,
+            args.profile,
+        )
     elif args.command == "inspect":
         _inspect_scenario(args.scenario, args.detail)
 

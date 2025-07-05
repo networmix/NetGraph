@@ -120,6 +120,7 @@ python -m ngraph run <scenario_file> [options]
 - `--results`, `-r`: Optional path to export results as JSON. If provided without a path, defaults to "results.json"
 - `--stdout`: Print results to stdout
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
+- `--profile`: Enable performance profiling with CPU analysis and bottleneck detection
 - `--help`, `-h`: Show help message
 
 ## Examples
@@ -178,6 +179,148 @@ workflow:
 ```
 
 Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_probe` will include only the CapacityProbe results.
+
+### Performance Profiling
+
+NetGraph provides performance profiling to identify bottlenecks, analyze execution time, and optimize workflow performance. The profiling system provides CPU-level analysis with function-by-function timing and bottleneck detection.
+
+#### Performance Analysis
+
+Use `--profile` to get performance analysis:
+
+```bash
+# Run scenario with profiling
+python -m ngraph run scenario.yaml --profile
+
+# Combine profiling with results export
+python -m ngraph run scenario.yaml --profile --results
+
+# Profiling with filtered output
+python -m ngraph run scenario.yaml --profile --keys capacity_probe
+```
+
+Performance profiling provides:
+
+- **Summary**: Total execution time, CPU efficiency, function call statistics
+- **Step timing analysis**: Time spent in each workflow step with percentage breakdown
+- **Bottleneck identification**: Workflow steps consuming >10% of total execution time
+- **Function-level analysis**: Top CPU-consuming functions within each bottleneck
+- **Call statistics**: Function call counts and timing distribution
+- **CPU utilization patterns**: Detailed breakdown of computational efficiency
+- **Targeted recommendations**: Specific optimization suggestions for each bottleneck
+
+#### Profiling Output
+
+Profiling generates a performance report displayed after scenario execution:
+
+```
+================================================================================
+NETGRAPH PERFORMANCE PROFILING REPORT
+================================================================================
+
+1. SUMMARY
+----------------------------------------
+Total Execution Time: 12.456 seconds
+Total CPU Time: 11.234 seconds
+CPU Efficiency: 90.2%
+Total Workflow Steps: 3
+Average Step Time: 4.152 seconds
+Total Function Calls: 1,234,567
+Function Calls/Second: 99,123
+
+1 performance bottleneck(s) identified
+
+2. WORKFLOW STEP TIMING ANALYSIS
+----------------------------------------
+Step Name          Type               Wall Time    CPU Time     Calls      % Total
+build_graph        BuildGraph         0.123s       0.098s       1,234      1.0%
+capacity_probe     CapacityProbe      11.234s      10.987s      1,200,000  90.2%
+network_stats      NetworkStats       1.099s       0.149s       33,333     8.8%
+
+3. PERFORMANCE BOTTLENECK ANALYSIS
+----------------------------------------
+Bottleneck #1: capacity_probe (CapacityProbe)
+   Wall Time: 11.234s (90.2% of total)
+   CPU Time: 10.987s
+   Function Calls: 1,200,000
+   CPU Efficiency: 97.8% (CPU-intensive workload)
+   Recommendation: Consider algorithmic optimization or parallelization
+
+4. DETAILED FUNCTION ANALYSIS
+----------------------------------------
+Top CPU-consuming functions in 'capacity_probe':
+   ngraph/lib/algorithms/max_flow.py:42(dijkstra_shortest_path)
+      Time: 8.456s, Calls: 500,000
+   ngraph/lib/algorithms/max_flow.py:156(ford_fulkerson)
+      Time: 2.234s, Calls: 250,000
+```
+
+#### Profiling Best Practices
+
+**When to Use Profiling:**
+
+- Performance optimization during development
+- Identifying bottlenecks in complex workflows
+- Analyzing scenarios with large networks or datasets
+- Benchmarking before/after optimization changes
+
+**Development Workflow:**
+
+```bash
+# 1. Profile scenario to identify bottlenecks
+python -m ngraph run scenario.yaml --profile
+
+# 2. Combine with filtering for targeted analysis
+python -m ngraph run scenario.yaml --profile --keys slow_step
+
+# 3. Profile with results export for analysis
+python -m ngraph run scenario.yaml --profile --results analysis.json
+```
+
+**Performance Considerations:**
+
+- Profiling adds minimal overhead (~15-25%)
+- Use production-like data sizes for accurate bottleneck identification
+- Profile multiple runs to account for variability in timing measurements
+- Focus optimization efforts on steps consuming >10% of total execution time
+
+**Interpreting Results:**
+
+- **CPU Efficiency**: Ratio of CPU time to wall time (higher is better for compute-bound tasks)
+- **Function Call Rate**: Calls per second (very high rates may indicate optimization opportunities)
+- **Bottleneck Percentage**: Time percentage helps prioritize optimization efforts
+- **Efficiency Ratio**: Low ratios (<30%) suggest I/O-bound operations or external dependencies
+
+#### Advanced Profiling Scenarios
+
+**Profiling Large Networks:**
+
+```bash
+# Profile capacity analysis on large networks
+python -m ngraph run large_network.yaml --profile --keys capacity_envelope_analysis
+```
+
+**Comparative Profiling:**
+
+```bash
+# Profile before optimization
+python -m ngraph run scenario_v1.yaml --profile > profile_v1.txt
+
+# Profile after optimization
+python -m ngraph run scenario_v2.yaml --profile > profile_v2.txt
+
+# Compare results manually or with diff tools
+```
+
+**Targeted Profiling:**
+
+```bash
+# Profile only specific workflow steps
+python -m ngraph run scenario.yaml --profile --keys capacity_probe network_stats
+
+# Profile with results export for further analysis
+python -m ngraph run scenario.yaml --profile --results analysis.json
+```
 
 ## Output Format
 

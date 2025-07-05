@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 04, 2025 at 19:15 UTC
+**Generated from source code on:** July 05, 2025 at 15:08 UTC
 
-**Modules auto-discovered:** 48
+**Modules auto-discovered:** 50
 
 ---
 
@@ -672,6 +672,90 @@ Generate a Base64-encoded, URL-safe UUID (22 characters, no padding).
 
 Returns:
     str: A 22-character Base64 URL-safe string with trailing '=' removed.
+
+---
+
+## ngraph.profiling
+
+Performance profiling instrumentation for NetGraph workflow execution.
+
+CPU profiler with workflow step timing, function analysis, and bottleneck detection.
+
+### PerformanceProfiler
+
+CPU profiler for NetGraph workflow execution.
+
+Profiles workflow steps using cProfile and identifies bottlenecks.
+
+**Methods:**
+
+- `analyze_performance(self) -> 'None'`
+  - Analyze profiling results and identify bottlenecks.
+- `end_scenario(self) -> 'None'`
+  - End profiling for the entire scenario execution.
+- `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'`
+  - Get the top CPU-consuming functions for a specific step.
+- `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'`
+  - Context manager for profiling individual workflow steps.
+- `save_detailed_profile(self, output_path: 'Path', step_name: 'Optional[str]' = None) -> 'None'`
+  - Save detailed profiling data to a file.
+- `start_scenario(self) -> 'None'`
+  - Start profiling for the entire scenario execution.
+
+### PerformanceReporter
+
+Formats and displays performance profiling results.
+
+Generates text reports with timing analysis, bottleneck identification, and optimization suggestions.
+
+**Methods:**
+
+- `generate_report(self) -> 'str'`
+  - Generate performance report.
+
+### ProfileResults
+
+Profiling results for a scenario execution.
+
+Attributes:
+    step_profiles: List of individual step performance profiles.
+    total_wall_time: Total wall-clock time for entire scenario.
+    total_cpu_time: Total CPU time across all steps.
+    total_function_calls: Total function calls across all steps.
+    bottlenecks: List of performance bottlenecks (>10% execution time).
+    analysis_summary: Performance metrics and statistics.
+
+**Attributes:**
+
+- `step_profiles` (List[StepProfile]) = []
+- `total_wall_time` (float) = 0.0
+- `total_cpu_time` (float) = 0.0
+- `total_function_calls` (int) = 0
+- `bottlenecks` (List[Dict[str, Any]]) = []
+- `analysis_summary` (Dict[str, Any]) = {}
+
+### StepProfile
+
+Performance profile data for a single workflow step.
+
+Attributes:
+    step_name: Name of the workflow step.
+    step_type: Type/class name of the workflow step.
+    wall_time: Total wall-clock time in seconds.
+    cpu_time: CPU time spent in step execution.
+    function_calls: Number of function calls during execution.
+    memory_peak: Peak memory usage during step (if available).
+    cprofile_stats: Detailed cProfile statistics object.
+
+**Attributes:**
+
+- `step_name` (str)
+- `step_type` (str)
+- `wall_time` (float)
+- `cpu_time` (float)
+- `function_calls` (int)
+- `memory_peak` (Optional[float])
+- `cprofile_stats` (Optional[pstats.Stats])
 
 ---
 
@@ -2122,29 +2206,27 @@ Attributes:
 
 ## ngraph.workflow.network_stats
 
-Base statistical analysis of nodes and links.
+Workflow step for basic node and link statistics.
 
 ### NetworkStats
 
-A workflow step that gathers capacity and degree statistics for the network.
+Compute basic node and link statistics for the network.
 
-YAML Configuration:
-    ```yaml
-    workflow:
-      - step_type: NetworkStats
-        name: "stats"        # Optional custom name for this step
-    ```
+Attributes:
+    include_disabled (bool): If True, include disabled nodes and links in statistics.
+                             If False, only consider enabled entities. Defaults to False.
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (Optional[int])
+- `include_disabled` (bool) = False
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step with automatic logging.
-- `run(self, scenario: "'Scenario'") -> 'None'`
+- `run(self, scenario: 'Scenario') -> 'None'`
   - Collect capacity and degree statistics.
 
 ---
