@@ -17,9 +17,9 @@ def mock_scenario():
     scenario.network.add_node(Node("B"))
     scenario.network.add_node(Node("C"))
 
-    scenario.network.add_link(Link("A", "B", capacity=10))
-    scenario.network.add_link(Link("A", "C", capacity=5))
-    scenario.network.add_link(Link("C", "A", capacity=7))
+    scenario.network.add_link(Link("A", "B", capacity=10, cost=1.0))
+    scenario.network.add_link(Link("A", "C", capacity=5, cost=2.0))
+    scenario.network.add_link(Link("C", "A", capacity=7, cost=1.5))
     return scenario
 
 
@@ -38,13 +38,17 @@ def mock_scenario_with_disabled():
     scenario.network.add_node(Node("D"))  # enabled
 
     # Add links - some enabled, some disabled
-    scenario.network.add_link(Link("A", "B", capacity=10))  # enabled
-    scenario.network.add_link(Link("A", "C", capacity=5))  # enabled (to disabled node)
+    scenario.network.add_link(Link("A", "B", capacity=10, cost=1.0))  # enabled
     scenario.network.add_link(
-        Link("C", "A", capacity=7)
+        Link("A", "C", capacity=5, cost=2.0)
+    )  # enabled (to disabled node)
+    scenario.network.add_link(
+        Link("C", "A", capacity=7, cost=1.5)
     )  # enabled (from disabled node)
-    scenario.network.add_link(Link("B", "D", capacity=15, disabled=True))  # disabled
-    scenario.network.add_link(Link("D", "B", capacity=20))  # enabled
+    scenario.network.add_link(
+        Link("B", "D", capacity=15, cost=3.0, disabled=True)
+    )  # disabled
+    scenario.network.add_link(Link("D", "B", capacity=20, cost=0.5))  # enabled
     return scenario
 
 
@@ -53,28 +57,33 @@ def test_network_stats_collects_statistics(mock_scenario):
 
     step.run(mock_scenario)
 
-    assert mock_scenario.results.put.call_count == 4
+    # Should collect node_count, link_count, capacity stats, cost stats, and degree stats
+    assert mock_scenario.results.put.call_count >= 10  # At least 10 different metrics
 
-    keys = {call.args[1] for call in mock_scenario.results.put.call_args_list}
-    assert keys == {"link_capacity", "node_capacity", "node_degree", "per_node"}
+    # Check that key statistics are collected
+    calls = {
+        call.args[1]: call.args[2] for call in mock_scenario.results.put.call_args_list
+    }
 
-    link_data = next(
-        call.args[2]
-        for call in mock_scenario.results.put.call_args_list
-        if call.args[1] == "link_capacity"
-    )
-    assert link_data["values"] == [5, 7, 10]
-    assert link_data["min"] == 5
-    assert link_data["max"] == 10
-    assert link_data["median"] == 7
-    assert link_data["mean"] == pytest.approx((5 + 7 + 10) / 3)
+    # Node statistics
+    assert calls["node_count"] == 3
 
-    per_node = next(
-        call.args[2]
-        for call in mock_scenario.results.put.call_args_list
-        if call.args[1] == "per_node"
-    )
-    assert set(per_node.keys()) == {"A", "B", "C"}
+    # Link statistics
+    assert calls["link_count"] == 3
+    assert calls["total_capacity"] == 22.0  # 10 + 5 + 7
+    assert calls["mean_capacity"] == pytest.approx(22.0 / 3)
+    assert calls["min_capacity"] == 5.0
+    assert calls["max_capacity"] == 10.0
+
+    # Cost statistics
+    assert calls["mean_cost"] == pytest.approx((1.0 + 2.0 + 1.5) / 3)
+    assert calls["min_cost"] == 1.0
+    assert calls["max_cost"] == 2.0
+
+    # Degree statistics should be present
+    assert "mean_degree" in calls
+    assert "min_degree" in calls
+    assert "max_degree" in calls
 
 
 def test_network_stats_excludes_disabled_by_default(mock_scenario_with_disabled):
@@ -89,30 +98,22 @@ def test_network_stats_excludes_disabled_by_default(mock_scenario_with_disabled)
         for call in mock_scenario_with_disabled.results.put.call_args_list
     }
 
-    # Link capacity should exclude disabled link (capacity=15)
-    link_data = calls["link_capacity"]
-    # Should include capacities: 10, 5, 7, 20 (excluding disabled link with capacity=15)
-    assert sorted(link_data["values"]) == [5, 7, 10, 20]
-    assert link_data["min"] == 5
-    assert link_data["max"] == 20
-    assert link_data["mean"] == pytest.approx((5 + 7 + 10 + 20) / 4)
+    # Should exclude disabled node C and disabled link B->D
+    assert calls["node_count"] == 3  # A, B, D (excluding C)
+    assert (
+        calls["link_count"] == 2
+    )  # A->B and D->B are enabled and between enabled nodes
 
-    # Per-node stats should exclude disabled node C
-    per_node = calls["per_node"]
-    # Should only include enabled nodes: A, B, D (excluding disabled node C)
-    assert set(per_node.keys()) == {"A", "B", "D"}
+    # Link statistics (A->B with capacity 10, D->B with capacity 20)
+    assert calls["total_capacity"] == 30.0  # 10 + 20
+    assert calls["mean_capacity"] == 15.0  # (10 + 20) / 2
+    assert calls["min_capacity"] == 10.0
+    assert calls["max_capacity"] == 20.0
 
-    # Node A should have degree 2 (links to B and C, both enabled)
-    assert per_node["A"]["degree"] == 2
-    assert per_node["A"]["capacity_sum"] == 15  # 10 + 5
-
-    # Node B should have degree 0 (link to D is disabled)
-    assert per_node["B"]["degree"] == 0
-    assert per_node["B"]["capacity_sum"] == 0
-
-    # Node D should have degree 1 (link to B is enabled)
-    assert per_node["D"]["degree"] == 1
-    assert per_node["D"]["capacity_sum"] == 20
+    # Cost statistics (A->B with cost 1.0, D->B with cost 0.5)
+    assert calls["mean_cost"] == 0.75  # (1.0 + 0.5) / 2
+    assert calls["min_cost"] == 0.5
+    assert calls["max_cost"] == 1.0
 
 
 def test_network_stats_includes_disabled_when_enabled(mock_scenario_with_disabled):
@@ -127,34 +128,35 @@ def test_network_stats_includes_disabled_when_enabled(mock_scenario_with_disable
         for call in mock_scenario_with_disabled.results.put.call_args_list
     }
 
-    # Link capacity should include all links including disabled one
-    link_data = calls["link_capacity"]
-    # Should include all capacities: 10, 5, 7, 15, 20
-    assert sorted(link_data["values"]) == [5, 7, 10, 15, 20]
-    assert link_data["min"] == 5
-    assert link_data["max"] == 20
-    assert link_data["mean"] == pytest.approx((5 + 7 + 10 + 15 + 20) / 5)
+    # Should include all nodes and links
+    assert calls["node_count"] == 4  # A, B, C, D
+    assert calls["link_count"] == 5  # All 5 links
 
-    # Per-node stats should include disabled node C
-    per_node = calls["per_node"]
-    # Should include all nodes: A, B, C, D
-    assert set(per_node.keys()) == {"A", "B", "C", "D"}
+    # Link statistics (all links: 10, 5, 7, 15, 20)
+    assert calls["total_capacity"] == 57.0  # 10 + 5 + 7 + 15 + 20
+    assert calls["mean_capacity"] == pytest.approx(57.0 / 5)
+    assert calls["min_capacity"] == 5.0
+    assert calls["max_capacity"] == 20.0
 
-    # Node A should have degree 2 (links to B and C)
-    assert per_node["A"]["degree"] == 2
-    assert per_node["A"]["capacity_sum"] == 15  # 10 + 5
+    # Cost statistics (costs: 1.0, 2.0, 1.5, 3.0, 0.5)
+    assert calls["mean_cost"] == pytest.approx((1.0 + 2.0 + 1.5 + 3.0 + 0.5) / 5)
+    assert calls["min_cost"] == 0.5
+    assert calls["max_cost"] == 3.0
 
-    # Node B should have degree 1 (link to D, now included)
-    assert per_node["B"]["degree"] == 1
-    assert per_node["B"]["capacity_sum"] == 15  # disabled link now included
 
-    # Node C should have degree 1 (link to A)
-    assert per_node["C"]["degree"] == 1
-    assert per_node["C"]["capacity_sum"] == 7
+def test_network_stats_with_exclusions(mock_scenario):
+    """Test NetworkStats with excluded nodes and links."""
+    step = NetworkStats(name="stats", excluded_nodes=["A"], excluded_links=[])
 
-    # Node D should have degree 1 (link to B)
-    assert per_node["D"]["degree"] == 1
-    assert per_node["D"]["capacity_sum"] == 20
+    step.run(mock_scenario)
+
+    calls = {
+        call.args[1]: call.args[2] for call in mock_scenario.results.put.call_args_list
+    }
+
+    # Should exclude node A and its links
+    assert calls["node_count"] == 2  # B, C (excluding A)
+    assert calls["link_count"] == 0  # All links connect to A, so none remain
 
 
 def test_network_stats_parameter_backward_compatibility(mock_scenario):

@@ -1,4 +1,9 @@
-"""NetworkView class for read-only filtered access to Network objects."""
+"""NetworkView provides a read-only view of a Network with temporary exclusions.
+
+This module implements a lightweight view pattern for Network objects, allowing
+temporary exclusion of nodes and links without modifying the underlying network.
+This is useful for what-if analysis, including failure simulations.
+"""
 
 from __future__ import annotations
 
@@ -29,10 +34,10 @@ class NetworkView:
     Example:
         ```python
         # Create view excluding specific nodes for failure analysis
-        view = NetworkView.from_failure_sets(
+        view = NetworkView.from_excluded_sets(
             base_network,
-            failed_nodes=["node1", "node2"],
-            failed_links=["link1"]
+            excluded_nodes=["node1", "node2"],
+            excluded_links=["link1"]
         )
 
         # Run analysis on filtered topology
@@ -334,24 +339,24 @@ class NetworkView:
         )
 
     @classmethod
-    def from_failure_sets(
+    def from_excluded_sets(
         cls,
         base: "Network",
-        failed_nodes: Iterable[str] = (),
-        failed_links: Iterable[str] = (),
+        excluded_nodes: Iterable[str] = (),
+        excluded_links: Iterable[str] = (),
     ) -> "NetworkView":
-        """Create a NetworkView with specified failure exclusions.
+        """Create a NetworkView with specified exclusions.
 
         Args:
             base: Base Network to create view over.
-            failed_nodes: Node names to exclude from analysis.
-            failed_links: Link IDs to exclude from analysis.
+            excluded_nodes: Node names to exclude from analysis.
+            excluded_links: Link IDs to exclude from analysis.
 
         Returns:
             NetworkView with specified exclusions applied.
         """
         return cls(
             _base=base,
-            _excluded_nodes=frozenset(failed_nodes),
-            _excluded_links=frozenset(failed_links),
+            _excluded_nodes=frozenset(excluded_nodes),
+            _excluded_links=frozenset(excluded_links),
         )

@@ -1,5 +1,7 @@
 """TrafficManager class for placing traffic demands on network topology."""
 
+from __future__ import annotations
+
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -14,6 +16,7 @@ from ngraph.network import Network, Node
 from ngraph.traffic_demand import TrafficDemand
 
 if TYPE_CHECKING:
+    from ngraph.network_view import NetworkView
     from ngraph.results_artifacts import TrafficMatrixSet
 
 
@@ -68,7 +71,7 @@ class TrafficManager:
     case no demands are created).
 
     Attributes:
-        network (Network): The underlying network object.
+        network (Union[Network, NetworkView]): The underlying network or view object.
         traffic_matrix_set (TrafficMatrixSet): Traffic matrices containing demands.
         matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
         default_flow_policy_config (FlowPolicyConfig): Default FlowPolicy if
@@ -79,7 +82,7 @@ class TrafficManager:
             TrafficDemand.id to its expanded Demand objects.
     """
 
-    network: Network
+    network: Union[Network, "NetworkView"]
     traffic_matrix_set: "TrafficMatrixSet"
     matrix_name: Optional[str] = None
     default_flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.SHORTEST_PATHS_ECMP

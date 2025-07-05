@@ -98,6 +98,11 @@ class RiskGroup:
 class Network:
     """A container for network nodes and links.
 
+    Network represents the scenario-level topology with persistent state (nodes/links
+    that are disabled in the scenario configuration). For temporary exclusion of
+    nodes/links during analysis (e.g., failure simulation), use NetworkView instead
+    of modifying the Network's disabled states.
+
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
         links (Dict[str, Link]): Mapping from link ID -> Link object.

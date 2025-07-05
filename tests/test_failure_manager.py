@@ -19,6 +19,7 @@ def mock_network() -> Network:
     # Populate these so that 'node1' and 'link1' are found in membership tests.
     mock_net.nodes = {"node1": MagicMock()}
     mock_net.links = {"link1": MagicMock()}
+    mock_net.risk_groups = {}  # Add risk_groups attribute
     return mock_net
 
 
@@ -104,8 +105,8 @@ def failure_manager(
     )
 
 
-def test_apply_failures_no_policy(mock_network, mock_demands):
-    """Test apply_failures does nothing if there is no failure_policy."""
+def test_get_failed_entities_no_policy(mock_network, mock_demands):
+    """Test get_failed_entities returns empty lists if there is no failure_policy."""
     from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
 
     matrix_set = TrafficMatrixSet()
@@ -121,30 +122,28 @@ def test_apply_failures_no_policy(mock_network, mock_demands):
         failure_policy_set=policy_set,
         policy_name=None,
     )
-    fmgr.apply_failures()
+    failed_nodes, failed_links = fmgr.get_failed_entities()
 
-    mock_network.disable_node.assert_not_called()
-    mock_network.disable_link.assert_not_called()
+    assert failed_nodes == []
+    assert failed_links == []
 
 
-def test_apply_failures_with_policy(failure_manager, mock_network):
+def test_get_failed_entities_with_policy(failure_manager, mock_network):
     """
-    Test apply_failures applies the policy's returned list of failed IDs
-    to disable_node/disable_link on the network.
+    Test get_failed_entities returns the correct lists of failed nodes and links.
     """
-    failure_manager.apply_failures()
+    failed_nodes, failed_links = failure_manager.get_failed_entities()
 
-    # We expect that one node and one link are disabled
-    mock_network.disable_node.assert_called_once_with("node1")
-    mock_network.disable_link.assert_called_once_with("link1")
+    # We expect one node and one link based on the mock policy
+    assert "node1" in failed_nodes
+    assert "link1" in failed_links
 
 
 def test_run_single_failure_scenario(
     failure_manager, mock_network, mock_traffic_manager_class, monkeypatch
 ):
     """
-    Test run_single_failure_scenario applies failures, builds TrafficManager,
-    and returns traffic results.
+    Test run_single_failure_scenario uses NetworkView and returns traffic results.
     """
     # Patch TrafficManager constructor in the 'ngraph.failure_manager' namespace
     monkeypatch.setattr(
@@ -154,25 +153,20 @@ def test_run_single_failure_scenario(
     results = failure_manager.run_single_failure_scenario()
     assert len(results) == 2  # We expect two mock results
 
-    # Verify network was re-enabled before applying failures
-    mock_network.enable_all.assert_called_once()
-    # Verify that apply_failures was indeed called
-    mock_network.disable_node.assert_called_once_with("node1")
-    mock_network.disable_link.assert_called_once_with("link1")
+    # Verify network was NOT modified (NetworkView is used instead)
+    mock_network.enable_all.assert_not_called()
+    mock_network.disable_node.assert_not_called()
+    mock_network.disable_link.assert_not_called()
 
 
 def test_run_monte_carlo_failures_zero_iterations(failure_manager):
     """
-    Test run_monte_carlo_failures(0) returns zeroed stats.
+    Test run_monte_carlo_failures(0) returns an empty list of results.
     """
-    stats = failure_manager.run_monte_carlo_failures(iterations=0, parallelism=1)
+    results = failure_manager.run_monte_carlo_failures(iterations=0, parallelism=1)
 
-    # Overall stats should be zeroed out
-    assert stats["overall_stats"]["mean"] == 0.0
-    assert stats["overall_stats"]["stdev"] == 0.0
-    assert stats["overall_stats"]["min"] == 0.0
-    assert stats["overall_stats"]["max"] == 0.0
-    assert stats["by_src_dst"] == {}
+    # Should return a dictionary with an empty list of raw results
+    assert results == {"raw_results": []}
 
 
 def test_run_monte_carlo_failures_single_thread(
@@ -182,23 +176,15 @@ def test_run_monte_carlo_failures_single_thread(
     monkeypatch.setattr(
         "ngraph.failure_manager.TrafficManager", mock_traffic_manager_class
     )
-    stats = failure_manager.run_monte_carlo_failures(iterations=2, parallelism=1)
+    results = failure_manager.run_monte_carlo_failures(iterations=2, parallelism=1)
 
     # Validate structure of returned dictionary
-    assert "overall_stats" in stats
-    assert "by_src_dst" in stats
-    assert len(stats["by_src_dst"]) > 0
-
-    overall_stats = stats["overall_stats"]
-    assert overall_stats["min"] <= overall_stats["mean"] <= overall_stats["max"]
-
-    # We expect at least one entry for each iteration for (A,B,1) and (C,D,2)
-    key1 = ("A", "B", 1)
-    key2 = ("C", "D", 2)
-    assert key1 in stats["by_src_dst"]
-    assert key2 in stats["by_src_dst"]
-    assert len(stats["by_src_dst"][key1]) == 2
-    assert len(stats["by_src_dst"][key2]) == 2
+    assert "raw_results" in results
+    assert isinstance(results["raw_results"], list)
+    assert len(results["raw_results"]) == 2
+    assert isinstance(
+        results["raw_results"][0], list
+    )  # Each item is a list of TrafficResult
 
 
 def test_run_monte_carlo_failures_multi_thread(
@@ -208,12 +194,10 @@ def test_run_monte_carlo_failures_multi_thread(
     monkeypatch.setattr(
         "ngraph.failure_manager.TrafficManager", mock_traffic_manager_class
     )
-    stats = failure_manager.run_monte_carlo_failures(iterations=2, parallelism=2)
+    results = failure_manager.run_monte_carlo_failures(iterations=2, parallelism=2)
 
     # Verify the structure is still as expected
-    assert "overall_stats" in stats
-    assert "by_src_dst" in stats
-
-    overall_stats = stats["overall_stats"]
-    assert overall_stats["mean"] > 0
-    assert overall_stats["max"] >= overall_stats["min"]
+    assert "raw_results" in results
+    assert isinstance(results["raw_results"], list)
+    assert len(results["raw_results"]) == 2
+    assert isinstance(results["raw_results"][0], list)

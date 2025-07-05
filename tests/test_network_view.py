@@ -19,27 +19,26 @@ class TestNetworkViewBasics:
         assert view._excluded_nodes == frozenset()
         assert view._excluded_links == frozenset()
 
-    def test_from_failure_sets(self):
-        """Test creating NetworkView using from_failure_sets factory method."""
+    def test_from_excluded_sets(self):
+        """Test creating NetworkView using from_excluded_sets factory method."""
         net = Network()
         net.add_node(Node("A"))
         net.add_node(Node("B"))
-        link = Link("A", "B")
+        link = Link("A", "B", capacity=100)
         net.add_link(link)
 
-        view = NetworkView.from_failure_sets(
-            net, failed_nodes=["A"], failed_links=[link.id]
+        view = NetworkView.from_excluded_sets(
+            net, excluded_nodes=["A"], excluded_links=[link.id]
         )
 
         assert view._base is net
-        assert view._excluded_nodes == {"A"}
-        assert view._excluded_links == {link.id}
+        assert view._excluded_nodes == frozenset(["A"])
+        assert view._excluded_links == frozenset([link.id])
 
-    def test_from_failure_sets_empty(self):
-        """Test from_failure_sets with empty iterables."""
+    def test_from_excluded_sets_empty(self):
+        """Test from_excluded_sets with empty iterables."""
         net = Network()
-        view = NetworkView.from_failure_sets(net)
-
+        view = NetworkView.from_excluded_sets(net)
         assert view._excluded_nodes == frozenset()
         assert view._excluded_links == frozenset()
 
@@ -174,7 +173,7 @@ class TestNetworkViewCaching:
         for i in range(9):
             self.net.add_link(Link(f"node_{i}", f"node_{i + 1}"))
 
-        self.view = NetworkView.from_failure_sets(self.net, failed_nodes=["node_0"])
+        self.view = NetworkView.from_excluded_sets(self.net, excluded_nodes=["node_0"])
 
     def test_initial_cache_state(self):
         """Test that cache doesn't exist initially."""
@@ -213,8 +212,8 @@ class TestNetworkViewCaching:
 
     def test_different_views_independent_cache(self):
         """Test that different NetworkView instances have independent caches."""
-        view1 = NetworkView.from_failure_sets(self.net, failed_nodes=["node_0"])
-        view2 = NetworkView.from_failure_sets(self.net, failed_nodes=["node_1"])
+        view1 = NetworkView.from_excluded_sets(self.net, excluded_nodes=["node_0"])
+        view2 = NetworkView.from_excluded_sets(self.net, excluded_nodes=["node_1"])
 
         graph1 = view1.to_strict_multidigraph()
         graph2 = view2.to_strict_multidigraph()
@@ -546,8 +545,8 @@ class TestNetworkViewIntegration:
         # Nodes should be visible normally
         assert len(view.nodes) == 3
 
-    def test_from_failure_sets_with_iterables(self):
-        """Test from_failure_sets with different iterable types."""
+    def test_from_excluded_sets_with_iterables(self):
+        """Test from_excluded_sets with different iterable types."""
         net = Network()
         net.add_node(Node("A"))
         net.add_node(Node("B"))
@@ -555,18 +554,18 @@ class TestNetworkViewIntegration:
         net.add_link(link)
 
         # Test with lists
-        view1 = NetworkView.from_failure_sets(
-            net, failed_nodes=["A"], failed_links=[link.id]
+        view1 = NetworkView.from_excluded_sets(
+            net, excluded_nodes=["A"], excluded_links=[link.id]
         )
 
         # Test with sets
-        view2 = NetworkView.from_failure_sets(
-            net, failed_nodes={"A"}, failed_links={link.id}
+        view2 = NetworkView.from_excluded_sets(
+            net, excluded_nodes={"A"}, excluded_links={link.id}
         )
 
         # Test with tuples
-        view3 = NetworkView.from_failure_sets(
-            net, failed_nodes=("A",), failed_links=(link.id,)
+        view3 = NetworkView.from_excluded_sets(
+            net, excluded_nodes=("A",), excluded_links=(link.id,)
         )
 
         # All should have same exclusion sets

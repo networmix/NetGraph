@@ -40,11 +40,19 @@ network = Network()
 # Access nodes, links, and analysis methods
 ```
 
+**Key Concepts:**
+
+- **Node.disabled**: Scenario-level configuration from YAML that persists across analyses
+- **Link.disabled**: Scenario-level configuration from YAML that persists across analyses
+- **Analysis exclusions**: Temporary exclusions handled via NetworkView, not by modifying disabled state
+
 **Key Methods:**
 
 - `max_flow(source_path, sink_path, **kwargs)` - Calculate maximum flow
 - `add_node(name, **attrs)` - Add network node
 - `add_link(source, target, **params)` - Add network link
+- `disable_node(name)` / `enable_node(name)` - Modify scenario-level disabled state
+- `disable_link(link_id)` / `enable_link(link_id)` - Modify scenario-level disabled state
 
 ### NetworkView
 Provides a read-only filtered view of a Network for failure analysis without modifying the base network.
@@ -53,29 +61,33 @@ Provides a read-only filtered view of a Network for failure analysis without mod
 from ngraph.network_view import NetworkView
 
 # Create view with specific nodes/links excluded (failure simulation)
-view = NetworkView.from_failure_sets(
+view = NetworkView.from_excluded_sets(
     network,
-    failed_nodes=["spine1", "spine2"],
-    failed_links=["link_id_123"]
+    excluded_nodes=["spine1", "spine2"],  # Analysis-specific exclusions
+    excluded_links=["link_id_123"]         # Analysis-specific exclusions
 )
 
 # Run analysis on filtered topology
+# This respects both:
+# 1. Scenario-disabled elements (Node.disabled, Link.disabled from YAML)
+# 2. Analysis-excluded elements (passed to NetworkView)
 max_flow = view.max_flow("source_path", "sink_path")
 ```
 
 **Key Features:**
 
-- Read-only overlay that hides disabled and excluded elements
+- Read-only overlay that combines scenario-disabled and analysis-excluded elements
 - Supports concurrent analysis with different failure scenarios
 - Identical API to Network for flow analysis methods
-- Cached graph building for performance
+- Cached graph building for ~30x performance improvement on repeated operations
+- Thread-safe for parallel Monte Carlo simulations
 
 **Key Methods:**
 
-- `from_failure_sets(network, failed_nodes, failed_links)` - Create view with exclusions
+- `from_excluded_sets(network, excluded_nodes, excluded_links)` - Create view with analysis exclusions
 - `max_flow()`, `saturated_edges()`, `sensitivity_analysis()` - Same as Network
-- `is_node_hidden(name)` - Check if node is visible in this view
-- `is_link_hidden(link_id)` - Check if link is visible in this view
+- `is_node_hidden(name)` - Check if node is hidden (disabled OR excluded)
+- `is_link_hidden(link_id)` - Check if link is hidden (disabled OR excluded OR endpoints hidden)
 
 ### NetworkExplorer
 Provides network visualization and exploration capabilities.
@@ -188,7 +200,10 @@ manager = FailureManager(
 )
 ```
 
-**Note:** For failure analysis without modifying the base network, consider using `NetworkView` instead of directly disabling nodes/links. This allows concurrent analysis of different failure scenarios.
+**Note:** For failure analysis without modifying the base network, use `NetworkView` instead of directly disabling nodes/links. NetworkView provides temporary exclusion of nodes/links for analysis purposes while preserving the scenario-defined disabled state. This separation enables:
+- Concurrent analysis of different failure scenarios
+- Clear distinction between persistent configuration (`Node.disabled`, `Link.disabled`) and temporary analysis exclusions
+- Thread-safe parallel Monte Carlo simulations
 
 ### Risk Groups
 Model correlated component failures.

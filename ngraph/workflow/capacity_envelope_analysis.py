@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.logging import get_logger
+from ngraph.network_view import NetworkView
 from ngraph.results_artifacts import CapacityEnvelope
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -63,29 +64,25 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
         profiler = cProfile.Profile()
         profiler.enable()
 
+    # Worker process ID for logging
     worker_pid = os.getpid()
-    worker_logger.debug(f"Worker {worker_pid} started with seed_offset={seed_offset}")
-
-    # Set up unique random seed for this worker iteration
-    if seed_offset is not None:
-        random.seed(seed_offset)
-        worker_logger.debug(
-            f"Worker {worker_pid} using provided seed offset: {seed_offset}"
-        )
-    else:
-        # Use pid ^ time_ns for statistical independence when no seed provided
-        actual_seed = worker_pid ^ time.time_ns()
-        random.seed(actual_seed)
-        worker_logger.debug(f"Worker {worker_pid} generated seed: {actual_seed}")
-
-    # Work on deep copies to avoid modifying shared data
     worker_logger.debug(
-        f"Worker {worker_pid} creating deep copies of network and policy"
+        f"Worker {worker_pid} starting: seed_offset={seed_offset}, is_baseline={is_baseline}"
     )
+
+    # Create a copy of the base network
     net = copy.deepcopy(base_network)
     pol = copy.deepcopy(base_policy) if base_policy else None
 
+    # Set random seed if provided
+    if seed_offset is not None:
+        random.seed(seed_offset)
+        worker_logger.debug(f"Worker {worker_pid} set random seed to {seed_offset}")
+
     # Apply failures unless this is a baseline iteration
+    failed_nodes = []
+    failed_links = []
+
     if pol and not is_baseline:
         pol.use_cache = False  # Local run, no benefit to caching
         worker_logger.debug(f"Worker {worker_pid} applying failure policy")
@@ -99,18 +96,31 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
             f"Worker {worker_pid} applied failures: {len(failed_ids)} entities failed"
         )
 
-        # Disable the failed entities
+        # Collect failed nodes and links for NetworkView
         for f_id in failed_ids:
             if f_id in net.nodes:
-                net.disable_node(f_id)
+                failed_nodes.append(f_id)
             elif f_id in net.links:
-                net.disable_link(f_id)
+                failed_links.append(f_id)
             elif f_id in net.risk_groups:
-                net.disable_risk_group(f_id, recursive=True)
+                # For risk groups, we need to collect all affected nodes/links
+                risk_group = net.risk_groups[f_id]
+                to_check = [risk_group]
+                while to_check:
+                    grp = to_check.pop()
+                    # Add all nodes/links in this risk group
+                    for node_name, node in net.nodes.items():
+                        if grp.name in node.risk_groups:
+                            failed_nodes.append(node_name)
+                    for link_id, link in net.links.items():
+                        if grp.name in link.risk_groups:
+                            failed_links.append(link_id)
+                    # Check children recursively
+                    to_check.extend(grp.children)
 
         if failed_ids:
             worker_logger.debug(
-                f"Worker {worker_pid} disabled failed entities: {failed_ids}"
+                f"Worker {worker_pid} collected failures: {len(failed_nodes)} nodes, {len(failed_links)} links"
             )
     elif is_baseline:
         worker_logger.debug(
@@ -119,11 +129,23 @@ def _worker(args: tuple[Any, ...]) -> tuple[list[tuple[str, str, float]], float]
     else:
         worker_logger.debug(f"Worker {worker_pid} no failure policy provided")
 
+    # Create a NetworkView by excluding the entities that failed
+    if failed_nodes or failed_links:
+        network_view = NetworkView.from_excluded_sets(
+            base_network,
+            excluded_nodes=failed_nodes,
+            excluded_links=failed_links,
+        )
+        worker_logger.debug(f"Worker {worker_pid} created NetworkView with exclusions")
+    else:
+        # Use base network directly if no failures
+        network_view = net
+
     # Compute max flow using the configured parameters
     worker_logger.debug(
         f"Worker {worker_pid} computing max flow: source={source_regex}, sink={sink_regex}, mode={mode}"
     )
-    flows = net.max_flow(
+    flows = network_view.max_flow(
         source_regex,
         sink_regex,
         mode=mode,

@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 05, 2025 at 19:29 UTC
+**Generated from source code on:** July 05, 2025 at 20:14 UTC
 
 **Modules auto-discovered:** 51
 
@@ -317,25 +317,41 @@ FailureManager class for running Monte Carlo failure simulations.
 
 ### FailureManager
 
-Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
-repeats multiple times for Monte Carlo experiments.
+Applies a FailurePolicy to a Network to determine exclusions, then uses a
+NetworkView to simulate the impact of those exclusions on traffic.
+
+This class is the orchestrator for failure analysis. It does not modify the
+base Network. Instead, it:
+1.  Uses a FailurePolicy to calculate which nodes/links should be excluded.
+2.  Creates a NetworkView with those exclusions.
+3.  Runs traffic placement against the view using a TrafficManager.
+
+The use of NetworkView ensures:
+- Base network remains unmodified during analysis
+- Concurrent Monte Carlo simulations can run safely in parallel
+- Clear separation between scenario-disabled elements (persistent) and
+  analysis-excluded elements (temporary)
+
+For concurrent analysis, prefer using NetworkView directly rather than
+FailureManager when you need fine-grained control over exclusions.
 
 Attributes:
-    network (Network): The underlying network to mutate (enable/disable nodes/links).
-    traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after failures.
+    network (Network): The underlying network (not modified).
+    traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after exclusions.
     failure_policy_set (FailurePolicySet): Set of named failure policies.
-    matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
+    matrix_name (Optional[str]): The specific traffic matrix to use from the set.
     policy_name (Optional[str]): Name of specific failure policy to use, or None for default.
-    default_flow_policy_config: The default flow policy for any demands lacking one.
+    default_flow_policy_config (Optional[FlowPolicyConfig]): Default flow placement
+        policy if not specified elsewhere.
 
 **Methods:**
 
-- `apply_failures(self) -> 'None'`
-  - Apply the current failure policy to self.network (in-place).
+- `get_failed_entities(self) -> 'Tuple[List[str], List[str]]'`
+  - Get the nodes and links that are designated for exclusion by the current policy.
 - `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
-  - Repeatedly applies (randomized) failures to the network and accumulates
+  - Repeatedly runs failure scenarios and accumulates traffic placement results.
 - `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
-  - Applies failures to the network, places the demands, and returns per-demand results.
+  - Runs one iteration of a failure scenario.
 
 ---
 
@@ -573,6 +589,11 @@ Attributes:
 
 A container for network nodes and links.
 
+Network represents the scenario-level topology with persistent state (nodes/links
+that are disabled in the scenario configuration). For temporary exclusion of
+nodes/links during analysis (e.g., failure simulation), use NetworkView instead
+of modifying the Network's disabled states.
+
 Attributes:
     nodes (Dict[str, Node]): Mapping from node name -> Node object.
     links (Dict[str, Link]): Mapping from link ID -> Link object.
@@ -677,7 +698,11 @@ Returns:
 
 ## ngraph.network_view
 
-NetworkView class for read-only filtered access to Network objects.
+NetworkView provides a read-only view of a Network with temporary exclusions.
+
+This module implements a lightweight view pattern for Network objects, allowing
+temporary exclusion of nodes and links without modifying the underlying network.
+This is useful for what-if analysis, including failure simulations.
 
 ### NetworkView
 
@@ -694,10 +719,10 @@ concurrently, each with different exclusion sets.
 Example:
     ```python
     # Create view excluding specific nodes for failure analysis
-    view = NetworkView.from_failure_sets(
+    view = NetworkView.from_excluded_sets(
         base_network,
-        failed_nodes=["node1", "node2"],
-        failed_links=["link1"]
+        excluded_nodes=["node1", "node2"],
+        excluded_links=["link1"]
     )
 
     # Run analysis on filtered topology
@@ -717,8 +742,8 @@ Attributes:
 
 **Methods:**
 
-- `from_failure_sets(base: "'Network'", failed_nodes: 'Iterable[str]' = (), failed_links: 'Iterable[str]' = ()) -> "'NetworkView'"`
-  - Create a NetworkView with specified failure exclusions.
+- `from_excluded_sets(base: "'Network'", excluded_nodes: 'Iterable[str]' = (), excluded_links: 'Iterable[str]' = ()) -> "'NetworkView'"`
+  - Create a NetworkView with specified exclusions.
 - `is_link_hidden(self, link_id: 'str') -> 'bool'`
   - Check if a link is hidden in this view.
 - `is_node_hidden(self, name: 'str') -> 'bool'`
@@ -1118,7 +1143,7 @@ that TrafficDemand's `demand` value (unless no valid node pairs exist, in which
 case no demands are created).
 
 Attributes:
-    network (Network): The underlying network object.
+    network (Union[Network, NetworkView]): The underlying network or view object.
     traffic_matrix_set (TrafficMatrixSet): Traffic matrices containing demands.
     matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
     default_flow_policy_config (FlowPolicyConfig): Default FlowPolicy if
@@ -1130,29 +1155,29 @@ Attributes:
 
 **Attributes:**
 
-- `network` (Network)
-- `traffic_matrix_set` (TrafficMatrixSet)
-- `matrix_name` (Optional)
+- `network` (Union[Network, 'NetworkView'])
+- `traffic_matrix_set` ('TrafficMatrixSet')
+- `matrix_name` (Optional[str])
 - `default_flow_policy_config` (FlowPolicyConfig) = 1
-- `graph` (Optional)
-- `demands` (List) = []
-- `_td_to_demands` (Dict) = {}
+- `graph` (Optional[StrictMultiDiGraph])
+- `demands` (List[Demand]) = []
+- `_td_to_demands` (Dict[str, List[Demand]]) = {}
 
 **Methods:**
 
-- `build_graph(self, add_reverse: bool = True) -> None`
+- `build_graph(self, add_reverse: 'bool' = True) -> 'None'`
   - Builds or rebuilds the internal StrictMultiDiGraph from self.network.
-- `expand_demands(self) -> None`
+- `expand_demands(self) -> 'None'`
   - Converts each TrafficDemand in the active matrix into one or more
-- `get_flow_details(self) -> Dict[Tuple[int, int], Dict[str, object]]`
+- `get_flow_details(self) -> 'Dict[Tuple[int, int], Dict[str, object]]'`
   - Summarizes flows from each Demand's FlowPolicy.
-- `get_traffic_results(self, detailed: bool = False) -> List[ngraph.traffic_manager.TrafficResult]`
+- `get_traffic_results(self, detailed: 'bool' = False) -> 'List[TrafficResult]'`
   - Returns traffic demand summaries.
-- `place_all_demands(self, placement_rounds: Union[int, str] = 'auto', reoptimize_after_each_round: bool = False) -> float`
+- `place_all_demands(self, placement_rounds: 'Union[int, str]' = 'auto', reoptimize_after_each_round: 'bool' = False) -> 'float'`
   - Places all expanded demands in ascending priority order using multiple
-- `reset_all_flow_usages(self) -> None`
+- `reset_all_flow_usages(self) -> 'None'`
   - Removes flow usage from the graph for each Demand's FlowPolicy
-- `summarize_link_usage(self) -> Dict[str, float]`
+- `summarize_link_usage(self) -> 'Dict[str, float]'`
   - Returns the total flow usage per edge in the graph.
 
 ### TrafficResult
@@ -2232,6 +2257,8 @@ Capacity probing workflow component.
 
 A workflow step that probes capacity (max flow) between selected groups of nodes.
 
+Supports optional exclusion simulation using NetworkView without modifying the base network.
+
 YAML Configuration:
     ```yaml
     workflow:
@@ -2243,6 +2270,8 @@ YAML Configuration:
         probe_reverse: false             # Also compute flow in reverse direction
         shortest_path: false             # Use shortest paths only
         flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
+        excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
+        excluded_links: ["link1"]          # Optional: Links to exclude for analysis
     ```
 
 Attributes:
@@ -2254,6 +2283,8 @@ Attributes:
     probe_reverse: If True, also compute flow in the reverse direction (sink→source).
     shortest_path: If True, only use shortest paths when computing flow.
     flow_placement: Handling strategy for parallel equal cost paths (default PROPORTIONAL).
+    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
+    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
 
 **Attributes:**
 
@@ -2265,6 +2296,8 @@ Attributes:
 - `probe_reverse` (bool) = False
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement) = 1
+- `excluded_nodes` (Iterable[str]) = ()
+- `excluded_links` (Iterable[str]) = ()
 
 **Methods:**
 
@@ -2283,22 +2316,28 @@ Workflow step for basic node and link statistics.
 
 Compute basic node and link statistics for the network.
 
+Supports optional exclusion simulation using NetworkView without modifying the base network.
+
 Attributes:
     include_disabled (bool): If True, include disabled nodes and links in statistics.
                              If False, only consider enabled entities. Defaults to False.
+    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
+    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (Optional[int])
 - `include_disabled` (bool) = False
+- `excluded_nodes` (Iterable[str]) = ()
+- `excluded_links` (Iterable[str]) = ()
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step with automatic logging.
 - `run(self, scenario: 'Scenario') -> 'None'`
-  - Collect capacity and degree statistics.
+  - Compute and store network statistics.
 
 ---
 

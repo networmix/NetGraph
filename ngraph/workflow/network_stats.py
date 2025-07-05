@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean, median
-from typing import TYPE_CHECKING, Dict, List
+from typing import TYPE_CHECKING, Dict, Iterable, List
 
+from ngraph.network_view import NetworkView
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -16,98 +17,95 @@ if TYPE_CHECKING:
 class NetworkStats(WorkflowStep):
     """Compute basic node and link statistics for the network.
 
+    Supports optional exclusion simulation using NetworkView without modifying the base network.
+
     Attributes:
         include_disabled (bool): If True, include disabled nodes and links in statistics.
                                  If False, only consider enabled entities. Defaults to False.
+        excluded_nodes: Optional list of node names to exclude (temporary exclusion).
+        excluded_links: Optional list of link IDs to exclude (temporary exclusion).
     """
 
     include_disabled: bool = False
+    excluded_nodes: Iterable[str] = ()
+    excluded_links: Iterable[str] = ()
 
     def run(self, scenario: Scenario) -> None:
-        """Collect capacity and degree statistics.
+        """Compute and store network statistics.
+
+        If excluded_nodes or excluded_links are specified, uses NetworkView to simulate
+        exclusions without modifying the base network.
 
         Args:
-            scenario: Scenario containing the network and results container.
+            scenario: The scenario containing the network to analyze.
         """
-
-        network = scenario.network
-
-        # Collect link capacity statistics - filter based on include_disabled setting
-        if self.include_disabled:
-            link_caps = [link.capacity for link in network.links.values()]
+        # Create view if we have exclusions, otherwise use base network
+        if self.excluded_nodes or self.excluded_links:
+            network_or_view = NetworkView.from_excluded_sets(
+                scenario.network,
+                excluded_nodes=self.excluded_nodes,
+                excluded_links=self.excluded_links,
+            )
+            nodes = network_or_view.nodes
+            links = network_or_view.links
         else:
-            link_caps = [
-                link.capacity for link in network.links.values() if not link.disabled
-            ]
-
-        link_caps_sorted = sorted(link_caps)
-        link_stats = {
-            "values": link_caps_sorted,
-            "min": min(link_caps_sorted) if link_caps_sorted else 0.0,
-            "max": max(link_caps_sorted) if link_caps_sorted else 0.0,
-            "mean": mean(link_caps_sorted) if link_caps_sorted else 0.0,
-            "median": median(link_caps_sorted) if link_caps_sorted else 0.0,
-        }
-
-        # Collect per-node statistics and aggregate data for distributions
-        node_stats: Dict[str, Dict[str, List[float] | float]] = {}
-        node_capacities = []
-        node_degrees = []
-        for node_name, node in network.nodes.items():
-            # Skip disabled nodes unless include_disabled is True
-            if not self.include_disabled and node.disabled:
-                continue
-
-            # Calculate node degree and capacity - filter links based on include_disabled setting
+            # Use base network, optionally filtering disabled
             if self.include_disabled:
-                outgoing = [
-                    link.capacity
-                    for link in network.links.values()
-                    if link.source == node_name
-                ]
+                nodes = scenario.network.nodes
+                links = scenario.network.links
             else:
-                outgoing = [
-                    link.capacity
-                    for link in network.links.values()
-                    if link.source == node_name and not link.disabled
-                ]
+                nodes = {
+                    name: node
+                    for name, node in scenario.network.nodes.items()
+                    if not node.disabled
+                }
+                links = {
+                    link_id: link
+                    for link_id, link in scenario.network.links.items()
+                    if not link.disabled
+                    and link.source in nodes  # Source node must be enabled
+                    and link.target in nodes  # Target node must be enabled
+                }
 
-            degree = len(outgoing)
-            cap_sum = sum(outgoing)
+        # Compute node statistics
+        node_count = len(nodes)
+        scenario.results.put(self.name, "node_count", node_count)
 
-            node_degrees.append(degree)
-            node_capacities.append(cap_sum)
+        # Compute link statistics
+        link_count = len(links)
+        scenario.results.put(self.name, "link_count", link_count)
 
-            node_stats[node_name] = {
-                "degree": degree,
-                "capacity_sum": cap_sum,
-                "capacities": sorted(outgoing),
-            }
+        if links:
+            capacities = [link.capacity for link in links.values()]
+            costs = [link.cost for link in links.values()]
 
-        # Create aggregate distributions for network-wide analysis
-        node_caps_sorted = sorted(node_capacities)
-        node_degrees_sorted = sorted(node_degrees)
+            scenario.results.put(self.name, "total_capacity", sum(capacities))
+            scenario.results.put(self.name, "mean_capacity", mean(capacities))
+            scenario.results.put(self.name, "median_capacity", median(capacities))
+            scenario.results.put(self.name, "min_capacity", min(capacities))
+            scenario.results.put(self.name, "max_capacity", max(capacities))
 
-        node_capacity_dist = {
-            "values": node_caps_sorted,
-            "min": min(node_caps_sorted) if node_caps_sorted else 0.0,
-            "max": max(node_caps_sorted) if node_caps_sorted else 0.0,
-            "mean": mean(node_caps_sorted) if node_caps_sorted else 0.0,
-            "median": median(node_caps_sorted) if node_caps_sorted else 0.0,
-        }
+            scenario.results.put(self.name, "mean_cost", mean(costs))
+            scenario.results.put(self.name, "median_cost", median(costs))
+            scenario.results.put(self.name, "min_cost", min(costs))
+            scenario.results.put(self.name, "max_cost", max(costs))
 
-        node_degree_dist = {
-            "values": node_degrees_sorted,
-            "min": min(node_degrees_sorted) if node_degrees_sorted else 0.0,
-            "max": max(node_degrees_sorted) if node_degrees_sorted else 0.0,
-            "mean": mean(node_degrees_sorted) if node_degrees_sorted else 0.0,
-            "median": median(node_degrees_sorted) if node_degrees_sorted else 0.0,
-        }
+        # Compute degree statistics (only for enabled nodes)
+        if nodes:
+            degrees: Dict[str, int] = {name: 0 for name in nodes}
 
-        scenario.results.put(self.name, "link_capacity", link_stats)
-        scenario.results.put(self.name, "node_capacity", node_capacity_dist)
-        scenario.results.put(self.name, "node_degree", node_degree_dist)
-        scenario.results.put(self.name, "per_node", node_stats)
+            for link in links.values():
+                if link.source in degrees:
+                    degrees[link.source] += 1
+                if link.target in degrees:
+                    degrees[link.target] += 1
+
+            degree_values: List[int] = list(degrees.values())
+            scenario.results.put(self.name, "mean_degree", mean(degree_values))
+            scenario.results.put(self.name, "median_degree", median(degree_values))
+            scenario.results.put(self.name, "min_degree", min(degree_values))
+            scenario.results.put(self.name, "max_degree", max(degree_values))
 
 
+# Register the class after definition to avoid decorator ordering issues
 register_workflow_step("NetworkStats")(NetworkStats)

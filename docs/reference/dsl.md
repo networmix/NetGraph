@@ -494,20 +494,23 @@ workflow:
 - **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
 - **`DistributeExternalConnectivity`**: Distributes external connectivity to attachment nodes
 - **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
+- **`NotebookExport`**: Exports analysis results to a Jupyter notebook with external JSON data file
 
 **Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
 
-- **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state
-- **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) should use NetworkView for temporary failure simulation to avoid corrupting the scenario
+- **Scenario-wide state**: Persistent configuration defined in YAML (e.g., `disabled: true` for nodes/links, maintenance windows). This state is part of the scenario definition and persists across all analyses.
+- **Analysis-specific state**: Temporary exclusions for failure simulation (e.g., nodes/links failed during Monte Carlo analysis). These exclusions are specific to individual analysis runs and don't affect the base network.
 
-  ```yaml
+**Workflow Step Categories:**
+
+- **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
+- **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
+
   - step_type: NotebookExport
-    name: "export_analysis"           # Optional: Custom name for this step
-    output_path: "my_results.ipynb"   # Optional: Custom output path (default: "results_summary.ipynb")
-    include_visualizations: true      # Optional: Include plots (default: true)
-    include_data_tables: true         # Optional: Include data tables (default: true)
-    max_data_preview_rows: 100        # Optional: Max rows in data previews (default: 100)
-  ```
+    name: "export_analysis"              # Optional: Custom name for this step
+    notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
+    json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
+    allow_empty_results: false           # Optional: Allow notebook creation with no results
 
 ## Path Matching Regex Syntax - Reference
 
