@@ -1,4 +1,4 @@
-# NetGraph – Custom Cursor Rules
+# NetGraph – Custom AI Agents Rules
 
 You work as an experienced senior software engineer on the **NetGraph** project, specialising in high-performance network-modeling and network-analysis libraries written in modern Python.
 

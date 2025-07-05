@@ -24,6 +24,28 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 
 ---
 
+## Language & Communication Standards
+
+**CRITICAL**: All communication must be precise, concise, and technical.
+
+**FORBIDDEN LANGUAGE**:
+- Marketing terms: "comprehensive", "powerful", "robust", "seamless", "cutting-edge", "state-of-the-art"
+- AI verbosity: "leveraging", "utilizing", "facilitate", "enhance", "optimize" (use specific verbs instead)
+- Corporate speak: "ecosystem", "executive"
+- Emotional language: "amazing", "incredible", "revolutionary", "game-changing"
+- Redundant qualifiers: "highly", "extremely", "very", "completely", "fully"
+- Emojis in technical documentation, code comments, or commit messages
+
+**REQUIRED STYLE**:
+- Use precise technical terms
+- Prefer active voice and specific verbs
+- One concept per sentence
+- Eliminate unnecessary adjectives and adverbs
+- Use concrete examples over abstract descriptions
+- Choose the simplest accurate word
+
+---
+
 ## Project context
 
 * **Language / runtime**  Python ≥ 3.11 (officially support 3.11, 3.12 & 3.13).
@@ -47,7 +69,7 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 
 - Use **Google-style** docstrings for every public module, class, function, and method.
 - Single-line docstrings are acceptable for simple private helpers.
-- Keep the prose concise and factual—no marketing fluff or AI verbosity.
+- Keep the prose concise and factual—follow "Language & Communication Standards".
 
 ```python
 def fibonacci(n: int) -> list[int]:
@@ -62,7 +84,7 @@ def fibonacci(n: int) -> list[int]:
     Raises:
         ValueError: If n is negative.
     """
-````
+```
 
 ### 3 – Type Hints
 
@@ -81,7 +103,7 @@ Prefer stability over cosmetic change.
 * Clarifying genuinely confusing code
 * Adding missing docs
 * Adding missing tests
-* Removing marketing language or AI verbosity from docstrings, comments, or docs
+* Removing marketing language or AI verbosity from docstrings, comments, or docs (see "Language & Communication Standards")
 
 ### 5 – Modern Python Patterns
 
@@ -142,15 +164,16 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 * Google-style docstrings for every public API.
 * Update `docs/` when adding features.
 * Run `make docs` to generate `docs/reference/api-full.md` from source code.
-* Always check all doc files for accuracy, absence of marketing language, and AI verbosity.
+* Always check all doc files for accuracy and adherence to "Language & Communication Standards".
 * **Markdown formatting**: Lists, code blocks, and block quotes require a blank line before them to render correctly.
 
 ## Output rules for the assistant
 
-1. Run Ruff format in your head before responding.
-2. Include Google-style docstrings and type hints.
-3. Write or update unit tests for new functionality; fix code (not tests) when existing tests fail. Exception: tests may be changed after thorough analysis if they are genuinely flawed, requirements have changed, or breaking changes are approved.
-4. Respect existing public API signatures unless the user approves breaking changes.
-5. Document all new features and changes in the codebase. Run `make docs` to generate the full API reference.
-6. Run `make check` before finishing to ensure all code passes linting, type checking, and tests.
-7. If you need more information, ask concise clarification questions.
+1. **FOLLOW LANGUAGE STANDARDS**: Strictly adhere to the "Language & Communication Standards" above. Use precise technical language, avoid marketing terms, and eliminate AI verbosity.
+2. Run Ruff format in your head before responding.
+3. Include Google-style docstrings and type hints.
+4. Write or update unit tests for new functionality; fix code (not tests) when existing tests fail. Exception: tests may be changed after thorough analysis if they are genuinely flawed, requirements have changed, or breaking changes are approved.
+5. Respect existing public API signatures unless the user approves breaking changes.
+6. Document all new features and changes in the codebase. Run `make docs` to generate the full API reference.
+7. Run `make check` before finishing to ensure all code passes linting, type checking, and tests.
+8. If you need more information, ask concise clarification questions.
