@@ -493,6 +493,7 @@ workflow:
 - **`DistributeExternalConnectivity`**: Creates external connectivity across attachment points
 - **`CapacityProbe`**: Probes maximum flow capacity between node groups
 - **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
+- **`NetworkStats`**: Computes basic node/link capacity and degree statistics
 - **`NotebookExport`**: Saves scenario results to a Jupyter notebook with configurable content and visualizations
 
   ```yaml

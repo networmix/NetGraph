@@ -118,6 +118,7 @@ The CLI outputs results in JSON format. The structure depends on the workflow st
 
 - **BuildGraph**: Returns graph data in node-link JSON format
 - **CapacityProbe**: Returns max flow values with descriptive labels
+- **NetworkStats**: Reports capacity and degree statistics
 - **Other Steps**: Each step stores its results with step-specific keys
 
 Example output structure:

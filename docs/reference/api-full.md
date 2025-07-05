@@ -2120,6 +2120,35 @@ Attributes:
 
 ---
 
+## ngraph.workflow.network_stats
+
+Base statistical analysis of nodes and links.
+
+### NetworkStats
+
+A workflow step that gathers capacity and degree statistics for the network.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: NetworkStats
+        name: "stats"        # Optional custom name for this step
+    ```
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (Optional[int])
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging.
+- `run(self, scenario: "'Scenario'") -> 'None'`
+  - Collect capacity and degree statistics.
+
+---
+
 ## ngraph.workflow.notebook_export
 
 Jupyter notebook export and generation functionality.
