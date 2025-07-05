@@ -1,7 +1,10 @@
 import json
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -519,3 +522,297 @@ def test_cli_run_no_output(tmp_path: Path, capsys, monkeypatch) -> None:
     # No stdout output should be produced
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+def test_cli_run_with_scenario_file(tmp_path):
+    """Test running a scenario via CLI."""
+    # Create a simple scenario file
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+workflow:
+  - step_type: BuildGraph
+    name: test_step
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    # Capture stdout to avoid cluttering test output
+    with patch("sys.stdout", new=Mock()):
+        with patch("sys.argv", ["ngraph", "run", str(scenario_file)]):
+            cli.main()
+
+
+def test_cli_inspect_with_scenario_file(tmp_path):
+    """Test inspecting a scenario file."""
+    # Create a simple scenario file
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+workflow:
+  - step_type: BuildGraph
+    name: test_step
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    # Capture stdout to check output
+    with (
+        patch("sys.stdout", new=Mock()),
+        patch("builtins.print") as mock_print,
+    ):
+        with patch("sys.argv", ["ngraph", "inspect", str(scenario_file)]):
+            cli.main()
+
+    # Check that print was called with expected content
+    print_calls = [call.args[0] for call in mock_print.call_args_list]
+
+    # Should have scenario overview
+    assert any("NETGRAPH SCENARIO INSPECTION" in str(call) for call in print_calls)
+    # Should show network structure
+    assert any("2. NETWORK STRUCTURE" in str(call) for call in print_calls)
+    # Should show node count
+    assert any("Total Nodes: 2" in str(call) for call in print_calls)
+    # Should show link count
+    assert any("Total Links: 1" in str(call) for call in print_calls)
+    # Should show workflow steps with table format
+    assert any("7. WORKFLOW STEPS" in str(call) for call in print_calls)
+    # Should show deterministic seed info
+    assert any("Seed: 42 (deterministic)" in str(call) for call in print_calls)
+    # Should show workflow table headers
+    assert any("Type" in str(call) for call in print_calls)
+
+
+def test_cli_inspect_detail_mode(tmp_path):
+    """Test inspecting a scenario with detail mode."""
+    # Create a scenario with more content for detail mode
+    scenario_content = """
+seed: 1001
+network:
+  nodes:
+    A: {}
+    B: {}
+    C: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+    - source: B
+      target: C
+      link_params:
+        capacity: 200
+failure_policy_set:
+  test_policy:
+    rules:
+      - entity_scope: node
+        rule_type: choice
+        count: 1
+traffic_matrix_set:
+  default:
+    - source_path: A
+      sink_path: C
+      demand: 50
+workflow:
+  - step_type: BuildGraph
+    name: build_graph
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    # Test detail mode
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mock_print:
+        with patch("sys.argv", ["ngraph", "inspect", str(scenario_file), "--detail"]):
+            cli.main()
+
+    # Check that print was called with expected content
+    print_calls = [call.args[0] for call in mock_print.call_args_list]
+
+    # Should show complete node table in detail mode
+    assert any("Nodes:" in str(call) for call in print_calls)
+    # Should show node capacity and link count columns
+    assert any("Tot. Capacity" in str(call) for call in print_calls)
+    assert any("Links" in str(call) for call in print_calls)
+    # Should show failure policy rules in detail mode
+    assert any("1. node choice" in str(call) for call in print_calls)
+    # Should show traffic demands in detail mode
+    assert any("1. A → C (50)" in str(call) for call in print_calls)
+
+
+def test_cli_inspect_nonexistent_file():
+    """Test inspecting a non-existent file."""
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mock_print:
+        with patch("sys.argv", ["ngraph", "inspect", "nonexistent.yaml"]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+    # Should print error message
+    print_calls = [call.args[0] for call in mock_print.call_args_list]
+    assert any("ERROR: Scenario file not found" in str(call) for call in print_calls)
+
+
+def test_cli_inspect_invalid_yaml(tmp_path):
+    """Test inspecting an invalid YAML file."""
+    invalid_yaml = tmp_path / "invalid.yaml"
+    invalid_yaml.write_text("invalid: yaml: content: [")
+
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mock_print:
+        with patch("sys.argv", ["ngraph", "inspect", str(invalid_yaml)]):
+            with pytest.raises(SystemExit):
+                cli.main()
+
+    # Should print error message
+    print_calls = [call.args[0] for call in mock_print.call_args_list]
+    assert any("ERROR: Failed to inspect scenario" in str(call) for call in print_calls)
+
+
+def test_cli_inspect_help():
+    """Test inspect command help."""
+    result = subprocess.run(
+        [sys.executable, "-m", "ngraph", "inspect", "--help"],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "inspect" in result.stdout
+    assert "--detail" in result.stdout
+
+
+def test_main_with_no_args():
+    """Test main function with no arguments."""
+    with pytest.raises(SystemExit):
+        cli.main([])
+
+
+def test_run_scenario_success():
+    """Test successful scenario run with results output."""
+    # This test would need a more complex setup
+    pass
+
+
+def test_run_scenario_with_stdout(tmp_path):
+    """Test scenario run with stdout output."""
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+workflow:
+  - step_type: BuildGraph
+    name: test_step
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    with patch("builtins.print") as mock_print:
+        with patch("sys.argv", ["ngraph", "run", str(scenario_file), "--stdout"]):
+            cli.main()
+
+    # Should print JSON results to stdout
+    print_calls = [call.args[0] for call in mock_print.call_args_list]
+    # Should contain JSON-like output
+    json_output = "".join(str(call) for call in print_calls)
+    assert "test_step" in json_output
+
+
+def test_run_scenario_with_results_file(tmp_path):
+    """Test scenario run with results file output."""
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+workflow:
+  - step_type: BuildGraph
+    name: test_step
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+    results_file = tmp_path / "results.json"
+
+    with patch("sys.stdout", new=Mock()):
+        with patch(
+            "sys.argv",
+            ["ngraph", "run", str(scenario_file), "--results", str(results_file)],
+        ):
+            cli.main()
+
+    # Results file should exist and contain data
+    assert results_file.exists()
+    results_content = results_file.read_text()
+    assert "test_step" in results_content
+
+
+def test_verbose_logging(tmp_path):
+    """Test verbose logging option."""
+    # Create a simple scenario file
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    with patch("ngraph.cli.set_global_log_level") as mock_set_level:
+        with patch("sys.argv", ["ngraph", "--verbose", "inspect", str(scenario_file)]):
+            with patch("builtins.print"):  # Suppress output
+                cli.main()
+
+        # Should have set DEBUG level
+        import logging
+
+        mock_set_level.assert_called_with(logging.DEBUG)
+
+
+def test_quiet_logging(tmp_path):
+    """Test quiet logging option."""
+    # Create a simple scenario file
+    scenario_content = """
+seed: 42
+network:
+  nodes:
+    A: {}
+"""
+    scenario_file = tmp_path / "test.yaml"
+    scenario_file.write_text(scenario_content)
+
+    with patch("ngraph.cli.set_global_log_level") as mock_set_level:
+        with patch("sys.argv", ["ngraph", "--quiet", "inspect", str(scenario_file)]):
+            with patch("builtins.print"):  # Suppress output
+                cli.main()
+
+        # Should have set WARNING level
+        import logging
+
+        mock_set_level.assert_called_with(logging.WARNING)
