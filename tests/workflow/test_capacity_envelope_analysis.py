@@ -13,7 +13,6 @@ from ngraph.results_artifacts import FailurePolicySet
 from ngraph.scenario import Scenario
 from ngraph.workflow.capacity_envelope_analysis import (
     CapacityEnvelopeAnalysis,
-    _run_single_iteration,
     _worker,
 )
 
@@ -400,16 +399,20 @@ workflow:
 
     def test_worker_no_failures(self, simple_network):
         """Test worker function without failures."""
+        # Initialize global network for the worker
+        import ngraph.workflow.capacity_envelope_analysis as cap_env
+
+        cap_env._shared_network = simple_network
+
         args = (
-            simple_network,
-            None,  # No failure policy
+            set(),  # excluded_nodes
+            set(),  # excluded_links
             "A",
             "C",
             "combine",
             False,
             FlowPlacement.PROPORTIONAL,
-            42,  # seed
-            False,  # is_baseline
+            42,  # seed_offset
             "test_step",  # step_name
         )
 
@@ -430,16 +433,29 @@ workflow:
 
     def test_worker_with_failures(self, simple_network, simple_failure_policy):
         """Test worker function with failures."""
+        # Initialize global network for the worker
+        import ngraph.workflow.capacity_envelope_analysis as cap_env
+
+        cap_env._shared_network = simple_network
+
+        # Pre-compute exclusions (simulate what main process does)
+        from ngraph.workflow.capacity_envelope_analysis import (
+            _compute_failure_exclusions,
+        )
+
+        excluded_nodes, excluded_links = _compute_failure_exclusions(
+            simple_network, simple_failure_policy, 42
+        )
+
         args = (
-            simple_network,
-            simple_failure_policy,
+            excluded_nodes,
+            excluded_links,
             "A",
             "C",
             "combine",
             False,
             FlowPlacement.PROPORTIONAL,
-            42,  # seed
-            False,  # is_baseline
+            42,  # seed_offset
             "test_step",  # step_name
         )
 
@@ -447,35 +463,6 @@ workflow:
         assert isinstance(flow_results, list)
         assert isinstance(total_capacity, (int, float))
         assert len(flow_results) >= 1
-
-    def test_run_single_iteration(self, simple_network):
-        """Test single iteration helper function."""
-        from collections import defaultdict
-
-        samples = defaultdict(list)
-        total_capacity_samples = []
-
-        _run_single_iteration(
-            simple_network,
-            None,  # No failures
-            "A",
-            "C",
-            "combine",
-            False,
-            FlowPlacement.PROPORTIONAL,
-            samples,
-            total_capacity_samples,
-            42,  # seed
-            False,  # is_baseline
-        )
-
-        assert len(samples) >= 1
-        for values in samples.values():
-            assert len(values) == 1
-
-        # Check that total capacity was recorded
-        assert len(total_capacity_samples) == 1
-        assert isinstance(total_capacity_samples[0], (int, float))
 
 
 class TestIntegration:
@@ -622,7 +609,11 @@ workflow:
         step.run(mock_scenario)
 
         # Verify ProcessPoolExecutor was used
-        mock_executor_class.assert_called_once_with(max_workers=2)
+        # Should be called with max_workers and potentially initializer/initargs
+        assert mock_executor_class.call_count == 1
+        call_args = mock_executor_class.call_args
+        assert call_args[1]["max_workers"] == 2
+        # May also have initializer and initargs for shared network setup
         mock_executor.map.assert_called_once()
 
     def test_no_parallel_when_single_iteration(self, mock_scenario):
@@ -651,45 +642,55 @@ workflow:
             )
 
     def test_worker_baseline_iteration(self, simple_network, simple_failure_policy):
-        """Test worker function with baseline=True skips failures."""
-        args = (
-            simple_network,
-            simple_failure_policy,
+        """Test that baseline iteration uses empty exclusion sets."""
+        # Initialize global network for the worker
+        import ngraph.workflow.capacity_envelope_analysis as cap_env
+
+        cap_env._shared_network = simple_network
+
+        # Baseline uses empty exclusion sets (no failures)
+        baseline_args = (
+            set(),  # excluded_nodes (empty for baseline)
+            set(),  # excluded_links (empty for baseline)
             "A",
             "C",
             "combine",
             False,
             FlowPlacement.PROPORTIONAL,
-            42,  # seed
-            True,  # is_baseline - should skip failures
+            42,  # seed_offset
             "test_step",  # step_name
         )
 
-        flow_results, total_capacity = _worker(args)
-        assert isinstance(flow_results, list)
-        assert isinstance(total_capacity, (int, float))
-        assert len(flow_results) >= 1
+        baseline_results, baseline_capacity = _worker(baseline_args)
+        assert isinstance(baseline_results, list)
+        assert isinstance(baseline_capacity, (int, float))
+        assert len(baseline_results) >= 1
 
-        # With baseline=True and a simple network, should get full capacity
-        # This should be the same as running without a failure policy
-        args_no_policy = (
-            simple_network,
-            None,
+        # Compare with a normal iteration with failures
+        from ngraph.workflow.capacity_envelope_analysis import (
+            _compute_failure_exclusions,
+        )
+
+        excluded_nodes, excluded_links = _compute_failure_exclusions(
+            simple_network, simple_failure_policy, 42
+        )
+
+        failure_args = (
+            excluded_nodes,
+            excluded_links,
             "A",
             "C",
             "combine",
             False,
             FlowPlacement.PROPORTIONAL,
-            42,  # seed
-            False,  # is_baseline
+            42,  # seed_offset
             "test_step",  # step_name
         )
 
-        baseline_results, baseline_capacity = _worker(args)
-        no_policy_results, no_policy_capacity = _worker(args_no_policy)
+        failure_results, failure_capacity = _worker(failure_args)
 
-        # Results should be the same since baseline skips failures
-        assert baseline_capacity == no_policy_capacity
+        # Baseline (no failures) should have at least as much capacity as with failures
+        assert baseline_capacity >= failure_capacity
 
     def test_baseline_mode_integration(self, mock_scenario):
         """Test baseline mode in full integration."""

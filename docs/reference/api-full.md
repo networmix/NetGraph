@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 05, 2025 at 20:14 UTC
+**Generated from source code on:** July 05, 2025 at 23:05 UTC
 
 **Modules auto-discovered:** 51
 
@@ -2193,6 +2193,12 @@ Performs Monte-Carlo analysis by repeatedly applying failures and measuring capa
 to build statistical envelopes of network resilience. Results include both individual
 flow capacity envelopes and total capacity samples per iteration.
 
+This implementation uses parallel processing for efficiency:
+- Network is serialized once and shared across all worker processes
+- Failure exclusions are pre-computed in the main process
+- NetworkView provides lightweight exclusion without deep copying
+- Flow computations are cached within workers to avoid redundant calculations
+
 YAML Configuration:
     ```yaml
     workflow:
@@ -2201,7 +2207,7 @@ YAML Configuration:
         source_path: "^datacenter/.*"             # Regex pattern for source node groups
         sink_path: "^edge/.*"                     # Regex pattern for sink node groups
         mode: "combine"                           # "combine" or "pairwise" flow analysis
-        failure_policy: "random_failures"        # Optional: Named failure policy to use
+        failure_policy: "random_failures"         # Optional: Named failure policy to use
         iterations: 1000                          # Number of Monte-Carlo trials
         parallelism: 4                            # Number of parallel worker processes
         shortest_path: false                      # Use shortest paths only
