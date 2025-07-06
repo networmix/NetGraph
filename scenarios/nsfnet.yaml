@@ -200,6 +200,7 @@ workflow:
     iterations: 1000
     baseline: true
     failure_policy: default
+    store_failure_patterns: true
   - step_type: CapacityEnvelopeAnalysis
     name: ce_2
     source_path: "^(.+)"
@@ -208,9 +209,10 @@ workflow:
     parallelism: 8
     shortest_path: false
     flow_placement: PROPORTIONAL
-    iterations: 1000
+    iterations: 1000000
     baseline: true
     failure_policy: availability_1992
+    store_failure_patterns: true
   - step_type: NotebookExport
     name: export_analysis
     notebook_path: analysis.ipynb

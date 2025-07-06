@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import pickle
-import random
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -14,7 +14,10 @@ from typing import TYPE_CHECKING, Any
 from ngraph.lib.algorithms.base import FlowPlacement
 from ngraph.logging import get_logger
 from ngraph.network_view import NetworkView
-from ngraph.results_artifacts import CapacityEnvelope
+from ngraph.results_artifacts import (
+    CapacityEnvelope,
+    FailurePatternResult,
+)
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -23,6 +26,8 @@ if TYPE_CHECKING:
     from ngraph.failure_policy import FailurePolicy
     from ngraph.network import Network
     from ngraph.scenario import Scenario
+else:
+    from ngraph.failure_policy import FailurePolicy
 
 logger = get_logger(__name__)
 
@@ -82,21 +87,32 @@ def _compute_failure_exclusions(
     Returns:
         Tuple of (excluded_nodes, excluded_links) containing entity IDs to exclude.
     """
-    # Set random seed per iteration for deterministic Monte Carlo analysis
-    if seed_offset is not None:
-        random.seed(seed_offset)
-
     excluded_nodes = set()
     excluded_links = set()
 
     if policy is None:
         return excluded_nodes, excluded_links
 
+    # Create a temporary copy of the policy with the iteration-specific seed
+    # to ensure deterministic but varying results across iterations
+    if seed_offset is not None:
+        # Create a shallow copy with the iteration-specific seed
+        temp_policy = FailurePolicy(
+            rules=policy.rules,
+            attrs=policy.attrs,
+            fail_risk_groups=policy.fail_risk_groups,
+            fail_risk_group_children=policy.fail_risk_group_children,
+            use_cache=policy.use_cache,
+            seed=seed_offset,  # Use iteration-specific seed
+        )
+    else:
+        temp_policy = policy
+
     # Apply failures using the same logic as the original implementation
     node_map = {n_name: n.attrs for n_name, n in network.nodes.items()}
     link_map = {link_name: link.attrs for link_name, link in network.links.items()}
 
-    failed_ids = policy.apply_failures(node_map, link_map, network.risk_groups)
+    failed_ids = temp_policy.apply_failures(node_map, link_map, network.risk_groups)
 
     # Separate entity types for efficient NetworkView creation
     for f_id in failed_ids:
@@ -125,7 +141,7 @@ def _compute_failure_exclusions(
 
 def _worker(
     args: tuple[Any, ...],
-) -> tuple[list[tuple[str, str, float]], float]:
+) -> tuple[list[tuple[str, str, float]], float, int, bool, set[str], set[str]]:
     """Worker function that computes capacity metrics for a given set of exclusions.
 
     Implements caching based on exclusion patterns since many Monte Carlo iterations
@@ -134,10 +150,12 @@ def _worker(
 
     Args:
         args: Tuple containing (excluded_nodes, excluded_links, source_regex,
-              sink_regex, mode, shortest_path, flow_placement, seed_offset, step_name)
+              sink_regex, mode, shortest_path, flow_placement, seed_offset, step_name,
+              iteration_index, is_baseline)
 
     Returns:
-        Tuple of (flow_results, total_capacity) where flow_results is
+        Tuple of (flow_results, total_capacity, iteration_index, is_baseline,
+                 excluded_nodes, excluded_links) where flow_results is
         a serializable list of (source, sink, capacity) tuples
     """
     global _shared_network
@@ -156,6 +174,8 @@ def _worker(
         flow_placement,
         seed_offset,
         step_name,
+        iteration_index,
+        is_baseline,
     ) = args
 
     # Optional per-worker profiling for performance analysis
@@ -195,6 +215,7 @@ def _worker(
         worker_logger.debug(f"Worker {worker_pid} using cached flow results")
         result, total_capacity = _flow_cache[cache_key]
     else:
+        worker_logger.debug(f"Worker {worker_pid} computing new flow (cache miss)")
         # Use NetworkView for lightweight exclusion without copying network
         network_view = NetworkView.from_excluded_sets(
             _shared_network,
@@ -253,7 +274,14 @@ def _worker(
                 "Failed to save worker profile: %s: %s", type(exc).__name__, exc
             )
 
-    return result, total_capacity
+    return (
+        result,
+        total_capacity,
+        iteration_index,
+        is_baseline,
+        excluded_nodes,
+        excluded_links,
+    )
 
 
 @dataclass
@@ -270,6 +298,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     - NetworkView provides lightweight exclusion without deep copying
     - Flow computations are cached within workers to avoid redundant calculations
 
+    All results are stored using frequency-based storage for memory efficiency.
+
     YAML Configuration:
         ```yaml
         workflow:
@@ -285,11 +315,13 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             flow_placement: "PROPORTIONAL"            # Flow placement strategy
             baseline: true                            # Optional: Run first iteration without failures
             seed: 42                                  # Optional: Seed for reproducible results
+            store_failure_patterns: false            # Optional: Store failure patterns in results
         ```
 
     Results stored in scenario.results:
         - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-        - `total_capacity_samples`: List of total capacity values per iteration
+        - `total_capacity_frequencies`: Frequency map of total capacity values
+        - `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
 
     Attributes:
         source_path: Regex pattern to select source node groups.
@@ -302,6 +334,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         flow_placement: Flow placement strategy (default: PROPORTIONAL).
         baseline: If True, run first iteration without failures as baseline (default: False).
         seed: Optional seed for deterministic results (for debugging).
+        store_failure_patterns: If True, store failure patterns in results (default: False).
     """
 
     source_path: str = ""
@@ -314,6 +347,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL
     baseline: bool = False
     seed: int | None = None
+    store_failure_patterns: bool = False
 
     def __post_init__(self):
         """Validate parameters and convert string flow_placement to enum."""
@@ -375,7 +409,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         logger.info(f"Running {mc_iters} Monte-Carlo iterations")
 
         # Run analysis
-        samples, total_capacity_samples = self._run_capacity_analysis(
+        samples, total_capacity_samples, failure_patterns = self._run_capacity_analysis(
             scenario.network, base_policy, mc_iters
         )
 
@@ -385,9 +419,52 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
         # Store results in scenario
         scenario.results.put(self.name, "capacity_envelopes", envelopes)
+
+        # Store frequency-based results
+        total_capacity_frequencies = dict(Counter(total_capacity_samples))
         scenario.results.put(
-            self.name, "total_capacity_samples", total_capacity_samples
+            self.name, "total_capacity_frequencies", total_capacity_frequencies
         )
+
+        # Store failure patterns as frequency map if requested
+        if self.store_failure_patterns:
+            pattern_map = {}
+            for pattern in failure_patterns:
+                key = json.dumps(
+                    {
+                        "excluded_nodes": pattern["excluded_nodes"],
+                        "excluded_links": pattern["excluded_links"],
+                    },
+                    sort_keys=True,
+                )
+
+                if key not in pattern_map:
+                    # Get capacity matrix for this pattern
+                    capacity_matrix = {}
+                    for flow_key, envelope_data in envelopes.items():
+                        # Find capacity value for this pattern's iteration
+                        pattern_iter = pattern["iteration_index"]
+                        if pattern_iter < len(envelope_data["frequencies"]):
+                            # Get capacity value from original samples
+                            capacity_matrix[flow_key] = samples[
+                                self._parse_flow_key(flow_key)
+                            ][pattern_iter]
+
+                    pattern_map[key] = FailurePatternResult(
+                        excluded_nodes=pattern["excluded_nodes"],
+                        excluded_links=pattern["excluded_links"],
+                        capacity_matrix=capacity_matrix,
+                        count=0,
+                        is_baseline=pattern["is_baseline"],
+                    )
+                pattern_map[key].count += 1
+
+            failure_pattern_results = {
+                result.pattern_key: result.to_dict() for result in pattern_map.values()
+            }
+            scenario.results.put(
+                self.name, "failure_pattern_results", failure_pattern_results
+            )
 
         # Log summary statistics for total capacity
         if total_capacity_samples:
@@ -457,7 +534,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
     def _run_capacity_analysis(
         self, network: "Network", policy: "FailurePolicy | None", mc_iters: int
-    ) -> tuple[dict[tuple[str, str], list[float]], list[float]]:
+    ) -> tuple[dict[tuple[str, str], list[float]], list[float], list[dict[str, Any]]]:
         """Run the capacity analysis iterations.
 
         Args:
@@ -466,12 +543,14 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             mc_iters: Number of Monte-Carlo iterations
 
         Returns:
-            Tuple of (samples, total_capacity_samples) where:
+            Tuple of (samples, total_capacity_samples, failure_patterns) where:
             - samples: Dictionary mapping (src_label, dst_label) to list of capacity samples
             - total_capacity_samples: List of total capacity values per iteration
+            - failure_patterns: List of failure pattern details per iteration
         """
         samples: dict[tuple[str, str], list[float]] = defaultdict(list)
         total_capacity_samples: list[float] = []
+        failure_patterns: list[dict[str, Any]] = []
 
         # Pre-compute exclusions for all iterations
         logger.debug("Pre-computing failure exclusions for all iterations")
@@ -507,6 +586,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                     self.flow_placement,
                     seed_offset,
                     self.name or self.__class__.__name__,
+                    i,  # iteration index
+                    is_baseline,  # baseline flag
                 )
             )
 
@@ -520,14 +601,21 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
         if use_parallel:
             self._run_parallel(
-                network, worker_args, mc_iters, samples, total_capacity_samples
+                network,
+                worker_args,
+                mc_iters,
+                samples,
+                total_capacity_samples,
+                failure_patterns,
             )
         else:
-            self._run_serial(network, worker_args, samples, total_capacity_samples)
+            self._run_serial(
+                network, worker_args, samples, total_capacity_samples, failure_patterns
+            )
 
         logger.debug(f"Collected samples for {len(samples)} flow pairs")
         logger.debug(f"Collected {len(total_capacity_samples)} total capacity samples")
-        return samples, total_capacity_samples
+        return samples, total_capacity_samples, failure_patterns
 
     def _run_parallel(
         self,
@@ -536,6 +624,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         mc_iters: int,
         samples: dict[tuple[str, str], list[float]],
         total_capacity_samples: list[float],
+        failure_patterns: list[dict[str, Any]],
     ) -> None:
         """Run analysis in parallel using shared network approach.
 
@@ -550,6 +639,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             mc_iters: Number of iterations
             samples: Dictionary to accumulate flow results into
             total_capacity_samples: List to accumulate total capacity values into
+            failure_patterns: List to accumulate failure patterns into
         """
         workers = min(self.parallelism, mc_iters)
         logger.info(
@@ -576,9 +666,14 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             logger.info(f"Starting parallel execution of {mc_iters} iterations")
 
             try:
-                for flow_results, total_capacity in pool.map(
-                    _worker, worker_args, chunksize=chunksize
-                ):
+                for (
+                    flow_results,
+                    total_capacity,
+                    iteration_index,
+                    is_baseline,
+                    excluded_nodes,
+                    excluded_links,
+                ) in pool.map(_worker, worker_args, chunksize=chunksize):
                     completed_tasks += 1
 
                     # Add flow results to samples
@@ -588,6 +683,17 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
                     # Add total capacity to samples
                     total_capacity_samples.append(total_capacity)
+
+                    # Add failure pattern if requested
+                    if self.store_failure_patterns:
+                        failure_patterns.append(
+                            {
+                                "iteration_index": iteration_index,
+                                "is_baseline": is_baseline,
+                                "excluded_nodes": list(excluded_nodes),
+                                "excluded_links": list(excluded_links),
+                            }
+                        )
 
                     # Progress logging
                     if completed_tasks % max(1, mc_iters // 10) == 0:
@@ -611,12 +717,31 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             f"Average time per iteration: {elapsed_time / mc_iters:.3f} seconds"
         )
 
+        # Log exclusion pattern diversity instead of meaningless main process cache
+        unique_exclusions = set()
+        for args in worker_args:
+            excluded_nodes, excluded_links = args[0], args[1]
+            exclusion_key = (
+                tuple(sorted(excluded_nodes)),
+                tuple(sorted(excluded_links)),
+            )
+            unique_exclusions.add(exclusion_key)
+
+        logger.info(
+            f"Generated {len(unique_exclusions)} unique exclusion patterns from {mc_iters} iterations"
+        )
+        cache_efficiency = (mc_iters - len(unique_exclusions)) / mc_iters * 100
+        logger.debug(
+            f"Potential cache efficiency: {cache_efficiency:.1f}% (worker processes benefit from caching)"
+        )
+
     def _run_serial(
         self,
         network: "Network",
         worker_args: list[tuple],
         samples: dict[tuple[str, str], list[float]],
         total_capacity_samples: list[float],
+        failure_patterns: list[dict[str, Any]],
     ) -> None:
         """Run analysis serially for single process execution.
 
@@ -625,6 +750,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             worker_args: Pre-computed worker arguments
             samples: Dictionary to accumulate flow results into
             total_capacity_samples: List to accumulate total capacity values into
+            failure_patterns: List to accumulate failure patterns into
         """
         logger.info("Running serial analysis")
         start_time = time.time()
@@ -643,7 +769,14 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                     f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}"
                 )
 
-                flow_results, total_capacity = _worker(args)
+                (
+                    flow_results,
+                    total_capacity,
+                    iteration_index,
+                    is_baseline,
+                    excluded_nodes,
+                    excluded_links,
+                ) = _worker(args)
 
                 # Add flow results to samples
                 for src, dst, val in flow_results:
@@ -651,6 +784,17 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
                 # Add total capacity to samples
                 total_capacity_samples.append(total_capacity)
+
+                # Add failure pattern if requested
+                if self.store_failure_patterns:
+                    failure_patterns.append(
+                        {
+                            "iteration_index": iteration_index,
+                            "is_baseline": is_baseline,
+                            "excluded_nodes": list(excluded_nodes),
+                            "excluded_links": list(excluded_links),
+                        }
+                    )
 
                 iter_time = time.time() - iter_start
                 if len(worker_args) <= 10:
@@ -675,6 +819,16 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             logger.debug(
                 f"Average time per iteration: {elapsed_time / len(worker_args):.3f} seconds"
             )
+        logger.info(
+            f"Flow cache contains {len(_flow_cache)} unique patterns after serial analysis"
+        )
+
+    def _parse_flow_key(self, flow_key: str) -> tuple[str, str]:
+        """Parse flow key back to (source, sink) tuple."""
+        parts = flow_key.split("->", 1)
+        if len(parts) != 2:
+            raise ValueError(f"Invalid flow key format: {flow_key}")
+        return parts[0], parts[1]
 
     def _build_capacity_envelopes(
         self, samples: dict[tuple[str, str], list[float]]
@@ -697,25 +851,23 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 )
                 continue
 
-            # Create capacity envelope
-            envelope = CapacityEnvelope(
+            # Use flow key as the result key
+            flow_key = f"{src_label}->{dst_label}"
+
+            # Create frequency-based envelope
+            envelope = CapacityEnvelope.from_values(
                 source_pattern=self.source_path,
                 sink_pattern=self.sink_path,
                 mode=self.mode,
-                capacity_values=capacity_values,
+                values=capacity_values,
             )
-
-            # Use flow key as the result key
-            flow_key = f"{src_label}->{dst_label}"
             envelopes[flow_key] = envelope.to_dict()
 
             # Detailed logging with statistics
-            min_val = min(capacity_values)
-            max_val = max(capacity_values)
-            mean_val = sum(capacity_values) / len(capacity_values)
             logger.debug(
-                f"Created envelope for {flow_key}: {len(capacity_values)} samples, "
-                f"min={min_val:.2f}, max={max_val:.2f}, mean={mean_val:.2f}"
+                f"Created frequency-based envelope for {flow_key}: {envelope.total_samples} samples, "
+                f"min={envelope.min_capacity:.2f}, max={envelope.max_capacity:.2f}, "
+                f"mean={envelope.mean_capacity:.2f}, unique_values={len(envelope.frequencies)}"
             )
 
         logger.debug(f"Successfully created {len(envelopes)} capacity envelopes")

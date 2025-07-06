@@ -3,75 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from statistics import mean, stdev
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, List
 
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficResult
 
 if TYPE_CHECKING:
     from ngraph.failure_policy import FailurePolicy
-
-
-@dataclass(frozen=True)
-class CapacityEnvelope:
-    """Range of max-flow values measured between two node groups.
-
-    This immutable dataclass stores capacity measurements and automatically
-    computes statistical measures in __post_init__.
-
-    Attributes:
-        source_pattern: Regex pattern for selecting source nodes.
-        sink_pattern: Regex pattern for selecting sink nodes.
-        mode: Flow computation mode (e.g., "combine").
-        capacity_values: List of measured capacity values.
-        min_capacity: Minimum capacity value (computed).
-        max_capacity: Maximum capacity value (computed).
-        mean_capacity: Mean capacity value (computed).
-        stdev_capacity: Standard deviation of capacity values (computed).
-    """
-
-    source_pattern: str
-    sink_pattern: str
-    mode: str = "combine"
-    capacity_values: list[float] = field(default_factory=list)
-
-    # Derived statistics - computed in __post_init__
-    min_capacity: float = field(init=False)
-    max_capacity: float = field(init=False)
-    mean_capacity: float = field(init=False)
-    stdev_capacity: float = field(init=False)
-
-    def __post_init__(self) -> None:
-        """Compute statistical measures from capacity values.
-
-        Uses object.__setattr__ to modify frozen dataclass fields.
-        Handles edge cases like empty lists and single values.
-        """
-        vals = self.capacity_values or [0.0]
-        object.__setattr__(self, "min_capacity", min(vals))
-        object.__setattr__(self, "max_capacity", max(vals))
-        object.__setattr__(self, "mean_capacity", mean(vals))
-        object.__setattr__(
-            self, "stdev_capacity", 0.0 if len(vals) < 2 else stdev(vals)
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization.
-
-        Returns:
-            Dictionary representation with all fields as primitives.
-        """
-        return {
-            "source": self.source_pattern,
-            "sink": self.sink_pattern,
-            "mode": self.mode,
-            "values": list(self.capacity_values),
-            "min": self.min_capacity,
-            "max": self.max_capacity,
-            "mean": self.mean_capacity,
-            "stdev": self.stdev_capacity,
-        }
 
 
 @dataclass
@@ -284,3 +222,166 @@ class FailurePolicySet:
             Dictionary mapping failure policy names to FailurePolicy dictionaries.
         """
         return {name: policy.to_dict() for name, policy in self.policies.items()}
+
+
+@dataclass
+class CapacityEnvelope:
+    """Frequency-based capacity envelope that stores capacity values as frequencies.
+
+    This approach is more memory-efficient for Monte Carlo analysis where we care
+    about statistical distributions rather than individual sample order.
+
+    Attributes:
+        source_pattern: Regex pattern used to select source nodes.
+        sink_pattern: Regex pattern used to select sink nodes.
+        mode: Flow analysis mode ("combine" or "pairwise").
+        frequencies: Dictionary mapping capacity values to their occurrence counts.
+        min_capacity: Minimum observed capacity.
+        max_capacity: Maximum observed capacity.
+        mean_capacity: Mean capacity across all samples.
+        stdev_capacity: Standard deviation of capacity values.
+        total_samples: Total number of samples represented.
+    """
+
+    source_pattern: str
+    sink_pattern: str
+    mode: str
+    frequencies: Dict[float, int]
+    min_capacity: float
+    max_capacity: float
+    mean_capacity: float
+    stdev_capacity: float
+    total_samples: int
+
+    @classmethod
+    def from_values(
+        cls, source_pattern: str, sink_pattern: str, mode: str, values: List[float]
+    ) -> "CapacityEnvelope":
+        """Create frequency-based envelope from a list of capacity values.
+
+        Args:
+            source_pattern: Source node pattern.
+            sink_pattern: Sink node pattern.
+            mode: Flow analysis mode.
+            values: List of capacity values from Monte Carlo iterations.
+
+        Returns:
+            CapacityEnvelope instance.
+        """
+        if not values:
+            raise ValueError("Cannot create envelope from empty values list")
+
+        # Build frequency map
+        frequencies = {}
+        for value in values:
+            frequencies[value] = frequencies.get(value, 0) + 1
+
+        # Calculate statistics
+        min_capacity = min(values)
+        max_capacity = max(values)
+        mean_capacity = sum(values) / len(values)
+
+        # Calculate standard deviation
+        variance = sum((x - mean_capacity) ** 2 for x in values) / len(values)
+        stdev_capacity = variance**0.5
+
+        return cls(
+            source_pattern=source_pattern,
+            sink_pattern=sink_pattern,
+            mode=mode,
+            frequencies=frequencies,
+            min_capacity=min_capacity,
+            max_capacity=max_capacity,
+            mean_capacity=mean_capacity,
+            stdev_capacity=stdev_capacity,
+            total_samples=len(values),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "source": self.source_pattern,
+            "sink": self.sink_pattern,
+            "mode": self.mode,
+            "frequencies": self.frequencies,
+            "min": self.min_capacity,
+            "max": self.max_capacity,
+            "mean": self.mean_capacity,
+            "stdev": self.stdev_capacity,
+            "total_samples": self.total_samples,
+        }
+
+    def get_percentile(self, percentile: float) -> float:
+        """Calculate percentile from frequency distribution.
+
+        Args:
+            percentile: Percentile to calculate (0-100).
+
+        Returns:
+            Capacity value at the specified percentile.
+        """
+        if not (0 <= percentile <= 100):
+            raise ValueError("Percentile must be between 0 and 100")
+
+        target_count = (percentile / 100.0) * self.total_samples
+
+        # Sort capacities and accumulate counts
+        sorted_capacities = sorted(self.frequencies.keys())
+        cumulative_count = 0
+
+        for capacity in sorted_capacities:
+            cumulative_count += self.frequencies[capacity]
+            if cumulative_count >= target_count:
+                return capacity
+
+        return sorted_capacities[-1]  # Return max if we somehow don't find it
+
+    def expand_to_values(self) -> List[float]:
+        """Expand frequency map back to individual values (for backward compatibility).
+
+        Returns:
+            List of capacity values reconstructed from frequencies.
+        """
+        values = []
+        for capacity, count in self.frequencies.items():
+            values.extend([capacity] * count)
+        return values
+
+
+@dataclass
+class FailurePatternResult:
+    """Result for a unique failure pattern with associated capacity matrix.
+
+    Attributes:
+        excluded_nodes: List of failed node IDs.
+        excluded_links: List of failed link IDs.
+        capacity_matrix: Dictionary mapping flow keys to capacity values.
+        count: Number of times this pattern occurred.
+        is_baseline: Whether this represents the baseline (no failures) case.
+    """
+
+    excluded_nodes: List[str]
+    excluded_links: List[str]
+    capacity_matrix: Dict[str, float]
+    count: int
+    is_baseline: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "excluded_nodes": self.excluded_nodes,
+            "excluded_links": self.excluded_links,
+            "capacity_matrix": self.capacity_matrix,
+            "count": self.count,
+            "is_baseline": self.is_baseline,
+        }
+
+    @property
+    def pattern_key(self) -> str:
+        """Generate a unique key for this failure pattern."""
+        if self.is_baseline:
+            return "baseline"
+
+        # Create deterministic key from excluded entities
+        excluded_str = ",".join(sorted(self.excluded_nodes + self.excluded_links))
+        return f"pattern_{hash(excluded_str) & 0x7FFFFFFF:08x}"

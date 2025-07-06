@@ -111,13 +111,15 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             return float(envelope_data)
 
         if isinstance(envelope_data, dict):
+            # Check for new frequency-based CapacityEnvelope format first
             for key in (
-                "capacity",
-                "max_capacity",
-                "envelope",
-                "value",
-                "max_value",
-                "values",
+                "max",  # New frequency-based format uses "max"
+                "mean",  # Alternative: use mean capacity
+                "max_capacity",  # Legacy format compatibility
+                "capacity",  # Simple capacity value
+                "envelope",  # Nested envelope data
+                "value",  # Simple value
+                "max_value",  # Maximum value
             ):
                 if key in envelope_data:
                     cap_val = envelope_data[key]
@@ -125,6 +127,12 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
                         return float(max(cap_val))
                     if isinstance(cap_val, (int, float)):
                         return float(cap_val)
+
+            # Legacy: Check for old "values" format (list of capacity samples)
+            if "values" in envelope_data:
+                cap_val = envelope_data["values"]
+                if isinstance(cap_val, (list, tuple)) and cap_val:
+                    return float(max(cap_val))
         return None
 
     @staticmethod
@@ -316,13 +324,29 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     def analyze_flow_availability(
         self, results: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
-        """Create CDF/availability distribution for *total_capacity_samples*."""
+        """Create CDF/availability distribution for *total_capacity_frequencies*."""
         step_name: Optional[str] = kwargs.get("step_name")
         if not step_name:
             return {"status": "error", "message": "step_name required"}
 
         step_data = results.get(step_name, {})
-        total_flow_samples = step_data.get("total_capacity_samples", [])
+        total_capacity_frequencies = step_data.get("total_capacity_frequencies", {})
+
+        # Convert frequencies to samples
+        total_flow_samples = []
+        for capacity, count in total_capacity_frequencies.items():
+            # Convert string keys from JSON to float values
+            try:
+                capacity_value = float(capacity)
+                count_value = int(count)
+                total_flow_samples.extend([capacity_value] * count_value)
+            except (ValueError, TypeError) as e:
+                return {
+                    "status": "error",
+                    "message": f"Invalid capacity data: {capacity}={count}, error: {e}",
+                    "step_name": step_name,
+                }
+
         if not total_flow_samples:
             return {
                 "status": "no_data",

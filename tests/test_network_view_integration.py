@@ -169,15 +169,18 @@ class TestNetworkViewIntegration:
         envelopes = sample_scenario.results.get("envelope_test", "capacity_envelopes")
         assert "^[AB]$->^[CD]$" in envelopes
 
-        capacity_values = envelopes["^[AB]$->^[CD]$"]["values"]
-        assert len(capacity_values) == 5
+        envelope_data = envelopes["^[AB]$->^[CD]$"]
+        assert envelope_data["total_samples"] == 5
 
         # First iteration should be baseline (no failures)
-        assert capacity_values[0] == 400.0
+        # With frequency storage, check for baseline capacity
+        frequencies = envelope_data["frequencies"]
+        assert 400.0 in frequencies  # Baseline capacity
+        assert 200.0 in frequencies  # Failure capacity
 
-        # Other iterations should have failures (one spine failed)
-        for i in range(1, 5):
-            assert capacity_values[i] == 200.0
+        # Should have both baseline and failure scenarios
+        assert frequencies[400.0] == 1  # One baseline
+        assert frequencies[200.0] == 4  # Four failure iterations
 
         # Verify original network is unchanged
         assert not sample_scenario.network.nodes["A"].disabled

@@ -297,7 +297,7 @@ def test_flow_availability_detection() -> None:
     results_with_bandwidth = {
         "capacity_analysis": {
             "capacity_envelopes": {"flow1": {"percentiles": [10, 20, 30]}},
-            "total_capacity_samples": [100.0, 90.0, 80.0],
+            "total_capacity_frequencies": {100.0: 1, 90.0: 1, 80.0: 1},
         }
     }
 
@@ -312,7 +312,7 @@ def test_flow_availability_detection() -> None:
     results_empty_bandwidth = {
         "capacity_analysis": {
             "capacity_envelopes": {"flow1": {"percentiles": [10, 20, 30]}},
-            "total_capacity_samples": [],
+            "total_capacity_frequencies": {},
         }
     }
 
@@ -333,8 +333,8 @@ def test_notebook_includes_flow_availability(tmp_path: Path) -> None:
     )
     scenario.results.put(
         "capacity_envelope",
-        "total_capacity_samples",
-        [100.0, 95.0, 90.0, 85.0, 80.0, 75.0],
+        "total_capacity_frequencies",
+        {100.0: 1, 95.0: 1, 90.0: 1, 85.0: 1, 80.0: 1, 75.0: 1},
     )
 
     export_step = NotebookExport(

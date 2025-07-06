@@ -67,7 +67,7 @@ class NotebookExport(WorkflowStep):
                     "analysis steps in the scenario workflow."
                 )
                 # Always export JSON file, even if empty, for consistency
-                self._save_results_json({}, json_output_path)
+                _ = self._save_results_json({}, json_output_path)
                 nb = self._create_empty_notebook()
             else:
                 raise ValueError(
@@ -77,12 +77,10 @@ class NotebookExport(WorkflowStep):
                 )
         else:
             logger.info(f"Creating notebook with {len(results_dict)} result sets")
-            logger.info(
-                f"Estimated data size: {self._estimate_data_size(results_dict)}"
-            )
 
-            # Save results to JSON file
-            self._save_results_json(results_dict, json_output_path)
+            # Save results to JSON file and get actual size
+            actual_size = self._save_results_json(results_dict, json_output_path)
+            logger.info(f"Data size: {actual_size}")
 
             # Create notebook that references the JSON file
             nb = self._create_data_notebook(results_dict, json_output_path)
@@ -204,20 +202,23 @@ class NotebookExport(WorkflowStep):
 
     def _save_results_json(
         self, results_dict: dict[str, dict[str, Any]], json_path: Path
-    ) -> None:
-        """Save results dictionary to JSON file."""
+    ) -> str:
+        """Save results dictionary to JSON file and return the formatted file size."""
         # Ensure directory exists
         json_path.parent.mkdir(parents=True, exist_ok=True)
 
         json_str = json.dumps(results_dict, indent=2, default=str)
         json_path.write_text(json_str, encoding="utf-8")
-        logger.info(f"Results JSON saved to: {json_path}")
 
-    def _estimate_data_size(self, results_dict: dict[str, dict[str, Any]]) -> str:
-        """Estimate the size of the results data for logging purposes."""
-        json_str = json.dumps(results_dict, default=str)
+        # Calculate actual file size
         size_bytes = len(json_str.encode("utf-8"))
+        formatted_size = self._format_file_size(size_bytes)
 
+        logger.info(f"Results JSON saved to: {json_path}")
+        return formatted_size
+
+    def _format_file_size(self, size_bytes: int) -> str:
+        """Format file size in human-readable units."""
         if size_bytes < 1024:
             return f"{size_bytes} bytes"
         elif size_bytes < 1024 * 1024:
@@ -246,12 +247,15 @@ class NotebookExport(WorkflowStep):
     def _has_flow_availability_data(
         self, results_dict: dict[str, dict[str, Any]]
     ) -> bool:
-        """Check if results contain flow availability data (total_capacity_samples)."""
+        """Check if results contain flow availability data (total_capacity_frequencies)."""
         for _step_name, step_data in results_dict.items():
-            if isinstance(step_data, dict) and "total_capacity_samples" in step_data:
+            if (
+                isinstance(step_data, dict)
+                and "total_capacity_frequencies" in step_data
+            ):
                 # Make sure it's not empty
-                samples = step_data["total_capacity_samples"]
-                if isinstance(samples, list) and len(samples) > 0:
+                frequencies = step_data["total_capacity_frequencies"]
+                if isinstance(frequencies, dict) and len(frequencies) > 0:
                     return True
         return False
 

@@ -90,9 +90,32 @@ envelope = CapacityEnvelopeAnalysis(
     sink_path="^leaf.*",
     failure_policy="random_failures",
     iterations=1000,
-    parallelism=8  # Safe concurrent execution
+    parallelism=8,  # Safe concurrent execution
+    baseline=True,  # Run first iteration without failures for comparison
+    store_failure_patterns=True  # Store failure patterns for analysis
 )
 ```
+
+### Baseline Analysis
+
+The `baseline` parameter enables comparison between failure scenarios and no-failure baseline:
+
+```yaml
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    name: "capacity_analysis"
+    source_path: "^datacenter.*"
+    sink_path: "^edge.*"
+    failure_policy: "random_failures"
+    iterations: 1000
+    baseline: true  # First iteration runs without failures
+    store_failure_patterns: true  # Store patterns for detailed analysis
+```
+
+This creates baseline capacity measurements alongside failure scenario results, enabling:
+- Comparison of degraded vs. normal network capacity
+- Analysis of failure impact magnitude
+- Identification of failure-resistant flow paths
 
 ## Key Benefits
 

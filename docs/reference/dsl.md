@@ -483,7 +483,15 @@ workflow:
     parallelism: P # Number of parallel worker processes (default: 1)
     shortest_path: true | false # Use shortest path only (default: false)
     flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # Flow placement strategy
+    baseline: true | false # Optional: Run first iteration without failures as baseline (default: false)
+    store_failure_patterns: true | false # Optional: Store failure patterns in results (default: false)
     seed: S # Optional: Seed for deterministic results
+
+  - step_type: NotebookExport
+    name: "export_analysis"              # Optional: Custom name for this step
+    notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
+    json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
+    allow_empty_results: false           # Optional: Allow notebook creation with no results
 ```
 
 **Available Workflow Steps:**

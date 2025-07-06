@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 05, 2025 at 23:05 UTC
+**Generated from source code on:** July 06, 2025 at 02:10 UTC
 
 **Modules auto-discovered:** 51
 
@@ -892,35 +892,67 @@ CapacityEnvelope, TrafficMatrixSet, PlacementResultSet, and FailurePolicySet cla
 
 ### CapacityEnvelope
 
-Range of max-flow values measured between two node groups.
+Frequency-based capacity envelope that stores capacity values as frequencies.
 
-This immutable dataclass stores capacity measurements and automatically
-computes statistical measures in __post_init__.
+This approach is more memory-efficient for Monte Carlo analysis where we care
+about statistical distributions rather than individual sample order.
 
 Attributes:
-    source_pattern: Regex pattern for selecting source nodes.
-    sink_pattern: Regex pattern for selecting sink nodes.
-    mode: Flow computation mode (e.g., "combine").
-    capacity_values: List of measured capacity values.
-    min_capacity: Minimum capacity value (computed).
-    max_capacity: Maximum capacity value (computed).
-    mean_capacity: Mean capacity value (computed).
-    stdev_capacity: Standard deviation of capacity values (computed).
+    source_pattern: Regex pattern used to select source nodes.
+    sink_pattern: Regex pattern used to select sink nodes.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    frequencies: Dictionary mapping capacity values to their occurrence counts.
+    min_capacity: Minimum observed capacity.
+    max_capacity: Maximum observed capacity.
+    mean_capacity: Mean capacity across all samples.
+    stdev_capacity: Standard deviation of capacity values.
+    total_samples: Total number of samples represented.
 
 **Attributes:**
 
 - `source_pattern` (str)
 - `sink_pattern` (str)
-- `mode` (str) = combine
-- `capacity_values` (list[float]) = []
+- `mode` (str)
+- `frequencies` (Dict[float, int])
 - `min_capacity` (float)
 - `max_capacity` (float)
 - `mean_capacity` (float)
 - `stdev_capacity` (float)
+- `total_samples` (int)
 
 **Methods:**
 
-- `to_dict(self) -> 'dict[str, Any]'`
+- `expand_to_values(self) -> 'List[float]'`
+  - Expand frequency map back to individual values (for backward compatibility).
+- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]') -> "'CapacityEnvelope'"`
+  - Create frequency-based envelope from a list of capacity values.
+- `get_percentile(self, percentile: 'float') -> 'float'`
+  - Calculate percentile from frequency distribution.
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### FailurePatternResult
+
+Result for a unique failure pattern with associated capacity matrix.
+
+Attributes:
+    excluded_nodes: List of failed node IDs.
+    excluded_links: List of failed link IDs.
+    capacity_matrix: Dictionary mapping flow keys to capacity values.
+    count: Number of times this pattern occurred.
+    is_baseline: Whether this represents the baseline (no failures) case.
+
+**Attributes:**
+
+- `excluded_nodes` (List[str])
+- `excluded_links` (List[str])
+- `capacity_matrix` (Dict[str, float])
+- `count` (int)
+- `is_baseline` (bool) = False
+
+**Methods:**
+
+- `to_dict(self) -> 'Dict[str, Any]'`
   - Convert to dictionary for JSON serialization.
 
 ### FailurePolicySet
@@ -2199,6 +2231,8 @@ This implementation uses parallel processing for efficiency:
 - NetworkView provides lightweight exclusion without deep copying
 - Flow computations are cached within workers to avoid redundant calculations
 
+All results are stored using frequency-based storage for memory efficiency.
+
 YAML Configuration:
     ```yaml
     workflow:
@@ -2214,11 +2248,13 @@ YAML Configuration:
         flow_placement: "PROPORTIONAL"            # Flow placement strategy
         baseline: true                            # Optional: Run first iteration without failures
         seed: 42                                  # Optional: Seed for reproducible results
+        store_failure_patterns: false            # Optional: Store failure patterns in results
     ```
 
 Results stored in scenario.results:
     - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-    - `total_capacity_samples`: List of total capacity values per iteration
+    - `total_capacity_frequencies`: Frequency map of total capacity values
+    - `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
 
 Attributes:
     source_path: Regex pattern to select source node groups.
@@ -2231,6 +2267,7 @@ Attributes:
     flow_placement: Flow placement strategy (default: PROPORTIONAL).
     baseline: If True, run first iteration without failures as baseline (default: False).
     seed: Optional seed for deterministic results (for debugging).
+    store_failure_patterns: If True, store failure patterns in results (default: False).
 
 **Attributes:**
 
@@ -2245,6 +2282,7 @@ Attributes:
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement) = 1
 - `baseline` (bool) = False
+- `store_failure_patterns` (bool) = False
 
 **Methods:**
 
@@ -2605,7 +2643,7 @@ Analyzes capacity envelope data and creates matrices.
 - `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', step_name: 'str') -> 'None'`
   - Analyse flow availability and render summary statistics & plots.
 - `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
-  - Create CDF/availability distribution for *total_capacity_samples*.
+  - Create CDF/availability distribution for *total_capacity_frequencies*.
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
   - Pretty-print *analysis* to the notebook/stdout.
 - `get_description(self) -> 'str'`

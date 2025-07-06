@@ -101,12 +101,12 @@ else:
 if results:
     capacity_analyzer = CapacityMatrixAnalyzer()
 
-    # Find steps with total flow samples (total_capacity_samples)
+    # Find steps with total flow samples (total_capacity_frequencies)
     flow_steps = []
     for step_name, step_data in results.items():
-        if isinstance(step_data, dict) and 'total_capacity_samples' in step_data:
-            samples = step_data['total_capacity_samples']
-            if isinstance(samples, list) and len(samples) > 0:
+        if isinstance(step_data, dict) and 'total_capacity_frequencies' in step_data:
+            frequencies = step_data['total_capacity_frequencies']
+            if isinstance(frequencies, dict) and len(frequencies) > 0:
                 flow_steps.append(step_name)
 
     if flow_steps:

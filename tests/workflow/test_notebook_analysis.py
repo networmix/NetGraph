@@ -369,7 +369,15 @@ class TestCapacityMatrixAnalyzer:
     def test_analyze_flow_availability_success(self):
         """Test successful bandwidth availability analysis."""
         results = {
-            "capacity_step": {"total_capacity_samples": [100.0, 90.0, 85.0, 80.0, 75.0]}
+            "capacity_step": {
+                "total_capacity_frequencies": {
+                    100.0: 1,
+                    90.0: 1,
+                    85.0: 1,
+                    80.0: 1,
+                    75.0: 1,
+                }
+            }
         }
 
         analyzer = CapacityMatrixAnalyzer()
@@ -418,7 +426,7 @@ class TestCapacityMatrixAnalyzer:
 
     def test_analyze_flow_availability_zero_capacity(self):
         """Test bandwidth availability analysis with all zero capacity."""
-        results = {"capacity_step": {"total_capacity_samples": [0.0, 0.0, 0.0]}}
+        results = {"capacity_step": {"total_capacity_frequencies": {0.0: 3}}}
 
         analyzer = CapacityMatrixAnalyzer()
         result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
@@ -428,7 +436,7 @@ class TestCapacityMatrixAnalyzer:
 
     def test_analyze_flow_availability_single_sample(self):
         """Test bandwidth availability analysis with single sample."""
-        results = {"capacity_step": {"total_capacity_samples": [50.0]}}
+        results = {"capacity_step": {"total_capacity_frequencies": {50.0: 1}}}
 
         analyzer = CapacityMatrixAnalyzer()
         result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
