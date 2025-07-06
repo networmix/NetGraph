@@ -271,18 +271,29 @@ class CapacityEnvelope:
         if not values:
             raise ValueError("Cannot create envelope from empty values list")
 
-        # Build frequency map
+        # Single pass to calculate everything efficiently
         frequencies = {}
+        total_sum = 0.0
+        sum_squares = 0.0
+        min_capacity = float("inf")
+        max_capacity = float("-inf")
+
         for value in values:
+            # Update frequency map
             frequencies[value] = frequencies.get(value, 0) + 1
 
-        # Calculate statistics
-        min_capacity = min(values)
-        max_capacity = max(values)
-        mean_capacity = sum(values) / len(values)
+            # Update statistics
+            total_sum += value
+            sum_squares += value * value
+            min_capacity = min(min_capacity, value)
+            max_capacity = max(max_capacity, value)
 
-        # Calculate standard deviation
-        variance = sum((x - mean_capacity) ** 2 for x in values) / len(values)
+        # Calculate derived statistics
+        n = len(values)
+        mean_capacity = total_sum / n
+
+        # Use computational formula for variance: Var(X) = E[X²] - (E[X])²
+        variance = (sum_squares / n) - (mean_capacity * mean_capacity)
         stdev_capacity = variance**0.5
 
         return cls(
@@ -294,7 +305,7 @@ class CapacityEnvelope:
             max_capacity=max_capacity,
             mean_capacity=mean_capacity,
             stdev_capacity=stdev_capacity,
-            total_samples=len(values),
+            total_samples=n,
         )
 
     def to_dict(self) -> Dict[str, Any]:

@@ -441,14 +441,17 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 if key not in pattern_map:
                     # Get capacity matrix for this pattern
                     capacity_matrix = {}
-                    for flow_key, envelope_data in envelopes.items():
+                    for flow_key, _envelope_data in envelopes.items():
                         # Find capacity value for this pattern's iteration
                         pattern_iter = pattern["iteration_index"]
-                        if pattern_iter < len(envelope_data["frequencies"]):
+                        flow_tuple = self._parse_flow_key(flow_key)
+                        if flow_tuple in samples and pattern_iter < len(
+                            samples[flow_tuple]
+                        ):
                             # Get capacity value from original samples
-                            capacity_matrix[flow_key] = samples[
-                                self._parse_flow_key(flow_key)
-                            ][pattern_iter]
+                            capacity_matrix[flow_key] = samples[flow_tuple][
+                                pattern_iter
+                            ]
 
                     pattern_map[key] = FailurePatternResult(
                         excluded_nodes=pattern["excluded_nodes"],
@@ -841,8 +844,14 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         Returns:
             Dictionary mapping flow keys to serialized CapacityEnvelope data.
         """
-        logger.debug(f"Building capacity envelopes from {len(samples)} flow pairs")
+        start_time = time.time()
+        total_samples = sum(len(values) for values in samples.values())
+        logger.info(
+            f"Building capacity envelopes from {len(samples)} flow pairs with {total_samples:,} total samples"
+        )
+
         envelopes = {}
+        processed_flows = 0
 
         for (src_label, dst_label), capacity_values in samples.items():
             if not capacity_values:
@@ -863,6 +872,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             )
             envelopes[flow_key] = envelope.to_dict()
 
+            processed_flows += 1
+
             # Detailed logging with statistics
             logger.debug(
                 f"Created frequency-based envelope for {flow_key}: {envelope.total_samples} samples, "
@@ -870,7 +881,17 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 f"mean={envelope.mean_capacity:.2f}, unique_values={len(envelope.frequencies)}"
             )
 
-        logger.debug(f"Successfully created {len(envelopes)} capacity envelopes")
+            # Progress logging for large numbers of flows
+            if len(samples) > 100 and processed_flows % max(1, len(samples) // 10) == 0:
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"Envelope building progress: {processed_flows}/{len(samples)} flows processed in {elapsed:.1f}s"
+                )
+
+        elapsed_time = time.time() - start_time
+        logger.info(
+            f"Generated {len(envelopes)} capacity envelopes in {elapsed_time:.2f} seconds"
+        )
         return envelopes
 
 
