@@ -207,7 +207,7 @@ class BlueprintTemplates:
         super_spine_count: int = 2,
         link_capacity: float = 10.0,
     ) -> Dict[str, Any]:
-        """Create a three-tier CLOS blueprint."""
+        """Create a three-tier Clos blueprint."""
         return {
             "groups": {
                 "leaf": {"node_count": leaf_count, "name_template": "leaf-{node_num}"},
@@ -554,8 +554,8 @@ class ScenarioTemplateBuilder:
         spine_count: int = 4,
         link_capacity: float = 100.0,
     ) -> "ScenarioTemplateBuilder":
-        """Add a CLOS fabric using blueprints."""
-        # Create the CLOS blueprint
+        """Add a Clos fabric using blueprints."""
+        # Create the Clos blueprint
         clos_blueprint = BlueprintTemplates.two_tier_blueprint(
             tier1_count=leaf_count, tier2_count=spine_count, link_capacity=link_capacity
         )
@@ -637,7 +637,7 @@ class CommonScenarios:
 
     @staticmethod
     def dual_clos_interconnect() -> str:
-        """Two CLOS fabrics interconnected via spine links."""
+        """Two Clos fabrics interconnected via spine links."""
         return (
             ScenarioTemplateBuilder("dual_clos", "1.0")
             .with_clos_fabric("fabric_east", leaf_count=4, spine_count=4)

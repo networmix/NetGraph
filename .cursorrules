@@ -150,7 +150,7 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 ### 10 – Development Workflow
 
 1. Use Python 3.11+.
-2. Run `make dev-install` for the full environment.
+2. Run `make dev` to setup full development environment.
 3. Before commit: `make format` then `make check`.
 4. All CI checks must pass before merge.
 

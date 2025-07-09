@@ -60,7 +60,7 @@ network:
       target: my_clos2/spine
       pattern: one_to_one
       link_params:
-        capacity: 400.0 # 400 Gb/s inter-CLOS spine links
+        capacity: 400.0 # 400 Gb/s inter-Clos spine links
         cost: 1
 
   link_overrides:

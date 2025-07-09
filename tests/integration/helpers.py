@@ -700,7 +700,7 @@ class ScenarioDataBuilder:
 
 def load_scenario_from_file(filename: str) -> Scenario:
     """
-    Load a scenario from a YAML file in the scenarios directory.
+    Load a scenario from a YAML file in the integration directory.
 
     Args:
         filename: Name of YAML file to load (e.g., "scenario_1.yaml")

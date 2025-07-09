@@ -13,6 +13,7 @@ from ngraph.scenario import Scenario
 from .helpers import ScenarioDataBuilder
 
 
+@pytest.mark.slow
 class TestMalformedYAML:
     """Tests for malformed YAML and parsing errors."""
 
@@ -102,6 +103,7 @@ class TestMalformedYAML:
             scenario.run()
 
 
+@pytest.mark.slow
 class TestBlueprintErrors:
     """Tests for blueprint-related errors."""
 
@@ -216,6 +218,7 @@ class TestBlueprintErrors:
             scenario.run()
 
 
+@pytest.mark.slow
 class TestFailurePolicyErrors:
     """Tests for failure policy validation errors."""
 
@@ -285,6 +288,7 @@ class TestFailurePolicyErrors:
             _scenario = Scenario.from_yaml(malformed_conditions)
 
 
+@pytest.mark.slow
 class TestTrafficDemandErrors:
     """Tests for traffic demand validation errors."""
 
@@ -342,6 +346,7 @@ class TestTrafficDemandErrors:
             pass
 
 
+@pytest.mark.slow
 class TestWorkflowErrors:
     """Tests for workflow step errors."""
 
@@ -396,6 +401,7 @@ class TestWorkflowErrors:
             scenario.run()
 
 
+@pytest.mark.slow
 class TestEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
@@ -547,6 +553,7 @@ class TestEdgeCases:
             pass
 
 
+@pytest.mark.slow
 class TestResourceLimits:
     """Tests for resource limitations and performance edge cases."""
 

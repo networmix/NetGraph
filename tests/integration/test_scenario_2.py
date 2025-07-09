@@ -13,7 +13,7 @@ topologies with proper expansion, naming, and connectivity patterns.
 It demonstrates the hierarchical DSL for defining reusable network components.
 
 Uses the modular testing approach with validation helpers from the
-scenarios.helpers module.
+integration.helpers module.
 """
 
 import pytest
@@ -22,6 +22,7 @@ from .expectations import SCENARIO_2_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
 
 
+@pytest.mark.slow
 class TestScenario2:
     """Tests for scenario 2 using modular validation approach."""
 
@@ -262,12 +263,14 @@ class TestScenario2:
         assert len(sea_nodes) > 0, "SEA blueprint expansion should create nodes"
 
 
-# Legacy test function for backward compatibility
+# Smoke test for basic scenario functionality
+@pytest.mark.slow
 def test_scenario_2_build_graph():
     """
-    Legacy integration test - maintained for backward compatibility.
+    Smoke test for scenario 2 - validates basic parsing and execution.
 
-    New tests should use the modular TestScenario2 class above.
+    This test provides quick validation that the scenario can be loaded and run
+    without errors. For comprehensive validation, use the TestScenario2 class.
     """
     scenario = load_scenario_from_file("scenario_2.yaml")
     scenario.run()

@@ -4,9 +4,6 @@
 
 set -e  # Exit on any error
 
-echo "🔍 Running complete code quality checks and tests..."
-echo ""
-
 # Check if pre-commit is installed
 if ! command -v pre-commit &> /dev/null; then
     echo "❌ pre-commit is not installed. Please run 'pip install pre-commit' first."
@@ -46,9 +43,11 @@ echo "📋 Validating YAML schemas..."
 if python -c "import jsonschema" >/dev/null 2>&1; then
     python -c "import json, yaml, jsonschema, pathlib; \
     schema = json.load(open('schemas/scenario.json')); \
-    scenarios = list(pathlib.Path('scenarios').glob('*.yaml')); \
-    [jsonschema.validate(yaml.safe_load(open(f)), schema) for f in scenarios]; \
-    print(f'✅ Validated {len(scenarios)} scenario files against schema')"
+    scenario_files = list(pathlib.Path('scenarios').rglob('*.yaml')); \
+    integration_files = list(pathlib.Path('tests/integration').glob('*.yaml')); \
+    all_files = scenario_files + integration_files; \
+    [jsonschema.validate(yaml.safe_load(open(f)), schema) for f in all_files]; \
+    print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"
 
     if [ $? -ne 0 ]; then
         echo ""
@@ -61,7 +60,7 @@ fi
 
 echo ""
 
-# Run tests with coverage
+# Run tests with coverage (includes slow and benchmark tests for regression detection)
 echo "🧪 Running tests with coverage..."
 pytest
 

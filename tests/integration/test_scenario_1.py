@@ -12,7 +12,7 @@ validating that simple network topologies work correctly before testing
 more complex blueprint-based scenarios.
 
 Uses the modular testing approach with validation helpers from the
-scenarios.helpers module.
+integration.helpers module.
 """
 
 import pytest
@@ -21,6 +21,7 @@ from .expectations import SCENARIO_1_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
 
 
+@pytest.mark.slow
 class TestScenario1:
     """Tests for scenario 1 using modular validation approach."""
 
@@ -226,12 +227,14 @@ class TestScenario1:
         )
 
 
-# Legacy test function for backward compatibility
+# Smoke test for basic scenario functionality
+@pytest.mark.slow
 def test_scenario_1_build_graph():
     """
-    Legacy integration test - maintained for backward compatibility.
+    Smoke test for scenario 1 - validates basic parsing and execution.
 
-    New tests should use the modular TestScenario1 class above.
+    This test provides quick validation that the scenario can be loaded and run
+    without errors. For comprehensive validation, use the TestScenario1 class.
     """
     scenario = load_scenario_from_file("scenario_1.yaml")
     scenario.run()

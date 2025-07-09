@@ -16,7 +16,7 @@ validating the framework's ability to handle enterprise-scale network definition
 with complex relationships and advanced analysis requirements.
 
 Uses the modular testing approach with validation helpers from the
-scenarios.helpers module.
+integration.helpers module.
 """
 
 import pytest
@@ -33,6 +33,7 @@ from .expectations import (
 from .helpers import create_scenario_helper, load_scenario_from_file
 
 
+@pytest.mark.slow
 class TestScenario4:
     """Tests for scenario 4 using modular validation approach."""
 
@@ -471,12 +472,14 @@ class TestScenario4:
         )
 
 
-# Legacy test function for backward compatibility
+# Smoke test for basic scenario functionality
+@pytest.mark.slow
 def test_scenario_4_advanced_features():
     """
-    Legacy integration test - maintained for backward compatibility.
+    Smoke test for scenario 4 - validates basic parsing and execution.
 
-    New tests should use the modular TestScenario4 class above.
+    This test provides quick validation that the scenario can be loaded and run
+    without errors. For comprehensive validation, use the TestScenario4 class.
     """
     scenario = load_scenario_from_file("scenario_4.yaml")
     scenario.run()
@@ -497,6 +500,7 @@ def test_scenario_4_advanced_features():
     assert len(scenario.failure_policy_set.policies) >= 3  # Adjusted expectation
 
 
+@pytest.mark.slow
 def test_scenario_4_basic():
     """Test scenario 4 basic execution."""
     scenario = load_scenario_from_file("scenario_4.yaml")
@@ -506,6 +510,7 @@ def test_scenario_4_basic():
     assert scenario.results.get("build_graph", "graph") is not None
 
 
+@pytest.mark.slow
 def test_scenario_4_structure():
     """Test scenario 4 network structure."""
     scenario = load_scenario_from_file("scenario_4.yaml")

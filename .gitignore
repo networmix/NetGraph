@@ -133,3 +133,7 @@ analysis_temp/
 tmp/
 analysis*.ipynb
 *_analysis.ipynb
+
+# Performance analysis results
+dev/perf_results/
+dev/perf_plots/

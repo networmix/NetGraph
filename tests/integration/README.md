@@ -31,19 +31,44 @@ This directory contains integration testing utilities for NetGraph scenarios. Th
 ### Test Scenarios
 
 #### Scenario 1: Basic L3 Backbone Network
-- **Purpose**: Validates fundamental NetGraph capabilities
-- **Features**: 6-node topology, explicit links, single failure policies
-- **Complexity**: Basic
+- **Tests**: Network parsing, link definitions, traffic matrices, single failure policies
+- **Scale**: 6 nodes, 10 links, 4 traffic demands
+- **Requirements**: Basic YAML parsing, graph construction
 
 #### Scenario 2: Hierarchical DSL with Blueprints
-- **Purpose**: Tests blueprint system and parameter overrides
-- **Features**: Nested blueprints, mesh patterns, parameter customization
-- **Complexity**: Advanced
+- **Tests**: Blueprint expansion, parameter overrides, mesh patterns, hierarchical naming
+- **Scale**: 15+ nodes from blueprint expansion, nested hierarchies 3 levels deep
+- **Requirements**: Blueprint system, DSL parsing, mesh connectivity algorithms
 
-#### Scenario 3: 3-tier CLOS Network
-- **Purpose**: Validates NetGraph features with nested blueprints
-- **Features**: Deep nesting, capacity probing, node/link overrides
-- **Complexity**: Expert
+#### Scenario 3: 3-tier Clos Network
+- **Tests**: Deep blueprint nesting, capacity probing, node/link overrides, flow analysis
+- **Scale**: 20+ nodes, 3-tier hierarchy, regex pattern matching
+- **Requirements**: Clos topology knowledge, capacity probe workflow, override systems
+
+#### Scenario 4: Data Center Network
+- **Tests**: Variable expansion, component system, multi-tier hierarchies, workflow transforms
+- **Scale**: 80+ nodes, 4+ hierarchy levels, multiple data centers
+- **Requirements**: Component library, variable expansion, workflow transforms
+
+### Dual Testing Approach
+
+Each scenario uses two test patterns:
+
+#### 1. **Class-based Tests** (`TestScenarioX`)
+- **Detailed validation**: Tests network structure, blueprint expansions, traffic matrices, flow results
+- **Modular structure**: Each test method focuses on specific functionality
+- **Fixtures**: Shared scenario setup and graph construction
+- **Examples**: `test_network_structure_validation()`, `test_blueprint_expansion_validation()`
+
+#### 2. **Smoke Tests** (`test_scenario_X_build_graph`)
+- **Basic validation**: Verifies scenario parsing and execution without errors
+- **Fast execution**: Minimal overhead for CI/CD pipelines
+- **Baseline checks**: Ensures scenarios load and run successfully
+- **Error detection**: Catches parsing failures and execution errors
+
+**When to use each approach:**
+- **Smoke tests**: Quick validation and CI checks
+- **Class-based tests**: Detailed validation and debugging
 
 ## Key Features
 
@@ -179,32 +204,25 @@ def test_blueprint_expansion():
     ))
 ```
 
-## Recent Improvements
+## Architecture Details
 
-### Enhanced Organization
-- Separated test expectations into dedicated module
-- Improved file structure and imports
-- Better separation of concerns
+### File Organization
+- `expectations.py`: Test expectations and validation constants
+- `helpers.py`: Core validation utilities and test helpers
+- `test_data_templates.py`: Template builders for programmatic scenario creation
+- `test_scenario_*.py`: Integration tests for specific scenarios
 
-### Documentation
-- Module and method documentation
-- Usage examples and best practices
-- Clear parameter descriptions
+### Validation Constants
+- Node count thresholds for topology validation
+- Link capacity ranges for flow analysis
+- Traffic demand bounds for matrix validation
+- Timeout values for workflow execution
 
-### Code Quality
-- Added validation constants and thresholds
-- Enhanced error messages with context
-- Better type annotations and safety
-
-### Templates
-- More composable template system
-- Safety limits for large networks
-- Consistent parameter interfaces
-
-### Validation
-- Improved connectivity analysis
-- Enhanced attribute validation
-- Better flow conservation checks
+### Template System
+- `ScenarioDataBuilder`: Programmatic scenario construction
+- `NetworkTemplates`: Common topology patterns (star, mesh, tree)
+- `ErrorInjectionTemplates`: Invalid configuration builders
+- Network size limits to prevent test timeout
 
 ## Contributing
 
@@ -221,20 +239,23 @@ When adding new test scenarios or validation methods:
 
 Run all integration tests:
 ```bash
-pytest tests/scenarios/ -v
+pytest tests/integration/ -v
 ```
 
 Run specific scenario tests:
 ```bash
-pytest tests/scenarios/test_scenario_1.py -v
+pytest tests/integration/test_scenario_1.py -v
 ```
 
 Run template examples:
 ```bash
-pytest tests/scenarios/test_template_examples.py -v
+pytest tests/integration/test_template_examples.py -v
 ```
 
-This framework provides integration testing for NetGraph while maintaining code quality, readability, and maintainability standards.
+Run integration tests by directory:
+```bash
+pytest tests/integration/ -v
+```
 
 ## Template Usage Guidelines
 
@@ -358,7 +379,7 @@ def test_missing_blueprint():
 1. Choose appropriate template class (Error/EdgeCase/Performance)
 2. Follow existing naming conventions (`*_builder()` methods)
 3. Return `ScenarioDataBuilder` instances for consistency
-4. Add comprehensive docstrings with usage examples
+4. Add docstrings with usage examples
 
 #### **Template Testing**
 - Each template should have validation tests

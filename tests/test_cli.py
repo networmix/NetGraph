@@ -12,7 +12,7 @@ from ngraph import cli
 
 
 def test_cli_run_file(tmp_path: Path) -> None:
-    scenario = Path("tests/scenarios/scenario_1.yaml")
+    scenario = Path("tests/integration/scenario_1.yaml")
     out_file = tmp_path / "res.json"
     cli.main(["run", str(scenario), "--results", str(out_file)])
     assert out_file.is_file()
@@ -22,7 +22,7 @@ def test_cli_run_file(tmp_path: Path) -> None:
 
 
 def test_cli_run_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
-    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout"])
     captured = capsys.readouterr()
@@ -34,7 +34,7 @@ def test_cli_run_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
 
 def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
     """Verify filtering of specific step names."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "capacity_probe"])
     captured = capsys.readouterr()
@@ -45,7 +45,7 @@ def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
 
 def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test filtering with multiple step names."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(
         [
@@ -73,7 +73,7 @@ def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
 
 def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test filtering with a single step name."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "build_graph"])
     captured = capsys.readouterr()
@@ -90,7 +90,7 @@ def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
 
 def test_cli_filter_nonexistent_step(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test filtering with a step name that doesn't exist."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "nonexistent_step"])
     captured = capsys.readouterr()
@@ -104,7 +104,7 @@ def test_cli_filter_mixed_existing_nonexistent(
     tmp_path: Path, capsys, monkeypatch
 ) -> None:
     """Test filtering with mix of existing and non-existing step names."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(
         [
@@ -126,7 +126,7 @@ def test_cli_filter_mixed_existing_nonexistent(
 
 def test_cli_no_filter_vs_filter(tmp_path: Path, monkeypatch) -> None:
     """Test that filtering actually reduces the output compared to no filter."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
 
     # First run without filter
@@ -160,7 +160,7 @@ def test_cli_no_filter_vs_filter(tmp_path: Path, monkeypatch) -> None:
 
 def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test filtering works correctly when writing to both file and stdout."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     results_file = tmp_path / "filtered_results.json"
     monkeypatch.chdir(tmp_path)
 
@@ -193,7 +193,7 @@ def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> N
 
 def test_cli_filter_preserves_step_data_structure(tmp_path: Path, monkeypatch) -> None:
     """Test that filtering preserves the complete data structure of filtered steps."""
-    scenario = Path("tests/scenarios/scenario_3.yaml").resolve()
+    scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
 
     # Get unfiltered results
@@ -471,7 +471,7 @@ workflow:
 
 def test_cli_run_results_default(tmp_path: Path, monkeypatch) -> None:
     """Test that --results with no path creates results.json."""
-    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--results"])
     assert (tmp_path / "results.json").exists()
@@ -481,7 +481,7 @@ def test_cli_run_results_default(tmp_path: Path, monkeypatch) -> None:
 
 def test_cli_run_results_custom_path(tmp_path: Path, monkeypatch) -> None:
     """Test that --results with custom path creates file at that location."""
-    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--results", "custom_output.json"])
     assert (tmp_path / "custom_output.json").exists()
@@ -492,7 +492,7 @@ def test_cli_run_results_custom_path(tmp_path: Path, monkeypatch) -> None:
 
 def test_cli_run_results_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test that --results and --stdout work together."""
-    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--results", "--stdout"])
 
@@ -512,7 +512,7 @@ def test_cli_run_results_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None
 
 def test_cli_run_no_output(tmp_path: Path, capsys, monkeypatch) -> None:
     """Test that running without --results or --stdout creates no files."""
-    scenario = Path("tests/scenarios/scenario_1.yaml").resolve()
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario)])
 

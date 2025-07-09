@@ -16,7 +16,7 @@ from .helpers import NetworkExpectations
 DEFAULT_BIDIRECTIONAL_MULTIPLIER = 2  # NetGraph creates bidirectional edges
 SCENARIO_1_PHYSICAL_LINKS = 10  # Count from scenario_1.yaml
 SCENARIO_2_PHYSICAL_LINKS = 56  # Count from scenario_2.yaml blueprint expansions
-SCENARIO_3_PHYSICAL_LINKS = 144  # Count from scenario_3.yaml CLOS fabric calculations
+SCENARIO_3_PHYSICAL_LINKS = 144  # Count from scenario_3.yaml Clos fabric calculations
 
 # Expected node counts by scenario component
 SCENARIO_2_NODE_BREAKDOWN = {
@@ -37,13 +37,13 @@ SCENARIO_3_NODE_BREAKDOWN = {
 
 def _calculate_scenario_3_total_nodes() -> int:
     """
-    Calculate total nodes for scenario 3 based on 3-tier CLOS structure.
+    Calculate total nodes for scenario 3 based on 3-tier Clos structure.
 
-    Each CLOS fabric contains:
+    Each Clos fabric contains:
     - 2 brick instances, each with 8 nodes (4 t1 + 4 t2)
     - 16 spine nodes
-    Total per CLOS: (2 * 8) + 16 = 32 nodes
-    Total for 2 CLOS fabrics: 32 * 2 = 64 nodes
+    Total per Clos: (2 * 8) + 16 = 32 nodes
+    Total for 2 Clos fabrics: 32 * 2 = 64 nodes
 
     Returns:
         Total expected node count for scenario 3.
@@ -93,14 +93,14 @@ SCENARIO_2_EXPECTATIONS = NetworkExpectations(
     },
 )
 
-# Scenario 3: 3-tier CLOS network with nested blueprints
+# Scenario 3: 3-tier Clos network with nested blueprints
 # Topology with deep blueprint nesting and capacity probing
 SCENARIO_3_EXPECTATIONS = NetworkExpectations(
     node_count=_calculate_scenario_3_total_nodes(),
     edge_count=SCENARIO_3_PHYSICAL_LINKS * DEFAULT_BIDIRECTIONAL_MULTIPLIER,
     specific_nodes=set(),  # All nodes generated from blueprints
     blueprint_expansions={
-        # Each CLOS fabric should expand to exactly 32 nodes
+        # Each Clos fabric should expand to exactly 32 nodes
         "my_clos1/": 32,
         "my_clos2/": 32,
     },

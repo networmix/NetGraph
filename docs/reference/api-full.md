@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 06, 2025 at 02:10 UTC
+**Generated from source code on:** July 09, 2025 at 01:36 UTC
 
 **Modules auto-discovered:** 51
 
@@ -2217,18 +2217,52 @@ YAML Configuration:
 
 Capacity envelope analysis workflow component.
 
+Monte Carlo analysis of network capacity under random failures. Generates statistical
+distributions (envelopes) of maximum flow capacity between node groups across failure scenarios.
+
+## Analysis Process
+
+1. **Pre-computation (Main Process)**: Apply failure policies for all Monte Carlo iterations
+   upfront in the main process using `_compute_failure_exclusions`. Risk groups are recursively
+   expanded to include member nodes/links. This generates small exclusion sets (typically <1%
+   of entities) that minimize inter-process communication overhead.
+
+2. **Distribution**: Network is pickled once and shared across worker processes via
+   ProcessPoolExecutor initializer. Pre-computed exclusion sets are distributed to workers
+   rather than modified network copies, avoiding repeated serialization overhead.
+
+3. **Flow Computation (Workers)**: Each worker creates a NetworkView with exclusions (no copying)
+   and computes max flow for each source-sink pair.
+   Results are cached based on exclusion patterns since many iterations share identical failure
+   sets. Cache is bounded with FIFO eviction.
+
+4. **Statistical Aggregation**: Collect capacity samples from all iterations and build
+   frequency-based distributions for memory efficiency. Results include capacity envelopes
+   (min/max/mean/percentiles) and optional failure pattern frequency maps.
+
+## Performance Characteristics
+
+**Time Complexity**: O(I × (R + F × A) / P) where I=iterations, R=failure evaluation,
+F=flow pairs, A=max-flow algorithm cost, P=parallelism. The max-flow algorithm uses
+Ford-Fulkerson with Dijkstra SPF augmentation: A = O(V²E) iterations × O(E log V) per SPF
+= O(V²E² log V) worst case, but typically much better. Also, per-worker cache reduces
+effective iterations by 60-90% for common failure patterns.
+
+**Space Complexity**: O(V + E + I × F + C) with frequency-based compression reducing
+I×F samples to ~√(I×F) entries. Validated by benchmark tests in test suite.
+
 ### CapacityEnvelopeAnalysis
 
 A workflow step that samples maximum capacity between node groups across random failures.
 
 Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
-to build statistical envelopes of network resilience. Results include both individual
-flow capacity envelopes and total capacity samples per iteration.
+to build statistical envelopes of network resilience. Results include individual
+flow capacity envelopes across iterations.
 
-This implementation uses parallel processing for efficiency:
+This implementation uses parallel processing:
 - Network is serialized once and shared across all worker processes
 - Failure exclusions are pre-computed in the main process
-- NetworkView provides lightweight exclusion without deep copying
+- NetworkView excludes entities without copying the network
 - Flow computations are cached within workers to avoid redundant calculations
 
 All results are stored using frequency-based storage for memory efficiency.
@@ -2253,7 +2287,6 @@ YAML Configuration:
 
 Results stored in scenario.results:
     - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-    - `total_capacity_frequencies`: Frequency map of total capacity values
     - `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
 
 Attributes:

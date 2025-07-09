@@ -5,6 +5,8 @@ Shows how the template system improves test data organization, reduces
 duplication, and enables rapid creation of test scenarios.
 """
 
+import pytest
+
 from ngraph.scenario import Scenario
 
 from .expectations import (
@@ -23,6 +25,7 @@ from .test_data_templates import (
 )
 
 
+@pytest.mark.slow
 class TestNetworkTemplates:
     """Tests demonstrating network topology templates."""
 
@@ -97,6 +100,7 @@ class TestNetworkTemplates:
         assert len(network_data["links"]) == 6
 
 
+@pytest.mark.slow
 class TestBlueprintTemplates:
     """Tests demonstrating blueprint templates."""
 
@@ -131,7 +135,7 @@ class TestBlueprintTemplates:
         assert adjacency["link_params"]["capacity"] == 25.0
 
     def test_three_tier_clos_blueprint(self):
-        """Test three-tier CLOS blueprint template."""
+        """Test three-tier Clos blueprint template."""
         blueprint = BlueprintTemplates.three_tier_clos_blueprint(
             leaf_count=8, spine_count=4, super_spine_count=2, link_capacity=40.0
         )
@@ -147,6 +151,7 @@ class TestBlueprintTemplates:
         # Should have leaf->spine and spine->super_spine connections
 
 
+@pytest.mark.slow
 class TestFailurePolicyTemplates:
     """Tests demonstrating failure policy templates."""
 
@@ -187,6 +192,7 @@ class TestFailurePolicyTemplates:
         assert "datacenter_a" in rule["conditions"][0]
 
 
+@pytest.mark.slow
 class TestTrafficDemandTemplates:
     """Tests demonstrating traffic demand templates."""
 
@@ -251,6 +257,7 @@ class TestTrafficDemandTemplates:
             assert demand["demand"] == 5.0
 
 
+@pytest.mark.slow
 class TestWorkflowTemplates:
     """Tests demonstrating workflow templates."""
 
@@ -288,6 +295,7 @@ class TestWorkflowTemplates:
         assert "CapacityEnvelopeAnalysis" in step_types
 
 
+@pytest.mark.slow
 class TestScenarioTemplateBuilder:
     """Tests demonstrating the high-level scenario template builder."""
 
@@ -316,7 +324,7 @@ class TestScenarioTemplateBuilder:
         assert len(graph.edges) == 6  # 3 physical links * 2 directions
 
     def test_clos_fabric_scenario(self):
-        """Test building a scenario with CLOS fabric blueprint."""
+        """Test building a scenario with Clos fabric blueprint."""
         yaml_content = (
             ScenarioTemplateBuilder("test_clos", "1.0")
             .with_clos_fabric("fabric1", leaf_count=4, spine_count=2)
@@ -335,6 +343,7 @@ class TestScenarioTemplateBuilder:
         assert len(graph.nodes) == 6
 
 
+@pytest.mark.slow
 class TestCommonScenarios:
     """Tests demonstrating pre-built common scenario templates."""
 
@@ -394,6 +403,7 @@ class TestCommonScenarios:
         assert len(graph.edges) == 4  # 2 physical links * 2 directions
 
 
+@pytest.mark.slow
 class TestTemplateComposition:
     """Tests demonstrating composition of multiple templates."""
 
@@ -409,7 +419,7 @@ class TestTemplateComposition:
         builder.builder.data["network"]["name"] = "complex_test"
         builder.builder.data["network"]["version"] = "1.0"
 
-        # Add CLOS fabric blueprint
+        # Add Clos fabric blueprint
         clos_blueprint = BlueprintTemplates.two_tier_blueprint(4, 4, "mesh", 25.0)
         builder.builder.with_blueprint("clos", clos_blueprint)
 
@@ -475,6 +485,7 @@ class TestTemplateComposition:
                 assert data.get("capacity") == scale["capacity"]
 
 
+@pytest.mark.slow
 class TestTemplateValidation:
     """Tests for template validation and error handling."""
 
@@ -515,6 +526,7 @@ class TestTemplateValidation:
         assert demands1 == demands2
 
 
+@pytest.mark.slow
 class TestMainScenarioVariants:
     """Template-based variants of main scenarios for testing different configurations."""
 
@@ -750,7 +762,7 @@ class TestMainScenarioVariants:
         helper.validate_traffic_demands(4)
 
     def test_scenario_3_template_variant(self):
-        """Template-based recreation of scenario 3 CLOS functionality."""
+        """Template-based recreation of scenario 3 Clos functionality."""
         builder = ScenarioTemplateBuilder("scenario_3_template", "1.0")
 
         # Create brick_2tier blueprint
@@ -794,7 +806,7 @@ class TestMainScenarioVariants:
         }
         builder.builder.with_blueprint("3tier_clos", three_tier_clos)
 
-        # Create network with two CLOS instances
+        # Create network with two Clos instances
         network_data = {
             "name": "scenario_3_template",
             "version": "1.0",

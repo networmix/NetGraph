@@ -1,9 +1,9 @@
 """
-Integration tests for scenario 3: 3-tier CLOS network with nested blueprints.
+Integration tests for scenario 3: 3-tier Clos network with nested blueprints.
 
 This module tests the most advanced NetGraph capabilities including:
 - Deep blueprint nesting with multiple levels of hierarchy
-- 3-tier CLOS fabric topology with brick-spine-spine architecture
+- 3-tier Clos fabric topology with brick-spine-spine architecture
 - Node and link override mechanisms for customization
 - Capacity probing with different flow placement algorithms
 - Network analysis workflows with multiple steps
@@ -14,7 +14,7 @@ validating NetGraph's ability to handle large network definitions with
 relationships and analysis requirements.
 
 Uses the modular testing approach with validation helpers from the
-scenarios.helpers module.
+integration.helpers module.
 """
 
 import pytest
@@ -23,6 +23,7 @@ from .expectations import SCENARIO_3_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
 
 
+@pytest.mark.slow
 class TestScenario3:
     """Tests for scenario 3 using modular validation approach."""
 
@@ -51,12 +52,12 @@ class TestScenario3:
         assert scenario_3_executed.results.get("build_graph", "graph") is not None
 
     def test_network_structure_validation(self, helper):
-        """Test basic network structure matches expectations for complex 3-tier CLOS."""
+        """Test basic network structure matches expectations for complex 3-tier Clos."""
         helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
 
     def test_nested_blueprint_structure(self, helper):
         """Test complex nested blueprint expansions work correctly."""
-        # Each 3-tier CLOS should have 32 nodes total
+        # Each 3-tier Clos should have 32 nodes total
         clos1_nodes = [
             node for node in helper.network.nodes if node.startswith("my_clos1/")
         ]
@@ -72,11 +73,11 @@ class TestScenario3:
         )
 
     def test_3tier_clos_blueprint_structure(self, helper):
-        """Test that 3-tier CLOS blueprint creates expected hierarchy."""
-        # Each CLOS should have:
+        """Test that 3-tier Clos blueprint creates expected hierarchy."""
+        # Each Clos should have:
         # - 2 brick instances (b1, b2), each with 4 t1 + 4 t2 = 8 nodes
         # - 16 spine nodes (t3-1 through t3-16)
-        # Total: 8 + 8 + 16 = 32 nodes per CLOS
+        # Total: 8 + 8 + 16 = 32 nodes per Clos
 
         # Check b1 structure in my_clos1
         b1_t1_nodes = [
@@ -124,12 +125,12 @@ class TestScenario3:
             t2_links = [link for link in b1_t2_to_spine_links if link.source == t2_node]
             assert len(t2_links) > 0, f"t2 node {t2_node} should connect to spine nodes"
 
-        # Inter-CLOS spine connections should also be one_to_one
+        # Inter-Clos spine connections should also be one_to_one
         inter_spine_links = helper.network.find_links(
             source_regex=r"my_clos1/spine/.*", target_regex=r"my_clos2/spine/.*"
         )
         assert len(inter_spine_links) == 16, (
-            f"Expected 16 one-to-one inter-CLOS spine links, found {len(inter_spine_links)}"
+            f"Expected 16 one-to-one inter-Clos spine links, found {len(inter_spine_links)}"
         )
 
     def test_mesh_pattern_in_nested_blueprints(self, helper):
@@ -266,19 +267,19 @@ class TestScenario3:
         helper.validate_topology_semantics()
 
     def test_inter_clos_connectivity(self, helper):
-        """Test connectivity between the two CLOS fabrics."""
+        """Test connectivity between the two Clos fabrics."""
         # Should be connected only through spine-spine links
         inter_clos_links = helper.network.find_links(
             source_regex=r"my_clos1/.*", target_regex=r"my_clos2/.*"
         )
 
-        # All inter-CLOS links should be spine-spine
+        # All inter-Clos links should be spine-spine
         for link in inter_clos_links:
             assert "/spine/" in link.source, (
-                f"Inter-CLOS link source should be spine: {link.source}"
+                f"Inter-Clos link source should be spine: {link.source}"
             )
             assert "/spine/" in link.target, (
-                f"Inter-CLOS link target should be spine: {link.target}"
+                f"Inter-Clos link target should be spine: {link.target}"
             )
 
     def test_regex_pattern_matching_in_overrides(self, helper):
@@ -315,12 +316,14 @@ class TestScenario3:
         assert probe2_result is not None, "Second CapacityProbe should have executed"
 
 
-# Legacy test function for backward compatibility
+# Smoke test for basic scenario functionality
+@pytest.mark.slow
 def test_scenario_3_build_graph_and_capacity_probe():
     """
-    Legacy integration test - maintained for backward compatibility.
+    Smoke test for scenario 3 - validates basic parsing and execution.
 
-    New tests should use the modular TestScenario3 class above.
+    This test provides quick validation that the scenario can be loaded and run
+    without errors. For comprehensive validation, use the TestScenario3 class.
     """
     scenario = load_scenario_from_file("scenario_3.yaml")
     scenario.run()

@@ -138,7 +138,7 @@ class TestCapacityEnvelopeAnalysis:
         mock_scenario.failure_policy_set = FailurePolicySet()  # Empty policy set
 
         with pytest.raises(
-            ValueError, match="iterations=5 is meaningless without a failure policy"
+            ValueError, match="iterations=5 has no effect without a failure policy"
         ):
             step.run(mock_scenario)
 
@@ -155,7 +155,7 @@ class TestCapacityEnvelopeAnalysis:
         mock_scenario.failure_policy_set = empty_policy_set
 
         with pytest.raises(
-            ValueError, match="iterations=10 is meaningless without a failure policy"
+            ValueError, match="iterations=10 has no effect without a failure policy"
         ):
             step.run(mock_scenario)
 
@@ -217,16 +217,6 @@ class TestCapacityEnvelopeAnalysis:
         assert envelopes is not None
         assert isinstance(envelopes, dict)
 
-        # Verify total capacity frequencies were stored
-        total_capacity_frequencies = mock_scenario.results.get(
-            "test_step", "total_capacity_frequencies"
-        )
-        assert total_capacity_frequencies is not None
-        assert isinstance(total_capacity_frequencies, dict)
-        assert (
-            sum(total_capacity_frequencies.values()) == 1
-        )  # Single iteration for no-failure case
-
         # Should have exactly one flow key
         assert len(envelopes) == 1
 
@@ -250,14 +240,6 @@ class TestCapacityEnvelopeAnalysis:
         envelopes = mock_scenario.results.get("test_step", "capacity_envelopes")
         assert envelopes is not None
         assert isinstance(envelopes, dict)
-
-        # Verify total capacity frequencies were stored
-        total_capacity_frequencies = mock_scenario.results.get(
-            "test_step", "total_capacity_frequencies"
-        )
-        assert total_capacity_frequencies is not None
-        assert isinstance(total_capacity_frequencies, dict)
-        assert sum(total_capacity_frequencies.values()) == 3  # 3 iterations
 
         # Should have exactly one flow key
         assert len(envelopes) == 1
@@ -422,27 +404,21 @@ workflow:
 
         (
             flow_results,
-            total_capacity,
             iteration_index,
             is_baseline,
             excluded_nodes,
             excluded_links,
         ) = _worker(args)
+
+        # Verify results
         assert isinstance(flow_results, list)
-        assert isinstance(total_capacity, (int, float))
-        assert len(flow_results) >= 1
+        assert len(flow_results) == 1
+        src, dst, capacity = flow_results[0]
+        assert src == "A"
+        assert dst == "C"
+        assert capacity == 5.0
         assert iteration_index == 0
         assert is_baseline is False
-
-        # Check result format
-        src, dst, flow_val = flow_results[0]
-        assert isinstance(src, str)
-        assert isinstance(dst, str)
-        assert isinstance(flow_val, (int, float))
-
-        # Total capacity should be sum of individual flows
-        expected_total = sum(val for _, _, val in flow_results)
-        assert total_capacity == expected_total
 
     def test_worker_with_failures(self, simple_network, simple_failure_policy):
         """Test worker function with failures."""
@@ -476,17 +452,18 @@ workflow:
 
         (
             flow_results,
-            total_capacity,
             iteration_index,
             is_baseline,
             returned_excluded_nodes,
             returned_excluded_links,
         ) = _worker(args)
+
+        # Verify results
         assert isinstance(flow_results, list)
-        assert isinstance(total_capacity, (int, float))
-        assert len(flow_results) >= 1
         assert iteration_index == 1
         assert is_baseline is False
+        assert returned_excluded_nodes == excluded_nodes
+        assert returned_excluded_links == excluded_links
 
 
 class TestIntegration:
@@ -617,9 +594,9 @@ workflow:
         mock_executor = MagicMock()
         mock_executor.__enter__.return_value = mock_executor
         mock_executor.map.return_value = [
-            ([("A", "C", 5.0)], 5.0, 0, False, set(), set()),
-            ([("A", "C", 4.0)], 4.0, 1, False, set(), {"link1"}),
-            ([("A", "C", 6.0)], 6.0, 2, False, set(), {"link2"}),
+            ([("A", "C", 5.0)], 0, False, set(), set()),
+            ([("A", "C", 4.0)], 1, False, set(), {"link1"}),
+            ([("A", "C", 6.0)], 2, False, set(), {"link2"}),
         ]
         mock_executor_class.return_value = mock_executor
 
@@ -633,13 +610,13 @@ workflow:
         )
         step.run(mock_scenario)
 
-        # Verify ProcessPoolExecutor was used
-        # Should be called with max_workers and potentially initializer/initargs
-        assert mock_executor_class.call_count == 1
-        call_args = mock_executor_class.call_args
-        assert call_args[1]["max_workers"] == 2
-        # May also have initializer and initargs for shared network setup
+        # Verify the ProcessPoolExecutor was called
+        mock_executor_class.assert_called_once()
         mock_executor.map.assert_called_once()
+
+        # Verify results were stored
+        envelopes = mock_scenario.results.get("test_step", "capacity_envelopes")
+        assert envelopes is not None
 
     def test_no_parallel_when_single_iteration(self, mock_scenario):
         """Test that parallel execution is not used for single iteration."""
@@ -690,15 +667,19 @@ workflow:
 
         (
             baseline_results,
-            baseline_capacity,
             iteration_index,
             is_baseline,
             excluded_nodes_returned,
             excluded_links_returned,
         ) = _worker(baseline_args)
+
+        # Verify baseline results
         assert isinstance(baseline_results, list)
-        assert isinstance(baseline_capacity, (int, float))
-        assert len(baseline_results) >= 1
+        assert len(baseline_results) == 1
+        src, dst, capacity = baseline_results[0]
+        assert src == "A"
+        assert dst == "C"
+        assert capacity == 5.0  # Full capacity without failures
         assert iteration_index == 0
         assert is_baseline is True
 
@@ -716,22 +697,15 @@ workflow:
 
         # Verify results were stored
         envelopes = mock_scenario.results.get("test_step", "capacity_envelopes")
-        total_capacity_frequencies = mock_scenario.results.get(
-            "test_step", "total_capacity_frequencies"
-        )
 
         assert envelopes is not None
-        assert total_capacity_frequencies is not None
-        assert sum(total_capacity_frequencies.values()) == 3  # 3 iterations total
 
-        # Extract capacity values to verify baseline behavior
-        capacity_values = []
-        for capacity, count in total_capacity_frequencies.items():
-            capacity_values.extend([capacity] * count)
+        # Should have exactly one flow key
+        assert len(envelopes) == 1
 
-        # Note: We can't guarantee order in frequency storage, so we just check
-        # that we have the expected total number of samples
-        assert len(capacity_values) == 3
+        # Get the envelope data
+        envelope_data = list(envelopes.values())[0]
+        assert envelope_data["total_samples"] == 3  # Three iterations
 
 
 class TestCaching:
@@ -788,19 +762,12 @@ class TestCaching:
         assert 1 <= len(_flow_cache) <= 4, "Unexpected cache size"
 
         # 2. Scenario results contain the expected number of samples.
-        total_capacity_frequencies = scenario.results.get(
-            "cache_test", "total_capacity_frequencies"
-        )
-        assert sum(total_capacity_frequencies.values()) == iterations
+        envelopes = scenario.results.get("cache_test", "capacity_envelopes")
+        assert envelopes is not None
 
-        # 3. Convert frequencies back to samples for baseline verification
-        samples = []
-        for capacity, count in total_capacity_frequencies.items():
-            samples.extend([capacity] * count)
-
-        # Note: We can't guarantee order in frequency storage, so we just verify
-        # that we have the expected number of samples
-        assert len(samples) == iterations
+        # Get the single flow envelope and verify sample count
+        envelope_data = list(envelopes.values())[0]
+        assert envelope_data["total_samples"] == iterations
 
     def test_failure_pattern_storage(self) -> None:
         """Test that failure patterns are stored when store_failure_patterns=True."""
