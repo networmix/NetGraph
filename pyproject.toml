@@ -75,6 +75,24 @@ markers = [
 ]
 
 # ---------------------------------------------------------------------
+# Coverage configuration
+[tool.coverage.run]
+source = ["./ngraph"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+# ---------------------------------------------------------------------
 # Package discovery
 [tool.setuptools.packages.find]
 include = ["ngraph*"]
