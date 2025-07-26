@@ -197,6 +197,6 @@ class FailureManager:
         self, results: List[List[TrafficResult]]
     ) -> Dict[str, Any]:
         """(Not implemented) Aggregates results from multiple Monte Carlo runs."""
-        # TODO: This needs a proper implementation based on desired output format.
+        # TODO: Implement aggregation logic based on desired output format.
         # For now, just return the raw list of results.
         return {"raw_results": results}

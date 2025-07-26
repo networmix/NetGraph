@@ -1,4 +1,30 @@
-"""Network transformation for distributing external connectivity."""
+"""Network transformation for distributing external connectivity.
+
+Attaches remote nodes and connects them to attachment stripes in the network.
+Creates or uses existing remote nodes and distributes connections across attachment nodes.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: DistributeExternalConnectivity
+        name: "external_connectivity"       # Optional: Custom name for this step
+        remote_locations:                   # List of remote node locations/names
+          - "denver"
+          - "seattle"
+          - "chicago"
+        attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
+        stripe_width: 3                     # Number of attachment nodes per stripe
+        link_count: 2                       # Number of links per remote node
+        capacity: 100.0                     # Capacity per link
+        cost: 10.0                          # Cost per link
+        remote_prefix: "external/"          # Prefix for remote node names
+    ```
+
+Results:
+    - Creates remote nodes if they don't exist
+    - Adds links from remote nodes to attachment stripes
+    - No data stored in scenario.results (modifies network directly)
+"""
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, List, Sequence
@@ -26,23 +52,6 @@ class _StripeChooser:
 @register_transform("DistributeExternalConnectivity")
 class DistributeExternalConnectivity(NetworkTransform):
     """Attach (or create) remote nodes and link them to attachment stripes.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - step_type: DistributeExternalConnectivity
-            name: "external_connectivity"       # Optional: Custom name for this step
-            remote_locations:                   # List of remote node locations/names
-              - "denver"
-              - "seattle"
-              - "chicago"
-            attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
-            stripe_width: 3                     # Number of attachment nodes per stripe
-            link_count: 2                       # Number of links per remote node
-            capacity: 100.0                     # Capacity per link
-            cost: 10.0                          # Cost per link
-            remote_prefix: "external/"          # Prefix for remote node names
-        ```
 
     Args:
         remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.

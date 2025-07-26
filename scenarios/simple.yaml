@@ -129,6 +129,8 @@ failure_policy_set:
         count: 1
 
 workflow:
+- step_type: NetworkStats
+  name: "network_statistics"
 - step_type: BuildGraph
   name: build_graph
 - step_type: CapacityEnvelopeAnalysis
@@ -155,8 +157,3 @@ workflow:
   iterations: 1000
   baseline: true           # Enable baseline mode
   failure_policy: "single_shared_risk_group_failure"
-- step_type: NotebookExport
-  name: "export_analysis"
-  notebook_path: "analysis.ipynb"
-  json_path: "results.json"
-  allow_empty_results: false

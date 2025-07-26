@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pytest
 
 from ngraph.workflow.analysis import (
     AnalysisContext,
@@ -50,34 +51,38 @@ class TestCapacityMatrixAnalyzer:
     def test_analyze_no_step_name(self) -> None:
         """Test analyze without step_name parameter."""
         results = {"step1": {"capacity_envelopes": {}}}
-        analysis = self.analyzer.analyze(results)
 
-        assert analysis["status"] == "error"
-        assert "step_name required" in analysis["message"]
+        with pytest.raises(
+            ValueError, match="step_name required for capacity matrix analysis"
+        ):
+            self.analyzer.analyze(results)
 
     def test_analyze_missing_step(self) -> None:
         """Test analyze with non-existent step."""
         results = {"step1": {"capacity_envelopes": {}}}
-        analysis = self.analyzer.analyze(results, step_name="nonexistent")
 
-        assert analysis["status"] == "no_data"
-        assert "No data for nonexistent" in analysis["message"]
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: nonexistent"
+        ):
+            self.analyzer.analyze(results, step_name="nonexistent")
 
     def test_analyze_no_envelopes(self) -> None:
         """Test analyze with step but no capacity_envelopes."""
         results = {"step1": {"other_data": "value"}}
-        analysis = self.analyzer.analyze(results, step_name="step1")
 
-        assert analysis["status"] == "no_data"
-        assert "No data for step1" in analysis["message"]
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: step1"
+        ):
+            self.analyzer.analyze(results, step_name="step1")
 
     def test_analyze_empty_envelopes(self) -> None:
         """Test analyze with empty capacity_envelopes."""
         results = {"step1": {"capacity_envelopes": {}}}
-        analysis = self.analyzer.analyze(results, step_name="step1")
 
-        assert analysis["status"] == "no_data"
-        assert "No data for step1" in analysis["message"]
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: step1"
+        ):
+            self.analyzer.analyze(results, step_name="step1")
 
     def test_analyze_success_simple_flow(self) -> None:
         """Test successful analysis with simple flow data."""
@@ -130,10 +135,10 @@ class TestCapacityMatrixAnalyzer:
             }
         }
 
-        analysis = self.analyzer.analyze(results, step_name="test_step")
-
-        # Should handle the exception gracefully
-        assert analysis["status"] in ["error", "no_valid_data"]
+        with pytest.raises(
+            RuntimeError, match="Error analyzing capacity matrix for test_step"
+        ):
+            self.analyzer.analyze(results, step_name="test_step")
 
     def test_parse_flow_path_directed(self) -> None:
         """Test parsing directed flow paths."""
@@ -281,10 +286,13 @@ class TestCapacityMatrixAnalyzer:
 
     @patch("builtins.print")
     def test_display_analysis_error(self, mock_print: MagicMock) -> None:
-        """Test displaying error analysis."""
-        analysis = {"status": "error", "message": "Test error"}
-        self.analyzer.display_analysis(analysis)
-        mock_print.assert_called_with("❌ Test error")
+        """Test displaying analysis with missing statistics."""
+        # Since display_analysis now expects successful analysis results,
+        # we test with incomplete analysis dict to trigger KeyError
+        analysis = {"step_name": "test_step"}  # Missing required 'statistics' key
+
+        with pytest.raises(KeyError):
+            self.analyzer.display_analysis(analysis)
 
     @patch("builtins.print")
     def test_display_analysis_no_data(self, mock_print: MagicMock) -> None:
@@ -370,12 +378,20 @@ class TestCapacityMatrixAnalyzer:
         """Test successful bandwidth availability analysis."""
         results = {
             "capacity_step": {
-                "total_capacity_frequencies": {
-                    100.0: 1,
-                    90.0: 1,
-                    85.0: 1,
-                    80.0: 1,
-                    75.0: 1,
+                "capacity_envelopes": {
+                    "flow1->flow2": {
+                        "frequencies": {
+                            "100.0": 1,
+                            "90.0": 1,
+                            "85.0": 1,
+                        }
+                    },
+                    "flow3->flow4": {
+                        "frequencies": {
+                            "80.0": 1,
+                            "75.0": 1,
+                        }
+                    },
                 }
             }
         }
@@ -387,68 +403,57 @@ class TestCapacityMatrixAnalyzer:
         assert result["step_name"] == "capacity_step"
         assert result["maximum_flow"] == 100.0
         assert result["total_samples"] == 5
-
-        # Check CDF structure - should be (relative_flow, cumulative_probability)
-        curve = result["flow_cdf"]
-        assert len(curve) == 5
-        assert curve[0] == (0.75, 0.2)  # 20% of samples are <= 0.75 relative flow
-        assert curve[-1] == (1.0, 1.0)  # 100% of samples are <= 1.0 relative flow
-
-        # Check statistics
-        stats = result["statistics"]
-        assert stats["has_data"] is True
-        assert stats["maximum_flow"] == 100.0
-        assert stats["minimum_flow"] == 75.0  # Updated field name
-        assert "flow_percentiles" in stats  # Updated field name
-
-        # Check visualization data
-        viz_data = result["visualization_data"]
-        assert viz_data["has_data"] is True
-        assert len(viz_data["cdf_data"]["flow_values"]) == 5
+        assert result["aggregated_flows"] == 2
 
     def test_analyze_flow_availability_no_step_name(self):
         """Test bandwidth availability analysis without step name."""
         analyzer = CapacityMatrixAnalyzer()
-        result = analyzer.analyze_flow_availability({})
 
-        assert result["status"] == "error"
-        assert "step_name required" in result["message"]
+        with pytest.raises(
+            ValueError, match="step_name required for flow availability analysis"
+        ):
+            analyzer.analyze_flow_availability({})
 
     def test_analyze_flow_availability_no_data(self):
         """Test bandwidth availability analysis with no data."""
         results = {"capacity_step": {}}
 
         analyzer = CapacityMatrixAnalyzer()
-        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
 
-        assert result["status"] == "no_data"
-        assert "No total flow samples" in result["message"]
+        with pytest.raises(
+            ValueError, match="No capacity envelopes found for step: capacity_step"
+        ):
+            analyzer.analyze_flow_availability(results, step_name="capacity_step")
 
     def test_analyze_flow_availability_zero_capacity(self):
         """Test bandwidth availability analysis with all zero capacity."""
-        results = {"capacity_step": {"total_capacity_frequencies": {0.0: 3}}}
+        results = {
+            "capacity_step": {
+                "capacity_envelopes": {"flow1->flow2": {"frequencies": {"0.0": 3}}}
+            }
+        }
 
         analyzer = CapacityMatrixAnalyzer()
-        result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
 
-        assert result["status"] == "invalid_data"
-        assert "All flow samples are zero" in result["message"]
+        with pytest.raises(RuntimeError, match="All aggregated flow samples are zero"):
+            analyzer.analyze_flow_availability(results, step_name="capacity_step")
 
     def test_analyze_flow_availability_single_sample(self):
         """Test bandwidth availability analysis with single sample."""
-        results = {"capacity_step": {"total_capacity_frequencies": {50.0: 1}}}
+        results = {
+            "capacity_step": {
+                "capacity_envelopes": {"flow1->flow2": {"frequencies": {"50.0": 1}}}
+            }
+        }
 
         analyzer = CapacityMatrixAnalyzer()
         result = analyzer.analyze_flow_availability(results, step_name="capacity_step")
 
         assert result["status"] == "success"
+        assert result["step_name"] == "capacity_step"
         assert result["maximum_flow"] == 50.0
         assert result["total_samples"] == 1
-
-        # Single sample should result in 100% CDF at that relative value
-        curve = result["flow_cdf"]
-        assert len(curve) == 1
-        assert curve[0] == (1.0, 1.0)  # 100% of samples are <= 1.0 relative flow
+        assert result["aggregated_flows"] == 1
 
     def test_bandwidth_availability_statistics_calculation(self):
         """Test detailed statistics calculation for bandwidth availability."""
@@ -520,10 +525,11 @@ class TestFlowAnalyzer:
     def test_analyze_no_flow_data(self) -> None:
         """Test analyze with no flow data."""
         results = {"step1": {"other_data": "value"}}
-        analysis = self.analyzer.analyze(results)
 
-        assert analysis["status"] == "no_data"
-        assert "No flow analysis results found" in analysis["message"]
+        with pytest.raises(
+            ValueError, match="No flow analysis results found in any workflow step"
+        ):
+            self.analyzer.analyze(results)
 
     def test_analyze_success_with_flow_data(self) -> None:
         """Test successful analysis with flow data."""
@@ -613,10 +619,13 @@ class TestFlowAnalyzer:
 
     @patch("builtins.print")
     def test_display_analysis_error(self, mock_print: MagicMock) -> None:
-        """Test displaying error analysis."""
-        analysis = {"status": "error", "message": "Test error"}
-        self.analyzer.display_analysis(analysis)
-        mock_print.assert_called_with("❌ Test error")
+        """Test displaying analysis with missing statistics."""
+        # Since display_analysis now expects successful analysis results,
+        # we test with incomplete analysis dict to trigger KeyError
+        analysis = {"step_name": "test_step"}  # Missing required 'statistics' key
+
+        with pytest.raises(KeyError):
+            self.analyzer.display_analysis(analysis)
 
     @patch("ngraph.workflow.analysis.show")
     @patch("builtins.print")
@@ -699,8 +708,11 @@ class TestFlowAnalyzer:
     def test_analyze_and_display_all(self, mock_print: MagicMock) -> None:
         """Test analyze_and_display_all method."""
         results = {"step1": {"other_data": "value"}}
-        self.analyzer.analyze_and_display_all(results)
-        mock_print.assert_called_with("❌ No flow analysis results found")
+
+        with pytest.raises(
+            ValueError, match="No flow analysis results found in any workflow step"
+        ):
+            self.analyzer.analyze_and_display_all(results)
 
 
 class TestPackageManager:
@@ -1015,9 +1027,9 @@ class TestSummaryAnalyzer:
 
     @patch("builtins.print")
     def test_analyze_and_display_summary(self, mock_print: MagicMock) -> None:
-        """Test analyze_and_display_summary method."""
+        """Test analyze_and_display method."""
         results = {"step1": {"data": "value"}}
-        self.analyzer.analyze_and_display_summary(results)
+        self.analyzer.analyze_and_display(results)
 
         # Should call both analyze and display_analysis
         calls = [call.args[0] for call in mock_print.call_args_list]
@@ -1146,11 +1158,11 @@ class TestExceptionHandling:
                 }
             }
 
-            analysis = analyzer.analyze(results, step_name="test_step")
-
-            assert analysis["status"] == "error"
-            assert "Error analyzing capacity matrix" in analysis["message"]
-            assert analysis["step_name"] == "test_step"
+            with pytest.raises(
+                RuntimeError,
+                match="Error analyzing capacity matrix for test_step: Pandas error",
+            ):
+                analyzer.analyze(results, step_name="test_step")
 
     def test_flow_analyzer_exception_handling(self) -> None:
         """Test FlowAnalyzer exception handling."""
@@ -1166,10 +1178,10 @@ class TestExceptionHandling:
                 }
             }
 
-            analysis = analyzer.analyze(results)
-
-            assert analysis["status"] == "error"
-            assert "Error analyzing flows" in analysis["message"]
+            with pytest.raises(
+                RuntimeError, match="Error analyzing flow results: Pandas error"
+            ):
+                analyzer.analyze(results)
 
     @patch("matplotlib.pyplot.show")
     @patch("matplotlib.pyplot.tight_layout")

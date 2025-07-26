@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger, set_global_log_level
 from ngraph.profiling import PerformanceProfiler, PerformanceReporter
+from ngraph.report import ReportGenerator
 from ngraph.scenario import Scenario
 
 logger = get_logger(__name__)
@@ -379,28 +380,29 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         logger.info("Scenario inspection completed successfully")
 
     except FileNotFoundError:
-        logger.error(f"Scenario file not found: {path}")
-        print(f"ERROR: Scenario file not found: {path}")
+        print(f"❌ ERROR: Scenario file not found: {path}")
         sys.exit(1)
     except Exception as e:
-        logger.error(f"Failed to inspect scenario: {type(e).__name__}: {e}")
-        print("ERROR: Failed to inspect scenario")
+        logger.error(f"Failed to inspect scenario: {e}")
+        print("❌ ERROR: Failed to inspect scenario")
         print(f"  {type(e).__name__}: {e}")
         sys.exit(1)
 
 
 def _run_scenario(
     path: Path,
-    output: Optional[Path],
+    output: Path,
+    no_results: bool,
     stdout: bool,
     keys: Optional[list[str]] = None,
     profile: bool = False,
 ) -> None:
-    """Run a scenario file and optionally export results as JSON.
+    """Run a scenario file and export results as JSON by default.
 
     Args:
         path: Scenario YAML file.
-        output: Optional path where JSON results should be written. If None, no JSON export.
+        output: Path where JSON results should be written.
+        no_results: Whether to disable results file generation.
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
             exported.
@@ -472,9 +474,10 @@ def _run_scenario(
             logger.info("Starting scenario execution")
             scenario.run()
             logger.info("Scenario execution completed successfully")
+            print("✅ Scenario execution completed")
 
-        # Only export JSON if output path is provided
-        if output:
+        # Export JSON results by default unless disabled
+        if not no_results:
             logger.info("Serializing results to JSON")
             results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
 
@@ -490,6 +493,7 @@ def _run_scenario(
             logger.info(f"Writing results to: {output}")
             output.write_text(json_str)
             logger.info("Results written successfully")
+            print(f"✅ Results written to: {output}")
 
             if stdout:
                 print(json_str)
@@ -507,9 +511,11 @@ def _run_scenario(
 
     except FileNotFoundError:
         logger.error(f"Scenario file not found: {path}")
+        print(f"❌ ERROR: Scenario file not found: {path}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to run scenario: {type(e).__name__}: {e}")
+        print(f"❌ ERROR: Failed to run scenario: {type(e).__name__}: {e}")
         sys.exit(1)
 
 
@@ -539,9 +545,13 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--results",
         "-r",
         type=Path,
-        nargs="?",
-        const=Path("results.json"),
-        help="Export results to JSON file (default: results.json if no path specified)",
+        default=Path("results.json"),
+        help="Export results to JSON file (default: results.json)",
+    )
+    run_parser.add_argument(
+        "--no-results",
+        action="store_true",
+        help="Disable results file generation",
     )
     run_parser.add_argument(
         "--stdout",
@@ -572,6 +582,36 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Show detailed information including complete node/link tables and step parameters",
     )
 
+    # Report command
+    report_parser = subparsers.add_parser(
+        "report", help="Generate analysis reports from results file"
+    )
+    report_parser.add_argument(
+        "results",
+        type=Path,
+        nargs="?",
+        default=Path("results.json"),
+        help="Path to results JSON file (default: results.json)",
+    )
+    report_parser.add_argument(
+        "--notebook",
+        "-n",
+        type=Path,
+        help="Output path for Jupyter notebook (default: analysis.ipynb)",
+    )
+    report_parser.add_argument(
+        "--html",
+        type=Path,
+        nargs="?",
+        const=Path("analysis.html"),
+        help="Generate HTML report (default: analysis.html if no path specified)",
+    )
+    report_parser.add_argument(
+        "--include-code",
+        action="store_true",
+        help="Include code cells in HTML output (default: report without code)",
+    )
+
     args = parser.parse_args(argv)
 
     # Configure logging based on arguments
@@ -587,12 +627,73 @@ def main(argv: Optional[List[str]] = None) -> None:
         _run_scenario(
             args.scenario,
             args.results,
+            args.no_results,
             args.stdout,
             args.keys,
             args.profile,
         )
     elif args.command == "inspect":
         _inspect_scenario(args.scenario, args.detail)
+    elif args.command == "report":
+        _generate_report(
+            args.results,
+            args.notebook,
+            args.html,
+            args.include_code,
+        )
+
+
+def _generate_report(
+    results_path: Path,
+    notebook_path: Optional[Path],
+    html_path: Optional[Path],
+    include_code: bool,
+) -> None:
+    """Generate analysis reports from results file.
+
+    Args:
+        results_path: Path to results.json file.
+        notebook_path: Output path for notebook (default: analysis.ipynb).
+        html_path: Output path for HTML report (None = no HTML).
+        include_code: Whether to include code cells in HTML output.
+    """
+    logger.info(f"Generating report from: {results_path}")
+
+    try:
+        # Initialize report generator
+        generator = ReportGenerator(results_path)
+        generator.load_results()
+
+        # Generate notebook
+        notebook_output = notebook_path or Path("analysis.ipynb")
+        generated_notebook = generator.generate_notebook(notebook_output)
+        print(f"✅ Notebook generated: {generated_notebook}")
+
+        # Generate HTML if requested
+        if html_path:
+            generated_html = generator.generate_html_report(
+                notebook_path=generated_notebook,
+                html_path=html_path,
+                include_code=include_code,
+            )
+            print(f"✅ HTML report generated: {generated_html}")
+
+    except FileNotFoundError as e:
+        logger.error(f"Results file not found: {e}")
+        print(f"❌ ERROR: Results file not found: {e}")
+        sys.exit(1)
+    except ValueError as e:
+        logger.error(f"Invalid results data: {e}")
+        print(f"❌ ERROR: Invalid results data: {e}")
+        sys.exit(1)
+    except RuntimeError as e:
+        logger.error(f"Report generation failed: {e}")
+        print(f"❌ ERROR: Report generation failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        print(f"❌ ERROR: Unexpected error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

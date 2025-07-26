@@ -1,4 +1,4 @@
-"""Base classes and utilities for workflow components."""
+"""Base classes for workflow automation."""
 
 from __future__ import annotations
 
@@ -15,13 +15,17 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# Registry for workflow step classes
 WORKFLOW_STEP_REGISTRY: Dict[str, Type["WorkflowStep"]] = {}
+
+# Global execution counter for tracking step order
+_execution_counter = 0
 
 
 def register_workflow_step(step_type: str):
-    """A decorator that registers a WorkflowStep subclass under `step_type`."""
+    """Decorator to register a WorkflowStep subclass."""
 
-    def decorator(cls: Type["WorkflowStep"]):
+    def decorator(cls: Type["WorkflowStep"]) -> Type["WorkflowStep"]:
         WORKFLOW_STEP_REGISTRY[step_type] = cls
         return cls
 
@@ -34,6 +38,7 @@ class WorkflowStep(ABC):
 
     All workflow steps are automatically logged with execution timing information.
     All workflow steps support seeding for reproducible random operations.
+    Workflow metadata is automatically stored in scenario.results for analysis.
 
     YAML Configuration:
         ```yaml
@@ -55,15 +60,24 @@ class WorkflowStep(ABC):
     seed: Optional[int] = None
 
     def execute(self, scenario: "Scenario") -> None:
-        """Execute the workflow step with automatic logging.
+        """Execute the workflow step with automatic logging and metadata storage.
 
-        This method wraps the abstract run() method with timing and logging.
+        This method wraps the abstract run() method with timing, logging, and
+        automatic metadata storage for the analysis registry system.
 
         Args:
             scenario: The scenario to execute the step on.
         """
+        global _execution_counter
+
         step_type = self.__class__.__name__
         step_name = self.name or step_type
+
+        # Store workflow metadata before execution
+        scenario.results.put_step_metadata(
+            step_name=step_name, step_type=step_type, execution_order=_execution_counter
+        )
+        _execution_counter += 1
 
         logger.info(f"Starting workflow step: {step_name} ({step_type})")
         start_time = time.time()
@@ -90,7 +104,7 @@ class WorkflowStep(ABC):
         """Execute the workflow step logic.
 
         This method should be implemented by concrete workflow step classes.
-        It is called by execute() which handles logging and timing.
+        It is called by execute() which handles logging, timing, and metadata storage.
 
         Args:
             scenario: The scenario to execute the step on.

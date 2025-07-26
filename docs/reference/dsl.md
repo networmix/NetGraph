@@ -487,13 +487,6 @@ workflow:
     store_failure_patterns: true | false # Optional: Store failure patterns in results (default: false)
     seed: S # Optional: Seed for deterministic results
 
-  - step_type: NotebookExport
-    name: "export_analysis"              # Optional: Custom name for this step
-    notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
-    json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
-    allow_empty_results: false           # Optional: Allow notebook creation with no results
-```
-
 **Available Workflow Steps:**
 
 - **`BuildGraph`**: Builds a StrictMultiDiGraph from scenario.network
@@ -502,7 +495,6 @@ workflow:
 - **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
 - **`DistributeExternalConnectivity`**: Distributes external connectivity to attachment nodes
 - **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
-- **`NotebookExport`**: Exports analysis results to a Jupyter notebook with external JSON data file
 
 **Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
 
@@ -514,11 +506,7 @@ workflow:
 - **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
 - **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
 
-  - step_type: NotebookExport
-    name: "export_analysis"              # Optional: Custom name for this step
-    notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
-    json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
-    allow_empty_results: false           # Optional: Allow notebook creation with no results
+**Report Generation:** After running a workflow, use the `ngraph report` CLI command to generate Jupyter notebooks and HTML reports from the results. See [CLI Reference](cli.md#report) for details.
 
 ## Path Matching Regex Syntax - Reference
 

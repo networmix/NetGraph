@@ -213,8 +213,3 @@ workflow:
     baseline: true
     failure_policy: availability_1992
     store_failure_patterns: true
-  - step_type: NotebookExport
-    name: export_analysis
-    notebook_path: analysis.ipynb
-    json_path: results.json
-    allow_empty_results: false

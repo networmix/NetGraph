@@ -1,4 +1,27 @@
-"""Capacity probing workflow component."""
+"""Capacity probing workflow component.
+
+Probes maximum flow capacity between selected node groups with support for
+exclusion simulation and configurable flow analysis modes.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: CapacityProbe
+        name: "capacity_probe_analysis"  # Optional: Custom name for this step
+        source_path: "^datacenter/.*"    # Regex pattern to select source node groups
+        sink_path: "^edge/.*"            # Regex pattern to select sink node groups
+        mode: "combine"                  # "combine" or "pairwise" flow analysis
+        probe_reverse: false             # Also compute flow in reverse direction
+        shortest_path: false             # Use shortest paths only
+        flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
+        excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
+        excluded_links: ["link1"]          # Optional: Links to exclude for analysis
+    ```
+
+Results stored in scenario.results:
+    - Flow capacity values with keys like "max_flow:[source_group -> sink_group]"
+    - Additional reverse flow results if probe_reverse=True
+"""
 
 from __future__ import annotations
 
@@ -18,21 +41,6 @@ class CapacityProbe(WorkflowStep):
     """A workflow step that probes capacity (max flow) between selected groups of nodes.
 
     Supports optional exclusion simulation using NetworkView without modifying the base network.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - step_type: CapacityProbe
-            name: "capacity_probe_analysis"  # Optional: Custom name for this step
-            source_path: "^datacenter/.*"    # Regex pattern to select source node groups
-            sink_path: "^edge/.*"            # Regex pattern to select sink node groups
-            mode: "combine"                  # "combine" or "pairwise" flow analysis
-            probe_reverse: false             # Also compute flow in reverse direction
-            shortest_path: false             # Use shortest paths only
-            flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
-            excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
-            excluded_links: ["link1"]          # Optional: Links to exclude for analysis
-        ```
 
     Attributes:
         source_path: A regex pattern to select source node groups.

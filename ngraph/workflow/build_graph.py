@@ -1,4 +1,18 @@
-"""Graph building workflow component."""
+"""Graph building workflow component.
+
+Converts scenario network definitions into StrictMultiDiGraph structures suitable
+for analysis algorithms. No additional parameters required beyond basic workflow step options.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: BuildGraph
+        name: "build_network_graph"  # Optional: Custom name for this step
+    ```
+
+Results stored in scenario.results:
+    - graph: StrictMultiDiGraph object with bidirectional links
+"""
 
 from __future__ import annotations
 
@@ -17,13 +31,6 @@ class BuildGraph(WorkflowStep):
 
     This step converts the scenario's network definition into a graph structure
     suitable for analysis algorithms. No additional parameters are required.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - step_type: BuildGraph
-            name: "build_network_graph"  # Optional: Custom name for this step
-        ```
     """
 
     def run(self, scenario: Scenario) -> None:

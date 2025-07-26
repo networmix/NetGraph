@@ -301,7 +301,7 @@ failure_policy_set:
         rule_type: "choice"
         count: 1
 
-# Comprehensive workflow demonstrating multiple steps
+# Multi-step workflow demonstrating various workflow steps
 workflow:
   - step_type: BuildGraph
     name: build_graph
@@ -367,10 +367,3 @@ workflow:
     parallelism: 2 # 2-way parallelism
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
-
-  # Export results to notebook
-  - step_type: NotebookExport
-    name: export_advanced_analysis
-    notebook_path: "advanced_dsl_analysis.ipynb"
-    json_path: "advanced_dsl_results.json"
-    allow_empty_results: false

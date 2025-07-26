@@ -34,6 +34,31 @@ effective iterations by 60-90% for common failure patterns.
 **Space Complexity**: O(V + E + I × F + C) with frequency-based compression reducing
 I×F samples to ~√(I×F) entries. Validated by benchmark tests in test suite.
 
+## YAML Configuration Example
+
+```yaml
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
+    source_path: "^datacenter/.*"             # Regex pattern for source node groups
+    sink_path: "^edge/.*"                     # Regex pattern for sink node groups
+    mode: "combine"                           # "combine" or "pairwise" flow analysis
+    failure_policy: "random_failures"         # Optional: Named failure policy to use
+    iterations: 1000                          # Number of Monte-Carlo trials
+    parallelism: 4                            # Number of parallel worker processes
+    shortest_path: false                      # Use shortest paths only
+    flow_placement: "PROPORTIONAL"            # Flow placement strategy
+    baseline: true                            # Optional: Run first iteration without failures
+    seed: 42                                  # Optional: Seed for reproducible results
+    store_failure_patterns: false            # Optional: Store failure patterns in results
+```
+
+## Results
+
+Results stored in scenario.results:
+- `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
+- `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
+
 """
 
 from __future__ import annotations
@@ -332,28 +357,6 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     - Flow computations are cached within workers to avoid redundant calculations
 
     All results are stored using frequency-based storage for memory efficiency.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - step_type: CapacityEnvelopeAnalysis
-            name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
-            source_path: "^datacenter/.*"             # Regex pattern for source node groups
-            sink_path: "^edge/.*"                     # Regex pattern for sink node groups
-            mode: "combine"                           # "combine" or "pairwise" flow analysis
-            failure_policy: "random_failures"         # Optional: Named failure policy to use
-            iterations: 1000                          # Number of Monte-Carlo trials
-            parallelism: 4                            # Number of parallel worker processes
-            shortest_path: false                      # Use shortest paths only
-            flow_placement: "PROPORTIONAL"            # Flow placement strategy
-            baseline: true                            # Optional: Run first iteration without failures
-            seed: 42                                  # Optional: Seed for reproducible results
-            store_failure_patterns: false            # Optional: Store failure patterns in results
-        ```
-
-    Results stored in scenario.results:
-        - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-        - `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
 
     Attributes:
         source_path: Regex pattern to select source node groups.

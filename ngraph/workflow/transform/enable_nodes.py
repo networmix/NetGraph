@@ -1,4 +1,23 @@
-"""Network transformation for enabling/disabling nodes."""
+"""Network transformation for enabling/disabling nodes.
+
+Enables a specified number of disabled nodes that match a regex pattern.
+Supports configurable selection ordering including lexical, reverse, and random ordering.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: EnableNodes
+        name: "enable_edge_nodes"      # Optional: Custom name for this step
+        path: "^edge/.*"               # Regex pattern to match nodes to enable
+        count: 5                       # Number of nodes to enable
+        order: "name"                  # Selection order: "name", "random", or "reverse"
+        seed: 42                       # Optional: Seed for reproducible random selection
+    ```
+
+Results:
+    - Enables the specified number of disabled nodes in-place
+    - No data stored in scenario.results (modifies network directly)
+"""
 
 from __future__ import annotations
 
@@ -20,17 +39,6 @@ class EnableNodesTransform(NetworkTransform):
     """Enable *count* disabled nodes that match *path*.
 
     Ordering is configurable; default is lexical by node name.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - step_type: EnableNodes
-            name: "enable_edge_nodes"      # Optional: Custom name for this step
-            path: "^edge/.*"               # Regex pattern to match nodes to enable
-            count: 5                       # Number of nodes to enable
-            order: "name"                  # Selection order: "name", "random", or "reverse"
-            seed: 42                       # Optional: Seed for reproducible random selection
-        ```
 
     Args:
         path: Regex pattern to match disabled nodes that should be enabled.

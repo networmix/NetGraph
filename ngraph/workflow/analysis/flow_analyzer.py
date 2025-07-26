@@ -1,4 +1,9 @@
-"""Flow analysis for notebook results."""
+"""Maximum flow analysis for workflow results.
+
+This module contains `FlowAnalyzer`, which processes maximum flow computation
+results from workflow steps, computes statistics, and generates visualizations
+for flow capacity analysis.
+"""
 
 import importlib
 from typing import Any, Dict
@@ -9,10 +14,27 @@ from .base import NotebookAnalyzer
 
 
 class FlowAnalyzer(NotebookAnalyzer):
-    """Analyzes maximum flow results."""
+    """Processes maximum flow computation results into statistical summaries.
+
+    Extracts max_flow results from workflow step data, computes flow statistics
+    including capacity distribution metrics, and generates tabular visualizations
+    for notebook output.
+    """
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Analyze flow results and create visualizations."""
+        """Analyze flow results and create visualizations.
+
+        Args:
+            results: Dictionary containing all workflow step results.
+            **kwargs: Additional arguments (unused for flow analysis).
+
+        Returns:
+            Dictionary containing flow analysis results with statistics and visualization data.
+
+        Raises:
+            ValueError: If no flow analysis results found.
+            RuntimeError: If analysis computation fails.
+        """
         flow_results = []
 
         for step_name, step_data in results.items():
@@ -29,7 +51,7 @@ class FlowAnalyzer(NotebookAnalyzer):
                         )
 
         if not flow_results:
-            return {"status": "no_data", "message": "No flow analysis results found"}
+            raise ValueError("No flow analysis results found in any workflow step")
 
         try:
             df_flows = pd.DataFrame(flow_results)
@@ -45,7 +67,7 @@ class FlowAnalyzer(NotebookAnalyzer):
             }
 
         except Exception as e:
-            return {"status": "error", "message": f"Error analyzing flows: {str(e)}"}
+            raise RuntimeError(f"Error analyzing flow results: {e}") from e
 
     def _calculate_flow_statistics(self, df_flows: pd.DataFrame) -> Dict[str, Any]:
         """Calculate flow statistics."""
@@ -67,14 +89,15 @@ class FlowAnalyzer(NotebookAnalyzer):
         }
 
     def get_description(self) -> str:
-        return "Analyzes maximum flow calculations"
+        return "Processes maximum flow computation results into statistical summaries"
 
     def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:
-        """Display flow analysis results."""
-        if analysis["status"] != "success":
-            print(f"❌ {analysis['message']}")
-            return
+        """Display flow analysis results.
 
+        Args:
+            analysis: Analysis results dictionary from the analyze method.
+            **kwargs: Additional arguments (unused).
+        """
         print("✅ Maximum Flow Analysis")
 
         stats = analysis["statistics"]
@@ -119,6 +142,62 @@ class FlowAnalyzer(NotebookAnalyzer):
                 plt.show()
             except ImportError:
                 print("Matplotlib not available for visualization")
+
+    def analyze_capacity_probe(self, results: Dict[str, Any], **kwargs) -> None:
+        """Analyze and display capacity probe results for a specific step.
+
+        Args:
+            results: Dictionary containing all workflow step results.
+            **kwargs: Additional arguments including step_name.
+
+        Raises:
+            ValueError: If step_name is missing, no data found, or no capacity probe results found.
+        """
+        step_name = kwargs.get("step_name", "")
+        if not step_name:
+            raise ValueError("No step name provided for capacity probe analysis")
+
+        step_data = results.get(step_name, {})
+        if not step_data:
+            raise ValueError(f"No data found for step: {step_name}")
+
+        # Extract flow results for this specific step
+        flow_results = []
+        for key, value in step_data.items():
+            if key.startswith("max_flow:"):
+                flow_path = key.replace("max_flow:", "").strip("[]")
+                flow_results.append(
+                    {
+                        "flow_path": flow_path,
+                        "max_flow": value,
+                    }
+                )
+
+        if not flow_results:
+            raise ValueError(f"No capacity probe results found in step: {step_name}")
+
+        print(f"🚰 Capacity Probe Results: {step_name}")
+        print("=" * 50)
+
+        df_flows = pd.DataFrame(flow_results)
+
+        # Display summary statistics
+        print("Flow Statistics:")
+        print(f"  Total probes: {len(flow_results):,}")
+        print(f"  Max flow: {df_flows['max_flow'].max():,.2f}")
+        print(f"  Min flow: {df_flows['max_flow'].min():,.2f}")
+        print(f"  Average flow: {df_flows['max_flow'].mean():,.2f}")
+        print(f"  Total capacity: {df_flows['max_flow'].sum():,.2f}")
+
+        # Display table
+        print("\nDetailed Results:")
+        _get_show()(
+            df_flows,
+            caption=f"Capacity Probe Results - {step_name}",
+            scrollY="300px",
+            scrollCollapse=True,
+            paging=True,
+        )
 
     def analyze_and_display_all(self, results: Dict[str, Any]) -> None:
         """Analyze and display all flow results."""

@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 09, 2025 at 01:36 UTC
+**Generated from source code on:** July 26, 2025 at 15:00 UTC
 
 **Modules auto-discovered:** 51
 
@@ -855,6 +855,31 @@ Attributes:
 
 ---
 
+## ngraph.report
+
+Standalone report generation for NetGraph analysis results.
+
+Generates Jupyter notebooks and HTML reports from results.json files.
+Separate from workflow execution to allow independent report generation.
+
+### ReportGenerator
+
+Generate analysis reports from NetGraph results files.
+
+Creates Jupyter notebooks with analysis code and can optionally export to HTML.
+Uses the analysis registry to determine which analysis modules to run for each workflow step.
+
+**Methods:**
+
+- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'`
+  - Generate HTML report from notebook.
+- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'`
+  - Generate Jupyter notebook with analysis code.
+- `load_results(self) -> 'None'`
+  - Load results from JSON file.
+
+---
+
 ## ngraph.results
 
 Results class for storing workflow step outputs.
@@ -862,16 +887,20 @@ Results class for storing workflow step outputs.
 ### Results
 
 A container for storing arbitrary key-value data that arises during workflow steps.
-The data is organized by step name, then by key.
+
+The data is organized by step name, then by key. Each step also has associated
+metadata that describes the workflow step type and execution context.
 
 Example usage:
   results.put("Step1", "total_capacity", 123.45)
   cap = results.get("Step1", "total_capacity")  # returns 123.45
   all_caps = results.get_all("total_capacity")  # might return {"Step1": 123.45, "Step2": 98.76}
+  metadata = results.get_step_metadata("Step1")  # returns WorkflowStepMetadata
 
 **Attributes:**
 
 - `_store` (Dict) = {}
+- `_metadata` (Dict) = {}
 
 **Methods:**
 
@@ -879,10 +908,33 @@ Example usage:
   - Retrieve the value from (step_name, key). If the key is missing, return `default`.
 - `get_all(self, key: str) -> Dict[str, Any]`
   - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+- `get_all_step_metadata(self) -> Dict[str, ngraph.results.WorkflowStepMetadata]`
+  - Get metadata for all workflow steps.
+- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.WorkflowStepMetadata]`
+  - Get metadata for a workflow step.
+- `get_steps_by_execution_order(self) -> list[str]`
+  - Get step names ordered by their execution order.
 - `put(self, step_name: str, key: str, value: Any) -> None`
   - Store a value under (step_name, key).
-- `to_dict(self) -> Dict[str, Dict[str, Any]]`
+- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None`
+  - Store metadata for a workflow step.
+- `to_dict(self) -> Dict[str, Any]`
   - Return a dictionary representation of all stored results.
+
+### WorkflowStepMetadata
+
+Metadata for a workflow step execution.
+
+Attributes:
+    step_type: The workflow step class name (e.g., 'CapacityEnvelopeAnalysis').
+    step_name: The instance name of the step.
+    execution_order: Order in which this step was executed (0-based).
+
+**Attributes:**
+
+- `step_type` (str)
+- `step_name` (str)
+- `execution_order` (int)
 
 ---
 
@@ -1063,7 +1115,7 @@ Typical usage example:
 - `workflow` (List[WorkflowStep])
 - `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
-- `results` (Results) = Results(_store={})
+- `results` (Results) = Results(_store={}, _metadata={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
 
@@ -2139,7 +2191,7 @@ Attributes:
 
 ## ngraph.workflow.base
 
-Base classes and utilities for workflow components.
+Base classes for workflow automation.
 
 ### WorkflowStep
 
@@ -2147,6 +2199,7 @@ Base class for all workflow steps.
 
 All workflow steps are automatically logged with execution timing information.
 All workflow steps support seeding for reproducible random operations.
+Workflow metadata is automatically stored in scenario.results for analysis.
 
 YAML Configuration:
     ```yaml
@@ -2171,13 +2224,13 @@ Attributes:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step logic.
 
 ### register_workflow_step(step_type: 'str')
 
-A decorator that registers a WorkflowStep subclass under `step_type`.
+Decorator to register a WorkflowStep subclass.
 
 ---
 
@@ -2185,19 +2238,25 @@ A decorator that registers a WorkflowStep subclass under `step_type`.
 
 Graph building workflow component.
 
+Converts scenario network definitions into StrictMultiDiGraph structures suitable
+for analysis algorithms. No additional parameters required beyond basic workflow step options.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: BuildGraph
+        name: "build_network_graph"  # Optional: Custom name for this step
+    ```
+
+Results stored in scenario.results:
+    - graph: StrictMultiDiGraph object with bidirectional links
+
 ### BuildGraph
 
 A workflow step that builds a StrictMultiDiGraph from scenario.network.
 
 This step converts the scenario's network definition into a graph structure
 suitable for analysis algorithms. No additional parameters are required.
-
-YAML Configuration:
-    ```yaml
-    workflow:
-      - step_type: BuildGraph
-        name: "build_network_graph"  # Optional: Custom name for this step
-    ```
 
 **Attributes:**
 
@@ -2207,7 +2266,7 @@ YAML Configuration:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Execute the workflow step logic.
 
@@ -2251,6 +2310,31 @@ effective iterations by 60-90% for common failure patterns.
 **Space Complexity**: O(V + E + I × F + C) with frequency-based compression reducing
 I×F samples to ~√(I×F) entries. Validated by benchmark tests in test suite.
 
+## YAML Configuration Example
+
+```yaml
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
+    source_path: "^datacenter/.*"             # Regex pattern for source node groups
+    sink_path: "^edge/.*"                     # Regex pattern for sink node groups
+    mode: "combine"                           # "combine" or "pairwise" flow analysis
+    failure_policy: "random_failures"         # Optional: Named failure policy to use
+    iterations: 1000                          # Number of Monte-Carlo trials
+    parallelism: 4                            # Number of parallel worker processes
+    shortest_path: false                      # Use shortest paths only
+    flow_placement: "PROPORTIONAL"            # Flow placement strategy
+    baseline: true                            # Optional: Run first iteration without failures
+    seed: 42                                  # Optional: Seed for reproducible results
+    store_failure_patterns: false            # Optional: Store failure patterns in results
+```
+
+## Results
+
+Results stored in scenario.results:
+- `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
+- `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
+
 ### CapacityEnvelopeAnalysis
 
 A workflow step that samples maximum capacity between node groups across random failures.
@@ -2266,28 +2350,6 @@ This implementation uses parallel processing:
 - Flow computations are cached within workers to avoid redundant calculations
 
 All results are stored using frequency-based storage for memory efficiency.
-
-YAML Configuration:
-    ```yaml
-    workflow:
-      - step_type: CapacityEnvelopeAnalysis
-        name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
-        source_path: "^datacenter/.*"             # Regex pattern for source node groups
-        sink_path: "^edge/.*"                     # Regex pattern for sink node groups
-        mode: "combine"                           # "combine" or "pairwise" flow analysis
-        failure_policy: "random_failures"         # Optional: Named failure policy to use
-        iterations: 1000                          # Number of Monte-Carlo trials
-        parallelism: 4                            # Number of parallel worker processes
-        shortest_path: false                      # Use shortest paths only
-        flow_placement: "PROPORTIONAL"            # Flow placement strategy
-        baseline: true                            # Optional: Run first iteration without failures
-        seed: 42                                  # Optional: Seed for reproducible results
-        store_failure_patterns: false            # Optional: Store failure patterns in results
-    ```
-
-Results stored in scenario.results:
-    - `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-    - `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
 
 Attributes:
     source_path: Regex pattern to select source node groups.
@@ -2320,7 +2382,7 @@ Attributes:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: "'Scenario'") -> 'None'`
   - Execute the capacity envelope analysis workflow step.
 
@@ -2330,13 +2392,10 @@ Attributes:
 
 Capacity probing workflow component.
 
-### CapacityProbe
+Probes maximum flow capacity between selected node groups with support for
+exclusion simulation and configurable flow analysis modes.
 
-A workflow step that probes capacity (max flow) between selected groups of nodes.
-
-Supports optional exclusion simulation using NetworkView without modifying the base network.
-
-YAML Configuration:
+YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: CapacityProbe
@@ -2350,6 +2409,16 @@ YAML Configuration:
         excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
         excluded_links: ["link1"]          # Optional: Links to exclude for analysis
     ```
+
+Results stored in scenario.results:
+    - Flow capacity values with keys like "max_flow:[source_group -> sink_group]"
+    - Additional reverse flow results if probe_reverse=True
+
+### CapacityProbe
+
+A workflow step that probes capacity (max flow) between selected groups of nodes.
+
+Supports optional exclusion simulation using NetworkView without modifying the base network.
 
 Attributes:
     source_path: A regex pattern to select source node groups.
@@ -2379,7 +2448,7 @@ Attributes:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Executes the capacity probe by computing max flow between node groups
 
@@ -2388,6 +2457,26 @@ Attributes:
 ## ngraph.workflow.network_stats
 
 Workflow step for basic node and link statistics.
+
+Computes and stores comprehensive network statistics including node/link counts,
+capacity distributions, cost distributions, and degree distributions. Supports
+optional exclusion simulation and disabled entity handling.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: NetworkStats
+        name: "network_statistics"           # Optional: Custom name for this step
+        include_disabled: false              # Include disabled nodes/links in stats
+        excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
+        excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
+    ```
+
+Results stored in scenario.results:
+    - Node statistics: node_count
+    - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
+      min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
+    - Degree statistics: mean_degree, median_degree, min_degree, max_degree
 
 ### NetworkStats
 
@@ -2412,79 +2501,9 @@ Attributes:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Compute and store network statistics.
-
----
-
-## ngraph.workflow.notebook_export
-
-Jupyter notebook export and generation functionality.
-
-### NotebookExport
-
-Export scenario results to a Jupyter notebook with external JSON data file.
-
-Creates a Jupyter notebook containing analysis code and visualizations,
-with results data stored in a separate JSON file. This separation improves
-performance and maintainability for large datasets.
-
-YAML Configuration:
-    ```yaml
-    workflow:
-      - step_type: NotebookExport
-        name: "export_analysis"              # Optional: Custom name for this step
-        notebook_path: "analysis.ipynb"      # Optional: Notebook output path (default: "results.ipynb")
-        json_path: "results.json"            # Optional: JSON data output path (default: "results.json")
-        allow_empty_results: false           # Optional: Allow notebook creation with no results
-    ```
-
-Attributes:
-    notebook_path: Destination notebook file path (default: "results.ipynb").
-    json_path: Destination JSON data file path (default: "results.json").
-    allow_empty_results: Whether to create a notebook when no results exist (default: False).
-                       If False, raises ValueError when results are empty.
-
-**Attributes:**
-
-- `name` (str)
-- `seed` (Optional[int])
-- `notebook_path` (str) = results.ipynb
-- `json_path` (str) = results.json
-- `allow_empty_results` (bool) = False
-
-**Methods:**
-
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging.
-- `run(self, scenario: "'Scenario'") -> 'None'`
-  - Create notebook and JSON files with the current scenario results.
-
----
-
-## ngraph.workflow.notebook_serializer
-
-Code serialization for notebook generation.
-
-### NotebookCodeSerializer
-
-Converts Python classes into notebook cells.
-
-**Methods:**
-
-- `create_capacity_analysis_cell() -> nbformat.notebooknode.NotebookNode`
-  - Create capacity analysis cell.
-- `create_data_loading_cell(json_path: str) -> nbformat.notebooknode.NotebookNode`
-  - Create data loading cell.
-- `create_flow_analysis_cell() -> nbformat.notebooknode.NotebookNode`
-  - Create flow analysis cell.
-- `create_flow_availability_cells() -> List[nbformat.notebooknode.NotebookNode]`
-  - Create flow availability analysis cells (markdown header + code).
-- `create_setup_cell() -> nbformat.notebooknode.NotebookNode`
-  - Create setup cell.
-- `create_summary_cell() -> nbformat.notebooknode.NotebookNode`
-  - Create analysis summary cell.
 
 ---
 
@@ -2537,11 +2556,10 @@ Raises:
 
 Network transformation for distributing external connectivity.
 
-### DistributeExternalConnectivity
+Attaches remote nodes and connects them to attachment stripes in the network.
+Creates or uses existing remote nodes and distributes connections across attachment nodes.
 
-Attach (or create) remote nodes and link them to attachment stripes.
-
-YAML Configuration:
+YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: DistributeExternalConnectivity
@@ -2557,6 +2575,15 @@ YAML Configuration:
         cost: 10.0                          # Cost per link
         remote_prefix: "external/"          # Prefix for remote node names
     ```
+
+Results:
+    - Creates remote nodes if they don't exist
+    - Adds links from remote nodes to attachment stripes
+    - No data stored in scenario.results (modifies network directly)
+
+### DistributeExternalConnectivity
+
+Attach (or create) remote nodes and link them to attachment stripes.
 
 Args:
     remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.
@@ -2580,13 +2607,10 @@ Args:
 
 Network transformation for enabling/disabling nodes.
 
-### EnableNodesTransform
+Enables a specified number of disabled nodes that match a regex pattern.
+Supports configurable selection ordering including lexical, reverse, and random ordering.
 
-Enable *count* disabled nodes that match *path*.
-
-Ordering is configurable; default is lexical by node name.
-
-YAML Configuration:
+YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: EnableNodes
@@ -2596,6 +2620,16 @@ YAML Configuration:
         order: "name"                  # Selection order: "name", "random", or "reverse"
         seed: 42                       # Optional: Seed for reproducible random selection
     ```
+
+Results:
+    - Enables the specified number of disabled nodes in-place
+    - No data stored in scenario.results (modifies network directly)
+
+### EnableNodesTransform
+
+Enable *count* disabled nodes that match *path*.
+
+Ordering is configurable; default is lexical by node name.
 
 Args:
     path: Regex pattern to match disabled nodes that should be enabled.
@@ -2658,27 +2692,33 @@ Base class for notebook analysis components.
 Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing detailed statistics, and generating notebook-friendly
-visualizations.
+envelope results, computing statistics, and generating notebook visualizations.
 
 ### CapacityMatrixAnalyzer
 
-Analyzes capacity envelope data and creates matrices.
+Processes capacity envelope data into matrices and flow availability analysis.
+
+Transforms capacity envelope results from CapacityEnvelopeAnalysis workflow steps
+into matrices, statistical summaries, and flow availability distributions.
+Provides visualization methods for notebook output including capacity matrices,
+flow CDFs, and reliability curves.
 
 **Methods:**
 
 - `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
-  - Analyze capacity envelopes and create matrix visualisation.
+  - Analyze capacity envelopes and create matrix visualization.
 - `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
   - Analyze results and display them in notebook format.
 - `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'`
-  - Run analyse/display on every step containing *capacity_envelopes*.
-- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', step_name: 'str') -> 'None'`
-  - Analyse flow availability and render summary statistics & plots.
+  - Run analyze/display on every step containing capacity_envelopes.
+- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Analyze and display flow availability for a specific step.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Analyze and display results for a specific step.
 - `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
-  - Create CDF/availability distribution for *total_capacity_frequencies*.
+  - Create CDF/availability distribution from capacity envelope frequencies.
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
-  - Pretty-print *analysis* to the notebook/stdout.
+  - Pretty-print analysis results to the notebook/stdout.
 - `get_description(self) -> 'str'`
   - Get a description of what this analyzer does.
 
@@ -2701,11 +2741,19 @@ Handles loading and validation of analysis results.
 
 ## ngraph.workflow.analysis.flow_analyzer
 
-Flow analysis for notebook results.
+Maximum flow analysis for workflow results.
+
+This module contains `FlowAnalyzer`, which processes maximum flow computation
+results from workflow steps, computes statistics, and generates visualizations
+for flow capacity analysis.
 
 ### FlowAnalyzer
 
-Analyzes maximum flow results.
+Processes maximum flow computation results into statistical summaries.
+
+Extracts max_flow results from workflow step data, computes flow statistics
+including capacity distribution metrics, and generates tabular visualizations
+for notebook output.
 
 **Methods:**
 
@@ -2715,6 +2763,8 @@ Analyzes maximum flow results.
   - Analyze results and display them in notebook format.
 - `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
   - Analyze and display all flow results.
+- `analyze_capacity_probe(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display capacity probe results for a specific step.
 - `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
   - Display flow analysis results.
 - `get_description(self) -> str`
@@ -2739,13 +2789,79 @@ Manages package installation and imports for notebooks.
 
 ---
 
+## ngraph.workflow.analysis.registry
+
+Analysis registry for mapping workflow steps to analysis modules.
+
+This module provides the central registry that defines which analysis modules
+should be executed for each workflow step type, eliminating fragile data-based
+parsing and creating a clear, maintainable mapping system.
+
+### AnalysisConfig
+
+Configuration for a single analysis module execution.
+
+Attributes:
+    analyzer_class: The analyzer class to instantiate.
+    method_name: The method to call on the analyzer (default: 'analyze_and_display').
+    kwargs: Additional keyword arguments to pass to the method.
+    section_title: Title for the notebook section (auto-generated if None).
+    enabled: Whether this analysis is enabled (default: True).
+
+**Attributes:**
+
+- `analyzer_class` (Type[NotebookAnalyzer])
+- `method_name` (str) = analyze_and_display
+- `kwargs` (Dict[str, Any]) = {}
+- `section_title` (Optional[str])
+- `enabled` (bool) = True
+
+### AnalysisRegistry
+
+Registry mapping workflow step types to their analysis configurations.
+
+The registry defines which analysis modules should run for each workflow step,
+providing a clear and maintainable mapping that replaces fragile data parsing.
+
+**Attributes:**
+
+- `_mappings` (Dict[str, List[AnalysisConfig]]) = {}
+
+**Methods:**
+
+- `get_all_step_types(self) -> 'List[str]'`
+  - Get all registered workflow step types.
+- `get_analyses(self, step_type: 'str') -> 'List[AnalysisConfig]'`
+  - Get all analysis configurations for a workflow step type.
+- `has_analyses(self, step_type: 'str') -> 'bool'`
+  - Check if any analyses are registered for a workflow step type.
+- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'`
+  - Register an analysis module for a workflow step type.
+
+### get_default_registry() -> 'AnalysisRegistry'
+
+Create and return the default analysis registry with standard mappings.
+
+Returns:
+    Configured registry with standard workflow step -> analysis mappings.
+
+---
+
 ## ngraph.workflow.analysis.summary
 
-Summary analysis for notebook results.
+Summary analysis for workflow results.
+
+This module contains `SummaryAnalyzer`, which processes workflow step results
+to generate high-level summaries, counts step types, and provides overview
+statistics for network construction and analysis results.
 
 ### SummaryAnalyzer
 
-Provides summary analysis of all results.
+Generates summary statistics and overviews of workflow results.
+
+Counts and categorizes workflow steps by type (capacity, flow, other),
+displays network statistics for graph construction steps, and provides
+high-level summaries for analysis overview.
 
 **Methods:**
 
@@ -2753,8 +2869,10 @@ Provides summary analysis of all results.
   - Analyze and summarize all results.
 - `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
   - Analyze results and display them in notebook format.
-- `analyze_and_display_summary(self, results: Dict[str, Any]) -> None`
-  - Analyze and display summary.
+- `analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display graph construction results.
+- `analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display network statistics for a specific step.
 - `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
   - Display summary analysis.
 - `get_description(self) -> str`

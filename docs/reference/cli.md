@@ -12,10 +12,11 @@ pip install ngraph
 
 ## Basic Usage
 
-The CLI provides two primary commands:
+The CLI provides three primary commands:
 
 - `inspect`: Analyze and validate scenario files without running them
 - `run`: Execute scenario files and generate results
+- `report`: Generate analysis reports from results files
 
 ### Quick Start
 
@@ -23,26 +24,29 @@ The CLI provides two primary commands:
 # Inspect a scenario to understand its structure
 python -m ngraph inspect my_scenario.yaml
 
-# Run a scenario after inspection
-python -m ngraph run my_scenario.yaml --results
+# Run a scenario (generates results.json by default)
+python -m ngraph run my_scenario.yaml
+
+# Generate analysis report from results
+python -m ngraph report results.json --notebook analysis.ipynb
 ```
 
 ```bash
-# Run a scenario (execution only, no file output)
+# Run a scenario (generates results.json by default)
 python -m ngraph run scenario.yaml
 
-# Run a scenario and export results to results.json
-python -m ngraph run scenario.yaml --results
-
-# Export results to a custom file
+# Run a scenario and save results to custom file
 python -m ngraph run scenario.yaml --results output.json
 python -m ngraph run scenario.yaml -r output.json
 
-# Print results to stdout only (no file)
+# Run a scenario without saving results (edge cases only)
+python -m ngraph run scenario.yaml --no-results
+
+# Print results to stdout in addition to saving file
 python -m ngraph run scenario.yaml --stdout
 
-# Export to file AND print to stdout
-python -m ngraph run scenario.yaml --results --stdout
+# Save to custom file AND print to stdout
+python -m ngraph run scenario.yaml --results output.json --stdout
 ```
 
 ## Command Reference
@@ -117,22 +121,85 @@ python -m ngraph run <scenario_file> [options]
 
 **Options:**
 
-- `--results`, `-r`: Optional path to export results as JSON. If provided without a path, defaults to "results.json"
-- `--stdout`: Print results to stdout
+- `--results`, `-r`: Path to export results as JSON (default: "results.json")
+- `--no-results`: Disable results file generation (for edge cases)
+- `--stdout`: Print results to stdout in addition to saving file
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
 - `--profile`: Enable performance profiling with CPU analysis and bottleneck detection
 - `--help`, `-h`: Show help message
+
+### `report`
+
+Generate analysis reports from NetGraph results files.
+
+**Syntax:**
+
+```bash
+python -m ngraph report <results_file> [options]
+```
+
+**Arguments:**
+
+- `results_file`: Path to the JSON results file (default: "results.json")
+
+**Options:**
+
+- `--notebook`, `-n`: Path for generated Jupyter notebook (default: "analysis.ipynb")
+- `--html`: Generate HTML report (default: "analysis.html" if no path specified)
+- `--include-code`: Include code cells in HTML report (default: no code in HTML)
+- `--help`, `-h`: Show help message
+
+**What it does:**
+
+The `report` command generates analysis reports from results files created by the `run` command. It creates:
+
+- **Jupyter notebook**: Interactive analysis notebook with code cells, visualizations, and explanations (default: "analysis.ipynb")
+- **HTML report** (optional): Static report for viewing without Jupyter, optionally including code (default: "analysis.html" when --html is used)
+
+The report automatically detects and analyzes the workflow steps present in the results file, creating appropriate sections and visualizations for each analysis type.
+
+**Examples:**
+
+```bash
+# Generate notebook from default results.json
+python -m ngraph report
+
+# Generate notebook with custom paths
+python -m ngraph report my_results.json --notebook my_analysis.ipynb
+
+# Generate both notebook and HTML report (default filenames)
+python -m ngraph report results.json --html
+
+# Generate HTML report with custom filename
+python -m ngraph report results.json --html custom_report.html
+
+# Generate HTML report without code cells (clean report)
+python -m ngraph report results.json --html
+
+# Generate HTML report with code cells included
+python -m ngraph report results.json --html --include-code
+```
+
+**Use cases:**
+
+- **Analysis documentation**: Create shareable notebooks documenting network analysis results
+- **Report generation**: Generate HTML reports for stakeholders who don't use Jupyter
+- **Iterative analysis**: Create notebooks for further data exploration and visualization
+- **Presentation**: Generate clean HTML reports for presentations and documentation
 
 ## Examples
 
 ### Basic Execution
 
 ```bash
-# Run a scenario (execution only, no output files)
+# Run a scenario (creates results.json by default)
 python -m ngraph run my_network.yaml
 
-# Run a scenario and export results to default file
-python -m ngraph run my_network.yaml --results
+# Run a scenario and save results to custom file
+python -m ngraph run my_network.yaml --results analysis.json
+
+# Run a scenario without creating any files (edge cases)
+python -m ngraph run my_network.yaml --no-results
 ```
 
 ### Save Results to File
@@ -143,6 +210,9 @@ python -m ngraph run my_network.yaml --results analysis.json
 
 # Save to file AND print to stdout
 python -m ngraph run my_network.yaml --results analysis.json --stdout
+
+# Use default filename and also print to stdout
+python -m ngraph run my_network.yaml --stdout
 ```
 
 ### Running Test Scenarios
@@ -157,14 +227,14 @@ python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
 You can filter the output to include only specific workflow steps using the `--keys` option:
 
 ```bash
-# Only include results from the capacity_probe step (stdout only)
+# Only include results from the capacity_probe step
 python -m ngraph run scenario.yaml --keys capacity_probe --stdout
 
-# Include multiple specific steps and export to file
+# Include multiple specific steps and save to custom file
 python -m ngraph run scenario.yaml --keys build_graph capacity_probe --results filtered.json
 
-# Filter and print to stdout while also saving to default file
-python -m ngraph run scenario.yaml --keys capacity_probe --results --stdout
+# Filter and print to stdout while using default file
+python -m ngraph run scenario.yaml --keys capacity_probe --stdout
 ```
 
 The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
@@ -382,41 +452,48 @@ The exact keys and values depend on:
 
 ## Output Behavior
 
-**NetGraph CLI output behavior changed in recent versions** to provide more flexibility:
+NetGraph CLI generates results by default to make analysis workflows more convenient:
 
-### Default Behavior (No Output Flags)
+### Default Behavior (Results Generated)
 ```bash
 python -m ngraph run scenario.yaml
 ```
 - Executes the scenario
 - Logs execution progress to the terminal
-- **Does not create any output files**
-- **Does not print results to stdout**
+- **Creates results.json automatically**
+- Shows success message with file location
 
-### Export to File
+### Custom Results File
 ```bash
-# Export to default file (results.json)
-python -m ngraph run scenario.yaml --results
-
-# Export to custom file
+# Save to custom file
 python -m ngraph run scenario.yaml --results my_analysis.json
 ```
+- Creates specified JSON file instead of results.json
+- Useful for organizing multiple analysis runs
 
 ### Print to Terminal
 ```bash
 python -m ngraph run scenario.yaml --stdout
 ```
-- Prints JSON results to stdout
-- **Does not create any files**
+- Creates results.json AND prints JSON to stdout
+- Useful for viewing results immediately while also saving them
 
 ### Combined Output
 ```bash
 python -m ngraph run scenario.yaml --results analysis.json --stdout
 ```
-- Creates a JSON file AND prints to stdout
-- Useful for viewing results immediately while also saving them
+- Creates custom JSON file AND prints to stdout
+- Maximum flexibility for different workflows
 
-**Migration Note:** If you were relying on automatic `results.json` creation, add the `--results` flag to your commands.
+### Disable File Generation (Edge Cases)
+```bash
+python -m ngraph run scenario.yaml --no-results
+```
+- Executes scenario without creating any output files
+- Only shows execution logs and completion status
+- Useful for testing, CI/CD validation, or when only logs are needed
+
+**This design prioritizes the common case:** Most users want to save their analysis results, so this is now the default behavior.
 
 ## Integration with Workflows
 
@@ -426,13 +503,14 @@ The CLI executes the complete workflow defined in your scenario file, running al
 
 1. **Inspect first**: Always use `inspect` to validate and understand your scenario
 2. **Debug issues**: Use detailed inspection to troubleshoot network expansion problems
-3. **Run after validation**: Execute scenarios only after successful inspection
+3. **Run after validation**: Execute scenarios after successful inspection
 4. **Iterate**: Use inspection during scenario development to verify changes
 
 ```bash
 # Development workflow
 python -m ngraph inspect my_scenario.yaml --detail  # Validate and debug
-python -m ngraph run my_scenario.yaml --results        # Execute after validation
+python -m ngraph run my_scenario.yaml              # Execute (creates results.json)
+python -m ngraph report results.json --notebook    # Generate analysis report
 ```
 
 ### Debugging Scenarios

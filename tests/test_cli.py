@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
@@ -9,6 +11,31 @@ from unittest.mock import Mock, patch
 import pytest
 
 from ngraph import cli
+
+
+def extract_json_from_stdout(output: str) -> str:
+    """Extract JSON content from stdout that may contain emoji feedback messages."""
+    # Find JSON content by looking for { to } block
+    json_start = output.find("{")
+    if json_start == -1:
+        return output  # No JSON found, return as-is
+
+    # Find the matching closing brace
+    brace_count = 0
+    json_end = -1
+    for i in range(json_start, len(output)):
+        if output[i] == "{":
+            brace_count += 1
+        elif output[i] == "}":
+            brace_count -= 1
+            if brace_count == 0:
+                json_end = i + 1
+                break
+
+    if json_end == -1:
+        return output  # No complete JSON found
+
+    return output[json_start:json_end]
 
 
 def test_cli_run_file(tmp_path: Path) -> None:
@@ -26,10 +53,11 @@ def test_cli_run_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout"])
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
     assert "build_graph" in data
-    # With new behavior, --stdout alone should NOT create a file
-    assert not (tmp_path / "results.json").exists()
+    # With new behavior, should create results.json by default even with --stdout
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -38,9 +66,12 @@ def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "capacity_probe"])
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
     assert list(data.keys()) == ["capacity_probe"]
     assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe"]
+    # Should create results.json by default
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -58,7 +89,8 @@ def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
         ]
     )
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
 
     # Should only have the two capacity probe steps
     assert set(data.keys()) == {"capacity_probe", "capacity_probe2"}
@@ -69,6 +101,8 @@ def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
 
     # Should not have build_graph
     assert "build_graph" not in data
+    # Should create results.json by default
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -77,7 +111,8 @@ def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "build_graph"])
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
 
     # Should only have build_graph step
     assert list(data.keys()) == ["build_graph"]
@@ -86,6 +121,8 @@ def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
     # Should not have capacity probe steps
     assert "capacity_probe" not in data
     assert "capacity_probe2" not in data
+    # Should create results.json by default
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_nonexistent_step(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -94,10 +131,13 @@ def test_cli_filter_nonexistent_step(tmp_path: Path, capsys, monkeypatch) -> Non
     monkeypatch.chdir(tmp_path)
     cli.main(["run", str(scenario), "--stdout", "--keys", "nonexistent_step"])
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
 
     # Should result in empty dictionary
     assert data == {}
+    # Should create results.json by default
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_mixed_existing_nonexistent(
@@ -117,11 +157,14 @@ def test_cli_filter_mixed_existing_nonexistent(
         ]
     )
     captured = capsys.readouterr()
-    data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    data = json.loads(json_output)
 
     # Should only have the existing step
     assert list(data.keys()) == ["capacity_probe"]
     assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe"]
+    # Should create results.json by default
+    assert (tmp_path / "results.json").exists()
 
 
 def test_cli_no_filter_vs_filter(tmp_path: Path, monkeypatch) -> None:
@@ -178,7 +221,8 @@ def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> N
 
     # Check stdout output
     captured = capsys.readouterr()
-    stdout_data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    stdout_data = json.loads(json_output)
 
     # Check file output
     file_data = json.loads(results_file.read_text())
@@ -189,6 +233,9 @@ def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> N
     assert (
         "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in stdout_data["capacity_probe"]
     )
+
+    # Default results.json should NOT be created when custom path is specified
+    assert not (tmp_path / "results.json").exists()
 
 
 def test_cli_filter_preserves_step_data_structure(tmp_path: Path, monkeypatch) -> None:
@@ -470,10 +517,10 @@ workflow:
 
 
 def test_cli_run_results_default(tmp_path: Path, monkeypatch) -> None:
-    """Test that --results with no path creates results.json."""
+    """Test that run without --results creates results.json by default."""
     scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
-    cli.main(["run", str(scenario), "--results"])
+    cli.main(["run", str(scenario)])
     assert (tmp_path / "results.json").exists()
     data = json.loads((tmp_path / "results.json").read_text())
     assert "build_graph" in data
@@ -494,14 +541,15 @@ def test_cli_run_results_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None
     """Test that --results and --stdout work together."""
     scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
-    cli.main(["run", str(scenario), "--results", "--stdout"])
+    cli.main(["run", str(scenario), "--stdout"])
 
     # Check stdout output
     captured = capsys.readouterr()
-    stdout_data = json.loads(captured.out)
+    json_output = extract_json_from_stdout(captured.out)
+    stdout_data = json.loads(json_output)
     assert "build_graph" in stdout_data
 
-    # Check file output
+    # Check file output (should be created by default)
     assert (tmp_path / "results.json").exists()
     file_data = json.loads((tmp_path / "results.json").read_text())
     assert "build_graph" in file_data
@@ -511,17 +559,17 @@ def test_cli_run_results_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None
 
 
 def test_cli_run_no_output(tmp_path: Path, capsys, monkeypatch) -> None:
-    """Test that running without --results or --stdout creates no files."""
+    """Test that running with --no-results creates no files."""
     scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
-    cli.main(["run", str(scenario)])
+    cli.main(["run", str(scenario), "--no-results"])
 
     # No files should be created
     assert not (tmp_path / "results.json").exists()
 
-    # No stdout output should be produced
+    # Only success message should be produced (no JSON)
     captured = capsys.readouterr()
-    assert captured.out == ""
+    assert captured.out == "✅ Scenario execution completed\n"
 
 
 def test_cli_run_with_scenario_file(tmp_path):
@@ -816,3 +864,263 @@ network:
         import logging
 
         mock_set_level.assert_called_with(logging.WARNING)
+
+
+def test_cli_report_command_help():
+    """Test report command help text."""
+    result = subprocess.run(
+        [sys.executable, "-m", "ngraph", "report", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Path to results JSON file" in result.stdout
+    assert "--notebook" in result.stdout
+    assert "--html" in result.stdout
+    assert "--include-code" in result.stdout
+
+
+def test_cli_report_command_missing_file():
+    """Test report command with missing results file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        missing_file = tmpdir_path / "missing.json"
+
+        result = subprocess.run(
+            [sys.executable, "-m", "ngraph", "report", str(missing_file)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1
+        assert "Results file not found" in result.stdout
+
+
+def test_cli_report_command_invalid_json():
+    """Test report command with invalid JSON file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        invalid_file = tmpdir_path / "invalid.json"
+        invalid_file.write_text("{ invalid json }")
+
+        result = subprocess.run(
+            [sys.executable, "-m", "ngraph", "report", str(invalid_file)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1
+        assert "Invalid JSON" in result.stdout
+
+
+def test_cli_report_command_empty_results():
+    """Test report command with empty results."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        empty_file = tmpdir_path / "empty.json"
+        empty_file.write_text('{"workflow": {}}')
+
+        result = subprocess.run(
+            [sys.executable, "-m", "ngraph", "report", str(empty_file)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 1
+        assert "No analysis results found" in result.stdout
+
+
+def test_cli_report_command_notebook_only():
+    """Test report command generating notebook only."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        results_file = tmpdir_path / "results.json"
+        # Create test data with workflow metadata structure
+        results_file.write_text(
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+        )
+
+        notebook_file = tmpdir_path / "test.ipynb"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ngraph",
+                "report",
+                str(results_file),
+                "--notebook",
+                str(notebook_file),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        assert "Notebook generated:" in result.stdout
+        assert notebook_file.exists()
+
+
+def test_cli_report_command_with_html():
+    """Test report command generating both notebook and HTML."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        results_file = tmpdir_path / "results.json"
+        # Create test data with workflow metadata structure
+        results_file.write_text(
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+        )
+
+        notebook_file = tmpdir_path / "test.ipynb"
+        html_file = tmpdir_path / "test.html"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ngraph",
+                "report",
+                str(results_file),
+                "--notebook",
+                str(notebook_file),
+                "--html",
+                str(html_file),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        assert "Notebook generated:" in result.stdout
+        assert "HTML report generated:" in result.stdout
+        assert notebook_file.exists()
+        assert html_file.exists()
+
+
+def test_cli_report_command_html_default():
+    """Test report command generating HTML with default filename."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        results_file = tmpdir_path / "results.json"
+        # Create test data with workflow metadata structure
+        results_file.write_text(
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+        )
+
+        # Change to the temp directory so analysis.html is created there
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmpdir)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "ngraph",
+                    "report",
+                    str(results_file),
+                    "--html",
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "Notebook generated:" in result.stdout
+            assert "HTML report generated:" in result.stdout
+            assert (tmpdir_path / "analysis.ipynb").exists()  # Default notebook
+            assert (tmpdir_path / "analysis.html").exists()  # Default HTML
+        finally:
+            os.chdir(original_cwd)
+
+
+def test_cli_report_command_with_code_included():
+    """Test report command with code cells included in HTML."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        results_file = tmpdir_path / "results.json"
+        # Create test data with workflow metadata structure
+        results_file.write_text(
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+        )
+
+        notebook_file = tmpdir_path / "test.ipynb"
+        html_file = tmpdir_path / "test.html"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ngraph",
+                "report",
+                str(results_file),
+                "--notebook",
+                str(notebook_file),
+                "--html",
+                str(html_file),
+                "--include-code",
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        assert "Notebook generated:" in result.stdout
+        assert "HTML report generated:" in result.stdout
+        assert notebook_file.exists()
+        assert html_file.exists()
+
+
+def test_cli_report_command_custom_notebook_path():
+    """Test report command with custom notebook path."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        results_file = tmpdir_path / "results.json"
+        # Create test data with workflow metadata structure
+        results_file.write_text(
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+        )
+
+        custom_notebook = tmpdir_path / "custom_analysis.ipynb"
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ngraph",
+                "report",
+                str(results_file),
+                "--notebook",
+                str(custom_notebook),
+            ],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        assert "Notebook generated:" in result.stdout
+        assert custom_notebook.exists()
+
+
+def test_cli_report_command_default_results_file():
+    """Test report command with default results.json file."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Change to temp directory so default results.json is there
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmpdir)
+
+            results_file = Path("results.json")
+            # Create test data with workflow metadata structure
+            results_file.write_text(
+                '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "ngraph", "report"],
+                capture_output=True,
+                text=True,
+            )
+
+            assert result.returncode == 0
+            assert "Notebook generated:" in result.stdout
+            assert Path("analysis.ipynb").exists()
+        finally:
+            os.chdir(original_cwd)

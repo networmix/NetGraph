@@ -29,6 +29,8 @@ dependencies = [
     "matplotlib",
     "seaborn",
     "nbformat",
+    "nbconvert",
+    "ipykernel",
     "itables",
 ]
 

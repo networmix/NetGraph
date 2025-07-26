@@ -1,4 +1,25 @@
-"""Workflow step for basic node and link statistics."""
+"""Workflow step for basic node and link statistics.
+
+Computes and stores comprehensive network statistics including node/link counts,
+capacity distributions, cost distributions, and degree distributions. Supports
+optional exclusion simulation and disabled entity handling.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: NetworkStats
+        name: "network_statistics"           # Optional: Custom name for this step
+        include_disabled: false              # Include disabled nodes/links in stats
+        excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
+        excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
+    ```
+
+Results stored in scenario.results:
+    - Node statistics: node_count
+    - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
+      min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
+    - Degree statistics: mean_degree, median_degree, min_degree, max_degree
+"""
 
 from __future__ import annotations
 

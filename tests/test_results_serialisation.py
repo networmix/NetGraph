@@ -26,7 +26,7 @@ def test_results_to_dict_empty():
     """Test Results.to_dict() with empty results."""
     res = Results()
     d = res.to_dict()
-    assert d == {}
+    assert d == {"workflow": {}}
 
 
 def test_results_to_dict_json_serializable():

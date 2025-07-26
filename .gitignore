@@ -133,6 +133,8 @@ analysis_temp/
 tmp/
 analysis*.ipynb
 *_analysis.ipynb
+analysis*.html
+*_analysis.html
 
 # Performance analysis results
 dev/perf_results/
