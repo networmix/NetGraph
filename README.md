@@ -11,17 +11,17 @@ NetGraph is a scenario-based network modeling and analysis framework written in 
 - ✅ **Fundamental Components**: StrictMultiGraph, base pathfinding and flow algorithms
 - ✅ **Scenario-Based Modeling**: YAML-based scenarios with Domain-Specific Language (DSL) describing topology, failures, traffic, and workflow
 - ✅ **Hierarchical Blueprints**: Reusable network templates with nested structures and parameterization
-- ✅ **JupyterLab Support**: Run NetGraph in a containerized environment with JupyterLab for interactive analysis
 - ✅ **Demand Placement**: Place traffic demands on the network with various flow placement strategies (e.g., shortest path only, ECMP/UCMP, etc.)
 - ✅ **Capacity Calculation**: Calculate MaxFlow with different flow placement strategies
 - ✅ **Reproducible Analysis**: Seed-based deterministic random operations for reliable testing and debugging
-- 🚧 **Failure Simulation**: Model component and risk groups failures for availability analysis with Monte Carlo simulation
+- ✅ **Command Line Interface**: Execute scenarios from terminal with JSON output for simple automation
+- ✅ **Reporting**: Export of results to JSON, Jupyter Notebook, and HTML
+- ✅ **JupyterLab Support**: Run NetGraph in a containerized environment with JupyterLab for interactive analysis
 - 🚧 **Network Analysis**: Workflow steps and tools to analyze capacity, failure tolerance, and power/cost efficiency of network designs
-- 🚧 **Command Line Interface**: Execute scenarios from terminal with JSON output for simple automation
+- 🚧 **Failure Simulation**: Model component and risk groups failures for availability analysis with Monte Carlo simulation
 - 🚧 **Python API**: API for programmatic access to scenario components and network analysis tools
 - 🚧 **Documentation and Examples**: Guides and use cases
 - 🔜 **Components Library**: Hardware/optics modeling with cost, power consumption, and capacity specifications
-- ❓ **Visualization**: Graphical representation of scenarios and results
 
 ### Status Legend
 
