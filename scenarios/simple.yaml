@@ -1,4 +1,4 @@
-# Simple random network scenario with 10 nodes
+# Simple Hub and Spoke network scenario with 8 nodes
 # Tests basic network functionality, random failures, and capacity analysis
 seed: 1234
 
@@ -6,150 +6,95 @@ network:
   name: Simple Random Network
   version: 1.0
   nodes:
-    node_1:
+    hub_1:
       attrs: {}
-    node_2:
+    hub_2:
       attrs: {}
-    node_3:
+    hub_3:
       attrs: {}
-    node_4:
+    hub_4:
       attrs: {}
-    node_5:
+    spoke_1:
       attrs: {}
-    node_6:
+    spoke_2:
       attrs: {}
-    node_7:
+    spoke_3:
       attrs: {}
-    node_8:
-      attrs: {}
-    node_9:
-      attrs: {}
-    node_10:
+    spoke_4:
       attrs: {}
   links:
-  # Create a connected random topology
-  # Ring to ensure connectivity
-  - source: node_1
-    target: node_2
+  - source: hub_1
+    target: hub_2
     link_params:
       capacity: 10000.0
       cost: 10
       risk_groups: ["srlg_1"]
-  - source: node_2
-    target: node_3
+  - source: hub_2
+    target: hub_3
     link_params:
       capacity: 10000.0
       cost: 10
       risk_groups: ["srlg_2"]
-  - source: node_3
-    target: node_4
+  - source: hub_3
+    target: hub_4
     link_params:
       capacity: 10000.0
       cost: 10
       risk_groups: ["srlg_3"]
-  - source: node_4
-    target: node_5
+  - source: hub_4
+    target: hub_1
     link_params:
       capacity: 10000.0
       cost: 10
       risk_groups: ["srlg_4"]
-  - source: node_5
-    target: node_6
+  - source: hub_1
+    target: spoke_1
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_5"]
-  - source: node_6
-    target: node_7
+  - source: hub_2
+    target: spoke_1
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_6"]
-  - source: node_7
-    target: node_8
+  - source: hub_2
+    target: spoke_2
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_7"]
-  - source: node_8
-    target: node_9
+  - source: hub_3
+    target: spoke_2
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_8"]
-  - source: node_9
-    target: node_10
+  - source: hub_3
+    target: spoke_3
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_9"]
-  - source: node_10
-    target: node_1
+  - source: hub_4
+    target: spoke_3
     link_params:
       capacity: 10000.0
-      cost: 10
+      cost: 100
       risk_groups: ["srlg_10"]
-  # Additional random connections for more realistic topology
-  - source: node_1
-    target: node_5
+  - source: hub_1
+    target: spoke_4
     link_params:
-      capacity: 8000.0
-      cost: 15
+      capacity: 10000.0
+      cost: 100
       risk_groups: ["srlg_11"]
-  - source: node_2
-    target: node_7
+  - source: hub_1
+    target: spoke_4
     link_params:
-      capacity: 8000.0
-      cost: 15
+      capacity: 10000.0
+      cost: 100
       risk_groups: ["srlg_12"]
-  - source: node_3
-    target: node_8
-    link_params:
-      capacity: 8000.0
-      cost: 15
-      risk_groups: ["srlg_13"]
-  - source: node_4
-    target: node_9
-    link_params:
-      capacity: 8000.0
-      cost: 15
-      risk_groups: ["srlg_14"]
-  - source: node_6
-    target: node_10
-    link_params:
-      capacity: 8000.0
-      cost: 15
-      risk_groups: ["srlg_15"]
-  - source: node_1
-    target: node_6
-    link_params:
-      capacity: 6000.0
-      cost: 20
-      risk_groups: ["srlg_16"]
-  - source: node_2
-    target: node_8
-    link_params:
-      capacity: 6000.0
-      cost: 20
-      risk_groups: ["srlg_17"]
-  - source: node_3
-    target: node_9
-    link_params:
-      capacity: 6000.0
-      cost: 20
-      risk_groups: ["srlg_18"]
-  - source: node_4
-    target: node_7
-    link_params:
-      capacity: 6000.0
-      cost: 20
-      risk_groups: ["srlg_19"]
-  - source: node_5
-    target: node_10
-    link_params:
-      capacity: 6000.0
-      cost: 20
-      risk_groups: ["srlg_20"]
 
 risk_groups:
   - name: srlg_1
@@ -164,14 +109,6 @@ risk_groups:
   - name: srlg_10
   - name: srlg_11
   - name: srlg_12
-  - name: srlg_13
-  - name: srlg_14
-  - name: srlg_15
-  - name: srlg_16
-  - name: srlg_17
-  - name: srlg_18
-  - name: srlg_19
-  - name: srlg_20
 
 failure_policy_set:
   default:
@@ -196,26 +133,26 @@ workflow:
   name: build_graph
 - step_type: CapacityEnvelopeAnalysis
   name: "ce_1"
-  source_path: "^(.+)"
-  sink_path: "^(.+)"
+  source_path: "^(spoke_.+)"
+  sink_path: "^(spoke_.+)"
   mode: "pairwise"
   parallelism: 8
   shortest_path: false
   flow_placement: "PROPORTIONAL"
   seed: 42
-  iterations: 100
+  iterations: 1000
   baseline: true           # Enable baseline mode
   failure_policy: "default"
 - step_type: CapacityEnvelopeAnalysis
   name: "ce_2"
-  source_path: "^(.+)"
-  sink_path: "^(.+)"
+  source_path: "^(spoke_.+)"
+  sink_path: "^(spoke_.+)"
   mode: "pairwise"
   parallelism: 8
   shortest_path: false
   flow_placement: "PROPORTIONAL"
   seed: 42
-  iterations: 10
+  iterations: 1000
   baseline: true           # Enable baseline mode
   failure_policy: "single_shared_risk_group_failure"
 - step_type: NotebookExport
