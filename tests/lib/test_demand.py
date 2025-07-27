@@ -13,8 +13,8 @@ def create_flow_policy(
     flow_placement: FlowPlacement,
     edge_select: EdgeSelect,
     multipath: bool,
-    max_flow_count: int = None,
-    max_path_cost_factor: float = None,
+    max_flow_count: int | None = None,
+    max_path_cost_factor: float | None = None,
 ) -> FlowPolicy:
     """Helper to create a FlowPolicy for testing."""
     return FlowPolicy(
@@ -477,3 +477,65 @@ class TestDemand:
         placed_demand, remaining_demand = d.place(r)
         assert placed_demand == 6
         assert remaining_demand == float("inf")
+
+
+def test_bidirectional_traffic_engineering_simulation():
+    r"""
+    Demonstrates traffic engineering by placing two bidirectional demands on a network.
+
+    Graph topology (costs/capacities):
+
+              [15]
+          A ─────── B
+           \       /
+        [5] \     / [15]
+             \   /
+              \ /
+               C
+
+    - Each link is bidirectional:
+         A↔B: capacity 15, B↔C: capacity 15, and A↔C: capacity 5.
+    - We place a demand of volume 20 from A→C and a second demand of volume 20 from C→A.
+    - Each demand uses its own FlowPolicy, so the policy's global flow accounting does not overlap.
+    - The test verifies that each demand is fully placed at 20 units.
+    """
+    from ngraph.lib.algorithms.flow_init import init_flow_graph
+    from ngraph.lib.demand import Demand
+    from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
+    from ngraph.lib.graph import StrictMultiDiGraph
+
+    # Build the graph.
+    g = StrictMultiDiGraph()
+    for node in ("A", "B", "C"):
+        g.add_node(node)
+
+    # Create bidirectional edges with distinct labels (for clarity).
+    g.add_edge("A", "B", key=0, cost=1, capacity=15, label="1")
+    g.add_edge("B", "A", key=1, cost=1, capacity=15, label="1")
+    g.add_edge("B", "C", key=2, cost=1, capacity=15, label="2")
+    g.add_edge("C", "B", key=3, cost=1, capacity=15, label="2")
+    g.add_edge("A", "C", key=4, cost=1, capacity=5, label="3")
+    g.add_edge("C", "A", key=5, cost=1, capacity=5, label="3")
+
+    # Initialize flow-related structures (e.g., to track placed flows in the graph).
+    flow_graph = init_flow_graph(g)
+
+    # Create flow policies for each demand.
+    flow_policy_ac = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+    flow_policy_ca = get_flow_policy(FlowPolicyConfig.TE_UCMP_UNLIM)
+
+    # Demand from A→C (volume 20).
+    demand_ac = Demand("A", "C", 20, flow_policy=flow_policy_ac)
+    demand_ac.place(flow_graph)
+    assert demand_ac.placed_demand == 20, (
+        f"Demand from {demand_ac.src_node} to {demand_ac.dst_node} "
+        f"expected to be fully placed."
+    )
+
+    # Demand from C→A (volume 20).
+    demand_ca = Demand("C", "A", 20, flow_policy=flow_policy_ca)
+    demand_ca.place(flow_graph)
+    assert demand_ca.placed_demand == 20, (
+        f"Demand from {demand_ca.src_node} to {demand_ca.dst_node} "
+        f"expected to be fully placed."
+    )
