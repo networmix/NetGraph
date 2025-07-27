@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 26, 2025 at 15:00 UTC
+**Generated from source code on:** July 27, 2025 at 07:33 UTC
 
 **Modules auto-discovered:** 51
 

@@ -8,6 +8,7 @@ for flow capacity analysis.
 import importlib
 from typing import Any, Dict
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from .base import NotebookAnalyzer
@@ -122,8 +123,6 @@ class FlowAnalyzer(NotebookAnalyzer):
         viz_data = analysis["visualization_data"]
         if viz_data["has_multiple_steps"]:
             try:
-                import matplotlib.pyplot as plt
-
                 fig, ax = plt.subplots(figsize=(12, 6))
 
                 for step in viz_data["steps"]:
@@ -140,8 +139,8 @@ class FlowAnalyzer(NotebookAnalyzer):
                 ax.legend()
                 plt.tight_layout()
                 plt.show()
-            except ImportError:
-                print("Matplotlib not available for visualization")
+            except Exception as exc:  # pragma: no cover
+                print(f"⚠️  Visualization error: {exc}")
 
     def analyze_capacity_probe(self, results: Dict[str, Any], **kwargs) -> None:
         """Analyze and display capacity probe results for a specific step.

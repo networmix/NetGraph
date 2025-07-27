@@ -7,7 +7,7 @@ This module tests the most advanced NetGraph capabilities including:
 - Bracket expansion in group names for multiple pattern matching
 - Complex node and link override patterns with advanced regex
 - Risk groups with hierarchical structure and failure simulation
-- Advanced workflow steps (EnableNodes, DistributeExternalConnectivity, NotebookExport)
+- Advanced workflow steps (EnableNodes, DistributeExternalConnectivity)
 - NetworkExplorer integration for hierarchy analysis
 - Large-scale network topology with realistic data center structure
 

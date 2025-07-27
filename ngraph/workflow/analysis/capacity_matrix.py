@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 from typing import Any, Dict, List, Optional
 
+import matplotlib.pyplot as plt
 import pandas as pd
 
 from .base import NotebookAnalyzer
@@ -412,9 +413,13 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             f"   Median Flow:  {stats['median_flow']:.2f} ({stats['flow_percentiles']['p50']['relative']:.1f}%)"
         )
         print(
-            f"   Std Dev:      {stats['flow_std']:.2f} ({stats['relative_std']:.1f}%)"
+            f"   Std Dev:      {stats['flow_std']:.2f} ({stats['relative_std']:.1f}%) "
+            f"→ Flow dispersion magnitude relative to mean"
         )
-        print(f"   CV:           {stats['coefficient_of_variation']:.1f}%\n")
+        print(
+            f"   CV:           {stats['coefficient_of_variation']:.1f}% "
+            f"→ Normalized variability metric: <30% stable, >50% high variance\n"
+        )
 
         print("📈 Flow Distribution Percentiles:")
         for p_name in ["p5", "p10", "p25", "p50", "p75", "p90", "p95", "p99"]:
@@ -427,7 +432,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         print()
 
         print("🎯 Network Reliability Analysis:")
-        for reliability in ["99%", "95%", "90%", "80%"]:
+        for reliability in ["99.99%", "99.9%", "99%", "95%", "90%", "80%"]:
             flow_fraction = viz_data["reliability_thresholds"].get(reliability, 0)
             flow_pct = flow_fraction * 100
             print(f"   {reliability} reliability: ≥{flow_pct:5.1f}% of maximum flow")
@@ -435,14 +440,25 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
         print("📐 Distribution Characteristics:")
         dist_metrics = viz_data["distribution_metrics"]
-        print(f"   Gini Coefficient:     {dist_metrics['gini_coefficient']:.3f}")
-        print(f"   Quartile Coefficient: {dist_metrics['quartile_coefficient']:.3f}")
-        print(f"   Range Ratio:          {dist_metrics['flow_range_ratio']:.3f}\n")
+        gini = dist_metrics["gini_coefficient"]
+        quartile = dist_metrics["quartile_coefficient"]
+        range_ratio = dist_metrics["flow_range_ratio"]
 
-        # Try to render plots (optional)
+        print(
+            f"   Gini Coefficient:     {gini:.3f} "
+            f"→ Flow inequality: 0=uniform, 1=maximum inequality"
+        )
+        print(
+            f"   Quartile Coefficient: {quartile:.3f} "
+            f"→ Interquartile spread: (Q3-Q1)/(Q3+Q1), measures distribution skew"
+        )
+        print(
+            f"   Range Ratio:          {range_ratio:.3f} "
+            f"→ Total variation span: (max-min)/max, failure impact magnitude\n"
+        )
+
+        # Render plots for flow availability analysis
         try:
-            import matplotlib.pyplot as plt
-
             cdf_data = viz_data["cdf_data"]
             percentile_data = viz_data["percentile_data"]
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
@@ -476,8 +492,6 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
             plt.tight_layout()
             plt.show()
-        except ImportError:
-            print("Matplotlib not available for visualisation")
         except Exception as exc:  # pragma: no cover
             print(f"⚠️  Visualisation error: {exc}")
 
@@ -689,7 +703,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             percentiles.append(avail_prob)
             flow_at_percentiles.append(rel_flow)
 
-        reliability_thresholds = [99, 95, 90, 80, 70, 50]
+        reliability_thresholds = [99.99, 99.9, 99, 95, 90, 80, 70, 50]
         threshold_flows: Dict[str, float] = {}
         for threshold in reliability_thresholds:
             target_avail = threshold / 100

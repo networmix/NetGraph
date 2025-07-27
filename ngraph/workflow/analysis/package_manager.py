@@ -69,6 +69,7 @@ class PackageManager:
             itables_opt.lengthMenu = [10, 25, 50, 100, 500, -1]
             itables_opt.maxBytes = 10**7  # 10MB limit
             itables_opt.maxColumns = 200  # Allow more columns
+            itables_opt.showIndex = True  # Always show DataFrame index as a column
 
             # Configure warnings
             import warnings
