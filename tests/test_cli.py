@@ -572,8 +572,9 @@ def test_cli_run_no_output(tmp_path: Path, capsys, monkeypatch) -> None:
     assert captured.out == "✅ Scenario execution completed\n"
 
 
-def test_cli_run_with_scenario_file(tmp_path):
+def test_cli_run_with_scenario_file(tmp_path, monkeypatch):
     """Test running a scenario via CLI."""
+    monkeypatch.chdir(tmp_path)
     # Create a simple scenario file
     scenario_content = """
 seed: 42
@@ -755,8 +756,9 @@ def test_run_scenario_success():
     pass
 
 
-def test_run_scenario_with_stdout(tmp_path):
+def test_run_scenario_with_stdout(tmp_path, monkeypatch):
     """Test scenario run with stdout output."""
+    monkeypatch.chdir(tmp_path)
     scenario_content = """
 seed: 42
 network:
@@ -786,8 +788,9 @@ workflow:
     assert "test_step" in json_output
 
 
-def test_run_scenario_with_results_file(tmp_path):
+def test_run_scenario_with_results_file(tmp_path, monkeypatch):
     """Test scenario run with results file output."""
+    monkeypatch.chdir(tmp_path)
     scenario_content = """
 seed: 42
 network:
