@@ -13,7 +13,7 @@ Load an entire scenario from a single YAML file (including topology, failure pol
 
 ## Examples
 
-- **[Basic Example](examples/basic.md)** - A very simple graph
+- **[Basic Example](examples/basic.md)** - A simple graph example
 - **[Clos Fabric Analysis](examples/clos-fabric.md)** - Analyze a 3-tier Clos network
 
 ## Documentation

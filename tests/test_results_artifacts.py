@@ -1,6 +1,8 @@
 import json
 from collections import namedtuple
 
+import pytest
+
 from ngraph.results_artifacts import (
     CapacityEnvelope,
     PlacementResultSet,
@@ -341,3 +343,53 @@ def test_all_artifacts_json_roundtrip():
                 assert obj is None or isinstance(obj, (str, int, float, bool))
 
         check_primitives(parsed)
+
+
+def test_traffic_matrix_set_get_default_single_matrix():
+    """Test get_default() with only one matrix."""
+    matrix_set = TrafficMatrixSet()
+    demand1 = TrafficDemand(source_path="A", sink_path="B", demand=100)
+    matrix_set.add("single", [demand1])
+
+    # Should return the single matrix even though it's not named 'default'
+    result = matrix_set.get_default_matrix()
+    assert result == [demand1]
+
+
+def test_traffic_matrix_set_get_default_multiple_matrices_no_default():
+    """Test get_default_matrix() with multiple matrices but no 'default' matrix."""
+    matrix_set = TrafficMatrixSet()
+    demand1 = TrafficDemand(source_path="A", sink_path="B", demand=100)
+    demand2 = TrafficDemand(source_path="C", sink_path="D", demand=200)
+
+    matrix_set.add("matrix1", [demand1])
+    matrix_set.add("matrix2", [demand2])
+
+    # Should raise ValueError since multiple matrices exist but no 'default'
+    with pytest.raises(ValueError, match="Multiple matrices exist"):
+        matrix_set.get_default_matrix()
+
+
+def test_traffic_matrix_set_get_all_demands():
+    """Test get_all_demands() method."""
+    matrix_set = TrafficMatrixSet()
+    demand1 = TrafficDemand(source_path="A", sink_path="B", demand=100)
+    demand2 = TrafficDemand(source_path="C", sink_path="D", demand=200)
+    demand3 = TrafficDemand(source_path="E", sink_path="F", demand=300)
+
+    matrix_set.add("matrix1", [demand1, demand2])
+    matrix_set.add("matrix2", [demand3])
+
+    all_demands = matrix_set.get_all_demands()
+    assert len(all_demands) == 3
+    assert demand1 in all_demands
+    assert demand2 in all_demands
+    assert demand3 in all_demands
+
+
+def test_capacity_envelope_from_values_empty_list():
+    """Test CapacityEnvelope.from_values() with empty values list."""
+    with pytest.raises(
+        ValueError, match="Cannot create envelope from empty values list"
+    ):
+        CapacityEnvelope.from_values("A", "B", "combine", [])

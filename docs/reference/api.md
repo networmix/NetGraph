@@ -1,322 +1,421 @@
 # API Reference
 
-This section provides detailed documentation for NetGraph's Python API.
-
 > **📚 Quick Navigation:**
 
-> - **[Auto-Generated API Reference](api-full.md)** - Auto-generated class and method documentation
+> - **[DSL Reference](dsl.md)** - YAML syntax and scenario definition
+> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line interface documentation
-> - **[DSL Reference](dsl.md)** - YAML DSL syntax reference
 
-## Core Classes
+This section provides a curated guide to NetGraph's Python API, organized by typical usage patterns.
+
+## 1. Fundamentals
+
+The core components that form the foundation of most NetGraph programs.
 
 ### Scenario
-The main entry point for building and running network analyses.
+
+**Purpose:** The main orchestrator that coordinates network topology, analysis workflows, and result collection.
+
+**When to use:** Every NetGraph program starts with a Scenario - either loaded from YAML or built programmatically.
 
 ```python
 from ngraph.scenario import Scenario
 
-# Create from YAML
+# Load complete scenario from YAML (recommended)
 scenario = Scenario.from_yaml(yaml_content)
 
-# Create programmatically
-scenario = Scenario()
-scenario.network = Network()
+# Or build programmatically
+from ngraph.network import Network
+scenario = Scenario(network=Network(), workflow=[])
+
+# Execute the scenario
 scenario.run()
+
+# Access results
+print(scenario.results.get("NetworkStats", "node_count"))
 ```
 
 **Key Methods:**
 
-- `from_yaml(yaml_content)` - Create scenario from YAML string
-- `run()` - Execute the scenario workflow
+- `from_yaml(yaml_content)` - Load scenario from YAML string/file
+- `run()` - Execute the complete analysis workflow
+
+**Integration:** Scenario coordinates Network topology, workflow execution, and Results collection. Components can also be used independently for direct programmatic access.
 
 ### Network
-Represents the network topology and provides analysis methods.
+
+**Purpose:** Represents network topology and provides fundamental analysis capabilities like maximum flow calculation.
+
+**When to use:** Core component for representing network structure. Used directly for programmatic topology creation or accessed via `scenario.network`.
 
 ```python
-from ngraph.network import Network
+from ngraph.network import Network, Node, Link
 
+# Create network topology
 network = Network()
-# Access nodes, links, and analysis methods
+
+# Add nodes and links
+node1 = Node(name="datacenter1")
+node2 = Node(name="datacenter2")
+network.add_node(node1)
+network.add_node(node2)
+
+link = Link(source="datacenter1", target="datacenter2", capacity=100.0)
+network.add_link(link)
+
+# Calculate maximum flow (returns dict)
+max_flow = network.max_flow(
+    source_path="datacenter1",
+    sink_path="datacenter2"
+)
+# Result: {('datacenter1', 'datacenter2'): 100.0}
 ```
+
+**Key Methods:**
+
+- `add_node(node)`, `add_link(link)` - Build topology programmatically
+- `max_flow(source_path, sink_path, **options)` - Calculate maximum flow (returns dict)
+- `nodes`, `links` - Access topology as dictionaries
 
 **Key Concepts:**
 
-- **Node.disabled**: Scenario-level configuration from YAML that persists across analyses
-- **Link.disabled**: Scenario-level configuration from YAML that persists across analyses
-- **Analysis exclusions**: Temporary exclusions handled via NetworkView, not by modifying disabled state
+- **Node.disabled/Link.disabled:** Scenario-level configuration that persists across analyses
+- **Regex patterns:** Use regex patterns like `"datacenter.*"` to select multiple nodes/links
+
+**Integration:** Foundation for all analysis. Used directly or through NetworkView for filtered analysis.
+
+### Results
+
+**Purpose:** Centralized container for storing and retrieving analysis results from workflow steps.
+
+**When to use:** Automatically managed by `scenario.results`. Used for storing custom analysis results and retrieving outputs from workflow steps.
+
+```python
+# Access results from scenario
+results = scenario.results
+
+# Retrieve specific results
+node_count = results.get("NetworkStats", "node_count")
+max_flow = results.get("CapacityProbe", "max_flow:[datacenter -> edge]")
+
+# Get all results for a metric across steps
+all_capacities = results.get_all("total_capacity")
+
+# Export all results for serialization
+all_data = results.to_dict()
+```
 
 **Key Methods:**
 
-- `max_flow(source_path, sink_path, **kwargs)` - Calculate maximum flow
-- `add_node(name, **attrs)` - Add network node
-- `add_link(source, target, **params)` - Add network link
-- `disable_node(name)` / `enable_node(name)` - Modify scenario-level disabled state
-- `disable_link(link_id)` / `enable_link(link_id)` - Modify scenario-level disabled state
+- `get(step_name, key, default=None)` - Retrieve specific result
+- `put(step_name, key, value)` - Store result (typically used by workflow steps)
+- `get_all(key)` - Get all values for a key across steps
+- `to_dict()` - Export all results with automatic serialization of objects with to_dict() method
 
-### NetworkView
-Provides a read-only filtered view of a Network for failure analysis without modifying the base network.
+**Integration:** Used by all workflow steps for result storage. Provides consistent access pattern for analysis outputs.
 
-```python
-from ngraph.network_view import NetworkView
+## 2. Basic Analysis
 
-# Create view with specific nodes/links excluded (failure simulation)
-view = NetworkView.from_excluded_sets(
-    network,
-    excluded_nodes=["spine1", "spine2"],  # Analysis-specific exclusions
-    excluded_links=["link_id_123"]         # Analysis-specific exclusions
-)
+Essential analysis capabilities for network evaluation.
 
-# Run analysis on filtered topology
-# This respects both:
-# 1. Scenario-disabled elements (Node.disabled, Link.disabled from YAML)
-# 2. Analysis-excluded elements (passed to NetworkView)
-max_flow = view.max_flow("source_path", "sink_path")
-```
+### Flow Analysis
 
-**Key Features:**
+**Purpose:** Calculate network flows between source and sink groups with various policies and constraints.
 
-- Read-only overlay that combines scenario-disabled and analysis-excluded elements
-- Supports concurrent analysis with different failure scenarios
-- Identical API to Network for flow analysis methods
-- Cached graph building for ~30x performance improvement on repeated operations
-- Thread-safe for parallel Monte Carlo simulations
-
-**Key Methods:**
-
-- `from_excluded_sets(network, excluded_nodes, excluded_links)` - Create view with analysis exclusions
-- `max_flow()`, `saturated_edges()`, `sensitivity_analysis()` - Same as Network
-- `is_node_hidden(name)` - Check if node is hidden (disabled OR excluded)
-- `is_link_hidden(link_id)` - Check if link is hidden (disabled OR excluded OR endpoints hidden)
-
-### NetworkExplorer
-Provides network visualization and exploration capabilities.
-
-```python
-from ngraph.explorer import NetworkExplorer
-
-explorer = NetworkExplorer.explore_network(network)
-explorer.print_tree(skip_leaves=True, detailed=False)
-```
-
-## Flow Analysis
-
-### FlowPlacement
-Enumeration of flow placement policies for traffic engineering.
+**When to use:** Fundamental analysis for understanding network capacity, bottlenecks, and traffic engineering scenarios.
 
 ```python
 from ngraph.lib.algorithms.base import FlowPlacement
 
-# Available policies:
-FlowPlacement.EQUAL_BALANCED    # ECMP - equal distribution
-FlowPlacement.PROPORTIONAL      # UCMP - capacity proportional
-```
-
-### Flow Calculation Methods
-
-```python
-# Maximum flow analysis
+# Basic maximum flow (returns dict)
 max_flow = network.max_flow(
-    source_path="datacenter1/servers",
-    sink_path="datacenter2/servers",
-    mode="combine",                    # or "full_mesh"
-    shortest_path=True,               # Use shortest paths only
-    flow_placement=FlowPlacement.EQUAL_BALANCED
+    source_path="datacenter.*",  # Regex: all nodes matching pattern
+    sink_path="edge.*",
+    mode="combine"               # Aggregate all source->sink flows
+)
+
+# Advanced flow options
+max_flow = network.max_flow(
+    source_path="pod1/servers",
+    sink_path="pod2/servers",
+    mode="pairwise",            # Individual flows between each pair
+    shortest_path=True,         # Use only shortest paths
+    flow_placement=FlowPlacement.PROPORTIONAL  # UCMP load balancing
 )
 ```
 
-## Blueprint System
+**Key Options:**
 
-### Blueprint Definition
-Blueprints are defined in YAML and loaded through the scenario system:
+- `mode`: `"combine"` (aggregate flows) or `"pairwise"` (individual pair flows)
+- `shortest_path`: `True` (shortest only) or `False` (all available paths)
+- `flow_placement`: `FlowPlacement.PROPORTIONAL` (UCMP) or `FlowPlacement.EQUAL_BALANCED` (ECMP)
+
+**Integration:** Available on both Network and NetworkView objects. Foundation for FailureManager Monte Carlo analysis.
+
+### NetworkView
+
+**Purpose:** Provides filtered view of network topology for failure analysis without modifying the base network.
+
+**When to use:** Simulate component failures, analyze degraded network states, or perform parallel analysis with different exclusions.
 
 ```python
-from ngraph.blueprints import Blueprint
+from ngraph.network_view import NetworkView
 
-# Blueprint is a dataclass that holds blueprint configuration
-# Blueprints are typically loaded from YAML, not created programmatically
-blueprint = Blueprint(
-    name="my_blueprint",
-    groups={
-        "servers": {"node_count": 4},
-        "switches": {"node_count": 2}
-    },
-    adjacency=[
-        {"source": "/servers", "target": "/switches", "pattern": "mesh"}
-    ]
+# Create view with failed components (for failure simulation)
+failed_view = NetworkView.from_excluded_sets(
+    network,
+    excluded_nodes={"spine1", "spine2"},    # Failed nodes
+    excluded_links={"link_123"}             # Failed links
 )
 
-# Note: Blueprint objects are usually created internally when parsing YAML
-# For programmatic creation, use the Network class directly
+# Analyze degraded network
+degraded_flow = failed_view.max_flow("datacenter.*", "edge.*")
+
+# NetworkView has same analysis API as Network
+bottlenecks = failed_view.saturated_edges("source", "sink")
 ```
 
-## Traffic Demands
+**Key Features:**
 
-### TrafficDemand
-Define and manage traffic demands between network segments.
+- **Read-only overlay:** Combines scenario-disabled and analysis-excluded elements
+- **Concurrent analysis:** Supports different failure scenarios in parallel
+- **Identical API:** Same analysis methods as Network
 
-```python
-from ngraph.traffic_demand import TrafficDemand
+**Integration:** Used internally by FailureManager for Monte Carlo analysis. Enables concurrent failure simulations without network state conflicts.
 
-demand = TrafficDemand(
-    source_path="web_servers",
-    sink_path="databases",
-    demand=1000.0,
-    mode="full_mesh"
-)
-```
+## 3. Advanced Analysis
 
-## Failure Modeling
+Sophisticated analysis capabilities using Monte Carlo methods and parallel processing.
 
-### FailurePolicy and FailurePolicySet
-Configure failure simulation parameters using named policies.
+### FailureManager
+
+**Purpose:** Authoritative Monte Carlo failure analysis engine with parallel processing and result aggregation.
+
+**When to use:** Capacity envelope analysis, demand placement studies, component sensitivity analysis, or custom Monte Carlo simulations.
 
 ```python
+from ngraph.failure_manager import FailureManager
 from ngraph.failure_policy import FailurePolicy, FailureRule
 from ngraph.results_artifacts import FailurePolicySet
 
-# Create individual failure rules
-rule = FailureRule(
-    entity_scope="link",
-    rule_type="choice",
-    count=2
-)
-
-# Create failure policy
-policy = FailurePolicy(rules=[rule])
-
-# Create policy set to manage multiple policies
+# Setup failure policies
 policy_set = FailurePolicySet()
-policy_set.add("light_failures", policy)
-policy_set.add("default", policy)
+rule = FailureRule(entity_scope="link", rule_type="choice", count=2)
+policy = FailurePolicy(rules=[rule])
+policy_set.add("random_failures", policy)
 
-# Use with FailureManager
-from ngraph.failure_manager import FailureManager
+# Create FailureManager
 manager = FailureManager(
     network=network,
-    traffic_matrix_set=traffic_matrix_set,
     failure_policy_set=policy_set,
-    policy_name="light_failures"  # Optional: specify which policy to use
+    policy_name="random_failures"
+)
+
+# Capacity envelope analysis
+envelope_results = manager.run_max_flow_monte_carlo(
+    source_path="datacenter.*",
+    sink_path="edge.*",
+    iterations=1000,
+    parallelism=4,
+    baseline=True
 )
 ```
 
-**Note:** For failure analysis without modifying the base network, use `NetworkView` instead of directly disabling nodes/links. NetworkView provides temporary exclusion of nodes/links for analysis purposes while preserving the scenario-defined disabled state. This separation enables:
-- Concurrent analysis of different failure scenarios
-- Clear distinction between persistent configuration (`Node.disabled`, `Link.disabled`) and temporary analysis exclusions
-- Thread-safe parallel Monte Carlo simulations
+**Key Methods:**
 
-### Risk Groups
-Model correlated component failures.
+- `run_max_flow_monte_carlo()` - Capacity envelope analysis under failures
+- `run_demand_placement_monte_carlo()` - Traffic demand placement success analysis
+- `run_sensitivity_monte_carlo()` - Component criticality and impact analysis
+- `run_monte_carlo_analysis()` - Generic Monte Carlo with custom analysis functions
 
-```python
-# Risk groups are typically defined in YAML
-risk_groups = [
-    {
-        "name": "PowerSupplyA",
-        "components": ["rack1/switch1", "rack1/servers"]
-    }
-]
-```
+**Key Features:**
 
-## Components and Hardware
+- **Parallel processing** with worker caching for performance
+- **Automatic result aggregation** into rich statistical objects
+- **Reproducible results** with seed support
+- **Failure policy integration** for realistic failure scenarios
 
-### Component Library
-Define hardware specifications and attributes.
+**Integration:** Uses NetworkView for isolated failure simulation. Returns specialized result objects for statistical analysis.
 
-```python
-from ngraph.components import Component
+### Monte Carlo Results
 
-router = Component(
-    name="SpineRouter",
-    component_type="router",
-    attrs={
-        "power_consumption": 500,
-        "port_count": 64,
-        "switching_capacity": 12800
-    }
-)
-```
+**Purpose:** Rich result objects with statistical analysis and visualization capabilities.
 
-## Workflow Automation
-
-### Available Workflow Steps
-NetGraph provides workflow steps for automated analysis sequences.
+**When to use:** Analyzing outputs from FailureManager convenience methods - provides pandas integration and statistical summaries.
 
 ```python
-# Available workflow steps:
-# - BuildGraph: Builds a StrictMultiDiGraph from scenario.network
-# - CapacityProbe: Probes capacity (max flow) between selected groups of nodes
-# - NetworkStats: Computes basic capacity and degree statistics
+# Work with capacity envelope results
+flow_keys = envelope_results.flow_keys()  # Available flow pairs
+envelope = envelope_results.get_envelope("datacenter->edge")
 
-# Example workflow configuration:
-workflow = [
-    {"step": "BuildGraph"},
-    {"step": "CapacityProbe", "params": {"flow_placement": "PROPORTIONAL"}}
-]
+# Statistical analysis with pandas
+stats_df = envelope_results.to_dataframe()
+summary = envelope_results.summary_statistics()
+
+# Export for further analysis
+export_data = envelope_results.export_summary()
+
+# For demand placement analysis
+placement_results = manager.run_demand_placement_monte_carlo(demands)
+success_rates = placement_results.success_rate_distribution()
 ```
 
-## Utilities and Helpers
+**Key Result Types:**
 
-### Graph Conversion Utilities
-Utilities for converting between NetGraph and NetworkX graph formats.
+- `CapacityEnvelopeResults` - Statistical flow capacity distributions
+- `DemandPlacementResults` - Traffic placement success metrics
+- `SensitivityResults` - Component criticality rankings
+
+**Integration:** Returned by FailureManager convenience methods. Provides pandas DataFrames and export capabilities for notebook analysis.
+
+## 4. Data & Results
+
+Working with analysis outputs and implementing custom result storage.
+
+### Result Artifacts
+
+**Purpose:** Serializable data structures that store analysis results with consistent interfaces for export and reconstruction.
+
+**When to use:** Working with stored analysis results, implementing custom workflow steps, or exporting data for external analysis.
 
 ```python
-from ngraph.lib.util import to_digraph, from_digraph, to_graph, from_graph
-from ngraph.lib.graph import StrictMultiDiGraph
+from ngraph.results_artifacts import CapacityEnvelope, FailurePatternResult
 
-# Convert to NetworkX formats
-graph = StrictMultiDiGraph()
-nx_digraph = to_digraph(graph)  # Convert to NetworkX DiGraph
-nx_graph = to_graph(graph)      # Convert to NetworkX Graph
+# Access capacity envelopes from analysis results
+envelope_dict = scenario.results.get("CapacityEnvelopeAnalysis", "capacity_envelopes")
+envelope = CapacityEnvelope.from_dict(envelope_dict["datacenter->edge"])
 
-# Convert back to NetGraph format
-restored_graph = from_digraph(nx_digraph)
-restored_graph = from_graph(nx_graph)
+# Statistical access
+print(f"Mean capacity: {envelope.mean_capacity}")
+print(f"95th percentile: {envelope.get_percentile(95)}")
+
+# Export and reconstruction
+serialized = envelope.to_dict()  # For JSON storage
+values = envelope.expand_to_values()  # Reconstruct original samples
 ```
 
-### Graph Algorithms
-Low-level graph analysis functions.
+**Key Classes:**
+
+- `CapacityEnvelope` - Frequency-based capacity distributions with percentile analysis
+- `FailurePatternResult` - Failure scenario details with capacity impact
+- `FailurePolicySet` - Collections of named failure policies
+
+**Integration:** Used by workflow steps and FailureManager. All provide `to_dict()` and `from_dict()` for serialization.
+
+### Export Patterns
+
+**Purpose:** Best practices for storing results in custom workflow steps and analysis functions.
 
 ```python
-from ngraph.lib.graph import StrictMultiDiGraph
-from ngraph.lib.algorithms.spf import spf, ksp
-from ngraph.lib.algorithms.max_flow import calc_max_flow, run_sensitivity, saturated_edges
+from ngraph.workflow.base import WorkflowStep
 
-# Direct graph manipulation
-graph = StrictMultiDiGraph()
-graph.add_node("A")
-graph.add_node("B")
-graph.add_edge("A", "B", capacity=10, cost=1)
+class CustomAnalysis(WorkflowStep):
+    def run(self, scenario):
+        # Simple metrics
+        scenario.results.put(self.name, "node_count", len(scenario.network.nodes))
 
-# Run shortest path algorithm
-costs, pred = spf(graph, "A")
-
-# Calculate maximum flow
-max_flow = calc_max_flow(graph, "A", "B")
-
-# Sensitivity analysis - identify bottleneck edges and test capacity changes
-saturated = saturated_edges(graph, "A", "B")
-sensitivity = run_sensitivity(graph, "A", "B", change_amount=1.0)
+        # Complex objects - convert to dict first
+        analysis_result = self.perform_analysis(scenario.network)
+        if hasattr(analysis_result, 'to_dict'):
+            scenario.results.put(self.name, "analysis", analysis_result.to_dict())
+        else:
+            scenario.results.put(self.name, "analysis", analysis_result)
 ```
 
-## Error Handling
+**Storage Conventions:**
 
-NetGraph uses standard Python exceptions for error conditions. Common error types include:
+- Use `self.name` as step identifier for result storage
+- Convert complex objects using `to_dict()` before storage
+- Use descriptive keys like `"capacity_envelopes"`, `"network_statistics"`
+- Results are automatically serialized via `results.to_dict()`
+
+## 5. Automation
+
+Workflow orchestration and reusable network templates.
+
+### Workflow Steps
+
+**Purpose:** Automated analysis sequences with standardized result storage and execution order.
+
+**When to use:** Complex multi-step analysis, reproducible analysis pipelines, or when you need automatic result collection and metadata tracking.
+
+Available workflow steps:
+
+- `BuildGraph` - Converts Network to NetworkX StrictMultiDiGraph
+- `NetworkStats` - Basic topology statistics (node/link counts, capacities)
+- `CapacityProbe` - Maximum flow analysis between node groups
+- `CapacityEnvelopeAnalysis` - Monte Carlo failure analysis with FailureManager
+
+**Integration:** Defined in YAML scenarios or created programmatically. Each step stores results using consistent naming patterns in `scenario.results`.
+
+### Blueprint System
+
+**Purpose:** Reusable network topology templates defined in YAML for complex, hierarchical network structures.
+
+**When to use:** Creating standardized network architectures, multi-pod topologies, or when you need parameterized network generation.
+
+```python
+# Blueprints are typically defined in YAML and used via Scenario
+# For programmatic topology creation, use Network class directly
+```
+
+**Integration:** Blueprints are processed during scenario creation. See [DSL Reference](dsl.md) for YAML blueprint syntax and examples.
+
+## 6. Extensions
+
+Advanced capabilities for custom analysis and low-level operations.
+
+### Utilities & Helpers
+
+**Purpose:** Graph format conversion and direct access to low-level algorithms.
+
+**When to use:** Custom analysis requiring NetworkX integration, performance-critical algorithms, or when you need direct control over graph operations.
+
+```python
+from ngraph.lib.util import to_digraph, from_digraph
+from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.algorithms.max_flow import calc_max_flow
+
+# Convert to NetworkX for custom algorithms
+nx_graph = to_digraph(scenario.network.to_strict_multidigraph())
+
+# Direct algorithm access
+costs, predecessors = spf(graph, source_node)
+max_flow_value = calc_max_flow(graph, source, sink)
+```
+
+**Integration:** Provides bridge between NetGraph and NetworkX ecosystems. Used when built-in analysis methods are insufficient.
+
+### Error Handling
+
+**Purpose:** Exception handling patterns and result validation for reliable analysis.
 
 ```python
 try:
-    scenario = Scenario.from_yaml(invalid_yaml)
+    scenario = Scenario.from_yaml(yaml_content)
+    scenario.run()
+
+    # Validate expected results
+    if scenario.results.get("CapacityProbe", "max_flow:[datacenter -> edge]") is None:
+        print("Warning: Expected flow analysis result not found")
+
 except ValueError as e:
     print(f"YAML validation failed: {e}")
-except KeyError as e:
-    print(f"Missing required field: {e}")
 except Exception as e:
-    print(f"General error: {e}")
+    print(f"Analysis error: {e}")
 ```
 
-For full API documentation with method signatures, parameters, and return types, see the auto-generated API docs or use Python's help system:
+**Common Patterns:**
+
+- Use `results.get()` with `default` parameter for safe result access
+- Validate step execution using `results.get_step_metadata()`
+- Handle YAML parsing errors with specific exception types
+
+---
+
+For complete method signatures and detailed parameter documentation, see the [Auto-Generated API Reference](api-full.md) or use Python's built-in help:
 
 ```python
-help(Scenario)
+help(Scenario.from_yaml)
 help(Network.max_flow)
 ```

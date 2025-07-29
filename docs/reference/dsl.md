@@ -1,10 +1,16 @@
 # Domain-Specific Language (DSL)
 
-This document provides an overview of the DSL used in NetGraph to define and run network scenarios. The scenario is typically defined in a YAML file that describes the network topology, traffic demands, and analysis workflow. Note: scenario can also be fully defined in Python code, but it will be covered in a separate document.
+> **📚 Quick Navigation:**
+
+> - **[API Reference](api.md)** - Python API for programmatic scenario creation
+> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
+
+This document provides an overview of the DSL used in NetGraph to define and run network scenarios. The scenario is typically defined in a YAML file that describes the network topology, traffic demands, and analysis workflow. Scenarios can also be created programmatically using the Python API (see [API Reference](api.md)).
 
 ## Overview
 
-The scenario YAML file is organized around a **core foundation** that defines your network, with **optional enhancements** for reusability, hardware modeling, failure simulation, and analysis. This document follows a logical progression from the essential core to advanced features.
+The scenario YAML file is organized around a **core foundation** that defines your network, with **optional extensions** for reusability, hardware modeling, failure simulation, and analysis. This document follows a logical progression from the essential core to advanced features.
 
 ## Top-Level Keys
 
@@ -529,6 +535,7 @@ path: SFO
 ```
 
 **2. Prefix Match**
+
 ```yaml
 # Matches all nodes starting with "SEA/spine/"
 path: SEA/spine/
@@ -536,6 +543,7 @@ path: SEA/spine/
 ```
 
 **3. Wildcard Patterns**
+
 ```yaml
 # Matches nodes starting with "SEA/leaf" followed by any characters
 path: SEA/leaf*
@@ -543,6 +551,7 @@ path: SEA/leaf*
 ```
 
 **4. Regex Patterns with Anchoring**
+
 ```yaml
 # Matches spine nodes with specific numbering
 path: ^dc1/spine/switch-[1-3]$
@@ -550,6 +559,7 @@ path: ^dc1/spine/switch-[1-3]$
 ```
 
 **5. Complex Regex with Alternation**
+
 ```yaml
 # Matches either spine or leaf nodes in dc1
 path: ^dc1/(spine|leaf)/switch-\d+$
@@ -561,6 +571,7 @@ path: ^dc1/(spine|leaf)/switch-\d+$
 When using capturing groups `(...)` in regex patterns, NetGraph groups matching nodes based on the captured values:
 
 **Single Capturing Group:**
+
 ```yaml
 # Pattern: (SEA/leaf\d)
 # Matches: SEA/leaf1/switch-1, SEA/leaf1/switch-2, SEA/leaf2/switch-1, SEA/leaf2/switch-2
@@ -570,6 +581,7 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 ```
 
 **Multiple Capturing Groups:**
+
 ```yaml
 # Pattern: (dc\d+)/(spine|leaf)/switch-(\d+)
 # Matches: dc1/spine/switch-1, dc1/leaf/switch-2, dc2/spine/switch-1
@@ -580,6 +592,7 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 ```
 
 **No Capturing Groups:**
+
 ```yaml
 # Pattern: SEA/spine/switch-\d+
 # All matching nodes are grouped under the original pattern string:

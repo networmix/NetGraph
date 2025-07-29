@@ -29,6 +29,7 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 **CRITICAL**: All communication must be precise, concise, and technical.
 
 **FORBIDDEN LANGUAGE**:
+
 - Marketing terms: "comprehensive", "powerful", "robust", "seamless", "cutting-edge", "state-of-the-art"
 - AI verbosity: "leveraging", "utilizing", "facilitate", "enhance", "optimize" (use specific verbs instead)
 - Corporate speak: "ecosystem", "executive"
@@ -37,6 +38,7 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 - Emojis in technical documentation, code comments, or commit messages
 
 **REQUIRED STYLE**:
+
 - Use precise technical terms
 - Prefer active voice and specific verbs
 - One concept per sentence
@@ -48,11 +50,11 @@ You work as an experienced senior software engineer on the **NetGraph** project,
 
 ## Project context
 
-* **Language / runtime**  Python ≥ 3.11 (officially support 3.11, 3.12 & 3.13).
-* **Key libs**  `networkx`, `pandas`, `matplotlib`, `seaborn`, `pyyaml`.
-* **Tooling**  Ruff (lint + format), Pyright (types), Pytest (tests + coverage), MkDocs + Material (docs).
-* **CLI**  `ngraph.cli:main`.
-* **Make targets**  `make format`, `make test`, `make check`, etc.
+- **Language / runtime**  Python ≥ 3.11 (officially support 3.11, 3.12 & 3.13).
+- **Key libs**  `networkx`, `pandas`, `matplotlib`, `seaborn`, `pyyaml`.
+- **Tooling**  Ruff (lint + format), Pyright (types), Pytest (tests + coverage), MkDocs + Material (docs).
+- **CLI**  `ngraph.cli:main`.
+- **Make targets**  `make format`, `make test`, `make check`, etc.
 
 ---
 
@@ -88,8 +90,8 @@ def fibonacci(n: int) -> list[int]:
 
 ### 3 – Type Hints
 
-* Add type hints when they improve clarity.
-* Use modern syntax (`list[int]`, `tuple[str, int]`, etc.).
+- Add type hints when they improve clarity.
+- Use modern syntax (`list[int]`, `tuple[str, int]`, etc.).
 
 ### 4 – Code Stability
 
@@ -97,13 +99,13 @@ Prefer stability over cosmetic change.
 
 *Do not* refactor, rename, or re-format code that already passes linting unless:
 
-* Fixing a bug/security issue
-* Adding a feature
-* Improving performance
-* Clarifying genuinely confusing code
-* Adding missing docs
-* Adding missing tests
-* Removing marketing language or AI verbosity from docstrings, comments, or docs (see "Language & Communication Standards")
+- Fixing a bug/security issue
+- Adding a feature
+- Improving performance
+- Clarifying genuinely confusing code
+- Adding missing docs
+- Adding missing tests
+- Removing marketing language or AI verbosity from docstrings, comments, or docs (see "Language & Communication Standards")
 
 ### 5 – Modern Python Patterns
 
@@ -122,35 +124,35 @@ Prefer stability over cosmetic change.
 
 Prioritize **why** over **what**, but include **what** when code is non-obvious. Document I/O, concurrency, performance-critical sections, and complex algorithms.
 
-* **Why comments**: Business logic, design decisions, performance trade-offs, workarounds.
-* **What comments**: Non-obvious data structure access, complex algorithms, domain-specific patterns.
-* **Algorithm documentation**: Explain both the approach and the reasoning in complex network analysis code.
-* **Avoid**: Comments that merely restate the code without adding context.
+- **Why comments**: Business logic, design decisions, performance trade-offs, workarounds.
+- **What comments**: Non-obvious data structure access, complex algorithms, domain-specific patterns.
+- **Algorithm documentation**: Explain both the approach and the reasoning in complex network analysis code.
+- **Avoid**: Comments that merely restate the code without adding context.
 
 ### 7 – Error Handling & Logging
 
-* Use specific exception types; avoid bare `except:` clauses.
-* Validate inputs at public API boundaries; use type hints for internal functions.
-* Use `ngraph.logging.get_logger(__name__)` for business logic, server operations, and internal processes.
-* Use `print()` statements for interactive notebook output, user-facing display methods, and visualization feedback in notebook analysis modules.
-* For network analysis operations, provide meaningful error messages with context.
-* Log important events at appropriate levels (DEBUG for detailed tracing, INFO for workflow steps, WARNING for recoverable issues, ERROR for failures).
-* **No fallbacks for dependencies**: Do not use try/except blocks to gracefully handle missing optional dependencies. All required dependencies must be declared in `pyproject.toml`. If a dependency is missing, the code should fail fast with a clear ImportError rather than falling back to inferior alternatives.
+- Use specific exception types; avoid bare `except:` clauses.
+- Validate inputs at public API boundaries; use type hints for internal functions.
+- Use `ngraph.logging.get_logger(__name__)` for business logic, server operations, and internal processes.
+- Use `print()` statements for interactive notebook output, user-facing display methods, and visualization feedback in notebook analysis modules.
+- For network analysis operations, provide meaningful error messages with context.
+- Log important events at appropriate levels (DEBUG for detailed tracing, INFO for workflow steps, WARNING for recoverable issues, ERROR for failures).
+- **No fallbacks for dependencies**: Do not use try/except blocks to gracefully handle missing optional dependencies. All required dependencies must be declared in `pyproject.toml`. If a dependency is missing, the code should fail fast with a clear ImportError rather than falling back to inferior alternatives.
 
 ### 8 – Performance & Benchmarking
 
-* Profile performance-critical code paths before optimizing.
-* Use `pytest-benchmark` for performance tests of core algorithms.
-* Document time/space complexity in docstrings for key functions.
-* Prefer NumPy operations over Python loops for numerical computations.
+- Profile performance-critical code paths before optimizing.
+- Use `pytest-benchmark` for performance tests of core algorithms.
+- Document time/space complexity in docstrings for key functions.
+- Prefer NumPy operations over Python loops for numerical computations.
 
 ### 9 – Testing & CI
 
-* **Make targets**: `make lint`, `make format`, `make test`, `make check`.
-* **CI environment**: Runs on pushes & PRs for Python 3.11/3.12/3.13.
-* **Test structure**: Tests live in `tests/`, mirror the source tree, and aim for ≥ 85% coverage.
-* **Test guidelines**: Write tests for new features; use pytest fixtures for common data; prefer meaningful tests over raw coverage numbers.
-* **Pytest timeout**: 30 seconds (see `pyproject.toml`).
+- **Make targets**: `make lint`, `make format`, `make test`, `make check`.
+- **CI environment**: Runs on pushes & PRs for Python 3.11/3.12/3.13.
+- **Test structure**: Tests live in `tests/`, mirror the source tree, and aim for ≥ 85% coverage.
+- **Test guidelines**: Write tests for new features; use pytest fixtures for common data; prefer meaningful tests over raw coverage numbers.
+- **Pytest timeout**: 30 seconds (see `pyproject.toml`).
 
 ### 10 – Development Workflow
 
@@ -161,11 +163,11 @@ Prioritize **why** over **what**, but include **what** when code is non-obvious.
 
 ### 11 – Documentation
 
-* Google-style docstrings for every public API.
-* Update `docs/` when adding features.
-* Run `make docs` to generate `docs/reference/api-full.md` from source code.
-* Always check all doc files for accuracy and adherence to "Language & Communication Standards".
-* **Markdown formatting**: Lists, code blocks, and block quotes require a blank line before them to render correctly.
+- Google-style docstrings for every public API.
+- Update `docs/` when adding features.
+- Run `make docs` to generate `docs/reference/api-full.md` from source code.
+- Always check all doc files for accuracy and adherence to "Language & Communication Standards".
+- **Markdown formatting**: Lists, code blocks, and block quotes require a blank line before them to render correctly.
 
 ## Output rules for the assistant
 

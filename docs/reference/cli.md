@@ -1,5 +1,11 @@
 # Command Line Interface
 
+> **📚 Quick Navigation:**
+
+> - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
+> - **[API Reference](api.md)** - Python API for programmatic access
+> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+
 NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios directly from the terminal.
 
 ## Installation
@@ -18,6 +24,11 @@ The CLI provides three primary commands:
 - `run`: Execute scenario files and generate results
 - `report`: Generate analysis reports from results files
 
+**Global options** (must be placed before the command):
+
+- `--verbose`, `-v`: Enable verbose (DEBUG) logging
+- `--quiet`, `-q`: Enable quiet mode (WARNING+ only)
+
 ### Quick Start
 
 ```bash
@@ -31,24 +42,6 @@ python -m ngraph run my_scenario.yaml
 python -m ngraph report results.json --notebook analysis.ipynb
 ```
 
-```bash
-# Run a scenario (generates results.json by default)
-python -m ngraph run scenario.yaml
-
-# Run a scenario and save results to custom file
-python -m ngraph run scenario.yaml --results output.json
-python -m ngraph run scenario.yaml -r output.json
-
-# Run a scenario without saving results (edge cases only)
-python -m ngraph run scenario.yaml --no-results
-
-# Print results to stdout in addition to saving file
-python -m ngraph run scenario.yaml --stdout
-
-# Save to custom file AND print to stdout
-python -m ngraph run scenario.yaml --results output.json --stdout
-```
-
 ## Command Reference
 
 ### `inspect`
@@ -58,7 +51,7 @@ Analyze and validate a NetGraph scenario file without executing it.
 **Syntax:**
 
 ```bash
-python -m ngraph inspect <scenario_file> [options]
+python -m ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 ```
 
 **Arguments:**
@@ -91,11 +84,11 @@ In detail mode (`--detail`), shows complete tables for all nodes and links with 
 # Basic inspection
 python -m ngraph inspect my_scenario.yaml
 
-# Detailed inspection with comprehensive node/link tables and step parameters
+# Detailed inspection with complete node/link tables and step parameters
 python -m ngraph inspect my_scenario.yaml --detail
 
-# Inspect with verbose logging
-python -m ngraph inspect my_scenario.yaml --verbose
+# Inspect with verbose logging (note: global option placement)
+python -m ngraph --verbose inspect my_scenario.yaml
 ```
 
 **Use cases:**
@@ -112,7 +105,7 @@ Execute a NetGraph scenario file.
 **Syntax:**
 
 ```bash
-python -m ngraph run <scenario_file> [options]
+python -m ngraph [--verbose|--quiet] run <scenario_file> [options]
 ```
 
 **Arguments:**
@@ -135,7 +128,7 @@ Generate analysis reports from NetGraph results files.
 **Syntax:**
 
 ```bash
-python -m ngraph report <results_file> [options]
+python -m ngraph [--verbose|--quiet] report [results_file] [options]
 ```
 
 **Arguments:**
@@ -144,9 +137,9 @@ python -m ngraph report <results_file> [options]
 
 **Options:**
 
-- `--notebook`, `-n`: Path for generated Jupyter notebook (default: "analysis.ipynb")
+- `--notebook`, `-n`: Output path for Jupyter notebook (default: "analysis.ipynb")
 - `--html`: Generate HTML report (default: "analysis.html" if no path specified)
-- `--include-code`: Include code cells in HTML report (default: no code in HTML)
+- `--include-code`: Include code cells in HTML output (default: report without code)
 - `--help`, `-h`: Show help message
 
 **What it does:**
@@ -156,7 +149,7 @@ The `report` command generates analysis reports from results files created by th
 - **Jupyter notebook**: Interactive analysis notebook with code cells, visualizations, and explanations (default: "analysis.ipynb")
 - **HTML report** (optional): Static report for viewing without Jupyter, optionally including code (default: "analysis.html" when --html is used)
 
-The report automatically detects and analyzes the workflow steps present in the results file, creating appropriate sections and visualizations for each analysis type.
+The report detects and analyzes the workflow steps present in the results file, creating appropriate sections and visualizations for each analysis type.
 
 **Examples:**
 
@@ -173,7 +166,7 @@ python -m ngraph report results.json --html
 # Generate HTML report with custom filename
 python -m ngraph report results.json --html custom_report.html
 
-# Generate HTML report without code cells (clean report)
+# Generate HTML report without code cells
 python -m ngraph report results.json --html
 
 # Generate HTML report with code cells included
@@ -185,7 +178,7 @@ python -m ngraph report results.json --html --include-code
 - **Analysis documentation**: Create shareable notebooks documenting network analysis results
 - **Report generation**: Generate HTML reports for stakeholders who don't use Jupyter
 - **Iterative analysis**: Create notebooks for further data exploration and visualization
-- **Presentation**: Generate clean HTML reports for presentations and documentation
+- **Presentation**: Generate HTML reports for presentations and documentation
 
 ## Examples
 
@@ -219,7 +212,7 @@ python -m ngraph run my_network.yaml --stdout
 
 ```bash
 # Run one of the included test scenarios with results export
-python -m ngraph run tests/scenarios/scenario_1.yaml --results results.json
+python -m ngraph run scenarios/simple.yaml --results results.json
 ```
 
 ### Filtering Results by Step Names
@@ -252,145 +245,32 @@ Then `--keys build_graph` will include only the results from the BuildGraph step
 
 ### Performance Profiling
 
-NetGraph provides performance profiling to identify bottlenecks, analyze execution time, and optimize workflow performance. The profiling system provides CPU-level analysis with function-by-function timing and bottleneck detection.
-
-#### Performance Analysis
-
-Use `--profile` to get performance analysis:
+Enable performance profiling to identify bottlenecks and analyze execution time:
 
 ```bash
 # Run scenario with profiling
 python -m ngraph run scenario.yaml --profile
 
 # Combine profiling with results export
-python -m ngraph run scenario.yaml --profile --results
+python -m ngraph run scenario.yaml --profile --results analysis.json
 
-# Profiling with filtered output
+# Profile specific workflow steps
 python -m ngraph run scenario.yaml --profile --keys capacity_probe
 ```
 
-Performance profiling provides:
+The profiling output includes:
 
 - **Summary**: Total execution time, CPU efficiency, function call statistics
-- **Step timing analysis**: Time spent in each workflow step with percentage breakdown
-- **Bottleneck identification**: Workflow steps consuming >10% of total execution time
-- **Function-level analysis**: Top CPU-consuming functions within each bottleneck
-- **Call statistics**: Function call counts and timing distribution
-- **CPU utilization patterns**: Detailed breakdown of computational efficiency
-- **Targeted recommendations**: Specific optimization suggestions for each bottleneck
+- **Step timing**: Time spent in each workflow step with percentage breakdown
+- **Bottlenecks**: Steps consuming >10% of total execution time
+- **Function analysis**: Top CPU-consuming functions within bottlenecks
+- **Recommendations**: Specific suggestions for each bottleneck
 
-#### Profiling Output
+**When to use profiling:**
 
-Profiling generates a performance report displayed after scenario execution:
-
-```
-================================================================================
-NETGRAPH PERFORMANCE PROFILING REPORT
-================================================================================
-
-1. SUMMARY
-----------------------------------------
-Total Execution Time: 12.456 seconds
-Total CPU Time: 11.234 seconds
-CPU Efficiency: 90.2%
-Total Workflow Steps: 3
-Average Step Time: 4.152 seconds
-Total Function Calls: 1,234,567
-Function Calls/Second: 99,123
-
-1 performance bottleneck(s) identified
-
-2. WORKFLOW STEP TIMING ANALYSIS
-----------------------------------------
-Step Name          Type               Wall Time    CPU Time     Calls      % Total
-build_graph        BuildGraph         0.123s       0.098s       1,234      1.0%
-capacity_probe     CapacityProbe      11.234s      10.987s      1,200,000  90.2%
-network_stats      NetworkStats       1.099s       0.149s       33,333     8.8%
-
-3. PERFORMANCE BOTTLENECK ANALYSIS
-----------------------------------------
-Bottleneck #1: capacity_probe (CapacityProbe)
-   Wall Time: 11.234s (90.2% of total)
-   CPU Time: 10.987s
-   Function Calls: 1,200,000
-   CPU Efficiency: 97.8% (CPU-intensive workload)
-   Recommendation: Consider algorithmic optimization or parallelization
-
-4. DETAILED FUNCTION ANALYSIS
-----------------------------------------
-Top CPU-consuming functions in 'capacity_probe':
-   ngraph/lib/algorithms/max_flow.py:42(dijkstra_shortest_path)
-      Time: 8.456s, Calls: 500,000
-   ngraph/lib/algorithms/max_flow.py:156(ford_fulkerson)
-      Time: 2.234s, Calls: 250,000
-```
-
-#### Profiling Best Practices
-
-**When to Use Profiling:**
-
-- Performance optimization during development
+- Performance analysis during development
 - Identifying bottlenecks in complex workflows
-- Analyzing scenarios with large networks or datasets
-- Benchmarking before/after optimization changes
-
-**Development Workflow:**
-
-```bash
-# 1. Profile scenario to identify bottlenecks
-python -m ngraph run scenario.yaml --profile
-
-# 2. Combine with filtering for targeted analysis
-python -m ngraph run scenario.yaml --profile --keys slow_step
-
-# 3. Profile with results export for analysis
-python -m ngraph run scenario.yaml --profile --results analysis.json
-```
-
-**Performance Considerations:**
-
-- Profiling adds minimal overhead (~15-25%)
-- Use production-like data sizes for accurate bottleneck identification
-- Profile multiple runs to account for variability in timing measurements
-- Focus optimization efforts on steps consuming >10% of total execution time
-
-**Interpreting Results:**
-
-- **CPU Efficiency**: Ratio of CPU time to wall time (higher is better for compute-bound tasks)
-- **Function Call Rate**: Calls per second (very high rates may indicate optimization opportunities)
-- **Bottleneck Percentage**: Time percentage helps prioritize optimization efforts
-- **Efficiency Ratio**: Low ratios (<30%) suggest I/O-bound operations or external dependencies
-
-#### Advanced Profiling Scenarios
-
-**Profiling Large Networks:**
-
-```bash
-# Profile capacity analysis on large networks
-python -m ngraph run large_network.yaml --profile --keys capacity_envelope_analysis
-```
-
-**Comparative Profiling:**
-
-```bash
-# Profile before optimization
-python -m ngraph run scenario_v1.yaml --profile > profile_v1.txt
-
-# Profile after optimization
-python -m ngraph run scenario_v2.yaml --profile > profile_v2.txt
-
-# Compare results manually or with diff tools
-```
-
-**Targeted Profiling:**
-
-```bash
-# Profile only specific workflow steps
-python -m ngraph run scenario.yaml --profile --keys capacity_probe network_stats
-
-# Profile with results export for further analysis
-python -m ngraph run scenario.yaml --profile --results analysis.json
-```
+- Benchmarking before/after changes
 
 ## Output Format
 
@@ -452,43 +332,53 @@ The exact keys and values depend on:
 
 ## Output Behavior
 
-NetGraph CLI generates results by default to make analysis workflows more convenient:
+NetGraph CLI generates results by default for analysis workflows:
 
 ### Default Behavior (Results Generated)
+
 ```bash
 python -m ngraph run scenario.yaml
 ```
+
 - Executes the scenario
 - Logs execution progress to the terminal
-- **Creates results.json automatically**
+- **Creates results.json by default**
 - Shows success message with file location
 
 ### Custom Results File
+
 ```bash
 # Save to custom file
 python -m ngraph run scenario.yaml --results my_analysis.json
 ```
+
 - Creates specified JSON file instead of results.json
 - Useful for organizing multiple analysis runs
 
 ### Print to Terminal
+
 ```bash
 python -m ngraph run scenario.yaml --stdout
 ```
+
 - Creates results.json AND prints JSON to stdout
 - Useful for viewing results immediately while also saving them
 
 ### Combined Output
+
 ```bash
 python -m ngraph run scenario.yaml --results analysis.json --stdout
 ```
+
 - Creates custom JSON file AND prints to stdout
-- Maximum flexibility for different workflows
+- Provides flexibility for different workflows
 
 ### Disable File Generation (Edge Cases)
+
 ```bash
 python -m ngraph run scenario.yaml --no-results
 ```
+
 - Executes scenario without creating any output files
 - Only shows execution logs and completion status
 - Useful for testing, CI/CD validation, or when only logs are needed
@@ -497,7 +387,7 @@ python -m ngraph run scenario.yaml --no-results
 
 ## Integration with Workflows
 
-The CLI executes the complete workflow defined in your scenario file, running all steps in sequence and accumulating results. This automates complex network analysis tasks without manual intervention.
+The CLI executes the complete workflow defined in your scenario file, running all steps in sequence and accumulating results. This runs complex network analysis tasks without manual intervention.
 
 ### Recommended Workflow
 
@@ -521,14 +411,15 @@ When developing complex scenarios with blueprints and hierarchical structures:
 # Check if scenario loads correctly
 python -m ngraph inspect scenario.yaml
 
-# Debug network expansion issues
-python -m ngraph inspect scenario.yaml --detail --verbose
+# Debug network expansion issues (note: global option placement)
+python -m ngraph --verbose inspect scenario.yaml --detail
 
 # Verify workflow steps are configured correctly
 python -m ngraph inspect scenario.yaml --detail | grep -A 5 "Workflow Steps"
 ```
 
 The `inspect` command will catch common issues like:
+
 - Invalid YAML syntax
 - Missing blueprint references
 - Incorrect node/link patterns
@@ -537,6 +428,6 @@ The `inspect` command will catch common issues like:
 
 ## See Also
 
-- [DSL Reference](dsl.md) - Scenario file syntax and structure
-- [API Reference](api.md) - Python API for programmatic access
-- [Tutorial](../getting-started/tutorial.md) - Step-by-step guide to creating scenarios
+- **[DSL Reference](dsl.md)** - Scenario file syntax and structure
+- **[API Reference](api.md)** - Python API for programmatic access
+- **[Tutorial](../getting-started/tutorial.md)** - Step-by-step guide to creating scenarios

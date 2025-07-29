@@ -2,17 +2,21 @@
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
 envelope results, computing statistics, and generating notebook visualizations.
+Works with both CapacityEnvelopeResults objects and workflow step data.
 """
 
 from __future__ import annotations
 
 import importlib
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 from .base import NotebookAnalyzer
+
+if TYPE_CHECKING:
+    from ngraph.monte_carlo.results import CapacityEnvelopeResults
 
 __all__ = ["CapacityMatrixAnalyzer"]
 
@@ -21,10 +25,210 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     """Processes capacity envelope data into matrices and flow availability analysis.
 
     Transforms capacity envelope results from CapacityEnvelopeAnalysis workflow steps
-    into matrices, statistical summaries, and flow availability distributions.
-    Provides visualization methods for notebook output including capacity matrices,
-    flow CDFs, and reliability curves.
+    or CapacityEnvelopeResults objects into matrices, statistical summaries, and
+    flow availability distributions. Provides visualization methods for notebook output
+    including capacity matrices, flow CDFs, and reliability curves.
+
+    Can be used in two modes:
+    1. Workflow mode: analyze() with workflow step results dictionary
+    2. Direct mode: analyze_results() with CapacityEnvelopeResults object
     """
+
+    def analyze_results(
+        self, results: "CapacityEnvelopeResults", **kwargs
+    ) -> Dict[str, Any]:
+        """Analyze CapacityEnvelopeResults object directly.
+
+        Args:
+            results: CapacityEnvelopeResults object from failure manager
+            **kwargs: Additional arguments (unused)
+
+        Returns:
+            Dictionary containing analysis results with capacity matrix and statistics.
+
+        Raises:
+            ValueError: If no valid envelope data found.
+            RuntimeError: If analysis computation fails.
+        """
+        try:
+            # Convert CapacityEnvelopeResults to workflow-compatible format
+            envelopes = {key: env.to_dict() for key, env in results.envelopes.items()}
+
+            matrix_data = self._extract_matrix_data(envelopes)
+            if not matrix_data:
+                raise ValueError("No valid capacity envelope data in results object")
+
+            df_matrix = pd.DataFrame(matrix_data)
+            capacity_matrix = self._create_capacity_matrix(df_matrix)
+            statistics = self._calculate_statistics(capacity_matrix)
+
+            return {
+                "status": "success",
+                "step_name": f"{results.source_pattern}->{results.sink_pattern}",
+                "matrix_data": matrix_data,
+                "capacity_matrix": capacity_matrix,
+                "statistics": statistics,
+                "visualization_data": self._prepare_visualization_data(capacity_matrix),
+                "envelope_results": results,  # Keep reference to original object
+            }
+
+        except Exception as exc:
+            raise RuntimeError(
+                f"Error analyzing capacity envelope results: {exc}"
+            ) from exc
+
+    def display_capacity_distributions(
+        self,
+        results: "CapacityEnvelopeResults",
+        flow_key: Optional[str] = None,
+        bins: int = 30,
+    ) -> None:
+        """Display capacity distribution plots for CapacityEnvelopeResults.
+
+        Args:
+            results: CapacityEnvelopeResults object to visualize
+            flow_key: Specific flow to plot (default: all flows)
+            bins: Number of histogram bins
+        """
+        import seaborn as sns
+
+        print("📊 Capacity Distribution Analysis")
+        print(f"Source pattern: {results.source_pattern}")
+        print(f"Sink pattern: {results.sink_pattern}")
+        print(f"Iterations: {results.iterations:,}")
+        print(f"Flow pairs: {len(results.envelopes):,}\n")
+
+        try:
+            if flow_key:
+                # Plot single flow
+                envelope = results.get_envelope(flow_key)
+                values = envelope.expand_to_values()
+
+                fig, ax = plt.subplots(figsize=(10, 6))
+                ax.hist(
+                    values,
+                    bins=bins,
+                    alpha=0.7,
+                    edgecolor="black",
+                    color=sns.color_palette()[0],
+                )
+                ax.set_title(f"Capacity Distribution: {flow_key}")
+                ax.set_xlabel("Capacity")
+                ax.set_ylabel("Frequency")
+                ax.grid(True, alpha=0.3)
+
+                # Add statistics
+                mean_val = envelope.mean_capacity
+                ax.axvline(
+                    mean_val,
+                    color="red",
+                    linestyle="--",
+                    alpha=0.8,
+                    label=f"Mean: {mean_val:.2f}",
+                )
+                ax.legend()
+
+            else:
+                # Plot all flows
+                n_flows = len(results.envelopes)
+                colors = sns.color_palette("husl", n_flows)
+
+                fig, ax = plt.subplots(figsize=(12, 8))
+                for i, (fkey, envelope) in enumerate(results.envelopes.items()):
+                    values = envelope.expand_to_values()
+                    ax.hist(values, bins=bins, alpha=0.6, label=fkey, color=colors[i])
+
+                ax.set_title("Capacity Distributions (All Flows)")
+                ax.set_xlabel("Capacity")
+                ax.set_ylabel("Frequency")
+                ax.grid(True, alpha=0.3)
+                ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+
+            plt.tight_layout()
+            plt.show()
+
+        except Exception as exc:
+            print(f"⚠️  Visualization error: {exc}")
+
+    def display_percentile_comparison(self, results: "CapacityEnvelopeResults") -> None:
+        """Display percentile comparison plots for CapacityEnvelopeResults.
+
+        Args:
+            results: CapacityEnvelopeResults object to visualize
+        """
+        import seaborn as sns
+
+        print("📈 Capacity Percentile Comparison")
+
+        try:
+            percentiles = [5, 25, 50, 75, 95]
+            flow_keys = results.flow_keys()
+
+            data = []
+            for fkey in flow_keys:
+                envelope = results.envelopes[fkey]
+                row = [envelope.get_percentile(p) for p in percentiles]
+                data.append(row)
+
+            df = pd.DataFrame(
+                data, index=flow_keys, columns=[f"p{p}" for p in percentiles]
+            )
+
+            fig, ax = plt.subplots(figsize=(12, 6))
+            df.plot(
+                kind="bar", ax=ax, color=sns.color_palette("viridis", len(percentiles))
+            )
+            ax.set_title("Capacity Percentiles by Flow")
+            ax.set_xlabel("Flow")
+            ax.set_ylabel("Capacity")
+            ax.legend(title="Percentile")
+            ax.grid(True, alpha=0.3)
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.show()
+
+        except Exception as exc:
+            print(f"⚠️  Visualization error: {exc}")
+
+    def analyze_and_display_envelope_results(
+        self, results: "CapacityEnvelopeResults", **kwargs
+    ) -> None:
+        """Complete analysis and display for CapacityEnvelopeResults object.
+
+        Args:
+            results: CapacityEnvelopeResults object to analyze and display
+            **kwargs: Additional arguments
+        """
+        # Perform analysis
+        analysis = self.analyze_results(results, **kwargs)
+
+        # Display capacity matrix
+        self.display_analysis(analysis, **kwargs)
+
+        # Display distribution plots
+        self.display_capacity_distributions(results)
+
+        # Display percentile comparison
+        self.display_percentile_comparison(results)
+
+        # Display flow availability if we have frequency data
+        try:
+            # Convert to workflow format for flow availability analysis
+            step_data = {
+                "capacity_envelopes": {
+                    key: env.to_dict() for key, env in results.envelopes.items()
+                }
+            }
+            workflow_results = {"envelope_analysis": step_data}
+
+            self.analyze_flow_availability(
+                workflow_results, step_name="envelope_analysis"
+            )
+            self.analyze_and_display_flow_availability(
+                workflow_results, step_name="envelope_analysis"
+            )
+        except Exception as exc:
+            print(f"ℹ️  Flow availability analysis skipped: {exc}")
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Analyze capacity envelopes and create matrix visualization.
@@ -126,28 +330,11 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             return float(envelope_data)
 
         if isinstance(envelope_data, dict):
-            # Check for new frequency-based CapacityEnvelope format first
-            for key in (
-                "max",  # New frequency-based format uses "max"
-                "mean",  # Alternative: use mean capacity
-                "max_capacity",  # Legacy format compatibility
-                "capacity",  # Simple capacity value
-                "envelope",  # Nested envelope data
-                "value",  # Simple value
-                "max_value",  # Maximum value
-            ):
-                if key in envelope_data:
-                    cap_val = envelope_data[key]
-                    if isinstance(cap_val, (list, tuple)) and cap_val:
-                        return float(max(cap_val))
-                    if isinstance(cap_val, (int, float)):
-                        return float(cap_val)
-
-            # Legacy: Check for old "values" format (list of capacity samples)
-            if "values" in envelope_data:
-                cap_val = envelope_data["values"]
-                if isinstance(cap_val, (list, tuple)) and cap_val:
-                    return float(max(cap_val))
+            # Extract capacity from canonical format
+            if "max" in envelope_data:
+                cap_val = envelope_data["max"]
+                if isinstance(cap_val, (int, float)):
+                    return float(cap_val)
         return None
 
     @staticmethod

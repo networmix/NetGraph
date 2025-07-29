@@ -319,7 +319,7 @@ class FailurePolicy:
                 rng = _random.Random(seed)
                 return {eid for eid in entity_ids if rng.random() < rule.probability}
             else:
-                # Use global random state for backward compatibility
+                # Use global random state when no seed provided
                 return {
                     eid for eid in entity_ids if _random.random() < rule.probability
                 }
@@ -331,7 +331,7 @@ class FailurePolicy:
                 rng = _random.Random(seed)
                 return set(rng.sample(entity_list, k=count))
             else:
-                # Use global random state for backward compatibility
+                # Use global random state when no seed provided
                 return set(_random.sample(entity_list, k=count))
         elif rule.rule_type == "all":
             return entity_ids

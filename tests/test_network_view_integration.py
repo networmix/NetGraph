@@ -215,23 +215,23 @@ class TestNetworkViewIntegration:
         # Create failure manager
         fm = FailureManager(
             network=sample_scenario.network,
-            traffic_matrix_set=sample_scenario.traffic_matrix_set,
             failure_policy_set=sample_scenario.failure_policy_set,
             policy_name="spine_failure",
         )
 
         # Get failed entities
-        failed_nodes, failed_links = fm.get_failed_entities()
+        failed_nodes, failed_links = fm.compute_exclusions()
         assert len(failed_nodes) == 1  # One spine should fail
-        assert failed_nodes[0] in ["A", "B"]
+        assert failed_nodes.pop() in ["A", "B"]
 
-        # Run single failure scenario
-        results = fm.run_single_failure_scenario()
+        # Run single failure scenario with a simple analysis function
+        def simple_analysis(network_view, **kwargs):
+            return f"Analysis completed with {len(network_view.nodes)} nodes"
 
-        # Check traffic was placed
-        assert len(results) > 0
-        total_placed = sum(r.placed_volume for r in results)
-        assert total_placed > 0
+        result = fm.run_single_failure_scenario(simple_analysis)
+
+        # Check result was returned
+        assert "Analysis completed" in result
 
         # Verify original network is unchanged
         assert not sample_scenario.network.nodes["A"].disabled
@@ -334,13 +334,12 @@ class TestNetworkViewIntegration:
         # Create failure manager
         fm = FailureManager(
             network=sample_network,
-            traffic_matrix_set=TrafficMatrixSet(),  # Empty for this test
             failure_policy_set=failure_policy_set,
             policy_name="risk_failure",
         )
 
         # Get failed entities
-        failed_nodes, failed_links = fm.get_failed_entities()
+        failed_nodes, failed_links = fm.compute_exclusions()
 
         # Both C and D should be failed (they're in rack1)
         assert set(failed_nodes) == {"C", "D"}

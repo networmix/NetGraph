@@ -1,5 +1,12 @@
 # JSON Schema Validation
 
+> **📚 Quick Navigation:**
+
+> - **[DSL Reference](dsl.md)** - YAML syntax and scenario structure
+> - **[API Reference](api.md)** - Python API documentation
+> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+> - **[CLI Reference](cli.md)** - Command-line interface
+
 NetGraph includes JSON Schema definitions for YAML scenario files to provide IDE validation, autocompletion, and documentation.
 
 ## Overview
@@ -30,13 +37,16 @@ The main schema file that validates NetGraph scenario YAML files including:
 While the schema validates most NetGraph features, there are some limitations due to JSON Schema constraints:
 
 ### Group Validation
+
 The schema allows all group properties but **runtime validation is stricter**:
+
 - Groups with `use_blueprint`: only allow `{use_blueprint, parameters, attrs, disabled, risk_groups}`
 - Groups without `use_blueprint`: only allow `{node_count, name_template, attrs, disabled, risk_groups}`
 
 This means some YAML that passes schema validation may still be rejected at runtime.
 
 ### Conditional Validation
+
 JSON Schema cannot express all NetGraph's conditional validation rules. The runtime implementation in `ngraph/scenario.py` is the authoritative source of truth for validation logic.
 
 ## IDE Setup
@@ -57,6 +67,7 @@ NetGraph automatically configures VS Code to use the schema for scenario files. 
 ```
 
 This enables:
+
 - ✅ Real-time YAML validation
 - ✅ IntelliSense autocompletion
 - ✅ Inline documentation on hover
@@ -128,6 +139,7 @@ NetGraph includes schema validation tests in `tests/test_schema_validation.py`:
 - **Structure validation**: Tests risk groups, failure policies, and all major sections
 
 The test suite validates both that:
+
 1. Valid NetGraph YAML passes schema validation
 2. Invalid structures are correctly rejected
 
@@ -146,30 +158,36 @@ The schema validates the top-level structure where only these keys are allowed:
 ### Key Validation Rules
 
 #### Network Links
+
 - ✅ **Direct links**: Support `source`, `target`, `link_params`, and optional `link_count`
 - ✅ **Link overrides**: Support `any_direction` for bidirectional matching
 - ❌ **Invalid**: `any_direction` in direct links (use `link_count` instead)
 
 #### Adjacency Rules
+
 - ✅ **Variable expansion**: Support `expand_vars` and `expansion_mode` for dynamic adjacency
 - ✅ **Patterns**: Support `mesh` and `one_to_one` connectivity patterns
 - ✅ **Link parameters**: Full support for capacity, cost, disabled, risk_groups, and attrs
 
 #### Traffic Demands
+
 - ✅ **Extended properties**: Support priority, demand_placed, mode, flow_policy_config, flow_policy, and attrs
 - ✅ **Required fields**: Must have `source_path`, `sink_path`, and `demand`
 
 #### Risk Groups Location
+
 - ✅ **Correct**: `risk_groups` at file root level
 - ✅ **Correct**: `risk_groups` under `link_params`
 - ❌ **Invalid**: `risk_groups` inside `attrs`
 
 #### Required Fields
+
 - Risk groups must have a `name` field
 - Links must have `source` and `target` fields
 - Workflow steps must have `step_type` field
 
 #### Data Types
+
 - Capacities and costs must be numbers
 - Risk group names must be strings
 - Boolean fields validate as true/false
@@ -177,12 +195,14 @@ The schema validates the top-level structure where only these keys are allowed:
 ## Benefits
 
 ### Developer Experience
+
 - **Immediate Feedback**: See validation errors as you type
 - **Autocompletion**: Discover available properties and values
 - **Documentation**: Hover tooltips explain each property
 - **Consistency**: Ensures all team members use the same format
 
 ### Code Quality
+
 - **Early Error Detection**: Catch mistakes before runtime
 - **Automated Testing**: Schema validation in CI/CD pipelines
 - **Standardization**: Enforces consistent YAML structure

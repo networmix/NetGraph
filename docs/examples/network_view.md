@@ -113,6 +113,7 @@ workflow:
 ```
 
 This creates baseline capacity measurements alongside failure scenario results, enabling:
+
 - Comparison of degraded vs. normal network capacity
 - Analysis of failure impact magnitude
 - Identification of failure-resistant flow paths
@@ -122,7 +123,7 @@ This creates baseline capacity measurements alongside failure scenario results, 
 1. **Immutability**: Base network remains unchanged during analysis
 2. **Concurrency**: Multiple views can analyze the same network simultaneously
 3. **Performance**: Selective caching provides ~30x speedup for repeated operations
-4. **Consistency**: Combines scenario-disabled and analysis-excluded elements seamlessly
+4. **Consistency**: Combines scenario-disabled and analysis-excluded elements
 
 ## Best Practices
 

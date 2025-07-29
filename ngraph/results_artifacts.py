@@ -348,7 +348,7 @@ class CapacityEnvelope:
         return sorted_capacities[-1]  # Return max if we somehow don't find it
 
     def expand_to_values(self) -> List[float]:
-        """Expand frequency map back to individual values (for backward compatibility).
+        """Expand frequency map back to individual values.
 
         Returns:
             List of capacity values reconstructed from frequencies.

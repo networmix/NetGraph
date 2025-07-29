@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 27, 2025 at 07:33 UTC
+**Generated from source code on:** July 29, 2025 at 16:07 UTC
 
-**Modules auto-discovered:** 51
+**Modules auto-discovered:** 53
 
 ---
 
@@ -313,45 +313,72 @@ Attributes:
 
 ## ngraph.failure_manager
 
-FailureManager class for running Monte Carlo failure simulations.
+FailureManager for Monte Carlo failure analysis.
+
+This module provides the authoritative failure analysis engine for NetGraph.
+It combines parallel processing, caching, and failure policy handling
+to support both workflow steps and direct notebook usage.
+
+The FailureManager provides a generic API for any type of failure analysis.
+
+## Performance Characteristics
+
+**Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
+P=parallelism. Per-worker caching reduces effective iterations by 60-90% for
+common failure patterns since exclusion sets frequently repeat in Monte Carlo
+analysis. Network serialization occurs once per worker process, not per iteration.
+
+**Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
+R=result size per iteration, C=cache size. Cache is bounded to prevent memory
+exhaustion with FIFO eviction after 1000 unique patterns per worker.
+
+**Parallelism Trade-offs**: Serial execution avoids IPC overhead for small
+iteration counts. Parallel execution benefits from worker caching and CPU
+utilization for larger workloads. Optimal parallelism typically equals CPU
+cores for analysis-bound workloads.
+
+### AnalysisFunction
+
+Protocol for analysis functions used with FailureManager.
+
+Analysis functions should take a NetworkView and any additional
+keyword arguments, returning analysis results of any type.
 
 ### FailureManager
 
-Applies a FailurePolicy to a Network to determine exclusions, then uses a
-NetworkView to simulate the impact of those exclusions on traffic.
+Failure analysis engine with Monte Carlo capabilities.
 
-This class is the orchestrator for failure analysis. It does not modify the
-base Network. Instead, it:
-1.  Uses a FailurePolicy to calculate which nodes/links should be excluded.
-2.  Creates a NetworkView with those exclusions.
-3.  Runs traffic placement against the view using a TrafficManager.
+This is the authoritative component for failure analysis in NetGraph.
+It provides parallel processing, worker caching, and failure
+policy handling to support both workflow steps and direct notebook usage.
 
-The use of NetworkView ensures:
-- Base network remains unmodified during analysis
-- Concurrent Monte Carlo simulations can run safely in parallel
-- Clear separation between scenario-disabled elements (persistent) and
-  analysis-excluded elements (temporary)
-
-For concurrent analysis, prefer using NetworkView directly rather than
-FailureManager when you need fine-grained control over exclusions.
+The FailureManager can execute any analysis function that takes a NetworkView
+and returns results, making it generic for different types of
+failure analysis (capacity, traffic, connectivity, etc.).
 
 Attributes:
-    network (Network): The underlying network (not modified).
-    traffic_matrix_set (TrafficMatrixSet): Traffic matrices to place after exclusions.
-    failure_policy_set (FailurePolicySet): Set of named failure policies.
-    matrix_name (Optional[str]): The specific traffic matrix to use from the set.
-    policy_name (Optional[str]): Name of specific failure policy to use, or None for default.
-    default_flow_policy_config (Optional[FlowPolicyConfig]): Default flow placement
-        policy if not specified elsewhere.
+    network: The underlying network (not modified during analysis).
+    failure_policy_set: Set of named failure policies.
+    policy_name: Name of specific failure policy to use.
 
 **Methods:**
 
-- `get_failed_entities(self) -> 'Tuple[List[str], List[str]]'`
-  - Get the nodes and links that are designated for exclusion by the current policy.
-- `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
-  - Repeatedly runs failure scenarios and accumulates traffic placement results.
-- `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
-  - Runs one iteration of a failure scenario.
+- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'`
+  - Compute the set of nodes and links to exclude for a failure iteration.
+- `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'`
+  - Create NetworkView with specified exclusions.
+- `get_failure_policy(self) -> "'FailurePolicy | None'"`
+  - Get the failure policy to use for analysis.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'`
+  - Run Monte Carlo failure analysis with any analysis function.
+- `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze component criticality for flow capacity under failures.
+- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'`
+  - Run a single failure scenario for convenience.
 
 ---
 
@@ -975,7 +1002,7 @@ Attributes:
 **Methods:**
 
 - `expand_to_values(self) -> 'List[float]'`
-  - Expand frequency map back to individual values (for backward compatibility).
+  - Expand frequency map back to individual values.
 - `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]') -> "'CapacityEnvelope'"`
   - Create frequency-based envelope from a list of capacity values.
 - `get_percentile(self, percentile: 'float') -> 'float'`
@@ -2276,93 +2303,56 @@ suitable for analysis algorithms. No additional parameters are required.
 
 Capacity envelope analysis workflow component.
 
-Monte Carlo analysis of network capacity under random failures. Generates statistical
-distributions (envelopes) of maximum flow capacity between node groups across failure scenarios.
+Monte Carlo analysis of network capacity under random failures using FailureManager.
+Generates statistical distributions (envelopes) of maximum flow capacity between
+node groups across failure scenarios. Supports parallel processing, baseline analysis,
+and configurable failure policies.
 
-## Analysis Process
+This component uses the FailureManager convenience method to perform the analysis,
+ensuring consistency with the programmatic API while providing workflow integration.
 
-1. **Pre-computation (Main Process)**: Apply failure policies for all Monte Carlo iterations
-   upfront in the main process using `_compute_failure_exclusions`. Risk groups are recursively
-   expanded to include member nodes/links. This generates small exclusion sets (typically <1%
-   of entities) that minimize inter-process communication overhead.
-
-2. **Distribution**: Network is pickled once and shared across worker processes via
-   ProcessPoolExecutor initializer. Pre-computed exclusion sets are distributed to workers
-   rather than modified network copies, avoiding repeated serialization overhead.
-
-3. **Flow Computation (Workers)**: Each worker creates a NetworkView with exclusions (no copying)
-   and computes max flow for each source-sink pair.
-   Results are cached based on exclusion patterns since many iterations share identical failure
-   sets. Cache is bounded with FIFO eviction.
-
-4. **Statistical Aggregation**: Collect capacity samples from all iterations and build
-   frequency-based distributions for memory efficiency. Results include capacity envelopes
-   (min/max/mean/percentiles) and optional failure pattern frequency maps.
-
-## Performance Characteristics
-
-**Time Complexity**: O(I × (R + F × A) / P) where I=iterations, R=failure evaluation,
-F=flow pairs, A=max-flow algorithm cost, P=parallelism. The max-flow algorithm uses
-Ford-Fulkerson with Dijkstra SPF augmentation: A = O(V²E) iterations × O(E log V) per SPF
-= O(V²E² log V) worst case, but typically much better. Also, per-worker cache reduces
-effective iterations by 60-90% for common failure patterns.
-
-**Space Complexity**: O(V + E + I × F + C) with frequency-based compression reducing
-I×F samples to ~√(I×F) entries. Validated by benchmark tests in test suite.
-
-## YAML Configuration Example
-
-```yaml
-workflow:
-  - step_type: CapacityEnvelopeAnalysis
-    name: "capacity_envelope_monte_carlo"     # Optional: Custom name for this step
-    source_path: "^datacenter/.*"             # Regex pattern for source node groups
-    sink_path: "^edge/.*"                     # Regex pattern for sink node groups
-    mode: "combine"                           # "combine" or "pairwise" flow analysis
-    failure_policy: "random_failures"         # Optional: Named failure policy to use
-    iterations: 1000                          # Number of Monte-Carlo trials
-    parallelism: 4                            # Number of parallel worker processes
-    shortest_path: false                      # Use shortest paths only
-    flow_placement: "PROPORTIONAL"            # Flow placement strategy
-    baseline: true                            # Optional: Run first iteration without failures
-    seed: 42                                  # Optional: Seed for reproducible results
-    store_failure_patterns: false            # Optional: Store failure patterns in results
-```
-
-## Results
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: CapacityEnvelopeAnalysis
+        name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
+        source_path: "^datacenter/.*"          # Regex pattern for source node groups
+        sink_path: "^edge/.*"                  # Regex pattern for sink node groups
+        mode: "combine"                        # "combine" or "pairwise" flow analysis
+        failure_policy: "random_failures"      # Optional: Named failure policy to use
+        iterations: 1000                       # Number of Monte-Carlo trials
+        parallelism: 4                         # Number of parallel worker processes
+        shortest_path: false                   # Use shortest paths only
+        flow_placement: "PROPORTIONAL"         # Flow placement strategy
+        baseline: true                         # Optional: Run first iteration without failures
+        seed: 42                               # Optional: Seed for reproducible results
+        store_failure_patterns: false          # Optional: Store failure patterns in results
+    ```
 
 Results stored in scenario.results:
-- `capacity_envelopes`: Dictionary mapping flow keys to CapacityEnvelope data
-- `failure_pattern_results`: Frequency map of failure patterns (if store_failure_patterns=True)
+    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data
+    - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
 
 ### CapacityEnvelopeAnalysis
 
-A workflow step that samples maximum capacity between node groups across random failures.
+Capacity envelope analysis workflow step using FailureManager convenience method.
 
-Performs Monte-Carlo analysis by repeatedly applying failures and measuring capacity
-to build statistical envelopes of network resilience. Results include individual
-flow capacity envelopes across iterations.
-
-This implementation uses parallel processing:
-- Network is serialized once and shared across all worker processes
-- Failure exclusions are pre-computed in the main process
-- NetworkView excludes entities without copying the network
-- Flow computations are cached within workers to avoid redundant calculations
-
-All results are stored using frequency-based storage for memory efficiency.
+This workflow step uses the FailureManager.run_max_flow_monte_carlo() convenience method
+to perform analysis, ensuring consistency with the programmatic API while providing
+workflow integration and result storage.
 
 Attributes:
-    source_path: Regex pattern to select source node groups.
-    sink_path: Regex pattern to select sink node groups.
-    mode: "combine" or "pairwise" flow analysis mode (default: "combine").
-    failure_policy: Name of failure policy in scenario.failure_policy_set (optional).
-    iterations: Number of Monte-Carlo trials (default: 1).
-    parallelism: Number of parallel worker processes (default: 1).
-    shortest_path: If True, use shortest paths only (default: False).
-    flow_placement: Flow placement strategy (default: PROPORTIONAL).
-    baseline: If True, run first iteration without failures as baseline (default: False).
-    seed: Optional seed for deterministic results (for debugging).
-    store_failure_patterns: If True, store failure patterns in results (default: False).
+    source_path: Regex pattern for source node groups.
+    sink_path: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    failure_policy: Name of failure policy in scenario.failure_policy_set.
+    iterations: Number of Monte-Carlo trials.
+    parallelism: Number of parallel worker processes.
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+    baseline: Whether to run first iteration without failures as baseline.
+    seed: Optional seed for reproducible results.
+    store_failure_patterns: Whether to store failure patterns in results.
 
 **Attributes:**
 
@@ -2375,7 +2365,7 @@ Attributes:
 - `iterations` (int) = 1
 - `parallelism` (int) = 1
 - `shortest_path` (bool) = False
-- `flow_placement` (FlowPlacement) = 1
+- `flow_placement` (FlowPlacement | str) = 1
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 
@@ -2384,7 +2374,7 @@ Attributes:
 - `execute(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the capacity envelope analysis workflow step.
+  - Execute capacity envelope analysis using FailureManager convenience method.
 
 ---
 
@@ -2656,6 +2646,185 @@ Args:
 
 ---
 
+## ngraph.monte_carlo.functions
+
+Picklable Monte Carlo analysis functions for FailureManager simulations.
+
+These functions are designed to be used with FailureManager.run_monte_carlo_analysis()
+and follow the pattern: analysis_func(network_view: NetworkView, **kwargs) -> Any.
+
+All functions accept only simple, hashable parameters to ensure compatibility
+with FailureManager's caching and multiprocessing systems for Monte Carlo
+failure analysis scenarios.
+
+Note: This module is distinct from ngraph.workflow.analysis, which provides
+notebook visualization components for workflow results.
+
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int' = 50, **kwargs) -> 'dict[str, Any]'
+
+Analyze traffic demand placement success rates.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    demands_config: List of demand configurations (serializable dicts).
+    placement_rounds: Number of placement optimization rounds.
+
+Returns:
+    Dictionary with placement statistics by priority.
+
+### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'list[tuple[str, str, float]]'
+
+Analyze maximum flow capacity between node groups.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    source_regex: Regex pattern for source node groups.
+    sink_regex: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+
+Returns:
+    List of (source, sink, capacity) tuples.
+
+### sensitivity_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'dict[str, float]'
+
+Analyze component sensitivity to failures.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    source_regex: Regex pattern for source node groups.
+    sink_regex: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+
+Returns:
+    Dictionary mapping component IDs to sensitivity scores.
+
+---
+
+## ngraph.monte_carlo.results
+
+Structured result objects for FailureManager analysis functions.
+
+These classes provide convenient interfaces for accessing Monte Carlo analysis
+results from FailureManager convenience methods. Visualization is handled by
+specialized analyzer classes in the workflow.analysis module.
+
+### CapacityEnvelopeResults
+
+Results from capacity envelope Monte Carlo analysis.
+
+This class provides data access for capacity envelope analysis results.
+For visualization, use CapacityMatrixAnalyzer from ngraph.workflow.analysis.
+
+Attributes:
+    envelopes: Dictionary mapping flow keys to CapacityEnvelope objects
+    failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects
+    source_pattern: Source node regex pattern used in analysis
+    sink_pattern: Sink node regex pattern used in analysis
+    mode: Flow analysis mode ("combine" or "pairwise")
+    iterations: Number of Monte Carlo iterations performed
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `envelopes` (Dict[str, CapacityEnvelope])
+- `failure_patterns` (Dict[str, FailurePatternResult])
+- `source_pattern` (str)
+- `sink_pattern` (str)
+- `mode` (str)
+- `iterations` (int)
+- `metadata` (Dict[str, Any])
+
+**Methods:**
+
+- `export_summary(self) -> 'Dict[str, Any]'`
+  - Export comprehensive summary for serialization.
+- `flow_keys(self) -> 'List[str]'`
+  - Get list of all flow keys in results.
+- `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'`
+  - Get CapacityEnvelope for a specific flow.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
+  - Get summary of failure patterns if available.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
+  - Get summary statistics for all flow pairs.
+- `to_dataframe(self) -> 'pd.DataFrame'`
+  - Convert capacity envelopes to DataFrame for analysis.
+
+### DemandPlacementResults
+
+Results from demand placement Monte Carlo analysis.
+
+Attributes:
+    raw_results: Raw results from FailureManager
+    iterations: Number of Monte Carlo iterations
+    baseline: Optional baseline result (no failures)
+    failure_patterns: Dictionary mapping pattern keys to failure pattern results
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `raw_results` (dict[str, Any])
+- `iterations` (int)
+- `baseline` (Optional[dict[str, Any]])
+- `failure_patterns` (Optional[Dict[str, Any]])
+- `metadata` (Optional[Dict[str, Any]])
+
+**Methods:**
+
+- `success_rate_distribution(self) -> 'pd.DataFrame'`
+  - Get demand placement success rate distribution as DataFrame.
+- `summary_statistics(self) -> 'dict[str, float]'`
+  - Get summary statistics for success rates.
+
+### SensitivityResults
+
+Results from sensitivity Monte Carlo analysis.
+
+Attributes:
+    raw_results: Raw results from FailureManager
+    iterations: Number of Monte Carlo iterations
+    baseline: Optional baseline result (no failures)
+    component_scores: Aggregated component impact scores by flow
+    failure_patterns: Dictionary mapping pattern keys to failure pattern results
+    source_pattern: Source node regex pattern used in analysis
+    sink_pattern: Sink node regex pattern used in analysis
+    mode: Flow analysis mode ("combine" or "pairwise")
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `raw_results` (dict[str, Any])
+- `iterations` (int)
+- `baseline` (Optional[dict[str, Any]])
+- `component_scores` (Optional[Dict[str, Dict[str, Dict[str, float]]]])
+- `failure_patterns` (Optional[Dict[str, Any]])
+- `source_pattern` (Optional[str])
+- `sink_pattern` (Optional[str])
+- `mode` (Optional[str])
+- `metadata` (Optional[Dict[str, Any]])
+
+**Methods:**
+
+- `component_impact_distribution(self) -> 'pd.DataFrame'`
+  - Get component impact distribution as DataFrame.
+- `export_summary(self) -> 'Dict[str, Any]'`
+  - Export comprehensive summary for serialization.
+- `flow_keys(self) -> 'List[str]'`
+  - Get list of all flow keys in results.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
+  - Get summary of failure patterns if available.
+- `get_flow_sensitivity(self, flow_key: 'str') -> 'Dict[str, Dict[str, float]]'`
+  - Get component sensitivity scores for a specific flow.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
+  - Get summary statistics for component impact across all flows.
+- `to_dataframe(self) -> 'pd.DataFrame'`
+  - Convert sensitivity results to DataFrame for analysis.
+
+---
+
 ## ngraph.workflow.analysis.base
 
 Base classes for notebook analysis components.
@@ -2693,15 +2862,20 @@ Capacity envelope analysis utilities.
 
 This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
 envelope results, computing statistics, and generating notebook visualizations.
+Works with both CapacityEnvelopeResults objects and workflow step data.
 
 ### CapacityMatrixAnalyzer
 
 Processes capacity envelope data into matrices and flow availability analysis.
 
 Transforms capacity envelope results from CapacityEnvelopeAnalysis workflow steps
-into matrices, statistical summaries, and flow availability distributions.
-Provides visualization methods for notebook output including capacity matrices,
-flow CDFs, and reliability curves.
+or CapacityEnvelopeResults objects into matrices, statistical summaries, and
+flow availability distributions. Provides visualization methods for notebook output
+including capacity matrices, flow CDFs, and reliability curves.
+
+Can be used in two modes:
+1. Workflow mode: analyze() with workflow step results dictionary
+2. Direct mode: analyze_results() with CapacityEnvelopeResults object
 
 **Methods:**
 
@@ -2711,14 +2885,22 @@ flow CDFs, and reliability curves.
   - Analyze results and display them in notebook format.
 - `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'`
   - Run analyze/display on every step containing capacity_envelopes.
+- `analyze_and_display_envelope_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'None'`
+  - Complete analysis and display for CapacityEnvelopeResults object.
 - `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
   - Analyze and display flow availability for a specific step.
 - `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
   - Analyze and display results for a specific step.
 - `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
   - Create CDF/availability distribution from capacity envelope frequencies.
+- `analyze_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'Dict[str, Any]'`
+  - Analyze CapacityEnvelopeResults object directly.
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
   - Pretty-print analysis results to the notebook/stdout.
+- `display_capacity_distributions(self, results: "'CapacityEnvelopeResults'", flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'`
+  - Display capacity distribution plots for CapacityEnvelopeResults.
+- `display_percentile_comparison(self, results: "'CapacityEnvelopeResults'") -> 'None'`
+  - Display percentile comparison plots for CapacityEnvelopeResults.
 - `get_description(self) -> 'str'`
   - Get a description of what this analyzer does.
 

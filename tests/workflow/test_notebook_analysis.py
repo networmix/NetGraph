@@ -90,7 +90,7 @@ class TestCapacityMatrixAnalyzer:
             "step1": {
                 "capacity_envelopes": {
                     "A -> B": 100,  # Simple numeric value
-                    "B -> C": {"capacity": 150},  # Dict with capacity key
+                    "B -> C": {"max": 150},  # Dict with canonical max key
                 }
             }
         }
@@ -107,8 +107,8 @@ class TestCapacityMatrixAnalyzer:
             "test_step": {
                 "capacity_envelopes": {
                     "Node1 -> Node2": 100.5,
-                    "Node2 <-> Node3": {"capacity": 200.0},
-                    "Node3 -> Node4": {"max_capacity": 150.0},
+                    "Node2 <-> Node3": {"max": 200.0},
+                    "Node3 -> Node4": {"max": 150.0},
                 }
             }
         }
@@ -177,45 +177,10 @@ class TestCapacityMatrixAnalyzer:
         assert self.analyzer._extract_capacity_value(100) == 100.0
         assert self.analyzer._extract_capacity_value(150.5) == 150.5
 
-    def test_extract_capacity_value_dict_capacity(self) -> None:
-        """Test extracting capacity from dict with capacity key."""
-        envelope_data = {"capacity": 200}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 200.0
-
-    def test_extract_capacity_value_dict_max_capacity(self) -> None:
-        """Test extracting capacity from dict with max_capacity key."""
-        envelope_data = {"max_capacity": 300}
+    def test_extract_capacity_value_dict_max(self) -> None:
+        """Test extracting capacity from dict with max key (canonical format)."""
+        envelope_data = {"max": 300.0}
         assert self.analyzer._extract_capacity_value(envelope_data) == 300.0
-
-    def test_extract_capacity_value_dict_envelope(self) -> None:
-        """Test extracting capacity from dict with envelope key."""
-        envelope_data = {"envelope": 250}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 250.0
-
-    def test_extract_capacity_value_dict_value(self) -> None:
-        """Test extracting capacity from dict with value key."""
-        envelope_data = {"value": 175}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 175.0
-
-    def test_extract_capacity_value_dict_max_value(self) -> None:
-        """Test extracting capacity from dict with max_value key."""
-        envelope_data = {"max_value": 225}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 225.0
-
-    def test_extract_capacity_value_dict_values_list(self) -> None:
-        """Test extracting capacity from dict with values list."""
-        envelope_data = {"values": [100, 200, 150]}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 200.0
-
-    def test_extract_capacity_value_dict_values_tuple(self) -> None:
-        """Test extracting capacity from dict with values tuple."""
-        envelope_data = {"values": (80, 120, 100)}
-        assert self.analyzer._extract_capacity_value(envelope_data) == 120.0
-
-    def test_extract_capacity_value_dict_values_empty_list(self) -> None:
-        """Test extracting capacity from dict with empty values list."""
-        envelope_data = {"values": []}
-        assert self.analyzer._extract_capacity_value(envelope_data) is None
 
     def test_extract_capacity_value_invalid(self) -> None:
         """Test extracting capacity from invalid data."""
@@ -583,12 +548,14 @@ class TestFlowAnalyzer:
 
     def test_calculate_flow_statistics(self) -> None:
         """Test _calculate_flow_statistics method."""
+        import pandas as pd
+
         df_flows = pd.DataFrame(
-            [
-                {"step": "step1", "flow_path": "A -> B", "max_flow": 100.0},
-                {"step": "step1", "flow_path": "B -> C", "max_flow": 200.0},
-                {"step": "step2", "flow_path": "C -> D", "max_flow": 150.0},
-            ]
+            {
+                "step": ["step1", "step1", "step2"],
+                "flow_path": ["A->B", "B->C", "C->D"],
+                "max_flow": [100.0, 200.0, 150.0],
+            }
         )
 
         stats = self.analyzer._calculate_flow_statistics(df_flows)
@@ -598,7 +565,64 @@ class TestFlowAnalyzer:
         assert stats["max_flow"] == 200.0
         assert stats["min_flow"] == 100.0
         assert stats["avg_flow"] == 150.0
-        assert stats["total_capacity"] == 450.0
+
+    def test_analyze_with_exception(self) -> None:
+        """Test analyze method when exception occurs during processing."""
+        # Create results that will cause an exception in DataFrame processing
+        results = {
+            "step1": {
+                "max_flow:[A -> B]": "invalid_number",  # This should cause an error
+            }
+        }
+
+        with pytest.raises(RuntimeError, match="Error analyzing flow results"):
+            self.analyzer.analyze(results)
+
+    def test_analyze_capacity_probe_no_step_name(self) -> None:
+        """Test analyze_capacity_probe without step_name."""
+        results = {"step1": {"max_flow:[A -> B]": 100.0}}
+
+        with pytest.raises(ValueError, match="No step name provided"):
+            self.analyzer.analyze_capacity_probe(results)
+
+    def test_analyze_capacity_probe_missing_step(self) -> None:
+        """Test analyze_capacity_probe with missing step."""
+        results = {"step1": {"max_flow:[A -> B]": 100.0}}
+
+        with pytest.raises(ValueError, match="No data found for step"):
+            self.analyzer.analyze_capacity_probe(results, step_name="missing_step")
+
+    def test_analyze_capacity_probe_no_flow_data(self) -> None:
+        """Test analyze_capacity_probe with no flow data in step."""
+        results = {"step1": {"other_data": "value"}}
+
+        with pytest.raises(ValueError, match="No capacity probe results found"):
+            self.analyzer.analyze_capacity_probe(results, step_name="step1")
+
+    def test_analyze_capacity_probe_success(self) -> None:
+        """Test successful analyze_capacity_probe."""
+        results = {
+            "capacity_probe": {
+                "max_flow:[datacenter -> edge]": 150.0,
+                "max_flow:[edge -> datacenter]": 200.0,
+                "other_data": "ignored",
+            }
+        }
+
+        with patch("ngraph.workflow.analysis.flow_analyzer._get_show") as mock_show:
+            mock_show.return_value = MagicMock()
+
+            # Capture print output
+            with patch("builtins.print") as mock_print:
+                self.analyzer.analyze_capacity_probe(
+                    results, step_name="capacity_probe"
+                )
+
+                # Verify that print was called with expected content
+                print_calls = [call[0][0] for call in mock_print.call_args_list]
+                assert any("Capacity Probe Results" in call for call in print_calls)
+                assert any("Total probes: 2" in call for call in print_calls)
+                assert any("Max flow: 200.00" in call for call in print_calls)
 
     def test_prepare_flow_visualization(self) -> None:
         """Test _prepare_flow_visualization method."""
@@ -1035,6 +1059,137 @@ class TestSummaryAnalyzer:
         calls = [call.args[0] for call in mock_print.call_args_list]
         assert any("NetGraph Analysis Summary" in call for call in calls)
 
+    @patch("builtins.print")
+    def test_analyze_network_stats_success(self, mock_print: MagicMock) -> None:
+        """Test analyze_network_stats with complete data."""
+        results = {
+            "network_step": {
+                "node_count": 50,
+                "link_count": 100,
+                "total_capacity": 1000.0,
+                "mean_capacity": 10.0,
+                "median_capacity": 8.5,
+                "min_capacity": 1.0,
+                "max_capacity": 50.0,
+                "mean_cost": 25.5,
+                "median_cost": 20.0,
+                "min_cost": 5.0,
+                "max_cost": 100.0,
+                "mean_degree": 4.2,
+                "median_degree": 4.0,
+                "min_degree": 2.0,
+                "max_degree": 8.0,
+            }
+        }
+
+        self.analyzer.analyze_network_stats(results, step_name="network_step")
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("📊 Network Statistics: network_step" in call for call in calls)
+        assert any("Nodes: 50" in call for call in calls)
+        assert any("Links: 100" in call for call in calls)
+        assert any("Total Capacity: 1,000.00" in call for call in calls)
+        assert any("Mean Capacity: 10.00" in call for call in calls)
+        assert any("Mean Cost: 25.50" in call for call in calls)
+        assert any("Mean Degree: 4.2" in call for call in calls)
+
+    @patch("builtins.print")
+    def test_analyze_network_stats_partial_data(self, mock_print: MagicMock) -> None:
+        """Test analyze_network_stats with partial data."""
+        results = {
+            "partial_step": {
+                "node_count": 25,
+                "mean_capacity": 15.0,
+                "max_degree": 6.0,
+                # Missing many optional fields
+            }
+        }
+
+        self.analyzer.analyze_network_stats(results, step_name="partial_step")
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("📊 Network Statistics: partial_step" in call for call in calls)
+        assert any("Nodes: 25" in call for call in calls)
+        assert any("Mean Capacity: 15.00" in call for call in calls)
+        assert any("Max Degree: 6.0" in call for call in calls)
+        # Should not display missing fields
+        assert not any("Links:" in call for call in calls)
+        assert not any("Cost Statistics:" in call for call in calls)
+
+    def test_analyze_network_stats_missing_step_name(self) -> None:
+        """Test analyze_network_stats without step_name."""
+        results = {"step": {"data": "value"}}
+
+        with pytest.raises(ValueError, match="No step name provided"):
+            self.analyzer.analyze_network_stats(results)
+
+    def test_analyze_network_stats_step_not_found(self) -> None:
+        """Test analyze_network_stats with non-existent step."""
+        results = {"other_step": {"data": "value"}}
+
+        with pytest.raises(ValueError, match="No data found for step: missing_step"):
+            self.analyzer.analyze_network_stats(results, step_name="missing_step")
+
+    def test_analyze_network_stats_empty_step_data(self) -> None:
+        """Test analyze_network_stats with empty step data."""
+        results = {"empty_step": {}}
+
+        with pytest.raises(ValueError, match="No data found for step: empty_step"):
+            self.analyzer.analyze_network_stats(results, step_name="empty_step")
+
+    @patch("builtins.print")
+    def test_analyze_build_graph_success(self, mock_print: MagicMock) -> None:
+        """Test analyze_build_graph with graph data."""
+        results = {
+            "graph_step": {
+                "graph": {"nodes": ["A", "B"], "edges": [("A", "B")]},
+                "metadata": "some_data",
+            }
+        }
+
+        self.analyzer.analyze_build_graph(results, step_name="graph_step")
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("🔗 Graph Construction: graph_step" in call for call in calls)
+        assert any("✅ Graph successfully constructed" in call for call in calls)
+
+    @patch("builtins.print")
+    def test_analyze_build_graph_no_graph(self, mock_print: MagicMock) -> None:
+        """Test analyze_build_graph without graph data."""
+        results = {
+            "no_graph_step": {
+                "other_data": "value",
+                # No graph field
+            }
+        }
+
+        self.analyzer.analyze_build_graph(results, step_name="no_graph_step")
+
+        calls = [call.args[0] for call in mock_print.call_args_list]
+        assert any("🔗 Graph Construction: no_graph_step" in call for call in calls)
+        assert any("❌ No graph data found" in call for call in calls)
+
+    def test_analyze_build_graph_missing_step_name(self) -> None:
+        """Test analyze_build_graph without step_name."""
+        results = {"step": {"graph": {}}}
+
+        with pytest.raises(ValueError, match="No step name provided"):
+            self.analyzer.analyze_build_graph(results)
+
+    def test_analyze_build_graph_step_not_found(self) -> None:
+        """Test analyze_build_graph with non-existent step."""
+        results = {"other_step": {"graph": {}}}
+
+        with pytest.raises(ValueError, match="No data found for step: missing_step"):
+            self.analyzer.analyze_build_graph(results, step_name="missing_step")
+
+    def test_analyze_build_graph_empty_step_data(self) -> None:
+        """Test analyze_build_graph with empty step data."""
+        results = {"empty_step": {}}
+
+        with pytest.raises(ValueError, match="No data found for step: empty_step"):
+            self.analyzer.analyze_build_graph(results, step_name="empty_step")
+
 
 # Add additional tests to improve coverage
 
@@ -1082,150 +1237,195 @@ class TestCapacityMatrixAnalyzerEdgeCases:
         """Set up test fixtures."""
         self.analyzer = CapacityMatrixAnalyzer()
 
-    def test_analyze_and_display_with_kwargs(self) -> None:
-        """Test analyze_and_display method with custom kwargs."""
+    def test_parse_flow_path_bidirectional(self) -> None:
+        """Test _parse_flow_path with bidirectional flow."""
+        result = self.analyzer._parse_flow_path("datacenter<->edge")
+
+        assert result is not None
+        assert result["source"] == "datacenter"
+        assert result["destination"] == "edge"
+        assert result["direction"] == "bidirectional"
+
+    def test_parse_flow_path_directed(self) -> None:
+        """Test _parse_flow_path with directed flow."""
+        result = self.analyzer._parse_flow_path("datacenter->edge")
+
+        assert result is not None
+        assert result["source"] == "datacenter"
+        assert result["destination"] == "edge"
+        assert result["direction"] == "directed"
+
+    def test_parse_flow_path_with_whitespace(self) -> None:
+        """Test _parse_flow_path handles whitespace correctly."""
+        result = self.analyzer._parse_flow_path(" datacenter -> edge ")
+
+        assert result is not None
+        assert result["source"] == "datacenter"
+        assert result["destination"] == "edge"
+        assert result["direction"] == "directed"
+
+    def test_parse_flow_path_invalid_format(self) -> None:
+        """Test _parse_flow_path with invalid format."""
+        result = self.analyzer._parse_flow_path("invalid_format")
+        assert result is None
+
+    def test_parse_flow_path_empty_string(self) -> None:
+        """Test _parse_flow_path with empty string."""
+        result = self.analyzer._parse_flow_path("")
+        assert result is None
+
+    def test_extract_capacity_value_numeric(self) -> None:
+        """Test _extract_capacity_value with numeric values."""
+        assert self.analyzer._extract_capacity_value(100) == 100.0
+        assert self.analyzer._extract_capacity_value(50.5) == 50.5
+        assert self.analyzer._extract_capacity_value(0) == 0.0
+
+    def test_extract_capacity_value_dict_format(self) -> None:
+        """Test _extract_capacity_value with dict format."""
+        envelope_data = {"max": 100, "min": 0, "avg": 50}
+        assert self.analyzer._extract_capacity_value(envelope_data) == 100.0
+
+    def test_extract_capacity_value_dict_non_numeric_max(self) -> None:
+        """Test _extract_capacity_value with non-numeric max in dict."""
+        envelope_data = {"max": "invalid", "min": 0, "avg": 50}
+        assert self.analyzer._extract_capacity_value(envelope_data) is None
+
+    def test_extract_capacity_value_dict_missing_max(self) -> None:
+        """Test _extract_capacity_value with missing max key."""
+        envelope_data = {"min": 0, "avg": 50}
+        assert self.analyzer._extract_capacity_value(envelope_data) is None
+
+    def test_extract_capacity_value_invalid_types(self) -> None:
+        """Test _extract_capacity_value with invalid types."""
+        assert self.analyzer._extract_capacity_value("string") is None
+        assert self.analyzer._extract_capacity_value([1, 2, 3]) is None
+        assert self.analyzer._extract_capacity_value(None) is None
+
+    def test_extract_matrix_data_mixed_formats(self) -> None:
+        """Test _extract_matrix_data with mixed envelope formats."""
+        envelopes = {
+            "datacenter->edge": 100,  # Numeric
+            "edge->datacenter": {"max": 80, "min": 20},  # Dict format
+            "invalid_flow_format": 50,  # Invalid flow path
+            "datacenter<->core": {"max": "invalid"},  # Invalid capacity
+        }
+
+        matrix_data = self.analyzer._extract_matrix_data(envelopes)
+
+        # Should only extract valid entries
+        assert len(matrix_data) == 2
+
+        # Check first entry
+        entry1 = next(d for d in matrix_data if d["flow_path"] == "datacenter->edge")
+        assert entry1["source"] == "datacenter"
+        assert entry1["destination"] == "edge"
+        assert entry1["capacity"] == 100.0
+        assert entry1["direction"] == "directed"
+
+        # Check second entry
+        entry2 = next(d for d in matrix_data if d["flow_path"] == "edge->datacenter")
+        assert entry2["source"] == "edge"
+        assert entry2["destination"] == "datacenter"
+        assert entry2["capacity"] == 80.0
+        assert entry2["direction"] == "directed"
+
+    def test_extract_matrix_data_empty_envelopes(self) -> None:
+        """Test _extract_matrix_data with empty envelopes."""
+        matrix_data = self.analyzer._extract_matrix_data({})
+        assert matrix_data == []
+
+    def test_create_capacity_matrix(self) -> None:
+        """Test _create_capacity_matrix helper method."""
+        # Create test dataframe
+        matrix_data = [
+            {"source": "A", "destination": "B", "capacity": 100},
+            {"source": "B", "destination": "A", "capacity": 80},
+            {"source": "A", "destination": "C", "capacity": 120},
+        ]
+        df = pd.DataFrame(matrix_data)
+
+        matrix = self.analyzer._create_capacity_matrix(df)
+
+        assert isinstance(matrix, pd.DataFrame)
+        assert matrix.loc["A", "B"] == 100
+        assert matrix.loc["B", "A"] == 80
+        assert matrix.loc["A", "C"] == 120
+        # Fill value should be 0 for missing combinations
+        assert matrix.loc["B", "C"] == 0
+
+    def test_calculate_statistics_empty_matrix(self) -> None:
+        """Test _calculate_statistics with empty matrix."""
+        empty_matrix = pd.DataFrame()
+        stats = self.analyzer._calculate_statistics(empty_matrix)
+
+        assert not stats["has_data"]
+
+    def test_calculate_statistics_all_zero_matrix(self) -> None:
+        """Test _calculate_statistics with all-zero matrix."""
+        matrix = pd.DataFrame({"A": [0, 0], "B": [0, 0]}, index=["A", "B"])
+
+        stats = self.analyzer._calculate_statistics(matrix)
+        assert not stats["has_data"]
+
+    def test_calculate_statistics_valid_matrix(self) -> None:
+        """Test _calculate_statistics with valid matrix."""
+        matrix = pd.DataFrame({"A": [0, 80], "B": [100, 0]}, index=["A", "B"])
+
+        stats = self.analyzer._calculate_statistics(matrix)
+
+        assert stats["has_data"]
+        assert "flow_density" in stats
+        assert "capacity_max" in stats  # Correct key name
+        assert "capacity_mean" in stats  # Correct key name
+        assert "capacity_min" in stats  # Correct key name
+
+    @pytest.mark.parametrize("step_name", [None, ""])
+    def test_analyze_missing_step_name(self, step_name) -> None:
+        """Test analyze method with missing or empty step name."""
+        results = {"some_step": {"capacity_envelopes": {}}}
+
+        with pytest.raises(ValueError, match="step_name required"):
+            self.analyzer.analyze(results, step_name=step_name)
+
+    def test_analyze_step_not_found(self) -> None:
+        """Test analyze method with non-existent step."""
+        results = {"other_step": {"capacity_envelopes": {}}}
+
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: missing_step"
+        ):
+            self.analyzer.analyze(results, step_name="missing_step")
+
+    def test_analyze_no_capacity_envelopes(self) -> None:
+        """Test analyze method with step data but no capacity envelopes."""
+        results = {"step": {"other_data": "value"}}
+
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: step"
+        ):
+            self.analyzer.analyze(results, step_name="step")
+
+    def test_analyze_empty_capacity_envelopes(self) -> None:
+        """Test analyze method with empty capacity envelopes."""
+        results = {"step": {"capacity_envelopes": {}}}
+
+        with pytest.raises(
+            ValueError, match="No capacity envelope data found for step: step"
+        ):
+            self.analyzer.analyze(results, step_name="step")
+
+    def test_analyze_invalid_envelope_data(self) -> None:
+        """Test analyze method with invalid envelope data."""
         results = {
-            "test_step": {
+            "step": {
                 "capacity_envelopes": {
-                    "A -> B": 100,
+                    "invalid_flow": "string_value",
+                    "another_invalid": None,
                 }
             }
         }
 
-        with (
-            patch.object(self.analyzer, "analyze") as mock_analyze,
-            patch.object(self.analyzer, "display_analysis") as mock_display,
+        with pytest.raises(
+            RuntimeError, match="Error analyzing capacity matrix for step"
         ):
-            mock_analyze.return_value = {"status": "success"}
-
-            self.analyzer.analyze_and_display(
-                results, step_name="test_step", custom_arg="value"
-            )
-
-            mock_analyze.assert_called_once_with(
-                results, step_name="test_step", custom_arg="value"
-            )
-            mock_display.assert_called_once_with(
-                {"status": "success"}, step_name="test_step", custom_arg="value"
-            )
-
-
-class TestFlowAnalyzerEdgeCases:
-    """Test edge cases for FlowAnalyzer."""
-
-    def setup_method(self) -> None:
-        """Set up test fixtures."""
-        self.analyzer = FlowAnalyzer()
-
-    def test_analyze_and_display_with_kwargs(self) -> None:
-        """Test analyze_and_display method with custom kwargs."""
-        results = {
-            "step1": {
-                "max_flow:[A -> B]": 100.0,
-            }
-        }
-
-        with (
-            patch.object(self.analyzer, "analyze") as mock_analyze,
-            patch.object(self.analyzer, "display_analysis") as mock_display,
-        ):
-            mock_analyze.return_value = {"status": "success"}
-
-            self.analyzer.analyze_and_display(results, custom_arg="value")
-
-            mock_analyze.assert_called_once_with(results, custom_arg="value")
-            mock_display.assert_called_once_with(
-                {"status": "success"}, custom_arg="value"
-            )
-
-
-class TestExceptionHandling:
-    """Test exception handling in various analyzers."""
-
-    def test_capacity_analyzer_exception_handling(self) -> None:
-        """Test CapacityMatrixAnalyzer exception handling."""
-        analyzer = CapacityMatrixAnalyzer()
-
-        # Create results that will cause an exception in pandas operations
-        with patch("pandas.DataFrame") as mock_df:
-            mock_df.side_effect = Exception("Pandas error")
-
-            results = {
-                "test_step": {
-                    "capacity_envelopes": {
-                        "A -> B": 100,
-                    }
-                }
-            }
-
-            with pytest.raises(
-                RuntimeError,
-                match="Error analyzing capacity matrix for test_step: Pandas error",
-            ):
-                analyzer.analyze(results, step_name="test_step")
-
-    def test_flow_analyzer_exception_handling(self) -> None:
-        """Test FlowAnalyzer exception handling."""
-        analyzer = FlowAnalyzer()
-
-        # Create results that will cause an exception in pandas operations
-        with patch("pandas.DataFrame") as mock_df:
-            mock_df.side_effect = Exception("Pandas error")
-
-            results = {
-                "step1": {
-                    "max_flow:[A -> B]": 100.0,
-                }
-            }
-
-            with pytest.raises(
-                RuntimeError, match="Error analyzing flow results: Pandas error"
-            ):
-                analyzer.analyze(results)
-
-    @patch("matplotlib.pyplot.show")
-    @patch("matplotlib.pyplot.tight_layout")
-    @patch("ngraph.workflow.analysis.show")
-    @patch("builtins.print")
-    def test_flow_analyzer_matplotlib_scenario(
-        self,
-        mock_print: MagicMock,
-        mock_show: MagicMock,
-        mock_tight_layout: MagicMock,
-        mock_plt_show: MagicMock,
-    ) -> None:
-        """Test FlowAnalyzer visualization scenario."""
-        analyzer = FlowAnalyzer()
-
-        df_flows = pd.DataFrame(
-            [
-                {"step": "step1", "flow_path": "A -> B", "max_flow": 100.0},
-                {"step": "step2", "flow_path": "C -> D", "max_flow": 150.0},
-            ]
-        )
-
-        analysis = {
-            "status": "success",
-            "dataframe": df_flows,
-            "statistics": {
-                "total_flows": 2,
-                "unique_steps": 2,
-                "max_flow": 150.0,
-                "min_flow": 100.0,
-                "avg_flow": 125.0,
-                "total_capacity": 250.0,
-            },
-            "visualization_data": {
-                "steps": ["step1", "step2"],
-                "has_multiple_steps": True,
-            },
-        }
-
-        # Test the display analysis with all matplotlib calls mocked
-        analyzer.display_analysis(analysis)
-
-        # Verify that the analysis was displayed
-        mock_print.assert_any_call("✅ Maximum Flow Analysis")
-        mock_show.assert_called_once()
-        mock_tight_layout.assert_called_once()
-        mock_plt_show.assert_called_once()
+            self.analyzer.analyze(results, step_name="step")
