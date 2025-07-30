@@ -1,11 +1,11 @@
 """Maximum flow algorithms and network flow computations."""
 
-from typing import Literal, Union, overload
+from typing import Dict, Literal, Union, overload
 
 from ngraph.lib.algorithms.base import EdgeSelect, FlowPlacement
 from ngraph.lib.algorithms.flow_init import init_flow_graph
 from ngraph.lib.algorithms.place_flow import place_flow_on_graph
-from ngraph.lib.algorithms.spf import spf
+from ngraph.lib.algorithms.spf import Cost, spf
 from ngraph.lib.algorithms.types import FlowSummary
 from ngraph.lib.graph import NodeID, StrictMultiDiGraph
 
@@ -208,6 +208,7 @@ def calc_max_flow(
                 capacity_attr,
                 flow_attr,
                 tolerance,
+                {},  # Empty cost distribution for self-loop case
             )
         else:
             return 0.0
@@ -220,8 +221,11 @@ def calc_max_flow(
         reset_flow_graph,
     )
 
+    # Initialize cost distribution tracking
+    cost_distribution: Dict[Cost, float] = {}
+
     # First path-finding iteration.
-    _, pred = spf(
+    costs, pred = spf(
         flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
     )
     flow_meta = place_flow_on_graph(
@@ -236,6 +240,13 @@ def calc_max_flow(
     )
     max_flow = flow_meta.placed_flow
 
+    # Track cost distribution for first iteration
+    if dst_node in costs and flow_meta.placed_flow > 0:
+        path_cost = costs[dst_node]
+        cost_distribution[path_cost] = (
+            cost_distribution.get(path_cost, 0.0) + flow_meta.placed_flow
+        )
+
     # If only one path (single augmentation) is desired, return early.
     if shortest_path:
         return _build_return_value(
@@ -247,11 +258,12 @@ def calc_max_flow(
             capacity_attr,
             flow_attr,
             tolerance,
+            cost_distribution,
         )
 
     # Otherwise, repeatedly find augmenting paths until no new flow can be placed.
     while True:
-        _, pred = spf(
+        costs, pred = spf(
             flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
         )
         if dst_node not in pred:
@@ -274,6 +286,13 @@ def calc_max_flow(
 
         max_flow += flow_meta.placed_flow
 
+        # Track cost distribution for this iteration
+        if dst_node in costs and flow_meta.placed_flow > 0:
+            path_cost = costs[dst_node]
+            cost_distribution[path_cost] = (
+                cost_distribution.get(path_cost, 0.0) + flow_meta.placed_flow
+            )
+
     return _build_return_value(
         max_flow,
         flow_graph,
@@ -283,6 +302,7 @@ def calc_max_flow(
         capacity_attr,
         flow_attr,
         tolerance,
+        cost_distribution,
     )
 
 
@@ -295,6 +315,7 @@ def _build_return_value(
     capacity_attr: str,
     flow_attr: str,
     tolerance: float,
+    cost_distribution: Dict[Cost, float],
 ) -> Union[float, tuple]:
     """Build the appropriate return value based on the requested flags."""
     if not (return_summary or return_graph):
@@ -303,7 +324,13 @@ def _build_return_value(
     summary = None
     if return_summary:
         summary = _build_flow_summary(
-            max_flow, flow_graph, src_node, capacity_attr, flow_attr, tolerance
+            max_flow,
+            flow_graph,
+            src_node,
+            capacity_attr,
+            flow_attr,
+            tolerance,
+            cost_distribution,
         )
 
     ret: list = [max_flow]
@@ -322,6 +349,7 @@ def _build_flow_summary(
     capacity_attr: str,
     flow_attr: str,
     tolerance: float,
+    cost_distribution: Dict[Cost, float],
 ) -> FlowSummary:
     """Build a FlowSummary from the flow graph state."""
     edge_flow = {}
@@ -364,6 +392,7 @@ def _build_flow_summary(
         residual_cap=residual_cap,
         reachable=reachable,
         min_cut=min_cut,
+        cost_distribution=cost_distribution,
     )
 
 

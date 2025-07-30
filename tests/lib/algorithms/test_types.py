@@ -35,6 +35,7 @@ class TestFlowSummary:
         residual_cap = {("A", "B", "e1"): 90.0, ("B", "C", "e2"): 95.0}
         reachable = {"A", "B"}
         min_cut = [("B", "C", "e2")]
+        cost_distribution = {1.0: 10.0, 2.0: 5.0}
 
         summary = FlowSummary(
             total_flow=15.0,
@@ -42,6 +43,7 @@ class TestFlowSummary:
             residual_cap=residual_cap,
             reachable=reachable,
             min_cut=min_cut,
+            cost_distribution=cost_distribution,
         )
 
         assert summary.total_flow == 15.0
@@ -49,6 +51,7 @@ class TestFlowSummary:
         assert summary.residual_cap == residual_cap
         assert summary.reachable == reachable
         assert summary.min_cut == min_cut
+        assert summary.cost_distribution == cost_distribution
 
     def test_flow_summary_structure(self) -> None:
         """Test that FlowSummary has the expected dataclass structure."""
@@ -58,6 +61,7 @@ class TestFlowSummary:
             residual_cap={},
             reachable=set(),
             min_cut=[],
+            cost_distribution={},
         )
 
         # Verify it's a dataclass with expected fields
@@ -69,6 +73,7 @@ class TestFlowSummary:
             "residual_cap",
             "reachable",
             "min_cut",
+            "cost_distribution",
         }
         assert set(fields.keys()) == expected_fields
 
@@ -97,6 +102,7 @@ class TestFlowSummary:
             residual_cap=residual_cap,
             reachable=reachable,
             min_cut=min_cut,
+            cost_distribution={2.0: 100.0, 3.0: 75.0},  # Test cost distribution
         )
 
         # Verify all data is accessible
@@ -105,12 +111,14 @@ class TestFlowSummary:
         assert len(summary.residual_cap) == 4
         assert len(summary.reachable) == 3
         assert len(summary.min_cut) == 1
+        assert len(summary.cost_distribution) == 2
 
         # Check specific values
         assert summary.edge_flow[("datacenter_1", "edge_1", "link_1")] == 100.0
         assert summary.residual_cap[("datacenter_1", "edge_1", "link_1")] == 0.0
         assert "datacenter_1" in summary.reachable
         assert ("datacenter_1", "edge_1", "link_1") in summary.min_cut
+        assert summary.cost_distribution[2.0] == 100.0
 
     def test_flow_summary_empty_collections(self) -> None:
         """Test FlowSummary with empty collections."""
@@ -120,6 +128,7 @@ class TestFlowSummary:
             residual_cap={},
             reachable=set(),
             min_cut=[],
+            cost_distribution={},
         )
 
         assert summary.total_flow == 0.0

@@ -280,3 +280,49 @@ class TestEnhancedMaxFlowMethods:
         assert "A" in summary.reachable
         # D should not be reachable since it's isolated
         assert "D" not in summary.reachable
+
+    def test_network_cost_distribution_functionality(self):
+        """Test that cost distribution is exposed through Network max flow methods."""
+        # Create a network with different path costs
+        nodes = {
+            "S": Node("S"),
+            "A": Node("A"),
+            "B": Node("B"),
+            "T": Node("T"),
+        }
+
+        links = {
+            "link1": Link(
+                "S", "A", capacity=5.0, cost=1.0
+            ),  # Path 1: cost 2, capacity 5
+            "link2": Link("A", "T", capacity=5.0, cost=1.0),
+            "link3": Link(
+                "S", "B", capacity=3.0, cost=2.0
+            ),  # Path 2: cost 4, capacity 3
+            "link4": Link("B", "T", capacity=3.0, cost=2.0),
+        }
+
+        network = Network(nodes=nodes, links=links, risk_groups={}, attrs={})
+
+        # Test max_flow_with_summary for cost distribution
+        result = network.max_flow_with_summary("^S$", "^T$", mode="combine")
+
+        assert len(result) == 1
+        (src_label, sink_label), (flow_value, summary) = next(iter(result.items()))
+
+        # Verify flow value and cost distribution
+        assert flow_value == 8.0
+        assert hasattr(summary, "cost_distribution")
+        assert summary.cost_distribution == {2.0: 5.0, 4.0: 3.0}
+
+        # Test max_flow_detailed for cost distribution
+        detailed_result = network.max_flow_detailed("^S$", "^T$", mode="combine")
+
+        assert len(detailed_result) == 1
+        (src_label, sink_label), (flow_value, summary, flow_graph) = next(
+            iter(detailed_result.items())
+        )
+
+        # Should have the same cost distribution
+        assert flow_value == 8.0
+        assert summary.cost_distribution == {2.0: 5.0, 4.0: 3.0}

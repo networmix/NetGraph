@@ -121,9 +121,71 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
+## Cost Distribution Analysis
+
+The cost distribution feature analyzes how flow is distributed across paths of different costs for latency span analysis and network performance characterization.
+
+```python
+# Get flow analysis with cost distribution
+result = network.max_flow_with_summary(
+    source_path="A",
+    sink_path="C",
+    mode="combine"
+)
+
+# Extract flow value and summary
+(src_label, sink_label), (flow_value, summary) = next(iter(result.items()))
+
+print(f"Total flow: {flow_value}")
+print(f"Cost distribution: {summary.cost_distribution}")
+
+# Example output:
+# Total flow: 6.0
+# Cost distribution: {2.0: 3.0, 4.0: 3.0}
+#
+# This means:
+# - 3.0 units of flow use paths with total cost 2.0 (A→B→C path)
+# - 3.0 units of flow use paths with total cost 4.0 (A→D→C path)
+```
+
+### Latency Span Analysis
+
+When link costs represent latency (e.g., distance-based), the cost distribution provides insight into traffic latency characteristics:
+
+```python
+def analyze_latency_span(cost_distribution):
+    """Analyze latency characteristics from cost distribution."""
+    if not cost_distribution:
+        return "No flow paths available"
+
+    total_flow = sum(cost_distribution.values())
+    weighted_avg_latency = sum(cost * flow for cost, flow in cost_distribution.items()) / total_flow
+
+    min_latency = min(cost_distribution.keys())
+    max_latency = max(cost_distribution.keys())
+    latency_span = max_latency - min_latency
+
+    print(f"Latency Analysis:")
+    print(f"  Average latency: {weighted_avg_latency:.2f}")
+    print(f"  Latency range: {min_latency:.1f} - {max_latency:.1f}")
+    print(f"  Latency span: {latency_span:.1f}")
+    print(f"  Flow distribution:")
+    for cost, flow in sorted(cost_distribution.items()):
+        percentage = (flow / total_flow) * 100
+        print(f"    {percentage:.1f}% of traffic uses paths with latency {cost:.1f}")
+
+# Example usage
+analyze_latency_span(summary.cost_distribution)
+```
+
+This analysis helps identify:
+- **Traffic concentration**: How much traffic uses low vs. high latency paths
+- **Latency span**: The range of latencies experienced by traffic
+- **Performance bottlenecks**: When high-latency paths carry traffic due to capacity constraints
+
 ## Advanced Analysis: Sensitivity Analysis
 
-For deeper network analysis, you can use the low-level graph algorithms to perform sensitivity analysis and identify bottleneck edges:
+For network analysis, you can use the low-level graph algorithms to run sensitivity analysis and identify bottleneck edges:
 
 ```python
 from ngraph.lib.algorithms.max_flow import calc_max_flow, saturated_edges, run_sensitivity

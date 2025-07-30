@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 29, 2025 at 16:59 UTC
+**Generated from source code on:** July 29, 2025 at 17:52 UTC
 
 **Modules auto-discovered:** 53
 
@@ -2205,6 +2205,9 @@ Attributes:
     residual_cap: Remaining capacity on each edge after flow placement.
     reachable: Set of nodes reachable from source in residual graph.
     min_cut: List of saturated edges that form the minimum cut.
+    cost_distribution: Distribution of flow volume over path costs.
+        Maps each cost value to the total volume of flow placed on
+        paths with that cost during sequential augmentation.
 
 **Attributes:**
 
@@ -2213,6 +2216,7 @@ Attributes:
 - `residual_cap` (Dict[Edge, float])
 - `reachable` (Set[str])
 - `min_cut` (List[Edge])
+- `cost_distribution` (Dict[Cost, float])
 
 ---
 

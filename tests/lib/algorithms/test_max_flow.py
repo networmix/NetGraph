@@ -671,3 +671,154 @@ def test_max_flow_with_parallel_edges():
         g, "A", "C", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
     )
     assert max_flow_eq == 2.0, f"Expected 2.0, got {max_flow_eq}"
+
+
+class TestMaxFlowCostDistribution:
+    """Tests for cost distribution calculation in max flow analysis."""
+
+    def test_cost_distribution_multiple_paths(self):
+        """Test cost distribution with paths of different costs."""
+        # Create graph with two path options at different costs
+        g = StrictMultiDiGraph()
+        for node in ["S", "A", "B", "T"]:
+            g.add_node(node)
+
+        # Path 1: S -> A -> T (cost = 1 + 1 = 2, capacity = 5)
+        g.add_edge("S", "A", capacity=5.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "T", capacity=5.0, flow=0.0, flows={}, cost=1)
+
+        # Path 2: S -> B -> T (cost = 2 + 2 = 4, capacity = 3)
+        g.add_edge("S", "B", capacity=3.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "T", capacity=3.0, flow=0.0, flows={}, cost=2)
+
+        flow_value, summary = calc_max_flow(g, "S", "T", return_summary=True)
+
+        # Algorithm should use lowest cost path first, then higher cost
+        assert flow_value == 8.0
+        assert summary.cost_distribution == {2.0: 5.0, 4.0: 3.0}
+
+    def test_cost_distribution_single_path(self):
+        """Test cost distribution with a single path."""
+        g = StrictMultiDiGraph()
+        for node in ["A", "B", "C"]:
+            g.add_node(node)
+
+        # Single path: A -> B -> C (cost = 3 + 2 = 5, capacity = 10)
+        g.add_edge("A", "B", capacity=10.0, flow=0.0, flows={}, cost=3)
+        g.add_edge("B", "C", capacity=10.0, flow=0.0, flows={}, cost=2)
+
+        flow_value, summary = calc_max_flow(g, "A", "C", return_summary=True)
+
+        assert flow_value == 10.0
+        assert summary.cost_distribution == {5.0: 10.0}
+
+    def test_cost_distribution_equal_cost_paths(self):
+        """Test cost distribution with multiple equal-cost paths."""
+        g = StrictMultiDiGraph()
+        for node in ["S", "A", "B", "T"]:
+            g.add_node(node)
+
+        # Two paths with same cost but different capacities
+        # Path 1: S -> A -> T (cost = 1 + 1 = 2, capacity = 4)
+        g.add_edge("S", "A", capacity=4.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "T", capacity=4.0, flow=0.0, flows={}, cost=1)
+
+        # Path 2: S -> B -> T (cost = 1 + 1 = 2, capacity = 6)
+        g.add_edge("S", "B", capacity=6.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("B", "T", capacity=6.0, flow=0.0, flows={}, cost=1)
+
+        flow_value, summary = calc_max_flow(g, "S", "T", return_summary=True)
+
+        # Should aggregate all flow at the same cost
+        assert flow_value == 10.0
+        assert summary.cost_distribution == {2.0: 10.0}
+
+    def test_cost_distribution_three_tiers(self):
+        """Test cost distribution with three different cost tiers."""
+        g = StrictMultiDiGraph()
+        for node in ["S", "A", "B", "C", "T"]:
+            g.add_node(node)
+
+        # Path 1: S -> A -> T (cost = 1, capacity = 2)
+        g.add_edge("S", "A", capacity=2.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "T", capacity=2.0, flow=0.0, flows={}, cost=0)
+
+        # Path 2: S -> B -> T (cost = 3, capacity = 4)
+        g.add_edge("S", "B", capacity=4.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "T", capacity=4.0, flow=0.0, flows={}, cost=1)
+
+        # Path 3: S -> C -> T (cost = 6, capacity = 3)
+        g.add_edge("S", "C", capacity=3.0, flow=0.0, flows={}, cost=3)
+        g.add_edge("C", "T", capacity=3.0, flow=0.0, flows={}, cost=3)
+
+        flow_value, summary = calc_max_flow(g, "S", "T", return_summary=True)
+
+        # Should use paths in cost order: cost 1, then 3, then 6
+        assert flow_value == 9.0
+        assert summary.cost_distribution == {1.0: 2.0, 3.0: 4.0, 6.0: 3.0}
+
+    def test_cost_distribution_no_flow(self):
+        """Test cost distribution when no flow is possible."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_node("B")
+        # No edges - no path possible
+
+        flow_value, summary = calc_max_flow(g, "A", "B", return_summary=True)
+
+        assert flow_value == 0.0
+        assert summary.cost_distribution == {}
+
+    def test_cost_distribution_self_loop(self):
+        """Test cost distribution for self-loop case."""
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        g.add_edge("A", "A", capacity=10.0, flow=0.0, flows={}, cost=5)
+
+        flow_value, summary = calc_max_flow(g, "A", "A", return_summary=True)
+
+        # Self-loop always returns 0 flow
+        assert flow_value == 0.0
+        assert summary.cost_distribution == {}
+
+    def test_cost_distribution_shortest_path_mode(self):
+        """Test cost distribution with shortest_path=True (single augmentation)."""
+        g = StrictMultiDiGraph()
+        for node in ["S", "A", "B", "T"]:
+            g.add_node(node)
+
+        # Path 1: S -> A -> T (cost = 2, capacity = 5)
+        g.add_edge("S", "A", capacity=5.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "T", capacity=5.0, flow=0.0, flows={}, cost=1)
+
+        # Path 2: S -> B -> T (cost = 4, capacity = 3)
+        g.add_edge("S", "B", capacity=3.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "T", capacity=3.0, flow=0.0, flows={}, cost=2)
+
+        flow_value, summary = calc_max_flow(
+            g, "S", "T", shortest_path=True, return_summary=True
+        )
+
+        # Should only use the first (lowest cost) path
+        assert flow_value == 5.0
+        assert summary.cost_distribution == {2.0: 5.0}
+
+    def test_cost_distribution_capacity_bottleneck(self):
+        """Test cost distribution when bottleneck limits flow on cheaper path."""
+        g = StrictMultiDiGraph()
+        for node in ["S", "A", "B", "T"]:
+            g.add_node(node)
+
+        # Path 1: S -> A -> T (cost = 1, but bottleneck capacity = 2)
+        g.add_edge("S", "A", capacity=10.0, flow=0.0, flows={}, cost=1)
+        g.add_edge("A", "T", capacity=2.0, flow=0.0, flows={}, cost=0)  # Bottleneck
+
+        # Path 2: S -> B -> T (cost = 3, capacity = 5)
+        g.add_edge("S", "B", capacity=5.0, flow=0.0, flows={}, cost=2)
+        g.add_edge("B", "T", capacity=5.0, flow=0.0, flows={}, cost=1)
+
+        flow_value, summary = calc_max_flow(g, "S", "T", return_summary=True)
+
+        # Should use cheap path first (limited by bottleneck), then expensive path
+        assert flow_value == 7.0
+        assert summary.cost_distribution == {1.0: 2.0, 3.0: 5.0}
