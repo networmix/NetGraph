@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # ---------------------------------------------------------------------
 [project]
 name = "ngraph"
-version = "0.7.1"
+version = "0.8.0"
 description = "A tool and a library for network modeling and capacity analysis."
 readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
@@ -23,13 +23,15 @@ classifiers = [
 
 # Runtime deps
 dependencies = [
-    "geopy",
     "networkx",
     "pyyaml",
-    "numpy",
     "pandas",
     "matplotlib",
     "seaborn",
+    "nbformat",
+    "nbconvert",
+    "ipykernel",
+    "itables",
 ]
 
 # Dev / CI extras
@@ -47,12 +49,16 @@ dev = [
     # style + type checking
     "ruff==0.11.13",
     "pyright",
+    # type stubs
+    "pandas-stubs",
     # pre-commit hooks
     "pre-commit",
     # build
     "build",
     # publishing
     "twine",
+    # schema validation
+    "jsonschema",
 ]
 
 [project.scripts]
@@ -61,8 +67,30 @@ ngraph = "ngraph.cli:main"
 # ---------------------------------------------------------------------
 # Pytest flags
 [tool.pytest.ini_options]
-addopts = "--cov=ngraph --cov-fail-under=85 --cov-report term-missing"
+addopts = "--cov=./ngraph --cov-fail-under=85 --cov-report term-missing --benchmark-disable-gc --benchmark-min-rounds=5 --benchmark-warmup=on"
 timeout = 30
+markers = [
+    "slow: marks integration tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: marks tests as performance benchmarks (run with '-m benchmark')",
+]
+
+# ---------------------------------------------------------------------
+# Coverage configuration
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/conftest.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
 
 # ---------------------------------------------------------------------
 # Package discovery

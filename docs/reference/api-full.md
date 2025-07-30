@@ -10,13 +10,15 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** June 11, 2025 at 02:22 UTC
+**Generated from source code on:** July 29, 2025 at 16:59 UTC
 
-**Modules auto-discovered:** 35
+**Modules auto-discovered:** 53
 
 ---
 
 ## ngraph.blueprints
+
+Network topology blueprints and generation.
 
 ### Blueprint
 
@@ -92,6 +94,8 @@ Returns:
 
 ## ngraph.cli
 
+Command-line interface for NetGraph.
+
 ### main(argv: 'Optional[List[str]]' = None) -> 'None'
 
 Entry point for the ``ngraph`` command.
@@ -103,6 +107,8 @@ Args:
 ---
 
 ## ngraph.components
+
+Component and ComponentsLibrary classes for hardware cost modeling.
 
 ### Component
 
@@ -196,7 +202,7 @@ Example (YAML-like):
 
 ## ngraph.config
 
-Configuration for NetGraph.
+Configuration classes for NetGraph components.
 
 ### TrafficManagerConfig
 
@@ -218,6 +224,8 @@ Configuration for traffic demand placement estimation.
 ---
 
 ## ngraph.explorer
+
+NetworkExplorer class for analyzing network hierarchy and structure.
 
 ### ExternalLinkBreakdown
 
@@ -305,29 +313,78 @@ Attributes:
 
 ## ngraph.failure_manager
 
+FailureManager for Monte Carlo failure analysis.
+
+This module provides the authoritative failure analysis engine for NetGraph.
+It combines parallel processing, caching, and failure policy handling
+to support both workflow steps and direct notebook usage.
+
+The FailureManager provides a generic API for any type of failure analysis.
+
+## Performance Characteristics
+
+**Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
+P=parallelism. Per-worker caching reduces effective iterations by 60-90% for
+common failure patterns since exclusion sets frequently repeat in Monte Carlo
+analysis. Network serialization occurs once per worker process, not per iteration.
+
+**Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
+R=result size per iteration, C=cache size. Cache is bounded to prevent memory
+exhaustion with FIFO eviction after 1000 unique patterns per worker.
+
+**Parallelism Trade-offs**: Serial execution avoids IPC overhead for small
+iteration counts. Parallel execution benefits from worker caching and CPU
+utilization for larger workloads. Optimal parallelism typically equals CPU
+cores for analysis-bound workloads.
+
+### AnalysisFunction
+
+Protocol for analysis functions used with FailureManager.
+
+Analysis functions should take a NetworkView and any additional
+keyword arguments, returning analysis results of any type.
+
 ### FailureManager
 
-Applies FailurePolicy to a Network, runs traffic placement, and (optionally)
-repeats multiple times for Monte Carlo experiments.
+Failure analysis engine with Monte Carlo capabilities.
+
+This is the authoritative component for failure analysis in NetGraph.
+It provides parallel processing, worker caching, and failure
+policy handling to support both workflow steps and direct notebook usage.
+
+The FailureManager can execute any analysis function that takes a NetworkView
+and returns results, making it generic for different types of
+failure analysis (capacity, traffic, connectivity, etc.).
 
 Attributes:
-    network (Network): The underlying network to mutate (enable/disable nodes/links).
-    traffic_demands (List[TrafficDemand]): List of demands to place after failures.
-    failure_policy (Optional[FailurePolicy]): The policy describing what fails.
-    default_flow_policy_config: The default flow policy for any demands lacking one.
+    network: The underlying network (not modified during analysis).
+    failure_policy_set: Set of named failure policies.
+    policy_name: Name of specific failure policy to use.
 
 **Methods:**
 
-- `apply_failures(self) -> 'None'`
-  - Apply the current failure_policy to self.network (in-place).
-- `run_monte_carlo_failures(self, iterations: 'int', parallelism: 'int' = 1) -> 'Dict[str, Any]'`
-  - Repeatedly applies (randomized) failures to the network and accumulates
-- `run_single_failure_scenario(self) -> 'List[TrafficResult]'`
-  - Applies failures to the network, places the demands, and returns per-demand results.
+- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'`
+  - Compute the set of nodes and links to exclude for a failure iteration.
+- `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'`
+  - Create NetworkView with specified exclusions.
+- `get_failure_policy(self) -> "'FailurePolicy | None'"`
+  - Get the failure policy to use for analysis.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'`
+  - Run Monte Carlo failure analysis with any analysis function.
+- `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+  - Analyze component criticality for flow capacity under failures.
+- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'`
+  - Run a single failure scenario for convenience.
 
 ---
 
 ## ngraph.failure_policy
+
+FailurePolicy, FailureRule, and FailureCondition classes for failure modeling.
 
 ### FailureCondition
 
@@ -360,7 +417,7 @@ A container for multiple FailureRules plus optional metadata in `attrs`.
 
 The main entry point is `apply_failures`, which:
   1) For each rule, gather the relevant entities (node, link, or risk_group).
-  2) Match them based on rule conditions (or skip if 'logic=any').
+          2) Match them based on rule conditions using 'and' or 'or' logic.
   3) Apply the selection strategy (all, random, or choice).
   4) Collect the union of all failed entities across all rules.
   5) Optionally expand failures by shared-risk groups or sub-risks.
@@ -371,12 +428,49 @@ Large-scale performance:
     network hasn't changed. If your network changes between calls,
     you should clear the cache or re-initialize the policy.
 
+Example YAML configuration:
+    ```yaml
+    failure_policy:
+      attrs:
+        name: "Texas Grid Outage Scenario"
+        description: "Regional power grid failure affecting telecom infrastructure"
+      fail_risk_groups: true
+      rules:
+        # Fail all nodes in Texas electrical grid
+        - entity_scope: "node"
+          conditions:
+            - attr: "electric_grid"
+              operator: "=="
+              value: "texas"
+          logic: "and"
+          rule_type: "all"
+
+        # Randomly fail 40% of underground fiber links in affected region
+        - entity_scope: "link"
+          conditions:
+            - attr: "region"
+              operator: "=="
+              value: "southwest"
+            - attr: "installation"
+              operator: "=="
+              value: "underground"
+          logic: "and"
+          rule_type: "random"
+          probability: 0.4
+
+        # Choose exactly 2 risk groups to fail (e.g., data centers)
+        # Note: logic defaults to "or" when not specified
+        - entity_scope: "risk_group"
+          rule_type: "choice"
+          count: 2
+    ```
+
 Attributes:
     rules (List[FailureRule]):
         A list of FailureRules to apply.
     attrs (Dict[str, Any]):
         Arbitrary metadata about this policy (e.g. "name", "description").
-    fail_shared_risk_groups (bool):
+    fail_risk_groups (bool):
         If True, after initial selection, expand failures among any
         node/link that shares a risk group with a failed entity.
     fail_risk_group_children (bool):
@@ -386,20 +480,26 @@ Attributes:
         If True, match results for each rule are cached to speed up
         repeated calls. If the network changes, the cached results
         may be stale.
+    seed (Optional[int]):
+        Seed for reproducible random operations. If None, operations
+        will be non-deterministic.
 
 **Attributes:**
 
 - `rules` (List[FailureRule]) = []
 - `attrs` (Dict[str, Any]) = {}
-- `fail_shared_risk_groups` (bool) = False
+- `fail_risk_groups` (bool) = False
 - `fail_risk_group_children` (bool) = False
 - `use_cache` (bool) = False
+- `seed` (Optional[int])
 - `_match_cache` (Dict[int, Set[str]]) = {}
 
 **Methods:**
 
 - `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
   - Identify which entities fail given the defined rules, then optionally
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
 
 ### FailureRule
 
@@ -410,10 +510,9 @@ Attributes:
         The type of entities this rule applies to: "node", "link", or "risk_group".
     conditions (List[FailureCondition]):
         A list of conditions to filter matching entities.
-    logic (Literal["and", "or", "any"]):
+    logic (Literal["and", "or"]):
         "and": All conditions must be true for a match.
-        "or": At least one condition is true for a match.
-        "any": Skip condition checks and match all.
+        "or": At least one condition is true for a match (default).
     rule_type (Literal["random", "choice", "all"]):
         The selection strategy among the matched set:
           - "random": each matched entity is chosen with probability = `probability`.
@@ -428,14 +527,65 @@ Attributes:
 
 - `entity_scope` (EntityScope)
 - `conditions` (List[FailureCondition]) = []
-- `logic` (Literal['and', 'or', 'any']) = and
+- `logic` (Literal['and', 'or']) = or
 - `rule_type` (Literal['random', 'choice', 'all']) = all
 - `probability` (float) = 1.0
 - `count` (int) = 1
 
 ---
 
+## ngraph.logging
+
+Centralized logging configuration for NetGraph.
+
+### disable_debug_logging() -> None
+
+Disable debug logging, set to INFO level.
+
+### enable_debug_logging() -> None
+
+Enable debug logging for the entire package.
+
+### get_logger(name: str) -> logging.Logger
+
+Get a logger with NetGraph's standard configuration.
+
+This is the main function that should be used throughout the package.
+All loggers will inherit from the root 'ngraph' logger configuration.
+
+Args:
+    name: Logger name (typically __name__ from calling module).
+
+Returns:
+    Configured logger instance.
+
+### reset_logging() -> None
+
+Reset logging configuration (mainly for testing).
+
+### set_global_log_level(level: int) -> None
+
+Set the log level for all NetGraph loggers.
+
+Args:
+    level: Logging level (e.g., logging.DEBUG, logging.INFO).
+
+### setup_root_logger(level: int = 20, format_string: Optional[str] = None, handler: Optional[logging.Handler] = None) -> None
+
+Set up the root NetGraph logger with a single handler.
+
+This should only be called once to avoid duplicate handlers.
+
+Args:
+    level: Logging level (default: INFO).
+    format_string: Custom format string (optional).
+    handler: Custom handler (optional, defaults to StreamHandler).
+
+---
+
 ## ngraph.network
+
+Network topology modeling with Node, Link, RiskGroup, and Network classes.
 
 ### Link
 
@@ -465,6 +615,11 @@ Attributes:
 ### Network
 
 A container for network nodes and links.
+
+Network represents the scenario-level topology with persistent state (nodes/links
+that are disabled in the scenario configuration). For temporary exclusion of
+nodes/links during analysis (e.g., failure simulation), use NetworkView instead
+of modifying the Network's disabled states.
 
 Attributes:
     nodes (Dict[str, Node]): Mapping from node name -> Node object.
@@ -531,7 +686,7 @@ the key in the Network's node dictionary.
 
 Attributes:
     name (str): Unique identifier for the node.
-    disabled (bool): Whether the node is disabled (excluded from calculations).
+    disabled (bool): Whether the node is disabled in the scenario configuration.
     risk_groups (Set[str]): Set of risk group names this node belongs to.
     attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
 
@@ -568,21 +723,211 @@ Returns:
 
 ---
 
+## ngraph.network_view
+
+NetworkView provides a read-only view of a Network with temporary exclusions.
+
+This module implements a lightweight view pattern for Network objects, allowing
+temporary exclusion of nodes and links without modifying the underlying network.
+This is useful for what-if analysis, including failure simulations.
+
+### NetworkView
+
+Read-only overlay that hides selected nodes/links from a base Network.
+
+NetworkView provides filtered access to a Network where both scenario-disabled
+elements (Node.disabled, Link.disabled) and analysis-excluded elements are
+hidden from algorithms. This enables failure simulation and what-if analysis
+without mutating the base Network.
+
+Multiple NetworkView instances can safely operate on the same base Network
+concurrently, each with different exclusion sets.
+
+Example:
+    ```python
+    # Create view excluding specific nodes for failure analysis
+    view = NetworkView.from_excluded_sets(
+        base_network,
+        excluded_nodes=["node1", "node2"],
+        excluded_links=["link1"]
+    )
+
+    # Run analysis on filtered topology
+    flows = view.max_flow("source.*", "sink.*")
+    ```
+
+Attributes:
+    _base: The underlying Network object.
+    _excluded_nodes: Frozen set of node names to exclude from analysis.
+    _excluded_links: Frozen set of link IDs to exclude from analysis.
+
+**Attributes:**
+
+- `_base` ('Network')
+- `_excluded_nodes` (frozenset[str]) = frozenset()
+- `_excluded_links` (frozenset[str]) = frozenset()
+
+**Methods:**
+
+- `from_excluded_sets(base: "'Network'", excluded_nodes: 'Iterable[str]' = (), excluded_links: 'Iterable[str]' = ()) -> "'NetworkView'"`
+  - Create a NetworkView with specified exclusions.
+- `is_link_hidden(self, link_id: 'str') -> 'bool'`
+  - Check if a link is hidden in this view.
+- `is_node_hidden(self, name: 'str') -> 'bool'`
+  - Check if a node is hidden in this view.
+- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], float]'`
+  - Compute maximum flow between node groups in this view.
+- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary', 'StrictMultiDiGraph']]"`
+  - Compute maximum flow with complete analytics and graph.
+- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'StrictMultiDiGraph']]"`
+  - Compute maximum flow and return flow-assigned graph.
+- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary']]"`
+  - Compute maximum flow with detailed analytics summary.
+- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'`
+  - Identify saturated edges in max flow solutions.
+- `select_node_groups_by_path(self, path: 'str') -> "Dict[str, List['Node']]"`
+  - Select and group visible nodes matching a regex pattern.
+- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'`
+  - Perform sensitivity analysis on capacity changes.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> "'StrictMultiDiGraph'"`
+  - Create a StrictMultiDiGraph representation of this view.
+
+---
+
+## ngraph.profiling
+
+Performance profiling instrumentation for NetGraph workflow execution.
+
+CPU profiler with workflow step timing, function analysis, and bottleneck detection.
+
+### PerformanceProfiler
+
+CPU profiler for NetGraph workflow execution.
+
+Profiles workflow steps using cProfile and identifies bottlenecks.
+
+**Methods:**
+
+- `analyze_performance(self) -> 'None'`
+  - Analyze profiling results and identify bottlenecks.
+- `end_scenario(self) -> 'None'`
+  - End profiling for the entire scenario execution.
+- `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'`
+  - Get the top CPU-consuming functions for a specific step.
+- `merge_child_profiles(self, profile_dir: 'Path', step_name: 'str') -> 'None'`
+  - Merge child worker profiles into the parent step profile.
+- `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'`
+  - Context manager for profiling individual workflow steps.
+- `save_detailed_profile(self, output_path: 'Path', step_name: 'Optional[str]' = None) -> 'None'`
+  - Save detailed profiling data to a file.
+- `start_scenario(self) -> 'None'`
+  - Start profiling for the entire scenario execution.
+
+### PerformanceReporter
+
+Formats and displays performance profiling results.
+
+Generates text reports with timing analysis, bottleneck identification, and optimization suggestions.
+
+**Methods:**
+
+- `generate_report(self) -> 'str'`
+  - Generate performance report.
+
+### ProfileResults
+
+Profiling results for a scenario execution.
+
+Attributes:
+    step_profiles: List of individual step performance profiles.
+    total_wall_time: Total wall-clock time for entire scenario.
+    total_cpu_time: Total CPU time across all steps.
+    total_function_calls: Total function calls across all steps.
+    bottlenecks: List of performance bottlenecks (>10% execution time).
+    analysis_summary: Performance metrics and statistics.
+
+**Attributes:**
+
+- `step_profiles` (List[StepProfile]) = []
+- `total_wall_time` (float) = 0.0
+- `total_cpu_time` (float) = 0.0
+- `total_function_calls` (int) = 0
+- `bottlenecks` (List[Dict[str, Any]]) = []
+- `analysis_summary` (Dict[str, Any]) = {}
+
+### StepProfile
+
+Performance profile data for a single workflow step.
+
+Attributes:
+    step_name: Name of the workflow step.
+    step_type: Type/class name of the workflow step.
+    wall_time: Total wall-clock time in seconds.
+    cpu_time: CPU time spent in step execution.
+    function_calls: Number of function calls during execution.
+    memory_peak: Peak memory usage during step (if available).
+    cprofile_stats: Detailed cProfile statistics object.
+    worker_profiles_merged: Number of worker profiles merged into this step.
+
+**Attributes:**
+
+- `step_name` (str)
+- `step_type` (str)
+- `wall_time` (float)
+- `cpu_time` (float)
+- `function_calls` (int)
+- `memory_peak` (Optional[float])
+- `cprofile_stats` (Optional[pstats.Stats])
+- `worker_profiles_merged` (int) = 0
+
+---
+
+## ngraph.report
+
+Standalone report generation for NetGraph analysis results.
+
+Generates Jupyter notebooks and HTML reports from results.json files.
+Separate from workflow execution to allow independent report generation.
+
+### ReportGenerator
+
+Generate analysis reports from NetGraph results files.
+
+Creates Jupyter notebooks with analysis code and can optionally export to HTML.
+Uses the analysis registry to determine which analysis modules to run for each workflow step.
+
+**Methods:**
+
+- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'`
+  - Generate HTML report from notebook.
+- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'`
+  - Generate Jupyter notebook with analysis code.
+- `load_results(self) -> 'None'`
+  - Load results from JSON file.
+
+---
+
 ## ngraph.results
+
+Results class for storing workflow step outputs.
 
 ### Results
 
 A container for storing arbitrary key-value data that arises during workflow steps.
-The data is organized by step name, then by key.
+
+The data is organized by step name, then by key. Each step also has associated
+metadata that describes the workflow step type and execution context.
 
 Example usage:
   results.put("Step1", "total_capacity", 123.45)
   cap = results.get("Step1", "total_capacity")  # returns 123.45
   all_caps = results.get_all("total_capacity")  # might return {"Step1": 123.45, "Step2": 98.76}
+  metadata = results.get_step_metadata("Step1")  # returns WorkflowStepMetadata
 
 **Attributes:**
 
 - `_store` (Dict) = {}
+- `_metadata` (Dict) = {}
 
 **Methods:**
 
@@ -590,14 +935,187 @@ Example usage:
   - Retrieve the value from (step_name, key). If the key is missing, return `default`.
 - `get_all(self, key: str) -> Dict[str, Any]`
   - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+- `get_all_step_metadata(self) -> Dict[str, ngraph.results.WorkflowStepMetadata]`
+  - Get metadata for all workflow steps.
+- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.WorkflowStepMetadata]`
+  - Get metadata for a workflow step.
+- `get_steps_by_execution_order(self) -> list[str]`
+  - Get step names ordered by their execution order.
 - `put(self, step_name: str, key: str, value: Any) -> None`
   - Store a value under (step_name, key).
-- `to_dict(self) -> Dict[str, Dict[str, Any]]`
+- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None`
+  - Store metadata for a workflow step.
+- `to_dict(self) -> Dict[str, Any]`
   - Return a dictionary representation of all stored results.
+
+### WorkflowStepMetadata
+
+Metadata for a workflow step execution.
+
+Attributes:
+    step_type: The workflow step class name (e.g., 'CapacityEnvelopeAnalysis').
+    step_name: The instance name of the step.
+    execution_order: Order in which this step was executed (0-based).
+
+**Attributes:**
+
+- `step_type` (str)
+- `step_name` (str)
+- `execution_order` (int)
+
+---
+
+## ngraph.results_artifacts
+
+CapacityEnvelope, TrafficMatrixSet, PlacementResultSet, and FailurePolicySet classes.
+
+### CapacityEnvelope
+
+Frequency-based capacity envelope that stores capacity values as frequencies.
+
+This approach is more memory-efficient for Monte Carlo analysis where we care
+about statistical distributions rather than individual sample order.
+
+Attributes:
+    source_pattern: Regex pattern used to select source nodes.
+    sink_pattern: Regex pattern used to select sink nodes.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    frequencies: Dictionary mapping capacity values to their occurrence counts.
+    min_capacity: Minimum observed capacity.
+    max_capacity: Maximum observed capacity.
+    mean_capacity: Mean capacity across all samples.
+    stdev_capacity: Standard deviation of capacity values.
+    total_samples: Total number of samples represented.
+
+**Attributes:**
+
+- `source_pattern` (str)
+- `sink_pattern` (str)
+- `mode` (str)
+- `frequencies` (Dict[float, int])
+- `min_capacity` (float)
+- `max_capacity` (float)
+- `mean_capacity` (float)
+- `stdev_capacity` (float)
+- `total_samples` (int)
+
+**Methods:**
+
+- `expand_to_values(self) -> 'List[float]'`
+  - Expand frequency map back to individual values.
+- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]') -> "'CapacityEnvelope'"`
+  - Create frequency-based envelope from a list of capacity values.
+- `get_percentile(self, percentile: 'float') -> 'float'`
+  - Calculate percentile from frequency distribution.
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### FailurePatternResult
+
+Result for a unique failure pattern with associated capacity matrix.
+
+Attributes:
+    excluded_nodes: List of failed node IDs.
+    excluded_links: List of failed link IDs.
+    capacity_matrix: Dictionary mapping flow keys to capacity values.
+    count: Number of times this pattern occurred.
+    is_baseline: Whether this represents the baseline (no failures) case.
+
+**Attributes:**
+
+- `excluded_nodes` (List[str])
+- `excluded_links` (List[str])
+- `capacity_matrix` (Dict[str, float])
+- `count` (int)
+- `is_baseline` (bool) = False
+
+**Methods:**
+
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### FailurePolicySet
+
+Named collection of FailurePolicy objects.
+
+This mutable container maps failure policy names to FailurePolicy objects,
+allowing management of multiple failure policies for analysis.
+
+Attributes:
+    policies: Dictionary mapping failure policy names to FailurePolicy objects.
+
+**Attributes:**
+
+- `policies` (dict[str, 'FailurePolicy']) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', policy: "'FailurePolicy'") -> 'None'`
+  - Add a failure policy to the collection.
+- `get_all_policies(self) -> "list['FailurePolicy']"`
+  - Get all failure policies from the collection.
+- `get_default_policy(self) -> "'FailurePolicy | None'"`
+  - Get the default failure policy.
+- `get_policy(self, name: 'str') -> "'FailurePolicy'"`
+  - Get a specific failure policy by name.
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### PlacementResultSet
+
+Aggregated traffic placement results from one or many runs.
+
+This immutable dataclass stores traffic placement results organized by case,
+with overall statistics and per-demand statistics.
+
+Attributes:
+    results_by_case: Dictionary mapping case names to TrafficResult lists.
+    overall_stats: Dictionary of overall statistics.
+    demand_stats: Dictionary mapping demand keys to per-demand statistics.
+
+**Attributes:**
+
+- `results_by_case` (dict[str, list[TrafficResult]]) = {}
+- `overall_stats` (dict[str, float]) = {}
+- `demand_stats` (dict[tuple[str, str, int], dict[str, float]]) = {}
+
+**Methods:**
+
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
+
+### TrafficMatrixSet
+
+Named collection of TrafficDemand lists.
+
+This mutable container maps scenario names to lists of TrafficDemand objects,
+allowing management of multiple traffic matrices for analysis.
+
+Attributes:
+    matrices: Dictionary mapping scenario names to TrafficDemand lists.
+
+**Attributes:**
+
+- `matrices` (dict[str, list[TrafficDemand]]) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'`
+  - Add a traffic matrix to the collection.
+- `get_all_demands(self) -> 'list[TrafficDemand]'`
+  - Get all traffic demands from all matrices combined.
+- `get_default_matrix(self) -> 'list[TrafficDemand]'`
+  - Get the default traffic matrix.
+- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'`
+  - Get a specific traffic matrix by name.
+- `to_dict(self) -> 'dict[str, Any]'`
+  - Convert to dictionary for JSON serialization.
 
 ---
 
 ## ngraph.scenario
+
+Scenario class for defining network analysis workflows from YAML.
 
 ### Scenario
 
@@ -605,11 +1123,12 @@ Represents a complete scenario for building and executing network workflows.
 
 This scenario includes:
   - A network (nodes/links), constructed via blueprint expansion.
-  - A failure policy (one or more rules).
-  - A set of traffic demands.
+  - A failure policy set (one or more named failure policies).
+  - A traffic matrix set containing one or more named traffic matrices.
   - A list of workflow steps to execute.
   - A results container for storing outputs.
   - A components_library for hardware/optics definitions.
+  - A seed for reproducible random operations (optional).
 
 Typical usage example:
 
@@ -620,11 +1139,12 @@ Typical usage example:
 **Attributes:**
 
 - `network` (Network)
-- `failure_policy` (Optional[FailurePolicy])
-- `traffic_demands` (List[TrafficDemand])
 - `workflow` (List[WorkflowStep])
-- `results` (Results) = Results(_store={})
+- `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
+- `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
+- `results` (Results) = Results(_store={}, _metadata={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
+- `seed` (Optional[int])
 
 **Methods:**
 
@@ -635,7 +1155,37 @@ Typical usage example:
 
 ---
 
+## ngraph.seed_manager
+
+Deterministic seed derivation to avoid global random.seed() order dependencies.
+
+### SeedManager
+
+Manages deterministic seed derivation for isolated component reproducibility.
+
+Global random.seed() creates order dependencies and component interference.
+SeedManager derives unique seeds per component from a master seed using SHA-256,
+ensuring reproducible results regardless of execution order or parallelism.
+
+Usage:
+    seed_mgr = SeedManager(42)
+    failure_seed = seed_mgr.derive_seed("failure_policy", "default")
+    transform_seed = seed_mgr.derive_seed("transform", "enable_nodes", 0)
+
+**Methods:**
+
+- `create_random_state(self, *components: 'Any') -> 'random.Random'`
+  - Create a new Random instance with derived seed.
+- `derive_seed(self, *components: 'Any') -> 'Optional[int]'`
+  - Derive a deterministic seed from master seed and component identifiers.
+- `seed_global_random(self, *components: 'Any') -> 'None'`
+  - Seed the global random module with derived seed.
+
+---
+
 ## ngraph.traffic_demand
+
+TrafficDemand class for modeling network traffic flows.
 
 ### TrafficDemand
 
@@ -671,6 +1221,8 @@ Attributes:
 
 ## ngraph.traffic_manager
 
+TrafficManager class for placing traffic demands on network topology.
+
 ### TrafficManager
 
 Manages the expansion and placement of traffic demands on a Network.
@@ -702,39 +1254,41 @@ that TrafficDemand's `demand` value (unless no valid node pairs exist, in which
 case no demands are created).
 
 Attributes:
-    network (Network): The underlying network object.
-    traffic_demands (List[TrafficDemand]): The scenario-level demands.
+    network (Union[Network, NetworkView]): The underlying network or view object.
+    traffic_matrix_set (TrafficMatrixSet): Traffic matrices containing demands.
+    matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
     default_flow_policy_config (FlowPolicyConfig): Default FlowPolicy if
         a TrafficDemand does not specify one.
     graph (StrictMultiDiGraph): Active graph built from the network.
-    demands (List[Demand]): All expanded demands from traffic_demands.
+    demands (List[Demand]): All expanded demands from the active matrix.
     _td_to_demands (Dict[str, List[Demand]]): Internal mapping from
         TrafficDemand.id to its expanded Demand objects.
 
 **Attributes:**
 
-- `network` (Network)
-- `traffic_demands` (List) = []
+- `network` (Union[Network, 'NetworkView'])
+- `traffic_matrix_set` ('TrafficMatrixSet')
+- `matrix_name` (Optional[str])
 - `default_flow_policy_config` (FlowPolicyConfig) = 1
-- `graph` (Optional)
-- `demands` (List) = []
-- `_td_to_demands` (Dict) = {}
+- `graph` (Optional[StrictMultiDiGraph])
+- `demands` (List[Demand]) = []
+- `_td_to_demands` (Dict[str, List[Demand]]) = {}
 
 **Methods:**
 
-- `build_graph(self, add_reverse: bool = True) -> None`
+- `build_graph(self, add_reverse: 'bool' = True) -> 'None'`
   - Builds or rebuilds the internal StrictMultiDiGraph from self.network.
-- `expand_demands(self) -> None`
-  - Converts each TrafficDemand in self.traffic_demands into one or more
-- `get_flow_details(self) -> Dict[Tuple[int, int], Dict[str, object]]`
+- `expand_demands(self) -> 'None'`
+  - Converts each TrafficDemand in the active matrix into one or more
+- `get_flow_details(self) -> 'Dict[Tuple[int, int], Dict[str, object]]'`
   - Summarizes flows from each Demand's FlowPolicy.
-- `get_traffic_results(self, detailed: bool = False) -> List[ngraph.traffic_manager.TrafficResult]`
+- `get_traffic_results(self, detailed: 'bool' = False) -> 'List[TrafficResult]'`
   - Returns traffic demand summaries.
-- `place_all_demands(self, placement_rounds: Union[int, str] = 'auto', reoptimize_after_each_round: bool = False) -> float`
+- `place_all_demands(self, placement_rounds: 'Union[int, str]' = 'auto', reoptimize_after_each_round: 'bool' = False) -> 'float'`
   - Places all expanded demands in ascending priority order using multiple
-- `reset_all_flow_usages(self) -> None`
+- `reset_all_flow_usages(self) -> 'None'`
   - Removes flow usage from the graph for each Demand's FlowPolicy
-- `summarize_link_usage(self) -> Dict[str, float]`
+- `summarize_link_usage(self) -> 'Dict[str, float]'`
   - Returns the total flow usage per edge in the graph.
 
 ### TrafficResult
@@ -751,7 +1305,36 @@ Attributes:
 
 ---
 
+## ngraph.yaml_utils
+
+Utilities for handling YAML parsing quirks and common operations.
+
+### normalize_yaml_dict_keys(data: Dict[Any, ~V]) -> Dict[str, ~V]
+
+Normalize dictionary keys from YAML parsing to ensure consistent string keys.
+
+YAML 1.1 boolean keys (e.g., true, false, yes, no, on, off) get converted to
+Python True/False boolean values. This function converts them to predictable
+string representations ("True"/"False") and ensures all keys are strings.
+
+Args:
+    data: Dictionary that may contain boolean or other non-string keys from YAML parsing
+
+Returns:
+    Dictionary with all keys converted to strings, boolean keys converted to "True"/"False"
+
+Examples:
+    >>> normalize_yaml_dict_keys({True: "value1", False: "value2", "normal": "value3"})
+    {"True": "value1", "False": "value2", "normal": "value3"}
+
+    >>> # In YAML: true:, yes:, on: all become Python True
+    >>> # In YAML: false:, no:, off: all become Python False
+
+---
+
 ## ngraph.lib.demand
+
+Demand class for modeling traffic flows between node groups.
 
 ### Demand
 
@@ -775,6 +1358,8 @@ flows through a single FlowPolicy.
 ---
 
 ## ngraph.lib.flow
+
+Flow and FlowIndex classes for traffic flow representation.
 
 ### Flow
 
@@ -806,6 +1391,8 @@ Attributes:
 ---
 
 ## ngraph.lib.flow_policy
+
+FlowPolicy and FlowPolicyConfig classes for traffic routing algorithms.
 
 ### FlowPolicy
 
@@ -846,6 +1433,8 @@ Raises:
 ---
 
 ## ngraph.lib.graph
+
+StrictMultiDiGraph class extending NetworkX with validation and utilities.
 
 ### StrictMultiDiGraph
 
@@ -942,6 +1531,8 @@ Inherits from:
   - Returns a SubGraph view of the subgraph induced on `nodes`.
 - `successors(self, n)`
   - Returns an iterator over successor nodes of n.
+- `to_dict(self) -> 'Dict[str, Any]'`
+  - Convert the graph to a dictionary representation suitable for JSON serialization.
 - `to_directed(self, as_view=False)`
   - Returns a directed representation of the graph.
 - `to_directed_class(self)`
@@ -967,6 +1558,8 @@ Returns:
 ---
 
 ## ngraph.lib.io
+
+Graph serialization functions for node-link and edge-list formats.
 
 ### edgelist_to_graph(lines: 'Iterable[str]', columns: 'List[str]', separator: 'str' = ' ', graph: 'Optional[StrictMultiDiGraph]' = None, source: 'str' = 'src', target: 'str' = 'dst', key: 'str' = 'key') -> 'StrictMultiDiGraph'
 
@@ -1073,6 +1666,8 @@ Returns:
 
 ## ngraph.lib.path
 
+Path class for representing network routing paths.
+
 ### Path
 
 Represents a single path in the network.
@@ -1106,6 +1701,8 @@ Attributes:
 ---
 
 ## ngraph.lib.path_bundle
+
+PathBundle class for managing parallel routing paths.
 
 ### PathBundle
 
@@ -1142,6 +1739,8 @@ If it's not a DAG, the behavior is... an infinite loop. Oops.
 ---
 
 ## ngraph.lib.util
+
+Graph conversion utilities between StrictMultiDiGraph and NetworkX graphs.
 
 ### from_digraph(nx_graph: networkx.classes.digraph.DiGraph) -> ngraph.lib.graph.StrictMultiDiGraph
 
@@ -1205,6 +1804,8 @@ Returns:
 
 ## ngraph.lib.algorithms.base
 
+Base classes and enums for network analysis algorithms.
+
 ### EdgeSelect
 
 Edge selection criteria determining which edges are considered
@@ -1221,6 +1822,8 @@ Types of path finding algorithms
 ---
 
 ## ngraph.lib.algorithms.calc_capacity
+
+Capacity calculation algorithms for network analysis.
 
 ### calc_graph_capacity(flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, capacity_attr: 'str' = 'capacity', flow_attr: 'str' = 'flow') -> 'Tuple[float, Dict[NodeID, Dict[NodeID, float]]]'
 
@@ -1266,6 +1869,8 @@ Raises:
 
 ## ngraph.lib.algorithms.edge_select
 
+Edge selection algorithms for network routing.
+
 ### edge_select_fabric(edge_select: ngraph.lib.algorithms.base.EdgeSelect, select_value: Optional[Any] = None, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]] = None, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None, cost_attr: str = 'cost', capacity_attr: str = 'capacity', flow_attr: str = 'flow') -> Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Optional[Set[Hashable]], Optional[Set[Hashable]]], Tuple[Union[int, float], List[Hashable]]]
 
 Creates a function that selects edges between two nodes according
@@ -1293,6 +1898,8 @@ Returns:
 
 ## ngraph.lib.algorithms.flow_init
 
+Flow graph initialization and setup utilities.
+
 ### init_flow_graph(flow_graph: 'StrictMultiDiGraph', flow_attr: 'str' = 'flow', flows_attr: 'str' = 'flows', reset_flow_graph: 'bool' = True) -> 'StrictMultiDiGraph'
 
 Ensure that every node and edge in the provided `flow_graph` has
@@ -1319,7 +1926,9 @@ Returns:
 
 ## ngraph.lib.algorithms.max_flow
 
-### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True) -> Union[float, tuple]
+Maximum flow algorithms and network flow computations.
+
+### calc_max_flow(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, *, return_summary: bool = False, return_graph: bool = False, flow_placement: ngraph.lib.algorithms.base.FlowPlacement = <FlowPlacement.PROPORTIONAL: 1>, shortest_path: bool = False, reset_flow_graph: bool = False, capacity_attr: str = 'capacity', flow_attr: str = 'flow', flows_attr: str = 'flows', copy_graph: bool = True, tolerance: float = 1e-10) -> Union[float, tuple]
 
 Compute the maximum flow between two nodes in a directed multi-graph,
 using an iterative shortest-path augmentation approach.
@@ -1365,6 +1974,9 @@ Args:
     copy_graph (bool):
         If True, work on a copy of the original graph so it remains unmodified.
         Defaults to True.
+    tolerance (float):
+        Tolerance for floating-point comparisons when determining saturated edges
+        and residual capacity. Defaults to 1e-10.
 
 Returns:
     Union[float, tuple]:
@@ -1373,9 +1985,7 @@ Returns:
         - If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
 
 Notes:
-    - For large graphs or performance-critical scenarios, consider specialized max-flow
-      algorithms (e.g., Dinic, Edmond-Karp) for better scaling.
-    - When using return_summary or return_graph, callers must unpack the returned tuple.
+    - When using return_summary or return_graph, the return value is a tuple.
 
 Examples:
     >>> g = StrictMultiDiGraph()
@@ -1440,6 +2050,8 @@ Returns:
 
 ## ngraph.lib.algorithms.path_utils
 
+Path manipulation and utility functions.
+
 ### resolve_to_paths(src_node: 'NodeID', dst_node: 'NodeID', pred: 'Dict[NodeID, Dict[NodeID, List[EdgeID]]]', split_parallel_edges: 'bool' = False) -> 'Iterator[PathTuple]'
 
 Enumerate all source->destination paths from a predecessor map.
@@ -1456,6 +2068,8 @@ Yields:
 ---
 
 ## ngraph.lib.algorithms.place_flow
+
+Flow placement algorithms for traffic routing.
 
 ### FlowPlacementMeta
 
@@ -1511,6 +2125,8 @@ Args:
 ---
 
 ## ngraph.lib.algorithms.spf
+
+Shortest path first (SPF) algorithms and implementations.
 
 ### ksp(graph: ngraph.lib.graph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.lib.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.lib.graph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
 
@@ -1579,7 +2195,7 @@ Types and data structures for algorithm analytics.
 
 Summary of max-flow computation results with detailed analytics.
 
-This immutable data structure provides comprehensive information about
+This immutable data structure provides information about
 the flow solution, including edge flows, residual capacities, and
 min-cut analysis.
 
@@ -1602,76 +2218,288 @@ Attributes:
 
 ## ngraph.workflow.base
 
+Base classes for workflow automation.
+
 ### WorkflowStep
 
 Base class for all workflow steps.
 
+All workflow steps are automatically logged with execution timing information.
+All workflow steps support seeding for reproducible random operations.
+Workflow metadata is automatically stored in scenario.results for analysis.
+
+YAML Configuration:
+    ```yaml
+    workflow:
+      - step_type: <StepTypeName>
+        name: "optional_step_name"  # Optional: Custom name for this step instance
+        seed: 42                    # Optional: Seed for reproducible random operations
+        # ... step-specific parameters ...
+    ```
+
+Attributes:
+    name: Optional custom identifier for this workflow step instance,
+        used for logging and result storage purposes.
+    seed: Optional seed for reproducible random operations. If None,
+        random operations will be non-deterministic.
+
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 
 **Methods:**
 
-- `run(self, scenario: 'Scenario') -> 'None'`
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'`
   - Execute the workflow step logic.
 
 ### register_workflow_step(step_type: 'str')
 
-A decorator that registers a WorkflowStep subclass under `step_type`.
+Decorator to register a WorkflowStep subclass.
 
 ---
 
 ## ngraph.workflow.build_graph
 
+Graph building workflow component.
+
+Converts scenario network definitions into StrictMultiDiGraph structures suitable
+for analysis algorithms. No additional parameters required beyond basic workflow step options.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: BuildGraph
+        name: "build_network_graph"  # Optional: Custom name for this step
+    ```
+
+Results stored in scenario.results:
+    - graph: StrictMultiDiGraph object with bidirectional links
+
 ### BuildGraph
 
 A workflow step that builds a StrictMultiDiGraph from scenario.network.
 
+This step converts the scenario's network definition into a graph structure
+suitable for analysis algorithms. No additional parameters are required.
+
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 
 **Methods:**
 
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Execute the workflow step logic.
 
 ---
 
+## ngraph.workflow.capacity_envelope_analysis
+
+Capacity envelope analysis workflow component.
+
+Monte Carlo analysis of network capacity under random failures using FailureManager.
+Generates statistical distributions (envelopes) of maximum flow capacity between
+node groups across failure scenarios. Supports parallel processing, baseline analysis,
+and configurable failure policies.
+
+This component uses the FailureManager convenience method to perform the analysis,
+ensuring consistency with the programmatic API while providing workflow integration.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: CapacityEnvelopeAnalysis
+        name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
+        source_path: "^datacenter/.*"          # Regex pattern for source node groups
+        sink_path: "^edge/.*"                  # Regex pattern for sink node groups
+        mode: "combine"                        # "combine" or "pairwise" flow analysis
+        failure_policy: "random_failures"      # Optional: Named failure policy to use
+        iterations: 1000                       # Number of Monte-Carlo trials
+        parallelism: 4                         # Number of parallel worker processes
+        shortest_path: false                   # Use shortest paths only
+        flow_placement: "PROPORTIONAL"         # Flow placement strategy
+        baseline: true                         # Optional: Run first iteration without failures
+        seed: 42                               # Optional: Seed for reproducible results
+        store_failure_patterns: false          # Optional: Store failure patterns in results
+    ```
+
+Results stored in scenario.results:
+    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data
+    - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
+
+### CapacityEnvelopeAnalysis
+
+Capacity envelope analysis workflow step using FailureManager convenience method.
+
+This workflow step uses the FailureManager.run_max_flow_monte_carlo() convenience method
+to perform analysis, ensuring consistency with the programmatic API while providing
+workflow integration and result storage.
+
+Attributes:
+    source_path: Regex pattern for source node groups.
+    sink_path: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    failure_policy: Name of failure policy in scenario.failure_policy_set.
+    iterations: Number of Monte-Carlo trials.
+    parallelism: Number of parallel worker processes.
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+    baseline: Whether to run first iteration without failures as baseline.
+    seed: Optional seed for reproducible results.
+    store_failure_patterns: Whether to store failure patterns in results.
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (int | None)
+- `source_path` (str)
+- `sink_path` (str)
+- `mode` (str) = combine
+- `failure_policy` (str | None)
+- `iterations` (int) = 1
+- `parallelism` (int) = 1
+- `shortest_path` (bool) = False
+- `flow_placement` (FlowPlacement | str) = 1
+- `baseline` (bool) = False
+- `store_failure_patterns` (bool) = False
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'`
+  - Execute capacity envelope analysis using FailureManager convenience method.
+
+---
+
 ## ngraph.workflow.capacity_probe
+
+Capacity probing workflow component.
+
+Probes maximum flow capacity between selected node groups with support for
+exclusion simulation and configurable flow analysis modes.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: CapacityProbe
+        name: "capacity_probe_analysis"  # Optional: Custom name for this step
+        source_path: "^datacenter/.*"    # Regex pattern to select source node groups
+        sink_path: "^edge/.*"            # Regex pattern to select sink node groups
+        mode: "combine"                  # "combine" or "pairwise" flow analysis
+        probe_reverse: false             # Also compute flow in reverse direction
+        shortest_path: false             # Use shortest paths only
+        flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
+        excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
+        excluded_links: ["link1"]          # Optional: Links to exclude for analysis
+    ```
+
+Results stored in scenario.results:
+    - Flow capacity values with keys like "max_flow:[source_group -> sink_group]"
+    - Additional reverse flow results if probe_reverse=True
 
 ### CapacityProbe
 
 A workflow step that probes capacity (max flow) between selected groups of nodes.
 
+Supports optional exclusion simulation using NetworkView without modifying the base network.
+
 Attributes:
-    source_path (str): A regex pattern to select source node groups.
-    sink_path (str): A regex pattern to select sink node groups.
-    mode (str): "combine" or "pairwise" (defaults to "combine").
+    source_path: A regex pattern to select source node groups.
+    sink_path: A regex pattern to select sink node groups.
+    mode: "combine" or "pairwise" (defaults to "combine").
         - "combine": All matched sources form one super-source; all matched sinks form one super-sink.
         - "pairwise": Compute flow for each (source_group, sink_group).
-    probe_reverse (bool): If True, also compute flow in the reverse direction (sink→source).
-    shortest_path (bool): If True, only use shortest paths when computing flow.
-    flow_placement (FlowPlacement): Handling strategy for parallel equal cost paths (default PROPORTIONAL).
+    probe_reverse: If True, also compute flow in the reverse direction (sink→source).
+    shortest_path: If True, only use shortest paths when computing flow.
+    flow_placement: Handling strategy for parallel equal cost paths (default PROPORTIONAL).
+    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
+    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
 
 **Attributes:**
 
 - `name` (str)
+- `seed` (Optional[int])
 - `source_path` (str)
 - `sink_path` (str)
 - `mode` (str) = combine
 - `probe_reverse` (bool) = False
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement) = 1
+- `excluded_nodes` (Iterable[str]) = ()
+- `excluded_links` (Iterable[str]) = ()
 
 **Methods:**
 
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Executes the capacity probe by computing max flow between node groups
 
 ---
 
-## ngraph.transform.base
+## ngraph.workflow.network_stats
+
+Workflow step for basic node and link statistics.
+
+Computes and stores comprehensive network statistics including node/link counts,
+capacity distributions, cost distributions, and degree distributions. Supports
+optional exclusion simulation and disabled entity handling.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: NetworkStats
+        name: "network_statistics"           # Optional: Custom name for this step
+        include_disabled: false              # Include disabled nodes/links in stats
+        excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
+        excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
+    ```
+
+Results stored in scenario.results:
+    - Node statistics: node_count
+    - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
+      min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
+    - Degree statistics: mean_degree, median_degree, min_degree, max_degree
+
+### NetworkStats
+
+Compute basic node and link statistics for the network.
+
+Supports optional exclusion simulation using NetworkView without modifying the base network.
+
+Attributes:
+    include_disabled (bool): If True, include disabled nodes and links in statistics.
+                             If False, only consider enabled entities. Defaults to False.
+    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
+    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (Optional[int])
+- `include_disabled` (bool) = False
+- `excluded_nodes` (Iterable[str]) = ()
+- `excluded_links` (Iterable[str]) = ()
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'`
+  - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: 'Scenario') -> 'None'`
+  - Compute and store network statistics.
+
+---
+
+## ngraph.workflow.transform.base
+
+Base classes for network transformations.
 
 ### NetworkTransform
 
@@ -1679,9 +2507,24 @@ Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
 
 Subclasses must override :meth:`apply`.
 
+Transform-based workflow steps are automatically registered and can be used
+in YAML workflow configurations. Each transform is wrapped as a WorkflowStep
+using the @register_transform decorator.
+
+YAML Configuration (Generic):
+    ```yaml
+    workflow:
+      - step_type: <TransformName>
+        name: "optional_step_name"  # Optional: Custom name for this step instance
+        # ... transform-specific parameters ...
+    ```
+
+Attributes:
+    label: Optional description string for this transform instance.
+
 **Methods:**
 
-- `apply(self, scenario: 'Scenario') -> 'None'`
+- `apply(self, scenario: "'Scenario'") -> 'None'`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
@@ -1699,7 +2542,34 @@ Raises:
 
 ---
 
-## ngraph.transform.distribute_external
+## ngraph.workflow.transform.distribute_external
+
+Network transformation for distributing external connectivity.
+
+Attaches remote nodes and connects them to attachment stripes in the network.
+Creates or uses existing remote nodes and distributes connections across attachment nodes.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: DistributeExternalConnectivity
+        name: "external_connectivity"       # Optional: Custom name for this step
+        remote_locations:                   # List of remote node locations/names
+          - "denver"
+          - "seattle"
+          - "chicago"
+        attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
+        stripe_width: 3                     # Number of attachment nodes per stripe
+        link_count: 2                       # Number of links per remote node
+        capacity: 100.0                     # Capacity per link
+        cost: 10.0                          # Cost per link
+        remote_prefix: "external/"          # Prefix for remote node names
+    ```
+
+Results:
+    - Creates remote nodes if they don't exist
+    - Adds links from remote nodes to attachment stripes
+    - No data stored in scenario.results (modifies network directly)
 
 ### DistributeExternalConnectivity
 
@@ -1716,14 +2586,34 @@ Args:
 
 **Methods:**
 
-- `apply(self, scenario: ngraph.scenario.Scenario) -> None`
+- `apply(self, scenario: 'Scenario') -> None`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
 
 ---
 
-## ngraph.transform.enable_nodes
+## ngraph.workflow.transform.enable_nodes
+
+Network transformation for enabling/disabling nodes.
+
+Enables a specified number of disabled nodes that match a regex pattern.
+Supports configurable selection ordering including lexical, reverse, and random ordering.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: EnableNodes
+        name: "enable_edge_nodes"      # Optional: Custom name for this step
+        path: "^edge/.*"               # Regex pattern to match nodes to enable
+        count: 5                       # Number of nodes to enable
+        order: "name"                  # Selection order: "name", "random", or "reverse"
+        seed: 42                       # Optional: Seed for reproducible random selection
+    ```
+
+Results:
+    - Enables the specified number of disabled nodes in-place
+    - No data stored in scenario.results (modifies network directly)
 
 ### EnableNodesTransform
 
@@ -1731,12 +2621,444 @@ Enable *count* disabled nodes that match *path*.
 
 Ordering is configurable; default is lexical by node name.
 
+Args:
+    path: Regex pattern to match disabled nodes that should be enabled.
+    count: Number of nodes to enable (must be positive integer).
+    order: Selection strategy when multiple nodes match:
+        - "name": Sort by node name (lexical order)
+        - "reverse": Sort by node name in reverse order
+        - "random": Random selection order
+    seed: Optional seed for reproducible random operations when order="random".
+
+**Attributes:**
+
+- `path` (str)
+- `count` (int)
+- `order` (str) = name
+- `seed` (Optional[int])
+
 **Methods:**
 
-- `apply(self, scenario: 'Scenario') -> 'None'`
+- `apply(self, scenario: "'Scenario'") -> 'None'`
   - Modify *scenario.network* in-place.
 - `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
   - Instantiate a registered transform by *step_type*.
+
+---
+
+## ngraph.monte_carlo.functions
+
+Picklable Monte Carlo analysis functions for FailureManager simulations.
+
+These functions are designed to be used with FailureManager.run_monte_carlo_analysis()
+and follow the pattern: analysis_func(network_view: NetworkView, **kwargs) -> Any.
+
+All functions accept only simple, hashable parameters to ensure compatibility
+with FailureManager's caching and multiprocessing systems for Monte Carlo
+failure analysis scenarios.
+
+Note: This module is distinct from ngraph.workflow.analysis, which provides
+notebook visualization components for workflow results.
+
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int' = 50, **kwargs) -> 'dict[str, Any]'
+
+Analyze traffic demand placement success rates.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    demands_config: List of demand configurations (serializable dicts).
+    placement_rounds: Number of placement optimization rounds.
+
+Returns:
+    Dictionary with placement statistics by priority.
+
+### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'list[tuple[str, str, float]]'
+
+Analyze maximum flow capacity between node groups.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    source_regex: Regex pattern for source node groups.
+    sink_regex: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+
+Returns:
+    List of (source, sink, capacity) tuples.
+
+### sensitivity_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'dict[str, float]'
+
+Analyze component sensitivity to failures.
+
+Args:
+    network_view: NetworkView with potential exclusions applied.
+    source_regex: Regex pattern for source node groups.
+    sink_regex: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+
+Returns:
+    Dictionary mapping component IDs to sensitivity scores.
+
+---
+
+## ngraph.monte_carlo.results
+
+Structured result objects for FailureManager analysis functions.
+
+These classes provide convenient interfaces for accessing Monte Carlo analysis
+results from FailureManager convenience methods. Visualization is handled by
+specialized analyzer classes in the workflow.analysis module.
+
+### CapacityEnvelopeResults
+
+Results from capacity envelope Monte Carlo analysis.
+
+This class provides data access for capacity envelope analysis results.
+For visualization, use CapacityMatrixAnalyzer from ngraph.workflow.analysis.
+
+Attributes:
+    envelopes: Dictionary mapping flow keys to CapacityEnvelope objects
+    failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects
+    source_pattern: Source node regex pattern used in analysis
+    sink_pattern: Sink node regex pattern used in analysis
+    mode: Flow analysis mode ("combine" or "pairwise")
+    iterations: Number of Monte Carlo iterations performed
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `envelopes` (Dict[str, CapacityEnvelope])
+- `failure_patterns` (Dict[str, FailurePatternResult])
+- `source_pattern` (str)
+- `sink_pattern` (str)
+- `mode` (str)
+- `iterations` (int)
+- `metadata` (Dict[str, Any])
+
+**Methods:**
+
+- `export_summary(self) -> 'Dict[str, Any]'`
+  - Export comprehensive summary for serialization.
+- `flow_keys(self) -> 'List[str]'`
+  - Get list of all flow keys in results.
+- `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'`
+  - Get CapacityEnvelope for a specific flow.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
+  - Get summary of failure patterns if available.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
+  - Get summary statistics for all flow pairs.
+- `to_dataframe(self) -> 'pd.DataFrame'`
+  - Convert capacity envelopes to DataFrame for analysis.
+
+### DemandPlacementResults
+
+Results from demand placement Monte Carlo analysis.
+
+Attributes:
+    raw_results: Raw results from FailureManager
+    iterations: Number of Monte Carlo iterations
+    baseline: Optional baseline result (no failures)
+    failure_patterns: Dictionary mapping pattern keys to failure pattern results
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `raw_results` (dict[str, Any])
+- `iterations` (int)
+- `baseline` (Optional[dict[str, Any]])
+- `failure_patterns` (Optional[Dict[str, Any]])
+- `metadata` (Optional[Dict[str, Any]])
+
+**Methods:**
+
+- `success_rate_distribution(self) -> 'pd.DataFrame'`
+  - Get demand placement success rate distribution as DataFrame.
+- `summary_statistics(self) -> 'dict[str, float]'`
+  - Get summary statistics for success rates.
+
+### SensitivityResults
+
+Results from sensitivity Monte Carlo analysis.
+
+Attributes:
+    raw_results: Raw results from FailureManager
+    iterations: Number of Monte Carlo iterations
+    baseline: Optional baseline result (no failures)
+    component_scores: Aggregated component impact scores by flow
+    failure_patterns: Dictionary mapping pattern keys to failure pattern results
+    source_pattern: Source node regex pattern used in analysis
+    sink_pattern: Sink node regex pattern used in analysis
+    mode: Flow analysis mode ("combine" or "pairwise")
+    metadata: Additional analysis metadata from FailureManager
+
+**Attributes:**
+
+- `raw_results` (dict[str, Any])
+- `iterations` (int)
+- `baseline` (Optional[dict[str, Any]])
+- `component_scores` (Optional[Dict[str, Dict[str, Dict[str, float]]]])
+- `failure_patterns` (Optional[Dict[str, Any]])
+- `source_pattern` (Optional[str])
+- `sink_pattern` (Optional[str])
+- `mode` (Optional[str])
+- `metadata` (Optional[Dict[str, Any]])
+
+**Methods:**
+
+- `component_impact_distribution(self) -> 'pd.DataFrame'`
+  - Get component impact distribution as DataFrame.
+- `export_summary(self) -> 'Dict[str, Any]'`
+  - Export comprehensive summary for serialization.
+- `flow_keys(self) -> 'List[str]'`
+  - Get list of all flow keys in results.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
+  - Get summary of failure patterns if available.
+- `get_flow_sensitivity(self, flow_key: 'str') -> 'Dict[str, Dict[str, float]]'`
+  - Get component sensitivity scores for a specific flow.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
+  - Get summary statistics for component impact across all flows.
+- `to_dataframe(self) -> 'pd.DataFrame'`
+  - Convert sensitivity results to DataFrame for analysis.
+
+---
+
+## ngraph.workflow.analysis.base
+
+Base classes for notebook analysis components.
+
+### AnalysisContext
+
+Context information for analysis execution.
+
+**Attributes:**
+
+- `step_name` (str)
+- `results` (Dict)
+- `config` (Dict)
+
+### NotebookAnalyzer
+
+Base class for notebook analysis components.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Perform the analysis and return results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display analysis results in notebook format.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.capacity_matrix
+
+Capacity envelope analysis utilities.
+
+This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
+envelope results, computing statistics, and generating notebook visualizations.
+Works with both CapacityEnvelopeResults objects and workflow step data.
+
+### CapacityMatrixAnalyzer
+
+Processes capacity envelope data into matrices and flow availability analysis.
+
+Transforms capacity envelope results from CapacityEnvelopeAnalysis workflow steps
+or CapacityEnvelopeResults objects into matrices, statistical summaries, and
+flow availability distributions. Provides visualization methods for notebook output
+including capacity matrices, flow CDFs, and reliability curves.
+
+Can be used in two modes:
+1. Workflow mode: analyze() with workflow step results dictionary
+2. Direct mode: analyze_results() with CapacityEnvelopeResults object
+
+**Methods:**
+
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
+  - Analyze capacity envelopes and create matrix visualization.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'`
+  - Run analyze/display on every step containing capacity_envelopes.
+- `analyze_and_display_envelope_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'None'`
+  - Complete analysis and display for CapacityEnvelopeResults object.
+- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Analyze and display flow availability for a specific step.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Analyze and display results for a specific step.
+- `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
+  - Create CDF/availability distribution from capacity envelope frequencies.
+- `analyze_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'Dict[str, Any]'`
+  - Analyze CapacityEnvelopeResults object directly.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
+  - Pretty-print analysis results to the notebook/stdout.
+- `display_capacity_distributions(self, results: "'CapacityEnvelopeResults'", flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'`
+  - Display capacity distribution plots for CapacityEnvelopeResults.
+- `display_percentile_comparison(self, results: "'CapacityEnvelopeResults'") -> 'None'`
+  - Display percentile comparison plots for CapacityEnvelopeResults.
+- `get_description(self) -> 'str'`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.data_loader
+
+Data loading utilities for notebook analysis.
+
+### DataLoader
+
+Handles loading and validation of analysis results.
+
+**Methods:**
+
+- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
+  - Load results from JSON file with detailed error handling.
+
+---
+
+## ngraph.workflow.analysis.flow_analyzer
+
+Maximum flow analysis for workflow results.
+
+This module contains `FlowAnalyzer`, which processes maximum flow computation
+results from workflow steps, computes statistics, and generates visualizations
+for flow capacity analysis.
+
+### FlowAnalyzer
+
+Processes maximum flow computation results into statistical summaries.
+
+Extracts max_flow results from workflow step data, computes flow statistics
+including capacity distribution metrics, and generates tabular visualizations
+for notebook output.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze flow results and create visualizations.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
+  - Analyze and display all flow results.
+- `analyze_capacity_probe(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display capacity probe results for a specific step.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display flow analysis results.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
+
+---
+
+## ngraph.workflow.analysis.package_manager
+
+Package management for notebook analysis components.
+
+### PackageManager
+
+Manages package installation and imports for notebooks.
+
+**Methods:**
+
+- `check_and_install_packages() -> Dict[str, Any]`
+  - Check for required packages and install if missing.
+- `setup_environment() -> Dict[str, Any]`
+  - Set up the complete notebook environment.
+
+---
+
+## ngraph.workflow.analysis.registry
+
+Analysis registry for mapping workflow steps to analysis modules.
+
+This module provides the central registry that defines which analysis modules
+should be executed for each workflow step type, eliminating fragile data-based
+parsing and creating a clear, maintainable mapping system.
+
+### AnalysisConfig
+
+Configuration for a single analysis module execution.
+
+Attributes:
+    analyzer_class: The analyzer class to instantiate.
+    method_name: The method to call on the analyzer (default: 'analyze_and_display').
+    kwargs: Additional keyword arguments to pass to the method.
+    section_title: Title for the notebook section (auto-generated if None).
+    enabled: Whether this analysis is enabled (default: True).
+
+**Attributes:**
+
+- `analyzer_class` (Type[NotebookAnalyzer])
+- `method_name` (str) = analyze_and_display
+- `kwargs` (Dict[str, Any]) = {}
+- `section_title` (Optional[str])
+- `enabled` (bool) = True
+
+### AnalysisRegistry
+
+Registry mapping workflow step types to their analysis configurations.
+
+The registry defines which analysis modules should run for each workflow step,
+providing a clear and maintainable mapping that replaces fragile data parsing.
+
+**Attributes:**
+
+- `_mappings` (Dict[str, List[AnalysisConfig]]) = {}
+
+**Methods:**
+
+- `get_all_step_types(self) -> 'List[str]'`
+  - Get all registered workflow step types.
+- `get_analyses(self, step_type: 'str') -> 'List[AnalysisConfig]'`
+  - Get all analysis configurations for a workflow step type.
+- `has_analyses(self, step_type: 'str') -> 'bool'`
+  - Check if any analyses are registered for a workflow step type.
+- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'`
+  - Register an analysis module for a workflow step type.
+
+### get_default_registry() -> 'AnalysisRegistry'
+
+Create and return the default analysis registry with standard mappings.
+
+Returns:
+    Configured registry with standard workflow step -> analysis mappings.
+
+---
+
+## ngraph.workflow.analysis.summary
+
+Summary analysis for workflow results.
+
+This module contains `SummaryAnalyzer`, which processes workflow step results
+to generate high-level summaries, counts step types, and provides overview
+statistics for network construction and analysis results.
+
+### SummaryAnalyzer
+
+Generates summary statistics and overviews of workflow results.
+
+Counts and categorizes workflow steps by type (capacity, flow, other),
+displays network statistics for graph construction steps, and provides
+high-level summaries for analysis overview.
+
+**Methods:**
+
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
+  - Analyze and summarize all results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze results and display them in notebook format.
+- `analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display graph construction results.
+- `analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None`
+  - Analyze and display network statistics for a specific step.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
+  - Display summary analysis.
+- `get_description(self) -> str`
+  - Get a description of what this analyzer does.
 
 ---
 

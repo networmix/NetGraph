@@ -27,6 +27,9 @@ jobs:
       - name: Type check with Pyright
         run: |
           pyright
+      - name: Validate YAML schemas
+        run: |
+          make validate
       - name: Test with pytest and check coverage
         run: |
           pytest

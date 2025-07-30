@@ -26,6 +26,7 @@ nav:
   - Examples:
       - Basic Example: examples/basic.md
       - Clos Fabric: examples/clos-fabric.md
+      - NetworkView: examples/network_view.md
   - Reference:
       - DSL: reference/dsl.md
       - CLI: reference/cli.md

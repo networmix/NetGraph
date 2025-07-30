@@ -91,28 +91,28 @@ network:
         cost: 4
         attrs:
           type: link
-failure_policy:
-  attrs:
-    name: "multi_rule_example"
-    description: "Testing multi-rule approach."
-  fail_shared_risk_groups: false
-  fail_risk_group_children: false
-  use_cache: false
-  rules:
-    - entity_scope: node
-      logic: "any"
-      rule_type: "choice"
-      count: 1
-    - entity_scope: link
-      logic: "any"
-      rule_type: "all"
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 15
-  - source_path: NodeA
-    sink_path: NodeC
-    demand: 5
+failure_policy_set:
+  default:
+    attrs:
+      name: "multi_rule_example"
+      description: "Testing multi-rule approach."
+    fail_risk_groups: false
+    fail_risk_group_children: false
+    use_cache: false
+    rules:
+      - entity_scope: node
+        rule_type: "choice"
+        count: 1
+      - entity_scope: link
+        rule_type: "all"
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 15
+    - source_path: NodeA
+      sink_path: NodeC
+      demand: 5
 workflow:
   - step_type: DoSmth
     name: Step1
@@ -139,12 +139,14 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-failure_policy:
-  rules: []
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 10
+failure_policy_set:
+  default:
+    rules: []
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 10
 workflow:
   - name: StepWithoutType
     some_param: 123
@@ -167,12 +169,14 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-failure_policy:
-  rules: []
-traffic_demands:
-  - source_path: NodeA
-    sink_path: NodeB
-    demand: 10
+failure_policy_set:
+  default:
+    rules: []
+traffic_matrix_set:
+  default:
+    - source_path: NodeA
+      sink_path: NodeB
+      demand: 10
 workflow:
   - step_type: NonExistentStep
     name: BadStep
@@ -196,9 +200,10 @@ network:
       target: NodeB
       link_params:
         capacity: 1
-traffic_demands: []
-failure_policy:
-  rules: []
+traffic_matrix_set: {}
+failure_policy_set:
+  default:
+    rules: []
 workflow:
   - step_type: DoSmth
     name: StepWithExtra
@@ -211,7 +216,7 @@ workflow:
 def minimal_scenario_yaml() -> str:
     """
     Returns a YAML string with only a single workflow step, no network,
-    no failure_policy, and no traffic_demands. Should be valid but minimal.
+    no failure_policy, and no traffic_matrix_set. Should be valid but minimal.
     """
     return """
 workflow:
@@ -274,33 +279,34 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert link_bc.cost == 4
 
     # Check failure policy
-    assert isinstance(scenario.failure_policy, FailurePolicy)
-    assert not scenario.failure_policy.fail_shared_risk_groups
-    assert not scenario.failure_policy.fail_risk_group_children
-    assert not scenario.failure_policy.use_cache
+    default_policy = scenario.failure_policy_set.get_default_policy()
+    assert isinstance(default_policy, FailurePolicy)
+    assert not default_policy.fail_risk_groups
+    assert not default_policy.fail_risk_group_children
+    assert not default_policy.use_cache
 
-    assert len(scenario.failure_policy.rules) == 2
-    assert scenario.failure_policy.attrs.get("name") == "multi_rule_example"
-    assert (
-        scenario.failure_policy.attrs.get("description")
-        == "Testing multi-rule approach."
-    )
+    assert len(default_policy.rules) == 2
+    assert default_policy.attrs.get("name") == "multi_rule_example"
+    assert default_policy.attrs.get("description") == "Testing multi-rule approach."
 
     # Rule1 => entity_scope=node, rule_type=choice, count=1
-    rule1 = scenario.failure_policy.rules[0]
+    rule1 = default_policy.rules[0]
     assert rule1.entity_scope == "node"
     assert rule1.rule_type == "choice"
     assert rule1.count == 1
 
     # Rule2 => entity_scope=link, rule_type=all
-    rule2 = scenario.failure_policy.rules[1]
+    rule2 = default_policy.rules[1]
     assert rule2.entity_scope == "link"
     assert rule2.rule_type == "all"
 
-    # Check traffic demands
-    assert len(scenario.traffic_demands) == 2
-    d1 = scenario.traffic_demands[0]
-    d2 = scenario.traffic_demands[1]
+    # Check traffic matrix set
+    assert len(scenario.traffic_matrix_set.matrices) == 1
+    assert "default" in scenario.traffic_matrix_set.matrices
+    default_demands = scenario.traffic_matrix_set.matrices["default"]
+    assert len(default_demands) == 2
+    d1 = default_demands[0]
+    d2 = default_demands[1]
     assert d1.source_path == "NodeA"
     assert d1.sink_path == "NodeB"
     assert d1.demand == 15
@@ -377,10 +383,10 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
 
-    # If no failure_policy block, scenario.failure_policy => None
-    assert scenario.failure_policy is None
+    # If no failure_policy_set block, scenario.failure_policy_set has no policies
+    assert scenario.failure_policy_set.get_default_policy() is None
 
-    assert scenario.traffic_demands == []
+    assert len(scenario.traffic_matrix_set.matrices) == 0
     assert len(scenario.workflow) == 1
     step = scenario.workflow[0]
     assert step.name == "JustStep"
@@ -396,8 +402,8 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert scenario.network is not None
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
-    assert scenario.failure_policy is None
-    assert scenario.traffic_demands == []
+    assert scenario.failure_policy_set.get_default_policy() is None
+    assert len(scenario.traffic_matrix_set.matrices) == 0
     assert scenario.workflow == []
 
 
@@ -411,7 +417,23 @@ network:
   nodes:
     NodeA: {}
     NodeB: {}
-  links: []
+    NodeC: {}
+  links:
+    - source: NodeA
+      target: NodeB
+      link_params:
+        capacity: 10
+        cost: 5
+        attrs:
+          type: link
+          some_attr: some_value
+    - source: NodeB
+      target: NodeC
+      link_params:
+        capacity: 20
+        cost: 4
+        attrs:
+          type: link
 risk_groups:
   - name: "RG1"
     disabled: false
@@ -439,3 +461,187 @@ risk_groups:
     with pytest.raises(ValueError) as excinfo:
         Scenario.from_yaml(scenario_yaml)
     assert "RiskGroup entry missing 'name' field" in str(excinfo.value)
+
+
+def test_failure_policy_docstring_yaml_integration():
+    """Integration test: Parse the exact YAML from the FailurePolicy docstring and verify it works."""
+
+    import yaml
+
+    from ngraph.seed_manager import SeedManager
+
+    # Extract the exact YAML from the docstring
+    yaml_content = """
+failure_policy:
+  attrs:
+    name: "Texas Grid Outage Scenario"
+    description: "Regional power grid failure affecting telecom infrastructure"
+  fail_risk_groups: true
+  rules:
+    # Fail all nodes in Texas electrical grid
+    - entity_scope: "node"
+      conditions:
+        - attr: "electric_grid"
+          operator: "=="
+          value: "texas"
+      logic: "and"
+      rule_type: "all"
+
+    # Randomly fail 40% of underground fiber links in affected region
+    - entity_scope: "link"
+      conditions:
+        - attr: "region"
+          operator: "=="
+          value: "southwest"
+        - attr: "type"
+          operator: "=="
+          value: "underground"
+      logic: "and"
+      rule_type: "random"
+      probability: 0.4
+
+    # Choose exactly 2 risk groups to fail (e.g., data centers)
+    - entity_scope: "risk_group"
+      rule_type: "choice"
+      count: 2
+"""
+
+    # Parse the YAML
+    parsed_data = yaml.safe_load(yaml_content)
+    failure_policy_data = parsed_data["failure_policy"]
+
+    # Use the internal _build_failure_policy method to create the policy
+    seed_manager = SeedManager(42)
+    policy = Scenario._build_failure_policy(
+        failure_policy_data, seed_manager, "test_policy"
+    )
+
+    # Verify structure
+    assert policy.attrs["name"] == "Texas Grid Outage Scenario"
+    assert policy.fail_risk_groups is True
+    assert len(policy.rules) == 3
+    assert policy.seed is not None  # Should have derived seed
+
+    # First rule: nodes with electric_grid == "texas"
+    rule1 = policy.rules[0]
+    assert rule1.entity_scope == "node"
+    assert rule1.rule_type == "all"
+    assert len(rule1.conditions) == 1
+    assert rule1.conditions[0].attr == "electric_grid"
+
+    # Second rule: random links in southwest with underground installation
+    rule2 = policy.rules[1]
+    assert rule2.entity_scope == "link"
+    assert rule2.rule_type == "random"
+    assert rule2.probability == 0.4
+    assert len(rule2.conditions) == 2
+
+    # Third rule: choice of 2 risk groups
+    rule3 = policy.rules[2]
+    assert rule3.entity_scope == "risk_group"
+    assert rule3.rule_type == "choice"
+    assert rule3.count == 2
+
+
+def test_failure_policy_docstring_yaml_full_scenario_integration():
+    """Test the docstring YAML example in a complete scenario context."""
+    from unittest.mock import patch
+
+    # Create a complete scenario with our failure policy
+    scenario_yaml = """
+network:
+  nodes:
+    N1:
+      attrs:
+        electric_grid: "texas"
+        region: "southwest"
+    N2:
+      attrs:
+        electric_grid: "california"
+        region: "west"
+    N3:
+      attrs:
+        electric_grid: "pjm"
+        region: "northeast"
+  links:
+    - source: "N1"
+      target: "N2"
+      link_params:
+        capacity: 1000
+        attrs:
+          type: "underground"
+          region: "southwest"
+    - source: "N2"
+      target: "N3"
+      link_params:
+        capacity: 500
+        attrs:
+          type: "opgw"
+          region: "west"
+
+failure_policy_set:
+  docstring_example:
+    attrs:
+      name: "Texas Grid Outage Scenario"
+      description: "Regional power grid failure affecting telecom infrastructure"
+    fail_risk_groups: true
+    rules:
+      # Fail all nodes in Texas electrical grid
+      - entity_scope: "node"
+        conditions:
+          - attr: "electric_grid"
+            operator: "=="
+            value: "texas"
+        logic: "and"
+        rule_type: "all"
+
+      # Randomly fail 40% of underground fiber links in affected region
+      - entity_scope: "link"
+        conditions:
+          - attr: "region"
+            operator: "=="
+            value: "southwest"
+          - attr: "type"
+            operator: "=="
+            value: "underground"
+        logic: "and"
+        rule_type: "random"
+        probability: 0.4
+
+      # Choose exactly 2 risk groups to fail (e.g., data centers)
+      - entity_scope: "risk_group"
+        rule_type: "choice"
+        count: 2
+
+traffic_matrix_set:
+  default: []
+"""
+
+    # Load the complete scenario
+    scenario = Scenario.from_yaml(scenario_yaml)
+
+    # Get the failure policy
+    policy = scenario.failure_policy_set.get_policy("docstring_example")
+    assert policy is not None
+
+    # Verify it matches our expectations
+    assert policy.attrs["name"] == "Texas Grid Outage Scenario"
+    assert policy.fail_risk_groups is True
+    assert len(policy.rules) == 3
+
+    # Verify it works with the scenario's network
+    network = scenario.network
+    nodes_dict = {name: node.attrs for name, node in network.nodes.items()}
+    links_dict = {link_id: link.attrs for link_id, link in network.links.items()}
+
+    with (
+        patch("ngraph.failure_policy._random.random", return_value=0.3),
+        patch("ngraph.failure_policy._random.sample", return_value=["RG1"]),
+    ):
+        failed = policy.apply_failures(nodes_dict, links_dict, {})
+
+    # N1 should fail (has electric_grid == "texas")
+    assert "N1" in failed
+    # N2, N3 should not fail (different electric grids)
+    assert "N2" not in failed
+    assert "N3" not in failed

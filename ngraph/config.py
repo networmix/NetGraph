@@ -1,4 +1,4 @@
-"""Configuration for NetGraph."""
+"""Configuration classes for NetGraph components."""
 
 from dataclasses import dataclass
 

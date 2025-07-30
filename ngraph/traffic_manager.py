@@ -1,7 +1,11 @@
+"""TrafficManager class for placing traffic demands on network topology."""
+
+from __future__ import annotations
+
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, List, NamedTuple, Optional, Tuple, Union
 
 from ngraph.lib.algorithms import base
 from ngraph.lib.algorithms.flow_init import init_flow_graph
@@ -10,6 +14,10 @@ from ngraph.lib.flow_policy import FlowPolicyConfig, get_flow_policy
 from ngraph.lib.graph import StrictMultiDiGraph
 from ngraph.network import Network, Node
 from ngraph.traffic_demand import TrafficDemand
+
+if TYPE_CHECKING:
+    from ngraph.network_view import NetworkView
+    from ngraph.results_artifacts import TrafficMatrixSet
 
 
 class TrafficResult(NamedTuple):
@@ -63,23 +71,36 @@ class TrafficManager:
     case no demands are created).
 
     Attributes:
-        network (Network): The underlying network object.
-        traffic_demands (List[TrafficDemand]): The scenario-level demands.
+        network (Union[Network, NetworkView]): The underlying network or view object.
+        traffic_matrix_set (TrafficMatrixSet): Traffic matrices containing demands.
+        matrix_name (Optional[str]): Name of specific matrix to use, or None for default.
         default_flow_policy_config (FlowPolicyConfig): Default FlowPolicy if
             a TrafficDemand does not specify one.
         graph (StrictMultiDiGraph): Active graph built from the network.
-        demands (List[Demand]): All expanded demands from traffic_demands.
+        demands (List[Demand]): All expanded demands from the active matrix.
         _td_to_demands (Dict[str, List[Demand]]): Internal mapping from
             TrafficDemand.id to its expanded Demand objects.
     """
 
-    network: Network
-    traffic_demands: List[TrafficDemand] = field(default_factory=list)
+    network: Union[Network, "NetworkView"]
+    traffic_matrix_set: "TrafficMatrixSet"
+    matrix_name: Optional[str] = None
     default_flow_policy_config: FlowPolicyConfig = FlowPolicyConfig.SHORTEST_PATHS_ECMP
 
     graph: Optional[StrictMultiDiGraph] = None
     demands: List[Demand] = field(default_factory=list)
     _td_to_demands: Dict[str, List[Demand]] = field(default_factory=dict)
+
+    def _get_traffic_demands(self) -> List[TrafficDemand]:
+        """Get the traffic demands from the matrix set.
+
+        Returns:
+            List of TrafficDemand objects from the specified or default matrix.
+        """
+        if self.matrix_name:
+            return self.traffic_matrix_set.get_matrix(self.matrix_name)
+        else:
+            return self.traffic_matrix_set.get_default_matrix()
 
     def build_graph(self, add_reverse: bool = True) -> None:
         """Builds or rebuilds the internal StrictMultiDiGraph from self.network.
@@ -94,7 +115,7 @@ class TrafficManager:
         init_flow_graph(self.graph)  # Initialize flow-related attributes
 
     def expand_demands(self) -> None:
-        """Converts each TrafficDemand in self.traffic_demands into one or more
+        """Converts each TrafficDemand in the active matrix into one or more
         Demand objects based on the demand's 'mode'.
 
         The expanded demands are stored in self.demands, sorted by ascending
@@ -107,7 +128,7 @@ class TrafficManager:
         self._td_to_demands.clear()
         expanded: List[Demand] = []
 
-        for td in self.traffic_demands:
+        for td in self._get_traffic_demands():
             # Gather node groups for source and sink
             src_groups = self.network.select_node_groups_by_path(td.source_path)
             snk_groups = self.network.select_node_groups_by_path(td.sink_path)
@@ -216,7 +237,7 @@ class TrafficManager:
                     break
 
         # Update each TrafficDemand's placed volume
-        for td in self.traffic_demands:
+        for td in self._get_traffic_demands():
             dlist = self._td_to_demands.get(td.id, [])
             td.demand_placed = sum(d.placed_demand for d in dlist)
 
@@ -236,7 +257,7 @@ class TrafficManager:
                 dmd.flow_policy.remove_demand(self.graph)
             dmd.placed_demand = 0.0
 
-        for td in self.traffic_demands:
+        for td in self._get_traffic_demands():
             td.demand_placed = 0.0
 
     def get_flow_details(self) -> Dict[Tuple[int, int], Dict[str, object]]:
@@ -300,7 +321,7 @@ class TrafficManager:
 
         if not detailed:
             # Summaries for top-level TrafficDemands
-            for td in self.traffic_demands:
+            for td in self._get_traffic_demands():
                 total_volume = td.demand
                 placed_volume = td.demand_placed
                 unplaced_volume = total_volume - placed_volume

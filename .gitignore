@@ -26,10 +26,6 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -38,8 +34,6 @@ pip-delete-this-directory.txt
 # Testing & Coverage
 # -----------------------------------------------------------------------------
 htmlcov/
-.tox/
-.nox/
 .coverage
 .coverage.*
 .cache
@@ -68,15 +62,9 @@ ngraph-venv/
 .python-version
 
 # Package managers
-#Pipfile.lock  # Uncomment if using pipenv
-poetry.lock   # Uncomment if you want to ignore poetry.lock
 __pypackages__/
 
 # Type checkers & linters
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.pyre/
 .ruff_cache/
 
 # -----------------------------------------------------------------------------
@@ -93,31 +81,17 @@ dmypy.json
 *.swo
 *~
 
-# Spyder
-.spyderproject
-.spyproject
-
-# Rope
-.ropeproject
-
 # -----------------------------------------------------------------------------
 # Jupyter Notebooks
 # -----------------------------------------------------------------------------
 .ipynb_checkpoints
 .virtual_documents/
 
-# IPython
-profile_default/
-ipython_config.py
-
 # -----------------------------------------------------------------------------
 # Documentation
 # -----------------------------------------------------------------------------
 # MkDocs
 /site
-
-# Sphinx
-docs/_build/
 
 # -----------------------------------------------------------------------------
 # OS Specific
@@ -149,37 +123,19 @@ exports/
 *.pickle
 *.pkl
 
-# Generated visualizations
-plots/
-figures/
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.svg
-*.pdf
-# Exceptions for documentation
-!docs/**/*.png
-!docs/**/*.jpg
-!docs/**/*.svg
-!README_assets/
-
-# Configuration with secrets
-config.local.*
-.env.local
-.env.*.local
-secrets/
-credentials/
-
-# Temporary analysis
+# Temporary analysis & CLI output
+*_results.json
+results*.json
 scratch/
 temp/
 temporary/
 analysis_temp/
 tmp/
+analysis*.ipynb
+*_analysis.ipynb
+analysis*.html
+*_analysis.html
 
-# -----------------------------------------------------------------------------
-# Special
-# -----------------------------------------------------------------------------
-# Agent instructions
-AGENTS.md
+# Performance analysis results
+dev/perf_results/
+dev/perf_plots/

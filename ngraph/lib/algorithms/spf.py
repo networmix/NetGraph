@@ -1,3 +1,5 @@
+"""Shortest path first (SPF) algorithms and implementations."""
+
 from heapq import heappop, heappush
 from typing import (
     Callable,

@@ -101,6 +101,7 @@ print(f"Maximum flow with ECMP: {max_flow_ecmp}")
 ## Understanding the Results
 
 The result `{('b1|b2', 'b1|b2'): 256.0}` means:
+
 - **Source**: All t1 nodes in both b1 and b2 segments of my_clos1
 - **Sink**: All t1 nodes in both b1 and b2 segments of my_clos2
 - **Capacity**: Maximum flow of 256.0 units
@@ -171,5 +172,5 @@ print(f"Found {len(paths)} paths between segments")
 
 ## Next Steps
 
-- **[DSL Reference](../reference/dsl.md)** - Learn the complete YAML syntax
+- **[DSL Reference](../reference/dsl.md)** - YAML syntax reference
 - **[API Reference](../reference/api.md)** - Explore the Python API in detail

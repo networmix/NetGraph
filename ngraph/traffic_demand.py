@@ -1,3 +1,5 @@
+"""TrafficDemand class for modeling network traffic flows."""
+
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 

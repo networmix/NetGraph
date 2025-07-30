@@ -1,6 +1,6 @@
 # Quick Tutorial: Two-Tier Clos Analysis
 
-This tutorial will walk you through analyzing a simple two-tier Clos network topology using NetGraph. You'll learn how to create a scenario in YAML, define network topologies, calculate maximum flows, and explore the network structure. This example will help you understand the basics of using NetGraph for network modeling and analysis.
+This tutorial will walk you through analyzing a simple two-tier Clos network topology using NetGraph. You'll learn how to create a scenario in YAML, define network topologies, calculate maximum flows, and explore the network structure.
 
 ## Building a Two-Tier Clos Topology
 
@@ -78,6 +78,7 @@ blueprints:
 
 network:
   name: "Three-Tier Clos Fabric"
+  seed: 42  # Optional: ensures reproducible results for debugging/testing
   groups:
     pod[1-2]:  # Creates pod1 and pod2
       use_blueprint: clos_pod
@@ -107,6 +108,8 @@ This creates a three-tier Clos fabric with the following structure:
 - Each server connects with two parallel links to its leaf switch
 - Leaf switches connect to spine switches in a full mesh
 - Spines connect to super-spines in respective columns in one-to-one fashion
+
+The `seed` parameter ensures reproducible results when using randomized workflow steps like failure simulation or random node selection - useful for debugging and testing.
 
 ## Network Topology Exploration
 
@@ -180,7 +183,7 @@ Maximum flow pod1→pod2 spine: {('pod1/spine', 'pod2/spine'): 400.0}
 
 All the nodes matched by the `source_path` and `sink_path` respectively are attached to pseudo-source and pseudo-sink nodes, which are then used to calculate the maximum flow. The results show the maximum flow between these two pseudo-nodes, which represent the total capacity of the network paths between them.
 
-MaxFlow calculation can be influenced by the folowing parameters:
+MaxFlow calculation can be influenced by the following parameters:
 
 - **`shortest_path`**: If set to `True`, it will only consider the shortest paths between source and sink nodes.
 - **`flow_placement`**: This parameter controls how flows are distributed across multiple shortest paths. Options include `FlowPlacement.PROPORTIONAL` (default) and `FlowPlacement.EQUAL_BALANCED`.

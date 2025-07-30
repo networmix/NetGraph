@@ -196,8 +196,8 @@ network:
     assert len(rack1.children) == 2
 
 
-def test_traffic_demands_example():
-    """Test traffic demands definition."""
+def test_traffic_matrix_set_example():
+    """Test traffic matrix set definition."""
     yaml_content = """
 network:
   nodes:
@@ -214,19 +214,21 @@ network:
       attrs:
         role: "server"
 
-traffic_demands:
-  - source_path: "source.*"
-    sink_path: "sink.*"
-    demand: 100
-    mode: "combine"
-    priority: 1
-    attrs:
-      service_type: "web"
+traffic_matrix_set:
+  default:
+    - source_path: "source.*"
+      sink_path: "sink.*"
+      demand: 100
+      mode: "combine"
+      priority: 1
+      attrs:
+        service_type: "web"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert len(scenario.traffic_demands) == 1
-    demand = scenario.traffic_demands[0]
+    default_demands = scenario.traffic_matrix_set.get_default_matrix()
+    assert len(default_demands) == 1
+    demand = default_demands[0]
     assert demand.source_path == "source.*"
     assert demand.sink_path == "sink.*"
     assert demand.demand == 100
@@ -245,28 +247,31 @@ network:
       attrs:
         role: "leaf"
 
-failure_policy:
-  fail_shared_risk_groups: true
-  fail_risk_group_children: false
-  use_cache: true
-  attrs:
-    custom_key: "value"
-  rules:
-    - entity_scope: "node"
-      conditions:
-        - attr: "role"
-          operator: "=="
-          value: "spine"
-      logic: "and"
-      rule_type: "all"
+failure_policy_set:
+  default:
+    fail_risk_groups: true
+    fail_risk_group_children: false
+    use_cache: true
+    attrs:
+      custom_key: "value"
+    rules:
+      - entity_scope: "node"
+        conditions:
+          - attr: "role"
+            operator: "=="
+            value: "spine"
+        logic: "and"
+        rule_type: "all"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert scenario.failure_policy is not None
-    assert scenario.failure_policy.fail_shared_risk_groups
-    assert not scenario.failure_policy.fail_risk_group_children
-    assert len(scenario.failure_policy.rules) == 1
-    rule = scenario.failure_policy.rules[0]
+    assert len(scenario.failure_policy_set.policies) == 1
+    default_policy = scenario.failure_policy_set.get_default_policy()
+    assert default_policy is not None
+    assert default_policy.fail_risk_groups
+    assert not default_policy.fail_risk_group_children
+    assert len(default_policy.rules) == 1
+    rule = default_policy.rules[0]
     assert rule.entity_scope == "node"
     assert len(rule.conditions) == 1
 

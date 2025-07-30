@@ -1,9 +1,11 @@
+"""FailurePolicy, FailureRule, and FailureCondition classes for failure modeling."""
+
 from __future__ import annotations
 
+import random as _random
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from random import random, sample
-from typing import Any, Dict, List, Literal, Set
+from typing import Any, Dict, List, Literal, Optional, Set
 
 
 @dataclass
@@ -44,10 +46,9 @@ class FailureRule:
             The type of entities this rule applies to: "node", "link", or "risk_group".
         conditions (List[FailureCondition]):
             A list of conditions to filter matching entities.
-        logic (Literal["and", "or", "any"]):
+        logic (Literal["and", "or"]):
             "and": All conditions must be true for a match.
-            "or": At least one condition is true for a match.
-            "any": Skip condition checks and match all.
+            "or": At least one condition is true for a match (default).
         rule_type (Literal["random", "choice", "all"]):
             The selection strategy among the matched set:
               - "random": each matched entity is chosen with probability = `probability`.
@@ -61,7 +62,7 @@ class FailureRule:
 
     entity_scope: EntityScope
     conditions: List[FailureCondition] = field(default_factory=list)
-    logic: Literal["and", "or", "any"] = "and"
+    logic: Literal["and", "or"] = "or"
     rule_type: Literal["random", "choice", "all"] = "all"
     probability: float = 1.0
     count: int = 1
@@ -81,7 +82,7 @@ class FailurePolicy:
 
     The main entry point is `apply_failures`, which:
       1) For each rule, gather the relevant entities (node, link, or risk_group).
-      2) Match them based on rule conditions (or skip if 'logic=any').
+              2) Match them based on rule conditions using 'and' or 'or' logic.
       3) Apply the selection strategy (all, random, or choice).
       4) Collect the union of all failed entities across all rules.
       5) Optionally expand failures by shared-risk groups or sub-risks.
@@ -92,12 +93,49 @@ class FailurePolicy:
         network hasn't changed. If your network changes between calls,
         you should clear the cache or re-initialize the policy.
 
+    Example YAML configuration:
+        ```yaml
+        failure_policy:
+          attrs:
+            name: "Texas Grid Outage Scenario"
+            description: "Regional power grid failure affecting telecom infrastructure"
+          fail_risk_groups: true
+          rules:
+            # Fail all nodes in Texas electrical grid
+            - entity_scope: "node"
+              conditions:
+                - attr: "electric_grid"
+                  operator: "=="
+                  value: "texas"
+              logic: "and"
+              rule_type: "all"
+
+            # Randomly fail 40% of underground fiber links in affected region
+            - entity_scope: "link"
+              conditions:
+                - attr: "region"
+                  operator: "=="
+                  value: "southwest"
+                - attr: "installation"
+                  operator: "=="
+                  value: "underground"
+              logic: "and"
+              rule_type: "random"
+              probability: 0.4
+
+            # Choose exactly 2 risk groups to fail (e.g., data centers)
+            # Note: logic defaults to "or" when not specified
+            - entity_scope: "risk_group"
+              rule_type: "choice"
+              count: 2
+        ```
+
     Attributes:
         rules (List[FailureRule]):
             A list of FailureRules to apply.
         attrs (Dict[str, Any]):
             Arbitrary metadata about this policy (e.g. "name", "description").
-        fail_shared_risk_groups (bool):
+        fail_risk_groups (bool):
             If True, after initial selection, expand failures among any
             node/link that shares a risk group with a failed entity.
         fail_risk_group_children (bool):
@@ -107,14 +145,18 @@ class FailurePolicy:
             If True, match results for each rule are cached to speed up
             repeated calls. If the network changes, the cached results
             may be stale.
+        seed (Optional[int]):
+            Seed for reproducible random operations. If None, operations
+            will be non-deterministic.
 
     """
 
     rules: List[FailureRule] = field(default_factory=list)
     attrs: Dict[str, Any] = field(default_factory=dict)
-    fail_shared_risk_groups: bool = False
+    fail_risk_groups: bool = False
     fail_risk_group_children: bool = False
     use_cache: bool = False
+    seed: Optional[int] = None
 
     # Internal cache for matched sets:  (rule_index -> set_of_entities)
     _match_cache: Dict[int, Set[str]] = field(default_factory=dict, init=False)
@@ -156,7 +198,7 @@ class FailurePolicy:
                 network_risk_groups,
             )
             # Then select a subset from matched_ids according to rule_type
-            selected = self._select_entities(matched_ids, rule)
+            selected = self._select_entities(matched_ids, rule, self.seed)
 
             # Add them to the respective fail sets
             if rule.entity_scope == "node":
@@ -166,9 +208,9 @@ class FailurePolicy:
             elif rule.entity_scope == "risk_group":
                 failed_risk_groups |= set(selected)
 
-        # 2) Optionally expand failures by shared-risk groups
-        if self.fail_shared_risk_groups:
-            self._expand_shared_risk_groups(
+        # 2) Optionally expand failures by risk groups
+        if self.fail_risk_groups:
+            self._expand_risk_groups(
                 failed_nodes, failed_links, network_nodes, network_links
             )
 
@@ -217,22 +259,19 @@ class FailurePolicy:
         conditions: List[FailureCondition],
         logic: str,
     ) -> Set[str]:
-        """Return all entity IDs that match the given conditions based on 'and'/'or'/'any' logic.
+        """Return all entity IDs that match the given conditions based on 'and'/'or' logic.
 
         entity_map is either nodes, links, or risk_groups:
           {entity_id -> {top_level_attr: value, ...}}
 
-        If logic='any', skip condition checks and return everything.
-        If no conditions and logic!='any', return empty set.
+        If no conditions, return everything (no restrictions means all match).
 
         Returns:
             A set of matching entity IDs.
         """
-        if logic == "any":
-            return set(entity_map.keys())
-
         if not conditions:
-            return set()
+            # No conditions means match all entities regardless of logic
+            return set(entity_map.keys())
 
         matched = set()
         for entity_id, attrs in entity_map.items():
@@ -258,23 +297,48 @@ class FailurePolicy:
             raise ValueError(f"Unsupported logic: {logic}")
 
     @staticmethod
-    def _select_entities(entity_ids: Set[str], rule: FailureRule) -> Set[str]:
-        """From the matched IDs, pick which entities fail under the given rule_type."""
+    def _select_entities(
+        entity_ids: Set[str], rule: FailureRule, seed: Optional[int] = None
+    ) -> Set[str]:
+        """From the matched IDs, pick which entities fail under the given rule_type.
+
+        Args:
+            entity_ids: Set of entity IDs that matched the rule conditions.
+            rule: The FailureRule specifying how to select from matched entities.
+            seed: Optional seed for reproducible random operations.
+
+        Returns:
+            Set of entity IDs selected for failure.
+        """
         if not entity_ids:
             return set()
 
         if rule.rule_type == "random":
-            return {eid for eid in entity_ids if random() < rule.probability}
+            if seed is not None:
+                # Use seeded random state for deterministic results
+                rng = _random.Random(seed)
+                return {eid for eid in entity_ids if rng.random() < rule.probability}
+            else:
+                # Use global random state when no seed provided
+                return {
+                    eid for eid in entity_ids if _random.random() < rule.probability
+                }
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
-            # sample needs a list
-            return set(sample(list(entity_ids), k=count))
+            entity_list = list(entity_ids)
+            if seed is not None:
+                # Use seeded random state for deterministic results
+                rng = _random.Random(seed)
+                return set(rng.sample(entity_list, k=count))
+            else:
+                # Use global random state when no seed provided
+                return set(_random.sample(entity_list, k=count))
         elif rule.rule_type == "all":
             return entity_ids
         else:
             raise ValueError(f"Unsupported rule_type: {rule.rule_type}")
 
-    def _expand_shared_risk_groups(
+    def _expand_risk_groups(
         self,
         failed_nodes: Set[str],
         failed_links: Set[str],
@@ -364,6 +428,38 @@ class FailurePolicy:
                 if child_name not in failed_rgs:
                     failed_rgs.add(child_name)
                     queue.append(child_name)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization.
+
+        Returns:
+            Dictionary representation with all fields as JSON-serializable primitives.
+        """
+        return {
+            "rules": [
+                {
+                    "entity_scope": rule.entity_scope,
+                    "conditions": [
+                        {
+                            "attr": cond.attr,
+                            "operator": cond.operator,
+                            "value": cond.value,
+                        }
+                        for cond in rule.conditions
+                    ],
+                    "logic": rule.logic,
+                    "rule_type": rule.rule_type,
+                    "probability": rule.probability,
+                    "count": rule.count,
+                }
+                for rule in self.rules
+            ],
+            "attrs": self.attrs,
+            "fail_risk_groups": self.fail_risk_groups,
+            "fail_risk_group_children": self.fail_risk_group_children,
+            "use_cache": self.use_cache,
+            "seed": self.seed,
+        }
 
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:

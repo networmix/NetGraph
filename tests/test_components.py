@@ -285,3 +285,118 @@ components:
     with pytest.raises(ValueError) as exc:
         _ = ComponentsLibrary.from_yaml(yaml_str)
     assert "'components' must be a dict if present." in str(exc.value)
+
+
+def test_components_library_yaml_boolean_keys():
+    """Test that YAML boolean keys are converted to string representations for component names."""
+    yaml_str = """
+components:
+  # Regular string key
+  MyChassis:
+    component_type: chassis
+    cost: 1000
+    power_watts: 100
+
+  # YAML 1.1 boolean keys - these get parsed as Python booleans
+  true:
+    component_type: optic
+    cost: 200
+    power_watts: 5
+  false:
+    component_type: linecard
+    cost: 500
+    power_watts: 25
+  yes:
+    component_type: switch
+    cost: 800
+    power_watts: 40
+  no:
+    component_type: router
+    cost: 1200
+    power_watts: 60
+  on:
+    component_type: module
+    cost: 300
+    power_watts: 15
+  off:
+    component_type: port
+    cost: 150
+    power_watts: 8
+"""
+
+    lib = ComponentsLibrary.from_yaml(yaml_str)
+
+    # All YAML boolean values collapse to just True/False, then converted to strings
+    component_names = set(lib.components.keys())
+    assert component_names == {"MyChassis", "True", "False"}
+
+    # Regular string key
+    my_chassis = lib.get("MyChassis")
+    assert my_chassis is not None
+    assert my_chassis.cost == 1000
+
+    # All true-like YAML values become "True" component (last one wins)
+    # NOTE: When multiple YAML keys collapse to the same boolean value,
+    # only the last one wins (standard YAML/dict behavior)
+    true_comp = lib.get("True")
+    assert true_comp is not None
+    assert true_comp.component_type == "module"  # from 'on:', the last true-like key
+    assert true_comp.cost == 300
+
+    # All false-like YAML values become "False" component (last one wins)
+    false_comp = lib.get("False")
+    assert false_comp is not None
+    assert false_comp.component_type == "port"  # from 'off:', the last false-like key
+    assert false_comp.cost == 150
+
+
+def test_components_library_yaml_boolean_child_keys():
+    """Test that YAML boolean keys in child components are handled correctly."""
+    yaml_str = """
+components:
+  ParentChassis:
+    component_type: chassis
+    cost: 2000
+    power_watts: 200
+    children:
+      LineCard1:
+        component_type: linecard
+        cost: 500
+        power_watts: 25
+      true:
+        component_type: optic
+        cost: 100
+        power_watts: 5
+      false:
+        component_type: module
+        cost: 200
+        power_watts: 10
+      yes:
+        component_type: switch
+        cost: 150
+        power_watts: 8
+      no:
+        component_type: port
+        cost: 75
+        power_watts: 3
+"""
+
+    lib = ComponentsLibrary.from_yaml(yaml_str)
+    parent = lib.get("ParentChassis")
+    assert parent is not None
+
+    # Child component names should be converted too
+    child_names = set(parent.children.keys())
+    assert child_names == {"LineCard1", "True", "False"}
+
+    # Regular string child key
+    assert parent.children["LineCard1"].cost == 500
+
+    # Boolean child keys converted to strings
+    true_child = parent.children["True"]
+    assert true_child.component_type == "switch"  # from 'yes:', the last true-like key
+    assert true_child.cost == 150
+
+    false_child = parent.children["False"]
+    assert false_child.component_type == "port"  # from 'no:', the last false-like key
+    assert false_child.cost == 75

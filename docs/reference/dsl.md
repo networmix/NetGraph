@@ -1,10 +1,16 @@
 # Domain-Specific Language (DSL)
 
-This document provides an overview of the DSL used in NetGraph to define and run network scenarios. The scenario is typically defined in a YAML file that describes the network topology, traffic demands, and analysis workflow. Note: scenario can also be fully defined in Python code, but it will be covered in a separate document.
+> **📚 Quick Navigation:**
+
+> - **[API Reference](api.md)** - Python API for programmatic scenario creation
+> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
+
+This document provides an overview of the DSL used in NetGraph to define and run network scenarios. The scenario is typically defined in a YAML file that describes the network topology, traffic demands, and analysis workflow. Scenarios can also be created programmatically using the Python API (see [API Reference](api.md)).
 
 ## Overview
 
-The scenario YAML file is organized around a **core foundation** that defines your network, with **optional enhancements** for reusability, hardware modeling, failure simulation, and analysis. This document follows a logical progression from the essential core to advanced features.
+The scenario YAML file is organized around a **core foundation** that defines your network, with **optional extensions** for reusability, hardware modeling, failure simulation, and analysis. This document follows a logical progression from the essential core to advanced features.
 
 ## Top-Level Keys
 
@@ -14,8 +20,8 @@ The main sections of a scenario YAML file work together to define a complete net
 - `blueprints`: **[Optional]** Defines reusable network templates that can be instantiated multiple times within the network.
 - `components`: **[Optional]** A library of hardware and optics definitions with attributes like power consumption.
 - `risk_groups`: **[Optional]** Defines groups of components that might fail together (e.g., all components in a rack or multiple parallel links sharing the same DWDM transmission).
-- `traffic_demands`: **[Optional]** Defines traffic demands between network nodes with various placement policies.
-- `failure_policy`: **[Optional]** Specifies availability parameters and rules for simulating network failures.
+- `traffic_matrix_set`: **[Optional]** Defines traffic demand matrices between network nodes with various placement policies.
+- `failure_policy_set`: **[Optional]** Specifies named failure policies and rules for simulating network failures.
 - `workflow`: **[Optional]** A list of steps to be executed, such as building graphs, running simulations, or performing analyses.
 
 ## `network` - Core Foundation
@@ -194,8 +200,8 @@ network:
       target: ".*/spine/.*"
       any_direction: true  # Match both directions of the link
       link_params:
+        risk_groups: ["SpineSRG"]
         attrs:
-          shared_risk_groups: ["SpineSRG"]
           hw_component: "400G-LR4"
 ```
 
@@ -368,21 +374,22 @@ risk_groups:
 
 Nodes and links can be associated with risk groups using their `risk_groups` attribute (a list of risk group names).
 
-## `traffic_demands` - Traffic Analysis
+## `traffic_matrix_set` - Traffic Analysis
 
-Specifies the traffic demands between different parts of the network. This section enables capacity analysis and flow optimization by defining traffic patterns.
+Specifies the traffic demand matrices between different parts of the network. This section enables capacity analysis and flow optimization by defining traffic patterns. Each matrix contains a collection of traffic demands that can be selected for analysis.
 
 ```yaml
-traffic_demands:
-  - name: "DemandName" # Optional
-    source_path: "regex/for/source_nodes"
-    sink_path: "regex/for/sink_nodes"
-    demand: X # Amount of traffic
-    mode: "combine" | "full_mesh" # Expansion mode for generating sub-demands
-    priority: P # Optional priority level
-    flow_policy_config: # Optional, defines how traffic is routed
-      # Available configurations:
-      # "SHORTEST_PATHS_ECMP" - hop-by-hop equal-cost balanced routing
+traffic_matrix_set:
+  matrix_name:
+    - name: "DemandName" # Optional
+      source_path: "regex/for/source_nodes"
+      sink_path: "regex/for/sink_nodes"
+      demand: X # Amount of traffic
+      mode: "combine" | "full_mesh" # Expansion mode for generating sub-demands
+      priority: P # Optional priority level
+      flow_policy_config: # Optional, defines how traffic is routed
+        # Available configurations:
+        # "SHORTEST_PATHS_ECMP" - hop-by-hop equal-cost balanced routing
       # "SHORTEST_PATHS_UCMP" - hop-by-hop proportional flow placement
       # "TE_UCMP_UNLIM" - unlimited MPLS LSPs with UCMP
       # "TE_ECMP_UP_TO_256_LSP" - up to 256 LSPs with ECMP
@@ -397,29 +404,44 @@ traffic_demands:
 
 - **`full_mesh`**: Creates individual demands for each (source_node, sink_node) pair, excluding self-pairs (where source equals sink). The total demand volume is split evenly among all valid pairs. This is useful for modeling distributed traffic patterns where every source communicates with every sink.
 
-## `failure_policy` - Failure Simulation
+## `failure_policy_set` - Failure Simulation
 
-Defines how network failures are simulated to test resilience and analyze failure scenarios.
+Defines named failure policies for simulating network failures to test resilience and analyze failure scenarios. Each policy contains rules and configuration for how failures are applied.
 
 ```yaml
-failure_policy:
-  name: "PolicyName" # Optional
-  fail_shared_risk_groups: true | false
-  fail_risk_group_children: true | false
-  use_cache: true | false
-  attrs: # Optional custom attributes for the policy
-    custom_key: value
-  rules:
-    - entity_scope: "node" | "link" | "risk_group"
-      conditions: # Optional: list of conditions to select entities
-        - attr: "attribute_name"
-          operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
-          value: "some_value"
-      logic: "and" | "or" | "any" # How to combine conditions
-      rule_type: "all" | "choice" | "random" # How to select entities matching conditions
-      count: N # For 'choice' rule_type
-      probability: P # For 'random' rule_type (0.0 to 1.0)
+failure_policy_set:
+  policy_name_1:
+    name: "PolicyName" # Optional
+    fail_risk_groups: true | false
+    fail_risk_group_children: true | false
+    use_cache: true | false
+    attrs: # Optional custom attributes for the policy
+      custom_key: value
+    rules:
+      - entity_scope: "node" | "link" | "risk_group"
+        conditions: # Optional: list of conditions to select entities
+          - attr: "attribute_name"
+            operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
+            value: "some_value"
+        logic: "and" | "or" # How to combine conditions (default: "or")
+        rule_type: "all" | "choice" | "random" # How to select entities matching conditions
+        count: N # For 'choice' rule_type
+        probability: P # For 'random' rule_type (0.0 to 1.0)
+  policy_name_2:
+    # Another failure policy...
+  default:
+    # Default failure policy (used when no specific policy is selected)
+    rules:
+      - entity_scope: "link"
+        rule_type: "choice"
+        count: 1
 ```
+
+**Policy Selection:**
+
+- If a `default` policy exists, it will be used when no specific policy is selected
+- If only one policy exists and no `default` is specified, that policy becomes the default
+- Multiple policies allow testing different failure scenarios in the same network
 
 ## `workflow` - Execution Steps
 
@@ -456,14 +478,41 @@ workflow:
     shortest_path: true | false # Use shortest path only vs full max flow
     flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # How to distribute flow
     # Additional probe parameters available
-```
+
+  - step_type: CapacityEnvelopeAnalysis
+    name: "envelope_name"  # Optional: Name for the analysis step
+    source_path: "regex/for/source_nodes"
+    sink_path: "regex/for/sink_nodes"
+    mode: "combine" | "pairwise" # How to group sources and sinks
+    failure_policy: "policy_name" # Optional: Named failure policy from failure_policy_set
+    iterations: N # Number of Monte-Carlo trials (default: 1)
+    parallelism: P # Number of parallel worker processes (default: 1)
+    shortest_path: true | false # Use shortest path only (default: false)
+    flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # Flow placement strategy
+    baseline: true | false # Optional: Run first iteration without failures as baseline (default: false)
+    store_failure_patterns: true | false # Optional: Store failure patterns in results (default: false)
+    seed: S # Optional: Seed for deterministic results
 
 **Available Workflow Steps:**
 
-- **`BuildGraph`**: Builds the network graph from the scenario definition
+- **`BuildGraph`**: Builds a StrictMultiDiGraph from scenario.network
+- **`CapacityProbe`**: Probes capacity (max flow) between selected groups of nodes
+- **`NetworkStats`**: Computes basic capacity and degree statistics
 - **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
-- **`DistributeExternalConnectivity`**: Creates external connectivity across attachment points
-- **`CapacityProbe`**: Probes maximum flow capacity between node groups
+- **`DistributeExternalConnectivity`**: Distributes external connectivity to attachment nodes
+- **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
+
+**Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
+
+- **Scenario-wide state**: Persistent configuration defined in YAML (e.g., `disabled: true` for nodes/links, maintenance windows). This state is part of the scenario definition and persists across all analyses.
+- **Analysis-specific state**: Temporary exclusions for failure simulation (e.g., nodes/links failed during Monte Carlo analysis). These exclusions are specific to individual analysis runs and don't affect the base network.
+
+**Workflow Step Categories:**
+
+- **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
+- **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
+
+**Report Generation:** After running a workflow, use the `ngraph report` CLI command to generate Jupyter notebooks and HTML reports from the results. See [CLI Reference](cli.md#report) for details.
 
 ## Path Matching Regex Syntax - Reference
 
@@ -486,6 +535,7 @@ path: SFO
 ```
 
 **2. Prefix Match**
+
 ```yaml
 # Matches all nodes starting with "SEA/spine/"
 path: SEA/spine/
@@ -493,6 +543,7 @@ path: SEA/spine/
 ```
 
 **3. Wildcard Patterns**
+
 ```yaml
 # Matches nodes starting with "SEA/leaf" followed by any characters
 path: SEA/leaf*
@@ -500,6 +551,7 @@ path: SEA/leaf*
 ```
 
 **4. Regex Patterns with Anchoring**
+
 ```yaml
 # Matches spine nodes with specific numbering
 path: ^dc1/spine/switch-[1-3]$
@@ -507,6 +559,7 @@ path: ^dc1/spine/switch-[1-3]$
 ```
 
 **5. Complex Regex with Alternation**
+
 ```yaml
 # Matches either spine or leaf nodes in dc1
 path: ^dc1/(spine|leaf)/switch-\d+$
@@ -518,6 +571,7 @@ path: ^dc1/(spine|leaf)/switch-\d+$
 When using capturing groups `(...)` in regex patterns, NetGraph groups matching nodes based on the captured values:
 
 **Single Capturing Group:**
+
 ```yaml
 # Pattern: (SEA/leaf\d)
 # Matches: SEA/leaf1/switch-1, SEA/leaf1/switch-2, SEA/leaf2/switch-1, SEA/leaf2/switch-2
@@ -527,6 +581,7 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 ```
 
 **Multiple Capturing Groups:**
+
 ```yaml
 # Pattern: (dc\d+)/(spine|leaf)/switch-(\d+)
 # Matches: dc1/spine/switch-1, dc1/leaf/switch-2, dc2/spine/switch-1
@@ -537,113 +592,9 @@ When using capturing groups `(...)` in regex patterns, NetGraph groups matching 
 ```
 
 **No Capturing Groups:**
+
 ```yaml
 # Pattern: SEA/spine/switch-\d+
 # All matching nodes are grouped under the original pattern string:
 #   "SEA/spine/switch-\\d+": [SEA/spine/switch-1, SEA/spine/switch-2, ...]
-```
-
-### Usage in Different DSL Sections
-
-**Adjacency Matching:**
-
-In `adjacency` blocks (both in blueprints and top-level network):
-- `source` and `target` fields accept regex patterns
-- Blueprint paths can be relative (no leading `/`) or absolute (with leading `/`)
-- Relative paths are resolved relative to the blueprint instance's path
-
-```yaml
-adjacency:
-  - source: "^my_clos1/leaf/switch-\\d+$"
-    target: "^my_clos1/spine/switch-\\d+$"
-    pattern: mesh
-```
-
-**Node and Link Overrides:**
-
-Use `path` field for nodes or `source`/`target` for links:
-
-```yaml
-node_overrides:
-  - path: ^my_clos1/spine/switch-(1|3|5)$  # Specific switches
-    disabled: true
-    attrs:
-      maintenance_mode: "active"
-
-link_overrides:
-  - source: ^my_clos1/leaf/switch-1$
-    target: ^my_clos1/spine/switch-1$
-    disabled: true
-```
-
-**Workflow Steps:**
-
-Workflow steps like `EnableNodes`, `CapacityProbe`, etc., use path patterns:
-
-```yaml
-workflow:
-  - step_type: EnableNodes
-    path: "^my_clos2/leaf/switch-\\d+$"  # All leaf switches
-    count: 4
-
-  - step_type: CapacityProbe
-    source_path: "^(dc\\d+)/client"  # Capturing group creates per-DC groups
-    sink_path: "^(dc\\d+)/server"
-    mode: pairwise  # Test dc1 client -> dc1 server, dc2 client -> dc2 server
-```
-
-### Best Practices
-
-1. **Use anchors for precision**: Always use `$` at the end if you want exact matches
-2. **Escape special characters in YAML**:
-   - For digit patterns: Use `\\d+` instead of `\d+` in quoted YAML strings
-   - For simple wildcards: `.*/spine/.*` works directly in YAML
-   - In Python code: Use raw strings `r"pattern"` or double escaping `"\\d+"`
-3. **Test patterns**: Use capturing groups strategically to create meaningful node groups
-4. **Relative vs absolute paths**: In blueprints, prefer relative paths for reusability
-5. **Group meaningfully**: Design capturing groups to create logical node groupings for workflow steps
-
-### Common Pitfalls
-
-1. **Missing end anchors**: `switch-1` matches `switch-10`, `switch-11`, etc.
-   - Fix: Use `switch-1$` for exact match
-
-2. **YAML escaping inconsistencies**:
-   - Simple patterns like `.*` work directly: `path: .*/spine/.*`
-   - Complex patterns need escaping: `path: "spine-\\d+$"`
-   - Python code always needs proper escaping: `"(SEA/leaf\\d)"`
-
-3. **Greedy matching**: `.*` can match more than intended
-   - Fix: Use specific patterns like `[^/]+` to match within path segments
-
-4. **Empty groups**: Patterns that don't match any nodes create empty results
-   - Fix: Test patterns against your actual node names
-
-### Regex Escaping Reference
-
-NetGraph processes regex patterns differently depending on context:
-
-**YAML Files (Scenarios):**
-```yaml
-# Simple wildcards - no escaping needed
-adjacency:
-  - source: .*/spine/.*    # Matches any spine nodes
-    target: .*/spine/.*
-
-# Complex patterns - use quotes and double backslashes
-node_overrides:
-  - path: "spine-\\d+$"    # Matches spine-1, spine-2, etc.
-    attrs:
-      hw_type: "high_performance"
-
-# Traffic demands with capturing groups
-traffic_demands:
-  - source_path: "my_clos1/b.*/t1"    # Works in YAML
-    sink_path: "my_clos2/b.*/t1"
-```
-
-**Python Code:**
-```python
-# Use raw strings (preferred)
-pattern = r"^S(\d+)$"
 ```

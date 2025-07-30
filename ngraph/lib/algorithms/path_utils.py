@@ -1,3 +1,5 @@
+"""Path manipulation and utility functions."""
+
 from __future__ import annotations
 
 from itertools import product

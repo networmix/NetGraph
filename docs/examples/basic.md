@@ -2,7 +2,7 @@
 
 In this toy example, we'll create a simple graph with parallel edges and alternative paths, then run max flow analysis with different flow placement policies.
 
-### Creating a Simple Network
+## Creating a Simple Network
 
 **Network Topology:**
 
@@ -25,6 +25,8 @@ from ngraph.lib.algorithms.base import FlowPlacement
 
 # Define network topology with parallel paths
 scenario_yaml = """
+seed: 1234  # Optional: ensures reproducible results
+
 network:
   name: "fundamentals_example"
 
@@ -79,7 +81,7 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 ```
 
-Note that here we used a simple `nodes` and `links` structure to directly define the network topology. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
+Note that here we used a simple `nodes` and `links` structure to directly define the network topology. The optional `seed` parameter ensures reproducible results when using randomized workflow steps. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
 
 ### Flow Analysis Variants
 
@@ -111,15 +113,15 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 # Result: 2.0 (splits flow equally across parallel edges in A→B and B→C)
 ```
 
-### Results Interpretation
+## Results Interpretation
 
 - **"True" MaxFlow**: Uses all available paths regardless of their cost
 - **Shortest Path**: Only uses paths with the minimum cost
-- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The toal flow can be limited by the smallest capacity path.
+- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The total flow can be limited by the smallest capacity path.
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
-### Advanced Analysis: Sensitivity Analysis
+## Advanced Analysis: Sensitivity Analysis
 
 For deeper network analysis, you can use the low-level graph algorithms to perform sensitivity analysis and identify bottleneck edges:
 
@@ -143,13 +145,14 @@ print(f"Sensitivity to capacity decreases: {sensitivity_decrease}")
 ```
 
 This analysis helps identify:
+
 - **Bottleneck edges**: Links that are fully utilized and limit overall flow
 - **High-impact upgrades**: Which capacity increases provide the most benefit
 - **Vulnerability assessment**: How flow decreases when links are degraded
 
 ## Next Steps
 
-- **[Tutorial](../getting-started/tutorial.md)** - Build complete network scenarios
+- **[Tutorial](../getting-started/tutorial.md)** - Build network scenarios
 - **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
 - **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
 - **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage

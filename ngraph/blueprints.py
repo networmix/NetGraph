@@ -1,3 +1,5 @@
+"""Network topology blueprints and generation."""
+
 from __future__ import annotations
 
 import copy
