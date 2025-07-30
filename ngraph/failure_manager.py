@@ -823,7 +823,14 @@ class FailureManager:
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
-            flow_placement = getattr(FlowPlacement, flow_placement)
+            try:
+                flow_placement = FlowPlacement[flow_placement.upper()]
+            except KeyError:
+                valid_values = ", ".join([e.name for e in FlowPlacement])
+                raise ValueError(
+                    f"Invalid flow_placement '{flow_placement}'. "
+                    f"Valid values are: {valid_values}"
+                ) from None
 
         # Run Monte Carlo analysis
         raw_results = self.run_monte_carlo_analysis(
@@ -1237,7 +1244,14 @@ class FailureManager:
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
-            flow_placement = getattr(FlowPlacement, flow_placement)
+            try:
+                flow_placement = FlowPlacement[flow_placement.upper()]
+            except KeyError:
+                valid_values = ", ".join([e.name for e in FlowPlacement])
+                raise ValueError(
+                    f"Invalid flow_placement '{flow_placement}'. "
+                    f"Valid values are: {valid_values}"
+                ) from None
 
         raw_results = self.run_monte_carlo_analysis(
             analysis_func=sensitivity_analysis,

@@ -974,3 +974,103 @@ class TestFailureManagerStringConversions:
             from ngraph.lib.algorithms.base import FlowPlacement
 
             assert call_kwargs["flow_placement"] == FlowPlacement.EQUAL_BALANCED
+
+    def test_invalid_flow_placement_string_max_flow(
+        self, failure_manager: FailureManager
+    ):
+        """Test that invalid flow_placement strings raise ValueError in run_max_flow_monte_carlo."""
+        with pytest.raises(ValueError) as exc_info:
+            failure_manager.run_max_flow_monte_carlo(
+                source_path="src.*",
+                sink_path="dst.*",
+                flow_placement="INVALID_OPTION",  # Invalid string
+                iterations=1,
+            )
+
+        error_msg = str(exc_info.value)
+        assert "Invalid flow_placement 'INVALID_OPTION'" in error_msg
+        assert "Valid values are: PROPORTIONAL, EQUAL_BALANCED" in error_msg
+
+    def test_invalid_flow_placement_string_sensitivity(
+        self, failure_manager: FailureManager
+    ):
+        """Test that invalid flow_placement strings raise ValueError in run_sensitivity_monte_carlo."""
+        with pytest.raises(ValueError) as exc_info:
+            failure_manager.run_sensitivity_monte_carlo(
+                source_path="src.*",
+                sink_path="dst.*",
+                flow_placement="ANOTHER_INVALID",  # Invalid string
+                iterations=1,
+            )
+
+        error_msg = str(exc_info.value)
+        assert "Invalid flow_placement 'ANOTHER_INVALID'" in error_msg
+        assert "Valid values are: PROPORTIONAL, EQUAL_BALANCED" in error_msg
+
+    @patch("ngraph.monte_carlo.functions.sensitivity_analysis")
+    @patch("ngraph.monte_carlo.results.SensitivityResults")
+    def test_valid_string_flow_placement_sensitivity(
+        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
+    ):
+        """Test that valid string flow_placement values are converted to enum in sensitivity analysis."""
+        mock_mc_result = {
+            "results": [{"component1": {"score": 0.5}}],
+            "failure_patterns": [],
+            "metadata": {"iterations": 1},
+        }
+
+        with patch.object(
+            failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
+        ) as mock_mc:
+            failure_manager.run_sensitivity_monte_carlo(
+                source_path="src.*",
+                sink_path="dst.*",
+                flow_placement="proportional",  # Lowercase string should work
+                iterations=1,
+            )
+
+            # Verify that the string was converted to enum in the call
+            call_kwargs = mock_mc.call_args[1]
+            from ngraph.lib.algorithms.base import FlowPlacement
+
+            assert call_kwargs["flow_placement"] == FlowPlacement.PROPORTIONAL
+
+    def test_case_insensitive_flow_placement_conversion(
+        self, failure_manager: FailureManager
+    ):
+        """Test that flow_placement string conversion is case-insensitive."""
+        from ngraph.lib.algorithms.base import FlowPlacement
+
+        # Test lowercase
+        mock_mc_result = {
+            "results": [[("src", "dst", 100.0)]],
+            "failure_patterns": [],
+            "metadata": {"iterations": 1},
+        }
+
+        with patch.object(
+            failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
+        ) as mock_mc:
+            failure_manager.run_max_flow_monte_carlo(
+                source_path="src.*",
+                sink_path="dst.*",
+                flow_placement="proportional",  # lowercase
+                iterations=1,
+            )
+
+            call_kwargs = mock_mc.call_args[1]
+            assert call_kwargs["flow_placement"] == FlowPlacement.PROPORTIONAL
+
+        # Test mixed case
+        with patch.object(
+            failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
+        ) as mock_mc:
+            failure_manager.run_max_flow_monte_carlo(
+                source_path="src.*",
+                sink_path="dst.*",
+                flow_placement="Equal_Balanced",  # mixed case
+                iterations=1,
+            )
+
+            call_kwargs = mock_mc.call_args[1]
+            assert call_kwargs["flow_placement"] == FlowPlacement.EQUAL_BALANCED
