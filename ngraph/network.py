@@ -463,6 +463,7 @@ class Network:
                 residual_cap={},
                 reachable=set(),
                 min_cut=[],
+                cost_distribution={},
             )
             return 0.0, empty_summary
 
@@ -584,6 +585,7 @@ class Network:
                 residual_cap={},
                 reachable=set(),
                 min_cut=[],
+                cost_distribution={},
             )
             return 0.0, empty_summary, base_graph
 
@@ -1202,6 +1204,7 @@ class Network:
                     residual_cap={},
                     reachable=set(),
                     min_cut=[],
+                    cost_distribution={},
                 )
                 return {(combined_src_label, combined_snk_label): (0.0, empty_summary)}
 
@@ -1215,6 +1218,7 @@ class Network:
                     residual_cap={},
                     reachable=set(),
                     min_cut=[],
+                    cost_distribution={},
                 )
                 return {(combined_src_label, combined_snk_label): (0.0, empty_summary)}
             else:
@@ -1240,6 +1244,7 @@ class Network:
                                 residual_cap={},
                                 reachable=set(),
                                 min_cut=[],
+                                cost_distribution={},
                             )
                             flow_val, summary = 0.0, empty_summary
                         else:
@@ -1255,6 +1260,7 @@ class Network:
                             residual_cap={},
                             reachable=set(),
                             min_cut=[],
+                            cost_distribution={},
                         )
                         flow_val, summary = 0.0, empty_summary
                     results[(src_label, snk_label)] = (flow_val, summary)
@@ -1439,6 +1445,7 @@ class Network:
                     residual_cap={},
                     reachable=set(),
                     min_cut=[],
+                    cost_distribution={},
                 )
                 return {
                     (combined_src_label, combined_snk_label): (
@@ -1459,6 +1466,7 @@ class Network:
                     residual_cap={},
                     reachable=set(),
                     min_cut=[],
+                    cost_distribution={},
                 )
                 return {
                     (combined_src_label, combined_snk_label): (
@@ -1501,6 +1509,7 @@ class Network:
                                 residual_cap={},
                                 reachable=set(),
                                 min_cut=[],
+                                cost_distribution={},
                             )
                             flow_val, summary, flow_graph = (
                                 0.0,
@@ -1521,6 +1530,7 @@ class Network:
                             residual_cap={},
                             reachable=set(),
                             min_cut=[],
+                            cost_distribution={},
                         )
                         flow_val, summary, flow_graph = 0.0, empty_summary, base_graph
                     results[(src_label, snk_label)] = (flow_val, summary, flow_graph)

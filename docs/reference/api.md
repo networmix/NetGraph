@@ -142,6 +142,18 @@ max_flow = network.max_flow(
     shortest_path=True,         # Use only shortest paths
     flow_placement=FlowPlacement.PROPORTIONAL  # UCMP load balancing
 )
+
+# Detailed flow analysis with cost distribution
+result = network.max_flow_with_summary(
+    source_path="datacenter.*",
+    sink_path="edge.*",
+    mode="combine"
+)
+(src_label, sink_label), (flow_value, summary) = next(iter(result.items()))
+
+# Cost distribution shows flow volume per path cost (useful for latency analysis)
+print(f"Cost distribution: {summary.cost_distribution}")
+# Example: {2.0: 150.0, 4.0: 75.0} means 150 units on cost-2 paths, 75 on cost-4 paths
 ```
 
 **Key Options:**
@@ -149,6 +161,11 @@ max_flow = network.max_flow(
 - `mode`: `"combine"` (aggregate flows) or `"pairwise"` (individual pair flows)
 - `shortest_path`: `True` (shortest only) or `False` (all available paths)
 - `flow_placement`: `FlowPlacement.PROPORTIONAL` (UCMP) or `FlowPlacement.EQUAL_BALANCED` (ECMP)
+
+**Advanced Features:**
+
+- **Cost Distribution**: `FlowSummary.cost_distribution` provides flow volume breakdown by path cost for latency span analysis and performance characterization
+- **Analytics**: Edge flows, residual capacities, min-cut analysis, and reachability information
 
 **Integration:** Available on both Network and NetworkView objects. Foundation for FailureManager Monte Carlo analysis.
 
