@@ -124,6 +124,19 @@ workflow:
         with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(invalid_data, schema)
 
+    def test_schema_validates_vars_section(self, schema):
+        """Test that the schema validates the vars section for YAML anchors."""
+        valid_data = {
+            "vars": {
+                "default_capacity": 100,
+                "common_attrs": {"region": "datacenter1", "type": "switch"},
+            },
+            "network": {"nodes": {}, "links": []},
+        }
+
+        # Should not raise any validation errors
+        jsonschema.validate(valid_data, schema)
+
     def test_schema_validates_link_risk_groups(self, schema):
         """Test that the schema validates risk_groups in link_params."""
         valid_data = {

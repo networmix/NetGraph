@@ -645,3 +645,87 @@ traffic_matrix_set:
     # N2, N3 should not fail (different electric grids)
     assert "N2" not in failed
     assert "N3" not in failed
+
+
+def test_yaml_anchors_and_aliases():
+    """Test that YAML anchors and aliases work correctly with the vars section."""
+    scenario_yaml = """
+vars:
+  default_capacity: &default_cap 100
+  common_attrs: &common_attrs
+    region: "datacenter1"
+    type: "switch"
+
+network:
+  name: "anchor_test"
+  nodes:
+    N1:
+      attrs:
+        <<: *common_attrs
+        capacity: *default_cap
+    N2:
+      attrs:
+        <<: *common_attrs
+        capacity: *default_cap
+        type: "router"  # Override the type
+  links:
+    - source: N1
+      target: N2
+      link_params:
+        capacity: *default_cap
+
+traffic_matrix_set:
+  default: []
+"""
+
+    # Should load without errors
+    scenario = Scenario.from_yaml(scenario_yaml)
+
+    # Verify the anchors were properly expanded
+    n1_attrs = scenario.network.nodes["N1"].attrs
+    n2_attrs = scenario.network.nodes["N2"].attrs
+
+    # Both nodes should have the common attributes
+    assert n1_attrs["region"] == "datacenter1"
+    assert n2_attrs["region"] == "datacenter1"
+    assert n1_attrs["capacity"] == 100
+    assert n2_attrs["capacity"] == 100
+
+    # N1 should have the original type from the anchor
+    assert n1_attrs["type"] == "switch"
+    # N2 should have the overridden type
+    assert n2_attrs["type"] == "router"
+
+    # The link should also use the anchored capacity
+    link = list(scenario.network.links.values())[0]
+    assert link.capacity == 100
+
+
+def test_yaml_anchors_without_vars_section():
+    """Test that YAML anchors work even without an explicit vars section."""
+    scenario_yaml = """
+network:
+  name: "anchor_test"
+  nodes:
+    N1: &common_node
+      attrs:
+        region: "datacenter1"
+        type: "switch"
+    N2:
+      <<: *common_node
+      attrs:
+        region: "datacenter2"
+        type: "router"
+  links: []
+
+traffic_matrix_set:
+  default: []
+"""
+
+    # Should load without errors
+    scenario = Scenario.from_yaml(scenario_yaml)
+
+    # Verify the network was created correctly
+    assert len(scenario.network.nodes) == 2
+    assert "N1" in scenario.network.nodes
+    assert "N2" in scenario.network.nodes
