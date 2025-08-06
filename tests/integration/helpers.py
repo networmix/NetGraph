@@ -251,7 +251,6 @@ class ScenarioTestHelper:
 
     def validate_failure_policy(
         self,
-        expected_name: Optional[str],
         expected_rules: int,
         expected_scopes: Optional[List[str]] = None,
     ) -> None:
@@ -259,7 +258,6 @@ class ScenarioTestHelper:
         Validate failure policy configuration.
 
         Args:
-            expected_name: Expected failure policy name (None if no policy expected)
             expected_rules: Expected number of failure rules
             expected_scopes: Optional list of expected rule scopes (node/link)
 
@@ -268,9 +266,9 @@ class ScenarioTestHelper:
         """
         policy = self.scenario.failure_policy_set.get_default_policy()
 
-        if expected_name is None:
+        if expected_rules == 0:
             assert policy is None, (
-                f"Expected no default failure policy, but found: {policy.attrs.get('name') if policy else None}"
+                f"Expected no default failure policy, but found policy with {len(policy.rules) if policy else 0} rules"
             )
             return
 
@@ -280,12 +278,6 @@ class ScenarioTestHelper:
         actual_rules = len(policy.rules)
         assert actual_rules == expected_rules, (
             f"Failure policy rule count mismatch: expected {expected_rules}, found {actual_rules}"
-        )
-
-        # Validate policy name
-        actual_name = policy.attrs.get("name")
-        assert actual_name == expected_name, (
-            f"Failure policy name mismatch: expected '{expected_name}', found '{actual_name}'"
         )
 
         # Validate rule scopes if specified
@@ -763,7 +755,7 @@ def basic_failure_scenario() -> Scenario:
         .with_failure_policy(
             "single_link_failure",
             {
-                "attrs": {"name": "single_link", "description": "Single link failure"},
+                "attrs": {"description": "Single link failure"},
                 "rules": [{"entity_scope": "link", "rule_type": "choice", "count": 1}],
             },
         )

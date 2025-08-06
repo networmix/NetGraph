@@ -113,7 +113,6 @@ risk_groups:
 failure_policy_set:
   default:
     attrs:
-      name: "single_random_link_failure"
       description: "Fails exactly one random link to test network resilience"
     rules:
       - entity_scope: "link"
@@ -121,7 +120,6 @@ failure_policy_set:
         count: 1
   single_shared_risk_group_failure:
     attrs:
-      name: "single_shared_risk_group_failure"
       description: "Fails exactly one random shared risk group to test network resilience"
     rules:
       - entity_scope: "risk_group"

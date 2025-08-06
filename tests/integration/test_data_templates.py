@@ -261,7 +261,6 @@ class FailurePolicyTemplates:
         """Template for single link failure policy."""
         return {
             "attrs": {
-                "name": "single_link_failure",
                 "description": "Single link failure scenario",
             },
             "rules": [{"entity_scope": "link", "rule_type": "choice", "count": 1}],
@@ -272,7 +271,6 @@ class FailurePolicyTemplates:
         """Template for single node failure policy."""
         return {
             "attrs": {
-                "name": "single_node_failure",
                 "description": "Single node failure scenario",
             },
             "rules": [{"entity_scope": "node", "rule_type": "choice", "count": 1}],
@@ -283,7 +281,6 @@ class FailurePolicyTemplates:
         """Template for multiple simultaneous failures."""
         return {
             "attrs": {
-                "name": f"multiple_{entity_scope}_failure",
                 "description": f"Multiple {entity_scope} failure scenario",
             },
             "rules": [
@@ -296,7 +293,6 @@ class FailurePolicyTemplates:
         """Template for all links failure policy."""
         return {
             "attrs": {
-                "name": "all_links_failure",
                 "description": "All links failure scenario",
             },
             "rules": [{"entity_scope": "link", "rule_type": "all"}],
@@ -307,7 +303,6 @@ class FailurePolicyTemplates:
         """Template for risk group-based failure policy."""
         return {
             "attrs": {
-                "name": f"{risk_group_name}_failure",
                 "description": f"Failure of risk group {risk_group_name}",
             },
             "fail_risk_groups": True,

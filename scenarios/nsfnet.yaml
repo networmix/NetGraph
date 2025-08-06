@@ -156,7 +156,6 @@ risk_groups:
 failure_policy_set:
   availability_1992:
     attrs:
-      name: "historical_availability_1992"
       description: >
         Approximates 1992 backbone reliability: each physical DS-3 has
         ~99.9 % monthly availability (p=0.001 failure), and each CNSS or
@@ -176,7 +175,6 @@ failure_policy_set:
 
   default:
     attrs:
-      name: single_random_link_failure
       description: Fails exactly one random link to test network resilience
     rules:
       - entity_scope: link

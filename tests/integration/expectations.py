@@ -121,9 +121,9 @@ TRAFFIC_DEMAND_EXPECTATIONS = {
 
 # Failure policy expectations by scenario
 FAILURE_POLICY_EXPECTATIONS = {
-    "scenario_1": {"name": "anySingleLink", "rules": 1, "scopes": ["link"]},
-    "scenario_2": {"name": "anySingleLink", "rules": 1, "scopes": ["link"]},
-    "scenario_3": {"name": None, "rules": 0, "scopes": []},  # No failure policy
+    "scenario_1": {"rules": 1, "scopes": ["link"]},
+    "scenario_2": {"rules": 1, "scopes": ["link"]},
+    "scenario_3": {"rules": 0, "scopes": []},  # No failure policy
 }
 
 # Scenario 4: Advanced DSL features with complex data center fabric

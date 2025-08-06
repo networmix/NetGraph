@@ -159,7 +159,7 @@ class TestFailurePolicyTemplates:
         """Test single link failure policy template."""
         policy = FailurePolicyTemplates.single_link_failure()
 
-        assert policy["attrs"]["name"] == "single_link_failure"
+        assert "name" not in policy["attrs"]
         assert len(policy["rules"]) == 1
 
         rule = policy["rules"][0]
@@ -171,7 +171,7 @@ class TestFailurePolicyTemplates:
         """Test multiple failure policy template."""
         policy = FailurePolicyTemplates.multiple_failure("node", 3)
 
-        assert policy["attrs"]["name"] == "multiple_node_failure"
+        assert "name" not in policy["attrs"]
         assert len(policy["rules"]) == 1
 
         rule = policy["rules"][0]
@@ -182,7 +182,7 @@ class TestFailurePolicyTemplates:
         """Test risk group failure policy template."""
         policy = FailurePolicyTemplates.risk_group_failure("datacenter_a")
 
-        assert policy["attrs"]["name"] == "datacenter_a_failure"
+        assert "name" not in policy["attrs"]
         assert policy["fail_risk_groups"] is True
         assert len(policy["rules"]) == 1
 
