@@ -173,7 +173,7 @@ failure_policy_set:
         rule_type: random
         probability: 0.0005     # 0.05 % chance a given node is down
 
-  default:
+  single_random_link_failure:
     attrs:
       description: Fails exactly one random link to test network resilience
     rules:
@@ -197,7 +197,7 @@ workflow:
     flow_placement: PROPORTIONAL
     iterations: 1000
     baseline: true
-    failure_policy: default
+    failure_policy: single_random_link_failure
     store_failure_patterns: true
   - step_type: CapacityEnvelopeAnalysis
     name: ce_2
@@ -207,7 +207,7 @@ workflow:
     parallelism: 8
     shortest_path: false
     flow_placement: PROPORTIONAL
-    iterations: 1000000
+    iterations: 10000
     baseline: true
     failure_policy: availability_1992
     store_failure_patterns: true
