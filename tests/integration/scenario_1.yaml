@@ -114,7 +114,6 @@ network:
 failure_policy_set:
   default:
     attrs:
-      name: "anySingleLink"
       description: "Evaluate traffic routing under any single link failure."
     rules:
       - entity_scope: "link"

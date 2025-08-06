@@ -97,7 +97,6 @@ class FailurePolicy:
         ```yaml
         failure_policy:
           attrs:
-            name: "Texas Grid Outage Scenario"
             description: "Regional power grid failure affecting telecom infrastructure"
           fail_risk_groups: true
           rules:

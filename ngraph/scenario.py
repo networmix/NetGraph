@@ -253,7 +253,6 @@ class Scenario:
         Example:
             failure_policy_set:
               default:
-                name: "test"  # (Currently unused if present)
                 fail_risk_groups: true
                 fail_risk_group_children: false
                 use_cache: true

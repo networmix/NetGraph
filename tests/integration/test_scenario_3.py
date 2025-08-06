@@ -211,7 +211,7 @@ class TestScenario3:
 
     def test_no_failure_policy(self, helper):
         """Test that this scenario has no failure policy as expected."""
-        helper.validate_failure_policy(expected_name=None, expected_rules=0)
+        helper.validate_failure_policy(expected_rules=0)
 
     def test_capacity_probe_proportional_flow_results(self, helper):
         """Test capacity probe results with PROPORTIONAL flow placement."""
@@ -335,7 +335,7 @@ def test_scenario_3_build_graph_and_capacity_probe():
     # Basic validation using helper
     helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
     helper.validate_traffic_demands(0)
-    helper.validate_failure_policy(None, 0)
+    helper.validate_failure_policy(0)
 
     # Validate key flow results
     helper.validate_flow_results(

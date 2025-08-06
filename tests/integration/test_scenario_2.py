@@ -228,9 +228,7 @@ class TestScenario2:
 
     def test_failure_policy_configuration(self, helper):
         """Test failure policy configuration."""
-        helper.validate_failure_policy(
-            expected_name="anySingleLink", expected_rules=1, expected_scopes=["link"]
-        )
+        helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
     def test_topology_semantic_correctness(self, helper):
         """Test that the expanded network topology is semantically correct."""
@@ -282,4 +280,4 @@ def test_scenario_2_build_graph():
     # Basic validation using helper
     helper.validate_network_structure(SCENARIO_2_EXPECTATIONS)
     helper.validate_traffic_demands(4)
-    helper.validate_failure_policy("anySingleLink", 1, ["link"])
+    helper.validate_failure_policy(1, ["link"])

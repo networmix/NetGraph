@@ -161,9 +161,7 @@ class TestScenario1:
 
     def test_failure_policy_configuration(self, helper):
         """Test that failure policy is correctly configured."""
-        helper.validate_failure_policy(
-            expected_name="anySingleLink", expected_rules=1, expected_scopes=["link"]
-        )
+        helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
         # Additional validation of the specific rule
         policy = helper.scenario.failure_policy_set.get_default_policy()
@@ -246,4 +244,4 @@ def test_scenario_1_build_graph():
     # Basic validation using helper
     helper.validate_network_structure(SCENARIO_1_EXPECTATIONS)
     helper.validate_traffic_demands(4)
-    helper.validate_failure_policy("anySingleLink", 1, ["link"])
+    helper.validate_failure_policy(1, ["link"])

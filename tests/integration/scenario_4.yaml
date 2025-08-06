@@ -276,7 +276,6 @@ traffic_matrix_set:
 failure_policy_set:
   single_link_failure:
     attrs:
-      name: "single_link_failure"
       description: "Single link failure"
     rules:
       - entity_scope: "link"
@@ -285,7 +284,6 @@ failure_policy_set:
 
   single_node_failure:
     attrs:
-      name: "single_node_failure"
       description: "Single node failure"
     rules:
       - entity_scope: "node"
@@ -294,7 +292,6 @@ failure_policy_set:
 
   default:
     attrs:
-      name: "random_link_failure"
       description: "Random single link failure"
     rules:
       - entity_scope: "link"

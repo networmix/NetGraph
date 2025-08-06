@@ -52,7 +52,6 @@ risk_groups:
 failure_policy_set:
   default:
     attrs:
-      name: "single_link_failure"
       description: "Test single link failure policy"
     rules:
       - entity_scope: "link"
@@ -268,8 +267,6 @@ workflow:
         complex_failure_scenario = """
 failure_policy_set:
   conditional_failure:
-    attrs:
-      name: "conditional_node_failure"
     rules:
       - entity_scope: "node"
         rule_type: "choice"
@@ -283,8 +280,6 @@ failure_policy_set:
             value: 5
         logic: "and"
   risk_group_failure:
-    attrs:
-      name: "datacenter_failure"
     fail_risk_groups: true
     fail_risk_group_children: true
     rules:

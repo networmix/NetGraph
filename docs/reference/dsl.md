@@ -411,7 +411,6 @@ Defines named failure policies for simulating network failures to test resilienc
 ```yaml
 failure_policy_set:
   policy_name_1:
-    name: "PolicyName" # Optional
     fail_risk_groups: true | false
     fail_risk_group_children: true | false
     use_cache: true | false

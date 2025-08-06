@@ -120,7 +120,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             original_level = logger.level
             logger.setLevel(logging.WARNING)
             try:
-                explorer = NetworkExplorer.explore_network(network)
+                explorer = NetworkExplorer.explore_network(
+                    network, scenario.components_library
+                )
                 print("\n   Network Hierarchy:")
                 explorer.print_tree(
                     max_depth=3 if not detail else None,

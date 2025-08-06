@@ -3,15 +3,18 @@
 from ngraph.config import TRAFFIC_CONFIG, TrafficManagerConfig
 
 
-def test_traffic_manager_config_defaults():
-    """Test that the default configuration values are correct."""
+def test_traffic_manager_config_functionality():
+    """Test TrafficManagerConfig functionality and edge cases."""
     config = TrafficManagerConfig()
 
-    assert config.default_rounds == 5
-    assert config.min_rounds == 5
-    assert config.max_rounds == 100
-    assert config.ratio_base == 5
-    assert config.ratio_multiplier == 5
+    # Test basic functionality instead of just constants
+    assert config.estimate_rounds(0.0) >= config.min_rounds
+    assert config.estimate_rounds(100.0) <= config.max_rounds
+
+    # Test boundary conditions
+    assert config.estimate_rounds(-1.0) == config.min_rounds
+    very_high_ratio = (config.max_rounds + 50) / config.ratio_multiplier
+    assert config.estimate_rounds(very_high_ratio) == config.max_rounds
 
 
 def test_traffic_manager_config_estimate_rounds():

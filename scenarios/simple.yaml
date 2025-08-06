@@ -111,9 +111,8 @@ risk_groups:
   - name: srlg_12
 
 failure_policy_set:
-  default:
+  single_random_link_failure:
     attrs:
-      name: "single_random_link_failure"
       description: "Fails exactly one random link to test network resilience"
     rules:
       - entity_scope: "link"
@@ -121,7 +120,6 @@ failure_policy_set:
         count: 1
   single_shared_risk_group_failure:
     attrs:
-      name: "single_shared_risk_group_failure"
       description: "Fails exactly one random shared risk group to test network resilience"
     rules:
       - entity_scope: "risk_group"
@@ -144,7 +142,7 @@ workflow:
   seed: 42
   iterations: 1000
   baseline: true           # Enable baseline mode
-  failure_policy: "default"
+  failure_policy: "single_random_link_failure"
 - step_type: CapacityEnvelopeAnalysis
   name: "ce_2"
   source_path: "^(spoke_.+)"
