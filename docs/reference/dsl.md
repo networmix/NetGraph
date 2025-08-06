@@ -16,6 +16,7 @@ The scenario YAML file is organized around a **core foundation** that defines yo
 
 The main sections of a scenario YAML file work together to define a complete network simulation:
 
+- `vars`: **[Optional]** Defines YAML anchors and variables for reuse throughout the scenario file.
 - `network`: **[Required]** Describes the actual network topology - nodes, links, and their connections.
 - `blueprints`: **[Optional]** Defines reusable network templates that can be instantiated multiple times within the network.
 - `components`: **[Optional]** A library of hardware and optics definitions with attributes like power consumption.
@@ -441,6 +442,37 @@ failure_policy_set:
 - If a `default` policy exists, it will be used when no specific policy is selected
 - If only one policy exists and no `default` is specified, that policy becomes the default
 - Multiple policies allow testing different failure scenarios in the same network
+
+## `vars` - YAML Anchors and Variables
+
+The `vars` section provides a designated space for YAML anchor definitions. YAML anchors (`&name`) and aliases (`*name`) follow the YAML 1.1 specification and are processed by PyYAML during parsing, before NetGraph validation.
+
+**Anchor Types:**
+
+- **Scalar anchors**: Reference primitive values (strings, numbers, booleans)
+- **Sequence anchors**: Reference arrays/lists
+- **Mapping anchors**: Reference objects/dictionaries
+- **Merge keys (`<<`)**: Merge mapping properties with override capability
+
+**Minimal Example:**
+
+```yaml
+vars:
+  default_cap: &cap 10000
+  base_attrs: &attrs {cost: 100, region: "dc1"}
+
+network:
+  nodes:
+    N1: {attrs: {<<: *attrs, capacity: *cap}}
+    N2: {attrs: {<<: *attrs, capacity: *cap, region: "dc2"}}
+```
+
+**Processing Behavior:**
+
+- Anchors are resolved during YAML parsing, before schema validation
+- The `vars` section itself is ignored by NetGraph runtime logic
+- Anchors can be defined in any section, not just `vars`
+- Merge operations follow YAML 1.1 semantics (later keys override earlier ones)
 
 ## `workflow` - Execution Steps
 

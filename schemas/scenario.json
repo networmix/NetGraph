@@ -5,6 +5,10 @@
   "description": "JSON Schema for NetGraph network scenario YAML files",
   "type": "object",
   "properties": {
+    "vars": {
+      "type": "object",
+      "description": "YAML anchors and variable definitions for reuse throughout the scenario"
+    },
     "seed": {
       "type": "integer",
       "description": "Master seed for reproducible random operations across the scenario"

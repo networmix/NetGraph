@@ -79,6 +79,7 @@ class Scenario:
         with a default ComponentsLibrary if provided.
 
         Top-level YAML keys can include:
+          - vars
           - blueprints
           - network
           - failure_policy_set
@@ -92,6 +93,7 @@ class Scenario:
         If 'failure_policy_set' is omitted, scenario.failure_policy_set is empty.
         If 'components' is provided, it is merged with default_components.
         If 'seed' is provided, it enables reproducible random operations.
+        If 'vars' is provided, it can contain YAML anchors and aliases for reuse.
         If any unrecognized top-level key is found, a ValueError is raised.
 
         Args:
@@ -115,6 +117,7 @@ class Scenario:
 
         # Ensure only recognized top-level keys are present.
         recognized_keys = {
+            "vars",
             "blueprints",
             "network",
             "failure_policy_set",
