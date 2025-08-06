@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** July 29, 2025 at 17:52 UTC
+**Generated from source code on:** August 06, 2025 at 16:18 UTC
 
 **Modules auto-discovered:** 53
 
@@ -88,7 +88,7 @@ Args:
         optional "blueprints" + "network".
 
 Returns:
-    Network: The fully expanded Network object with all nodes and links.
+    Network: The expanded Network object with all nodes and links.
 
 ---
 
@@ -1198,7 +1198,7 @@ Attributes:
     demand (float): The total demand volume (default=0.0).
     demand_placed (float): The portion of this demand that has been placed so far.
     flow_policy_config (Optional[FlowPolicyConfig]): The routing/placement policy config.
-    flow_policy (Optional[FlowPolicy]): A fully constructed FlowPolicy instance.
+    flow_policy (Optional[FlowPolicy]): A constructed FlowPolicy instance.
         If provided, it overrides flow_policy_config.
     mode (str): Expansion mode for generating sub-demands.
     attrs (Dict[str, Any]): Additional arbitrary attributes.
@@ -2452,7 +2452,7 @@ Attributes:
 
 Workflow step for basic node and link statistics.
 
-Computes and stores comprehensive network statistics including node/link counts,
+Computes and stores network statistics including node/link counts,
 capacity distributions, cost distributions, and degree distributions. Supports
 optional exclusion simulation and disabled entity handling.
 
@@ -2745,7 +2745,7 @@ Attributes:
 **Methods:**
 
 - `export_summary(self) -> 'Dict[str, Any]'`
-  - Export comprehensive summary for serialization.
+  - Export summary for serialization.
 - `flow_keys(self) -> 'List[str]'`
   - Get list of all flow keys in results.
 - `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'`
@@ -2815,7 +2815,7 @@ Attributes:
 - `component_impact_distribution(self) -> 'pd.DataFrame'`
   - Get component impact distribution as DataFrame.
 - `export_summary(self) -> 'Dict[str, Any]'`
-  - Export comprehensive summary for serialization.
+  - Export summary for serialization.
 - `flow_keys(self) -> 'List[str]'`
   - Get list of all flow keys in results.
 - `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
