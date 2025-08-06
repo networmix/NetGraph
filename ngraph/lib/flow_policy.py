@@ -351,7 +351,7 @@ class FlowPolicy:
 
         Args:
             flow_graph: The network graph.
-            flow_index: The key identifying the flow to re-optimize.
+            flow_index: The key identifying the flow to update.
             headroom: Additional volume to accommodate on the new path.
 
         Returns:
@@ -453,7 +453,7 @@ class FlowPolicy:
                     f"Maximum iteration limit ({self.max_total_iterations}) exceeded in place_demand."
                 )
 
-            # If the flow can accept more volume, attempt to create or re-optimize.
+            # If the flow can accept more volume, attempt to create or update.
             if (
                 target_flow_volume - flow.placed_flow >= base.MIN_FLOW
                 and not self.static_paths

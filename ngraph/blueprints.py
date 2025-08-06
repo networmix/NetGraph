@@ -78,7 +78,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
             optional "blueprints" + "network".
 
     Returns:
-        Network: The fully expanded Network object with all nodes and links.
+        Network: The expanded Network object with all nodes and links.
     """
     # 1) Parse blueprint definitions
     blueprint_map: Dict[str, Blueprint] = {}

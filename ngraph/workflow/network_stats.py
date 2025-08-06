@@ -1,6 +1,6 @@
 """Workflow step for basic node and link statistics.
 
-Computes and stores comprehensive network statistics including node/link counts,
+Computes and stores network statistics including node/link counts,
 capacity distributions, cost distributions, and degree distributions. Supports
 optional exclusion simulation and disabled entity handling.
 

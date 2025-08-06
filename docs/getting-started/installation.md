@@ -52,7 +52,7 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 **Prerequisites:**
 
-- Python 3.9 or higher installed on your machine.
+- Python 3.11 or higher installed on your machine.
 
 !!! note
 

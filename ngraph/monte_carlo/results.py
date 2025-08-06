@@ -126,7 +126,7 @@ class CapacityEnvelopeResults:
         return pd.DataFrame(data)
 
     def export_summary(self) -> Dict[str, Any]:
-        """Export comprehensive summary for serialization.
+        """Export summary for serialization.
 
         Returns:
             Dictionary with all results data in serializable format
@@ -364,7 +364,7 @@ class SensitivityResults:
         return pd.DataFrame(data)
 
     def export_summary(self) -> Dict[str, Any]:
-        """Export comprehensive summary for serialization.
+        """Export summary for serialization.
 
         Returns:
             Dictionary with all results data in serializable format
