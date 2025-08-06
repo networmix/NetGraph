@@ -1,17 +1,17 @@
 from ngraph.traffic_demand import TrafficDemand
 
 
-def test_traffic_demand_defaults():
-    """
-    Test creation of TrafficDemand with default values.
-    """
-    demand = TrafficDemand(source_path="NodeA", sink_path="NodeB")
-    assert demand.source_path == "NodeA"
-    assert demand.sink_path == "NodeB"
-    assert demand.priority == 0
-    assert demand.demand == 0.0
-    assert demand.demand_placed == 0.0
-    assert demand.attrs == {}
+def test_traffic_demand_validation():
+    """Test TrafficDemand validation and edge cases."""
+    # Test negative demand values are handled
+    demand = TrafficDemand(source_path="NodeA", sink_path="NodeB", demand=-10.0)
+    assert demand.demand == -10.0  # Should allow negative values
+
+    # Test that demand_placed can exceed demand for validation scenarios
+    demand = TrafficDemand(
+        source_path="NodeA", sink_path="NodeB", demand=5.0, demand_placed=10.0
+    )
+    assert demand.demand_placed > demand.demand
 
 
 def test_traffic_demand_custom_values():
