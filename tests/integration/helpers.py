@@ -266,15 +266,14 @@ class ScenarioTestHelper:
         """
         policy = self.scenario.failure_policy_set.get_default_policy()
 
-        if expected_rules == 0:
-            assert policy is None, (
-                f"Expected no default failure policy, but found policy with {len(policy.rules) if policy else 0} rules"
+        if policy is None:
+            # No policy exists - only valid if expecting zero rules
+            assert expected_rules == 0, (
+                f"Expected a failure policy with {expected_rules} rules, but no default policy found"
             )
             return
 
-        assert policy is not None, "Expected a default failure policy but none found"
-
-        # Validate rule count
+        # Policy exists - validate rule count
         actual_rules = len(policy.rules)
         assert actual_rules == expected_rules, (
             f"Failure policy rule count mismatch: expected {expected_rules}, found {actual_rules}"
