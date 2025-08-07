@@ -2,9 +2,7 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-NetGraph is a scenario-based network modeling and analysis framework written in Python. Design, simulate, and evaluate complex network topologies from small test cases to large-scale Data Center fabrics and WAN networks.
-
-Load an entire scenario from a single YAML file (including topology, failure policies, traffic demands, multi-step workflows) and run it in a few lines of Python. Results can be explored, visualized, and refined for iterative network design, traffic engineering experiments, and what-if scenario analysis in large-scale topologies.
+NetGraph is a scenario-based network modeling and analysis library in Python. Define topology, failure policies, traffic demands, and workflows in one YAML file; run it programmatically or via CLI; inspect results and iterate.
 
 ## Getting Started
 

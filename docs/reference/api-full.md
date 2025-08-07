@@ -1,18 +1,20 @@
+<!-- markdownlint-disable MD007 MD032 MD029 MD050 MD004 MD052 MD012 -->
+
 # NetGraph API Reference (Auto-Generated)
 
 This is the complete auto-generated API documentation for NetGraph.
-For a curated, example-driven API guide, see **[api.md](api.md)**.
+For a curated, example-driven API guide, see [api.md](api.md).
 
-> **📋 Documentation Types:**
+Quick links:
 
-> - **[Main API Guide (api.md)](api.md)** - Curated examples and usage patterns
-> - **This Document (api-full.md)** - Complete auto-generated reference
-> - **[CLI Reference](cli.md)** - Command-line interface
-> - **[DSL Reference](dsl.md)** - YAML syntax guide
+- [Main API Guide (api.md)](api.md)
+- [This Document (api-full.md)](api-full.md)
+- [CLI Reference](cli.md)
+- [DSL Reference](dsl.md)
 
-**Generated from source code on:** August 07, 2025 at 15:24 UTC
+Generated from source code on: August 07, 2025 at 23:02 UTC
 
-**Modules auto-discovered:** 48
+Modules auto-discovered: 48
 
 ---
 
@@ -65,9 +67,13 @@ Overall flow:
   1) Parse "blueprints" into Blueprint objects.
   2) Build a new Network from "network" metadata (e.g. name, version).
   3) Expand 'network["groups"]'.
-     - If a group references a blueprint, incorporate that blueprint's subgroups
+
+- If a group references a blueprint, incorporate that blueprint's subgroups
+
        while merging parent's attrs + disabled + risk_groups into subgroups.
-     - Otherwise, directly create nodes (a "direct node group").
+
+- Otherwise, directly create nodes (a "direct node group").
+
   4) Process any direct node definitions (network["nodes"]).
   5) Expand adjacency definitions in 'network["adjacency"]'.
   6) Process any direct link definitions (network["links"]).
@@ -75,11 +81,17 @@ Overall flow:
   8) Process node overrides (in order if multiple overrides match).
 
 Under the new rules:
-  - Only certain top-level fields are permitted in each structure. Any extra
+
+- Only certain top-level fields are permitted in each structure. Any extra
+
     keys raise a ValueError. "attrs" is where arbitrary user fields go.
-  - For link_params, recognized fields are "capacity", "cost", "disabled",
+
+- For link_params, recognized fields are "capacity", "cost", "disabled",
+
     "risk_groups", "attrs". Everything else must go inside link_params["attrs"].
-  - For node/group definitions, recognized fields include "node_count",
+
+- For node/group definitions, recognized fields include "node_count",
+
     "name_template", "attrs", "disabled", "risk_groups" or "use_blueprint"
     for blueprint-based groups.
 
@@ -145,16 +157,11 @@ Attributes:
 
 **Methods:**
 
-- `as_dict(self, include_children: 'bool' = True) -> 'Dict[str, Any]'`
-  - Returns a dictionary containing all properties of this component.
-- `total_capacity(self) -> 'float'`
-  - Computes the total (recursive) capacity of this component,
-- `total_cost(self) -> 'float'`
-  - Computes the total (recursive) cost of this component, including children,
-- `total_power(self) -> 'float'`
-  - Computes the total *typical* (recursive) power usage of this component,
-- `total_power_max(self) -> 'float'`
-  - Computes the total *peak* (recursive) power usage of this component,
+- `as_dict(self, include_children: 'bool' = True) -> 'Dict[str, Any]'` - Returns a dictionary containing all properties of this component.
+- `total_capacity(self) -> 'float'` - Computes the total (recursive) capacity of this component,
+- `total_cost(self) -> 'float'` - Computes the total (recursive) cost of this component, including children,
+- `total_power(self) -> 'float'` - Computes the total *typical* (recursive) power usage of this component,
+- `total_power_max(self) -> 'float'` - Computes the total *peak* (recursive) power usage of this component,
 
 ### ComponentsLibrary
 
@@ -187,16 +194,11 @@ Example (YAML-like):
 
 **Methods:**
 
-- `clone(self) -> 'ComponentsLibrary'`
-  - Creates a deep copy of this ComponentsLibrary.
-- `from_dict(data: 'Dict[str, Any]') -> 'ComponentsLibrary'`
-  - Constructs a ComponentsLibrary from a dictionary of raw component definitions.
-- `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'`
-  - Constructs a ComponentsLibrary from a YAML string. If the YAML contains
-- `get(self, name: 'str') -> 'Optional[Component]'`
-  - Retrieves a Component by its name from the library.
-- `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'`
-  - Merges another ComponentsLibrary into this one. By default (override=True),
+- `clone(self) -> 'ComponentsLibrary'` - Creates a deep copy of this ComponentsLibrary.
+- `from_dict(data: 'Dict[str, Any]') -> 'ComponentsLibrary'` - Constructs a ComponentsLibrary from a dictionary of raw component definitions.
+- `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'` - Constructs a ComponentsLibrary from a YAML string. If the YAML contains
+- `get(self, name: 'str') -> 'Optional[Component]'` - Retrieves a Component by its name from the library.
+- `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'` - Merges another ComponentsLibrary into this one. By default (override=True),
 
 ---
 
@@ -218,8 +220,7 @@ Configuration for traffic demand placement estimation.
 
 **Methods:**
 
-- `estimate_rounds(self, demand_capacity_ratio: float) -> int`
-  - Calculate placement rounds based on demand to capacity ratio.
+- `estimate_rounds(self, demand_capacity_ratio: float) -> int` - Calculate placement rounds based on demand to capacity ratio.
 
 ---
 
@@ -247,10 +248,8 @@ Provides hierarchical exploration of a Network, computing statistics in two mode
 
 **Methods:**
 
-- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'`
-  - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
-- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True) -> 'None'`
-  - Print the hierarchy from 'node' down (default: root).
+- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'` - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
+- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True) -> 'None'` - Print the hierarchy from 'node' down (default: root).
 
 ### TreeNode
 
@@ -279,10 +278,8 @@ Attributes:
 
 **Methods:**
 
-- `add_child(self, child_name: 'str') -> 'TreeNode'`
-  - Ensure a child node named 'child_name' exists and return it.
-- `is_leaf(self) -> 'bool'`
-  - Return True if this node has no children.
+- `add_child(self, child_name: 'str') -> 'TreeNode'` - Ensure a child node named 'child_name' exists and return it.
+- `is_leaf(self) -> 'bool'` - Return True if this node has no children.
 
 ### TreeStats
 
@@ -315,27 +312,24 @@ Attributes:
 
 FailureManager for Monte Carlo failure analysis.
 
-This module provides the failure analysis engine for NetGraph.
-Combines parallel processing, caching, and failure policy handling
-for workflow steps and direct notebook usage.
+Provides the failure analysis engine for NetGraph. Supports parallel
+processing, per-worker caching, and failure policy handling for workflow steps
+and direct programmatic use.
 
-The FailureManager provides a generic API for any type of failure analysis.
+Performance characteristics:
+Time complexity: O(I × A / P), where I is iteration count, A is analysis cost,
+and P is parallelism. Worker-local caching reduces repeated work when exclusion
+sets repeat across iterations. Network serialization happens once per worker,
+not per iteration.
 
-## Performance Characteristics
+Space complexity: O(V + E + I × R + C), where V and E are node and link counts,
+R is result size per iteration, and C is cache size. The per-worker cache is
+bounded and evicts in FIFO order after 1000 unique patterns.
 
-**Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
-P=parallelism. Per-worker caching reduces iterations by 60-90% for
-common failure patterns since exclusion sets repeat in Monte Carlo
-analysis. Network serialization occurs once per worker process, not per iteration.
-
-**Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
-R=result size per iteration, C=cache size. Cache is bounded to prevent memory
-exhaustion with FIFO eviction after 1000 unique patterns per worker.
-
-**Parallelism**: Serial execution avoids IPC overhead for small
-iteration counts. Parallel execution benefits from worker caching and CPU
-utilization for larger workloads. Optimal parallelism equals CPU
-cores for analysis-bound workloads.
+Parallelism: For small iteration counts, serial execution avoids IPC overhead.
+For larger workloads, parallel execution benefits from worker caching and CPU
+utilization. Optimal parallelism is the number of CPU cores for analysis-bound
+workloads.
 
 ### AnalysisFunction
 
@@ -363,22 +357,14 @@ Attributes:
 
 **Methods:**
 
-- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'`
-  - Compute set of nodes and links to exclude for a failure iteration.
-- `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'`
-  - Create NetworkView with specified exclusions.
-- `get_failure_policy(self) -> "'FailurePolicy | None'"`
-  - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
-  - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'`
-  - Analyze maximum flow capacity envelopes between node groups under failures.
-- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'`
-  - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
-  - Analyze component criticality for flow capacity under failures.
-- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'`
-  - Run a single failure scenario for convenience.
+- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
+- `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'` - Create NetworkView with specified exclusions.
+- `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
+- `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze component criticality for flow capacity under failures.
+- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---
 
@@ -392,7 +378,9 @@ A single condition for matching an entity's attribute with an operator and value
 
 Example usage (YAML):
   conditions:
-    - attr: "capacity"
+
+- attr: "capacity"
+
       operator: "<"
       value: 100
 
@@ -423,7 +411,9 @@ The main entry point is `apply_failures`, which:
   5) Optionally expand failures by shared-risk groups or sub-risks.
 
 Large-scale performance:
-  - If you set `use_cache=True`, matched sets for each rule are cached,
+
+- If you set `use_cache=True`, matched sets for each rule are cached,
+
     so repeated calls to `apply_failures` can skip re-matching if the
     network hasn't changed. If your network changes between calls,
     you should clear the cache or re-initialize the policy.
@@ -437,8 +427,10 @@ Example YAML configuration:
       rules:
         # Fail all nodes in Texas electrical grid
         - entity_scope: "node"
+
           conditions:
             - attr: "electric_grid"
+
               operator: "=="
               value: "texas"
           logic: "and"
@@ -446,11 +438,14 @@ Example YAML configuration:
 
         # Randomly fail 40% of underground fiber links in affected region
         - entity_scope: "link"
+
           conditions:
             - attr: "region"
+
               operator: "=="
               value: "southwest"
             - attr: "installation"
+
               operator: "=="
               value: "underground"
           logic: "and"
@@ -460,6 +455,7 @@ Example YAML configuration:
         # Choose exactly 2 risk groups to fail (e.g., data centers)
         # Note: logic defaults to "or" when not specified
         - entity_scope: "risk_group"
+
           rule_type: "choice"
           count: 2
     ```
@@ -495,10 +491,8 @@ Attributes:
 
 **Methods:**
 
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'List[str]'`
-  - Identify which entities fail given the defined rules, then optionally
-- `to_dict(self) -> 'Dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None) -> 'List[str]'` - Identify which entities fail given the defined rules, then optionally
+- `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### FailureRule
 
@@ -514,9 +508,11 @@ Attributes:
         "or": At least one condition is true for a match (default).
     rule_type (Literal["random", "choice", "all"]):
         The selection strategy among the matched set:
-          - "random": each matched entity is chosen with probability = `probability`.
-          - "choice": pick exactly `count` items from the matched set (random sample).
-          - "all": select every matched entity in the matched set.
+
+- "random": each matched entity is chosen with probability = `probability`.
+- "choice": pick exactly `count` items from the matched set (random sample).
+- "all": select every matched entity in the matched set.
+
     probability (float):
         Probability in [0,1], used if `rule_type="random"`.
     count (int):
@@ -635,46 +631,26 @@ Attributes:
 
 **Methods:**
 
-- `add_link(self, link: 'Link') -> 'None'`
-  - Add a link to the network (keyed by the link's auto-generated ID).
-- `add_node(self, node: 'Node') -> 'None'`
-  - Add a node to the network (keyed by node.name).
-- `disable_all(self) -> 'None'`
-  - Mark all nodes and links as disabled.
-- `disable_link(self, link_id: 'str') -> 'None'`
-  - Mark a link as disabled.
-- `disable_node(self, node_name: 'str') -> 'None'`
-  - Mark a node as disabled.
-- `disable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'`
-  - Disable all nodes/links that have 'name' in their risk_groups.
-- `enable_all(self) -> 'None'`
-  - Mark all nodes and links as enabled.
-- `enable_link(self, link_id: 'str') -> 'None'`
-  - Mark a link as enabled.
-- `enable_node(self, node_name: 'str') -> 'None'`
-  - Mark a node as enabled.
-- `enable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'`
-  - Enable all nodes/links that have 'name' in their risk_groups.
-- `find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -> 'List[Link]'`
-  - Search for links using optional regex patterns for source or target node names.
-- `get_links_between(self, source: 'str', target: 'str') -> 'List[str]'`
-  - Retrieve all link IDs that connect the specified source node
-- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], float]'`
-  - Compute maximum flow between groups of source nodes and sink nodes.
-- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, FlowSummary, StrictMultiDiGraph]]'`
-  - Compute maximum flow with complete analytics and graph.
-- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, StrictMultiDiGraph]]'`
-  - Compute maximum flow and return the flow-assigned graph.
-- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, FlowSummary]]'`
-  - Compute maximum flow with detailed analytics summary.
-- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'`
-  - Identify saturated (bottleneck) edges in max flow solutions between node groups.
-- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'`
-  - Select and group nodes whose names match a given regular expression.
-- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'`
-  - Perform sensitivity analysis on capacity changes for max flow solutions.
-- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> 'StrictMultiDiGraph'`
-  - Create a StrictMultiDiGraph representation of this Network.
+- `add_link(self, link: 'Link') -> 'None'` - Add a link to the network (keyed by the link's auto-generated ID).
+- `add_node(self, node: 'Node') -> 'None'` - Add a node to the network (keyed by node.name).
+- `disable_all(self) -> 'None'` - Mark all nodes and links as disabled.
+- `disable_link(self, link_id: 'str') -> 'None'` - Mark a link as disabled.
+- `disable_node(self, node_name: 'str') -> 'None'` - Mark a node as disabled.
+- `disable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Disable all nodes/links that have 'name' in their risk_groups.
+- `enable_all(self) -> 'None'` - Mark all nodes and links as enabled.
+- `enable_link(self, link_id: 'str') -> 'None'` - Mark a link as enabled.
+- `enable_node(self, node_name: 'str') -> 'None'` - Mark a node as enabled.
+- `enable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Enable all nodes/links that have 'name' in their risk_groups.
+- `find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -> 'List[Link]'` - Search for links using optional regex patterns for source or target node names.
+- `get_links_between(self, source: 'str', target: 'str') -> 'List[str]'` - Retrieve all link IDs that connect the specified source node
+- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between groups of source nodes and sink nodes.
+- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, FlowSummary, StrictMultiDiGraph]]'` - Compute maximum flow with complete analytics and graph.
+- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, StrictMultiDiGraph]]'` - Compute maximum flow and return the flow-assigned graph.
+- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Tuple[float, FlowSummary]]'` - Compute maximum flow with detailed analytics summary.
+- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'` - Identify saturated (bottleneck) edges in max flow solutions between node groups.
+- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'` - Select and group nodes whose names match a given regular expression.
+- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'` - Perform sensitivity analysis on capacity changes for max flow solutions.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> 'StrictMultiDiGraph'` - Create a StrictMultiDiGraph representation of this Network.
 
 ### Node
 
@@ -768,28 +744,17 @@ Attributes:
 
 **Methods:**
 
-- `from_excluded_sets(base: "'Network'", excluded_nodes: 'Iterable[str]' = (), excluded_links: 'Iterable[str]' = ()) -> "'NetworkView'"`
-  - Create a NetworkView with specified exclusions.
-- `is_link_hidden(self, link_id: 'str') -> 'bool'`
-  - Check if a link is hidden in this view.
-- `is_node_hidden(self, name: 'str') -> 'bool'`
-  - Check if a node is hidden in this view.
-- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], float]'`
-  - Compute maximum flow between node groups in this view.
-- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary', 'StrictMultiDiGraph']]"`
-  - Compute maximum flow with complete analytics and graph.
-- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'StrictMultiDiGraph']]"`
-  - Compute maximum flow and return flow-assigned graph.
-- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary']]"`
-  - Compute maximum flow with detailed analytics summary.
-- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'`
-  - Identify saturated edges in max flow solutions.
-- `select_node_groups_by_path(self, path: 'str') -> "Dict[str, List['Node']]"`
-  - Select and group visible nodes matching a regex pattern.
-- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'`
-  - Perform sensitivity analysis on capacity changes.
-- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> "'StrictMultiDiGraph'"`
-  - Create a StrictMultiDiGraph representation of this view.
+- `from_excluded_sets(base: "'Network'", excluded_nodes: 'Iterable[str]' = (), excluded_links: 'Iterable[str]' = ()) -> "'NetworkView'"` - Create a NetworkView with specified exclusions.
+- `is_link_hidden(self, link_id: 'str') -> 'bool'` - Check if a link is hidden in this view.
+- `is_node_hidden(self, name: 'str') -> 'bool'` - Check if a node is hidden in this view.
+- `max_flow(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between node groups in this view.
+- `max_flow_detailed(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary', 'StrictMultiDiGraph']]"` - Compute maximum flow with complete analytics and graph.
+- `max_flow_with_graph(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'StrictMultiDiGraph']]"` - Compute maximum flow and return flow-assigned graph.
+- `max_flow_with_summary(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> "Dict[Tuple[str, str], Tuple[float, 'FlowSummary']]"` - Compute maximum flow with detailed analytics summary.
+- `saturated_edges(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', tolerance: 'float' = 1e-10, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], List[Tuple[str, str, str]]]'` - Identify saturated edges in max flow solutions.
+- `select_node_groups_by_path(self, path: 'str') -> "Dict[str, List['Node']]"` - Select and group visible nodes matching a regex pattern.
+- `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'` - Perform sensitivity analysis on capacity changes.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> "'StrictMultiDiGraph'"` - Create a StrictMultiDiGraph representation of this view.
 
 ---
 
@@ -807,20 +772,13 @@ Profiles workflow steps using cProfile and identifies bottlenecks.
 
 **Methods:**
 
-- `analyze_performance(self) -> 'None'`
-  - Analyze profiling results and identify bottlenecks.
-- `end_scenario(self) -> 'None'`
-  - End profiling for the entire scenario execution.
-- `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'`
-  - Get the top CPU-consuming functions for a specific step.
-- `merge_child_profiles(self, profile_dir: 'Path', step_name: 'str') -> 'None'`
-  - Merge child worker profiles into the parent step profile.
-- `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'`
-  - Context manager for profiling individual workflow steps.
-- `save_detailed_profile(self, output_path: 'Path', step_name: 'Optional[str]' = None) -> 'None'`
-  - Save detailed profiling data to a file.
-- `start_scenario(self) -> 'None'`
-  - Start profiling for the entire scenario execution.
+- `analyze_performance(self) -> 'None'` - Analyze profiling results and identify bottlenecks.
+- `end_scenario(self) -> 'None'` - End profiling for the entire scenario execution.
+- `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'` - Get the top CPU-consuming functions for a specific step.
+- `merge_child_profiles(self, profile_dir: 'Path', step_name: 'str') -> 'None'` - Merge child worker profiles into the parent step profile.
+- `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'` - Context manager for profiling individual workflow steps.
+- `save_detailed_profile(self, output_path: 'Path', step_name: 'Optional[str]' = None) -> 'None'` - Save detailed profiling data to a file.
+- `start_scenario(self) -> 'None'` - Start profiling for the entire scenario execution.
 
 ### PerformanceReporter
 
@@ -830,8 +788,7 @@ Generates text reports with timing analysis, bottleneck identification, and opti
 
 **Methods:**
 
-- `generate_report(self) -> 'str'`
-  - Generate performance report.
+- `generate_report(self) -> 'str'` - Generate performance report.
 
 ### ProfileResults
 
@@ -897,12 +854,9 @@ Uses the analysis registry to determine which analysis modules to run for each w
 
 **Methods:**
 
-- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'`
-  - Generate HTML report from notebook.
-- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'`
-  - Generate Jupyter notebook with analysis code.
-- `load_results(self) -> 'None'`
-  - Load results from JSON file.
+- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'` - Generate HTML report from notebook.
+- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'` - Generate Jupyter notebook with analysis code.
+- `load_results(self) -> 'None'` - Load results from JSON file.
 
 ---
 
@@ -930,22 +884,14 @@ Example usage:
 
 **Methods:**
 
-- `get(self, step_name: str, key: str, default: Any = None) -> Any`
-  - Retrieve the value from (step_name, key). If the key is missing, return `default`.
-- `get_all(self, key: str) -> Dict[str, Any]`
-  - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
-- `get_all_step_metadata(self) -> Dict[str, ngraph.results.WorkflowStepMetadata]`
-  - Get metadata for all workflow steps.
-- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.WorkflowStepMetadata]`
-  - Get metadata for a workflow step.
-- `get_steps_by_execution_order(self) -> list[str]`
-  - Get step names ordered by their execution order.
-- `put(self, step_name: str, key: str, value: Any) -> None`
-  - Store a value under (step_name, key).
-- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None`
-  - Store metadata for a workflow step.
-- `to_dict(self) -> Dict[str, Any]`
-  - Return a dictionary representation of all stored results.
+- `get(self, step_name: str, key: str, default: Any = None) -> Any` - Retrieve the value from (step_name, key). If the key is missing, return `default`.
+- `get_all(self, key: str) -> Dict[str, Any]` - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+- `get_all_step_metadata(self) -> Dict[str, ngraph.results.WorkflowStepMetadata]` - Get metadata for all workflow steps.
+- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.WorkflowStepMetadata]` - Get metadata for a workflow step.
+- `get_steps_by_execution_order(self) -> list[str]` - Get step names ordered by their execution order.
+- `put(self, step_name: str, key: str, value: Any) -> None` - Store a value under (step_name, key).
+- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None` - Store metadata for a workflow step.
+- `to_dict(self) -> Dict[str, Any]` - Return a dictionary representation of all stored results.
 
 ### WorkflowStepMetadata
 
@@ -1003,14 +949,10 @@ Attributes:
 
 **Methods:**
 
-- `expand_to_values(self) -> 'List[float]'`
-  - Expand frequency map back to individual values.
-- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]', flow_summaries: 'List[Any] | None' = None) -> "'CapacityEnvelope'"`
-  - Create frequency-based envelope from capacity values and optional flow summaries.
-- `get_percentile(self, percentile: 'float') -> 'float'`
-  - Calculate percentile from frequency distribution.
-- `to_dict(self) -> 'Dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `expand_to_values(self) -> 'List[float]'` - Expand frequency map back to individual values.
+- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]', flow_summaries: 'List[Any] | None' = None) -> "'CapacityEnvelope'"` - Create frequency-based envelope from capacity values and optional flow summaries.
+- `get_percentile(self, percentile: 'float') -> 'float'` - Calculate percentile from frequency distribution.
+- `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### FailurePatternResult
 
@@ -1033,8 +975,7 @@ Attributes:
 
 **Methods:**
 
-- `to_dict(self) -> 'Dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### FailurePolicySet
 
@@ -1052,14 +993,10 @@ Attributes:
 
 **Methods:**
 
-- `add(self, name: 'str', policy: "'FailurePolicy'") -> 'None'`
-  - Add a failure policy to the collection.
-- `get_all_policies(self) -> "list['FailurePolicy']"`
-  - Get all failure policies from the collection.
-- `get_policy(self, name: 'str') -> "'FailurePolicy'"`
-  - Get a specific failure policy by name.
-- `to_dict(self) -> 'dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `add(self, name: 'str', policy: "'FailurePolicy'") -> 'None'` - Add a failure policy to the collection.
+- `get_all_policies(self) -> "list['FailurePolicy']"` - Get all failure policies from the collection.
+- `get_policy(self, name: 'str') -> "'FailurePolicy'"` - Get a specific failure policy by name.
+- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### PlacementResultSet
 
@@ -1081,8 +1018,7 @@ Attributes:
 
 **Methods:**
 
-- `to_dict(self) -> 'dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### TrafficMatrixSet
 
@@ -1100,16 +1036,11 @@ Attributes:
 
 **Methods:**
 
-- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'`
-  - Add a traffic matrix to the collection.
-- `get_all_demands(self) -> 'list[TrafficDemand]'`
-  - Get all traffic demands from all matrices combined.
-- `get_default_matrix(self) -> 'list[TrafficDemand]'`
-  - Get default traffic matrix.
-- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'`
-  - Get a specific traffic matrix by name.
-- `to_dict(self) -> 'dict[str, Any]'`
-  - Convert to dictionary for JSON serialization.
+- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a traffic matrix to the collection.
+- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all matrices combined.
+- `get_default_matrix(self) -> 'list[TrafficDemand]'` - Get default traffic matrix.
+- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific traffic matrix by name.
+- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ---
 
@@ -1122,13 +1053,14 @@ Scenario class for defining network analysis workflows from YAML.
 Represents a complete scenario for building and executing network workflows.
 
 This scenario includes:
-  - A network (nodes/links), constructed via blueprint expansion.
-  - A failure policy set (one or more named failure policies).
-  - A traffic matrix set containing one or more named traffic matrices.
-  - A list of workflow steps to execute.
-  - A results container for storing outputs.
-  - A components_library for hardware/optics definitions.
-  - A seed for reproducible random operations (optional).
+
+- A network (nodes/links), constructed via blueprint expansion.
+- A failure policy set (one or more named failure policies).
+- A traffic matrix set containing one or more named traffic matrices.
+- A list of workflow steps to execute.
+- A results container for storing outputs.
+- A components_library for hardware/optics definitions.
+- A seed for reproducible random operations (optional).
 
 Typical usage example:
 
@@ -1148,10 +1080,8 @@ Typical usage example:
 
 **Methods:**
 
-- `from_yaml(yaml_str: 'str', default_components: 'Optional[ComponentsLibrary]' = None) -> 'Scenario'`
-  - Constructs a Scenario from a YAML string, optionally merging
-- `run(self) -> 'None'`
-  - Executes the scenario's workflow steps in order.
+- `from_yaml(yaml_str: 'str', default_components: 'Optional[ComponentsLibrary]' = None) -> 'Scenario'` - Constructs a Scenario from a YAML string, optionally merging
+- `run(self) -> 'None'` - Executes the scenario's workflow steps in order.
 
 ---
 
@@ -1174,12 +1104,9 @@ Usage:
 
 **Methods:**
 
-- `create_random_state(self, *components: 'Any') -> 'random.Random'`
-  - Create a new Random instance with derived seed.
-- `derive_seed(self, *components: 'Any') -> 'Optional[int]'`
-  - Derive a deterministic seed from master seed and component identifiers.
-- `seed_global_random(self, *components: 'Any') -> 'None'`
-  - Seed the global random module with derived seed.
+- `create_random_state(self, *components: 'Any') -> 'random.Random'` - Create a new Random instance with derived seed.
+- `derive_seed(self, *components: 'Any') -> 'Optional[int]'` - Derive a deterministic seed from master seed and component identifiers.
+- `seed_global_random(self, *components: 'Any') -> 'None'` - Seed the global random module with derived seed.
 
 ---
 
@@ -1238,14 +1165,17 @@ This class:
      re-optimization, reset usage, and retrieve flow/usage summaries.
 
 In particular:
-  - 'combine' mode:
-    * Combine all matched sources into a single pseudo-source node, and all
+
+- 'combine' mode:
+- Combine all matched sources into a single pseudo-source node, and all
+
       matched sinks into a single pseudo-sink node (named using the traffic
       demand's `source_path` and `sink_path`). A single Demand is created
       from the pseudo-source to the pseudo-sink, with the full volume.
 
-  - 'full_mesh' mode:
-    * All matched sources form one group, all matched sinks form another group.
+- 'full_mesh' mode:
+- All matched sources form one group, all matched sinks form another group.
+
       A separate Demand is created for each (src_node, dst_node) pair,
       skipping self-pairs. The total volume is split evenly across the pairs.
 
@@ -1276,20 +1206,13 @@ Attributes:
 
 **Methods:**
 
-- `build_graph(self, add_reverse: 'bool' = True) -> 'None'`
-  - Builds or rebuilds the internal StrictMultiDiGraph from self.network.
-- `expand_demands(self) -> 'None'`
-  - Converts each TrafficDemand in the active matrix into one or more
-- `get_flow_details(self) -> 'Dict[Tuple[int, int], Dict[str, object]]'`
-  - Summarizes flows from each Demand's FlowPolicy.
-- `get_traffic_results(self, detailed: 'bool' = False) -> 'List[TrafficResult]'`
-  - Returns traffic demand summaries.
-- `place_all_demands(self, placement_rounds: 'Union[int, str]' = 'auto', reoptimize_after_each_round: 'bool' = False) -> 'float'`
-  - Places all expanded demands in ascending priority order using multiple
-- `reset_all_flow_usages(self) -> 'None'`
-  - Removes flow usage from the graph for each Demand's FlowPolicy
-- `summarize_link_usage(self) -> 'Dict[str, float]'`
-  - Returns the total flow usage per edge in the graph.
+- `build_graph(self, add_reverse: 'bool' = True) -> 'None'` - Builds or rebuilds the internal StrictMultiDiGraph from self.network.
+- `expand_demands(self) -> 'None'` - Converts each TrafficDemand in the active matrix into one or more
+- `get_flow_details(self) -> 'Dict[Tuple[int, int], Dict[str, object]]'` - Summarizes flows from each Demand's FlowPolicy.
+- `get_traffic_results(self, detailed: 'bool' = False) -> 'List[TrafficResult]'` - Returns traffic demand summaries.
+- `place_all_demands(self, placement_rounds: 'Union[int, str]' = 'auto', reoptimize_after_each_round: 'bool' = False) -> 'float'` - Places all expanded demands in ascending priority order using multiple
+- `reset_all_flow_usages(self) -> 'None'` - Removes flow usage from the graph for each Demand's FlowPolicy
+- `summarize_link_usage(self) -> 'Dict[str, float]'` - Returns the total flow usage per edge in the graph.
 
 ### TrafficResult
 
@@ -1352,8 +1275,7 @@ flows through a single FlowPolicy.
 
 **Methods:**
 
-- `place(self, flow_graph: 'StrictMultiDiGraph', max_fraction: 'float' = 1.0, max_placement: 'Optional[float]' = None) -> 'Tuple[float, float]'`
-  - Places demand volume onto the network via self.flow_policy.
+- `place(self, flow_graph: 'StrictMultiDiGraph', max_fraction: 'float' = 1.0, max_placement: 'Optional[float]' = None) -> 'Tuple[float, float]'` - Places demand volume onto the network via self.flow_policy.
 
 ---
 
@@ -1366,16 +1288,15 @@ Flow and FlowIndex classes for traffic flow representation.
 Represents a fraction of demand routed along a given PathBundle.
 
 In traffic-engineering scenarios, a `Flow` object can model:
-  - MPLS LSPs/tunnels with explicit paths,
-  - IP forwarding behavior (with ECMP or UCMP),
-  - Or anything that follows a specific set of paths.
+
+- MPLS LSPs/tunnels with explicit paths,
+- IP forwarding behavior (with ECMP or UCMP),
+- Or anything that follows a specific set of paths.
 
 **Methods:**
 
-- `place_flow(self, flow_graph: 'StrictMultiDiGraph', to_place: 'float', flow_placement: 'FlowPlacement') -> 'Tuple[float, float]'`
-  - Attempt to place (or update) this flow on the given `flow_graph`.
-- `remove_flow(self, flow_graph: 'StrictMultiDiGraph') -> 'None'`
-  - Remove this flow's contribution from the provided `flow_graph`.
+- `place_flow(self, flow_graph: 'StrictMultiDiGraph', to_place: 'float', flow_placement: 'FlowPlacement') -> 'Tuple[float, float]'` - Attempt to place (or update) this flow on the given `flow_graph`.
+- `remove_flow(self, flow_graph: 'StrictMultiDiGraph') -> 'None'` - Remove this flow's contribution from the provided `flow_graph`.
 
 ### FlowIndex
 
@@ -1404,14 +1325,10 @@ selection algorithms and flow placement methods.
 
 **Methods:**
 
-- `deep_copy(self) -> 'FlowPolicy'`
-  - Creates and returns a deep copy of this FlowPolicy, including all flows.
-- `place_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', volume: 'float', target_flow_volume: 'Optional[float]' = None, min_flow: 'Optional[float]' = None) -> 'Tuple[float, float]'`
-  - Places the given demand volume on the network graph by splitting or creating
-- `rebalance_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', target_flow_volume: 'float') -> 'Tuple[float, float]'`
-  - Rebalances the demand across existing flows so that their volumes are closer
-- `remove_demand(self, flow_graph: 'StrictMultiDiGraph') -> 'None'`
-  - Removes all flows from the network graph without clearing internal state.
+- `deep_copy(self) -> 'FlowPolicy'` - Creates and returns a deep copy of this FlowPolicy, including all flows.
+- `place_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', volume: 'float', target_flow_volume: 'Optional[float]' = None, min_flow: 'Optional[float]' = None) -> 'Tuple[float, float]'` - Places the given demand volume on the network graph by splitting or creating
+- `rebalance_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', target_flow_volume: 'float') -> 'Tuple[float, float]'` - Rebalances the demand across existing flows so that their volumes are closer
+- `remove_demand(self, flow_graph: 'StrictMultiDiGraph') -> 'None'` - Removes all flows from the network graph without clearing internal state.
 
 ### FlowPolicyConfig
 
@@ -1441,13 +1358,17 @@ StrictMultiDiGraph class extending NetworkX with validation and utilities.
 A custom multi-directed graph with strict rules and unique edge IDs.
 
 This class enforces:
-  - No automatic creation of missing nodes when adding an edge.
-  - No duplicate nodes (raising ValueError on duplicates).
-  - No duplicate edges by key (raising ValueError on duplicates).
-  - Attempting to remove non-existent nodes or edges raises ValueError.
-  - Each edge key must be unique; by default, a Base64-UUID is generated
+
+- No automatic creation of missing nodes when adding an edge.
+- No duplicate nodes (raising ValueError on duplicates).
+- No duplicate edges by key (raising ValueError on duplicates).
+- Attempting to remove non-existent nodes or edges raises ValueError.
+- Each edge key must be unique; by default, a Base64-UUID is generated
+
     if none is provided.
-  - copy() can perform a pickle-based deep copy that may be faster
+
+- copy() can perform a pickle-based deep copy that may be faster
+
     than NetworkX's default.
 
 Inherits from:
@@ -1455,96 +1376,51 @@ Inherits from:
 
 **Methods:**
 
-- `add_edge(self, u_for_edge: 'NodeID', v_for_edge: 'NodeID', key: 'Optional[EdgeID]' = None, **attr: 'Any') -> 'EdgeID'`
-  - Add a directed edge from u_for_edge to v_for_edge.
-- `add_edges_from(self, ebunch_to_add, **attr)`
-  - Add all the edges in ebunch_to_add.
-- `add_node(self, node_for_adding: 'NodeID', **attr: 'Any') -> 'None'`
-  - Add a single node, disallowing duplicates.
-- `add_nodes_from(self, nodes_for_adding, **attr)`
-  - Add multiple nodes.
-- `add_weighted_edges_from(self, ebunch_to_add, weight='weight', **attr)`
-  - Add weighted edges in `ebunch_to_add` with specified weight attr
-- `adjacency(self)`
-  - Returns an iterator over (node, adjacency dict) tuples for all nodes.
-- `clear(self)`
-  - Remove all nodes and edges from the graph.
-- `clear_edges(self)`
-  - Remove all edges from the graph without altering nodes.
-- `copy(self, as_view: 'bool' = False, pickle: 'bool' = True) -> 'StrictMultiDiGraph'`
-  - Create a copy of this graph.
-- `edge_subgraph(self, edges)`
-  - Returns the subgraph induced by the specified edges.
-- `edges_between(self, u: 'NodeID', v: 'NodeID') -> 'List[EdgeID]'`
-  - List all edge keys from node u to node v.
-- `get_edge_attr(self, key: 'EdgeID') -> 'AttrDict'`
-  - Retrieve the attribute dictionary of a specific edge.
-- `get_edge_data(self, u, v, key=None, default=None)`
-  - Returns the attribute dictionary associated with edge (u, v,
-- `get_edges(self) -> 'Dict[EdgeID, EdgeTuple]'`
-  - Retrieve a dictionary of all edges by their keys.
-- `get_nodes(self) -> 'Dict[NodeID, AttrDict]'`
-  - Retrieve all nodes and their attributes as a dictionary.
-- `has_edge(self, u, v, key=None)`
-  - Returns True if the graph has an edge between nodes u and v.
-- `has_edge_by_id(self, key: 'EdgeID') -> 'bool'`
-  - Check whether an edge with the given key exists.
-- `has_node(self, n)`
-  - Returns True if the graph contains the node n.
-- `has_predecessor(self, u, v)`
-  - Returns True if node u has predecessor v.
-- `has_successor(self, u, v)`
-  - Returns True if node u has successor v.
-- `is_directed(self)`
-  - Returns True if graph is directed, False otherwise.
-- `is_multigraph(self)`
-  - Returns True if graph is a multigraph, False otherwise.
-- `nbunch_iter(self, nbunch=None)`
-  - Returns an iterator over nodes contained in nbunch that are
-- `neighbors(self, n)`
-  - Returns an iterator over successor nodes of n.
-- `new_edge_key(self, u, v)`
-  - Returns an unused key for edges between nodes `u` and `v`.
-- `number_of_edges(self, u=None, v=None)`
-  - Returns the number of edges between two nodes.
-- `number_of_nodes(self)`
-  - Returns the number of nodes in the graph.
-- `order(self)`
-  - Returns the number of nodes in the graph.
-- `predecessors(self, n)`
-  - Returns an iterator over predecessor nodes of n.
-- `remove_edge(self, u: 'NodeID', v: 'NodeID', key: 'Optional[EdgeID]' = None) -> 'None'`
-  - Remove an edge (or edges) between nodes u and v.
-- `remove_edge_by_id(self, key: 'EdgeID') -> 'None'`
-  - Remove a directed edge by its unique key.
-- `remove_edges_from(self, ebunch)`
-  - Remove all edges specified in ebunch.
-- `remove_node(self, n: 'NodeID') -> 'None'`
-  - Remove a single node and all incident edges.
-- `remove_nodes_from(self, nodes)`
-  - Remove multiple nodes.
-- `reverse(self, copy=True)`
-  - Returns the reverse of the graph.
-- `size(self, weight=None)`
-  - Returns the number of edges or total of all edge weights.
-- `subgraph(self, nodes)`
-  - Returns a SubGraph view of the subgraph induced on `nodes`.
-- `successors(self, n)`
-  - Returns an iterator over successor nodes of n.
-- `to_dict(self) -> 'Dict[str, Any]'`
-  - Convert the graph to a dictionary representation suitable for JSON serialization.
-- `to_directed(self, as_view=False)`
-  - Returns a directed representation of the graph.
-- `to_directed_class(self)`
-  - Returns the class to use for empty directed copies.
-- `to_undirected(self, reciprocal=False, as_view=False)`
-  - Returns an undirected representation of the digraph.
-- `to_undirected_class(self)`
-  - Returns the class to use for empty undirected copies.
-- `update(self, edges=None, nodes=None)`
-  - Update the graph using nodes/edges/graphs as input.
-- `update_edge_attr(self, key: 'EdgeID', **attr: 'Any') -> 'None'`
-  - Update attributes on an existing edge by key.
+- `add_edge(self, u_for_edge: 'NodeID', v_for_edge: 'NodeID', key: 'Optional[EdgeID]' = None, **attr: 'Any') -> 'EdgeID'` - Add a directed edge from u_for_edge to v_for_edge.
+- `add_edges_from(self, ebunch_to_add, **attr)` - Add all the edges in ebunch_to_add.
+- `add_node(self, node_for_adding: 'NodeID', **attr: 'Any') -> 'None'` - Add a single node, disallowing duplicates.
+- `add_nodes_from(self, nodes_for_adding, **attr)` - Add multiple nodes.
+- `add_weighted_edges_from(self, ebunch_to_add, weight='weight', **attr)` - Add weighted edges in `ebunch_to_add` with specified weight attr
+- `adjacency(self)` - Returns an iterator over (node, adjacency dict) tuples for all nodes.
+- `clear(self)` - Remove all nodes and edges from the graph.
+- `clear_edges(self)` - Remove all edges from the graph without altering nodes.
+- `copy(self, as_view: 'bool' = False, pickle: 'bool' = True) -> 'StrictMultiDiGraph'` - Create a copy of this graph.
+- `edge_subgraph(self, edges)` - Returns the subgraph induced by the specified edges.
+- `edges_between(self, u: 'NodeID', v: 'NodeID') -> 'List[EdgeID]'` - List all edge keys from node u to node v.
+- `get_edge_attr(self, key: 'EdgeID') -> 'AttrDict'` - Retrieve the attribute dictionary of a specific edge.
+- `get_edge_data(self, u, v, key=None, default=None)` - Returns the attribute dictionary associated with edge (u, v,
+- `get_edges(self) -> 'Dict[EdgeID, EdgeTuple]'` - Retrieve a dictionary of all edges by their keys.
+- `get_nodes(self) -> 'Dict[NodeID, AttrDict]'` - Retrieve all nodes and their attributes as a dictionary.
+- `has_edge(self, u, v, key=None)` - Returns True if the graph has an edge between nodes u and v.
+- `has_edge_by_id(self, key: 'EdgeID') -> 'bool'` - Check whether an edge with the given key exists.
+- `has_node(self, n)` - Returns True if the graph contains the node n.
+- `has_predecessor(self, u, v)` - Returns True if node u has predecessor v.
+- `has_successor(self, u, v)` - Returns True if node u has successor v.
+- `is_directed(self)` - Returns True if graph is directed, False otherwise.
+- `is_multigraph(self)` - Returns True if graph is a multigraph, False otherwise.
+- `nbunch_iter(self, nbunch=None)` - Returns an iterator over nodes contained in nbunch that are
+- `neighbors(self, n)` - Returns an iterator over successor nodes of n.
+- `new_edge_key(self, u, v)` - Returns an unused key for edges between nodes `u` and `v`.
+- `number_of_edges(self, u=None, v=None)` - Returns the number of edges between two nodes.
+- `number_of_nodes(self)` - Returns the number of nodes in the graph.
+- `order(self)` - Returns the number of nodes in the graph.
+- `predecessors(self, n)` - Returns an iterator over predecessor nodes of n.
+- `remove_edge(self, u: 'NodeID', v: 'NodeID', key: 'Optional[EdgeID]' = None) -> 'None'` - Remove an edge (or edges) between nodes u and v.
+- `remove_edge_by_id(self, key: 'EdgeID') -> 'None'` - Remove a directed edge by its unique key.
+- `remove_edges_from(self, ebunch)` - Remove all edges specified in ebunch.
+- `remove_node(self, n: 'NodeID') -> 'None'` - Remove a single node and all incident edges.
+- `remove_nodes_from(self, nodes)` - Remove multiple nodes.
+- `reverse(self, copy=True)` - Returns the reverse of the graph.
+- `size(self, weight=None)` - Returns the number of edges or total of all edge weights.
+- `subgraph(self, nodes)` - Returns a SubGraph view of the subgraph induced on `nodes`.
+- `successors(self, n)` - Returns an iterator over successor nodes of n.
+- `to_dict(self) -> 'Dict[str, Any]'` - Convert the graph to a dictionary representation suitable for JSON serialization.
+- `to_directed(self, as_view=False)` - Returns a directed representation of the graph.
+- `to_directed_class(self)` - Returns the class to use for empty directed copies.
+- `to_undirected(self, reciprocal=False, as_view=False)` - Returns an undirected representation of the digraph.
+- `to_undirected_class(self)` - Returns the class to use for empty undirected copies.
+- `update(self, edges=None, nodes=None)` - Update the graph using nodes/edges/graphs as input.
+- `update_edge_attr(self, key: 'EdgeID', **attr: 'Any') -> 'None'` - Update attributes on an existing edge by key.
 
 ### new_base64_uuid() -> 'str'
 
@@ -1695,8 +1571,7 @@ Attributes:
 
 **Methods:**
 
-- `get_sub_path(self, dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'Path'`
-  - Create a sub-path ending at the specified destination node, recalculating the cost.
+- `get_sub_path(self, dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'Path'` - Create a sub-path ending at the specified destination node, recalculating the cost.
 
 ---
 
@@ -1721,20 +1596,13 @@ If it's not a DAG, the behavior is... an infinite loop. Oops.
 
 **Methods:**
 
-- `add(self, other: 'PathBundle') -> 'PathBundle'`
-  - Concatenate this bundle with another bundle (end-to-start).
-- `contains(self, other: 'PathBundle') -> 'bool'`
-  - Check if this bundle's edge set contains all edges of `other`.
-- `from_path(path: 'Path', resolve_edges: 'bool' = False, graph: 'Optional[StrictMultiDiGraph]' = None, edge_select: 'Optional[EdgeSelect]' = None, cost_attr: 'str' = 'cost', capacity_attr: 'str' = 'capacity') -> 'PathBundle'`
-  - Construct a PathBundle from a single `Path` object.
-- `get_sub_path_bundle(self, new_dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'PathBundle'`
-  - Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
-- `is_disjoint_from(self, other: 'PathBundle') -> 'bool'`
-  - Check if this bundle shares no edges with `other`.
-- `is_subset_of(self, other: 'PathBundle') -> 'bool'`
-  - Check if this bundle's edge set is contained in `other`'s edge set.
-- `resolve_to_paths(self, split_parallel_edges: 'bool' = False) -> 'Iterator[Path]'`
-  - Generate all concrete `Path` objects contained in this PathBundle.
+- `add(self, other: 'PathBundle') -> 'PathBundle'` - Concatenate this bundle with another bundle (end-to-start).
+- `contains(self, other: 'PathBundle') -> 'bool'` - Check if this bundle's edge set contains all edges of `other`.
+- `from_path(path: 'Path', resolve_edges: 'bool' = False, graph: 'Optional[StrictMultiDiGraph]' = None, edge_select: 'Optional[EdgeSelect]' = None, cost_attr: 'str' = 'cost', capacity_attr: 'str' = 'capacity') -> 'PathBundle'` - Construct a PathBundle from a single `Path` object.
+- `get_sub_path_bundle(self, new_dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'PathBundle'` - Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
+- `is_disjoint_from(self, other: 'PathBundle') -> 'bool'` - Check if this bundle shares no edges with `other`.
+- `is_subset_of(self, other: 'PathBundle') -> 'bool'` - Check if this bundle's edge set is contained in `other`'s edge set.
+- `resolve_to_paths(self, split_parallel_edges: 'bool' = False) -> 'Iterator[Path]'` - Generate all concrete `Path` objects contained in this PathBundle.
 
 ---
 
@@ -1831,18 +1699,28 @@ Calculate the maximum feasible flow from src_node to dst_node (forward sense)
 using either the PROPORTIONAL or EQUAL_BALANCED approach.
 
 In PROPORTIONAL mode (similar to Dinic in reversed orientation):
-  1. Build the reversed residual graph from dst_node (via `_init_graph_data`).
-  2. Use BFS (in `_set_levels_bfs`) to build a level graph and DFS (`_push_flow_dfs`)
+
+1. Build the reversed residual graph from dst_node (via `_init_graph_data`).
+2. Use BFS (in `_set_levels_bfs`) to build a level graph and DFS (`_push_flow_dfs`)
+
      to push blocking flows, repeating until no more flow can be pushed.
-  3. The net flow found is stored in reversed orientation. Convert final flows
+
+3. The net flow found is stored in reversed orientation. Convert final flows
+
      to forward orientation by negating and normalizing by the total.
 
 In EQUAL_BALANCED mode:
-  1. Build reversed adjacency from dst_node (also via `_init_graph_data`),
+
+1. Build reversed adjacency from dst_node (also via `_init_graph_data`),
+
      ignoring capacity checks in that BFS.
-  2. Perform a BFS pass from src_node (`_equal_balance_bfs`) to distribute a
+
+2. Perform a BFS pass from src_node (`_equal_balance_bfs`) to distribute a
+
      nominal flow of 1.0 equally among parallel edges.
-  3. Determine the scaling ratio so that no edge capacity is exceeded.
+
+3. Determine the scaling ratio so that no edge capacity is exceeded.
+
      Scale the flow assignments accordingly, then normalize to the forward sense.
 
 Args:
@@ -1857,8 +1735,10 @@ Args:
 
 Returns:
     A tuple of:
-      - total_flow: The maximum feasible flow from src_node to dst_node.
-      - flow_dict: A nested dictionary [u][v] -> flow value in the forward sense.
+
+- total_flow: The maximum feasible flow from src_node to dst_node.
+- flow_dict: A nested dictionary [u][v] -> flow value in the forward sense.
+
         Positive if flow is from u to v, negative otherwise.
 
 Raises:
@@ -1891,8 +1771,9 @@ Returns:
         (graph, src_node, dst_node, edges_dict, excluded_edges, excluded_nodes) ->
         (selected_cost, [list_of_edge_ids])
     where:
-        - `selected_cost` is the numeric cost used by the path-finding algorithm (e.g. Dijkstra).
-        - `[list_of_edge_ids]` is the list of edges chosen.
+
+- `selected_cost` is the numeric cost used by the path-finding algorithm (e.g. Dijkstra).
+- `[list_of_edge_ids]` is the list of edges chosen.
 
 ---
 
@@ -1934,10 +1815,14 @@ Compute the maximum flow between two nodes in a directed multi-graph,
 using an iterative shortest-path augmentation approach.
 
 By default, this function:
-  1. Creates or re-initializes a flow-aware copy of the graph (via ``init_flow_graph``).
-  2. Repeatedly finds a path from ``src_node`` to ``dst_node`` using ``spf`` with
+
+1. Creates or re-initializes a flow-aware copy of the graph (via ``init_flow_graph``).
+2. Repeatedly finds a path from ``src_node`` to ``dst_node`` using ``spf`` with
+
      capacity constraints (``EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING``).
-  3. Places flow along that path (via ``place_flow_on_graph``) until no augmenting path
+
+3. Places flow along that path (via ``place_flow_on_graph``) until no augmenting path
+
      remains or the capacities are exhausted.
 
 If ``shortest_path=True``, the function performs only one iteration (single augmentation)
@@ -1980,12 +1865,14 @@ Args:
 
 Returns:
     Union[float, tuple]:
-        - If neither return_summary nor return_graph: float (total flow)
-        - If return_summary only: tuple[float, FlowSummary]
-        - If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
+
+- If neither return_summary nor return_graph: float (total flow)
+- If return_summary only: tuple[float, FlowSummary]
+- If both flags: tuple[float, FlowSummary, StrictMultiDiGraph]
 
 Notes:
-    - When using return_summary or return_graph, the return value is a tuple.
+
+- When using return_summary or return_graph, the return value is a tuple.
 
 Examples:
     >>> g = StrictMultiDiGraph()
@@ -2177,8 +2064,10 @@ Args:
 
 Returns:
     A tuple of (costs, pred):
-      - costs: Maps each reachable node to its minimal cost from src_node.
-      - pred: For each reachable node, a dict of predecessor -> list of edges
+
+- costs: Maps each reachable node to its minimal cost from src_node.
+- pred: For each reachable node, a dict of predecessor -> list of edges
+
         from that predecessor to the node. Multiple predecessors are possible
         if multipath=True.
 
@@ -2236,6 +2125,7 @@ YAML Configuration:
     ```yaml
     workflow:
       - step_type: <StepTypeName>
+
         name: "optional_step_name"  # Optional: Custom name for this step instance
         seed: 42                    # Optional: Seed for reproducible random operations
         # ... step-specific parameters ...
@@ -2254,10 +2144,8 @@ Attributes:
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging and metadata storage.
-- `run(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step logic.
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
 
 ### register_workflow_step(step_type: 'str')
 
@@ -2276,11 +2164,13 @@ YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: BuildGraph
+
         name: "build_network_graph"  # Optional: Custom name for this step
     ```
 
 Results stored in scenario.results:
-    - graph: StrictMultiDiGraph object with bidirectional links
+
+- graph: StrictMultiDiGraph object with bidirectional links
 
 ### BuildGraph
 
@@ -2296,10 +2186,8 @@ suitable for analysis algorithms. No additional parameters are required.
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging and metadata storage.
-- `run(self, scenario: 'Scenario') -> 'None'`
-  - Execute the workflow step logic.
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: 'Scenario') -> 'None'` - Execute the workflow step logic.
 
 ---
 
@@ -2319,6 +2207,7 @@ YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: CapacityEnvelopeAnalysis
+
         name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
         source_path: "^datacenter/.*"          # Regex pattern for source node groups
         sink_path: "^edge/.*"                  # Regex pattern for sink node groups
@@ -2335,8 +2224,9 @@ YAML Configuration Example:
     ```
 
 Results stored in scenario.results:
-    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data with optional flow summary statistics
-    - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
+
+- capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data with optional flow summary statistics
+- failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
 
 ### CapacityEnvelopeAnalysis
 
@@ -2378,10 +2268,8 @@ Attributes:
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging and metadata storage.
-- `run(self, scenario: "'Scenario'") -> 'None'`
-  - Execute capacity envelope analysis using FailureManager convenience method.
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute capacity envelope analysis using FailureManager convenience method.
 
 ---
 
@@ -2397,6 +2285,7 @@ YAML Configuration Example:
     ```yaml
     workflow:
       - step_type: NetworkStats
+
         name: "network_statistics"           # Optional: Custom name for this step
         include_disabled: false              # Include disabled nodes/links in stats
         excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
@@ -2404,10 +2293,13 @@ YAML Configuration Example:
     ```
 
 Results stored in scenario.results:
-    - Node statistics: node_count
-    - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
+
+- Node statistics: node_count
+- Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
+
       min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
-    - Degree statistics: mean_degree, median_degree, min_degree, max_degree
+
+- Degree statistics: mean_degree, median_degree, min_degree, max_degree
 
 ### NetworkStats
 
@@ -2431,10 +2323,8 @@ Attributes:
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging and metadata storage.
-- `run(self, scenario: 'Scenario') -> 'None'`
-  - Compute and store network statistics.
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with automatic logging and metadata storage.
+- `run(self, scenario: 'Scenario') -> 'None'` - Compute and store network statistics.
 
 ---
 
@@ -2534,24 +2424,15 @@ Attributes:
 
 **Methods:**
 
-- `cost_distribution_summary(self) -> 'pd.DataFrame'`
-  - Get cost distribution summary across all flows.
-- `export_summary(self) -> 'Dict[str, Any]'`
-  - Export summary for serialization.
-- `flow_keys(self) -> 'List[str]'`
-  - Get list of all flow keys in results.
-- `get_cost_distribution(self, flow_key: 'str') -> 'Dict[float, Dict[str, float]]'`
-  - Get cost distribution statistics for a specific flow.
-- `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'`
-  - Get CapacityEnvelope for a specific flow.
-- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
-  - Get summary of failure patterns if available.
-- `get_min_cut_frequencies(self, flow_key: 'str') -> 'Dict[str, int]'`
-  - Get min-cut edge frequencies for a specific flow.
-- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
-  - Get summary statistics for all flow pairs.
-- `to_dataframe(self) -> 'pd.DataFrame'`
-  - Convert capacity envelopes to DataFrame for analysis.
+- `cost_distribution_summary(self) -> 'pd.DataFrame'` - Get cost distribution summary across all flows.
+- `export_summary(self) -> 'Dict[str, Any]'` - Export summary for serialization.
+- `flow_keys(self) -> 'List[str]'` - Get list of all flow keys in results.
+- `get_cost_distribution(self, flow_key: 'str') -> 'Dict[float, Dict[str, float]]'` - Get cost distribution statistics for a specific flow.
+- `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'` - Get CapacityEnvelope for a specific flow.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'` - Get summary of failure patterns if available.
+- `get_min_cut_frequencies(self, flow_key: 'str') -> 'Dict[str, int]'` - Get min-cut edge frequencies for a specific flow.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'` - Get summary statistics for all flow pairs.
+- `to_dataframe(self) -> 'pd.DataFrame'` - Convert capacity envelopes to DataFrame for analysis.
 
 ### DemandPlacementResults
 
@@ -2574,10 +2455,8 @@ Attributes:
 
 **Methods:**
 
-- `success_rate_distribution(self) -> 'pd.DataFrame'`
-  - Get demand placement success rate distribution as DataFrame.
-- `summary_statistics(self) -> 'dict[str, float]'`
-  - Get summary statistics for success rates.
+- `success_rate_distribution(self) -> 'pd.DataFrame'` - Get demand placement success rate distribution as DataFrame.
+- `summary_statistics(self) -> 'dict[str, float]'` - Get summary statistics for success rates.
 
 ### SensitivityResults
 
@@ -2608,20 +2487,13 @@ Attributes:
 
 **Methods:**
 
-- `component_impact_distribution(self) -> 'pd.DataFrame'`
-  - Get component impact distribution as DataFrame.
-- `export_summary(self) -> 'Dict[str, Any]'`
-  - Export summary for serialization.
-- `flow_keys(self) -> 'List[str]'`
-  - Get list of all flow keys in results.
-- `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
-  - Get summary of failure patterns if available.
-- `get_flow_sensitivity(self, flow_key: 'str') -> 'Dict[str, Dict[str, float]]'`
-  - Get component sensitivity scores for a specific flow.
-- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
-  - Get summary statistics for component impact across all flows.
-- `to_dataframe(self) -> 'pd.DataFrame'`
-  - Convert sensitivity results to DataFrame for analysis.
+- `component_impact_distribution(self) -> 'pd.DataFrame'` - Get component impact distribution as DataFrame.
+- `export_summary(self) -> 'Dict[str, Any]'` - Export summary for serialization.
+- `flow_keys(self) -> 'List[str]'` - Get list of all flow keys in results.
+- `get_failure_pattern_summary(self) -> 'pd.DataFrame'` - Get summary of failure patterns if available.
+- `get_flow_sensitivity(self, flow_key: 'str') -> 'Dict[str, Dict[str, float]]'` - Get component sensitivity scores for a specific flow.
+- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'` - Get summary statistics for component impact across all flows.
+- `to_dataframe(self) -> 'pd.DataFrame'` - Convert sensitivity results to DataFrame for analysis.
 
 ---
 
@@ -2645,14 +2517,10 @@ Base class for notebook analysis components.
 
 **Methods:**
 
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Perform the analysis and return results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display analysis results in notebook format.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]` - Perform the analysis and return results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None` - Display analysis results in notebook format.
+- `get_description(self) -> str` - Get a description of what this analyzer does.
 
 ---
 
@@ -2674,35 +2542,24 @@ flow availability distributions. Provides visualization methods for notebook out
 including capacity matrices, flow CDFs, and reliability curves.
 
 Can be used in two modes:
+
 1. Workflow mode: analyze() with workflow step results dictionary
 2. Direct mode: analyze_results() with CapacityEnvelopeResults object
 
 **Methods:**
 
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
-  - Analyze capacity envelopes and create matrix visualization.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'`
-  - Run analyze/display on every step containing capacity_envelopes.
-- `analyze_and_display_envelope_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'None'`
-  - Complete analysis and display for CapacityEnvelopeResults object.
-- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
-  - Analyze and display flow availability for a specific step.
-- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
-  - Analyze and display results for a specific step.
-- `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'`
-  - Create CDF/availability distribution from capacity envelope frequencies.
-- `analyze_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'Dict[str, Any]'`
-  - Analyze CapacityEnvelopeResults object directly.
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'`
-  - Pretty-print analysis results to the notebook/stdout.
-- `display_capacity_distributions(self, results: "'CapacityEnvelopeResults'", flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'`
-  - Display capacity distribution plots for CapacityEnvelopeResults.
-- `display_percentile_comparison(self, results: "'CapacityEnvelopeResults'") -> 'None'`
-  - Display percentile comparison plots for CapacityEnvelopeResults.
-- `get_description(self) -> 'str'`
-  - Get a description of what this analyzer does.
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze capacity envelopes and create matrix visualization.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
+- `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'` - Run analyze/display on every step containing capacity_envelopes.
+- `analyze_and_display_envelope_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'None'` - Complete analysis and display for CapacityEnvelopeResults object.
+- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display flow availability for a specific step.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display results for a specific step.
+- `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Create CDF/availability distribution from capacity envelope frequencies.
+- `analyze_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'Dict[str, Any]'` - Analyze CapacityEnvelopeResults object directly.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Pretty-print analysis results to the notebook/stdout.
+- `display_capacity_distributions(self, results: "'CapacityEnvelopeResults'", flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'` - Display capacity distribution plots for CapacityEnvelopeResults.
+- `display_percentile_comparison(self, results: "'CapacityEnvelopeResults'") -> 'None'` - Display percentile comparison plots for CapacityEnvelopeResults.
+- `get_description(self) -> 'str'` - Get a description of what this analyzer does.
 
 ---
 
@@ -2716,8 +2573,7 @@ Handles loading and validation of analysis results.
 
 **Methods:**
 
-- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
-  - Load results from JSON file with detailed error handling.
+- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]` - Load results from JSON file with detailed error handling.
 
 ---
 
@@ -2731,10 +2587,8 @@ Manages package installation and imports for notebooks.
 
 **Methods:**
 
-- `check_and_install_packages() -> Dict[str, Any]`
-  - Check for required packages and install if missing.
-- `setup_environment() -> Dict[str, Any]`
-  - Set up the complete notebook environment.
+- `check_and_install_packages() -> Dict[str, Any]` - Check for required packages and install if missing.
+- `setup_environment() -> Dict[str, Any]` - Set up the complete notebook environment.
 
 ---
 
@@ -2778,14 +2632,10 @@ providing a clear and maintainable mapping that replaces fragile data parsing.
 
 **Methods:**
 
-- `get_all_step_types(self) -> 'List[str]'`
-  - Get all registered workflow step types.
-- `get_analyses(self, step_type: 'str') -> 'List[AnalysisConfig]'`
-  - Get all analysis configurations for a workflow step type.
-- `has_analyses(self, step_type: 'str') -> 'bool'`
-  - Check if any analyses are registered for a workflow step type.
-- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'`
-  - Register an analysis module for a workflow step type.
+- `get_all_step_types(self) -> 'List[str]'` - Get all registered workflow step types.
+- `get_analyses(self, step_type: 'str') -> 'List[AnalysisConfig]'` - Get all analysis configurations for a workflow step type.
+- `has_analyses(self, step_type: 'str') -> 'bool'` - Check if any analyses are registered for a workflow step type.
+- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'` - Register an analysis module for a workflow step type.
 
 ### get_default_registry() -> 'AnalysisRegistry'
 
@@ -2814,18 +2664,12 @@ high-level summaries for analysis overview.
 
 **Methods:**
 
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze and summarize all results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze and display graph construction results.
-- `analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze and display network statistics for a specific step.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display summary analysis.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
+- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]` - Analyze and summarize all results.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
+- `analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None` - Analyze and display graph construction results.
+- `analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None` - Analyze and display network statistics for a specific step.
+- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None` - Display summary analysis.
+- `get_description(self) -> str` - Get a description of what this analyzer does.
 
 ---
 

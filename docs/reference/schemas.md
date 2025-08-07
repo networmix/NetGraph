@@ -1,12 +1,12 @@
 # JSON Schema Validation
 
-> **📚 Quick Navigation:**
->
-> - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
-> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
-> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
-> - **[API Reference](api.md)** - Python API for programmatic scenario creation
-> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+Quick links:
+
+- [DSL Reference](dsl.md) — YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
+- [CLI Reference](cli.md) — command-line tools for running scenarios
+- [API Reference](api.md) — Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
 NetGraph includes JSON Schema definitions for YAML scenario files, providing IDE validation, autocompletion, and automated testing.
 
@@ -23,7 +23,7 @@ The schema validates:
 - Top-level section organization
 - Basic constraint checking
 
-**Limitations**: Runtime validation in `ngraph/scenario.py` is authoritative. Some YAML may pass schema validation but fail at runtime due to business logic constraints.
+Limitations: runtime validation in `ngraph/scenario.py` is authoritative. Some YAML may pass schema validation but fail at runtime due to business logic constraints.
 
 ## Schema Validation Rules
 
@@ -127,4 +127,4 @@ jsonschema.validate(data, schema)
 4. Run `make test` to verify schema tests
 5. Update documentation
 
-**Authority**: Code implementation in `ngraph/scenario.py` and `ngraph/blueprints.py` is authoritative, not the schema.
+Authority: code implementation in `ngraph/scenario.py` and `ngraph/blueprints.py` is authoritative, not the schema.

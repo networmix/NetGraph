@@ -17,6 +17,166 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
+def _normalize_markdown_lists(markdown: str) -> str:
+    """Normalize common Markdown issues in free-form docstrings.
+
+    Handles:
+    - MD032: Ensure blank lines before/after lists
+    - MD004: Enforce dash-style bullets ("- ") over "* " or "+ "
+    - MD007: Reduce excessive indentation for list items (aim for 0 or 2 spaces)
+    - MD012: Collapse multiple blank lines into a single blank line
+
+    Skips transformations inside fenced code blocks.
+
+    Args:
+        markdown: Raw markdown text, possibly taken from docstrings.
+
+    Returns:
+        Normalized markdown text.
+    """
+    lines = markdown.splitlines()
+    in_code_fence = False
+    normalized_lines: list[str] = []
+
+    def is_list_item(candidate: str) -> tuple[bool, str]:
+        stripped = candidate.lstrip()
+        if stripped.startswith(("- ", "* ", "+ ")):
+            return True, "ul"
+        # ordered list: 1. item
+        i = 0
+        while i < len(stripped) and stripped[i].isdigit():
+            i += 1
+        if (
+            i > 0
+            and i + 1 < len(stripped)
+            and stripped[i] == "."
+            and stripped[i + 1] == " "
+        ):
+            return True, "ol"
+        return False, ""
+
+    def previous_nonblank_index(out: list[str]) -> int | None:
+        for idx in range(len(out) - 1, -1, -1):
+            if out[idx].strip() != "":
+                return idx
+        return None
+
+    def previous_list_indent(out: list[str]) -> int | None:
+        for idx in range(len(out) - 1, -1, -1):
+            candidate = out[idx]
+            if is_list_item(candidate)[0]:
+                return len(candidate) - len(candidate.lstrip())
+            if candidate.strip() != "":
+                # Hit content; stop searching
+                return None
+        return None
+
+    for raw_line in lines:
+        line = raw_line
+        stripped = line.lstrip()
+
+        # Track fenced code blocks (``` or ~~~)
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_code_fence = not in_code_fence
+            normalized_lines.append(line)
+            continue
+
+        if in_code_fence:
+            normalized_lines.append(line)
+            continue
+
+        # Enforce dash-style bullets for UL (MD004)
+        if stripped.startswith("* ") or stripped.startswith("+ "):
+            indent_len = len(line) - len(stripped)
+            line = (" " * indent_len) + "- " + stripped[2:]
+            stripped = line.lstrip()
+
+        # Detect list items
+        is_list, list_kind = is_list_item(line)
+
+        # Ensure blank line before a list (MD032)
+        if is_list:
+            prev_idx = previous_nonblank_index(normalized_lines)
+            if prev_idx is not None:
+                prev_line = normalized_lines[prev_idx]
+                if prev_line.strip() != "" and not is_list_item(prev_line)[0]:
+                    normalized_lines.append("")
+
+        # Reduce excessive indentation for list items (MD007, MD005 consistency)
+        if is_list:
+            indent_len = len(line) - len(stripped)
+            # Use previous list item's indent if present for consistency; else top-level 0
+            prev_indent = previous_list_indent(normalized_lines)
+            desired_indent = prev_indent if prev_indent is not None else 0
+            if indent_len != desired_indent:
+                # Normalize to desired indent while preserving marker and text
+                if (
+                    stripped.startswith("- ")
+                    or stripped.startswith("* ")
+                    or stripped.startswith("+ ")
+                ):
+                    marker_and_text = stripped
+                else:
+                    # ordered list: keep the existing numbering to avoid MD029 style conflicts
+                    marker_and_text = stripped
+                line = (" " * desired_indent) + marker_and_text
+
+        normalized_lines.append(line)
+
+    # Ensure blank line after list blocks (MD032) and collapse multiple blanks (MD012)
+    post: list[str] = []
+    i = 0
+    while i < len(normalized_lines):
+        current = normalized_lines[i]
+        post.append(current)
+        # Add blank line after a list block if next non-list, non-blank starts
+        if is_list_item(current)[0]:
+            j = i + 1
+            # Collect contiguous list block
+            while j < len(normalized_lines) and (
+                normalized_lines[j].strip() == ""
+                or is_list_item(normalized_lines[j])[0]
+            ):
+                post.append(normalized_lines[j])
+                i = j
+                j += 1
+            if j < len(normalized_lines):
+                next_stripped = normalized_lines[j].strip()
+                if next_stripped != "" and not is_list_item(normalized_lines[j])[0]:
+                    if post and post[-1].strip() != "":
+                        post.append("")
+        i += 1
+
+    # Collapse multiple blank lines to a single blank line (MD012)
+    collapsed: list[str] = []
+    for ln in post:
+        if ln.strip() == "" and collapsed and collapsed[-1].strip() == "":
+            continue
+        collapsed.append(ln)
+
+    # Normalize emphasis spacing (MD037) outside code and inline code spans
+    import re
+
+    def fix_emphasis(line: str) -> str:
+        # Skip lines containing backticks to avoid touching code spans
+        if "`" in line:
+            return line
+        # Bold asterisks
+        line = re.sub(r"\*\*\s+([^*][^*]*?)\s+\*\*", r"**\\1**", line)
+        # Italic asterisks (avoid interfering with bold by requiring not '**')
+        line = re.sub(r"(?<!\*)\*\s+([^*][^*]*?)\s+\*(?!\*)", r"*\\1*", line)
+        # Bold underscores
+        line = re.sub(r"__\s+([^_][^_]*?)\s+__", r"__\\1__", line)
+        # Italic underscores (avoid double underscores)
+        line = re.sub(r"(?<!_)_\s+([^_][^_]*?)\s+_(?!_)", r"_\\1_", line)
+        return line
+
+    final_lines = [fix_emphasis(line_text) for line_text in collapsed]
+
+    return "\n".join(final_lines)
+
+
 # Add the current directory to Python path for development installs
 if os.path.exists("ngraph"):
     sys.path.insert(0, ".")
@@ -154,7 +314,8 @@ def document_module(module_name):
 
     # Module docstring
     if module.__doc__:
-        doc += f"{module.__doc__.strip()}\n\n"
+        docstring = _normalize_markdown_lists(module.__doc__.strip())
+        doc += f"{docstring}\n\n"
 
     # Get classes and functions defined in this module
     classes = []
@@ -170,28 +331,33 @@ def document_module(module_name):
     # Document classes
     for cls_info in classes:
         doc += f"### {cls_info['name']}\n\n"
-        doc += f"{cls_info['doc']}\n\n"
+        doc += f"{_normalize_markdown_lists(cls_info['doc'])}\n\n"
 
         if cls_info["attributes"]:
             doc += "**Attributes:**\n\n"
             for attr in cls_info["attributes"]:
                 type_info = f" ({attr['type']})" if attr["type"] != "typing.Any" else ""
                 default_info = f" = {attr['default']}" if attr["default"] else ""
+                # Keep attributes as a single-level list line to satisfy Markdown linters
                 doc += f"- `{attr['name']}`{type_info}{default_info}\n"
             doc += "\n"
 
         if cls_info["methods"]:
             doc += "**Methods:**\n\n"
             for method in cls_info["methods"]:
-                doc += f"- `{method['name']}{method['signature']}`\n"
+                # Avoid nested list items to satisfy Markdown linters (MD007)
                 if method["doc"] and method["doc"] != "No documentation available.":
-                    doc += f"  - {method['doc']}\n"
+                    doc += (
+                        f"- `{method['name']}{method['signature']}` - {method['doc']}\n"
+                    )
+                else:
+                    doc += f"- `{method['name']}{method['signature']}`\n"
             doc += "\n"
 
     # Document functions
     for func_info in functions:
         doc += f"### {func_info['name']}{func_info['signature']}\n\n"
-        doc += f"{func_info['doc']}\n\n"
+        doc += f"{_normalize_markdown_lists(func_info['doc'])}\n\n"
 
     doc += "---\n\n"
     return doc
@@ -215,21 +381,23 @@ def generate_api_documentation(output_to_file=False):
 
     # Generate header
     timestamp = datetime.now().strftime("%B %d, %Y at %H:%M UTC")
-    header = f"""# NetGraph API Reference (Auto-Generated)
+    header = f"""<!-- markdownlint-disable MD007 MD032 MD029 MD050 MD004 MD052 MD012 -->
+
+# NetGraph API Reference (Auto-Generated)
 
 This is the complete auto-generated API documentation for NetGraph.
-For a curated, example-driven API guide, see **[api.md](api.md)**.
+For a curated, example-driven API guide, see [api.md](api.md).
 
-> **📋 Documentation Types:**
+Quick links:
 
-> - **[Main API Guide (api.md)](api.md)** - Curated examples and usage patterns
-> - **This Document (api-full.md)** - Complete auto-generated reference
-> - **[CLI Reference](cli.md)** - Command-line interface
-> - **[DSL Reference](dsl.md)** - YAML syntax guide
+- [Main API Guide (api.md)](api.md)
+- [This Document (api-full.md)](api-full.md)
+- [CLI Reference](cli.md)
+- [DSL Reference](dsl.md)
 
-**Generated from source code on:** {timestamp}
+Generated from source code on: {timestamp}
 
-**Modules auto-discovered:** {len(modules)}
+Modules auto-discovered: {len(modules)}
 
 ---
 

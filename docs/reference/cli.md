@@ -1,11 +1,11 @@
 # Command Line Interface
 
-> **📚 Quick Navigation:**
->
-> - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
-> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
-> - **[API Reference](api.md)** - Python API for programmatic scenario creation
-> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+Quick links:
+
+- [DSL Reference](dsl.md) — YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
+- [API Reference](api.md) — Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
 NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios directly from the terminal.
 
@@ -212,8 +212,8 @@ python -m ngraph run my_network.yaml --stdout
 ### Running Test Scenarios
 
 ```bash
-# Run one of the included test scenarios with results export
-python -m ngraph run scenarios/simple.yaml --results results.json
+# Run one of the included scenarios with results export
+python -m ngraph run scenarios/square_mesh.yaml --results results.json
 ```
 
 ### Filtering Results by Step Names
@@ -428,9 +428,3 @@ The `inspect` command will catch common issues like:
 - Incorrect node/link patterns
 - Workflow step configuration errors
 - Risk group and policy definition problems
-
-## See Also
-
-- **[DSL Reference](dsl.md)** - Scenario file syntax and structure
-- **[API Reference](api.md)** - Python API for programmatic access
-- **[Tutorial](../getting-started/tutorial.md)** - Step-by-step guide to creating scenarios

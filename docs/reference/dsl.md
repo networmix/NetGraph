@@ -1,11 +1,11 @@
 # Domain-Specific Language (DSL)
 
-> **📚 Quick Navigation:**
->
-> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
-> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
-> - **[API Reference](api.md)** - Python API for programmatic scenario creation
-> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+Quick links:
+
+- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
+- [CLI Reference](cli.md) — command-line tools for running scenarios
+- [API Reference](api.md) — Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
 This document describes the DSL for defining network scenarios in NetGraph. Scenarios are YAML files that describe network topology, traffic demands, and analysis workflows.
 
@@ -438,7 +438,7 @@ workflow:
 - `NetworkStats`: Compute network statistics
 - `CapacityEnvelopeAnalysis`: Monte Carlo capacity analysis
 
-> **📖 Complete Workflow Documentation:** See [Workflow Reference](workflow.md) for detailed configuration.
+See [Workflow Reference](workflow.md) for detailed configuration.
 
 ## Path Matching Regex Syntax
 

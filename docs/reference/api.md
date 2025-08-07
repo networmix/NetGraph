@@ -1,11 +1,11 @@
 # API Reference
 
-> **📚 Quick Navigation:**
->
-> - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
-> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
-> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
-> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+Quick links:
+
+- [DSL Reference](dsl.md) — YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
+- [CLI Reference](cli.md) — command-line tools for running scenarios
+- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
 This section provides a curated guide to NetGraph's Python API, organized by typical usage patterns.
 

@@ -120,11 +120,11 @@ This creates baseline capacity measurements alongside failure scenario results, 
 - Analysis of failure impact magnitude
 - Identification of failure-resistant flow paths
 
-## Key Benefits
+## Key Properties
 
 1. **Immutability**: Base network remains unchanged during analysis
 2. **Concurrency**: Multiple views can analyze the same network simultaneously
-3. **Performance**: Selective caching provides ~30x speedup for repeated operations
+3. **Caching**: Reuses filtered graphs across repeated operations to avoid recomputation
 4. **Consistency**: Combines scenario-disabled and analysis-excluded elements
 
 ## Best Practices

@@ -1,11 +1,11 @@
 # Workflow Reference
 
-> **📚 Quick Navigation:**
->
-> - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
-> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
-> - **[API Reference](api.md)** - Python API for programmatic scenario creation
-> - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
+Quick links:
+
+- [DSL Reference](dsl.md) — YAML syntax for scenario definition
+- [CLI Reference](cli.md) — command-line tools for running scenarios
+- [API Reference](api.md) — Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
 This document describes NetGraph workflows - analysis execution pipelines that perform capacity analysis, failure simulation, and network statistics computation.
 

@@ -15,7 +15,7 @@ We'll create two separate 3-tier Clos networks and analyze the maximum flow capa
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.lib.flow_policy import FlowPlacement
+from ngraph.lib.algorithms.base import FlowPlacement
 
 scenario_yaml = """
 blueprints:
