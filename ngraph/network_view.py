@@ -160,10 +160,10 @@ class NetworkView:
         return cache[add_reverse]
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List["Node"]]:
-        """Select and group visible nodes matching a regex pattern.
+        """Select and group visible nodes using regex or attribute directive.
 
         Args:
-            path: Regular expression pattern to match node names.
+            path: Regular expression pattern or ``"attr:<name>"`` directive.
 
         Returns:
             Dictionary mapping group labels to lists of matching visible nodes.

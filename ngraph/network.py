@@ -224,19 +224,31 @@ class Network:
         return graph
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
-        """Select and group nodes whose names match a given regular expression.
+        """Select and group nodes using a regex pattern or attribute directive.
 
-        Uses re.match(), so the pattern is anchored at the start of the node name.
-        If the pattern includes capturing groups, the group label is formed by
-        joining all non-None captures with '|'. If no capturing groups exist,
-        the group label is the original pattern string.
+        If ``path`` begins with ``"attr:"``, the remainder specifies an attribute
+        name. Nodes are grouped by the value of this attribute; nodes without the
+        attribute are ignored. Otherwise, ``path`` is treated as a regular
+        expression anchored at the start of each node name. If the pattern
+        includes capturing groups, the group label joins captures with ``"|"``.
+        Without capturing groups, the label is the pattern string itself.
 
         Args:
-            path (str): A Python regular expression pattern (e.g., "^foo", "bar(\\d+)", etc.).
+            path: Regular expression pattern or ``"attr:<name>"`` directive.
 
         Returns:
-            Dict[str, List[Node]]: A mapping from group label -> list of matching nodes.
+            Mapping from group label to list of matching nodes.
         """
+        if path.startswith("attr:"):
+            attr_name = path[5:]
+            groups_map: Dict[str, List[Node]] = {}
+            for node in self.nodes.values():
+                value = node.attrs.get(attr_name)
+                if value is not None:
+                    label = str(value)
+                    groups_map.setdefault(label, []).append(node)
+            return groups_map
+
         pattern = re.compile(path)
         groups_map: Dict[str, List[Node]] = {}
 

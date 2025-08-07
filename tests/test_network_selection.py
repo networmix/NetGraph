@@ -97,6 +97,21 @@ class TestNodeSelection:
         # Should have groups for each combination found
         assert len(node_groups) >= 2
 
+    def test_select_node_groups_by_attr(self):
+        """Test grouping nodes by attribute value."""
+        net = Network()
+        net.add_node(Node("r1", attrs={"metro": "SEA"}))
+        net.add_node(Node("r2", attrs={"metro": "SEA"}))
+        net.add_node(Node("r3", attrs={"metro": "SFO"}))
+
+        groups = net.select_node_groups_by_path("attr:metro")
+
+        assert set(groups) == {"SEA", "SFO"}
+        sea = {n.name for n in groups["SEA"]}
+        assert sea == {"r1", "r2"}
+        sfo = {n.name for n in groups["SFO"]}
+        assert sfo == {"r3"}
+
 
 class TestLinkUtilities:
     """Tests for link utility methods."""

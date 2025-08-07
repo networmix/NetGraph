@@ -428,6 +428,23 @@ class TestNetworkViewSelectNodeGroups:
         # Should return empty dict since all dc1 nodes are hidden
         assert len(groups) == 0
 
+    def test_select_by_attribute(self):
+        """Test grouping visible nodes by attribute value."""
+        net = Network()
+        net.add_node(Node("a", attrs={"role": "core"}))
+        net.add_node(Node("b", attrs={"role": "core"}))
+        net.add_node(Node("c", attrs={"role": "edge"}))
+        net.nodes["b"].disabled = True
+        view = NetworkView(_base=net)
+
+        groups = view.select_node_groups_by_path("attr:role")
+
+        assert set(groups) == {"core", "edge"}
+        core = {n.name for n in groups["core"]}
+        assert core == {"a"}
+        edge = {n.name for n in groups["edge"]}
+        assert edge == {"c"}
+
 
 class TestNetworkViewEdgeCases:
     """Test NetworkView edge cases and error conditions."""
