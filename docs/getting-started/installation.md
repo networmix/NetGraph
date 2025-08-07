@@ -15,28 +15,28 @@ NetGraph can be used in two ways:
 
 1. Clone the repository:
 
-   ```bash
-   git clone https://github.com/networmix/NetGraph
-   ```
+    ```bash
+    git clone https://github.com/networmix/NetGraph
+    ```
 
 2. Build the Docker image:
 
-   ```bash
-   cd NetGraph
-   ./run.sh build
-   ```
+    ```bash
+    cd NetGraph
+    ./run.sh build
+    ```
 
 3. Start the container with JupyterLab server:
 
-   ```bash
-   ./run.sh run
-   ```
+    ```bash
+    ./run.sh run
+    ```
 
 4. Open the JupyterLab URL in your browser:
 
-   ```bash
-   http://127.0.0.1:8788/
-   ```
+    ```bash
+    http://127.0.0.1:8788/
+    ```
 
 5. Jupyter will show the content of `notebooks` directory and you can start using the provided notebooks (e.g., open scenario_dc.ipynb) or create your own.
 
@@ -62,13 +62,13 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 1. Install the package using pip:
 
-   ```bash
-   pip install ngraph
-   ```
+    ```bash
+    pip install ngraph
+    ```
 
 2. Use the package in your Python code:
 
-   ```python
+    ```python
    from ngraph.scenario import Scenario
 
    scenario_yaml = """

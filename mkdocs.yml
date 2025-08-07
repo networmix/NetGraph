@@ -30,6 +30,7 @@ nav:
   - Reference:
       - DSL: reference/dsl.md
       - CLI: reference/cli.md
+      - Schemas: reference/schemas.md
       - API: reference/api.md
       - API Full: reference/api-full.md
 plugins:

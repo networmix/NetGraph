@@ -6,7 +6,7 @@ In this toy example, we'll create a simple graph with parallel edges and alterna
 
 **Network Topology:**
 
-```
+```text
              [1,1] & [1,2]     [1,1] & [1,2]
       A ─────────────────── B ────────────── C
       │                                      │
@@ -179,6 +179,7 @@ analyze_latency_span(summary.cost_distribution)
 ```
 
 This analysis helps identify:
+
 - **Traffic concentration**: How much traffic uses low vs. high latency paths
 - **Latency span**: The range of latencies experienced by traffic
 - **Performance bottlenecks**: When high-latency paths carry traffic due to capacity constraints

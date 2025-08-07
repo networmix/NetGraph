@@ -1,7 +1,7 @@
 # API Reference
 
 > **📚 Quick Navigation:**
-
+>
 > - **[DSL Reference](dsl.md)** - YAML syntax and scenario definition
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line interface documentation

@@ -1,7 +1,7 @@
 # Command Line Interface
 
 > **📚 Quick Navigation:**
-
+>
 > - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
 > - **[API Reference](api.md)** - Python API for programmatic access
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation

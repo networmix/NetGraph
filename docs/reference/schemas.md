@@ -1,7 +1,7 @@
 # JSON Schema Validation
 
 > **📚 Quick Navigation:**
-
+>
 > - **[DSL Reference](dsl.md)** - YAML syntax and scenario structure
 > - **[API Reference](api.md)** - Python API documentation
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation

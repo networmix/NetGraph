@@ -1,7 +1,7 @@
 # Domain-Specific Language (DSL)
 
 > **📚 Quick Navigation:**
-
+>
 > - **[API Reference](api.md)** - Python API for programmatic scenario creation
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
 > - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
@@ -353,7 +353,8 @@ network:
       target: leaf-1
       link_params:
         attrs:
-          ```
+          hw_component: "Optic400GLR4"  # References optic component
+```
 
 ## `risk_groups` - Hardware Risk Modeling
 
