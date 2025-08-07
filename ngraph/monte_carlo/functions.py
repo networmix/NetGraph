@@ -1,6 +1,6 @@
 """Picklable Monte Carlo analysis functions for FailureManager simulations.
 
-These functions are designed to be used with FailureManager.run_monte_carlo_analysis()
+These functions are designed for use with FailureManager.run_monte_carlo_analysis()
 and follow the pattern: analysis_func(network_view: NetworkView, **kwargs) -> Any.
 
 All functions accept only simple, hashable parameters to ensure compatibility
@@ -32,8 +32,9 @@ def max_flow_analysis(
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
+    include_flow_summary: bool = False,
     **kwargs,
-) -> list[tuple[str, str, float]]:
+) -> list[tuple]:
     """Analyze maximum flow capacity between node groups.
 
     Args:
@@ -43,20 +44,36 @@ def max_flow_analysis(
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: Whether to use shortest paths only.
         flow_placement: Flow placement strategy.
+        include_flow_summary: Whether to collect detailed flow summary data.
 
     Returns:
-        List of (source, sink, capacity) tuples.
+        List of tuples. If include_flow_summary is False: (source, sink, capacity).
+        If include_flow_summary is True: (source, sink, capacity, flow_summary).
     """
-    flows = network_view.max_flow(
-        source_regex,
-        sink_regex,
-        mode=mode,
-        shortest_path=shortest_path,
-        flow_placement=flow_placement,
-    )
-
-    # Convert to serializable format for inter-process communication
-    return [(src, dst, val) for (src, dst), val in flows.items()]
+    if include_flow_summary:
+        # Use max_flow_with_summary to get detailed flow analytics
+        flows = network_view.max_flow_with_summary(
+            source_regex,
+            sink_regex,
+            mode=mode,
+            shortest_path=shortest_path,
+            flow_placement=flow_placement,
+        )
+        # Return with complete FlowSummary data
+        return [
+            (src, dst, val, summary) for (src, dst), (val, summary) in flows.items()
+        ]
+    else:
+        # Use regular max_flow for capacity-only analysis (existing behavior)
+        flows = network_view.max_flow(
+            source_regex,
+            sink_regex,
+            mode=mode,
+            shortest_path=shortest_path,
+            flow_placement=flow_placement,
+        )
+        # Convert to serializable format for inter-process communication
+        return [(src, dst, val) for (src, dst), val in flows.items()]
 
 
 def demand_placement_analysis(

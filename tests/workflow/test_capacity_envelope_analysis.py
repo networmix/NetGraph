@@ -71,6 +71,7 @@ class TestCapacityEnvelopeAnalysis:
         assert step.baseline is False
         assert step.seed is None
         assert step.store_failure_patterns is False
+        assert step.include_flow_summary is False
 
     def test_initialization_custom_values(self):
         """Test CapacityEnvelopeAnalysis initialization with custom values."""
@@ -86,6 +87,7 @@ class TestCapacityEnvelopeAnalysis:
             baseline=True,
             seed=42,
             store_failure_patterns=True,
+            include_flow_summary=True,
         )
 
         assert step.source_path == "^src"
@@ -99,6 +101,7 @@ class TestCapacityEnvelopeAnalysis:
         assert step.baseline is True
         assert step.seed == 42
         assert step.store_failure_patterns is True
+        assert step.include_flow_summary is True
 
     def test_validation_errors(self):
         """Test parameter validation."""
@@ -171,6 +174,7 @@ class TestCapacityEnvelopeAnalysis:
             baseline=False,
             seed=None,
             store_failure_patterns=False,
+            include_flow_summary=False,
         )
 
         # Verify results were processed (just check that the step ran without error)
@@ -229,6 +233,7 @@ class TestCapacityEnvelopeAnalysis:
             baseline=False,
             seed=None,
             store_failure_patterns=True,
+            include_flow_summary=False,
         )
 
         # The test verifies that the FailureManager integration works properly
@@ -278,3 +283,64 @@ class TestCapacityEnvelopeAnalysis:
         envelopes = scenario.results.get(step.name, "capacity_envelopes")
         assert envelopes is not None
         assert "A->C" in envelopes
+
+    @patch("ngraph.workflow.capacity_envelope_analysis.FailureManager")
+    def test_include_flow_summary_functionality(
+        self, mock_failure_manager_class, mock_scenario
+    ):
+        """Test that include_flow_summary parameter is passed through correctly."""
+        # Setup mock FailureManager
+        mock_failure_manager = MagicMock()
+        mock_failure_manager_class.return_value = mock_failure_manager
+
+        # Mock envelope results with flow summary stats
+        mock_envelope_results = MagicMock()
+        mock_envelope = MagicMock()
+        mock_envelope.to_dict.return_value = {
+            "min": 5.0,
+            "max": 5.0,
+            "mean": 5.0,
+            "frequencies": {"5.0": 1},
+            "flow_summary_stats": {
+                "cost_distribution_stats": {
+                    "3.0": {
+                        "mean": 5.0,
+                        "min": 5.0,
+                        "max": 5.0,
+                        "total_samples": 1,
+                        "frequencies": {"5.0": 1},
+                    }
+                },
+                "min_cut_frequencies": {"('A', 'B', 'A|B|test')": 1},
+                "total_flow_summaries": 1,
+            },
+        }
+        mock_envelope_results.envelopes = {"A->C": mock_envelope}
+        mock_envelope_results.failure_patterns = {}
+        mock_failure_manager.run_max_flow_monte_carlo.return_value = (
+            mock_envelope_results
+        )
+
+        # Test with include_flow_summary=True
+        step = CapacityEnvelopeAnalysis(
+            source_path="^A", sink_path="^C", iterations=1, include_flow_summary=True
+        )
+        step.run(mock_scenario)
+
+        # Verify the parameter was passed through correctly
+        mock_failure_manager.run_max_flow_monte_carlo.assert_called_once_with(
+            source_path="^A",
+            sink_path="^C",
+            mode="combine",
+            iterations=1,
+            parallelism=1,
+            shortest_path=False,
+            flow_placement=step.flow_placement,
+            baseline=False,
+            seed=None,
+            store_failure_patterns=False,
+            include_flow_summary=True,  # ← This should be True
+        )
+
+        # Verify that flow summary stats are preserved in the results
+        # The envelope's to_dict method should have been called, preserving flow summary stats

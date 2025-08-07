@@ -49,7 +49,7 @@ class TrafficMatrixSet:
         return self.matrices[name]
 
     def get_default_matrix(self) -> list[TrafficDemand]:
-        """Get the default traffic matrix.
+        """Get default traffic matrix.
 
         Returns the matrix named 'default' if it exists, otherwise returns
         the first matrix if there's only one, otherwise raises an error.
@@ -202,7 +202,7 @@ class FailurePolicySet:
 class CapacityEnvelope:
     """Frequency-based capacity envelope that stores capacity values as frequencies.
 
-    This approach is more memory-efficient for Monte Carlo analysis where we care
+    This approach is memory-efficient for Monte Carlo analysis where we care
     about statistical distributions rather than individual sample order.
 
     Attributes:
@@ -215,6 +215,8 @@ class CapacityEnvelope:
         mean_capacity: Mean capacity across all samples.
         stdev_capacity: Standard deviation of capacity values.
         total_samples: Total number of samples represented.
+        flow_summary_stats: Optional dictionary with aggregated FlowSummary statistics.
+                           Contains cost_distribution_stats and other flow analytics.
     """
 
     source_pattern: str
@@ -226,21 +228,28 @@ class CapacityEnvelope:
     mean_capacity: float
     stdev_capacity: float
     total_samples: int
+    flow_summary_stats: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_values(
-        cls, source_pattern: str, sink_pattern: str, mode: str, values: List[float]
+        cls,
+        source_pattern: str,
+        sink_pattern: str,
+        mode: str,
+        values: List[float],
+        flow_summaries: List[Any] | None = None,
     ) -> "CapacityEnvelope":
-        """Create frequency-based envelope from a list of capacity values.
+        """Create frequency-based envelope from capacity values and optional flow summaries.
 
         Args:
             source_pattern: Source node pattern.
             sink_pattern: Sink node pattern.
             mode: Flow analysis mode.
             values: List of capacity values from Monte Carlo iterations.
+            flow_summaries: Optional list of FlowSummary objects for detailed analytics.
 
         Returns:
-            CapacityEnvelope instance.
+            CapacityEnvelope instance with capacity statistics and optional flow analytics.
         """
         if not values:
             raise ValueError("Cannot create envelope from empty values list")
@@ -270,6 +279,11 @@ class CapacityEnvelope:
         variance = (sum_squares / n) - (mean_capacity * mean_capacity)
         stdev_capacity = variance**0.5
 
+        # Process flow summaries if provided
+        flow_summary_stats = {}
+        if flow_summaries:
+            flow_summary_stats = cls._aggregate_flow_summaries(flow_summaries)
+
         return cls(
             source_pattern=source_pattern,
             sink_pattern=sink_pattern,
@@ -280,11 +294,64 @@ class CapacityEnvelope:
             mean_capacity=mean_capacity,
             stdev_capacity=stdev_capacity,
             total_samples=n,
+            flow_summary_stats=flow_summary_stats,
         )
+
+    @classmethod
+    def _aggregate_flow_summaries(cls, flow_summaries: List[Any]) -> Dict[str, Any]:
+        """Aggregate FlowSummary objects into statistical summaries.
+
+        Args:
+            flow_summaries: List of FlowSummary objects from Monte Carlo iterations.
+
+        Returns:
+            Dictionary with aggregated flow analytics including cost distribution statistics.
+        """
+        from collections import defaultdict
+
+        # Aggregate cost distributions
+        cost_data = defaultdict(list)  # cost -> list of flow volumes
+        min_cut_frequencies = defaultdict(int)  # edge -> frequency count
+
+        valid_summaries = [s for s in flow_summaries if s is not None]
+        if not valid_summaries:
+            return {}
+
+        for summary in valid_summaries:
+            # Process cost distribution
+            if hasattr(summary, "cost_distribution") and summary.cost_distribution:
+                for cost, flow_volume in summary.cost_distribution.items():
+                    cost_data[cost].append(flow_volume)
+
+            # Process min cut edges
+            if hasattr(summary, "min_cut") and summary.min_cut:
+                for edge in summary.min_cut:
+                    edge_key = str(
+                        edge
+                    )  # Convert edge tuple to string for JSON serialization
+                    min_cut_frequencies[edge_key] += 1
+
+        # Calculate cost distribution statistics
+        cost_distribution_stats = {}
+        for cost, volumes in cost_data.items():
+            if volumes:
+                cost_distribution_stats[float(cost)] = {
+                    "mean": sum(volumes) / len(volumes),
+                    "min": min(volumes),
+                    "max": max(volumes),
+                    "total_samples": len(volumes),
+                    "frequencies": {vol: volumes.count(vol) for vol in set(volumes)},
+                }
+
+        return {
+            "cost_distribution_stats": cost_distribution_stats,
+            "min_cut_frequencies": dict(min_cut_frequencies),
+            "total_flow_summaries": len(valid_summaries),
+        }
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        return {
+        result = {
             "source": self.source_pattern,
             "sink": self.sink_pattern,
             "mode": self.mode,
@@ -295,6 +362,12 @@ class CapacityEnvelope:
             "stdev": self.stdev_capacity,
             "total_samples": self.total_samples,
         }
+
+        # Include flow summary stats if available
+        if self.flow_summary_stats:
+            result["flow_summary_stats"] = self.flow_summary_stats
+
+        return result
 
     def get_percentile(self, percentile: float) -> float:
         """Calculate percentile from frequency distribution.

@@ -24,10 +24,11 @@ YAML Configuration Example:
         baseline: true                         # Optional: Run first iteration without failures
         seed: 42                               # Optional: Seed for reproducible results
         store_failure_patterns: false          # Optional: Store failure patterns in results
+        include_flow_summary: false            # Optional: Collect detailed flow summary statistics
     ```
 
 Results stored in scenario.results:
-    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data
+    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data with optional flow summary statistics
     - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
 """
 
@@ -67,6 +68,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         baseline: Whether to run first iteration without failures as baseline.
         seed: Optional seed for reproducible results.
         store_failure_patterns: Whether to store failure patterns in results.
+        include_flow_summary: Whether to collect detailed flow summary statistics (cost distribution, min-cut edges).
     """
 
     source_path: str = ""
@@ -80,6 +82,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     baseline: bool = False
     seed: int | None = None
     store_failure_patterns: bool = False
+    include_flow_summary: bool = False
 
     def __post_init__(self):
         """Validate parameters and convert string flow_placement to enum."""
@@ -116,7 +119,8 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         logger.debug(
             f"Analysis parameters: source_path={self.source_path}, sink_path={self.sink_path}, "
             f"mode={self.mode}, iterations={self.iterations}, parallelism={self.parallelism}, "
-            f"failure_policy={self.failure_policy}, baseline={self.baseline}"
+            f"failure_policy={self.failure_policy}, baseline={self.baseline}, "
+            f"include_flow_summary={self.include_flow_summary}"
         )
 
         # Create FailureManager instance
@@ -141,6 +145,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             baseline=self.baseline,
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
+            include_flow_summary=self.include_flow_summary,
         )
 
         logger.info(f"Generated {len(envelope_results.envelopes)} capacity envelopes")

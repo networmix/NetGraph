@@ -218,4 +218,5 @@ This analysis helps identify:
 - **[Tutorial](../getting-started/tutorial.md)** - Build network scenarios
 - **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
 - **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
+- **[Workflow Reference](../reference/workflow.md)** - Learn about analysis workflows and Monte Carlo simulation
 - **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage

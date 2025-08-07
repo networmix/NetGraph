@@ -19,4 +19,5 @@ Load an entire scenario from a single YAML file (including topology, failure pol
 ## Documentation
 
 - **[DSL Reference](reference/dsl.md)** - YAML syntax guide
+- **[Workflow Reference](reference/workflow.md)** - Analysis workflow configuration
 - **[API Reference](reference/api.md)** - Python API documentation

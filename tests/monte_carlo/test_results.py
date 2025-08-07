@@ -259,6 +259,177 @@ class TestCapacityEnvelopeResults:
         assert summary["iterations"] == 100
         assert summary["metadata"] == {"test": "value"}
 
+    def test_get_cost_distribution(self) -> None:
+        """Test get_cost_distribution method."""
+        # Mock envelope with flow summary stats
+        mock_envelope = MagicMock()
+        mock_envelope.flow_summary_stats = {
+            "cost_distribution_stats": {
+                2.0: {"mean": 3.0, "min": 2.0, "max": 4.0, "total_samples": 5},
+                4.0: {"mean": 1.5, "min": 1.0, "max": 2.0, "total_samples": 3},
+            }
+        }
+
+        envelopes = {"datacenter->edge": mock_envelope}
+        result = CapacityEnvelopeResults(
+            envelopes=envelopes,  # type: ignore
+            failure_patterns={},
+            source_pattern="datacenter.*",
+            sink_pattern="edge.*",
+            mode="combine",
+            iterations=100,
+            metadata={},
+        )
+
+        cost_dist = result.get_cost_distribution("datacenter->edge")
+
+        assert 2.0 in cost_dist
+        assert 4.0 in cost_dist
+        assert cost_dist[2.0]["mean"] == 3.0
+        assert cost_dist[4.0]["total_samples"] == 3
+
+    def test_get_cost_distribution_empty(self) -> None:
+        """Test get_cost_distribution with no flow summary stats."""
+        mock_envelope = MagicMock()
+        mock_envelope.flow_summary_stats = {}
+
+        envelopes = {"datacenter->edge": mock_envelope}
+        result = CapacityEnvelopeResults(
+            envelopes=envelopes,  # type: ignore
+            failure_patterns={},
+            source_pattern="datacenter.*",
+            sink_pattern="edge.*",
+            mode="combine",
+            iterations=100,
+            metadata={},
+        )
+
+        cost_dist = result.get_cost_distribution("datacenter->edge")
+        assert cost_dist == {}
+
+    def test_get_min_cut_frequencies(self) -> None:
+        """Test get_min_cut_frequencies method."""
+        mock_envelope = MagicMock()
+        mock_envelope.flow_summary_stats = {
+            "min_cut_frequencies": {
+                "('A', 'B', 'link1')": 15,
+                "('B', 'C', 'link2')": 8,
+            }
+        }
+
+        envelopes = {"datacenter->edge": mock_envelope}
+        result = CapacityEnvelopeResults(
+            envelopes=envelopes,  # type: ignore
+            failure_patterns={},
+            source_pattern="datacenter.*",
+            sink_pattern="edge.*",
+            mode="combine",
+            iterations=100,
+            metadata={},
+        )
+
+        min_cuts = result.get_min_cut_frequencies("datacenter->edge")
+
+        assert "('A', 'B', 'link1')" in min_cuts
+        assert min_cuts["('A', 'B', 'link1')"] == 15
+        assert min_cuts["('B', 'C', 'link2')"] == 8
+
+    def test_cost_distribution_summary(self) -> None:
+        """Test cost_distribution_summary method."""
+        # Mock multiple envelopes with cost distribution data
+        mock_envelope1 = MagicMock()
+        mock_envelope1.flow_summary_stats = {
+            "cost_distribution_stats": {
+                2.0: {
+                    "mean": 5.0,
+                    "min": 4.0,
+                    "max": 6.0,
+                    "total_samples": 10,
+                    "frequencies": {"5.0": 8, "4.0": 2},
+                },
+                3.0: {
+                    "mean": 3.0,
+                    "min": 3.0,
+                    "max": 3.0,
+                    "total_samples": 5,
+                    "frequencies": {"3.0": 5},
+                },
+            }
+        }
+
+        mock_envelope2 = MagicMock()
+        mock_envelope2.flow_summary_stats = {
+            "cost_distribution_stats": {
+                1.5: {
+                    "mean": 2.0,
+                    "min": 1.5,
+                    "max": 2.5,
+                    "total_samples": 8,
+                    "frequencies": {"2.0": 6, "1.5": 2},
+                },
+            }
+        }
+
+        envelopes = {
+            "datacenter->edge": mock_envelope1,
+            "edge->datacenter": mock_envelope2,
+        }
+        result = CapacityEnvelopeResults(
+            envelopes=envelopes,  # type: ignore
+            failure_patterns={},
+            source_pattern="datacenter.*",
+            sink_pattern="edge.*",
+            mode="combine",
+            iterations=100,
+            metadata={},
+        )
+
+        df = result.cost_distribution_summary()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 3  # 2 cost levels in envelope1 + 1 in envelope2
+
+        expected_columns = [
+            "flow_key",
+            "cost",
+            "mean_flow",
+            "min_flow",
+            "max_flow",
+            "total_samples",
+            "unique_values",
+        ]
+        for col in expected_columns:
+            assert col in df.columns
+
+        # Check specific data
+        cost_2_row = df[
+            (df["flow_key"] == "datacenter->edge") & (df["cost"] == 2.0)
+        ].iloc[0]
+        assert cost_2_row["mean_flow"] == 5.0
+        assert cost_2_row["total_samples"] == 10
+        assert cost_2_row["unique_values"] == 2  # 2 unique frequencies
+
+    def test_cost_distribution_summary_empty(self) -> None:
+        """Test cost_distribution_summary with no cost distribution data."""
+        mock_envelope = MagicMock()
+        mock_envelope.flow_summary_stats = {}
+
+        envelopes = {"datacenter->edge": mock_envelope}
+        result = CapacityEnvelopeResults(
+            envelopes=envelopes,  # type: ignore
+            failure_patterns={},
+            source_pattern="datacenter.*",
+            sink_pattern="edge.*",
+            mode="combine",
+            iterations=100,
+            metadata={},
+        )
+
+        df = result.cost_distribution_summary()
+
+        assert isinstance(df, pd.DataFrame)
+        assert len(df) == 0
+
 
 class TestDemandPlacementResults:
     """Test DemandPlacementResults class."""

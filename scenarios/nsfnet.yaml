@@ -199,6 +199,7 @@ workflow:
     baseline: true
     failure_policy: single_random_link_failure
     store_failure_patterns: true
+    include_flow_summary: true
   - step_type: CapacityEnvelopeAnalysis
     name: ce_2
     source_path: "^(.+)"
@@ -211,3 +212,4 @@ workflow:
     baseline: true
     failure_policy: availability_1992
     store_failure_patterns: true
+    include_flow_summary: true

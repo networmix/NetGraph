@@ -1,6 +1,6 @@
 """Structured result objects for FailureManager analysis functions.
 
-These classes provide convenient interfaces for accessing Monte Carlo analysis
+These classes provide interfaces for accessing Monte Carlo analysis
 results from FailureManager convenience methods. Visualization is handled by
 specialized analyzer classes in the workflow.analysis module.
 """
@@ -23,13 +23,13 @@ class CapacityEnvelopeResults:
     For visualization, use CapacityMatrixAnalyzer from ngraph.workflow.analysis.
 
     Attributes:
-        envelopes: Dictionary mapping flow keys to CapacityEnvelope objects
-        failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects
-        source_pattern: Source node regex pattern used in analysis
-        sink_pattern: Sink node regex pattern used in analysis
-        mode: Flow analysis mode ("combine" or "pairwise")
-        iterations: Number of Monte Carlo iterations performed
-        metadata: Additional analysis metadata from FailureManager
+        envelopes: Dictionary mapping flow keys to CapacityEnvelope objects.
+        failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects.
+        source_pattern: Source node regex pattern used in analysis.
+        sink_pattern: Sink node regex pattern used in analysis.
+        mode: Flow analysis mode ("combine" or "pairwise").
+        iterations: Number of Monte Carlo iterations performed.
+        metadata: Additional analysis metadata from FailureManager.
     """
 
     envelopes: Dict[str, CapacityEnvelope]
@@ -44,7 +44,7 @@ class CapacityEnvelopeResults:
         """Get list of all flow keys in results.
 
         Returns:
-            List of flow keys (e.g., ["datacenter->edge", "edge->datacenter"])
+            List of flow keys (e.g., ["datacenter->edge", "edge->datacenter"]).
         """
         return list(self.envelopes.keys())
 
@@ -52,13 +52,13 @@ class CapacityEnvelopeResults:
         """Get CapacityEnvelope for a specific flow.
 
         Args:
-            flow_key: Flow key (e.g., "datacenter->edge")
+            flow_key: Flow key (e.g., "datacenter->edge").
 
         Returns:
             CapacityEnvelope object with frequency-based statistics
 
         Raises:
-            KeyError: If flow_key not found in results
+            KeyError: If flow_key not found in results.
         """
         if flow_key not in self.envelopes:
             available = ", ".join(self.envelopes.keys())
@@ -125,6 +125,60 @@ class CapacityEnvelopeResults:
 
         return pd.DataFrame(data)
 
+    def get_cost_distribution(self, flow_key: str) -> Dict[float, Dict[str, float]]:
+        """Get cost distribution statistics for a specific flow.
+
+        Args:
+            flow_key: Flow key (e.g., "datacenter->edge").
+
+        Returns:
+            Dictionary mapping cost values to their statistics
+            (mean, min, max, total_samples, frequencies)
+
+        Raises:
+            KeyError: If flow_key not found in results.
+        """
+        envelope = self.get_envelope(flow_key)
+        return envelope.flow_summary_stats.get("cost_distribution_stats", {})
+
+    def get_min_cut_frequencies(self, flow_key: str) -> Dict[str, int]:
+        """Get min-cut edge frequencies for a specific flow.
+
+        Args:
+            flow_key: Flow key (e.g., "datacenter->edge").
+
+        Returns:
+            Dictionary mapping edge identifiers to occurrence frequencies
+
+        Raises:
+            KeyError: If flow_key not found in results.
+        """
+        envelope = self.get_envelope(flow_key)
+        return envelope.flow_summary_stats.get("min_cut_frequencies", {})
+
+    def cost_distribution_summary(self) -> pd.DataFrame:
+        """Get cost distribution summary across all flows.
+
+        Returns:
+            DataFrame with cost distribution statistics for all flows
+        """
+        data = []
+        for flow_key, envelope in self.envelopes.items():
+            cost_stats = envelope.flow_summary_stats.get("cost_distribution_stats", {})
+            for cost, stats in cost_stats.items():
+                row = {
+                    "flow_key": flow_key,
+                    "cost": cost,
+                    "mean_flow": stats.get("mean", 0.0),
+                    "min_flow": stats.get("min", 0.0),
+                    "max_flow": stats.get("max", 0.0),
+                    "total_samples": stats.get("total_samples", 0),
+                    "unique_values": len(stats.get("frequencies", {})),
+                }
+                data.append(row)
+
+        return pd.DataFrame(data)
+
     def export_summary(self) -> Dict[str, Any]:
         """Export summary for serialization.
 
@@ -142,6 +196,11 @@ class CapacityEnvelopeResults:
                 key: fp.to_dict() for key, fp in self.failure_patterns.items()
             },
             "summary_statistics": self.summary_statistics(),
+            "cost_distribution_summary": self.cost_distribution_summary().to_dict(
+                "records"
+            )
+            if not self.cost_distribution_summary().empty
+            else [],
         }
 
 
@@ -267,7 +326,7 @@ class SensitivityResults:
         """Get list of all flow keys in results.
 
         Returns:
-            List of flow keys (e.g., ["datacenter->edge", "edge->datacenter"])
+            List of flow keys (e.g., ["datacenter->edge", "edge->datacenter"]).
         """
         return list(self.component_scores.keys()) if self.component_scores else []
 
@@ -275,13 +334,13 @@ class SensitivityResults:
         """Get component sensitivity scores for a specific flow.
 
         Args:
-            flow_key: Flow key (e.g., "datacenter->edge")
+            flow_key: Flow key (e.g., "datacenter->edge").
 
         Returns:
             Dictionary mapping component IDs to impact statistics
 
         Raises:
-            KeyError: If flow_key not found in results
+            KeyError: If flow_key not found in results.
         """
         if not self.component_scores or flow_key not in self.component_scores:
             available = (

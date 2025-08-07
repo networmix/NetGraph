@@ -1,25 +1,25 @@
 """FailureManager for Monte Carlo failure analysis.
 
-This module provides the authoritative failure analysis engine for NetGraph.
-It combines parallel processing, caching, and failure policy handling
-to support both workflow steps and direct notebook usage.
+This module provides the failure analysis engine for NetGraph.
+Combines parallel processing, caching, and failure policy handling
+for workflow steps and direct notebook usage.
 
 The FailureManager provides a generic API for any type of failure analysis.
 
 ## Performance Characteristics
 
 **Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
-P=parallelism. Per-worker caching reduces effective iterations by 60-90% for
-common failure patterns since exclusion sets frequently repeat in Monte Carlo
+P=parallelism. Per-worker caching reduces iterations by 60-90% for
+common failure patterns since exclusion sets repeat in Monte Carlo
 analysis. Network serialization occurs once per worker process, not per iteration.
 
 **Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
 R=result size per iteration, C=cache size. Cache is bounded to prevent memory
 exhaustion with FIFO eviction after 1000 unique patterns per worker.
 
-**Parallelism Trade-offs**: Serial execution avoids IPC overhead for small
+**Parallelism**: Serial execution avoids IPC overhead for small
 iteration counts. Parallel execution benefits from worker caching and CPU
-utilization for larger workloads. Optimal parallelism typically equals CPU
+utilization for larger workloads. Optimal parallelism equals CPU
 cores for analysis-bound workloads.
 """
 
@@ -53,16 +53,16 @@ def _create_cache_key(
     analysis_name: str,
     analysis_kwargs: Dict[str, Any],
 ) -> tuple:
-    """Create a cache key that handles non-hashable objects.
+    """Create cache key for non-hashable objects.
 
     Args:
-        excluded_nodes: Set of excluded node names
-        excluded_links: Set of excluded link IDs
-        analysis_name: Name of the analysis function
-        analysis_kwargs: Analysis function arguments
+        excluded_nodes: Set of excluded node names.
+        excluded_links: Set of excluded link IDs.
+        analysis_name: Name of the analysis function.
+        analysis_kwargs: Analysis function arguments.
 
     Returns:
-        Tuple suitable for use as a cache key
+        Tuple suitable for use as a cache key.
     """
     # Basic components that are always hashable
     base_key = (
@@ -87,14 +87,14 @@ def _create_cache_key(
 
 
 def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
-    """Auto-adjust parallelism based on function characteristics.
+    """Adjust parallelism based on function characteristics.
 
     Args:
-        parallelism: Requested parallelism level
-        analysis_func: The analysis function to check
+        parallelism: Requested parallelism level.
+        analysis_func: Analysis function to check.
 
     Returns:
-        Adjusted parallelism level
+        Adjusted parallelism level.
     """
     # Check if function is defined in __main__ (notebook context)
     if hasattr(analysis_func, "__module__") and analysis_func.__module__ == "__main__":
@@ -131,7 +131,7 @@ class AnalysisFunction(Protocol):
 def _worker_init(network_pickle: bytes) -> None:
     """Initialize worker process with shared network and clear cache.
 
-    Called exactly once per worker process lifetime via ProcessPoolExecutor's
+    Called once per worker process lifetime via ProcessPoolExecutor's
     initializer mechanism. Network is deserialized once per worker (not per task)
     to avoid repeated serialization overhead. Process boundaries provide
     isolation so no cross-contamination is possible.
@@ -150,7 +150,7 @@ def _worker_init(network_pickle: bytes) -> None:
 
 
 def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], set[str]]:
-    """Generic worker that executes any analysis function with caching.
+    """Execute analysis function with caching.
 
     Caches analysis results based on exclusion patterns and analysis parameters
     since many Monte Carlo iterations share the same exclusion sets.
@@ -158,11 +158,11 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 
     Args:
         args: Tuple containing (excluded_nodes, excluded_links, analysis_func,
-              analysis_kwargs, iteration_index, is_baseline, analysis_name)
+              analysis_kwargs, iteration_index, is_baseline, analysis_name).
 
     Returns:
         Tuple of (analysis_result, iteration_index, is_baseline,
-                 excluded_nodes, excluded_links)
+                 excluded_nodes, excluded_links).
     """
     global _shared_network, _analysis_cache
 
@@ -263,9 +263,9 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 class FailureManager:
     """Failure analysis engine with Monte Carlo capabilities.
 
-    This is the authoritative component for failure analysis in NetGraph.
-    It provides parallel processing, worker caching, and failure
-    policy handling to support both workflow steps and direct notebook usage.
+    This is the component for failure analysis in NetGraph.
+    Provides parallel processing, worker caching, and failure
+    policy handling for workflow steps and direct notebook usage.
 
     The FailureManager can execute any analysis function that takes a NetworkView
     and returns results, making it generic for different types of
@@ -295,7 +295,7 @@ class FailureManager:
         self.policy_name = policy_name
 
     def get_failure_policy(self) -> "FailurePolicy | None":
-        """Get the failure policy to use for analysis.
+        """Get failure policy for analysis.
 
         Returns:
             FailurePolicy instance or None if no policy should be applied.
@@ -318,12 +318,12 @@ class FailureManager:
         policy: "FailurePolicy | None" = None,
         seed_offset: int | None = None,
     ) -> tuple[set[str], set[str]]:
-        """Compute the set of nodes and links to exclude for a failure iteration.
+        """Compute set of nodes and links to exclude for a failure iteration.
 
         Applies failure policy logic and returns exclusion sets. This approach is
         equivalent to directly applying failures to the network:
         NetworkView(network, exclusions) ≡ network.copy().apply_failures(),
-        but with lower overhead since exclusion sets are typically <1% of entities.
+        but with lower overhead since exclusion sets are <1% of entities.
 
         Args:
             policy: Failure policy to apply. If None, uses instance policy.
@@ -429,8 +429,8 @@ class FailureManager:
     ) -> dict[str, Any]:
         """Run Monte Carlo failure analysis with any analysis function.
 
-        This is the main method for executing failure analysis. It handles
-        the complexity of parallel processing, worker caching, and failure policy
+        This is the main method for executing failure analysis. Handles
+        parallel processing, worker caching, and failure policy
         application, while allowing flexibility in the analysis function.
 
         Args:
@@ -795,6 +795,7 @@ class FailureManager:
         baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
+        include_flow_summary: bool = False,
         **kwargs,
     ) -> Any:  # Will be CapacityEnvelopeResults when imports are enabled
         """Analyze maximum flow capacity envelopes between node groups under failures.
@@ -804,19 +805,20 @@ class FailureManager:
         frequency-based capacity envelopes and optional failure pattern analysis.
 
         Args:
-            source_path: Regex pattern for source node groups
-            sink_path: Regex pattern for sink node groups
-            mode: "combine" (aggregate) or "pairwise" (individual flows)
-            iterations: Number of failure scenarios to simulate
-            parallelism: Number of parallel workers (auto-adjusted if needed)
-            shortest_path: Whether to use shortest paths only
-            flow_placement: Flow placement strategy
-            baseline: Whether to include baseline (no failures) iteration
-            seed: Optional seed for reproducible results
-            store_failure_patterns: Whether to store failure patterns in results
+            source_path: Regex pattern for source node groups.
+            sink_path: Regex pattern for sink node groups.
+            mode: "combine" (aggregate) or "pairwise" (individual flows).
+            iterations: Number of failure scenarios to simulate.
+            parallelism: Number of parallel workers (auto-adjusted if needed).
+            shortest_path: Whether to use shortest paths only.
+            flow_placement: Flow placement strategy.
+            baseline: Whether to include baseline (no failures) iteration.
+            seed: Optional seed for reproducible results.
+            store_failure_patterns: Whether to store failure patterns in results.
+            include_flow_summary: Whether to collect detailed flow summary data.
 
         Returns:
-            CapacityEnvelopeResults object with envelope statistics and analysis methods
+            CapacityEnvelopeResults object with envelope statistics and analysis methods.
         """
         from ngraph.monte_carlo.functions import max_flow_analysis
         from ngraph.monte_carlo.results import CapacityEnvelopeResults
@@ -845,14 +847,23 @@ class FailureManager:
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,
+            include_flow_summary=include_flow_summary,
             **kwargs,
         )
 
-        # Process results the same way as CapacityEnvelopeAnalysis
-        samples = self._process_results_to_samples(raw_results["results"])
-        envelopes = self._build_capacity_envelopes(
-            samples, source_path, sink_path, mode
-        )
+        # Process results with support for flow summary data
+        if include_flow_summary:
+            samples, flow_summaries = self._process_results_with_summaries(
+                raw_results["results"]
+            )
+            envelopes = self._build_capacity_envelopes_with_summaries(
+                samples, flow_summaries, source_path, sink_path, mode
+            )
+        else:
+            samples = self._process_results_to_samples(raw_results["results"])
+            envelopes = self._build_capacity_envelopes(
+                samples, source_path, sink_path, mode
+            )
 
         # Process failure patterns if requested
         failure_patterns = {}
@@ -939,6 +950,107 @@ class FailureManager:
                 f"Created envelope for {flow_key}: {envelope.total_samples} samples, "
                 f"min={envelope.min_capacity:.2f}, max={envelope.max_capacity:.2f}, "
                 f"mean={envelope.mean_capacity:.2f}"
+            )
+
+        return envelopes
+
+    def _process_results_with_summaries(
+        self, results: list[list[tuple]]
+    ) -> tuple[dict[tuple[str, str], list[float]], dict[tuple[str, str], list[Any]]]:
+        """Convert raw results with FlowSummary data to samples and summaries dictionaries.
+
+        Args:
+            results: List of results from each iteration, where each result
+                    is a list of (source, sink, capacity, flow_summary) tuples.
+
+        Returns:
+            Tuple of:
+            - Dictionary mapping (source, sink) to list of capacity values
+            - Dictionary mapping (source, sink) to list of FlowSummary objects
+        """
+        from collections import defaultdict
+
+        samples = defaultdict(list)
+        flow_summaries = defaultdict(list)
+
+        for flow_results in results:
+            for result_tuple in flow_results:
+                if len(result_tuple) == 4:
+                    # Format: (src, dst, capacity, flow_summary)
+                    src, dst, capacity, summary = result_tuple
+                    samples[(src, dst)].append(capacity)
+                    flow_summaries[(src, dst)].append(summary)
+                elif len(result_tuple) == 3:
+                    # Fallback for backwards compatibility: (src, dst, capacity)
+                    src, dst, capacity = result_tuple
+                    samples[(src, dst)].append(capacity)
+                    # No summary available, append None
+                    flow_summaries[(src, dst)].append(None)
+                else:
+                    logger.warning(f"Unexpected result tuple format: {result_tuple}")
+
+        logger.debug(f"Processed samples and summaries for {len(samples)} flow pairs")
+        return samples, flow_summaries
+
+    def _build_capacity_envelopes_with_summaries(
+        self,
+        samples: dict[tuple[str, str], list[float]],
+        flow_summaries: dict[tuple[str, str], list[Any]],
+        source_pattern: str,
+        sink_pattern: str,
+        mode: str,
+    ) -> dict[str, Any]:
+        """Build CapacityEnvelope objects from collected samples and flow summaries.
+
+        Args:
+            samples: Dictionary mapping (src_label, dst_label) to capacity values.
+            flow_summaries: Dictionary mapping (src_label, dst_label) to FlowSummary objects.
+            source_pattern: Source node regex pattern
+            sink_pattern: Sink node regex pattern
+            mode: Flow analysis mode
+
+        Returns:
+            Dictionary mapping flow keys to CapacityEnvelope objects with flow summary data.
+        """
+        from ngraph.results_artifacts import CapacityEnvelope
+
+        envelopes = {}
+
+        for (src_label, dst_label), capacity_values in samples.items():
+            if not capacity_values:
+                logger.warning(
+                    f"No capacity values found for flow {src_label}->{dst_label}"
+                )
+                continue
+
+            # Use flow key as the result key
+            flow_key = f"{src_label}->{dst_label}"
+
+            # Get corresponding flow summaries
+            summaries = flow_summaries.get((src_label, dst_label), [])
+
+            # Extract cost distribution data from summaries
+            cost_distributions = []
+            for summary in summaries:
+                if summary is not None and hasattr(summary, "cost_distribution"):
+                    cost_distributions.append(summary.cost_distribution)
+
+            # Create frequency-based envelope with flow summary statistics
+            envelope = CapacityEnvelope.from_values(
+                source_pattern=source_pattern,
+                sink_pattern=sink_pattern,
+                mode=mode,
+                values=capacity_values,
+                flow_summaries=summaries,
+            )
+
+            envelopes[flow_key] = envelope
+
+            logger.debug(
+                f"Created envelope for {flow_key}: {envelope.total_samples} samples, "
+                f"min={envelope.min_capacity:.2f}, max={envelope.max_capacity:.2f}, "
+                f"mean={envelope.mean_capacity:.2f}, flow_summaries={len(summaries)}, "
+                f"cost_levels={len(envelope.flow_summary_stats.get('cost_distribution_stats', {}))}"
             )
 
         return envelopes
@@ -1138,20 +1250,20 @@ class FailureManager:
     ) -> Any:  # Will be DemandPlacementResults when imports are enabled
         """Analyze traffic demand placement success under failures.
 
-        Attempts to place actual traffic demands on the network across
+        Attempts to place traffic demands on the network across
         Monte Carlo failure scenarios and measures success rates.
 
         Args:
-            demands_config: List of demand configs or TrafficMatrixSet object
-            iterations: Number of failure scenarios to simulate
-            parallelism: Number of parallel workers (auto-adjusted if needed)
-            placement_rounds: Optimization rounds for demand placement
-            baseline: Whether to include baseline (no failures) iteration
-            seed: Optional seed for reproducible results
-            store_failure_patterns: Whether to store failure patterns in results
+            demands_config: List of demand configs or TrafficMatrixSet object.
+            iterations: Number of failure scenarios to simulate.
+            parallelism: Number of parallel workers (auto-adjusted if needed).
+            placement_rounds: Optimization rounds for demand placement.
+            baseline: Whether to include baseline (no failures) iteration.
+            seed: Optional seed for reproducible results.
+            store_failure_patterns: Whether to store failure patterns in results.
 
         Returns:
-            DemandPlacementResults object with SLA and placement metrics
+            DemandPlacementResults object with SLA and placement metrics.
         """
         from ngraph.monte_carlo.functions import demand_placement_analysis
         from ngraph.monte_carlo.results import DemandPlacementResults
@@ -1225,19 +1337,19 @@ class FailureManager:
         they fail, across Monte Carlo failure scenarios.
 
         Args:
-            source_path: Regex pattern for source node groups
-            sink_path: Regex pattern for sink node groups
-            mode: "combine" (aggregate) or "pairwise" (individual flows)
-            iterations: Number of failure scenarios to simulate
-            parallelism: Number of parallel workers (auto-adjusted if needed)
-            shortest_path: Whether to use shortest paths only
-            flow_placement: Flow placement strategy
-            baseline: Whether to include baseline (no failures) iteration
-            seed: Optional seed for reproducible results
-            store_failure_patterns: Whether to store failure patterns in results
+            source_path: Regex pattern for source node groups.
+            sink_path: Regex pattern for sink node groups.
+            mode: "combine" (aggregate) or "pairwise" (individual flows).
+            iterations: Number of failure scenarios to simulate.
+            parallelism: Number of parallel workers (auto-adjusted if needed).
+            shortest_path: Whether to use shortest paths only.
+            flow_placement: Flow placement strategy.
+            baseline: Whether to include baseline (no failures) iteration.
+            seed: Optional seed for reproducible results.
+            store_failure_patterns: Whether to store failure patterns in results.
 
         Returns:
-            SensitivityResults object with component criticality rankings
+            SensitivityResults object with component criticality rankings.
         """
         from ngraph.monte_carlo.functions import sensitivity_analysis
         from ngraph.monte_carlo.results import SensitivityResults

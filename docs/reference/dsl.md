@@ -2,71 +2,51 @@
 
 > **📚 Quick Navigation:**
 >
+> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
+> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
 > - **[API Reference](api.md)** - Python API for programmatic scenario creation
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
-> - **[CLI Reference](cli.md)** - Command-line tools for running scenarios
 
-This document provides an overview of the DSL used in NetGraph to define and run network scenarios. The scenario is typically defined in a YAML file that describes the network topology, traffic demands, and analysis workflow. Scenarios can also be created programmatically using the Python API (see [API Reference](api.md)).
+This document describes the DSL for defining network scenarios in NetGraph. Scenarios are YAML files that describe network topology, traffic demands, and analysis workflows.
 
 ## Overview
 
-The scenario YAML file is organized around a **core foundation** that defines your network, with **optional extensions** for reusability, hardware modeling, failure simulation, and analysis. This document follows a logical progression from the essential core to advanced features.
+A scenario file defines a complete network simulation including:
+
+- **Network topology**: Nodes, links, and their relationships, as well as risk groups
+- **Analysis configuration**: Traffic demands, failure policies, workflows
+- **Reusable components**: Blueprints, hardware definitions
+
+The DSL enables both simple direct definitions and complex hierarchical structures with templates and parameters.
 
 ## Top-Level Keys
 
-The main sections of a scenario YAML file work together to define a complete network simulation:
-
-- `vars`: **[Optional]** Defines YAML anchors and variables for reuse throughout the scenario file.
-- `network`: **[Required]** Describes the actual network topology - nodes, links, and their connections.
-- `blueprints`: **[Optional]** Defines reusable network templates that can be instantiated multiple times within the network.
-- `components`: **[Optional]** A library of hardware and optics definitions with attributes like power consumption.
-- `risk_groups`: **[Optional]** Defines groups of components that might fail together (e.g., all components in a rack or multiple parallel links sharing the same DWDM transmission).
-- `traffic_matrix_set`: **[Optional]** Defines traffic demand matrices between network nodes with various placement policies.
-- `failure_policy_set`: **[Optional]** Specifies named failure policies and rules for simulating network failures.
-- `workflow`: **[Optional]** A list of steps to be executed, such as building graphs, running simulations, or performing analyses.
+```yaml
+network:                 # Network topology (required)
+blueprints:              # Reusable network templates
+components:              # Hardware component library
+risk_groups:             # Failure correlation groups
+vars:                    # YAML anchors and variables for reuse
+traffic_matrix_set:      # Traffic demand definitions
+failure_policy_set:      # Failure simulation policies
+workflow:                # Analysis execution steps
+```
 
 ## `network` - Core Foundation
 
-The `network` section is the **only required section** in a scenario file. It defines the overall network structure through nodes and their connections. Even an empty network with zero nodes is valid (though not very useful).
+The only required section. Defines network topology through nodes and links.
 
-**Top-Level Network Properties:**
-
-```yaml
-network:
-  name: "NetworkName"     # Optional: Human-readable network name
-  version: "1.0"          # Optional: Version identifier (string or number)
-  # ... groups, adjacency, etc.
-```
-
-**Defining Node Groups Directly in the Network:**
-
-The most common approach is to define groups of similar nodes and their connectivity patterns:
+**Basic Properties:**
 
 ```yaml
 network:
-  groups:
-    direct_group_A: # A top-level group defined directly
-      node_count: 2
-      name_template: "server-{node_num}" # Results in nodes: direct_group_A/server-1, direct_group_A/server-2
-      attrs:
-        os: "linux"
-    instance_of_bp:  # Another top-level group from a blueprint
-      use_blueprint: my_blueprint_name # Instantiates a blueprint. Nodes within will be prefixed by 'instance_of_bp/'
-      attrs: # Attributes defined here can be inherited by nodes within the blueprint if not overridden
-        location: "rack1"
-      risk_groups: ["RG_INSTANCE"] # Risk groups here are merged with those defined in the blueprint's groups
-  adjacency:
-    - source: /direct_group_A
-      target: /instance_of_bp
-      pattern: "mesh"
-      link_params:
-        capacity: 100  # Capacity of each link
-        cost: 10  # Cost (metric) of each link
+  name: "NetworkName"     # Optional network identifier
+  version: "1.0"          # Optional version
 ```
 
-**Direct Node Definitions:**
+### Direct Node and Link Definitions
 
-You can define individual nodes directly without using groups:
+**Individual Nodes:**
 
 ```yaml
 network:
@@ -81,392 +61,273 @@ network:
         hw_type: "router_model_B"
 ```
 
-**Direct Link Definitions:**
-
-You can define individual links directly between existing nodes:
+**Individual Links:**
 
 ```yaml
 network:
   links:
     - source: SEA
-      target: DEN
+      target: SFO
       link_params:
         capacity: 200
         cost: 6846
         attrs:
           distance_km: 1369.13
           media_type: "fiber"
-    # Multiple parallel links between same nodes
-    - source: DEN
-      target: DFW
-      link_params:
-        capacity: 400
-        cost: 7102
-    - source: DEN
-      target: DFW
-      link_params:
-        capacity: 400
-        cost: 7102
 ```
 
-**Bracket Expansion in Group Names:**
+### Group-Based Definitions
 
-Group names can use bracket `[]` notation for concise definition of multiple similar groups. For example, `plane[1-4]` would create groups `plane1`, `plane2`, `plane3`, and `plane4`. If this group instantiates a blueprint, the blueprint is instantiated for each expanded name.
+**Node Groups:**
 
 ```yaml
 network:
   groups:
-    dc[1-2]/fabric: # Creates dc1/fabric and dc2/fabric
-      use_blueprint: clos_fabric
-      parameters: # Parameters can be passed to the blueprint
-        clos_fabric.spine_count: 8
+    servers:
+      node_count: 4
+      name_template: "server-{node_num}"
+      attrs:
+        role: "compute"
+    switches:
+      node_count: 2
+      name_template: "sw-{node_num}"
+      attrs:
+        role: "network"
 ```
 
-The bracket expansion syntax supports:
+**Adjacency Rules:**
 
-- **Numeric ranges**: `[1-4]` expands to `1`, `2`, `3`, `4`
-- **Character ranges**: `[a-c]` expands to `a`, `b`, `c`
-- **Explicit lists**: `[red,blue,green]` expands to `red`, `blue`, `green`
-- **Multiple expansions**: `dc[1-2]/rack[a-b]` creates `dc1/racka`, `dc1/rackb`, `dc2/racka`, `dc2/rackb`
+```yaml
+network:
+  adjacency:
+    - source: /servers
+      target: /switches
+      pattern: "mesh"           # Connect every server to every switch
+      link_params:
+        capacity: 10
+        cost: 1
+    - source: /switches
+      target: /switches
+      pattern: "one_to_one"     # Connect switches pairwise
+      link_params:
+        capacity: 40
+        cost: 1
+```
 
-**Advanced Adjacency Features:**
+**Connectivity Patterns:**
 
-Variable expansion allows dynamic creation of adjacency rules:
+- `mesh`: Full connectivity between all source and target nodes
+- `one_to_one`: Pairwise connections (requires compatible group sizes)
+
+### Bracket Expansion
+
+Create multiple similar groups using bracket notation:
+
+```yaml
+network:
+  groups:
+    dc[1-3]/rack[a-b]:     # Creates dc1/racka, dc1/rackb, dc2/racka, etc.
+      node_count: 4
+      name_template: "srv-{node_num}"
+```
+
+**Expansion Types:**
+
+- Numeric ranges: `[1-4]` → 1, 2, 3, 4
+- Character ranges: `[a-c]` → a, b, c
+- Explicit lists: `[red,blue,green]` → red, blue, green
+
+### Variable Expansion in Adjacency
 
 ```yaml
 adjacency:
-  # Cartesian product expansion
   - source: "plane{p}/rack{r}"
     target: "spine{s}"
     expand_vars:
       p: [1, 2]
       r: ["a", "b"]
       s: [1, 2, 3]
-    expansion_mode: "cartesian"  # Creates all combinations
+    expansion_mode: "cartesian"  # All combinations
     pattern: "mesh"
 
-  # Zip expansion (pairs elements by index)
   - source: "server{idx}"
     target: "switch{idx}"
     expand_vars:
       idx: [1, 2, 3, 4]
-    expansion_mode: "zip"  # server1->switch1, server2->switch2, etc.
+    expansion_mode: "zip"        # Paired by index
     pattern: "one_to_one"
-```
-
-Complex pattern matching with regex:
-
-```yaml
-adjacency:
-  # Use regex in source/target paths with bracket expansion
-  - source: "/pod1/rsw"
-    target: "/plane[0-9]*/fsw/fsw-1"  # Matches plane1/fsw/fsw-1, plane2/fsw/fsw-1, etc.
-    pattern: mesh
-```
-
-## Node and Link Overrides
-
-You can override specific attributes of nodes and links after they are created by network definitions or blueprints:
-
-```yaml
-network:
-  # ... groups and adjacency definitions ...
-
-  node_overrides:
-    - path: "^my_clos1/spine/switch-(1|3|5)$"  # Specific spine switches
-      disabled: true
-      attrs:
-        maintenance_mode: "active"
-        hw_type: "newer_model"
-    - path: "^dc1/leaf/.*$"  # All leaf switches in dc1
-      attrs:
-        role: "access_switch"
-
-  link_overrides:
-    - source: "^my_clos1/leaf/.*$"
-      target: "^my_clos1/spine/.*$"
-      disabled: false  # Ensure all leaf-spine links are enabled
-      capacity: 400    # Override default capacity
-    - source: "^backup_dc/.*$"
-      target: "^primary_dc/.*$"
-      cost: 1000       # Make backup paths less preferred
-    # Override specific link between two exact nodes
-    - source: "my_clos1/spine/t3-1$"
-      target: "my_clos2/spine/t3-1$"
-      link_params:
-        capacity: 1     # Reduce capacity of this specific link
-        cost: 1
-    # Apply attributes to all spine-to-spine links in any direction
-    - source: ".*/spine/.*"
-      target: ".*/spine/.*"
-      any_direction: true  # Match both directions of the link
-      link_params:
-        risk_groups: ["SpineSRG"]
-        attrs:
-          hw_component: "400G-LR4"
 ```
 
 ## `blueprints` - Reusable Templates
 
-Blueprints are templates for network segments that can be referenced from the `network` section. They allow you to define a structure once and reuse it multiple times, making your scenarios more maintainable and reducing duplication.
-
-**Defining Node Groups within Blueprints:**
-
-A blueprint consists of `groups` and `adjacency` definitions. Each entry under `groups` defines a collection of nodes with common properties. Adjacency rules define how these groups connect to each other within the blueprint.
+Templates for network segments that can be instantiated multiple times:
 
 ```yaml
 blueprints:
-  my_blueprint_name:
+  leaf_spine:
     groups:
-      group_name_1: # This is a logical name for a collection of nodes
-        node_count: N                 # Number of nodes in this group
-        name_template: "prefix-{node_num}" # How nodes are named within this group.
-                                      # {node_num} is replaced by 1, 2, ..., N.
-                                      # Full node name becomes: <blueprint_instance_name>/<group_name_1>/prefix-1
-        attrs:                        # Optional: Default attributes for all nodes in this group
-          hw_type: "router_model_X"
-          role: "leaf"
-        disabled: false               # Optional: If true, nodes are created but marked as disabled
-        risk_groups: ["RG1", "RG2"]   # Optional: List of risk groups these nodes belong to
-      # ... other groups ...
+      leaf:
+        node_count: 4
+        name_template: "leaf-{node_num}"
+      spine:
+        node_count: 2
+        name_template: "spine-{node_num}"
     adjacency:
-      # Defines connections BETWEEN groups WITHIN this blueprint.
-      # These connections are created when the blueprint is instantiated.
-      - source: /group_name_1  # Path to a source group within this blueprint.
-                              # Paths are typically relative to the blueprint's own scope.
-                              # e.g., /group_name_1 refers to 'group_name_1' defined above.
-        target: /group_name_2  # Path to a target group within this blueprint.
-        pattern: "mesh"       # Connectivity pattern:
-                              # - "mesh": Connect every node in source to every node in target.
-                              # - "one_to_one": Pair nodes from source to target. Sizes must be
-                              #   compatible (e.g., same size, or one is a multiple of the other).
-                              # Other patterns might be available.
-        link_count: 1         # Optional: Number of parallel links to create for each pair
-                              # defined by the pattern. Defaults to 1.
-        link_params:          # Optional: Attributes for the links created by this adjacency rule.
-          capacity: 100       # e.g., capacity of each link.
-          cost: 10            # e.g., cost of each link.
-          disabled: false     # Optional: If true, links are created but marked as disabled.
-          risk_groups: ["RG_LINK_TYPE_A"] # Optional: Risk groups for these links.
-          attrs:              # Optional: Custom attributes for these links.
-            media_type: "fiber"
-      - source: /group_name_1
-        target: /group_name_1 # Connecting a group to itself (e.g., full mesh within t1 nodes)
+      - source: /leaf
+        target: /spine
         pattern: mesh
         link_params:
-          capacity: 50
-      # Adjacency with variable expansion for more complex scenarios
-      - source: "/group_prefix_{var1}/nodes"
-        target: "/another_group_prefix_{var2}/nodes"
-        pattern: "one_to_one"
-        expand_vars: # Defines variables to be substituted into source and target paths
-          var1: [1, 2]
-          var2: ["a", "b"]
-        expansion_mode: "cartesian" # "cartesian" (all combinations) or "zip"
-        link_params:
-          capacity: 200
+          capacity: 40
+          cost: 1
 
-      # Advanced pattern matching with regex placeholders
-      - source: "eb0{idx}"
-        target: "eb0{idx}"
-        expand_vars:
-          idx: [1, 2, 3, 4, 5, 6, 7, 8]
-        expansion_mode: "zip"  # Pairs source[i] with target[i]
-        pattern: "mesh"
-        link_params:
-          capacity: 3200
+network:
+  groups:
+    pod1:
+      use_blueprint: leaf_spine
+    pod2:
+      use_blueprint: leaf_spine
+      parameters:                # Override blueprint parameters
+        leaf.node_count: 6
+        spine.name_template: "core-{node_num}"
 ```
 
-**Blueprint Parameter Overrides:**
+**Blueprint Features:**
 
-When instantiating blueprints in the `network` section, you can override specific parameters using dot notation:
+- Define groups and adjacency rules once, reuse multiple times
+- Override parameters using dot notation during instantiation
+- Hierarchical naming: `pod1/leaf/leaf-1`, `pod2/spine/core-1`
+
+## Node and Link Overrides
+
+Modify specific nodes or links after initial creation:
 
 ```yaml
 network:
-  groups:
-    my_clos_instance:
-      use_blueprint: 3tier_clos
-      parameters:
-        # Override spine node count in the blueprint
-        spine.node_count: 8
-        # Override naming template
-        spine.name_template: "backbone-{node_num}"
-        # Override nested blueprint parameters
-        brick.t1.node_count: 6
+  node_overrides:
+    - path: "^pod1/spine/.*$"           # Regex pattern matching
+      disabled: true
+      attrs:
+        maintenance_mode: "active"
+    - path: "server-[1-3]$"             # Specific node subset
+      attrs:
+        priority: "high"
+
+  link_overrides:
+    - source: "^pod1/leaf/.*$"
+      target: "^pod1/spine/.*$"
+      capacity: 100                     # Override capacity
+    - source: ".*/spine/.*"
+      target: ".*/spine/.*"
+      any_direction: true               # Bidirectional matching
+      link_params:
+        cost: 5
+        attrs:
+          link_type: "backbone"
 ```
-
-When a blueprint is instantiated (e.g., `my_clos1: use_blueprint: 3tier_clos`), the `group_name_1` above would result in nodes like `my_clos1/group_name_1/prefix-1`, `my_clos1/group_name_1/prefix-2`, etc. The `adjacency` rules would then create links between these instantiated nodes, for example, connecting nodes from `my_clos1/group_name_1` to `my_clos1/group_name_2`.
-
-**Path Hierarchy:**
-
-Node names form a hierarchy based on their group structure. For example, a node defined in `group_A` within a blueprint `bp_X`, which is instantiated as `instance_Y`, might have a full name like `instance_Y/group_A/node_name-1`. This hierarchical path is crucial for matching.
 
 ## `components` - Hardware Library
 
-Defines a library of hardware components (e.g., routers, optics) and their attributes, like power consumption. Components are referenced by nodes and links through their `attrs` field, providing a centralized way to model hardware characteristics.
+Define hardware components with attributes for cost and power modeling:
 
 ```yaml
 components:
-  SpineChassis:
+  SpineRouter:
     component_type: "chassis"
-    description: "High-capacity spine router chassis"
     cost: 50000.0
     power_watts: 2500.0
-    power_watts_max: 3000.0
-    capacity: 64000.0  # Gbps
+    capacity: 64000.0           # Gbps
     ports: 64
-    count: 1
     attrs:
-      vendor: "Example Corp"
-      model: "EX-9000"
+      vendor: "VendorName"
+      model: "Model-9000"
     children:
       LineCard400G:
         component_type: "linecard"
         cost: 8000.0
         power_watts: 400.0
-        capacity: 12800.0  # 32x400G ports
+        capacity: 12800.0
         ports: 32
         count: 4
 
-  Optic400GLR4:
+  Optic400G:
     component_type: "optic"
-    description: "400G LR4 pluggable optic"
     cost: 2500.0
     power_watts: 12.0
     capacity: 400.0
-    count: 1
     attrs:
       reach: "10km"
       wavelength: "1310nm"
 ```
 
-Components are referenced by nodes and links through their `attrs` field:
+**Component Usage:**
 
 ```yaml
 network:
   nodes:
     spine-1:
       attrs:
-        hw_component: "SpineChassis"  # References component definition
+        hw_component: "SpineRouter"
   links:
     - source: spine-1
       target: leaf-1
       link_params:
         attrs:
-          hw_component: "Optic400GLR4"  # References optic component
+          hw_component: "Optic400G"
 ```
 
 ## `risk_groups` - Hardware Risk Modeling
 
-Defines hierarchical groups of components that share a common fate (e.g., all components in a rack, or on a card). This section is used in conjunction with `components` to model realistic failure scenarios.
+Define hierarchical failure correlation groups:
 
 ```yaml
 risk_groups:
   - name: "Rack1"
-    disabled: false # Optional, defaults to false
-    attrs: # Optional custom attributes
+    attrs:
       location: "DC1_Floor2"
-    children: # Optional, for nested risk groups
+    children:
       - name: "Card1.1"
         children:
           - name: "PortGroup1.1.1"
       - name: "Card1.2"
-  - name: "PowerSupplyUnitA"
+  - name: "PowerSupplyA"
+    attrs:
+      type: "power_infrastructure"
 ```
 
-Nodes and links can be associated with risk groups using their `risk_groups` attribute (a list of risk group names).
-
-## `traffic_matrix_set` - Traffic Analysis
-
-Specifies the traffic demand matrices between different parts of the network. This section enables capacity analysis and flow optimization by defining traffic patterns. Each matrix contains a collection of traffic demands that can be selected for analysis.
+Nodes and links reference risk groups via `risk_groups` attribute:
 
 ```yaml
-traffic_matrix_set:
-  matrix_name:
-    - name: "DemandName" # Optional
-      source_path: "regex/for/source_nodes"
-      sink_path: "regex/for/sink_nodes"
-      demand: X # Amount of traffic
-      mode: "combine" | "full_mesh" # Expansion mode for generating sub-demands
-      priority: P # Optional priority level
-      flow_policy_config: # Optional, defines how traffic is routed
-        # Available configurations:
-        # "SHORTEST_PATHS_ECMP" - hop-by-hop equal-cost balanced routing
-      # "SHORTEST_PATHS_UCMP" - hop-by-hop proportional flow placement
-      # "TE_UCMP_UNLIM" - unlimited MPLS LSPs with UCMP
-      # "TE_ECMP_UP_TO_256_LSP" - up to 256 LSPs with ECMP
-      # "TE_ECMP_16_LSP" - exactly 16 LSPs with ECMP
-    attrs: # Optional custom attributes
-      key: value
+network:
+  nodes:
+    server-1:
+      risk_groups: ["Rack1"]
+      attrs:
+        hw_component: "ServerChassis"
 ```
 
-**Traffic Demand Modes:**
+## `vars` - YAML Anchors
 
-- **`combine`** (default): Creates a pseudo-source node connected with infinite-capacity edges to all matched source nodes, and a pseudo-sink node connected with infinite-capacity edges from all matched sink nodes. Creates one demand from the pseudo-source to the pseudo-sink with the full demand volume. This is useful for modeling aggregate traffic flows between groups of nodes.
-
-- **`full_mesh`**: Creates individual demands for each (source_node, sink_node) pair, excluding self-pairs (where source equals sink). The total demand volume is split evenly among all valid pairs. This is useful for modeling distributed traffic patterns where every source communicates with every sink.
-
-## `failure_policy_set` - Failure Simulation
-
-Defines named failure policies for simulating network failures to test resilience and analyze failure scenarios. Each policy contains rules and configuration for how failures are applied.
-
-```yaml
-failure_policy_set:
-  policy_name_1:
-    fail_risk_groups: true | false
-    fail_risk_group_children: true | false
-    use_cache: true | false
-    attrs: # Optional custom attributes for the policy
-      custom_key: value
-    rules:
-      - entity_scope: "node" | "link" | "risk_group"
-        conditions: # Optional: list of conditions to select entities
-          - attr: "attribute_name"
-            operator: "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains" | "not_contains" | "any_value" | "no_value"
-            value: "some_value"
-        logic: "and" | "or" # How to combine conditions (default: "or")
-        rule_type: "all" | "choice" | "random" # How to select entities matching conditions
-        count: N # For 'choice' rule_type
-        probability: P # For 'random' rule_type (0.0 to 1.0)
-  policy_name_2:
-    # Another failure policy...
-  default:
-    # Default failure policy (used when no specific policy is selected)
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
-```
-
-**Policy Selection:**
-
-- If a `default` policy exists, it will be used when no specific policy is selected
-- If only one policy exists and no `default` is specified, that policy becomes the default
-- Multiple policies allow testing different failure scenarios in the same network
-
-## `vars` - YAML Anchors and Variables
-
-The `vars` section provides a designated space for YAML anchor definitions. YAML anchors (`&name`) and aliases (`*name`) follow the YAML 1.1 specification and are processed by PyYAML during parsing, before NetGraph validation.
-
-**Anchor Types:**
-
-- **Scalar anchors**: Reference primitive values (strings, numbers, booleans)
-- **Sequence anchors**: Reference arrays/lists
-- **Mapping anchors**: Reference objects/dictionaries
-- **Merge keys (`<<`)**: Merge mapping properties with override capability
-
-**Minimal Example:**
+Defines reusable values using YAML anchors (`&name`) and aliases (`*name`) for deduplicating complex scenarios:
 
 ```yaml
 vars:
   default_cap: &cap 10000
   base_attrs: &attrs {cost: 100, region: "dc1"}
+  spine_config: &spine_cfg
+    hw_component: "SpineRouter"
+    power_budget: 2500
 
 network:
   nodes:
-    N1: {attrs: {<<: *attrs, capacity: *cap}}
-    N2: {attrs: {<<: *attrs, capacity: *cap, region: "dc2"}}
+    spine-1: {attrs: {<<: *attrs, <<: *spine_cfg, capacity: *cap}}
+    spine-2: {attrs: {<<: *attrs, <<: *spine_cfg, capacity: *cap, region: "dc2"}}
 ```
+
+**Anchor Types:**
+
+- **Scalar**: `&cap 10000` - Reference primitive values
+- **Mapping**: `&attrs {cost: 100}` - Reference objects
+- **Merge**: `<<: *attrs` - Merge properties with override capability
 
 **Processing Behavior:**
 
@@ -475,136 +336,147 @@ network:
 - Anchors can be defined in any section, not just `vars`
 - Merge operations follow YAML 1.1 semantics (later keys override earlier ones)
 
+## `traffic_matrix_set` - Traffic Analysis
+
+Define traffic demand patterns for capacity analysis:
+
+```yaml
+traffic_matrix_set:
+  production:
+    - name: "server_to_storage"
+      source_path: "^servers/.*"
+      sink_path: "^storage/.*"
+      demand: 1000               # Traffic volume
+      mode: "combine"            # Aggregate demand
+      priority: 1
+      flow_policy_config: "SHORTEST_PATHS_ECMP"
+
+    - name: "inter_dc_backup"
+      source_path: "^dc1/.*"
+      sink_path: "^dc2/.*"
+      demand: 500
+      mode: "full_mesh"          # Distributed demand
+      priority: 2
+```
+
+**Traffic Modes:**
+
+- `combine`: Single aggregate flow between source and sink groups
+- `full_mesh`: Individual flows between all source-sink node pairs
+
+**Flow Policies:**
+
+- `SHORTEST_PATHS_ECMP`: Equal-cost multi-path routing
+- `SHORTEST_PATHS_UCMP`: Unequal-cost multi-path routing
+- `TE_ECMP_16_LSP`: Traffic engineering with 16 ECMP LSPs
+
+## `failure_policy_set` - Failure Simulation
+
+Define failure policies for resilience testing:
+
+```yaml
+failure_policy_set:
+  single_link_failure:
+    rules:
+      - entity_scope: "link"
+        rule_type: "choice"
+        count: 1
+
+  random_failures:
+    fail_risk_groups: true
+    use_cache: true
+    rules:
+      - entity_scope: "node"
+        rule_type: "random"
+        probability: 0.001
+      - entity_scope: "link"
+        rule_type: "random"
+        probability: 0.002
+
+  maintenance_scenario:
+    rules:
+      - entity_scope: "node"
+        conditions:
+          - attr: "maintenance_mode"
+            operator: "=="
+            value: "scheduled"
+        rule_type: "all"
+```
+
+**Rule Types:**
+
+- `all`: Select all matching entities
+- `choice`: Select specific count of entities
+- `random`: Select entities with given probability
+
+**Conditions:**
+
+- Target entities based on attributes
+- Support operators: `==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `not_contains`
+
 ## `workflow` - Execution Steps
 
-A list of operations to perform on the network. Each step has a `step_type` and specific arguments. This section defines the analysis workflow to be executed.
+Define analysis workflow steps:
 
 ```yaml
 workflow:
   - step_type: BuildGraph
-    # Builds the StrictMultiDiGraph from scenario.network for analysis
-    # No additional parameters required
-
-
-
-
-
   - step_type: CapacityEnvelopeAnalysis
-    name: "envelope_name"  # Optional: Name for the analysis step
-    source_path: "regex/for/source_nodes"
-    sink_path: "regex/for/sink_nodes"
-    mode: "combine" | "pairwise" # How to group sources and sinks
-    failure_policy: "policy_name" # Optional: Named failure policy from failure_policy_set
-    iterations: N # Number of Monte-Carlo trials (default: 1)
-    parallelism: P # Number of parallel worker processes (default: 1)
-    shortest_path: true | false # Use shortest path only (default: false)
-    flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # Flow placement strategy
-    baseline: true | false # Optional: Run first iteration without failures as baseline (default: false)
-    store_failure_patterns: true | false # Optional: Store failure patterns in results (default: false)
-    seed: S # Optional: Seed for deterministic results
-
-    # For single deterministic capacity analysis (equivalent to removed CapacityProbe):
-    # Set iterations: 1, baseline: false, failure_policy: null
-
-**Available Workflow Steps:**
-
-- **`BuildGraph`**: Builds a StrictMultiDiGraph from scenario.network
-- **`NetworkStats`**: Computes basic capacity and degree statistics
-- **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios, including deterministic single-iteration analysis
-
-**Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
-
-- **Scenario-wide state**: Persistent configuration defined in YAML (e.g., `disabled: true` for nodes/links, maintenance windows). This state is part of the scenario definition and persists across all analyses.
-- **Analysis-specific state**: Temporary exclusions for failure simulation (e.g., nodes/links failed during Monte Carlo analysis). These exclusions are specific to individual analysis runs and don't affect the base network.
-
-**Workflow Step Categories:**
-
-- **NetworkTransform steps** permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
-- **Analysis steps** (like `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
-
-**Report Generation:** After running a workflow, use the `ngraph report` CLI command to generate Jupyter notebooks and HTML reports from the results. See [CLI Reference](cli.md#report) for details.
-
-## Path Matching Regex Syntax - Reference
-
-Many parts of the DSL use **path expressions** to select nodes or links based on their names. These expressions are Python regular expressions (regex) that are matched against the full, hierarchical names of nodes or the source/target names of links.
-
-### Core Matching Behavior
-
-NetGraph uses Python's `re.match()` function for path matching, which has specific behavior:
-
-- **Anchored at start**: The pattern is automatically anchored at the beginning of the node name. You don't need `^` at the start (though it's harmless to include it).
-- **Prefix matching**: Unlike `re.search()`, the pattern must match from the beginning of the string.
-- **Full match not required**: The pattern doesn't need to match the entire node name unless you explicitly anchor it at the end with `$`.
-
-### Pattern Types and Examples
-
-**1. Exact Match**
-```yaml
-# Matches only the node named "SFO"
-path: SFO
+    name: "capacity_analysis"
+    source_path: "^servers/.*"
+    sink_path: "^storage/.*"
+    mode: "combine"
+    failure_policy: "single_link_failure"
+    iterations: 1000
+    parallelism: 4
+    baseline: true
 ```
 
-**2. Prefix Match**
+**Common Steps:**
+
+- `BuildGraph`: Build network graph for analysis
+- `NetworkStats`: Compute network statistics
+- `CapacityEnvelopeAnalysis`: Monte Carlo capacity analysis
+
+> **📖 Complete Workflow Documentation:** See [Workflow Reference](workflow.md) for detailed configuration.
+
+## Path Matching Regex Syntax
+
+NetGraph uses Python regex patterns for node/link selection. Patterns are anchored at the start using `re.match()`.
+
+**Pattern Examples:**
 
 ```yaml
-# Matches all nodes starting with "SEA/spine/"
-path: SEA/spine/
-# Result: SEA/spine/switch-1, SEA/spine/switch-2, etc.
+# Exact match
+path: "spine-1"
+
+# Prefix match
+path: "dc1/spine/"
+
+# Wildcard patterns
+path: "dc1/leaf.*"
+
+# Anchored patterns
+path: "^dc1/spine/switch-[1-3]$"
+
+# Alternation
+path: "^dc1/(spine|leaf)/.*$"
 ```
 
-**3. Wildcard Patterns**
+**Capturing Groups:**
+
+Regex capturing groups create node groupings for analysis:
 
 ```yaml
-# Matches nodes starting with "SEA/leaf" followed by any characters
-path: SEA/leaf*
-# Result: SEA/leaf1/switch-1, SEA/leaf2/switch-1, etc.
+# Single group: (dc\d+)
+# Creates groups: "dc1", "dc2", etc.
+
+# Multiple groups: (dc\d+)/(spine|leaf)/switch-(\d+)
+# Creates groups: "dc1|spine|1", "dc1|leaf|2", etc.
 ```
 
-**4. Regex Patterns with Anchoring**
+**Group Behavior:**
 
-```yaml
-# Matches spine nodes with specific numbering
-path: ^dc1/spine/switch-[1-3]$
-# Result: dc1/spine/switch-1, dc1/spine/switch-2, dc1/spine/switch-3
-```
-
-**5. Complex Regex with Alternation**
-
-```yaml
-# Matches either spine or leaf nodes in dc1
-path: ^dc1/(spine|leaf)/switch-\d+$
-# Result: dc1/spine/switch-1, dc1/leaf/switch-1, etc.
-```
-
-### Capturing Groups and Node Grouping
-
-When using capturing groups `(...)` in regex patterns, NetGraph groups matching nodes based on the captured values:
-
-**Single Capturing Group:**
-
-```yaml
-# Pattern: (SEA/leaf\d)
-# Matches: SEA/leaf1/switch-1, SEA/leaf1/switch-2, SEA/leaf2/switch-1, SEA/leaf2/switch-2
-# Groups created:
-#   "SEA/leaf1": [SEA/leaf1/switch-1, SEA/leaf1/switch-2]
-#   "SEA/leaf2": [SEA/leaf2/switch-1, SEA/leaf2/switch-2]
-```
-
-**Multiple Capturing Groups:**
-
-```yaml
-# Pattern: (dc\d+)/(spine|leaf)/switch-(\d+)
-# Matches: dc1/spine/switch-1, dc1/leaf/switch-2, dc2/spine/switch-1
-# Groups created (joined with '|'):
-#   "dc1|spine|1": [dc1/spine/switch-1]
-#   "dc1|leaf|2": [dc1/leaf/switch-2]
-#   "dc2|spine|1": [dc2/spine/switch-1]
-```
-
-**No Capturing Groups:**
-
-```yaml
-# Pattern: SEA/spine/switch-\d+
-# All matching nodes are grouped under the original pattern string:
-#   "SEA/spine/switch-\\d+": [SEA/spine/switch-1, SEA/spine/switch-2, ...]
-```
+- Single capturing group: Group by captured value
+- Multiple capturing groups: Join with `|` separator
+- No capturing groups: Group by original pattern string

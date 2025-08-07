@@ -3,7 +3,8 @@
 > **📚 Quick Navigation:**
 >
 > - **[DSL Reference](dsl.md)** - YAML syntax for scenario definition
-> - **[API Reference](api.md)** - Python API for programmatic access
+> - **[Workflow Reference](workflow.md)** - Analysis workflow configuration and execution
+> - **[API Reference](api.md)** - Python API for programmatic scenario creation
 > - **[Auto-Generated API Reference](api-full.md)** - Complete class and method documentation
 
 NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios directly from the terminal.

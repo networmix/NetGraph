@@ -10,7 +10,7 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** August 07, 2025 at 04:05 UTC
+**Generated from source code on:** August 07, 2025 at 15:24 UTC
 
 **Modules auto-discovered:** 48
 
@@ -315,26 +315,26 @@ Attributes:
 
 FailureManager for Monte Carlo failure analysis.
 
-This module provides the authoritative failure analysis engine for NetGraph.
-It combines parallel processing, caching, and failure policy handling
-to support both workflow steps and direct notebook usage.
+This module provides the failure analysis engine for NetGraph.
+Combines parallel processing, caching, and failure policy handling
+for workflow steps and direct notebook usage.
 
 The FailureManager provides a generic API for any type of failure analysis.
 
 ## Performance Characteristics
 
 **Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
-P=parallelism. Per-worker caching reduces effective iterations by 60-90% for
-common failure patterns since exclusion sets frequently repeat in Monte Carlo
+P=parallelism. Per-worker caching reduces iterations by 60-90% for
+common failure patterns since exclusion sets repeat in Monte Carlo
 analysis. Network serialization occurs once per worker process, not per iteration.
 
 **Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
 R=result size per iteration, C=cache size. Cache is bounded to prevent memory
 exhaustion with FIFO eviction after 1000 unique patterns per worker.
 
-**Parallelism Trade-offs**: Serial execution avoids IPC overhead for small
+**Parallelism**: Serial execution avoids IPC overhead for small
 iteration counts. Parallel execution benefits from worker caching and CPU
-utilization for larger workloads. Optimal parallelism typically equals CPU
+utilization for larger workloads. Optimal parallelism equals CPU
 cores for analysis-bound workloads.
 
 ### AnalysisFunction
@@ -348,9 +348,9 @@ keyword arguments, returning analysis results of any type.
 
 Failure analysis engine with Monte Carlo capabilities.
 
-This is the authoritative component for failure analysis in NetGraph.
-It provides parallel processing, worker caching, and failure
-policy handling to support both workflow steps and direct notebook usage.
+This is the component for failure analysis in NetGraph.
+Provides parallel processing, worker caching, and failure
+policy handling for workflow steps and direct notebook usage.
 
 The FailureManager can execute any analysis function that takes a NetworkView
 and returns results, making it generic for different types of
@@ -364,14 +364,14 @@ Attributes:
 **Methods:**
 
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'`
-  - Compute the set of nodes and links to exclude for a failure iteration.
+  - Compute set of nodes and links to exclude for a failure iteration.
 - `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'`
   - Create NetworkView with specified exclusions.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"`
-  - Get the failure policy to use for analysis.
+  - Get failure policy for analysis.
 - `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
   - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'`
+- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'`
   - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'`
   - Run Monte Carlo failure analysis with any analysis function.
@@ -972,7 +972,7 @@ CapacityEnvelope, TrafficMatrixSet, PlacementResultSet, and FailurePolicySet cla
 
 Frequency-based capacity envelope that stores capacity values as frequencies.
 
-This approach is more memory-efficient for Monte Carlo analysis where we care
+This approach is memory-efficient for Monte Carlo analysis where we care
 about statistical distributions rather than individual sample order.
 
 Attributes:
@@ -985,6 +985,8 @@ Attributes:
     mean_capacity: Mean capacity across all samples.
     stdev_capacity: Standard deviation of capacity values.
     total_samples: Total number of samples represented.
+    flow_summary_stats: Optional dictionary with aggregated FlowSummary statistics.
+                       Contains cost_distribution_stats and other flow analytics.
 
 **Attributes:**
 
@@ -997,13 +999,14 @@ Attributes:
 - `mean_capacity` (float)
 - `stdev_capacity` (float)
 - `total_samples` (int)
+- `flow_summary_stats` (Dict[str, Any]) = {}
 
 **Methods:**
 
 - `expand_to_values(self) -> 'List[float]'`
   - Expand frequency map back to individual values.
-- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]') -> "'CapacityEnvelope'"`
-  - Create frequency-based envelope from a list of capacity values.
+- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]', flow_summaries: 'List[Any] | None' = None) -> "'CapacityEnvelope'"`
+  - Create frequency-based envelope from capacity values and optional flow summaries.
 - `get_percentile(self, percentile: 'float') -> 'float'`
   - Calculate percentile from frequency distribution.
 - `to_dict(self) -> 'Dict[str, Any]'`
@@ -1102,7 +1105,7 @@ Attributes:
 - `get_all_demands(self) -> 'list[TrafficDemand]'`
   - Get all traffic demands from all matrices combined.
 - `get_default_matrix(self) -> 'list[TrafficDemand]'`
-  - Get the default traffic matrix.
+  - Get default traffic matrix.
 - `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'`
   - Get a specific traffic matrix by name.
 - `to_dict(self) -> 'dict[str, Any]'`
@@ -2328,10 +2331,11 @@ YAML Configuration Example:
         baseline: true                         # Optional: Run first iteration without failures
         seed: 42                               # Optional: Seed for reproducible results
         store_failure_patterns: false          # Optional: Store failure patterns in results
+        include_flow_summary: false            # Optional: Collect detailed flow summary statistics
     ```
 
 Results stored in scenario.results:
-    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data
+    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data with optional flow summary statistics
     - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
 
 ### CapacityEnvelopeAnalysis
@@ -2354,6 +2358,7 @@ Attributes:
     baseline: Whether to run first iteration without failures as baseline.
     seed: Optional seed for reproducible results.
     store_failure_patterns: Whether to store failure patterns in results.
+    include_flow_summary: Whether to collect detailed flow summary statistics (cost distribution, min-cut edges).
 
 **Attributes:**
 
@@ -2369,6 +2374,7 @@ Attributes:
 - `flow_placement` (FlowPlacement | str) = 1
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
+- `include_flow_summary` (bool) = False
 
 **Methods:**
 
@@ -2436,7 +2442,7 @@ Attributes:
 
 Picklable Monte Carlo analysis functions for FailureManager simulations.
 
-These functions are designed to be used with FailureManager.run_monte_carlo_analysis()
+These functions are designed for use with FailureManager.run_monte_carlo_analysis()
 and follow the pattern: analysis_func(network_view: NetworkView, **kwargs) -> Any.
 
 All functions accept only simple, hashable parameters to ensure compatibility
@@ -2458,7 +2464,7 @@ Args:
 Returns:
     Dictionary with placement statistics by priority.
 
-### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'list[tuple[str, str, float]]'
+### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[tuple]'
 
 Analyze maximum flow capacity between node groups.
 
@@ -2469,9 +2475,11 @@ Args:
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: Whether to use shortest paths only.
     flow_placement: Flow placement strategy.
+    include_flow_summary: Whether to collect detailed flow summary data.
 
 Returns:
-    List of (source, sink, capacity) tuples.
+    List of tuples. If include_flow_summary is False: (source, sink, capacity).
+    If include_flow_summary is True: (source, sink, capacity, flow_summary).
 
 ### sensitivity_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'dict[str, float]'
 
@@ -2494,7 +2502,7 @@ Returns:
 
 Structured result objects for FailureManager analysis functions.
 
-These classes provide convenient interfaces for accessing Monte Carlo analysis
+These classes provide interfaces for accessing Monte Carlo analysis
 results from FailureManager convenience methods. Visualization is handled by
 specialized analyzer classes in the workflow.analysis module.
 
@@ -2506,13 +2514,13 @@ This class provides data access for capacity envelope analysis results.
 For visualization, use CapacityMatrixAnalyzer from ngraph.workflow.analysis.
 
 Attributes:
-    envelopes: Dictionary mapping flow keys to CapacityEnvelope objects
-    failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects
-    source_pattern: Source node regex pattern used in analysis
-    sink_pattern: Sink node regex pattern used in analysis
-    mode: Flow analysis mode ("combine" or "pairwise")
-    iterations: Number of Monte Carlo iterations performed
-    metadata: Additional analysis metadata from FailureManager
+    envelopes: Dictionary mapping flow keys to CapacityEnvelope objects.
+    failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects.
+    source_pattern: Source node regex pattern used in analysis.
+    sink_pattern: Sink node regex pattern used in analysis.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    iterations: Number of Monte Carlo iterations performed.
+    metadata: Additional analysis metadata from FailureManager.
 
 **Attributes:**
 
@@ -2526,14 +2534,20 @@ Attributes:
 
 **Methods:**
 
+- `cost_distribution_summary(self) -> 'pd.DataFrame'`
+  - Get cost distribution summary across all flows.
 - `export_summary(self) -> 'Dict[str, Any]'`
   - Export summary for serialization.
 - `flow_keys(self) -> 'List[str]'`
   - Get list of all flow keys in results.
+- `get_cost_distribution(self, flow_key: 'str') -> 'Dict[float, Dict[str, float]]'`
+  - Get cost distribution statistics for a specific flow.
 - `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'`
   - Get CapacityEnvelope for a specific flow.
 - `get_failure_pattern_summary(self) -> 'pd.DataFrame'`
   - Get summary of failure patterns if available.
+- `get_min_cut_frequencies(self, flow_key: 'str') -> 'Dict[str, int]'`
+  - Get min-cut edge frequencies for a specific flow.
 - `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'`
   - Get summary statistics for all flow pairs.
 - `to_dataframe(self) -> 'pd.DataFrame'`

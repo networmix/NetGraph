@@ -29,6 +29,7 @@ nav:
       - NetworkView: examples/network_view.md
   - Reference:
       - DSL: reference/dsl.md
+      - Workflow: reference/workflow.md
       - CLI: reference/cli.md
       - Schemas: reference/schemas.md
       - API: reference/api.md

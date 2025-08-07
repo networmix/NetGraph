@@ -1,0 +1,67 @@
+# Toy scenario: 4-node full mesh topology with single-link failure analysis
+# Each node connected to every other node with identical link parameters
+
+network:
+  nodes:
+    N1: {}
+    N2: {}
+    N3: {}
+    N4: {}
+
+  links:
+    # Full mesh connectivity: 6 bidirectional links (connects every node to every other node)
+    # Links are bidirectional by default in NetGraph
+    - source: N1
+      target: N2
+      link_params:
+        capacity: 2.0
+        cost: 1.0
+    - source: N1
+      target: N3
+      link_params:
+        capacity: 1.0
+        cost: 1.0
+    - source: N1
+      target: N4
+      link_params:
+        capacity: 2.0
+        cost: 1.0
+    - source: N2
+      target: N3
+      link_params:
+        capacity: 2.0
+        cost: 1.0
+    - source: N2
+      target: N4
+      link_params:
+        capacity: 1.0
+        cost: 1.0
+    - source: N3
+      target: N4
+      link_params:
+        capacity: 2.0
+        cost: 1.0
+
+failure_policy_set:
+  single_link_failure:
+    rules:
+      - entity_scope: link
+        rule_type: choice
+        count: 1
+
+workflow:
+  # Single pairwise analysis generates complete 4x4 node-to-node capacity matrix
+  - step_type: CapacityEnvelopeAnalysis
+    name: "node_to_node_capacity_matrix"
+    source_path: "^N([1-4])$"        # Capturing group creates separate groups: "1", "2", "3", "4"
+    sink_path: "^N([1-4])$"          # Capturing group creates separate groups: "1", "2", "3", "4"
+    mode: "pairwise"                 # Generates all source-sink combinations (16 total)
+    failure_policy: "single_link_failure"
+    iterations: 10                   # Monte Carlo iterations per node pair
+    parallelism: 8                   # Number of parallel worker processes
+    shortest_path: false             # Allow all paths for flow analysis
+    flow_placement: "PROPORTIONAL"   # Distribute flow proportionally across paths
+    baseline: true                   # Include baseline (no failure) analysis
+    seed: 42                         # Reproducible results
+    store_failure_patterns: false    # Retain failure patterns for analysis
+    include_flow_summary: true       # Include cost distribution and min-cut analysis
