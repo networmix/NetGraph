@@ -1,6 +1,7 @@
 """Tests for the FailureManager class."""
 
 import os
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -103,9 +104,9 @@ class TestFailureManager:
         """Test getting a named failure policy."""
         policy = failure_manager.get_failure_policy()
 
-        failure_manager.failure_policy_set.get_policy.assert_called_once_with(
-            "test_policy"
-        )
+        cast(
+            MagicMock, failure_manager.failure_policy_set.get_policy
+        ).assert_called_once_with("test_policy")
         assert policy is not None
 
     def test_get_failure_policy_with_default_policy(
@@ -127,7 +128,9 @@ class TestFailureManager:
         self, mock_network: Network, mock_failure_policy_set: FailurePolicySet
     ):
         """Test error when named policy is not found."""
-        mock_failure_policy_set.get_policy.side_effect = KeyError("Policy not found")
+        cast(MagicMock, mock_failure_policy_set.get_policy).side_effect = KeyError(
+            "Policy not found"
+        )
 
         fm = FailureManager(
             network=mock_network,
@@ -286,7 +289,9 @@ class TestFailureManager:
     def test_validation_errors(self, failure_manager: FailureManager):
         """Test various validation errors."""
         # Test iterations validation without policy
-        failure_manager.failure_policy_set.get_policy.return_value = None
+        cast(
+            MagicMock, failure_manager.failure_policy_set.get_policy
+        ).return_value = None
         # No longer using get_default_policy - set policy_name=None directly
 
         with pytest.raises(
@@ -390,6 +395,102 @@ class TestFailureManagerEdgeCases:
         )
 
         assert len(result["results"]) == 1
+
+
+class TestFailureManagerTopLevelMatching:
+    """Tests for compute_exclusions merged attribute view correctness."""
+
+    def test_node_matching_on_top_level_disabled(
+        self, mock_network: Network, mock_failure_policy_set: FailurePolicySet
+    ) -> None:
+        # Arrange a node disabled at top-level, not inside attrs
+        mock_network.nodes["node1"].disabled = True
+        mock_network.nodes["node2"].disabled = False
+
+        # Policy that matches disabled nodes
+        from ngraph.failure_policy import FailureCondition, FailurePolicy, FailureRule
+
+        rule = FailureRule(
+            entity_scope="node",
+            conditions=[FailureCondition(attr="disabled", operator="==", value=True)],
+            logic="and",
+            rule_type="all",
+        )
+        policy = FailurePolicy(rules=[rule])
+
+        fm = FailureManager(
+            network=mock_network,
+            failure_policy_set=mock_failure_policy_set,
+            policy_name=None,
+        )
+
+        # Act
+        excluded_nodes, excluded_links = fm.compute_exclusions(policy=policy)
+
+        # Assert
+        assert "node1" in excluded_nodes
+        assert "node2" not in excluded_nodes
+        assert excluded_links == set()
+
+    def test_link_matching_on_top_level_capacity(
+        self, mock_network: Network, mock_failure_policy_set: FailurePolicySet
+    ) -> None:
+        # capacity is a Link top-level field; ensure matching sees it
+        mock_network.links["link1"].capacity = 100.0
+        mock_network.links["link2"].capacity = 50.0
+
+        from ngraph.failure_policy import FailureCondition, FailurePolicy, FailureRule
+
+        rule = FailureRule(
+            entity_scope="link",
+            conditions=[FailureCondition(attr="capacity", operator=">", value=60.0)],
+            logic="and",
+            rule_type="all",
+        )
+        policy = FailurePolicy(rules=[rule])
+
+        fm = FailureManager(
+            network=mock_network,
+            failure_policy_set=mock_failure_policy_set,
+            policy_name=None,
+        )
+
+        excluded_nodes, excluded_links = fm.compute_exclusions(policy=policy)
+
+        assert "link1" in excluded_links
+        assert "link2" not in excluded_links
+        assert excluded_nodes == set()
+
+    def test_risk_group_expansion_uses_top_level_risk_groups(
+        self, mock_network: Network, mock_failure_policy_set: FailurePolicySet
+    ) -> None:
+        # Put node1 and link1 into rg1 via top-level risk_groups
+        mock_risk_group = MagicMock()
+        mock_risk_group.name = "rg1"
+        mock_risk_group.children = []
+        mock_network.risk_groups = {"rg1": mock_risk_group}
+        mock_network.nodes["node1"].risk_groups = {"rg1"}
+        mock_network.links["link1"].risk_groups = {"rg1"}
+
+        from ngraph.failure_policy import FailurePolicy, FailureRule
+
+        # This rule matches the risk_group entity and selects it, then
+        # compute_exclusions must expand to nodes/links via risk_groups.
+        rule = FailureRule(entity_scope="risk_group", rule_type="all")
+        policy = FailurePolicy(rules=[rule])
+        # Simulate apply_failures returning the risk group id
+        policy.apply_failures = MagicMock(return_value=["rg1"])  # type: ignore
+
+        fm = FailureManager(
+            network=mock_network,
+            failure_policy_set=mock_failure_policy_set,
+            policy_name=None,
+        )
+
+        excluded_nodes, excluded_links = fm.compute_exclusions(policy=policy)
+
+        assert "node1" in excluded_nodes
+        assert "link1" in excluded_links
 
 
 class TestFailureManagerHelperFunctions:

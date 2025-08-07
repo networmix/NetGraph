@@ -1,26 +1,23 @@
 """FailureManager for Monte Carlo failure analysis.
 
-This module provides the failure analysis engine for NetGraph.
-Combines parallel processing, caching, and failure policy handling
-for workflow steps and direct notebook usage.
+Provides the failure analysis engine for NetGraph. Supports parallel
+processing, per-worker caching, and failure policy handling for workflow steps
+and direct programmatic use.
 
-The FailureManager provides a generic API for any type of failure analysis.
+Performance characteristics:
+Time complexity: O(I × A / P), where I is iteration count, A is analysis cost,
+and P is parallelism. Worker-local caching reduces repeated work when exclusion
+sets repeat across iterations. Network serialization happens once per worker,
+not per iteration.
 
-## Performance Characteristics
+Space complexity: O(V + E + I × R + C), where V and E are node and link counts,
+R is result size per iteration, and C is cache size. The per-worker cache is
+bounded and evicts in FIFO order after 1000 unique patterns.
 
-**Time Complexity**: O(I × A / P) where I=iterations, A=analysis function cost,
-P=parallelism. Per-worker caching reduces iterations by 60-90% for
-common failure patterns since exclusion sets repeat in Monte Carlo
-analysis. Network serialization occurs once per worker process, not per iteration.
-
-**Space Complexity**: O(V + E + I × R + C) where V=nodes, E=links, I=iterations,
-R=result size per iteration, C=cache size. Cache is bounded to prevent memory
-exhaustion with FIFO eviction after 1000 unique patterns per worker.
-
-**Parallelism**: Serial execution avoids IPC overhead for small
-iteration counts. Parallel execution benefits from worker caching and CPU
-utilization for larger workloads. Optimal parallelism equals CPU
-cores for analysis-bound workloads.
+Parallelism: For small iteration counts, serial execution avoids IPC overhead.
+For larger workloads, parallel execution benefits from worker caching and CPU
+utilization. Optimal parallelism is the number of CPU cores for analysis-bound
+workloads.
 """
 
 from __future__ import annotations
@@ -53,7 +50,7 @@ def _create_cache_key(
     analysis_name: str,
     analysis_kwargs: Dict[str, Any],
 ) -> tuple:
-    """Create cache key for non-hashable objects.
+    """Create cache key from exclusions, analysis name, and parameters.
 
     Args:
         excluded_nodes: Set of excluded node names.
@@ -71,15 +68,15 @@ def _create_cache_key(
         analysis_name,
     )
 
-    # Handle analysis_kwargs smartly
+    # Normalize analysis_kwargs for hashing
     hashable_kwargs = []
     for key, value in sorted(analysis_kwargs.items()):
         try:
-            # Try to create a tuple - this works for most hashable types
+            # Try to hash the (key, value) pair directly
             _ = hash((key, value))
             hashable_kwargs.append((key, value))
         except TypeError:
-            # For non-hashable objects, use their type name and a hash of their string representation
+            # For non-hashable values, use type name and a digest of a stable string
             value_hash = hashlib.md5(str(value).encode()).hexdigest()[:8]
             hashable_kwargs.append((key, f"{type(value).__name__}_{value_hash}"))
 
@@ -320,10 +317,9 @@ class FailureManager:
     ) -> tuple[set[str], set[str]]:
         """Compute set of nodes and links to exclude for a failure iteration.
 
-        Applies failure policy logic and returns exclusion sets. This approach is
-        equivalent to directly applying failures to the network:
-        NetworkView(network, exclusions) ≡ network.copy().apply_failures(),
-        but with lower overhead since exclusion sets are <1% of entities.
+        Applies failure policy logic and returns exclusion sets. This is
+        equivalent to applying failures to the network and then filtering, but
+        with lower overhead since exclusion sets are typically small.
 
         Args:
             policy: Failure policy to apply. If None, uses instance policy.
@@ -341,28 +337,44 @@ class FailureManager:
         if policy is None:
             return excluded_nodes, excluded_links
 
-        # Create a temporary copy of the policy with the iteration-specific seed
-        # to ensure deterministic but varying results across iterations
-        if seed_offset is not None:
-            temp_policy = FailurePolicy(
-                rules=policy.rules,
-                attrs=policy.attrs,
-                fail_risk_groups=policy.fail_risk_groups,
-                fail_risk_group_children=policy.fail_risk_group_children,
-                use_cache=policy.use_cache,
-                seed=seed_offset,
-            )
-        else:
-            temp_policy = policy
+        # Build merged views of nodes and links including top-level fields required by
+        # policy matching and risk-group expansion. This ensures attributes like
+        # 'risk_groups' are available to the policy engine.
+        def _merge_node_attrs() -> dict[str, dict[str, Any]]:
+            merged: dict[str, dict[str, Any]] = {}
+            for node_name, node in self.network.nodes.items():
+                attrs: dict[str, Any] = {
+                    "name": node.name,
+                    "disabled": node.disabled,
+                    "risk_groups": node.risk_groups,
+                }
+                # Top-level fields take precedence over attrs on conflict
+                attrs.update({k: v for k, v in node.attrs.items() if k not in attrs})
+                merged[node_name] = attrs
+            return merged
 
-        # Apply failure policy to determine which entities to exclude
-        node_map = {n_name: n.attrs for n_name, n in self.network.nodes.items()}
-        link_map = {
-            link_name: link.attrs for link_name, link in self.network.links.items()
-        }
+        def _merge_link_attrs() -> dict[str, dict[str, Any]]:
+            merged: dict[str, dict[str, Any]] = {}
+            for link_id, link in self.network.links.items():
+                attrs: dict[str, Any] = {
+                    "id": link_id,
+                    "source": link.source,
+                    "target": link.target,
+                    "capacity": link.capacity,
+                    "cost": link.cost,
+                    "disabled": link.disabled,
+                    "risk_groups": link.risk_groups,
+                }
+                attrs.update({k: v for k, v in link.attrs.items() if k not in attrs})
+                merged[link_id] = attrs
+            return merged
 
-        failed_ids = temp_policy.apply_failures(
-            node_map, link_map, self.network.risk_groups
+        node_map = _merge_node_attrs()
+        link_map = _merge_link_attrs()
+
+        # Apply failure policy with optional deterministic seed override
+        failed_ids = policy.apply_failures(
+            node_map, link_map, self.network.risk_groups, seed=seed_offset
         )
 
         # Separate entity types for NetworkView creation

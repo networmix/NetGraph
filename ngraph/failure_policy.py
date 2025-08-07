@@ -165,6 +165,8 @@ class FailurePolicy:
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],
         network_risk_groups: Dict[str, Any] | None = None,
+        *,
+        seed: Optional[int] = None,
     ) -> List[str]:
         """Identify which entities fail given the defined rules, then optionally
         expand by shared-risk groups or nested risk groups.
@@ -175,6 +177,8 @@ class FailurePolicy:
             network_links: {link_id -> link_object_or_dict}, similarly.
             network_risk_groups: {rg_name -> RiskGroup} or dict. If you don't have risk
                                  groups, pass None or {}.
+            seed: Optional seed for deterministic selection. Overrides the policy's
+                internal seed when provided.
 
         Returns:
             A list of IDs that fail (union of all rule matches, possibly expanded).
@@ -197,7 +201,10 @@ class FailurePolicy:
                 network_risk_groups,
             )
             # Then select a subset from matched_ids according to rule_type
-            selected = self._select_entities(matched_ids, rule, self.seed)
+            # When an explicit seed is provided, it overrides the policy's seed
+            # for deterministic selection without creating a policy copy.
+            effective_seed = seed if seed is not None else self.seed
+            selected = self._select_entities(matched_ids, rule, effective_seed)
 
             # Add them to the respective fail sets
             if rule.entity_scope == "node":
