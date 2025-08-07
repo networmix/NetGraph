@@ -113,7 +113,6 @@ def get_default_registry() -> AnalysisRegistry:
         Configured registry with standard workflow step -> analysis mappings.
     """
     from .capacity_matrix import CapacityMatrixAnalyzer
-    from .flow_analyzer import FlowAnalyzer
     from .summary import SummaryAnalyzer
 
     registry = AnalysisRegistry()
@@ -124,14 +123,6 @@ def get_default_registry() -> AnalysisRegistry:
         SummaryAnalyzer,
         method_name="analyze_network_stats",
         section_title="Network Statistics",
-    )
-
-    # Capacity probe analysis
-    registry.register(
-        "CapacityProbe",
-        FlowAnalyzer,
-        method_name="analyze_capacity_probe",
-        section_title="Capacity Probe Results",
     )
 
     # Capacity envelope analysis - capacity matrix

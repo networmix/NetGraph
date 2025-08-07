@@ -64,12 +64,12 @@ def test_cli_filter_keys(tmp_path: Path, capsys, monkeypatch) -> None:
     """Verify filtering of specific step names."""
     scenario = Path("tests/integration/scenario_3.yaml").resolve()
     monkeypatch.chdir(tmp_path)
-    cli.main(["run", str(scenario), "--stdout", "--keys", "capacity_probe"])
+    cli.main(["run", str(scenario), "--stdout", "--keys", "capacity_analysis_forward"])
     captured = capsys.readouterr()
     json_output = extract_json_from_stdout(captured.out)
     data = json.loads(json_output)
-    assert list(data.keys()) == ["capacity_probe"]
-    assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe"]
+    assert list(data.keys()) == ["capacity_analysis_forward"]
+    assert "capacity_envelopes" in data["capacity_analysis_forward"]
     # Should create results.json by default
     assert (tmp_path / "results.json").exists()
 
@@ -84,20 +84,23 @@ def test_cli_filter_multiple_steps(tmp_path: Path, capsys, monkeypatch) -> None:
             str(scenario),
             "--stdout",
             "--keys",
-            "capacity_probe",
-            "capacity_probe2",
+            "capacity_analysis_forward",
+            "capacity_analysis_forward_balanced",
         ]
     )
     captured = capsys.readouterr()
     json_output = extract_json_from_stdout(captured.out)
     data = json.loads(json_output)
 
-    # Should only have the two capacity probe steps
-    assert set(data.keys()) == {"capacity_probe", "capacity_probe2"}
+    # Should only have the two capacity analysis steps
+    assert set(data.keys()) == {
+        "capacity_analysis_forward",
+        "capacity_analysis_forward_balanced",
+    }
 
-    # Both should have max_flow results
-    assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe"]
-    assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe2"]
+    # Both should have capacity_envelopes results
+    assert "capacity_envelopes" in data["capacity_analysis_forward"]
+    assert "capacity_envelopes" in data["capacity_analysis_forward_balanced"]
 
     # Should not have build_graph
     assert "build_graph" not in data
@@ -118,9 +121,9 @@ def test_cli_filter_single_step(tmp_path: Path, capsys, monkeypatch) -> None:
     assert list(data.keys()) == ["build_graph"]
     assert "graph" in data["build_graph"]
 
-    # Should not have capacity probe steps
-    assert "capacity_probe" not in data
-    assert "capacity_probe2" not in data
+    # Should not have capacity analysis steps
+    assert "capacity_analysis_forward" not in data
+    assert "capacity_analysis_forward_balanced" not in data
     # Should create results.json by default
     assert (tmp_path / "results.json").exists()
 
@@ -152,7 +155,7 @@ def test_cli_filter_mixed_existing_nonexistent(
             str(scenario),
             "--stdout",
             "--keys",
-            "capacity_probe",
+            "capacity_analysis_forward",
             "nonexistent_step",
         ]
     )
@@ -161,8 +164,8 @@ def test_cli_filter_mixed_existing_nonexistent(
     data = json.loads(json_output)
 
     # Should only have the existing step
-    assert list(data.keys()) == ["capacity_probe"]
-    assert "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in data["capacity_probe"]
+    assert list(data.keys()) == ["capacity_analysis_forward"]
+    assert "capacity_envelopes" in data["capacity_analysis_forward"]
     # Should create results.json by default
     assert (tmp_path / "results.json").exists()
 
@@ -186,7 +189,7 @@ def test_cli_no_filter_vs_filter(tmp_path: Path, monkeypatch) -> None:
             "--results",
             str(results_file2),
             "--keys",
-            "capacity_probe",
+            "capacity_analysis_forward",
         ]
     )
     filter_data = json.loads(results_file2.read_text())
@@ -198,7 +201,10 @@ def test_cli_no_filter_vs_filter(tmp_path: Path, monkeypatch) -> None:
     assert set(filter_data.keys()).issubset(set(no_filter_data.keys()))
 
     # The filtered step should have the same content in both
-    assert filter_data["capacity_probe"] == no_filter_data["capacity_probe"]
+    assert (
+        filter_data["capacity_analysis_forward"]
+        == no_filter_data["capacity_analysis_forward"]
+    )
 
 
 def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -215,7 +221,7 @@ def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> N
             str(results_file),
             "--stdout",
             "--keys",
-            "capacity_probe",
+            "capacity_analysis_forward",
         ]
     )
 
@@ -229,10 +235,8 @@ def test_cli_filter_to_file_and_stdout(tmp_path: Path, capsys, monkeypatch) -> N
 
     # Both should be identical and contain only the filtered step
     assert stdout_data == file_data
-    assert list(stdout_data.keys()) == ["capacity_probe"]
-    assert (
-        "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]" in stdout_data["capacity_probe"]
-    )
+    assert list(stdout_data.keys()) == ["capacity_analysis_forward"]
+    assert "capacity_envelopes" in stdout_data["capacity_analysis_forward"]
 
     # Default results.json should NOT be created when custom path is specified
     assert not (tmp_path / "results.json").exists()
@@ -413,10 +417,13 @@ network:
 workflow:
   - step_type: BuildGraph
     name: build_test
-  - step_type: CapacityProbe
+  - step_type: CapacityEnvelopeAnalysis
     name: probe_test
     source_path: "A"
     sink_path: "B"
+    iterations: 1
+    baseline: false
+    failure_policy: null
 """)
 
         monkeypatch.chdir(tmpdir_path)
@@ -483,10 +490,13 @@ network:
 workflow:
   - step_type: BuildGraph
     name: build_step
-  - step_type: CapacityProbe
+  - step_type: CapacityEnvelopeAnalysis
     name: probe_step
     source_path: "A"
     sink_path: "B"
+    iterations: 1
+    baseline: false
+    failure_policy: null
 """)
 
         # Run with filter - this should NOT return empty results

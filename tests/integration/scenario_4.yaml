@@ -303,44 +303,58 @@ workflow:
   - step_type: BuildGraph
     name: build_graph
 
-  # Enable nodes that were disabled for maintenance
-  - step_type: EnableNodes
-    name: enable_maintenance_racks
-    path: "dc2_podb_rack2/.*"
-    count: 10 # Enable 10 nodes
-    order: "name"
 
-  # Add external connectivity
-  - step_type: DistributeExternalConnectivity
-    name: add_wan_connectivity
-    remote_locations:
-      - "WAN_NYC"
-      - "WAN_CHI" # 2 WAN locations for test efficiency
-    attachment_path: "dc[12]_fabric/spine/spine-[12]"
-    stripe_width: 2
-    link_count: 1 # 1 link per location
-    capacity: 100.0 # 100 Gb/s WAN links
-    cost: 50
-    remote_prefix: "wan/"
+
+
 
   # Capacity analysis with different traffic patterns
-  - step_type: CapacityProbe
-    name: intra_dc_capacity
+  # Forward intra-DC capacity analysis
+  - step_type: CapacityEnvelopeAnalysis
+    name: intra_dc_capacity_forward
     source_path: "dc1_pod[ab]_rack.*/servers/.*"
     sink_path: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
-    probe_reverse: true
     shortest_path: false
     flow_placement: "PROPORTIONAL"
+    iterations: 1
+    baseline: false
+    failure_policy: null
 
-  - step_type: CapacityProbe
-    name: inter_dc_capacity
+  # Reverse intra-DC capacity analysis
+  - step_type: CapacityEnvelopeAnalysis
+    name: intra_dc_capacity_reverse
+    source_path: "dc1_pod[ab]_rack.*/servers/.*"
+    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    mode: "combine"
+    shortest_path: false
+    flow_placement: "PROPORTIONAL"
+    iterations: 1
+    baseline: false
+    failure_policy: null
+
+  # Forward inter-DC capacity analysis
+  - step_type: CapacityEnvelopeAnalysis
+    name: inter_dc_capacity_forward
     source_path: "dc1_.*servers/.*"
     sink_path: "dc2_.*servers/.*"
     mode: "combine"
-    probe_reverse: true
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
+    iterations: 1
+    baseline: false
+    failure_policy: null
+
+  # Reverse inter-DC capacity analysis
+  - step_type: CapacityEnvelopeAnalysis
+    name: inter_dc_capacity_reverse
+    source_path: "dc2_.*servers/.*"
+    sink_path: "dc1_.*servers/.*"
+    mode: "combine"
+    shortest_path: false
+    flow_placement: "EQUAL_BALANCED"
+    iterations: 1
+    baseline: false
+    failure_policy: null
 
   # Failure analysis with different policies
   - step_type: CapacityEnvelopeAnalysis

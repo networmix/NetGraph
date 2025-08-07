@@ -33,16 +33,18 @@ assert not net.nodes["A"].disabled
 
 ## Workflow Integration
 
-### CapacityProbe with Exclusions
+### CapacityEnvelopeAnalysis with Deterministic Analysis
 
 ```yaml
 workflow:
-  - step_type: CapacityProbe
-    name: "probe_with_exclusions"
+  # Single deterministic analysis (equivalent to removed CapacityProbe)
+  - step_type: CapacityEnvelopeAnalysis
+    name: "deterministic_capacity_analysis"
     source_path: "^spine.*"
     sink_path: "^leaf.*"
-    excluded_nodes: ["spine1", "spine2"]
-    excluded_links: ["link123"]
+    iterations: 1
+    baseline: false
+    failure_policy: null  # No failures for deterministic analysis
 ```
 
 ### NetworkStats with Exclusions

@@ -57,7 +57,7 @@ def mock_failure_policy_set(mock_failure_policy: FailurePolicy) -> FailurePolicy
     """Create a mock FailurePolicySet for testing."""
     policy_set = MagicMock(spec=FailurePolicySet)
     policy_set.get_policy.return_value = mock_failure_policy
-    policy_set.get_default_policy.return_value = mock_failure_policy
+    # No longer using get_default_policy
     return policy_set
 
 
@@ -120,8 +120,8 @@ class TestFailureManager:
 
         policy = fm.get_failure_policy()
 
-        mock_failure_policy_set.get_default_policy.assert_called_once()
-        assert policy is not None
+        # No longer using get_default_policy - should return None when policy_name=None
+        assert policy is None
 
     def test_get_failure_policy_not_found(
         self, mock_network: Network, mock_failure_policy_set: FailurePolicySet
@@ -149,8 +149,7 @@ class TestFailureManager:
             policy_name=None,
         )
 
-        # Mock the policy set to return None for default policy
-        mock_failure_policy_set.get_default_policy.return_value = None
+        # No longer using get_default_policy - policy_name=None returns None directly
 
         excluded_nodes, excluded_links = fm.compute_exclusions()
 
@@ -288,7 +287,7 @@ class TestFailureManager:
         """Test various validation errors."""
         # Test iterations validation without policy
         failure_manager.failure_policy_set.get_policy.return_value = None
-        failure_manager.failure_policy_set.get_default_policy.return_value = None
+        # No longer using get_default_policy - set policy_name=None directly
 
         with pytest.raises(
             ValueError, match="iterations=2 has no effect without a failure policy"
@@ -376,7 +375,7 @@ class TestFailureManagerEdgeCases:
     def test_empty_failure_policy_set(self, mock_network: Network):
         """Test FailureManager with empty failure policy set."""
         empty_policy_set = MagicMock(spec=FailurePolicySet)
-        empty_policy_set.get_default_policy.return_value = None
+        # No longer using get_default_policy
 
         fm = FailureManager(
             network=mock_network,

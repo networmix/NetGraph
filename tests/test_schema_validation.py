@@ -61,10 +61,13 @@ failure_policy_set:
 workflow:
   - step_type: BuildGraph
     name: build_graph
-  - step_type: CapacityProbe
+  - step_type: CapacityEnvelopeAnalysis
     name: capacity_test
     source_path: "A"
     sink_path: "C"
+    iterations: 1
+    baseline: false
+    failure_policy: null
     mode: "combine"
 """
         data = yaml.safe_load(simple_scenario)
@@ -351,10 +354,13 @@ network:
 workflow:
   - step_type: BuildGraph
     name: build_graph
-  - step_type: CapacityProbe
+  - step_type: CapacityEnvelopeAnalysis
     name: capacity_test
     source_path: "spine1"
     sink_path: "leaf1"
+    iterations: 1
+    baseline: false
+    failure_policy: null
     mode: "combine"
 """
         data = yaml.safe_load(traffic_scenario)

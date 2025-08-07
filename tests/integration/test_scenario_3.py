@@ -213,54 +213,138 @@ class TestScenario3:
         """Test that this scenario has no failure policy as expected."""
         helper.validate_failure_policy(expected_rules=0)
 
-    def test_capacity_probe_proportional_flow_results(self, helper):
-        """Test capacity probe results with PROPORTIONAL flow placement."""
-        # Test forward flow result
-        flow_label_fwd = "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
-        helper.validate_flow_results(
-            step_name="capacity_probe", flow_label=flow_label_fwd, expected_flow=3200.0
+    def test_capacity_envelope_proportional_flow_results(self, helper):
+        """Test capacity envelope results with PROPORTIONAL flow placement."""
+        # CapacityEnvelopeAnalysis with baseline=True, iterations=1 stores results under "capacity_envelopes"
+        # and each envelope contains statistics including the baseline value
+
+        # Test forward direction
+        envelopes_fwd = helper.scenario.results.get(
+            "capacity_analysis_forward", "capacity_envelopes"
+        )
+        assert envelopes_fwd is not None, (
+            "Forward capacity analysis should have envelope results"
         )
 
-        # Test reverse flow result
-        flow_label_rev = "max_flow:[my_clos2/b.*/t1 -> my_clos1/b.*/t1]"
-        helper.validate_flow_results(
-            step_name="capacity_probe", flow_label=flow_label_rev, expected_flow=3200.0
+        flow_key_fwd = "my_clos1/b.*/t1->my_clos2/b.*/t1"
+        assert flow_key_fwd in envelopes_fwd, (
+            f"Expected flow key '{flow_key_fwd}' in forward results"
         )
 
-    def test_capacity_probe_equal_balanced_flow_results(self, helper):
-        """Test capacity probe results with EQUAL_BALANCED flow placement."""
-        # Test forward flow result from second capacity probe step
-        flow_label_fwd = "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
-        helper.validate_flow_results(
-            step_name="capacity_probe2", flow_label=flow_label_fwd, expected_flow=3200.0
+        # For baseline analysis, check the mean/baseline value
+        envelope_fwd = envelopes_fwd[flow_key_fwd]
+        assert abs(envelope_fwd["mean"] - 3200.0) < 0.1, (
+            f"Expected forward flow ~3200.0, got {envelope_fwd['mean']}"
         )
 
-        # Test reverse flow result
-        flow_label_rev = "max_flow:[my_clos2/b.*/t1 -> my_clos1/b.*/t1]"
-        helper.validate_flow_results(
-            step_name="capacity_probe2", flow_label=flow_label_rev, expected_flow=3200.0
+        # Test reverse direction
+        envelopes_rev = helper.scenario.results.get(
+            "capacity_analysis_reverse", "capacity_envelopes"
+        )
+        assert envelopes_rev is not None, (
+            "Reverse capacity analysis should have envelope results"
+        )
+
+        flow_key_rev = "my_clos2/b.*/t1->my_clos1/b.*/t1"
+        assert flow_key_rev in envelopes_rev, (
+            f"Expected flow key '{flow_key_rev}' in reverse results"
+        )
+
+        envelope_rev = envelopes_rev[flow_key_rev]
+        assert abs(envelope_rev["mean"] - 3200.0) < 0.1, (
+            f"Expected reverse flow ~3200.0, got {envelope_rev['mean']}"
+        )
+
+    def test_capacity_envelope_equal_balanced_flow_results(self, helper):
+        """Test capacity envelope results with EQUAL_BALANCED flow placement."""
+        # Test forward direction with EQUAL_BALANCED
+        envelopes_fwd = helper.scenario.results.get(
+            "capacity_analysis_forward_balanced", "capacity_envelopes"
+        )
+        assert envelopes_fwd is not None, (
+            "Forward balanced capacity analysis should have envelope results"
+        )
+
+        flow_key_fwd = "my_clos1/b.*/t1->my_clos2/b.*/t1"
+        assert flow_key_fwd in envelopes_fwd, (
+            f"Expected flow key '{flow_key_fwd}' in forward balanced results"
+        )
+
+        envelope_fwd = envelopes_fwd[flow_key_fwd]
+        assert abs(envelope_fwd["mean"] - 3200.0) < 0.1, (
+            f"Expected forward balanced flow ~3200.0, got {envelope_fwd['mean']}"
+        )
+
+        # Test reverse direction with EQUAL_BALANCED
+        envelopes_rev = helper.scenario.results.get(
+            "capacity_analysis_reverse_balanced", "capacity_envelopes"
+        )
+        assert envelopes_rev is not None, (
+            "Reverse balanced capacity analysis should have envelope results"
+        )
+
+        flow_key_rev = "my_clos2/b.*/t1->my_clos1/b.*/t1"
+        assert flow_key_rev in envelopes_rev, (
+            f"Expected flow key '{flow_key_rev}' in reverse balanced results"
+        )
+
+        envelope_rev = envelopes_rev[flow_key_rev]
+        assert abs(envelope_rev["mean"] - 3200.0) < 0.1, (
+            f"Expected reverse balanced flow ~3200.0, got {envelope_rev['mean']}"
         )
 
     def test_flow_conservation_properties(self, helper):
         """Test that flow results satisfy conservation principles."""
-        # Get all flow results from both capacity probe steps
+        # Get all flow results from the capacity envelope analysis steps
         all_flows = {}
 
-        # Add results from capacity_probe step
-        flow_fwd_1 = helper.scenario.results.get(
-            "capacity_probe", "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
+        # Add results from forward capacity analysis step
+        envelopes_fwd = helper.scenario.results.get(
+            "capacity_analysis_forward", "capacity_envelopes"
         )
-        flow_rev_1 = helper.scenario.results.get(
-            "capacity_probe", "max_flow:[my_clos2/b.*/t1 -> my_clos1/b.*/t1]"
+        if envelopes_fwd:
+            flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
+            if flow_key in envelopes_fwd:
+                all_flows["forward_proportional"] = envelopes_fwd[flow_key]["mean"]
+
+        # Add results from reverse capacity analysis step
+        envelopes_rev = helper.scenario.results.get(
+            "capacity_analysis_reverse", "capacity_envelopes"
         )
+        if envelopes_rev:
+            flow_key = "my_clos2/b.*/t1 -> my_clos1/b.*/t1"
+            if flow_key in envelopes_rev:
+                all_flows["reverse_proportional"] = envelopes_rev[flow_key]["mean"]
 
-        if flow_fwd_1 is not None:
-            all_flows["clos1->clos2 (PROP)"] = flow_fwd_1
-        if flow_rev_1 is not None:
-            all_flows["clos2->clos1 (PROP)"] = flow_rev_1
+        # Add results from forward balanced capacity analysis step
+        envelopes_fwd_bal = helper.scenario.results.get(
+            "capacity_analysis_forward_balanced", "capacity_envelopes"
+        )
+        if envelopes_fwd_bal:
+            flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
+            if flow_key in envelopes_fwd_bal:
+                all_flows["forward_balanced"] = envelopes_fwd_bal[flow_key]["mean"]
 
-        # Validate flow conservation
-        helper.validate_flow_conservation(all_flows)
+        # Add results from reverse balanced capacity analysis step
+        envelopes_rev_bal = helper.scenario.results.get(
+            "capacity_analysis_reverse_balanced", "capacity_envelopes"
+        )
+        if envelopes_rev_bal:
+            flow_key = "my_clos2/b.*/t1 -> my_clos1/b.*/t1"
+            if flow_key in envelopes_rev_bal:
+                all_flows["reverse_balanced"] = envelopes_rev_bal[flow_key]["mean"]
+
+        # Validate flow conservation - should have at least some flow results
+        assert len(all_flows) > 0, "Should have at least some capacity analysis results"
+
+        # All flows should be the same value since topology is symmetric
+        flow_values = list(all_flows.values())
+        if flow_values:
+            expected_flow = 3200.0
+            for flow_name, flow_value in all_flows.items():
+                assert abs(flow_value - expected_flow) < 0.1, (
+                    f"Flow {flow_name} = {flow_value}, expected ~{expected_flow}"
+                )
 
     def test_topology_semantic_correctness(self, helper):
         """Test that the complex nested topology is semantically correct."""
@@ -304,21 +388,25 @@ class TestScenario3:
         graph_result = scenario_3_executed.results.get("build_graph", "graph")
         assert graph_result is not None, "BuildGraph step should have executed"
 
-        # Should have results from both CapacityProbe steps
-        probe1_result = scenario_3_executed.results.get(
-            "capacity_probe", "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
+        # Should have results from capacity envelope analysis steps
+        envelope1_result = scenario_3_executed.results.get(
+            "capacity_analysis_forward", "capacity_envelopes"
         )
-        assert probe1_result is not None, "First CapacityProbe should have executed"
+        assert envelope1_result is not None, (
+            "Forward capacity envelope analysis should have executed"
+        )
 
-        probe2_result = scenario_3_executed.results.get(
-            "capacity_probe2", "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]"
+        envelope2_result = scenario_3_executed.results.get(
+            "capacity_analysis_forward_balanced", "capacity_envelopes"
         )
-        assert probe2_result is not None, "Second CapacityProbe should have executed"
+        assert envelope2_result is not None, (
+            "Forward balanced capacity envelope analysis should have executed"
+        )
 
 
 # Smoke test for basic scenario functionality
 @pytest.mark.slow
-def test_scenario_3_build_graph_and_capacity_probe():
+def test_scenario_3_build_graph_and_capacity_envelope():
     """
     Smoke test for scenario 3 - validates basic parsing and execution.
 
@@ -337,10 +425,14 @@ def test_scenario_3_build_graph_and_capacity_probe():
     helper.validate_traffic_demands(0)
     helper.validate_failure_policy(0)
 
-    # Validate key flow results
-    helper.validate_flow_results(
-        "capacity_probe", "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]", 3200.0
+    # Validate key envelope results
+    envelopes_fwd = scenario.results.get(
+        "capacity_analysis_forward", "capacity_envelopes"
     )
-    helper.validate_flow_results(
-        "capacity_probe2", "max_flow:[my_clos1/b.*/t1 -> my_clos2/b.*/t1]", 3200.0
+    assert envelopes_fwd is not None, "Forward capacity analysis should have results"
+
+    flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
+    assert flow_key in envelopes_fwd, f"Expected flow key '{flow_key}' in results"
+    assert abs(envelopes_fwd[flow_key]["mean"] - 3200.0) < 0.1, (
+        "Expected ~3200.0 Gb/s capacity"
     )

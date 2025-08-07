@@ -484,31 +484,9 @@ workflow:
     # Builds the StrictMultiDiGraph from scenario.network for analysis
     # No additional parameters required
 
-  - step_type: EnableNodes
-    path: "^regex/for/nodes/to/enable"
-    count: N # Number of nodes to enable
-    order: "name" | "random" | "reverse" # Selection order
 
-  - step_type: DistributeExternalConnectivity
-    remote_prefix: "prefix_for_remote_nodes/"
-    remote_locations:
-      - LOC_A
-      - LOC_B
-    attachment_path: "^regex/for/attachment/nodes"
-    stripe_width: W # Distribution width
-    link_count: N # Number of links per remote node (default: 1)
-    capacity: C # Link capacity
-    cost: Z # Link cost
 
-  - step_type: CapacityProbe
-    name: "probe_name"  # Optional: Name for the probe step
-    source_path: "regex/for/source_nodes"
-    sink_path: "regex/for/sink_nodes"
-    mode: "combine" | "pairwise" # How to group sources and sinks
-    probe_reverse: true | false # Whether to probe reverse direction
-    shortest_path: true | false # Use shortest path only vs full max flow
-    flow_placement: "PROPORTIONAL" | "EQUAL_BALANCED" # How to distribute flow
-    # Additional probe parameters available
+
 
   - step_type: CapacityEnvelopeAnalysis
     name: "envelope_name"  # Optional: Name for the analysis step
@@ -524,14 +502,14 @@ workflow:
     store_failure_patterns: true | false # Optional: Store failure patterns in results (default: false)
     seed: S # Optional: Seed for deterministic results
 
+    # For single deterministic capacity analysis (equivalent to removed CapacityProbe):
+    # Set iterations: 1, baseline: false, failure_policy: null
+
 **Available Workflow Steps:**
 
 - **`BuildGraph`**: Builds a StrictMultiDiGraph from scenario.network
-- **`CapacityProbe`**: Probes capacity (max flow) between selected groups of nodes
 - **`NetworkStats`**: Computes basic capacity and degree statistics
-- **`EnableNodes`**: Enables previously disabled nodes matching a path pattern
-- **`DistributeExternalConnectivity`**: Distributes external connectivity to attachment nodes
-- **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios
+- **`CapacityEnvelopeAnalysis`**: Performs Monte-Carlo capacity analysis across failure scenarios, including deterministic single-iteration analysis
 
 **Note:** NetGraph separates scenario-wide state (persistent configuration) from analysis-specific state (temporary failures). The `NetworkView` class provides a clean way to analyze networks under different failure conditions without modifying the base network, enabling concurrent analysis of multiple failure scenarios.
 
@@ -540,8 +518,8 @@ workflow:
 
 **Workflow Step Categories:**
 
-- **NetworkTransform steps** (like `EnableNodes`, `DistributeExternalConnectivity`) permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
-- **Analysis steps** (like `CapacityProbe`, `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
+- **NetworkTransform steps** permanently modify the Network's scenario state by changing the `disabled` property of nodes/links
+- **Analysis steps** (like `CapacityEnvelopeAnalysis`) use NetworkView internally for temporary failure simulation, preserving the base network state
 
 **Report Generation:** After running a workflow, use the `ngraph report` CLI command to generate Jupyter notebooks and HTML reports from the results. See [CLI Reference](cli.md#report) for details.
 

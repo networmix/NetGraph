@@ -288,7 +288,7 @@ class FailureManager:
         Args:
             network: Network to analyze (read-only, not modified).
             failure_policy_set: Set of named failure policies.
-            policy_name: Name of specific policy to use. If None, uses default policy.
+            policy_name: Name of specific policy to use. If None, no failure policy is applied.
         """
         self.network = network
         self.failure_policy_set = failure_policy_set
@@ -311,7 +311,7 @@ class FailureManager:
                     f"Failure policy '{self.policy_name}' not found in scenario"
                 ) from None
         else:
-            return self.failure_policy_set.get_default_policy()
+            return None
 
     def compute_exclusions(
         self,

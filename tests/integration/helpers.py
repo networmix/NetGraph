@@ -264,7 +264,9 @@ class ScenarioTestHelper:
         Raises:
             AssertionError: If failure policy doesn't match expectations
         """
-        policy = self.scenario.failure_policy_set.get_default_policy()
+        # Get the first policy if any exist for validation
+        policies = self.scenario.failure_policy_set.get_all_policies()
+        policy = policies[0] if policies else None
 
         if policy is None:
             # No policy exists - only valid if expecting zero rules
@@ -641,7 +643,7 @@ class ScenarioDataBuilder:
         Add a workflow step to the scenario execution plan.
 
         Args:
-            step_type: Type of workflow step (e.g., "BuildGraph", "CapacityProbe")
+            step_type: Type of workflow step (e.g., "BuildGraph", "CapacityEnvelopeAnalysis")
             name: Unique name for this step instance
             **kwargs: Additional step-specific parameters
 

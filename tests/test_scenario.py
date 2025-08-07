@@ -278,25 +278,25 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert link_bc.capacity == 20
     assert link_bc.cost == 4
 
-    # Check failure policy
-    default_policy = scenario.failure_policy_set.get_default_policy()
-    assert isinstance(default_policy, FailurePolicy)
-    assert not default_policy.fail_risk_groups
-    assert not default_policy.fail_risk_group_children
-    assert not default_policy.use_cache
+    # Check failure policy - access by known name "default"
+    simple_policy = scenario.failure_policy_set.get_policy("default")
+    assert isinstance(simple_policy, FailurePolicy)
+    assert not simple_policy.fail_risk_groups
+    assert not simple_policy.fail_risk_group_children
+    assert not simple_policy.use_cache
 
-    assert len(default_policy.rules) == 2
-    assert default_policy.attrs.get("name") == "multi_rule_example"
-    assert default_policy.attrs.get("description") == "Testing multi-rule approach."
+    assert len(simple_policy.rules) == 2
+    assert simple_policy.attrs.get("name") == "multi_rule_example"
+    assert simple_policy.attrs.get("description") == "Testing multi-rule approach."
 
     # Rule1 => entity_scope=node, rule_type=choice, count=1
-    rule1 = default_policy.rules[0]
+    rule1 = simple_policy.rules[0]
     assert rule1.entity_scope == "node"
     assert rule1.rule_type == "choice"
     assert rule1.count == 1
 
     # Rule2 => entity_scope=link, rule_type=all
-    rule2 = default_policy.rules[1]
+    rule2 = simple_policy.rules[1]
     assert rule2.entity_scope == "link"
     assert rule2.rule_type == "all"
 
@@ -384,7 +384,7 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     assert len(scenario.network.links) == 0
 
     # If no failure_policy_set block, scenario.failure_policy_set has no policies
-    assert scenario.failure_policy_set.get_default_policy() is None
+    assert len(scenario.failure_policy_set.get_all_policies()) == 0
 
     assert len(scenario.traffic_matrix_set.matrices) == 0
     assert len(scenario.workflow) == 1
@@ -402,7 +402,7 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert scenario.network is not None
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
-    assert scenario.failure_policy_set.get_default_policy() is None
+    assert len(scenario.failure_policy_set.get_all_policies()) == 0
     assert len(scenario.traffic_matrix_set.matrices) == 0
     assert scenario.workflow == []
 

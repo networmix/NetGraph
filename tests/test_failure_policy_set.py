@@ -13,7 +13,6 @@ class TestFailurePolicySet:
         """Test empty failure policy set."""
         fps = FailurePolicySet()
         assert len(fps.policies) == 0
-        assert fps.get_default_policy() is None
         assert fps.get_all_policies() == []
 
     def test_add_and_get_policy(self):
@@ -30,40 +29,6 @@ class TestFailurePolicySet:
         fps = FailurePolicySet()
         with pytest.raises(KeyError):
             fps.get_policy("nonexistent")
-
-    def test_default_policy_explicit(self):
-        """Test explicit default policy."""
-        fps = FailurePolicySet()
-        default_policy = FailurePolicy(rules=[])
-        other_policy = FailurePolicy(rules=[])
-
-        fps.add("default", default_policy)
-        fps.add("other", other_policy)
-
-        assert fps.get_default_policy() is default_policy
-
-    def test_default_policy_single(self):
-        """Test default policy when only one policy exists."""
-        fps = FailurePolicySet()
-        policy = FailurePolicy(rules=[])
-
-        fps.add("only_one", policy)
-        assert fps.get_default_policy() is policy
-
-    def test_default_policy_multiple_no_default(self):
-        """Test default policy with multiple policies but no 'default' key."""
-        fps = FailurePolicySet()
-        policy1 = FailurePolicy(rules=[])
-        policy2 = FailurePolicy(rules=[])
-
-        fps.add("policy1", policy1)
-        fps.add("policy2", policy2)
-
-        with pytest.raises(ValueError) as exc_info:
-            fps.get_default_policy()
-
-        assert "Multiple failure policies exist" in str(exc_info.value)
-        assert "no 'default' policy" in str(exc_info.value)
 
     def test_get_all_policies(self):
         """Test getting all policies."""

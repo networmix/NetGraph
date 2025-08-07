@@ -61,11 +61,6 @@ def discover_modules():
         elif len(parts) == 3 and parts[1] == "workflow":  # ngraph.workflow.xxx
             return (3, parts[2])
 
-        # Then transform modules (under workflow)
-        elif len(parts) == 4 and parts[1:3] == ["workflow", "transform"]:
-            # ngraph.workflow.transform.xxx
-            return (4, parts[3])
-
         # Everything else at the end
         else:
             return (9, module_name)

@@ -266,8 +266,10 @@ failure_policy_set:
 
     scenario = Scenario.from_yaml(yaml_content)
     assert len(scenario.failure_policy_set.policies) == 1
-    default_policy = scenario.failure_policy_set.get_default_policy()
-    assert default_policy is not None
+    policies = scenario.failure_policy_set.get_all_policies()
+    assert len(policies) > 0
+    # Since the policy was named "default", access it directly
+    default_policy = scenario.failure_policy_set.get_policy("default")
     assert default_policy.fail_risk_groups
     assert not default_policy.fail_risk_group_children
     assert len(default_policy.rules) == 1
@@ -286,16 +288,11 @@ network:
 
 workflow:
   - step_type: BuildGraph
-  - step_type: EnableNodes
-    path: "node.*"
-    count: 2
-    order: "name"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert len(scenario.workflow) == 2
+    assert len(scenario.workflow) == 1
     assert scenario.workflow[0].__class__.__name__ == "BuildGraph"
-    assert scenario.workflow[1].__class__.__name__ == "_TransformStep"
 
     # Test running the workflow
     scenario.run()

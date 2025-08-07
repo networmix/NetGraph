@@ -7,7 +7,7 @@ This module tests the most advanced NetGraph capabilities including:
 - Bracket expansion in group names for multiple pattern matching
 - Complex node and link override patterns with advanced regex
 - Risk groups with hierarchical structure and failure simulation
-- Advanced workflow steps (EnableNodes, DistributeExternalConnectivity)
+- Advanced workflow steps
 - NetworkExplorer integration for hierarchy analysis
 - Large-scale network topology with realistic data center structure
 
@@ -346,29 +346,33 @@ class TestScenario4:
         graph = results.get("build_graph", "graph")
         assert graph is not None
 
-        # Test EnableNodes step
-        # Should have enabled previously disabled nodes
-        # Note: EnableNodes step should have enabled some of the disabled nodes
-
-        # Test DistributeExternalConnectivity step
-        # Should have added WAN nodes and connections
-        wan_nodes = [node for node in helper.network.nodes if node.startswith("wan/")]
-        assert len(wan_nodes) > 0, "DistributeExternalConnectivity should add WAN nodes"
-
-        # Test CapacityProbe results - using the correct keys from the output
-        intra_dc_key = (
-            "max_flow:[dc1_pod[ab]_rack.*/servers/.* -> dc1_pod[ab]_rack.*/servers/.*]"
+        # Test CapacityEnvelopeAnalysis results - using capacity_envelopes key
+        intra_dc_envelopes = results.get(
+            "intra_dc_capacity_forward", "capacity_envelopes"
         )
-        intra_dc_result = results.get("intra_dc_capacity", intra_dc_key)
-        assert intra_dc_result is not None, (
-            "Intra-DC capacity probe should have results"
+        assert intra_dc_envelopes is not None, (
+            "Intra-DC forward capacity analysis should have envelope results"
         )
 
-        # For inter-DC, just check one of the available keys
-        inter_dc_key = "max_flow:[dc1_.*servers/.* -> dc2_.*servers/.*]"
-        inter_dc_result = results.get("inter_dc_capacity", inter_dc_key)
-        assert inter_dc_result is not None, (
-            "Inter-DC capacity probe should have results"
+        # Check that envelope contains expected flow key
+        expected_intra_key = (
+            "dc1_pod[ab]_rack.*/servers/.*->dc1_pod[ab]_rack.*/servers/.*"
+        )
+        assert expected_intra_key in intra_dc_envelopes, (
+            f"Expected flow key '{expected_intra_key}' in intra-DC results"
+        )
+
+        # For inter-DC, check forward direction
+        inter_dc_envelopes = results.get(
+            "inter_dc_capacity_forward", "capacity_envelopes"
+        )
+        assert inter_dc_envelopes is not None, (
+            "Inter-DC forward capacity analysis should have envelope results"
+        )
+
+        expected_inter_key = "dc1_.*servers/.*->dc2_.*servers/.*"
+        assert expected_inter_key in inter_dc_envelopes, (
+            f"Expected flow key '{expected_inter_key}' in inter-DC results"
         )
 
         # Test CapacityEnvelopeAnalysis results
@@ -387,7 +391,7 @@ class TestScenario4:
 
         # Verify reasonable network size for test scenario
         assert (
-            explorer.root_node.stats.node_count > 80
+            explorer.root_node.stats.node_count >= 80
         )  # Should have substantial node count
 
         # Test component cost/power aggregation
@@ -457,7 +461,7 @@ class TestScenario4:
     def test_edge_case_handling(self, helper):
         """Test edge cases and boundary conditions in complex scenario."""
         # Test disabled node handling (may be enabled by workflow steps)
-        # Since EnableNodes step might have enabled them, just check the functionality
+        # Test disabled node handling
         # Test empty group handling (if any)
         all_nodes = list(helper.network.nodes.keys())
         assert len(all_nodes) > 0, "Should have some nodes"
@@ -496,7 +500,7 @@ def test_scenario_4_advanced_features():
     assert len(scenario.components_library.components) >= 3
 
     # Validate advanced features worked with current test scale
-    assert len(scenario.network.nodes) > 80  # Should have substantial node count
+    assert len(scenario.network.nodes) >= 80  # Should have substantial node count
     assert len(scenario.failure_policy_set.policies) >= 3  # Adjusted expectation
 
 

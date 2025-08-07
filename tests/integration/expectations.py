@@ -187,7 +187,7 @@ def _calculate_scenario_4_total_links() -> int:
     # - Leaf to spine links within fabrics: 2 leaf * 2 spine * 2 DCs * 2 directions = 16
     # - Rack to fabric connections: 8 racks * 2 leaf per rack * 2 directions = 32
     # - Inter-DC spine connections: 2 spine * 2 spine * 2 directions = 8
-    # - WAN connections added by DistributeExternalConnectivity workflow step: varies
+
     # - Some connections may be missing due to disabled nodes or complex adjacency patterns
     # Actual observed value: 148 directed edges (updated after attribute cleanup)
     return 148  # Current observed value from execution

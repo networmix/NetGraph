@@ -10,7 +10,6 @@ from ngraph.results import Results
 from ngraph.scenario import Scenario
 from ngraph.workflow.analysis.registry import get_default_registry
 from ngraph.workflow.capacity_envelope_analysis import CapacityEnvelopeAnalysis
-from ngraph.workflow.capacity_probe import CapacityProbe
 from ngraph.workflow.network_stats import NetworkStats
 
 
@@ -55,10 +54,13 @@ failure_policy_set:
 workflow:
   - step_type: NetworkStats
     name: "network_stats"
-  - step_type: CapacityProbe
-    name: "capacity_probe"
+  - step_type: CapacityEnvelopeAnalysis
+    name: "capacity_analysis"
     source_path: "^A$"
     sink_path: "^C$"
+    iterations: 1
+    baseline: false
+    failure_policy: null
 """
         return Scenario.from_yaml(scenario_yaml)
 
@@ -77,23 +79,31 @@ workflow:
         assert node_count > 0
         assert link_count > 0
 
-    def test_capacity_probe_execution(self, simple_scenario):
-        """Test CapacityProbe workflow step execution."""
+    def test_capacity_envelope_execution(self, simple_scenario):
+        """Test CapacityEnvelopeAnalysis workflow step execution."""
         # First build the graph
         from ngraph.workflow.build_graph import BuildGraph
 
         build_step = BuildGraph(name="build")
         build_step.run(simple_scenario)
 
-        # Then run capacity probe
-        probe_step = CapacityProbe(name="probe", source_path="^A$", sink_path="^C$")
-        probe_step.run(simple_scenario)
+        # Then run capacity envelope analysis
+        envelope_step = CapacityEnvelopeAnalysis(
+            name="envelope",
+            source_path="^A$",
+            sink_path="^C$",
+            iterations=1,
+            baseline=False,
+            failure_policy=None,
+        )
+        envelope_step.run(simple_scenario)
 
         # Verify results
-        # The CapacityProbe should store flow results directly in the step results
-        max_flow_result = simple_scenario.results.get("probe", "max_flow:[^A$ -> ^C$]")
-        assert max_flow_result is not None
-        assert max_flow_result > 0
+        # CapacityEnvelopeAnalysis stores results under capacity_envelopes
+        envelopes = simple_scenario.results.get("envelope", "capacity_envelopes")
+        assert envelopes is not None
+        assert "^A$->^C$" in envelopes
+        assert envelopes["^A$->^C$"]["mean"] > 0
 
     def test_capacity_envelope_analysis_execution(self, simple_scenario):
         """Test CapacityEnvelopeAnalysis execution."""
@@ -146,7 +156,7 @@ workflow:
         # Test registry contains expected mappings
         step_types = registry.get_all_step_types()
         assert "NetworkStats" in step_types
-        assert "CapacityProbe" in step_types
+
         assert "CapacityEnvelopeAnalysis" in step_types
 
         # Test registry functionality - just verify it has expected step types
@@ -163,10 +173,11 @@ workflow:
         assert node_count is not None
         assert node_count > 0
 
-        # CapacityProbe stores specific flow results
-        probe_result = simple_scenario.results.get(
-            "capacity_probe", "max_flow:[^A$ -> ^C$]"
+        # CapacityEnvelopeAnalysis stores envelope results
+        envelopes = simple_scenario.results.get(
+            "capacity_analysis", "capacity_envelopes"
         )
+        probe_result = envelopes["^A$->^C$"]["mean"] if envelopes else None
         assert probe_result is not None
         assert probe_result > 0
 
@@ -180,10 +191,13 @@ network:
   links: []
 
 workflow:
-  - step_type: CapacityProbe
-    name: "invalid_probe"
+  - step_type: CapacityEnvelopeAnalysis
+    name: "invalid_envelope"
     source_path: "^A$"
     sink_path: "NonExistent"  # This should cause an error
+    iterations: 1
+    baseline: false
+    failure_policy: null
 """
         scenario = Scenario.from_yaml(scenario_yaml)
 
@@ -272,28 +286,19 @@ class TestAnalysisComponentsCore:
 class TestWorkflowStepParameters:
     """Test workflow step parameter validation and handling."""
 
-    def test_capacity_probe_parameter_validation(self):
-        """Test CapacityProbe parameter validation."""
-        # Valid parameters
-        probe = CapacityProbe(name="test", source_path="A", sink_path="B")
-        assert probe.source_path == "A"
-        assert probe.sink_path == "B"
-
     def test_capacity_envelope_parameter_validation(self):
         """Test CapacityEnvelopeAnalysis parameter validation."""
+        # Valid parameters
         envelope = CapacityEnvelopeAnalysis(
             name="test",
-            source_path="^spine.*",
-            sink_path="^leaf.*",
-            iterations=100,
-            parallelism=4,
-            seed=42,
+            source_path="A",
+            sink_path="B",
+            iterations=1,
+            baseline=False,
+            failure_policy=None,
         )
-        assert envelope.source_path == "^spine.*"
-        assert envelope.sink_path == "^leaf.*"
-        assert envelope.iterations == 100
-        assert envelope.parallelism == 4
-        assert envelope.seed == 42
+        assert envelope.source_path == "A"
+        assert envelope.sink_path == "B"
 
     def test_network_stats_basic_functionality(self):
         """Test NetworkStats basic functionality."""

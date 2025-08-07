@@ -440,12 +440,14 @@ class WorkflowTemplates:
         for i, mode in enumerate(modes):
             workflow.append(
                 {
-                    "step_type": "CapacityProbe",
-                    "name": f"capacity_probe_{i}",
+                    "step_type": "CapacityEnvelopeAnalysis",
+                    "name": f"capacity_analysis_{i}",
                     "source_path": source_pattern,
                     "sink_path": sink_pattern,
                     "mode": mode,
-                    "probe_reverse": True,
+                    "iterations": 1,
+                    "baseline": False,
+                    "failure_policy": None,
                     "shortest_path": True,
                 }
             )
@@ -477,20 +479,23 @@ class WorkflowTemplates:
         return [
             {"step_type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "CapacityProbe",
-                "name": "capacity_probe_combine",
+                "step_type": "CapacityEnvelopeAnalysis",
+                "name": "capacity_analysis_combine",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,
                 "mode": "combine",
-                "probe_reverse": True,
+                "iterations": 1,
+                "baseline": True,
             },
             {
-                "step_type": "CapacityProbe",
-                "name": "capacity_probe_pairwise",
+                "step_type": "CapacityEnvelopeAnalysis",
+                "name": "capacity_analysis_pairwise",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,
                 "mode": "pairwise",
                 "shortest_path": True,
+                "iterations": 1,
+                "baseline": True,
             },
             {
                 "step_type": "CapacityEnvelopeAnalysis",
@@ -757,11 +762,11 @@ class ErrorInjectionTemplates:
         builder = ScenarioDataBuilder()
         builder.with_simple_nodes(["A", "B"])
         builder.with_simple_links([("A", "B", 10.0)])
-        # Add CapacityProbe without required parameters
+        # Add CapacityEnvelopeAnalysis without required parameters
         builder.data["workflow"] = [
             {
-                "step_type": "CapacityProbe",
-                "name": "incomplete_probe",
+                "step_type": "CapacityEnvelopeAnalysis",
+                "name": "incomplete_analysis",
                 # Missing source_path and sink_path
             }
         ]

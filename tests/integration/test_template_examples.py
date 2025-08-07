@@ -275,10 +275,10 @@ class TestWorkflowTemplates:
             "source_pattern", "sink_pattern", modes=["combine", "pairwise"]
         )
 
-        assert len(workflow) == 3  # BuildGraph + 2 CapacityProbe steps
+        assert len(workflow) == 3  # BuildGraph + 2 CapacityEnvelopeAnalysis steps
         assert workflow[0]["step_type"] == "BuildGraph"
-        assert workflow[1]["step_type"] == "CapacityProbe"
-        assert workflow[2]["step_type"] == "CapacityProbe"
+        assert workflow[1]["step_type"] == "CapacityEnvelopeAnalysis"
+        assert workflow[2]["step_type"] == "CapacityEnvelopeAnalysis"
 
         # Different modes
         assert workflow[1]["mode"] == "combine"
@@ -291,7 +291,6 @@ class TestWorkflowTemplates:
         assert len(workflow) == 4  # BuildGraph + multiple analysis steps
         step_types = [step["step_type"] for step in workflow]
         assert "BuildGraph" in step_types
-        assert "CapacityProbe" in step_types
         assert "CapacityEnvelopeAnalysis" in step_types
 
 
@@ -363,8 +362,9 @@ class TestCommonScenarios:
         assert len(graph.edges) == 8  # 4 physical links * 2 directions
 
         # Should have failure policy
-        policy = scenario.failure_policy_set.get_default_policy()
-        assert policy is not None
+        policies = scenario.failure_policy_set.get_all_policies()
+        assert len(policies) > 0
+        policy = policies[0]  # Get first policy for validation
         assert len(policy.rules) == 1
 
     def test_us_backbone_network(self):
@@ -446,7 +446,7 @@ class TestTemplateComposition:
         helper.set_graph(graph)
 
         assert len(graph.nodes) >= 3  # At least backbone nodes
-        assert scenario.failure_policy_set.get_default_policy() is not None
+        assert len(scenario.failure_policy_set.get_all_policies()) > 0
 
     def test_template_parameterization(self):
         """Test that templates can be easily parameterized for different scales."""
@@ -829,24 +829,28 @@ class TestMainScenarioVariants:
         workflow = [
             {"step_type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "CapacityProbe",
-                "name": "capacity_probe",
+                "step_type": "CapacityEnvelopeAnalysis",
+                "name": "capacity_analysis",
                 "source_path": "my_clos1/b.*/t1",
                 "sink_path": "my_clos2/b.*/t1",
                 "mode": "combine",
-                "probe_reverse": True,
                 "shortest_path": True,
                 "flow_placement": "PROPORTIONAL",
+                "iterations": 1,
+                "baseline": False,
+                "failure_policy": None,
             },
             {
-                "step_type": "CapacityProbe",
-                "name": "capacity_probe2",
+                "step_type": "CapacityEnvelopeAnalysis",
+                "name": "capacity_analysis2",
                 "source_path": "my_clos1/b.*/t1",
                 "sink_path": "my_clos2/b.*/t1",
                 "mode": "combine",
-                "probe_reverse": True,
                 "shortest_path": True,
                 "flow_placement": "EQUAL_BALANCED",
+                "iterations": 1,
+                "baseline": False,
+                "failure_policy": None,
             },
         ]
         builder.builder.data["workflow"] = workflow

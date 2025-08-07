@@ -62,16 +62,16 @@ class TestFailureManagerCore:
         policy = manager.get_failure_policy()
         assert policy is not None
 
-    def test_get_default_failure_policy(self, simple_network, failure_policy_set):
-        """Test retrieving default failure policy."""
-        # Set default policy
+    def test_get_no_failure_policy(self, simple_network, failure_policy_set):
+        """Test that policy_name=None returns None (no default policy behavior)."""
+        # Add a named policy (but no default behavior)
         failure_policy_set.policies["default"] = failure_policy_set.policies[
             "single_failures"
         ]
 
         manager = FailureManager(simple_network, failure_policy_set, None)
         policy = manager.get_failure_policy()
-        assert policy is not None
+        assert policy is None  # No implicit default policy behavior
 
     def test_invalid_policy_name_error(self, simple_network, failure_policy_set):
         """Test error handling for invalid policy name."""

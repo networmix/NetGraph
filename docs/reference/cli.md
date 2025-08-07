@@ -220,14 +220,14 @@ python -m ngraph run scenarios/simple.yaml --results results.json
 You can filter the output to include only specific workflow steps using the `--keys` option:
 
 ```bash
-# Only include results from the capacity_probe step
-python -m ngraph run scenario.yaml --keys capacity_probe --stdout
+# Only include results from the capacity_analysis step
+python -m ngraph run scenario.yaml --keys capacity_analysis --stdout
 
 # Include multiple specific steps and save to custom file
-python -m ngraph run scenario.yaml --keys build_graph capacity_probe --results filtered.json
+python -m ngraph run scenario.yaml --keys build_graph capacity_analysis --results filtered.json
 
 # Filter and print to stdout while using default file
-python -m ngraph run scenario.yaml --keys capacity_probe --stdout
+python -m ngraph run scenario.yaml --keys capacity_analysis --stdout
 ```
 
 The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
@@ -236,12 +236,12 @@ The `--keys` option filters by the `name` field of workflow steps defined in you
 workflow:
   - step_type: BuildGraph
     name: build_graph
-  - step_type: CapacityProbe
-    name: capacity_probe
+  - step_type: CapacityEnvelopeAnalysis
+    name: capacity_analysis
     # ... other parameters
 ```
 
-Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_probe` will include only the CapacityProbe results.
+Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_analysis` will include only the CapacityEnvelopeAnalysis results.
 
 ### Performance Profiling
 
@@ -255,7 +255,7 @@ python -m ngraph run scenario.yaml --profile
 python -m ngraph run scenario.yaml --profile --results analysis.json
 
 # Profile specific workflow steps
-python -m ngraph run scenario.yaml --profile --keys capacity_probe
+python -m ngraph run scenario.yaml --profile --keys capacity_analysis
 ```
 
 The profiling output includes:
@@ -277,7 +277,7 @@ The profiling output includes:
 The CLI outputs results in JSON format. The structure depends on the workflow steps executed in your scenario:
 
 - **BuildGraph**: Returns graph data in node-link JSON format
-- **CapacityProbe**: Returns max flow values with descriptive labels
+- **CapacityEnvelopeAnalysis**: Returns capacity envelope data with statistical distributions
 - **NetworkStats**: Reports capacity and degree statistics
 - **Other Steps**: Each step stores its results with step-specific keys
 
@@ -318,8 +318,10 @@ Example output structure:
       ]
     }
   },
-  "capacity_probe": {
-    "max_flow:[SEA -> SFO]": 200.0
+  "capacity_analysis": {
+    "capacity_envelopes": {
+      "^SEA$ -> ^SFO$": {"mean": 200.0, "max": 200.0, "min": 200.0}
+    }
   }
 }
 ```

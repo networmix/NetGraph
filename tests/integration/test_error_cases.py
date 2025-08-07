@@ -360,46 +360,6 @@ class TestWorkflowErrors:
             scenario = builder.build_scenario()
             scenario.run()
 
-    def test_missing_required_step_parameters(self):
-        """Test workflow steps missing required parameters."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB"])
-        # CapacityProbe without required source_path/sink_path
-        builder.data["workflow"] = [
-            {
-                "step_type": "CapacityProbe",
-                "name": "incomplete_probe",
-                # Missing required source_path and sink_path parameters
-            }
-        ]
-
-        scenario = builder.build_scenario()
-        # NetGraph may handle missing parameters gracefully or with defaults
-        try:
-            scenario.run()
-            # May succeed if default parameters are used
-        except (ValueError, TypeError, AttributeError):
-            # Expected if strict parameter validation is enforced
-            pass
-
-    def test_invalid_step_parameter_types(self):
-        """Test workflow steps with invalid parameter types."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB"])
-        builder.data["workflow"] = [
-            {
-                "step_type": "CapacityProbe",
-                "name": "invalid_probe",
-                "source_path": "NodeA",
-                "sink_path": "NodeB",
-                "mode": "invalid_mode",  # Should be 'combine' or 'pairwise'
-            }
-        ]
-
-        scenario = builder.build_scenario()
-        with pytest.raises((ValueError, KeyError)):
-            scenario.run()
-
 
 @pytest.mark.slow
 class TestEdgeCases:

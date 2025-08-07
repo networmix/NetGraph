@@ -96,7 +96,7 @@ results = scenario.results
 
 # Retrieve specific results
 node_count = results.get("NetworkStats", "node_count")
-max_flow = results.get("CapacityProbe", "max_flow:[datacenter -> edge]")
+capacity_envelopes = results.get("CapacityEnvelopeAnalysis", "capacity_envelopes")
 
 # Get all results for a metric across steps
 all_capacities = results.get_all("total_capacity")
@@ -360,7 +360,6 @@ Available workflow steps:
 
 - `BuildGraph` - Converts Network to NetworkX StrictMultiDiGraph
 - `NetworkStats` - Basic topology statistics (node/link counts, capacities)
-- `CapacityProbe` - Maximum flow analysis between node groups
 - `CapacityEnvelopeAnalysis` - Monte Carlo failure analysis with FailureManager
 
 **Integration:** Defined in YAML scenarios or created programmatically. Each step stores results using consistent naming patterns in `scenario.results`.
@@ -413,7 +412,7 @@ try:
     scenario.run()
 
     # Validate expected results
-    if scenario.results.get("CapacityProbe", "max_flow:[datacenter -> edge]") is None:
+    if scenario.results.get("CapacityEnvelopeAnalysis", "capacity_envelopes") is None:
         print("Warning: Expected flow analysis result not found")
 
 except ValueError as e:

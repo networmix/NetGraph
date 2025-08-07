@@ -10,9 +10,9 @@ For a curated, example-driven API guide, see **[api.md](api.md)**.
 > - **[CLI Reference](cli.md)** - Command-line interface
 > - **[DSL Reference](dsl.md)** - YAML syntax guide
 
-**Generated from source code on:** August 07, 2025 at 00:14 UTC
+**Generated from source code on:** August 07, 2025 at 03:49 UTC
 
-**Modules auto-discovered:** 53
+**Modules auto-discovered:** 48
 
 ---
 
@@ -1053,8 +1053,6 @@ Attributes:
   - Add a failure policy to the collection.
 - `get_all_policies(self) -> "list['FailurePolicy']"`
   - Get all failure policies from the collection.
-- `get_default_policy(self) -> "'FailurePolicy | None'"`
-  - Get the default failure policy.
 - `get_policy(self, name: 'str') -> "'FailurePolicy'"`
   - Get a specific failure policy by name.
 - `to_dict(self) -> 'dict[str, Any]'`
@@ -1169,7 +1167,7 @@ ensuring reproducible results regardless of execution order or parallelism.
 Usage:
     seed_mgr = SeedManager(42)
     failure_seed = seed_mgr.derive_seed("failure_policy", "default")
-    transform_seed = seed_mgr.derive_seed("transform", "enable_nodes", 0)
+    analysis_seed = seed_mgr.derive_seed("workflow", "capacity_analysis", 0)
 
 **Methods:**
 
@@ -2381,72 +2379,6 @@ Attributes:
 
 ---
 
-## ngraph.workflow.capacity_probe
-
-Capacity probing workflow component.
-
-Probes maximum flow capacity between selected node groups with support for
-exclusion simulation and configurable flow analysis modes.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - step_type: CapacityProbe
-        name: "capacity_probe_analysis"  # Optional: Custom name for this step
-        source_path: "^datacenter/.*"    # Regex pattern to select source node groups
-        sink_path: "^edge/.*"            # Regex pattern to select sink node groups
-        mode: "combine"                  # "combine" or "pairwise" flow analysis
-        probe_reverse: false             # Also compute flow in reverse direction
-        shortest_path: false             # Use shortest paths only
-        flow_placement: "PROPORTIONAL"   # "PROPORTIONAL" or "EQUAL_BALANCED"
-        excluded_nodes: ["node1", "node2"] # Optional: Nodes to exclude for analysis
-        excluded_links: ["link1"]          # Optional: Links to exclude for analysis
-    ```
-
-Results stored in scenario.results:
-    - Flow capacity values with keys like "max_flow:[source_group -> sink_group]"
-    - Additional reverse flow results if probe_reverse=True
-
-### CapacityProbe
-
-A workflow step that probes capacity (max flow) between selected groups of nodes.
-
-Supports optional exclusion simulation using NetworkView without modifying the base network.
-
-Attributes:
-    source_path: A regex pattern to select source node groups.
-    sink_path: A regex pattern to select sink node groups.
-    mode: "combine" or "pairwise" (defaults to "combine").
-        - "combine": All matched sources form one super-source; all matched sinks form one super-sink.
-        - "pairwise": Compute flow for each (source_group, sink_group).
-    probe_reverse: If True, also compute flow in the reverse direction (sink→source).
-    shortest_path: If True, only use shortest paths when computing flow.
-    flow_placement: Handling strategy for parallel equal cost paths (default PROPORTIONAL).
-    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
-    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
-
-**Attributes:**
-
-- `name` (str)
-- `seed` (Optional[int])
-- `source_path` (str)
-- `sink_path` (str)
-- `mode` (str) = combine
-- `probe_reverse` (bool) = False
-- `shortest_path` (bool) = False
-- `flow_placement` (FlowPlacement) = 1
-- `excluded_nodes` (Iterable[str]) = ()
-- `excluded_links` (Iterable[str]) = ()
-
-**Methods:**
-
-- `execute(self, scenario: "'Scenario'") -> 'None'`
-  - Execute the workflow step with automatic logging and metadata storage.
-- `run(self, scenario: 'Scenario') -> 'None'`
-  - Executes the capacity probe by computing max flow between node groups
-
----
-
 ## ngraph.workflow.network_stats
 
 Workflow step for basic node and link statistics.
@@ -2497,155 +2429,6 @@ Attributes:
   - Execute the workflow step with automatic logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'`
   - Compute and store network statistics.
-
----
-
-## ngraph.workflow.transform.base
-
-Base classes for network transformations.
-
-### NetworkTransform
-
-Stateless mutator applied to a :class:`ngraph.scenario.Scenario`.
-
-Subclasses must override :meth:`apply`.
-
-Transform-based workflow steps are automatically registered and can be used
-in YAML workflow configurations. Each transform is wrapped as a WorkflowStep
-using the @register_transform decorator.
-
-YAML Configuration (Generic):
-    ```yaml
-    workflow:
-      - step_type: <TransformName>
-        name: "optional_step_name"  # Optional: Custom name for this step instance
-        # ... transform-specific parameters ...
-    ```
-
-Attributes:
-    label: Optional description string for this transform instance.
-
-**Methods:**
-
-- `apply(self, scenario: "'Scenario'") -> 'None'`
-  - Modify *scenario.network* in-place.
-- `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
-  - Instantiate a registered transform by *step_type*.
-
-### register_transform(name: 'str') -> 'Any'
-
-Class decorator that registers a concrete :class:`NetworkTransform` and
-auto-wraps it as a :class:`WorkflowStep`.
-
-The same *name* is used for both the transform factory and the workflow
-``step_type`` in YAML.
-
-Raises:
-    ValueError: If *name* is already registered.
-
----
-
-## ngraph.workflow.transform.distribute_external
-
-Network transformation for distributing external connectivity.
-
-Attaches remote nodes and connects them to attachment stripes in the network.
-Creates or uses existing remote nodes and distributes connections across attachment nodes.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - step_type: DistributeExternalConnectivity
-        name: "external_connectivity"       # Optional: Custom name for this step
-        remote_locations:                   # List of remote node locations/names
-          - "denver"
-          - "seattle"
-          - "chicago"
-        attachment_path: "^datacenter/.*"   # Regex pattern for attachment nodes
-        stripe_width: 3                     # Number of attachment nodes per stripe
-        link_count: 2                       # Number of links per remote node
-        capacity: 100.0                     # Capacity per link
-        cost: 10.0                          # Cost per link
-        remote_prefix: "external/"          # Prefix for remote node names
-    ```
-
-Results:
-    - Creates remote nodes if they don't exist
-    - Adds links from remote nodes to attachment stripes
-    - No data stored in scenario.results (modifies network directly)
-
-### DistributeExternalConnectivity
-
-Attach (or create) remote nodes and link them to attachment stripes.
-
-Args:
-    remote_locations: Iterable of node names, e.g. ``["den", "sea"]``.
-    attachment_path: Regex matching nodes that accept the links.
-    stripe_width: Number of attachment nodes per stripe (≥ 1).
-    link_count: Number of links per remote node (default ``1``).
-    capacity: Per-link capacity.
-    cost: Per-link cost metric.
-    remote_prefix: Prefix used when creating remote node names (default ``""``).
-
-**Methods:**
-
-- `apply(self, scenario: 'Scenario') -> None`
-  - Modify *scenario.network* in-place.
-- `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
-  - Instantiate a registered transform by *step_type*.
-
----
-
-## ngraph.workflow.transform.enable_nodes
-
-Network transformation for enabling/disabling nodes.
-
-Enables a specified number of disabled nodes that match a regex pattern.
-Supports configurable selection ordering including lexical, reverse, and random ordering.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - step_type: EnableNodes
-        name: "enable_edge_nodes"      # Optional: Custom name for this step
-        path: "^edge/.*"               # Regex pattern to match nodes to enable
-        count: 5                       # Number of nodes to enable
-        order: "name"                  # Selection order: "name", "random", or "reverse"
-        seed: 42                       # Optional: Seed for reproducible random selection
-    ```
-
-Results:
-    - Enables the specified number of disabled nodes in-place
-    - No data stored in scenario.results (modifies network directly)
-
-### EnableNodesTransform
-
-Enable *count* disabled nodes that match *path*.
-
-Ordering is configurable; default is lexical by node name.
-
-Args:
-    path: Regex pattern to match disabled nodes that should be enabled.
-    count: Number of nodes to enable (must be positive integer).
-    order: Selection strategy when multiple nodes match:
-        - "name": Sort by node name (lexical order)
-        - "reverse": Sort by node name in reverse order
-        - "random": Random selection order
-    seed: Optional seed for reproducible random operations when order="random".
-
-**Attributes:**
-
-- `path` (str)
-- `count` (int)
-- `order` (str) = name
-- `seed` (Optional[int])
-
-**Methods:**
-
-- `apply(self, scenario: "'Scenario'") -> 'None'`
-  - Modify *scenario.network* in-place.
-- `create(step_type: 'str', **kwargs: 'Any') -> 'Self'`
-  - Instantiate a registered transform by *step_type*.
 
 ---
 
@@ -2921,39 +2704,6 @@ Handles loading and validation of analysis results.
 
 - `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]`
   - Load results from JSON file with detailed error handling.
-
----
-
-## ngraph.workflow.analysis.flow_analyzer
-
-Maximum flow analysis for workflow results.
-
-This module contains `FlowAnalyzer`, which processes maximum flow computation
-results from workflow steps, computes statistics, and generates visualizations
-for flow capacity analysis.
-
-### FlowAnalyzer
-
-Processes maximum flow computation results into statistical summaries.
-
-Extracts max_flow results from workflow step data, computes flow statistics
-including capacity distribution metrics, and generates tabular visualizations
-for notebook output.
-
-**Methods:**
-
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]`
-  - Analyze flow results and create visualizations.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze results and display them in notebook format.
-- `analyze_and_display_all(self, results: Dict[str, Any]) -> None`
-  - Analyze and display all flow results.
-- `analyze_capacity_probe(self, results: Dict[str, Any], **kwargs) -> None`
-  - Analyze and display capacity probe results for a specific step.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None`
-  - Display flow analysis results.
-- `get_description(self) -> str`
-  - Get a description of what this analyzer does.
 
 ---
 

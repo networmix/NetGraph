@@ -12,7 +12,6 @@ from ngraph.scenario import Scenario
 from ngraph.traffic_demand import TrafficDemand
 from ngraph.traffic_manager import TrafficManager
 from ngraph.workflow.capacity_envelope_analysis import CapacityEnvelopeAnalysis
-from ngraph.workflow.capacity_probe import CapacityProbe
 from ngraph.workflow.network_stats import NetworkStats
 
 
@@ -99,57 +98,32 @@ class TestNetworkViewIntegration:
 
         return scenario
 
-    def test_capacity_probe_with_network_view(self, sample_scenario):
-        """Test CapacityProbe using NetworkView for failure simulation."""
-        # Test without failures
-        probe = CapacityProbe(
-            name="probe_baseline",
+    def test_capacity_envelope_with_network_view(self, sample_scenario):
+        """Test CapacityEnvelopeAnalysis using NetworkView for failure simulation."""
+        # Test deterministic capacity analysis (equivalent to old CapacityProbe)
+        envelope = CapacityEnvelopeAnalysis(
+            name="envelope_baseline",
             source_path="^[AB]$",
             sink_path="^[CD]$",
             mode="combine",
+            iterations=1,
+            baseline=False,
+            failure_policy=None,
         )
-        probe.run(sample_scenario)
+        envelope.run(sample_scenario)
 
-        # Get baseline flow - key is based on regex patterns
-        baseline_key = "max_flow:[^[AB]$ -> ^[CD]$]"
-        baseline_flow = sample_scenario.results.get("probe_baseline", baseline_key)
+        # Get baseline flow - CapacityEnvelopeAnalysis uses capacity_envelopes
+        envelopes = sample_scenario.results.get(
+            "envelope_baseline", "capacity_envelopes"
+        )
+        baseline_flow = envelopes["^[AB]$->^[CD]$"]["mean"]
         assert baseline_flow == 400.0  # 2 spines × 2 leaves × 100 capacity each
-
-        # Test with node exclusion
-        probe_failed = CapacityProbe(
-            name="probe_failed",
-            source_path="^[AB]$",
-            sink_path="^[CD]$",
-            mode="combine",
-            excluded_nodes=["A"],  # Exclude node A
-        )
-        probe_failed.run(sample_scenario)
-
-        # Get flow with exclusion
-        failed_flow = sample_scenario.results.get("probe_failed", baseline_key)
-        assert failed_flow == 200.0  # Only B can send, 2 leaves × 100 capacity
-
-        # Test with link exclusion
-        probe_link_failed = CapacityProbe(
-            name="probe_link_failed",
-            source_path="^[AB]$",
-            sink_path="^[CD]$",
-            mode="combine",
-            excluded_links=sample_scenario.network.get_links_between("A", "C"),
-        )
-        probe_link_failed.run(sample_scenario)
-
-        # Flow should be reduced due to link exclusion
-        link_failed_flow = sample_scenario.results.get(
-            "probe_link_failed", baseline_key
-        )
-        assert link_failed_flow < baseline_flow
 
         # Verify original network is unchanged
         assert not sample_scenario.network.nodes["A"].disabled
         assert len(sample_scenario.network.nodes) == 5
 
-    def test_capacity_envelope_with_network_view(self, sample_scenario):
+    def test_capacity_envelope_monte_carlo(self, sample_scenario):
         """Test CapacityEnvelopeAnalysis uses NetworkView internally."""
         # Run capacity envelope analysis with deterministic seed
         envelope = CapacityEnvelopeAnalysis(
@@ -355,15 +329,17 @@ class TestNetworkViewIntegration:
 
     def test_scenario_state_preservation(self, sample_scenario):
         """Test that scenario state is preserved across multiple analyses."""
-        # Run multiple analyses
+        # Run multiple analyses with CapacityEnvelopeAnalysis
         for i in range(3):
-            probe = CapacityProbe(
-                name=f"probe_{i}",
+            envelope = CapacityEnvelopeAnalysis(
+                name=f"envelope_{i}",
                 source_path="^[AB]$",
                 sink_path="^[CD]$",
-                excluded_nodes=["A"] if i % 2 == 0 else ["B"],
+                iterations=1,
+                baseline=False,
+                failure_policy=None,
             )
-            probe.run(sample_scenario)
+            envelope.run(sample_scenario)
 
         # Verify network state is unchanged
         assert not sample_scenario.network.nodes["A"].disabled
@@ -371,7 +347,9 @@ class TestNetworkViewIntegration:
         assert sample_scenario.network.nodes["E"].disabled  # Should remain disabled
 
         # Verify all results are stored
-        result_key = "max_flow:[^[AB]$ -> ^[CD]$]"
         for i in range(3):
-            result = sample_scenario.results.get(f"probe_{i}", result_key)
-            assert result == 200.0  # One spine failed each time
+            envelopes = sample_scenario.results.get(
+                f"envelope_{i}", "capacity_envelopes"
+            )
+            result = envelopes["^[AB]$->^[CD]$"]["mean"]
+            assert result == 400.0  # No failures with deterministic analysis

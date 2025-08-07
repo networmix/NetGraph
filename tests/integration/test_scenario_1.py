@@ -164,7 +164,8 @@ class TestScenario1:
         helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
         # Additional validation of the specific rule
-        policy = helper.scenario.failure_policy_set.get_default_policy()
+        policies = helper.scenario.failure_policy_set.get_all_policies()
+        policy = policies[0]  # Get first policy for validation
         rule = policy.rules[0]
 
         assert rule.logic == "or", f"Expected rule logic 'or', found '{rule.logic}'"

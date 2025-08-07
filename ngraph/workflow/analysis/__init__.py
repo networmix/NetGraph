@@ -13,7 +13,7 @@ Data Analyzers:
     CapacityMatrixAnalyzer: Processes capacity envelope data from network flow analysis.
         - Works with workflow step results (workflow mode)
         - Works directly with CapacityEnvelopeResults objects (direct mode)
-    FlowAnalyzer: Processes maximum flow calculation results.
+
     SummaryAnalyzer: Aggregates results across all workflow steps.
 
 Utility Components:
@@ -35,7 +35,6 @@ from itables import show
 from .base import AnalysisContext, NotebookAnalyzer
 from .capacity_matrix import CapacityMatrixAnalyzer
 from .data_loader import DataLoader
-from .flow_analyzer import FlowAnalyzer
 from .package_manager import PackageManager
 from .registry import AnalysisConfig, AnalysisRegistry, get_default_registry
 from .summary import SummaryAnalyzer
@@ -71,7 +70,6 @@ __all__ = [
     "AnalysisRegistry",
     "get_default_registry",
     "CapacityMatrixAnalyzer",
-    "FlowAnalyzer",
     "SummaryAnalyzer",
     "PackageManager",
     "DataLoader",

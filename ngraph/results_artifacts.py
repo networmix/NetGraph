@@ -181,32 +181,6 @@ class FailurePolicySet:
         """
         return self.policies[name]
 
-    def get_default_policy(self) -> "FailurePolicy | None":
-        """Get the default failure policy.
-
-        Returns the policy named 'default' if it exists, otherwise returns
-        the first policy if there's only one, otherwise returns None.
-
-        Returns:
-            FailurePolicy object for the default policy, or None if no policies exist.
-
-        Raises:
-            ValueError: If multiple policies exist without a 'default' policy.
-        """
-        if not self.policies:
-            return None
-
-        if "default" in self.policies:
-            return self.policies["default"]
-
-        if len(self.policies) == 1:
-            return next(iter(self.policies.values()))
-
-        raise ValueError(
-            f"Multiple failure policies exist ({list(self.policies.keys())}) but no 'default' policy. "
-            f"Please specify which policy to use or add a 'default' policy."
-        )
-
     def get_all_policies(self) -> list["FailurePolicy"]:
         """Get all failure policies from the collection.
 
