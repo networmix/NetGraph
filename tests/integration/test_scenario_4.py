@@ -37,18 +37,18 @@ from .helpers import create_scenario_helper, load_scenario_from_file
 class TestScenario4:
     """Tests for scenario 4 using modular validation approach."""
 
-    @pytest.fixture
+    @pytest.fixture(scope="module")
     def scenario_4(self):
         """Load scenario 4 from YAML file."""
         return load_scenario_from_file("scenario_4.yaml")
 
-    @pytest.fixture
+    @pytest.fixture(scope="module")
     def scenario_4_executed(self, scenario_4):
         """Execute scenario 4 workflow and return with results."""
         scenario_4.run()
         return scenario_4
 
-    @pytest.fixture
+    @pytest.fixture(scope="module")
     def helper(self, scenario_4_executed):
         """Create test helper for scenario 4."""
         helper = create_scenario_helper(scenario_4_executed)
@@ -474,56 +474,3 @@ class TestScenario4:
             f"Network ({total_nodes}) and graph ({graph_nodes}) node counts should be close. "
             f"Difference: {node_diff} (some nodes may be disabled and excluded from graph)"
         )
-
-
-# Smoke test for basic scenario functionality
-@pytest.mark.slow
-def test_scenario_4_advanced_features():
-    """
-    Smoke test for scenario 4 - validates basic parsing and execution.
-
-    This test provides quick validation that the scenario can be loaded and run
-    without errors. For comprehensive validation, use the TestScenario4 class.
-    """
-    scenario = load_scenario_from_file("scenario_4.yaml")
-    scenario.run()
-
-    helper = create_scenario_helper(scenario)
-    graph = scenario.results.get("build_graph", "graph")
-    helper.set_graph(graph)
-
-    # Basic validation using helper
-    helper.validate_network_structure(SCENARIO_4_EXPECTATIONS)
-    helper.validate_topology_semantics()
-
-    # Validate components integration
-    assert len(scenario.components_library.components) >= 3
-
-    # Validate advanced features worked with current test scale
-    assert len(scenario.network.nodes) >= 80  # Should have substantial node count
-    assert len(scenario.failure_policy_set.policies) >= 3  # Adjusted expectation
-
-
-@pytest.mark.slow
-def test_scenario_4_basic():
-    """Test scenario 4 basic execution."""
-    scenario = load_scenario_from_file("scenario_4.yaml")
-    scenario.run()
-
-    assert scenario.results is not None
-    assert scenario.results.get("build_graph", "graph") is not None
-
-
-@pytest.mark.slow
-def test_scenario_4_structure():
-    """Test scenario 4 network structure."""
-    scenario = load_scenario_from_file("scenario_4.yaml")
-    scenario.run()
-
-    helper = create_scenario_helper(scenario)
-    graph = scenario.results.get("build_graph", "graph")
-    helper.set_graph(graph)
-
-    # Validate basic structure
-    helper.validate_network_structure(SCENARIO_4_EXPECTATIONS)
-    helper.validate_topology_semantics()

@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -741,17 +739,14 @@ def test_cli_inspect_invalid_yaml(tmp_path):
     assert any("ERROR: Failed to inspect scenario" in str(call) for call in print_calls)
 
 
-def test_cli_inspect_help():
+def test_cli_inspect_help(capsys):
     """Test inspect command help."""
-    result = subprocess.run(
-        [sys.executable, "-m", "ngraph", "inspect", "--help"],
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0
-    assert "inspect" in result.stdout
-    assert "--detail" in result.stdout
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["inspect", "--help"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "inspect" in out
+    assert "--detail" in out
 
 
 def test_main_with_no_args():
@@ -760,10 +755,7 @@ def test_main_with_no_args():
         cli.main([])
 
 
-def test_run_scenario_success():
-    """Test successful scenario run with results output."""
-    # This test would need a more complex setup
-    pass
+# Removed deprecated placeholder: test_run_scenario_success
 
 
 def test_run_scenario_with_stdout(tmp_path, monkeypatch):
@@ -833,6 +825,44 @@ workflow:
     assert "test_step" in results_content
 
 
+def test_cli_run_with_profile_flag(tmp_path: Path, monkeypatch) -> None:
+    """Test running a scenario with --profile writes results successfully."""
+    monkeypatch.chdir(tmp_path)
+    scenario_content = """
+seed: 123
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 10
+workflow:
+  - step_type: NetworkStats
+    name: stats
+"""
+    scenario_file = tmp_path / "test_profile.yaml"
+    scenario_file.write_text(scenario_content)
+
+    results_file = tmp_path / "results_profile.json"
+
+    cli.main(
+        [
+            "run",
+            str(scenario_file),
+            "--profile",
+            "--results",
+            str(results_file),
+        ]
+    )
+
+    assert results_file.exists()
+    data = json.loads(results_file.read_text())
+    assert "stats" in data
+
+
 def test_verbose_logging(tmp_path):
     """Test verbose logging option."""
     # Create a simple scenario file
@@ -879,104 +909,98 @@ network:
         mock_set_level.assert_called_with(logging.WARNING)
 
 
-def test_cli_report_command_help():
+def test_cli_report_command_help(capsys):
     """Test report command help text."""
-    result = subprocess.run(
-        [sys.executable, "-m", "ngraph", "report", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "Path to results JSON file" in result.stdout
-    assert "--notebook" in result.stdout
-    assert "--html" in result.stdout
-    assert "--include-code" in result.stdout
+    with pytest.raises(SystemExit) as exc_info:
+        cli.main(["report", "--help"])
+    assert exc_info.value.code == 0
+    out = capsys.readouterr().out
+    assert "Path to results JSON file" in out
+    assert "--notebook" in out
+    assert "--html" in out
+    assert "--include-code" in out
 
 
-def test_cli_report_command_missing_file():
+def test_cli_report_command_missing_file(capsys):
     """Test report command with missing results file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         missing_file = tmpdir_path / "missing.json"
-
-        result = subprocess.run(
-            [sys.executable, "-m", "ngraph", "report", str(missing_file)],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 1
-        assert "Results file not found" in result.stdout
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["report", str(missing_file)])
+        assert exc_info.value.code == 1
+        out = capsys.readouterr().out
+        assert "Results file not found" in out
 
 
-def test_cli_report_command_invalid_json():
+def test_cli_report_command_invalid_json(capsys):
     """Test report command with invalid JSON file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         invalid_file = tmpdir_path / "invalid.json"
         invalid_file.write_text("{ invalid json }")
-
-        result = subprocess.run(
-            [sys.executable, "-m", "ngraph", "report", str(invalid_file)],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 1
-        assert "Invalid JSON" in result.stdout
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["report", str(invalid_file)])
+        assert exc_info.value.code == 1
+        out = capsys.readouterr().out
+        assert "Invalid JSON" in out
 
 
-def test_cli_report_command_empty_results():
+def test_cli_report_command_empty_results(capsys):
     """Test report command with empty results."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         empty_file = tmpdir_path / "empty.json"
         empty_file.write_text('{"workflow": {}}')
-
-        result = subprocess.run(
-            [sys.executable, "-m", "ngraph", "report", str(empty_file)],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 1
-        assert "No analysis results found" in result.stdout
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(["report", str(empty_file)])
+        assert exc_info.value.code == 1
+        out = capsys.readouterr().out
+        assert "No analysis results found" in out
 
 
-def test_cli_report_command_notebook_only():
-    """Test report command generating notebook only."""
+def test_cli_report_command_notebook_only(monkeypatch, capsys):
+    """Test report command generating notebook only (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         results_file = tmpdir_path / "results.json"
-        # Create test data with workflow metadata structure
         results_file.write_text(
             '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
         )
 
         notebook_file = tmpdir_path / "test.ipynb"
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "ngraph",
-                "report",
-                str(results_file),
-                "--notebook",
-                str(notebook_file),
-            ],
-            capture_output=True,
-            text=True,
-        )
+        class FakeRG:
+            def __init__(self, results_path):
+                self.results_path = Path(results_path)
 
-        assert result.returncode == 0
-        assert "Notebook generated:" in result.stdout
+            def load_results(self):
+                json.loads(self.results_path.read_text())
+
+            def generate_notebook(self, output_path):
+                Path(output_path).write_text("{}")
+                return Path(output_path)
+
+            def generate_html_report(
+                self, notebook_path, html_path, include_code=False
+            ):
+                Path(notebook_path).write_text("{}")
+                Path(html_path).write_text("<html></html>")
+                return Path(html_path)
+
+        monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+        cli.main(["report", str(results_file), "--notebook", str(notebook_file)])
+        out = capsys.readouterr().out
+        assert "Notebook generated:" in out
         assert notebook_file.exists()
 
 
-def test_cli_report_command_with_html():
-    """Test report command generating both notebook and HTML."""
+def test_cli_report_command_with_html(monkeypatch, capsys):
+    """Test report command generating both notebook and HTML (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         results_file = tmpdir_path / "results.json"
-        # Create test data with workflow metadata structure
         results_file.write_text(
             '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
         )
@@ -984,72 +1008,90 @@ def test_cli_report_command_with_html():
         notebook_file = tmpdir_path / "test.ipynb"
         html_file = tmpdir_path / "test.html"
 
-        result = subprocess.run(
+        class FakeRG:
+            def __init__(self, results_path):
+                self.results_path = Path(results_path)
+
+            def load_results(self):
+                json.loads(self.results_path.read_text())
+
+            def generate_notebook(self, output_path):
+                Path(output_path).write_text("{}")
+                return Path(output_path)
+
+            def generate_html_report(
+                self, notebook_path, html_path, include_code=False
+            ):
+                Path(notebook_path).write_text("{}")
+                Path(html_path).write_text("<html></html>")
+                return Path(html_path)
+
+        monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+        cli.main(
             [
-                sys.executable,
-                "-m",
-                "ngraph",
                 "report",
                 str(results_file),
                 "--notebook",
                 str(notebook_file),
                 "--html",
                 str(html_file),
-            ],
-            capture_output=True,
-            text=True,
+            ]
         )
 
-        assert result.returncode == 0
-        assert "Notebook generated:" in result.stdout
-        assert "HTML report generated:" in result.stdout
+        out = capsys.readouterr().out
+        assert "Notebook generated:" in out
+        assert "HTML report generated:" in out
         assert notebook_file.exists()
         assert html_file.exists()
 
 
-def test_cli_report_command_html_default():
-    """Test report command generating HTML with default filename."""
+def test_cli_report_command_html_default(monkeypatch, capsys):
+    """Test report command generating HTML with default filename (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         results_file = tmpdir_path / "results.json"
-        # Create test data with workflow metadata structure
         results_file.write_text(
             '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
         )
 
-        # Change to the temp directory so analysis.html is created there
+        class FakeRG:
+            def __init__(self, results_path):
+                self.results_path = Path(results_path)
+
+            def load_results(self):
+                json.loads(self.results_path.read_text())
+
+            def generate_notebook(self, output_path):
+                Path(output_path).write_text("{}")
+                return Path(output_path)
+
+            def generate_html_report(
+                self, notebook_path, html_path, include_code=False
+            ):
+                Path(notebook_path).write_text("{}")
+                Path(html_path).write_text("<html></html>")
+                return Path(html_path)
+
         original_cwd = os.getcwd()
         try:
             os.chdir(tmpdir)
-
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "ngraph",
-                    "report",
-                    str(results_file),
-                    "--html",
-                ],
-                capture_output=True,
-                text=True,
-            )
-
-            assert result.returncode == 0
-            assert "Notebook generated:" in result.stdout
-            assert "HTML report generated:" in result.stdout
-            assert (tmpdir_path / "analysis.ipynb").exists()  # Default notebook
-            assert (tmpdir_path / "analysis.html").exists()  # Default HTML
+            monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+            cli.main(["report", str(results_file), "--html"])
+            out = capsys.readouterr().out
+            assert "Notebook generated:" in out
+            assert "HTML report generated:" in out
+            assert (tmpdir_path / "analysis.ipynb").exists()
+            assert (tmpdir_path / "analysis.html").exists()
         finally:
             os.chdir(original_cwd)
 
 
-def test_cli_report_command_with_code_included():
-    """Test report command with code cells included in HTML."""
+def test_cli_report_command_with_code_included(monkeypatch, capsys):
+    """Test report command with code cells included in HTML (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         results_file = tmpdir_path / "results.json"
-        # Create test data with workflow metadata structure
         results_file.write_text(
             '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
         )
@@ -1057,11 +1099,28 @@ def test_cli_report_command_with_code_included():
         notebook_file = tmpdir_path / "test.ipynb"
         html_file = tmpdir_path / "test.html"
 
-        result = subprocess.run(
+        class FakeRG:
+            def __init__(self, results_path):
+                self.results_path = Path(results_path)
+
+            def load_results(self):
+                json.loads(self.results_path.read_text())
+
+            def generate_notebook(self, output_path):
+                Path(output_path).write_text("{}")
+                return Path(output_path)
+
+            def generate_html_report(
+                self, notebook_path, html_path, include_code=False
+            ):
+                Path(notebook_path).write_text("{}")
+                Path(html_path).write_text("<html></html>")
+                return Path(html_path)
+
+        monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+        cli.main(
             [
-                sys.executable,
-                "-m",
-                "ngraph",
                 "report",
                 str(results_file),
                 "--notebook",
@@ -1069,71 +1128,86 @@ def test_cli_report_command_with_code_included():
                 "--html",
                 str(html_file),
                 "--include-code",
-            ],
-            capture_output=True,
-            text=True,
+            ]
         )
 
-        assert result.returncode == 0
-        assert "Notebook generated:" in result.stdout
-        assert "HTML report generated:" in result.stdout
+        out = capsys.readouterr().out
+        assert "Notebook generated:" in out
+        assert "HTML report generated:" in out
         assert notebook_file.exists()
         assert html_file.exists()
 
 
-def test_cli_report_command_custom_notebook_path():
-    """Test report command with custom notebook path."""
+def test_cli_report_command_custom_notebook_path(monkeypatch, capsys):
+    """Test report command with custom notebook path (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir_path = Path(tmpdir)
         results_file = tmpdir_path / "results.json"
-        # Create test data with workflow metadata structure
         results_file.write_text(
             '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
         )
 
         custom_notebook = tmpdir_path / "custom_analysis.ipynb"
 
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "ngraph",
-                "report",
-                str(results_file),
-                "--notebook",
-                str(custom_notebook),
-            ],
-            capture_output=True,
-            text=True,
-        )
+        class FakeRG:
+            def __init__(self, results_path):
+                self.results_path = Path(results_path)
 
-        assert result.returncode == 0
-        assert "Notebook generated:" in result.stdout
+            def load_results(self):
+                json.loads(self.results_path.read_text())
+
+            def generate_notebook(self, output_path):
+                Path(output_path).write_text("{}")
+                return Path(output_path)
+
+            def generate_html_report(
+                self, notebook_path, html_path, include_code=False
+            ):
+                Path(notebook_path).write_text("{}")
+                Path(html_path).write_text("<html></html>")
+                return Path(html_path)
+
+        monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+        cli.main(["report", str(results_file), "--notebook", str(custom_notebook)])
+        out = capsys.readouterr().out
+        assert "Notebook generated:" in out
         assert custom_notebook.exists()
 
 
-def test_cli_report_command_default_results_file():
-    """Test report command with default results.json file."""
+def test_cli_report_command_default_results_file(monkeypatch, capsys):
+    """Test report command with default results.json file (fast path)."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Change to temp directory so default results.json is there
         original_cwd = os.getcwd()
         try:
             os.chdir(tmpdir)
-
             results_file = Path("results.json")
-            # Create test data with workflow metadata structure
             results_file.write_text(
                 '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"data": "value"}}'
             )
 
-            result = subprocess.run(
-                [sys.executable, "-m", "ngraph", "report"],
-                capture_output=True,
-                text=True,
-            )
+            class FakeRG:
+                def __init__(self, results_path):
+                    self.results_path = Path(results_path)
 
-            assert result.returncode == 0
-            assert "Notebook generated:" in result.stdout
+                def load_results(self):
+                    json.loads(self.results_path.read_text())
+
+                def generate_notebook(self, output_path):
+                    Path(output_path).write_text("{}")
+                    return Path(output_path)
+
+                def generate_html_report(
+                    self, notebook_path, html_path, include_code=False
+                ):
+                    Path(notebook_path).write_text("{}")
+                    Path(html_path).write_text("<html></html>")
+                    return Path(html_path)
+
+            monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+            cli.main(["report"])
+            out = capsys.readouterr().out
+            assert "Notebook generated:" in out
             assert Path("analysis.ipynb").exists()
         finally:
             os.chdir(original_cwd)

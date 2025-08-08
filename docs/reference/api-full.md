@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 07, 2025 at 23:02 UTC
+Generated from source code on: August 08, 2025 at 01:34 UTC
 
 Modules auto-discovered: 48
 
