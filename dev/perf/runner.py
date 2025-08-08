@@ -10,8 +10,8 @@ from typing import Any, Callable
 
 import networkx as nx
 
-from ngraph.lib.algorithms.max_flow import calc_max_flow
-from ngraph.lib.algorithms.spf import spf
+from ngraph.algorithms.max_flow import calc_max_flow
+from ngraph.algorithms.spf import spf
 
 from .core import (
     BenchmarkCase,

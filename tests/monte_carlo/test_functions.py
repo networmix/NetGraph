@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
 from ngraph.monte_carlo.functions import (
     demand_placement_analysis,
     max_flow_analysis,
@@ -44,6 +44,34 @@ class TestMaxFlowAnalysis:
             ("datacenter", "edge", 100.0),
             ("edge", "datacenter", 80.0),
         ]
+
+    def test_max_flow_analysis_with_summary(self) -> None:
+        """Test include_flow_summary=True path and return shape."""
+        mock_network_view = MagicMock()
+        summary_obj_1 = {"min_cut_frequencies": {"('A','B')": 3}}
+        summary_obj_2 = {"min_cut_frequencies": {"('B','A')": 1}}
+        mock_network_view.max_flow_with_summary.return_value = {
+            ("X", "Y"): (10.0, summary_obj_1),
+            ("Y", "X"): (5.0, summary_obj_2),
+        }
+
+        result = max_flow_analysis(
+            network_view=mock_network_view,
+            source_regex="X.*",
+            sink_regex="Y.*",
+            include_flow_summary=True,
+        )
+
+        mock_network_view.max_flow_with_summary.assert_called_once_with(
+            "X.*",
+            "Y.*",
+            mode="combine",
+            shortest_path=False,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        assert ("X", "Y", 10.0, summary_obj_1) in result
+        assert ("Y", "X", 5.0, summary_obj_2) in result
 
     def test_max_flow_analysis_with_optional_params(self) -> None:
         """Test max_flow_analysis with optional parameters."""
@@ -186,6 +214,48 @@ class TestDemandPlacementAnalysis:
             assert p1_results["placed_volume"] == 50.0
             assert p1_results["placement_ratio"] == 1.0
             assert p1_results["demand_count"] == 1
+
+    def test_demand_placement_analysis_zero_total_demand(self) -> None:
+        """Handles zero total demand without division by zero."""
+        mock_network_view = MagicMock()
+
+        with (
+            patch("ngraph.monte_carlo.functions.TrafficManager") as MockTrafficManager,
+            patch(
+                "ngraph.monte_carlo.functions.TrafficMatrixSet"
+            ) as MockTrafficMatrixSet,
+            patch("ngraph.monte_carlo.functions.TrafficDemand") as MockTrafficDemand,
+        ):
+            # Create a single zero-volume demand
+            mock_demand = MagicMock()
+            mock_demand.volume = 0.0
+            mock_demand.placed_demand = 0.0
+            mock_demand.priority = 0
+            MockTrafficDemand.return_value = mock_demand
+
+            mock_tm = MockTrafficManager.return_value
+            mock_tm.demands = [mock_demand]
+            mock_tm.place_all_demands.return_value = 0.0
+
+            _ = MockTrafficMatrixSet.return_value
+
+            demands_config = [
+                {
+                    "source_path": "A",
+                    "sink_path": "B",
+                    "demand": 0.0,
+                }
+            ]
+
+            result = demand_placement_analysis(
+                network_view=mock_network_view,
+                demands_config=demands_config,
+                placement_rounds=1,
+            )
+
+            assert result["total_placed"] == 0.0
+            assert result["total_demand"] == 0.0
+            assert result["overall_placement_ratio"] == 0.0
 
 
 class TestSensitivityAnalysis:

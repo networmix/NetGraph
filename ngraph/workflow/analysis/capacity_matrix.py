@@ -37,17 +37,17 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     def analyze_results(
         self, results: "CapacityEnvelopeResults", **kwargs
     ) -> Dict[str, Any]:
-        """Analyze CapacityEnvelopeResults object directly.
+        """Analyze a `CapacityEnvelopeResults` object directly.
 
         Args:
-            results: CapacityEnvelopeResults object from failure manager
-            **kwargs: Additional arguments (unused)
+            results: Results object from the failure manager.
+            **kwargs: Additional arguments (unused).
 
         Returns:
-            Dictionary containing analysis results with capacity matrix and statistics.
+            Analysis dictionary with capacity matrix, statistics, and viz data.
 
         Raises:
-            ValueError: If no valid envelope data found.
+            ValueError: If no valid envelope data is present.
             RuntimeError: If analysis computation fails.
         """
         try:
@@ -83,12 +83,12 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         flow_key: Optional[str] = None,
         bins: int = 30,
     ) -> None:
-        """Display capacity distribution plots for CapacityEnvelopeResults.
+        """Display capacity distribution plots for `CapacityEnvelopeResults`.
 
         Args:
-            results: CapacityEnvelopeResults object to visualize
-            flow_key: Specific flow to plot (default: all flows)
-            bins: Number of histogram bins
+            results: Results object to visualize.
+            flow_key: Specific flow to plot (default: all flows).
+            bins: Number of histogram bins.
         """
         import seaborn as sns
 
@@ -151,10 +151,10 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             print(f"⚠️  Visualization error: {exc}")
 
     def display_percentile_comparison(self, results: "CapacityEnvelopeResults") -> None:
-        """Display percentile comparison plots for CapacityEnvelopeResults.
+        """Display percentile comparison plots for `CapacityEnvelopeResults`.
 
         Args:
-            results: CapacityEnvelopeResults object to visualize
+            results: Results object to visualize.
         """
         import seaborn as sns
 
@@ -196,8 +196,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         """Complete analysis and display for CapacityEnvelopeResults object.
 
         Args:
-            results: CapacityEnvelopeResults object to analyze and display
-            **kwargs: Additional arguments
+            results: Results object to analyze and display.
+            **kwargs: Additional arguments.
         """
         # Perform analysis
         analysis = self.analyze_results(results, **kwargs)
@@ -235,13 +235,13 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
         Args:
             results: Dictionary containing all workflow step results.
-            **kwargs: Additional arguments including step_name.
+            **kwargs: Additional arguments including `step_name`.
 
         Returns:
             Dictionary containing analysis results with capacity matrix and statistics.
 
         Raises:
-            ValueError: If step_name is missing or no valid envelope data found.
+            ValueError: If `step_name` is missing or no valid envelope data found.
             RuntimeError: If analysis computation fails.
         """
         step_name: Optional[str] = kwargs.get("step_name")
@@ -306,7 +306,10 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _parse_flow_path(flow_path: str) -> Optional[Dict[str, str]]:
-        """Parse *flow_path* ("src->dst" or "src<->dst") into components."""
+        """Parse flow path string into components.
+
+        Supported formats are "src->dst" and "src<->dst".
+        """
         if "<->" in flow_path:
             source, destination = flow_path.split("<->", 1)
             return {
@@ -325,7 +328,10 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _extract_capacity_value(envelope_data: Any) -> Optional[float]:
-        """Return numeric capacity from *envelope_data* (int/float or dict)."""
+        """Return numeric capacity from envelope data.
+
+        Accepts plain numbers or the canonical dict format with a "max" key.
+        """
         if isinstance(envelope_data, (int, float)):
             return float(envelope_data)
 
@@ -354,7 +360,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _calculate_statistics(capacity_matrix: pd.DataFrame) -> Dict[str, Any]:
-        """Compute basic statistics for *capacity_matrix*."""
+        """Compute basic statistics for the capacity matrix."""
         non_zero_values = capacity_matrix.values[capacity_matrix.values > 0]
         if len(non_zero_values) == 0:
             return {"has_data": False}
@@ -397,7 +403,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _format_dataframe_for_display(df: pd.DataFrame) -> pd.DataFrame:  # type: ignore[name-match]
-        """Return *df* with thousands-separator formatting applied."""
+        """Return a copy of the DataFrame with thousands separators applied."""
         if df.empty:
             return df
 
@@ -820,7 +826,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         """Calculate statistical metrics for flow samples.
 
         Args:
-            samples: List of flow sample values.
+            samples: Flow sample values.
             maximum_flow: Maximum flow value.
 
         Returns:
@@ -871,8 +877,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         """Prepare flow CDF data for visualization.
 
         Args:
-            flow_cdf: List of (relative_flow, cumulative_probability) tuples.
-            availability_curve: List of (relative_flow, availability_probability) tuples.
+            flow_cdf: Pairs of relative flow and cumulative probability.
+            availability_curve: Pairs of relative flow and availability probability.
             maximum_flow: Maximum flow value.
 
         Returns:

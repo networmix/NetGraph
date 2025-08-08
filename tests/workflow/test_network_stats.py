@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ngraph.network import Link, Network, Node
+from ngraph.model.network import Link, Network, Node
 from ngraph.workflow.network_stats import NetworkStats
 
 
@@ -159,30 +159,5 @@ def test_network_stats_with_exclusions(mock_scenario):
     assert calls["link_count"] == 0  # All links connect to A, so none remain
 
 
-def test_network_stats_parameter_backward_compatibility(mock_scenario):
-    """Test that the new parameter maintains backward compatibility."""
-    # Test with explicit default
-    step_explicit = NetworkStats(name="stats", include_disabled=False)
-    step_explicit.run(mock_scenario)
-
-    # Capture results from explicit test
-    explicit_calls = {
-        call.args[1]: call.args[2] for call in mock_scenario.results.put.call_args_list
-    }
-
-    # Reset mock for second test
-    mock_scenario.results.put.reset_mock()
-
-    # Test with implicit default
-    step_implicit = NetworkStats(name="stats")
-    step_implicit.run(mock_scenario)
-
-    # Capture results from implicit test
-    implicit_calls = {
-        call.args[1]: call.args[2] for call in mock_scenario.results.put.call_args_list
-    }
-
-    # Results should be identical
-    assert explicit_calls.keys() == implicit_calls.keys()
-    for key in explicit_calls:
-        assert explicit_calls[key] == implicit_calls[key]
+# (Removed backward-compatibility param duplication; covered by explicit
+# include_disabled default behavior in other tests.)

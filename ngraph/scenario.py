@@ -7,18 +7,18 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from ngraph.blueprints import expand_network_dsl
 from ngraph.components import ComponentsLibrary
-from ngraph.failure_policy import (
+from ngraph.demand.spec import TrafficDemand
+from ngraph.dsl.blueprints.expand import expand_network_dsl
+from ngraph.failure.policy import (
     FailureCondition,
     FailurePolicy,
     FailureRule,
 )
-from ngraph.network import Network, RiskGroup
+from ngraph.model.network import Network, RiskGroup
 from ngraph.results import Results
-from ngraph.results_artifacts import FailurePolicySet, TrafficMatrixSet
+from ngraph.results.artifacts import FailurePolicySet, TrafficMatrixSet
 from ngraph.seed_manager import SeedManager
-from ngraph.traffic_demand import TrafficDemand
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 from ngraph.yaml_utils import normalize_yaml_dict_keys
 

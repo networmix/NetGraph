@@ -199,31 +199,32 @@ def discover_modules():
 
     # Sort modules in logical order for documentation
     def module_sort_key(module_name):
-        """Sort key to organize modules logically."""
+        """Sort key to organize modules logically after refactor."""
         parts = module_name.split(".")
-
-        # Main ngraph modules first
-        if len(parts) == 2:  # ngraph.xxx
+        # Main ngraph modules first (ngraph.xxx)
+        if len(parts) == 2:
             return (0, parts[1])
-
-        # Then lib modules
-        elif len(parts) == 3 and parts[1] == "lib":  # ngraph.lib.xxx
-            return (1, parts[2])
-
-        # Then algorithm modules
-        elif len(parts) == 4 and parts[1:3] == [
-            "lib",
+        # Order for top-level packages
+        order = [
+            "graph",
+            "model",
             "algorithms",
-        ]:  # ngraph.lib.algorithms.xxx
-            return (2, parts[3])
-
-        # Then workflow modules
-        elif len(parts) == 3 and parts[1] == "workflow":  # ngraph.workflow.xxx
-            return (3, parts[2])
-
-        # Everything else at the end
-        else:
-            return (9, module_name)
+            "paths",
+            "flows",
+            "solver",
+            "demand",
+            "failure",
+            "workflow",
+            "dsl",
+            "results",
+            "monte_carlo",
+            "profiling",
+            "types",
+            "utils",
+        ]
+        if len(parts) >= 3 and parts[1] in order:
+            return (1 + order.index(parts[1]), ".".join(parts[2:]))
+        return (99, module_name)
 
     modules.sort(key=module_sort_key)
     return modules

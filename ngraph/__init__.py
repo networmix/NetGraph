@@ -8,7 +8,7 @@ to the most commonly used NetGraph functionality.
 from __future__ import annotations
 
 from . import cli, config, logging
-from .results_artifacts import CapacityEnvelope, PlacementResultSet, TrafficMatrixSet
+from .results.artifacts import CapacityEnvelope, PlacementResultSet, TrafficMatrixSet
 
 __all__ = [
     "cli",

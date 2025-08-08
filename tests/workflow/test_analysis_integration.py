@@ -1,12 +1,8 @@
 """Tests for workflow analysis components integration."""
 
-import tempfile
-from pathlib import Path
-
 import pytest
 
-from ngraph.network import Network
-from ngraph.results import Results
+from ngraph.model.network import Network
 from ngraph.scenario import Scenario
 from ngraph.workflow.analysis.registry import get_default_registry
 from ngraph.workflow.capacity_envelope_analysis import CapacityEnvelopeAnalysis
@@ -209,78 +205,8 @@ workflow:
 class TestAnalysisComponentsCore:
     """Test core analysis components functionality."""
 
-    def test_data_loader_json_loading(self):
-        """Test DataLoader JSON file loading functionality."""
-        test_data = {"test_key": "test_value", "nested": {"inner": 42}}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            import json
-
-            json.dump(test_data, f)
-            temp_path = f.name
-
-        try:
-            # Test basic loading functionality
-            import json
-
-            with open(temp_path, "r") as f:
-                loaded_data = json.load(f)
-            assert loaded_data == test_data
-        finally:
-            Path(temp_path).unlink()
-
-    def test_data_loader_error_handling(self):
-        """Test error handling for invalid JSON files."""
-        # Test invalid JSON
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            f.write("invalid json content {")
-            temp_path = f.name
-
-        try:
-            import json
-
-            with pytest.raises(json.JSONDecodeError):
-                with open(temp_path, "r") as f:
-                    json.load(f)
-        finally:
-            Path(temp_path).unlink()
-
-    def test_results_serialization_integration(self):
-        """Test that workflow results can be serialized and loaded."""
-        # Create scenario with results
-        from ngraph.network import Link, Node
-
-        network = Network()
-        network.attrs["name"] = "test"
-        network.add_node(Node("A"))
-        network.add_node(Node("B"))
-        network.add_link(Link("A", "B", capacity=10.0, cost=1))
-
-        results = Results()
-        results.put("test_step", "test_data", {"value": 42})
-        results.put_step_metadata("test_step", "TestStep", 0)
-
-        # Test serialization
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            # Use direct JSON serialization instead of save_json
-            import json
-
-            data = {"steps": {"test_step": {"test_data": {"value": 42}}}}
-            json.dump(data, f)
-            temp_path = f.name
-
-        try:
-            # Test loading
-            import json
-
-            with open(temp_path, "r") as f:
-                loaded_data = json.load(f)
-
-            assert "steps" in loaded_data
-            assert "test_step" in loaded_data["steps"]
-            assert loaded_data["steps"]["test_step"]["test_data"]["value"] == 42
-        finally:
-            Path(temp_path).unlink()
+    # (Removed JSON roundtrip tests that only validate stdlib behavior rather than
+    # project functionality.)
 
 
 class TestWorkflowStepParameters:
@@ -302,7 +228,7 @@ class TestWorkflowStepParameters:
 
     def test_network_stats_basic_functionality(self):
         """Test NetworkStats basic functionality."""
-        from ngraph.network import Link, Node
+        from ngraph.model.network import Link, Node
 
         network = Network()
         network.attrs["name"] = "test"

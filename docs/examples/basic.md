@@ -21,7 +21,7 @@ Let's create this network by using NetGraph's scenario system:
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
 
 # Define network topology with parallel paths
 scenario_yaml = """
@@ -189,7 +189,7 @@ This analysis helps identify:
 For network analysis, you can use the low-level graph algorithms to run sensitivity analysis and identify bottleneck edges:
 
 ```python
-from ngraph.lib.algorithms.max_flow import calc_max_flow, saturated_edges, run_sensitivity
+from ngraph.algorithms.max_flow import calc_max_flow, saturated_edges, run_sensitivity
 
 # Get the underlying graph for low-level analysis
 graph = network.to_strict_multidigraph()

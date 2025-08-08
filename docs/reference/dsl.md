@@ -440,11 +440,14 @@ workflow:
 
 See [Workflow Reference](workflow.md) for detailed configuration.
 
-## Path Matching Regex Syntax
+## Node Selection
 
-NetGraph uses Python regex patterns for node/link selection. Patterns are anchored at the start using `re.match()`.
+NetGraph supports two ways to select and group nodes:
 
-**Pattern Examples:**
+1. Regex on node name (anchored at the start using `re.match()`)
+2. Attribute directive `attr:<name>` to group by a node attribute
+
+**Regex Examples:**
 
 ```yaml
 # Exact match
@@ -463,7 +466,7 @@ path: "^dc1/spine/switch-[1-3]$"
 path: "^dc1/(spine|leaf)/.*$"
 ```
 
-**Capturing Groups:**
+**Regex Capturing Groups:**
 
 Regex capturing groups create node groupings for analysis:
 
@@ -480,3 +483,31 @@ Regex capturing groups create node groupings for analysis:
 - Single capturing group: Group by captured value
 - Multiple capturing groups: Join with `|` separator
 - No capturing groups: Group by original pattern string
+
+### Attribute Directive
+
+Write `attr:<name>` to group nodes by the value of `node.attrs[<name>]`.
+
+- Strict detection: Only a full match of `attr:<name>` (where `<name>` matches `[A-Za-z_]\w*`) triggers attribute grouping. Everything else is treated as a normal regex.
+- Missing attributes: Nodes without the attribute are omitted.
+- Labels: Group labels are the string form of the attribute value.
+
+Examples:
+
+```yaml
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    source_path: "attr:dc_site_id"  # groups by integer dc_site_id attribute
+    sink_path:   "attr:role"        # groups by role attribute
+    mode: "pairwise"
+```
+
+Mixing modes works:
+
+```yaml
+workflow:
+  - step_type: MaxFlow
+    source_path: "attr:metro"
+    sink_path:   "SFO/servers/.*"   # regex
+    mode: "combine"
+```

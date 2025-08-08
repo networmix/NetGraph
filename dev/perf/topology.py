@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from itertools import product
 from textwrap import dedent
 
-from ngraph.network import Link, Network, Node
+from ngraph.model.network import Link, Network, Node
 from ngraph.scenario import Scenario
 
 
@@ -138,8 +138,8 @@ class Grid2DTopology(Topology):
     """m x n 2-D lattice with optional wrap-around (torus).
 
     Args:
-        rows: Number of rows in the grid (≥ 2).
-        cols: Number of columns in the grid (≥ 2).
+        rows: Number of rows in the grid (>= 2).
+        cols: Number of columns in the grid (>= 2).
         wrap: If True, connect borders to create torus topology.
         diag: If True, add diagonal connections (8-neighbor grid).
         link_capacity: Capacity for all links in the grid.
@@ -168,7 +168,7 @@ class Grid2DTopology(Topology):
             ValueError: If rows or cols are less than 2.
         """
         if self.rows < 2 or self.cols < 2:
-            raise ValueError("rows and cols must both be ≥ 2")
+            raise ValueError("rows and cols must both be >= 2")
         self.name = f"{'torus' if self.wrap else 'grid'}_{self.rows}x{self.cols}"
         self.expected_nodes = self.rows * self.cols
 

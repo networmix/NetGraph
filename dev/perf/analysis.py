@@ -14,7 +14,7 @@ def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
     """Fit power law to benchmark samples using least squares regression.
 
     Performs linear regression in log space to fit y = a * x^b model.
-    Calculates R² goodness of fit metric.
+    Calculates R^2 goodness of fit metric.
 
     Args:
         samples: List of benchmark samples with problem sizes and timings.
@@ -42,7 +42,7 @@ def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
 
     slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
 
-    # Calculate R²
+    # Calculate R^2
     y_mean = sum_y / n
     ss_tot = sum((y - y_mean) ** 2 for y in log_times)
     ss_res = sum(
@@ -174,7 +174,7 @@ class PerformanceAnalyzer:
             print(
                 f"    Measured:   {interpreted} (exponent = {empirical_exponent:.3f})"
             )
-            # R² quality assessment thresholds
+            # R^2 quality assessment thresholds
             EXCELLENT_R2_THRESHOLD = 0.99
             GOOD_R2_THRESHOLD = 0.95
 
@@ -185,7 +185,7 @@ class PerformanceAnalyzer:
             else:
                 quality = "(fair)"
 
-            print(f"    Fit quality: R² = {r_squared:.4f} {quality}")
+            print(f"    Fit quality: R^2 = {r_squared:.4f} {quality}")
 
             # Pass/fail assessment
             if deviation_pct <= run.profile.analysis.fit_tol_pct:

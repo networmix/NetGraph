@@ -226,23 +226,4 @@ class TestScenario1:
         )
 
 
-# Smoke test for basic scenario functionality
-@pytest.mark.slow
-def test_scenario_1_build_graph():
-    """
-    Smoke test for scenario 1 - validates basic parsing and execution.
-
-    This test provides quick validation that the scenario can be loaded and run
-    without errors. For comprehensive validation, use the TestScenario1 class.
-    """
-    scenario = load_scenario_from_file("scenario_1.yaml")
-    scenario.run()
-
-    helper = create_scenario_helper(scenario)
-    graph = scenario.results.get("build_graph", "graph")
-    helper.set_graph(graph)
-
-    # Basic validation using helper
-    helper.validate_network_structure(SCENARIO_1_EXPECTATIONS)
-    helper.validate_traffic_demands(4)
-    helper.validate_failure_policy(1, ["link"])
+# Removed redundant smoke test; class-based tests already cover these checks.

@@ -15,7 +15,7 @@ We'll create two separate 3-tier Clos networks and analyze the maximum flow capa
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
 
 scenario_yaml = """
 blueprints:
@@ -156,8 +156,8 @@ explorer = NetworkExplorer.explore_network(network)
 explorer.print_tree(skip_leaves=True, detailed=False)
 
 # Analyze specific paths between border nodes
-from ngraph.lib.algorithms.spf import spf
-from ngraph.lib.algorithms.path_utils import resolve_to_paths
+from ngraph.algorithms.spf import spf
+from ngraph.algorithms.paths import resolve_to_paths
 
 # Get border nodes from different segments
 border_nodes = [node for node in network.nodes.values() if '/b1/t1' in node.name or '/b2/t1' in node.name]

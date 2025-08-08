@@ -404,35 +404,4 @@ class TestScenario3:
         )
 
 
-# Smoke test for basic scenario functionality
-@pytest.mark.slow
-def test_scenario_3_build_graph_and_capacity_envelope():
-    """
-    Smoke test for scenario 3 - validates basic parsing and execution.
-
-    This test provides quick validation that the scenario can be loaded and run
-    without errors. For comprehensive validation, use the TestScenario3 class.
-    """
-    scenario = load_scenario_from_file("scenario_3.yaml")
-    scenario.run()
-
-    helper = create_scenario_helper(scenario)
-    graph = scenario.results.get("build_graph", "graph")
-    helper.set_graph(graph)
-
-    # Basic validation using helper
-    helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
-    helper.validate_traffic_demands(0)
-    helper.validate_failure_policy(0)
-
-    # Validate key envelope results
-    envelopes_fwd = scenario.results.get(
-        "capacity_analysis_forward", "capacity_envelopes"
-    )
-    assert envelopes_fwd is not None, "Forward capacity analysis should have results"
-
-    flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
-    assert flow_key in envelopes_fwd, f"Expected flow key '{flow_key}' in results"
-    assert abs(envelopes_fwd[flow_key]["mean"] - 3200.0) < 0.1, (
-        "Expected ~3200.0 Gb/s capacity"
-    )
+# Removed redundant smoke test; class-based tests already cover these checks.

@@ -87,7 +87,7 @@ class AnalysisRegistry:
         ]
 
     def has_analyses(self, step_type: str) -> bool:
-        """Check if any analyses are registered for a workflow step type.
+        """Return True if any analyses are registered for a workflow step type.
 
         Args:
             step_type: The workflow step type.
@@ -98,7 +98,7 @@ class AnalysisRegistry:
         return len(self.get_analyses(step_type)) > 0
 
     def get_all_step_types(self) -> List[str]:
-        """Get all registered workflow step types.
+        """Return all registered workflow step types.
 
         Returns:
             List of all workflow step types with registered analyses.

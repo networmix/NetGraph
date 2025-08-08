@@ -69,30 +69,30 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 2. Use the package in your Python code:
 
     ```python
-   from ngraph.scenario import Scenario
+from ngraph.scenario import Scenario
 
-   scenario_yaml = """
-   network:
-   name: "Two-Tier Clos Fabric"
-   groups:
-       leaf:
-           node_count: 4
-           name_template: "leaf-{node_num}"
-       spine:
-           node_count: 2
-           name_template: "spine-{node_num}"
-   adjacency:
-       - source: /leaf
-           target: /spine
-           pattern: mesh
-           link_params:
-           capacity: 10
-           cost: 1
-   """
+scenario_yaml = """
+network:
+  name: "Two-Tier Clos Fabric"
+  groups:
+    leaf:
+      node_count: 4
+      name_template: "leaf-{node_num}"
+    spine:
+      node_count: 2
+      name_template: "spine-{node_num}"
+  adjacency:
+    - source: /leaf
+      target: /spine
+      pattern: mesh
+      link_params:
+        capacity: 10
+        cost: 1
+"""
 
-   scenario = Scenario.from_yaml(scenario_yaml)
-   network = scenario.network
-   print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
+scenario = Scenario.from_yaml(scenario_yaml)
+network = scenario.network
+print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
    ```
 
 ## Next Steps

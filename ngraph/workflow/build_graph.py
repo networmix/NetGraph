@@ -10,8 +10,8 @@ YAML Configuration Example:
         name: "build_network_graph"  # Optional: Custom name for this step
     ```
 
-Results stored in scenario.results:
-    - graph: StrictMultiDiGraph object with bidirectional links
+Results stored in `scenario.results`:
+    - graph: `StrictMultiDiGraph` object with bidirectional links
 """
 
 from __future__ import annotations
@@ -34,6 +34,14 @@ class BuildGraph(WorkflowStep):
     """
 
     def run(self, scenario: Scenario) -> None:
+        """Build the network graph and store it in results.
+
+        Args:
+            scenario: Scenario containing the network model.
+
+        Returns:
+            None
+        """
         graph = scenario.network.to_strict_multidigraph(add_reverse=True)
         scenario.results.put(self.name, "graph", graph)
 

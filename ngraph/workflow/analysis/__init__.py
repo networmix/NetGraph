@@ -4,23 +4,23 @@ This package provides specialized analyzers for processing and visualizing netwo
 results in Jupyter notebooks. Each component handles specific data types and provides
 both programmatic analysis and interactive display capabilities.
 
-Core Components:
+Core components:
     NotebookAnalyzer: Abstract base class defining the analysis interface.
     AnalysisContext: Immutable dataclass containing execution context.
     AnalysisRegistry: Registry mapping workflow steps to analysis modules.
 
-Data Analyzers:
+Data analyzers:
     CapacityMatrixAnalyzer: Processes capacity envelope data from network flow analysis.
         - Works with workflow step results (workflow mode)
         - Works directly with CapacityEnvelopeResults objects (direct mode)
 
     SummaryAnalyzer: Aggregates results across all workflow steps.
 
-Utility Components:
+Utility components:
     PackageManager: Handles runtime dependency verification and installation.
     DataLoader: Provides JSON file loading with detailed error handling.
 
-Convenience Functions:
+Convenience functions:
     analyze_capacity_envelopes: Create analyzer for CapacityEnvelopeResults objects.
 """
 
@@ -46,13 +46,13 @@ if TYPE_CHECKING:
 def analyze_capacity_envelopes(
     results: CapacityEnvelopeResults,
 ) -> CapacityMatrixAnalyzer:
-    """Create CapacityMatrixAnalyzer configured for direct CapacityEnvelopeResults analysis.
+    """Return a `CapacityMatrixAnalyzer` for direct results analysis.
 
     Args:
-        results: CapacityEnvelopeResults object from FailureManager convenience methods
+        results: CapacityEnvelopeResults object from convenience methods.
 
     Returns:
-        CapacityMatrixAnalyzer instance ready for analysis and visualization
+        Configured analyzer ready for analysis and visualization.
 
     Example:
         >>> from ngraph.workflow.analysis import analyze_capacity_envelopes

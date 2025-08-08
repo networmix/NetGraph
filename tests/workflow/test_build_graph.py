@@ -2,8 +2,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ngraph.lib.graph import StrictMultiDiGraph
-from ngraph.network import Link, Network, Node
+from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
+from ngraph.model.network import Link, Network, Node
 from ngraph.workflow.build_graph import BuildGraph
 
 

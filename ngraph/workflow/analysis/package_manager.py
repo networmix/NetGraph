@@ -1,4 +1,8 @@
-"""Package management for notebook analysis components."""
+"""Package management for notebook analysis components.
+
+Provides light-weight helpers to ensure plotting/display packages are available
+in interactive environments and to apply sensible defaults.
+"""
 
 from typing import Any, Dict
 
@@ -7,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 class PackageManager:
-    """Manages package installation and imports for notebooks."""
+    """Manage package installation and imports for notebooks."""
 
     REQUIRED_PACKAGES = {
         "itables": "itables",
@@ -16,7 +20,11 @@ class PackageManager:
 
     @classmethod
     def check_and_install_packages(cls) -> Dict[str, Any]:
-        """Check for required packages and install if missing."""
+        """Check for required packages and install if missing.
+
+        Returns:
+            Status dictionary with installation results and messages.
+        """
         import importlib
         import subprocess
         import sys
@@ -54,7 +62,11 @@ class PackageManager:
 
     @classmethod
     def setup_environment(cls) -> Dict[str, Any]:
-        """Set up the complete notebook environment."""
+        """Set up the notebook environment.
+
+        Returns:
+            Status dictionary with environment configuration details.
+        """
         # Check and install packages
         install_result = cls.check_and_install_packages()
 

@@ -61,9 +61,9 @@ class ComplexityModel:
 
         Thresholds based on common algorithmic complexity classes:
         - < 1.2: near-linear (close to O(n))
-        - 1.2-1.8: sub-quadratic (between O(n) and O(n²))
-        - 1.8-2.5: quadratic (close to O(n²))
-        - > 2.5: super-quadratic (worse than O(n²))
+        - 1.2-1.8: sub-quadratic (between O(n) and O(n^2))
+        - 1.8-2.5: quadratic (close to O(n^2))
+        - > 2.5: super-quadratic (worse than O(n^2))
 
         Args:
             empirical_exponent: Measured scaling exponent from power law fit.
@@ -89,8 +89,8 @@ class ComplexityModel:
 # Predefined complexity models
 LINEAR = ComplexityModel("linear", 1.0, "Linear O(n)")
 N_LOG_N = ComplexityModel("n_log_n", 1.1, "n log n")
-QUADRATIC = ComplexityModel("quadratic", 2.0, "Quadratic O(n²)")
-CUBIC = ComplexityModel("cubic", 3.0, "Cubic O(n³)")
+QUADRATIC = ComplexityModel("quadratic", 2.0, "Quadratic O(n^2)")
+CUBIC = ComplexityModel("cubic", 3.0, "Cubic O(n^3)")
 
 
 @dataclass

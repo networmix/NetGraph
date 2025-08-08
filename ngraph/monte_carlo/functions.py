@@ -16,13 +16,13 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from ngraph.lib.algorithms.base import FlowPlacement
-from ngraph.results_artifacts import TrafficMatrixSet
-from ngraph.traffic_demand import TrafficDemand
-from ngraph.traffic_manager import TrafficManager
+from ngraph.algorithms.base import FlowPlacement
+from ngraph.demand.manager.manager import TrafficManager
+from ngraph.demand.spec import TrafficDemand
+from ngraph.results.artifacts import TrafficMatrixSet
 
 if TYPE_CHECKING:
-    from ngraph.network_view import NetworkView
+    from ngraph.model.view import NetworkView
 
 
 def max_flow_analysis(
@@ -45,6 +45,7 @@ def max_flow_analysis(
         shortest_path: Whether to use shortest paths only.
         flow_placement: Flow placement strategy.
         include_flow_summary: Whether to collect detailed flow summary data.
+        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
         List of tuples. If include_flow_summary is False: (source, sink, capacity).
@@ -88,9 +89,16 @@ def demand_placement_analysis(
         network_view: NetworkView with potential exclusions applied.
         demands_config: List of demand configurations (serializable dicts).
         placement_rounds: Number of placement optimization rounds.
+        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        Dictionary with placement statistics by priority.
+        Dictionary with placement statistics for this run, including:
+        - total_placed: Total placed demand volume.
+        - total_demand: Total demand volume.
+        - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
+        - priority_results: Mapping from priority to statistics with keys
+          total_volume, placed_volume, unplaced_volume, placement_ratio,
+          and demand_count.
     """
     # Reconstruct demands from config to avoid passing complex objects
     demands = []
@@ -161,7 +169,7 @@ def sensitivity_analysis(
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     **kwargs,
-) -> dict[str, float]:
+) -> dict[str, dict[str, float]]:
     """Analyze component sensitivity to failures.
 
     Args:
@@ -171,9 +179,11 @@ def sensitivity_analysis(
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: Whether to use shortest paths only.
         flow_placement: Flow placement strategy.
+        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        Dictionary mapping component IDs to sensitivity scores.
+        Dictionary mapping flow keys ("src->dst") to dictionaries of component
+        identifiers mapped to sensitivity scores.
     """
     sensitivity = network_view.sensitivity_analysis(
         source_regex,

@@ -147,7 +147,7 @@ Total links in fabric: 56
 Let's analyze the maximum flow capacity between different segments of our Clos fabric:
 
 ```python
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
 
 # Calculate MaxFlow from pod1 servers to pod2 servers
 max_flow = network.max_flow(

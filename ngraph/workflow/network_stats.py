@@ -14,7 +14,7 @@ YAML Configuration Example:
         excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
     ```
 
-Results stored in scenario.results:
+Results stored in `scenario.results`:
     - Node statistics: node_count
     - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
       min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from statistics import mean, median
 from typing import TYPE_CHECKING, Dict, Iterable, List
 
-from ngraph.network_view import NetworkView
+from ngraph.model.view import NetworkView
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -41,8 +41,8 @@ class NetworkStats(WorkflowStep):
     Supports optional exclusion simulation using NetworkView without modifying the base network.
 
     Attributes:
-        include_disabled (bool): If True, include disabled nodes and links in statistics.
-                                 If False, only consider enabled entities. Defaults to False.
+        include_disabled: If True, include disabled nodes and links in statistics.
+            If False, only consider enabled entities.
         excluded_nodes: Optional list of node names to exclude (temporary exclusion).
         excluded_links: Optional list of link IDs to exclude (temporary exclusion).
     """
@@ -54,11 +54,14 @@ class NetworkStats(WorkflowStep):
     def run(self, scenario: Scenario) -> None:
         """Compute and store network statistics.
 
-        If excluded_nodes or excluded_links are specified, uses NetworkView to simulate
-        exclusions without modifying the base network.
+        If `excluded_nodes` or `excluded_links` are specified, uses `NetworkView` to
+        simulate exclusions without modifying the base network.
 
         Args:
             scenario: The scenario containing the network to analyze.
+
+        Returns:
+            None
         """
         # Create view if we have exclusions, otherwise use base network
         if self.excluded_nodes or self.excluded_links:

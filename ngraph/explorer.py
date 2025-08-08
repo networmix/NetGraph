@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Set
 
 from ngraph.components import ComponentsLibrary
 from ngraph.logging import get_logger
-from ngraph.network import Network, Node
+from ngraph.model.network import Network, Node
 
 logger = get_logger(__name__)
 

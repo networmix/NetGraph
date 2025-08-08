@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pytest
 
-from ngraph.lib.graph import StrictMultiDiGraph
+from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 from ngraph.scenario import Scenario
 
 # Validation constants for test consistency

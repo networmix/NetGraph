@@ -1,4 +1,9 @@
-"""Base classes for workflow automation."""
+"""Base classes for workflow automation.
+
+Defines the workflow step abstraction, registration decorator, and execution
+wrapper that adds timing and logging. Steps implement `run()` and are executed
+via `execute()` which records metadata and re-raises failures.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +28,14 @@ _execution_counter = 0
 
 
 def register_workflow_step(step_type: str):
-    """Decorator to register a WorkflowStep subclass."""
+    """Return a decorator that registers a `WorkflowStep` subclass.
+
+    Args:
+        step_type: Registry key used to instantiate steps from configuration.
+
+    Returns:
+        A class decorator that adds the class to `WORKFLOW_STEP_REGISTRY`.
+    """
 
     def decorator(cls: Type["WorkflowStep"]) -> Type["WorkflowStep"]:
         WORKFLOW_STEP_REGISTRY[step_type] = cls
@@ -60,13 +72,20 @@ class WorkflowStep(ABC):
     seed: Optional[int] = None
 
     def execute(self, scenario: "Scenario") -> None:
-        """Execute the workflow step with automatic logging and metadata storage.
+        """Execute the workflow step with logging and metadata storage.
 
         This method wraps the abstract run() method with timing, logging, and
         automatic metadata storage for the analysis registry system.
 
         Args:
             scenario: The scenario to execute the step on.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: Re-raises any exception raised by `run()` after logging
+                duration and context.
         """
         global _execution_counter
 
@@ -108,5 +127,8 @@ class WorkflowStep(ABC):
 
         Args:
             scenario: The scenario to execute the step on.
+
+        Returns:
+            None
         """
         pass

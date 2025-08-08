@@ -5,7 +5,7 @@ Generates statistical distributions (envelopes) of maximum flow capacity between
 node groups across failure scenarios. Supports parallel processing, baseline analysis,
 and configurable failure policies.
 
-This component uses the FailureManager convenience method to perform the analysis,
+This component uses the `FailureManager` convenience method to perform the analysis,
 ensuring consistency with the programmatic API while providing workflow integration.
 
 YAML Configuration Example:
@@ -27,9 +27,9 @@ YAML Configuration Example:
         include_flow_summary: false            # Optional: Collect detailed flow summary statistics
     ```
 
-Results stored in scenario.results:
-    - capacity_envelopes: Dictionary mapping flow keys to CapacityEnvelope data with optional flow summary statistics
-    - failure_pattern_results: Frequency map of failure patterns (if store_failure_patterns=True)
+Results stored in `scenario.results`:
+    - capacity_envelopes: Mapping of flow keys to capacity envelope data (serializable)
+    - failure_pattern_results: Frequency map of failure patterns (if `store_failure_patterns=True`)
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ngraph.failure_manager import FailureManager
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
+from ngraph.failure.manager.manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -85,7 +85,11 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     include_flow_summary: bool = False
 
     def __post_init__(self):
-        """Validate parameters and convert string flow_placement to enum."""
+        """Validate parameters and convert string `flow_placement` to enum.
+
+        Raises:
+            ValueError: If parameters are outside accepted ranges or invalid.
+        """
         if self.iterations < 1:
             raise ValueError("iterations must be >= 1")
         if self.parallelism < 1:
@@ -110,10 +114,13 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 ) from None
 
     def run(self, scenario: "Scenario") -> None:
-        """Execute capacity envelope analysis using FailureManager convenience method.
+        """Execute capacity envelope analysis using `FailureManager`.
 
         Args:
             scenario: The scenario containing network, failure policies, and results.
+
+        Returns:
+            None
         """
         logger.info(f"Starting capacity envelope analysis: {self.name}")
         logger.debug(

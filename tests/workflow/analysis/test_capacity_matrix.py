@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from ngraph.monte_carlo.results import CapacityEnvelopeResults
-from ngraph.results_artifacts import CapacityEnvelope
+from ngraph.results.artifacts import CapacityEnvelope
 from ngraph.workflow.analysis.capacity_matrix import CapacityMatrixAnalyzer
 
 

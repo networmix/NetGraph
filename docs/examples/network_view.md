@@ -5,8 +5,8 @@ This example demonstrates how to use `NetworkView` for temporary exclusion simul
 ## Basic Usage
 
 ```python
-from ngraph.network import Network, Node, Link
-from ngraph.network_view import NetworkView
+from ngraph.model.network import Network, Node, Link
+from ngraph.model.view import NetworkView
 
 # Create a network
 net = Network()

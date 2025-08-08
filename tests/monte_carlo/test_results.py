@@ -175,6 +175,41 @@ class TestCapacityEnvelopeResults:
         assert "datacenter->edge" in df.index
         assert df.loc["datacenter->edge", "mean"] == 100.0
 
+    def test_export_summary_includes_cost_distribution_summary(self) -> None:
+        """Export includes cost_distribution_summary records when present."""
+        mock_env = MagicMock()
+        mock_env.mean_capacity = 1.0
+        mock_env.stdev_capacity = 0.0
+        mock_env.min_capacity = 1.0
+        mock_env.max_capacity = 1.0
+        mock_env.total_samples = 1
+        mock_env.get_percentile.side_effect = lambda p: 1.0
+        mock_env.flow_summary_stats = {
+            "cost_distribution_stats": {
+                2.0: {
+                    "mean": 1.0,
+                    "min": 1.0,
+                    "max": 1.0,
+                    "total_samples": 1,
+                    "frequencies": {"1.0": 1},
+                }
+            }
+        }
+
+        res = CapacityEnvelopeResults(
+            envelopes={"datacenter->edge": mock_env},  # type: ignore
+            failure_patterns={},
+            source_pattern="dc",
+            sink_pattern="edge",
+            mode="combine",
+            iterations=1,
+            metadata={},
+        )
+
+        summary = res.export_summary()
+        assert isinstance(summary.get("cost_distribution_summary"), list)
+        assert len(summary["cost_distribution_summary"]) == 1
+
     def test_get_failure_pattern_summary_no_patterns(self) -> None:
         """Test get_failure_pattern_summary with no patterns."""
         result = CapacityEnvelopeResults(
@@ -834,3 +869,18 @@ class TestSensitivityResults:
         assert summary["metadata"] == {}
         assert summary["component_scores"] == {}
         assert summary["failure_patterns"] == {}
+
+    def test_get_flow_sensitivity_keyerror_message(self) -> None:
+        """KeyError message contains available keys or 'none'."""
+        result = SensitivityResults(
+            raw_results={"test": "data"},
+            iterations=1,
+            component_scores={},
+        )
+
+        with pytest.raises(KeyError) as exc:
+            result.get_flow_sensitivity("x->y")
+
+        msg = str(exc.value)
+        assert "Flow key 'x->y' not found" in msg
+        assert "Available:" in msg

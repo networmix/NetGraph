@@ -19,7 +19,15 @@ class SummaryAnalyzer(NotebookAnalyzer):
     """
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Analyze and summarize all results."""
+        """Analyze and summarize all results.
+
+        Args:
+            results: Dictionary containing all workflow step results.
+            **kwargs: Unused.
+
+        Returns:
+            Summary statistics including total steps and category counts.
+        """
         total_steps = len(results)
         capacity_steps = len(
             [
@@ -50,7 +58,12 @@ class SummaryAnalyzer(NotebookAnalyzer):
         return "Generates summary statistics and overviews of workflow results"
 
     def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:
-        """Display summary analysis."""
+        """Display summary analysis.
+
+        Args:
+            analysis: Summary statistics returned by `analyze()`.
+            **kwargs: Unused.
+        """
         print("📊 NetGraph Analysis Summary")
         print("=" * 40)
 

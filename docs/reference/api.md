@@ -81,7 +81,7 @@ max_flow = network.max_flow(
 **Key Concepts:**
 
 - **Node.disabled/Link.disabled:** Scenario-level configuration that persists across analyses
-- **Regex patterns:** Use regex patterns like `"datacenter.*"` to select multiple nodes/links
+- **Node selection:** Use regex patterns like `"datacenter.*"` or attribute directives like `attr:role` to group nodes by attribute (see DSL Node Selection)
 
 **Integration:** Foundation for all analysis. Used directly or through NetworkView for filtered analysis.
 
@@ -126,7 +126,7 @@ Essential analysis capabilities for network evaluation.
 **When to use:** Fundamental analysis for understanding network capacity, bottlenecks, and traffic engineering scenarios.
 
 ```python
-from ngraph.lib.algorithms.base import FlowPlacement
+from ngraph.core.algorithms.base import FlowPlacement
 
 # Basic maximum flow (returns dict)
 max_flow = network.max_flow(
@@ -389,9 +389,9 @@ Advanced capabilities for custom analysis and low-level operations.
 **When to use:** Custom analysis requiring NetworkX integration, performance-critical algorithms, or when you need direct control over graph operations.
 
 ```python
-from ngraph.lib.util import to_digraph, from_digraph
-from ngraph.lib.algorithms.spf import spf
-from ngraph.lib.algorithms.max_flow import calc_max_flow
+from ngraph.core.util import to_digraph, from_digraph
+from ngraph.core.algorithms.spf import spf
+from ngraph.core.algorithms.max_flow import calc_max_flow
 
 # Convert to NetworkX for custom algorithms
 nx_graph = to_digraph(scenario.network.to_strict_multidigraph())

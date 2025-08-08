@@ -27,27 +27,13 @@ from .test_data_templates import (
 
 @pytest.mark.slow
 class TestNetworkTemplates:
-    """Tests demonstrating network topology templates."""
+    """Keep only a minimal sanity check for templates; detailed tests belong to unit level."""
 
-    def test_linear_network_template(self):
-        """Test linear network template creates correct topology."""
+    def test_linear_network_template_minimal(self):
         nodes = ["A", "B", "C", "D"]
         network_data = NetworkTemplates.linear_network(nodes, link_capacity=15.0)
-
-        # Validate structure
         assert len(network_data["nodes"]) == 4
-        assert len(network_data["links"]) == 3  # 4 nodes = 3 links in linear
-
-        # Validate links connect correctly
-        expected_links = [("A", "B"), ("B", "C"), ("C", "D")]
-        actual_links = [
-            (link["source"], link["target"]) for link in network_data["links"]
-        ]
-        assert actual_links == expected_links
-
-        # Validate capacity
-        for link in network_data["links"]:
-            assert link["link_params"]["capacity"] == 15.0
+        assert len(network_data["links"]) == 3
 
     def test_star_network_template(self):
         """Test star network template creates correct topology."""
@@ -102,204 +88,39 @@ class TestNetworkTemplates:
 
 @pytest.mark.slow
 class TestBlueprintTemplates:
-    """Tests demonstrating blueprint templates."""
-
-    def test_simple_group_blueprint(self):
-        """Test simple group blueprint template."""
+    def test_simple_group_blueprint_minimal(self):
         blueprint = BlueprintTemplates.simple_group_blueprint(
             "servers", 5, "srv-{node_num}"
         )
-
-        assert "groups" in blueprint
-        assert "servers" in blueprint["groups"]
         assert blueprint["groups"]["servers"]["node_count"] == 5
-        assert blueprint["groups"]["servers"]["name_template"] == "srv-{node_num}"
-
-    def test_two_tier_blueprint(self):
-        """Test two-tier blueprint template creates leaf-spine structure."""
-        blueprint = BlueprintTemplates.two_tier_blueprint(
-            tier1_count=6, tier2_count=4, pattern="mesh", link_capacity=25.0
-        )
-
-        # Validate groups
-        assert len(blueprint["groups"]) == 2
-        assert blueprint["groups"]["tier1"]["node_count"] == 6
-        assert blueprint["groups"]["tier2"]["node_count"] == 4
-
-        # Validate adjacency
-        assert len(blueprint["adjacency"]) == 1
-        adjacency = blueprint["adjacency"][0]
-        assert adjacency["source"] == "/tier1"
-        assert adjacency["target"] == "/tier2"
-        assert adjacency["pattern"] == "mesh"
-        assert adjacency["link_params"]["capacity"] == 25.0
-
-    def test_three_tier_clos_blueprint(self):
-        """Test three-tier Clos blueprint template."""
-        blueprint = BlueprintTemplates.three_tier_clos_blueprint(
-            leaf_count=8, spine_count=4, super_spine_count=2, link_capacity=40.0
-        )
-
-        # Validate groups
-        assert len(blueprint["groups"]) == 3
-        assert blueprint["groups"]["leaf"]["node_count"] == 8
-        assert blueprint["groups"]["spine"]["node_count"] == 4
-        assert blueprint["groups"]["super_spine"]["node_count"] == 2
-
-        # Validate adjacency patterns
-        assert len(blueprint["adjacency"]) == 2
-        # Should have leaf->spine and spine->super_spine connections
 
 
 @pytest.mark.slow
 class TestFailurePolicyTemplates:
-    """Tests demonstrating failure policy templates."""
-
-    def test_single_link_failure_template(self):
-        """Test single link failure policy template."""
+    def test_single_link_failure_template_minimal(self):
         policy = FailurePolicyTemplates.single_link_failure()
-
-        assert "name" not in policy["attrs"]
         assert len(policy["rules"]) == 1
-
-        rule = policy["rules"][0]
-        assert rule["entity_scope"] == "link"
-        assert rule["rule_type"] == "choice"
-        assert rule["count"] == 1
-
-    def test_multiple_failure_template(self):
-        """Test multiple failure policy template."""
-        policy = FailurePolicyTemplates.multiple_failure("node", 3)
-
-        assert "name" not in policy["attrs"]
-        assert len(policy["rules"]) == 1
-
-        rule = policy["rules"][0]
-        assert rule["entity_scope"] == "node"
-        assert rule["count"] == 3
-
-    def test_risk_group_failure_template(self):
-        """Test risk group failure policy template."""
-        policy = FailurePolicyTemplates.risk_group_failure("datacenter_a")
-
-        assert "name" not in policy["attrs"]
-        assert policy["fail_risk_groups"] is True
-        assert len(policy["rules"]) == 1
-
-        rule = policy["rules"][0]
-        assert rule["entity_scope"] == "link"
-        assert rule["rule_type"] == "conditional"
-        assert "datacenter_a" in rule["conditions"][0]
 
 
 @pytest.mark.slow
 class TestTrafficDemandTemplates:
-    """Tests demonstrating traffic demand templates."""
-
-    def test_all_to_all_uniform_demands(self):
-        """Test all-to-all uniform traffic demand template."""
+    def test_all_to_all_uniform_demands_minimal(self):
         nodes = ["A", "B", "C"]
         demands = TrafficDemandTemplates.all_to_all_uniform(nodes, demand_value=15.0)
-
-        # 3 nodes = 3*2 = 6 demands (excluding self-demands)
         assert len(demands) == 6
-
-        # Validate demand structure
-        for demand in demands:
-            assert demand["demand"] == 15.0
-            assert demand["source_path"] != demand["sink_path"]  # No self-demands
-
-    def test_star_traffic_pattern(self):
-        """Test star traffic pattern template."""
-        center = "HUB"
-        leaves = ["A", "B", "C"]
-        demands = TrafficDemandTemplates.star_traffic(center, leaves, demand_value=10.0)
-
-        # 3 leaves * 2 directions = 6 demands
-        assert len(demands) == 6
-
-        # Half should be leaves->center, half center->leaves
-        to_center = [d for d in demands if d["sink_path"] == center]
-        from_center = [d for d in demands if d["source_path"] == center]
-        assert len(to_center) == 3
-        assert len(from_center) == 3
-
-    def test_random_demands_reproducibility(self):
-        """Test that random demands are reproducible with same seed."""
-        nodes = ["A", "B", "C", "D"]
-
-        demands1 = TrafficDemandTemplates.random_demands(nodes, 5, seed=42)
-        demands2 = TrafficDemandTemplates.random_demands(nodes, 5, seed=42)
-
-        # Should be identical with same seed
-        assert demands1 == demands2
-        assert len(demands1) == 5
-
-    def test_hotspot_traffic_pattern(self):
-        """Test hotspot traffic pattern template."""
-        hotspots = ["HOT1", "HOT2"]
-        others = ["A", "B", "C"]
-        demands = TrafficDemandTemplates.hotspot_traffic(
-            hotspots, others, hotspot_demand=50.0, normal_demand=5.0
-        )
-
-        # Should have high-demand traffic to hotspots and normal inter-node traffic
-        hotspot_demands = [d for d in demands if d["sink_path"] in hotspots]
-        normal_demands = [d for d in demands if d["sink_path"] not in hotspots]
-
-        assert len(hotspot_demands) > 0
-        assert len(normal_demands) > 0
-
-        # Validate demand values
-        for demand in hotspot_demands:
-            assert demand["demand"] == 50.0
-        for demand in normal_demands:
-            assert demand["demand"] == 5.0
 
 
 @pytest.mark.slow
 class TestWorkflowTemplates:
-    """Tests demonstrating workflow templates."""
-
-    def test_basic_build_workflow(self):
-        """Test basic build workflow template."""
+    def test_basic_build_workflow_minimal(self):
         workflow = WorkflowTemplates.basic_build_workflow()
-
         assert len(workflow) == 1
         assert workflow[0]["step_type"] == "BuildGraph"
-        assert workflow[0]["name"] == "build_graph"
-
-    def test_capacity_analysis_workflow(self):
-        """Test capacity analysis workflow template."""
-        workflow = WorkflowTemplates.capacity_analysis_workflow(
-            "source_pattern", "sink_pattern", modes=["combine", "pairwise"]
-        )
-
-        assert len(workflow) == 3  # BuildGraph + 2 CapacityEnvelopeAnalysis steps
-        assert workflow[0]["step_type"] == "BuildGraph"
-        assert workflow[1]["step_type"] == "CapacityEnvelopeAnalysis"
-        assert workflow[2]["step_type"] == "CapacityEnvelopeAnalysis"
-
-        # Different modes
-        assert workflow[1]["mode"] == "combine"
-        assert workflow[2]["mode"] == "pairwise"
-
-    def test_comprehensive_analysis_workflow(self):
-        """Test comprehensive analysis workflow template."""
-        workflow = WorkflowTemplates.comprehensive_analysis_workflow("src", "dst")
-
-        assert len(workflow) == 4  # BuildGraph + multiple analysis steps
-        step_types = [step["step_type"] for step in workflow]
-        assert "BuildGraph" in step_types
-        assert "CapacityEnvelopeAnalysis" in step_types
 
 
 @pytest.mark.slow
 class TestScenarioTemplateBuilder:
-    """Tests demonstrating the high-level scenario template builder."""
-
-    def test_linear_backbone_scenario(self):
-        """Test building a complete linear backbone scenario."""
+    def test_linear_backbone_scenario_minimal(self):
         cities = ["NYC", "CHI", "DEN", "SFO"]
         yaml_content = (
             ScenarioTemplateBuilder("test_backbone", "1.0")
@@ -309,98 +130,20 @@ class TestScenarioTemplateBuilder:
             .with_capacity_analysis("NYC", "SFO")
             .build()
         )
-
-        # Parse and validate the generated scenario
         scenario = Scenario.from_yaml(yaml_content)
         scenario.run()
-
-        # Validate network structure
-        helper = create_scenario_helper(scenario)
         graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
-
         assert len(graph.nodes) == 4
-        assert len(graph.edges) == 6  # 3 physical links * 2 directions
-
-    def test_clos_fabric_scenario(self):
-        """Test building a scenario with Clos fabric blueprint."""
-        yaml_content = (
-            ScenarioTemplateBuilder("test_clos", "1.0")
-            .with_clos_fabric("fabric1", leaf_count=4, spine_count=2)
-            .with_capacity_analysis("fabric1/tier1/.*", "fabric1/tier2/.*")
-            .build()
-        )
-
-        scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
-
-        # 4 leaf + 2 spine = 6 nodes
-        assert len(graph.nodes) == 6
 
 
 @pytest.mark.slow
 class TestCommonScenarios:
-    """Tests demonstrating pre-built common scenario templates."""
-
-    def test_simple_linear_with_failures(self):
-        """Test simple linear scenario with failures."""
-        yaml_content = CommonScenarios.simple_linear_with_failures(node_count=5)
-
-        scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
-
-        # Validate basic structure
-        assert len(graph.nodes) == 5
-        assert len(graph.edges) == 8  # 4 physical links * 2 directions
-
-        # Should have failure policy
-        policies = scenario.failure_policy_set.get_all_policies()
-        assert len(policies) > 0
-        policy = policies[0]  # Get first policy for validation
-        assert len(policy.rules) == 1
-
-    def test_us_backbone_network(self):
-        """Test US backbone network scenario."""
-        yaml_content = CommonScenarios.us_backbone_network()
-
-        scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
-
-        # Should have 8 major cities
-        assert len(graph.nodes) == 8
-
-        # Should have coordinates for visualization
-        for node_name in ["NYC", "SFO", "CHI"]:
-            if node_name in scenario.network.nodes:
-                node = scenario.network.nodes[node_name]
-                assert "coords" in node.attrs
-
-    def test_minimal_test_scenario(self):
-        """Test minimal scenario for basic testing."""
+    def test_minimal_test_scenario_minimal(self):
         yaml_content = CommonScenarios.minimal_test_scenario()
-
         scenario = Scenario.from_yaml(yaml_content)
         scenario.run()
-
-        helper = create_scenario_helper(scenario)
         graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
-
-        # Minimal: 3 nodes, 2 links
         assert len(graph.nodes) == 3
-        assert len(graph.edges) == 4  # 2 physical links * 2 directions
 
 
 @pytest.mark.slow

@@ -181,7 +181,7 @@ class PerformanceVisualizer:
                 "-",
                 linewidth=2,
                 alpha=0.9,
-                label=f"Empirical Fit (R² = {r_squared:.3f})",
+                label=f"Empirical Fit (R^2 = {r_squared:.3f})",
                 color=sns.color_palette("deep")[2],
             )
         except (ValueError, ZeroDivisionError, OverflowError) as e:

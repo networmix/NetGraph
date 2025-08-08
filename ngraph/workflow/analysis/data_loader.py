@@ -1,4 +1,7 @@
-"""Data loading utilities for notebook analysis."""
+"""Data loading utilities for notebook analysis.
+
+Provides simple JSON loading with basic validation and structured status output.
+"""
 
 import json
 from pathlib import Path
@@ -10,7 +13,14 @@ class DataLoader:
 
     @staticmethod
     def load_results(json_path: Union[str, Path]) -> Dict[str, Any]:
-        """Load results from JSON file with detailed error handling."""
+        """Load results from a JSON file with error handling.
+
+        Args:
+            json_path: Path to a JSON file containing analysis results.
+
+        Returns:
+            A dictionary with success flag, message, and parsed results.
+        """
         json_path = Path(json_path)
 
         result = {
