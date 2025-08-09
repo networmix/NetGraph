@@ -83,3 +83,4 @@ workflow:
     baseline: true
     seed: 42
     store_failure_patterns: true
+    include_flow_details: true

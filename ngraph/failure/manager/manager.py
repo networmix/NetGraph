@@ -1258,6 +1258,7 @@ class FailureManager:
         baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
+        include_flow_details: bool = False,
         **kwargs,
     ) -> Any:  # Will be DemandPlacementResults when imports are enabled
         """Analyze traffic demand placement success under failures.
@@ -1314,6 +1315,7 @@ class FailureManager:
             store_failure_patterns=store_failure_patterns,
             demands_config=demands_config,
             placement_rounds=placement_rounds,
+            include_flow_details=include_flow_details,
             **kwargs,
         )
 

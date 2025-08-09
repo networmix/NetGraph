@@ -17,9 +17,13 @@ YAML Configuration Example:
         baseline: true                     # Include baseline iteration first
         seed: 42                           # Optional reproducible seed
         store_failure_patterns: false      # Store failure patterns if needed
+        include_flow_details: true         # Collect per-demand cost distribution and edges
 
 Results stored in `scenario.results` under the step name:
-    - placement_results: Per-iteration demand placement statistics (serializable)
+    - placement_envelopes: Per-demand placement ratio envelopes with statistics
+      When ``include_flow_details`` is true, each envelope also includes
+      ``flow_summary_stats`` with aggregated ``cost_distribution_stats`` and
+      ``edge_usage_frequencies``.
     - failure_pattern_results: Failure pattern mapping (if requested)
     - metadata: Execution metadata (iterations, parallelism, baseline, etc.)
 """
@@ -52,6 +56,9 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         baseline: Include baseline iteration without failures first.
         seed: Optional seed for reproducibility.
         store_failure_patterns: Whether to store failure pattern results.
+        include_flow_details: If True, collect per-demand cost distribution and
+            edges used per iteration, and aggregate into ``flow_summary_stats``
+            on each placement envelope.
     """
 
     matrix_name: str = ""
@@ -62,6 +69,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
     baseline: bool = False
     seed: int | None = None
     store_failure_patterns: bool = False
+    include_flow_details: bool = False
 
     def run(self, scenario: "Scenario") -> None:
         """Execute demand placement Monte Carlo analysis.
@@ -117,6 +125,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             baseline=self.baseline,
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
+            include_flow_details=self.include_flow_details,
         )
 
         # Build per-demand placement envelopes similar to capacity envelopes
@@ -151,6 +160,62 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             data["dst"] = dst
             data["metric"] = "placement_ratio"
             envelopes[key] = data
+
+        # If flow details were requested, aggregate them into per-demand flow_summary_stats
+        if self.include_flow_details:
+            from collections import defaultdict
+
+            # Accumulate per-demand cost distributions and edge usage across iterations
+            cost_map: dict[tuple[str, str, int], dict[float, list[float]]] = (
+                defaultdict(lambda: defaultdict(list))
+            )
+            edge_counts: dict[tuple[str, str, int], dict[str, int]] = defaultdict(
+                lambda: defaultdict(int)
+            )
+
+            for iter_result in results.raw_results.get("results", []):
+                for d_entry in iter_result.get("demand_results", []):
+                    src = str(d_entry.get("src", ""))
+                    dst = str(d_entry.get("dst", ""))
+                    prio = int(d_entry.get("priority", 0))
+                    # cost_distribution present only if include_flow_details was enabled
+                    cd = d_entry.get("cost_distribution")
+                    if isinstance(cd, dict):
+                        for cost_str, vol in cd.items():
+                            # cost keys can be str or float; normalize to float
+                            try:
+                                cost_val = float(cost_str)
+                            except Exception:
+                                continue
+                            cost_map[(src, dst, prio)][cost_val].append(float(vol))
+                    used_edges = d_entry.get("edges_used") or []
+                    if isinstance(used_edges, list):
+                        for e in used_edges:
+                            edge_counts[(src, dst, prio)][str(e)] += 1
+
+            # Reduce accumulations into stats and attach to envelopes
+            for (src, dst, prio), costs in cost_map.items():
+                key = f"{src}->{dst}|prio={prio}"
+                if key not in envelopes:
+                    continue
+                cost_stats: dict[float, dict[str, Any]] = {}
+                for cost, vols in costs.items():
+                    if not vols:
+                        continue
+                    freq = {v: vols.count(v) for v in set(vols)}
+                    cost_stats[float(cost)] = {
+                        "mean": sum(vols) / len(vols),
+                        "min": min(vols),
+                        "max": max(vols),
+                        "total_samples": len(vols),
+                        "frequencies": freq,
+                    }
+                flow_stats: dict[str, Any] = {"cost_distribution_stats": cost_stats}
+                # Attach edge usage frequencies if collected
+                ec = edge_counts.get((src, dst, prio))
+                if ec:
+                    flow_stats["edge_usage_frequencies"] = dict(ec)
+                envelopes[key]["flow_summary_stats"] = flow_stats
 
         # Convert to serializable dicts for results export
         # Store serializable outputs

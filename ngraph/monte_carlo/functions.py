@@ -81,6 +81,7 @@ def demand_placement_analysis(
     network_view: "NetworkView",
     demands_config: list[dict[str, Any]],
     placement_rounds: int | str = "auto",
+    include_flow_details: bool = False,
     **kwargs,
 ) -> dict[str, Any]:
     """Analyze traffic demand placement success rates.
@@ -97,8 +98,11 @@ def demand_placement_analysis(
         - total_demand: Total demand volume.
         - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
         - demand_results: List of per-demand statistics preserving offered volume.
-        - priority_results: Mapping from priority to aggregated statistics with keys
-          total_volume, placed_volume, unplaced_volume, placement_ratio,
+          When ``include_flow_details`` is True, each entry also includes
+          ``cost_distribution`` mapping path cost to placed volume and
+          ``edges_used`` as a list of edge identifiers seen in the placed flows.
+        - priority_results: Mapping from priority to aggregated statistics with
+          keys total_volume, placed_volume, unplaced_volume, placement_ratio,
           and demand_count.
     """
     # Reconstruct demands from config to avoid passing complex objects
@@ -138,17 +142,43 @@ def demand_placement_analysis(
         unplaced = offered - placed
         priority = int(getattr(dmd, "priority", getattr(dmd, "demand_class", 0)))
 
-        demand_results.append(
-            {
-                "src": str(getattr(dmd, "src_node", "")),
-                "dst": str(getattr(dmd, "dst_node", "")),
-                "priority": priority,
-                "offered_demand": offered,
-                "placed_demand": placed,
-                "unplaced_demand": unplaced,
-                "placement_ratio": (placed / offered) if offered > 0 else 0.0,
-            }
-        )
+        entry: dict[str, Any] = {
+            "src": str(getattr(dmd, "src_node", "")),
+            "dst": str(getattr(dmd, "dst_node", "")),
+            "priority": priority,
+            "offered_demand": offered,
+            "placed_demand": placed,
+            "unplaced_demand": unplaced,
+            "placement_ratio": (placed / offered) if offered > 0 else 0.0,
+        }
+
+        if include_flow_details and getattr(dmd, "flow_policy", None) is not None:
+            # Summarize placed flows by path cost and collect edges used
+            cost_distribution: dict[float, float] = {}
+            edge_strings: set[str] = set()
+            try:
+                for flow in dmd.flow_policy.flows.values():  # type: ignore[union-attr]
+                    # Path cost for the flow
+                    cost_val = float(getattr(flow.path_bundle, "cost", 0.0))
+                    placed_flow = float(getattr(flow, "placed_flow", 0.0))
+                    if placed_flow > 0.0:
+                        cost_distribution[cost_val] = (
+                            cost_distribution.get(cost_val, 0.0) + placed_flow
+                        )
+                    # Record edges used by this flow
+                    for eid in getattr(flow.path_bundle, "edges", set()):
+                        edge_strings.add(str(eid))
+            except Exception:
+                # Be defensive: omit details if anything unexpected occurs
+                cost_distribution = {}
+                edge_strings = set()
+
+            if cost_distribution:
+                entry["cost_distribution"] = cost_distribution
+            if edge_strings:
+                entry["edges_used"] = sorted(edge_strings)
+
+        demand_results.append(entry)
 
         demand_stats[priority]["total_volume"] += offered
         demand_stats[priority]["placed_volume"] += placed
