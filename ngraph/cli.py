@@ -311,6 +311,52 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 remaining = matrix_count - 5
                 print(f"     ... and {remaining} more")
 
+        # Helper: collect step path-like fields and summarize node matches
+        def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
+            fields: list[tuple[str, str]] = []
+            for key, value in step.__dict__.items():
+                if key.startswith("_"):
+                    continue
+                if not isinstance(value, str):
+                    continue
+                if not value.strip():
+                    continue
+                if key.endswith("_path") or key.endswith("_regex"):
+                    fields.append((key, value))
+            return fields
+
+        def _summarize_node_matches(
+            step: Any,
+            net: Any,
+        ) -> Dict[str, Dict[str, Any]]:
+            summary: Dict[str, Dict[str, Any]] = {}
+            fields = _collect_step_path_fields(step)
+            if not fields:
+                return summary
+            for name, pattern in fields:
+                try:
+                    groups = net.select_node_groups_by_path(pattern)
+                except Exception as exc:  # pragma: no cover (defensive)
+                    summary[name] = {
+                        "pattern": pattern,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                    continue
+
+                group_labels = list(groups.keys())
+                total_nodes = sum(len(nodes) for nodes in groups.values())
+                enabled_nodes = sum(
+                    1 for nodes in groups.values() for nd in nodes if not nd.disabled
+                )
+                summary[name] = {
+                    "pattern": pattern,
+                    "groups": len(group_labels),
+                    "nodes": total_nodes,
+                    "enabled_nodes": enabled_nodes,
+                    "labels": group_labels[:5],  # preview up to 5 labels
+                }
+            return summary
+
         # Workflow Analysis as table
         print("\n7. WORKFLOW STEPS")
         print("-" * 30)
@@ -334,6 +380,27 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                     ["#", "Name", "Type", "Seed"], workflow_rows
                 )
                 print(workflow_table)
+
+                # Node selection preview for steps with path-like fields
+                print("\n   Node selection preview:")
+                any_preview = False
+                for i, step in enumerate(scenario.workflow):
+                    match_info = _summarize_node_matches(step, network)
+                    if not match_info:
+                        continue
+                    any_preview = True
+                    parts: list[str] = []
+                    for field_name, info in match_info.items():
+                        if "error" in info:
+                            parts.append(f"{field_name}: ERROR {info['error']}")
+                        else:
+                            parts.append(
+                                f"{field_name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
+                            )
+                    label = step.name or step.__class__.__name__
+                    print(f"     {i + 1}. {label}: " + "; ".join(parts))
+                if not any_preview:
+                    print("     (no node selection fields in workflow steps)")
             else:
                 # Detailed view with parameters
                 for i, step in enumerate(scenario.workflow):
@@ -363,6 +430,50 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                             f"        {line}" for line in param_table.split("\n")
                         )
                         print(indented_table)
+
+                    # Show node selection matches for path-like fields
+                    match_info = _summarize_node_matches(step, network)
+                    if match_info:
+                        rows: list[List[str]] = []
+                        for field_name, info in match_info.items():
+                            if "error" in info:
+                                rows.append(
+                                    [
+                                        field_name,
+                                        info["pattern"],
+                                        "ERROR",
+                                        info["error"],
+                                    ]
+                                )
+                            else:
+                                label_preview = (
+                                    ", ".join(info["labels"]) if info["labels"] else "-"
+                                )
+                                rows.append(
+                                    [
+                                        field_name,
+                                        info["pattern"],
+                                        f"{info['groups']} groups / {info['nodes']} nodes",
+                                        f"{info['enabled_nodes']} enabled; labels: {label_preview}",
+                                    ]
+                                )
+                        if rows:
+                            print("        Node matches:")
+                            match_table = _format_table(
+                                ["Field", "Pattern", "Matches", "Details"], rows
+                            )
+                            indented = "\n".join(
+                                f"        {line}" for line in match_table.split("\n")
+                            )
+                            print(indented)
+                        # Emphasize empty matches
+                        if all(
+                            (info.get("nodes", 0) == 0) and ("error" not in info)
+                            for info in match_info.values()
+                        ):
+                            print(
+                                "        WARNING: No nodes matched for the given patterns"
+                            )
 
         print("\n" + "=" * 60)
         print("INSPECTION COMPLETE")

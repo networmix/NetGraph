@@ -274,6 +274,58 @@ def test_inspect_errors_for_missing_and_invalid_files(tmp_path: Path) -> None:
     )
 
 
+def test_inspect_workflow_node_selection_preview_basic(tmp_path: Path) -> None:
+    scenario_file = tmp_path / "s.yaml"
+    scenario_file.write_text(
+        """
+seed: 1
+network:
+  nodes:
+    src-1: {}
+    src-2: {}
+    dst-1: {}
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    name: cap
+    source_path: "^src"
+    sink_path: "^dst"
+"""
+    )
+
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+        cli.main(["inspect", str(scenario_file)])
+
+    out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
+    assert "Node selection preview:" in out
+    assert "source_path:" in out and "sink_path:" in out
+    assert "groups" in out and "nodes" in out
+
+
+def test_inspect_workflow_node_selection_detail_and_warning(tmp_path: Path) -> None:
+    scenario_file = tmp_path / "s2.yaml"
+    scenario_file.write_text(
+        """
+seed: 1
+network:
+  nodes:
+    A: {}
+workflow:
+  - step_type: CapacityEnvelopeAnalysis
+    name: cap2
+    source_path: "^none"
+    sink_path: "^none"
+"""
+    )
+
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+        cli.main(["inspect", str(scenario_file), "--detail"])
+
+    out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
+    assert "Node matches:" in out
+    assert "Field" in out and "Pattern" in out and "Matches" in out
+    assert "WARNING: No nodes matched" in out
+
+
 # Report command tests (fast path with fake generator)
 
 
