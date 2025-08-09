@@ -43,7 +43,7 @@ def test_custom_assignment_including_policy_config() -> None:
         demand=42.5,
         demand_placed=10.0,
         attrs={"description": "test"},
-        mode="full_mesh",
+        mode="pairwise",
         flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
     )
 
@@ -53,5 +53,5 @@ def test_custom_assignment_including_policy_config() -> None:
     assert demand.demand == 42.5
     assert demand.demand_placed == 10.0
     assert demand.attrs == {"description": "test"}
-    assert demand.mode == "full_mesh"
+    assert demand.mode == "pairwise"
     assert demand.flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_ECMP

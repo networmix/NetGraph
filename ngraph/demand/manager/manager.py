@@ -58,11 +58,11 @@ class TrafficResult(NamedTuple):
 class TrafficManager:
     """Manage expansion and placement of traffic demands on a `Network`.
 
-    This class:
+     This class:
 
       1) Builds (or rebuilds) a StrictMultiDiGraph from the given Network.
-      2) Expands each TrafficDemand into one or more Demand objects based
-         on a configurable 'mode' (e.g., 'combine' or 'full_mesh').
+       2) Expands each TrafficDemand into one or more Demand objects based
+          on a configurable 'mode' ("combine" or "pairwise").
       3) Each Demand is associated with a FlowPolicy, which handles how flows
          are placed (split across paths, balancing, etc.).
       4) Provides methods to place all demands incrementally with optional
@@ -75,7 +75,7 @@ class TrafficManager:
           demand's `source_path` and `sink_path`). A single Demand is created
           from the pseudo-source to the pseudo-sink, with the full volume.
 
-      - 'full_mesh' mode:
+       - 'pairwise' mode:
         * All matched sources form one group, all matched sinks form another group.
           A separate Demand is created for each (src_node, dst_node) pair,
           skipping self-pairs. The total volume is split evenly across the pairs.
@@ -156,9 +156,9 @@ class TrafficManager:
                 self._expand_combine(demands_of_td, td, src_groups, snk_groups)
                 expanded.extend(demands_of_td)
                 self._td_to_demands[td.id] = demands_of_td
-            elif td.mode == "full_mesh":
+            elif td.mode == "pairwise":
                 demands_of_td: List[Demand] = []
-                self._expand_full_mesh(demands_of_td, td, src_groups, snk_groups)
+                self._expand_pairwise(demands_of_td, td, src_groups, snk_groups)
                 expanded.extend(demands_of_td)
                 self._td_to_demands[td.id] = demands_of_td
             else:
@@ -450,14 +450,14 @@ class TrafficManager:
             )
         )
 
-    def _expand_full_mesh(
+    def _expand_pairwise(
         self,
         expanded: List[Demand],
         td: TrafficDemand,
         src_groups: Dict[str, List[Node]],
         snk_groups: Dict[str, List[Node]],
     ) -> None:
-        """Expand a single demand using the ``full_mesh`` mode.
+        """Expand a single demand using the ``pairwise`` mode.
 
         Creates one `Demand` for each valid source-destination pair (excluding
         self-pairs) and splits total volume evenly across pairs.

@@ -107,7 +107,7 @@ def demand_placement_analysis(
             source_path=config["source_path"],
             sink_path=config["sink_path"],
             demand=config["demand"],
-            mode=config.get("mode", "full_mesh"),
+            mode=config.get("mode", "pairwise"),
             flow_policy_config=config.get("flow_policy_config"),
             priority=config.get("priority", 0),
         )

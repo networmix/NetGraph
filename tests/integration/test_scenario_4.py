@@ -313,7 +313,7 @@ class TestScenario4:
         for demand in default_matrix:
             assert hasattr(demand, "attrs")
             if demand.attrs.get("traffic_type") == "east_west":
-                assert demand.mode == "full_mesh"
+                assert demand.mode == "pairwise"
             elif demand.attrs.get("traffic_type") == "inter_dc":
                 assert demand.mode == "combine"
 

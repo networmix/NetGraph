@@ -64,7 +64,7 @@ def test_traffic_matrix_set_comprehensive():
             sink_path="backup.*",
             demand=500.0,
             priority=0,
-            mode="full_mesh",
+            mode="pairwise",
         )
     ]
     tms.add("emergency", emergency_demands)
@@ -87,7 +87,7 @@ def test_traffic_matrix_set_comprehensive():
     # Verify demand details
     assert d["peak_hour"][0]["demand"] == 200.0
     assert d["peak_hour"][0]["priority"] == 1
-    assert d["emergency"][0]["mode"] == "full_mesh"
+    assert d["emergency"][0]["mode"] == "pairwise"
     assert d["off_peak"][1]["source_path"] == "sync.*"
 
 

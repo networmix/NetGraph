@@ -26,7 +26,7 @@ class TrafficDemand:
             ``flow_policy`` is not provided.
         flow_policy: Concrete policy instance. If set, it overrides
             ``flow_policy_config``.
-        mode: Expansion mode, e.g. ``"combine"`` or ``"full_mesh"``.
+        mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
         attrs: Arbitrary user metadata.
         id: Unique identifier assigned at initialization.
     """

@@ -1289,7 +1289,7 @@ class FailureManager:
                     "source_path": demand.source_path,
                     "sink_path": demand.sink_path,
                     "demand": demand.demand,
-                    "mode": getattr(demand, "mode", "full_mesh"),
+                    "mode": getattr(demand, "mode", "pairwise"),
                     "flow_policy_config": getattr(demand, "flow_policy_config", None),
                     "priority": getattr(demand, "priority", 0),
                 }

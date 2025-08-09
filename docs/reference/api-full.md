@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 09, 2025 at 03:28 UTC
+Generated from source code on: August 09, 2025 at 04:04 UTC
 
 Modules auto-discovered: 59
 
@@ -1688,11 +1688,11 @@ per-demand `FlowPolicy` instances.
 
 Manage expansion and placement of traffic demands on a `Network`.
 
-This class:
+ This class:
 
   1) Builds (or rebuilds) a StrictMultiDiGraph from the given Network.
-  2) Expands each TrafficDemand into one or more Demand objects based
-     on a configurable 'mode' (e.g., 'combine' or 'full_mesh').
+   2) Expands each TrafficDemand into one or more Demand objects based
+      on a configurable 'mode' ("combine" or "pairwise").
   3) Each Demand is associated with a FlowPolicy, which handles how flows
      are placed (split across paths, balancing, etc.).
   4) Provides methods to place all demands incrementally with optional
@@ -1707,7 +1707,7 @@ In particular:
       demand's `source_path` and `sink_path`). A single Demand is created
       from the pseudo-source to the pseudo-sink, with the full volume.
 
-- 'full_mesh' mode:
+- 'pairwise' mode:
 - All matched sources form one group, all matched sinks form another group.
 
       A separate Demand is created for each (src_node, dst_node) pair,
@@ -1788,7 +1788,7 @@ Attributes:
         ``flow_policy`` is not provided.
     flow_policy: Concrete policy instance. If set, it overrides
         ``flow_policy_config``.
-    mode: Expansion mode, e.g. ``"combine"`` or ``"full_mesh"``.
+    mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
     attrs: Arbitrary user metadata.
     id: Unique identifier assigned at initialization.
 
@@ -2362,7 +2362,7 @@ YAML Configuration Example:
         name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
         source_path: "^datacenter/.*"          # Regex pattern for source node groups
         sink_path: "^edge/.*"                  # Regex pattern for sink node groups
-        mode: "combine"                        # "combine" or "pairwise" flow analysis
+         mode: "combine"                        # "combine" or "pairwise" flow analysis
         failure_policy: "random_failures"      # Optional: Named failure policy to use
         iterations: 1000                       # Number of Monte-Carlo trials
         parallelism: 4                         # Number of parallel worker processes

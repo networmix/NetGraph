@@ -153,7 +153,7 @@ class TestDemandPlacementAnalysis:
                     "source_path": "A",
                     "sink_path": "B",
                     "demand": 100.0,
-                    "mode": "full_mesh",
+                    "mode": "pairwise",
                     "priority": 0,
                 },
                 {
@@ -176,7 +176,7 @@ class TestDemandPlacementAnalysis:
                 source_path="A",
                 sink_path="B",
                 demand=100.0,
-                mode="full_mesh",
+                mode="pairwise",
                 flow_policy_config=None,
                 priority=0,
             )

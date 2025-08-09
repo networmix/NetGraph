@@ -15,7 +15,7 @@ YAML Configuration Example:
         name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
         source_path: "^datacenter/.*"          # Regex pattern for source node groups
         sink_path: "^edge/.*"                  # Regex pattern for sink node groups
-        mode: "combine"                        # "combine" or "pairwise" flow analysis
+         mode: "combine"                        # "combine" or "pairwise" flow analysis
         failure_policy: "random_failures"      # Optional: Named failure policy to use
         iterations: 1000                       # Number of Monte-Carlo trials
         parallelism: 4                         # Number of parallel worker processes

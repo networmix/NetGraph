@@ -355,14 +355,14 @@ traffic_matrix_set:
       source_path: "^dc1/.*"
       sink_path: "^dc2/.*"
       demand: 500
-      mode: "full_mesh"          # Distributed demand
+      mode: "pairwise"           # Distributed demand
       priority: 2
 ```
 
 **Traffic Modes:**
 
 - `combine`: Single aggregate flow between source and sink groups
-- `full_mesh`: Individual flows between all source-sink node pairs
+- `pairwise`: Individual flows between all source-sink node pairs
 
 **Flow Policies:**
 

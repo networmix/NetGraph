@@ -251,7 +251,7 @@ traffic_matrix_set:
     - source_path: "dc1_pod[ab]_rack.*/servers/.*"
       sink_path: "dc1_pod[ab]_rack.*/servers/.*"
       demand: 5.0 # 5 Gb/s east-west traffic
-      mode: "full_mesh"
+      mode: "pairwise"
       attrs:
         traffic_type: "east_west"
 
@@ -268,7 +268,7 @@ traffic_matrix_set:
     - source_path: "dc1_poda_rack1/servers/srv-[1-4]"
       sink_path: "dc1_poda_rack1/servers/srv-[1-4]"
       demand: 20.0 # 20 Gb/s HPC collective communication
-      mode: "full_mesh"
+      mode: "pairwise"
       attrs:
         traffic_type: "hpc_collective"
 
