@@ -279,19 +279,14 @@ class TestFailureManager:
         mock_pool_executor: MagicMock,
         failure_manager: FailureManager,
     ) -> None:
+        """When deduplication collapses iterations to one unique pattern, execution
+        may run serially even if parallelism > 1. Validate results shape and metadata
+        without asserting executor usage.
+        """
         mock_pickle.dumps.return_value = b"fake_network_data"
 
         mock_pool = MagicMock()
         mock_pool_executor.return_value.__enter__.return_value = mock_pool
-
-        mock_results = [
-            [("src1", "dst1", 100.0)],
-            [("src2", "dst2", 200.0)],
-        ]
-        mock_pool.map.return_value = [
-            (mock_results[0], 0, False, set(), set()),
-            (mock_results[1], 1, False, set(), set()),
-        ]
 
         result = failure_manager.run_monte_carlo_analysis(
             analysis_func=mock_analysis_func,
@@ -301,7 +296,6 @@ class TestFailureManager:
 
         assert len(result["results"]) == 2
         assert result["metadata"]["parallelism"] == 2
-        mock_pool_executor.assert_called_once()
 
 
 class TestFailureManagerTopLevelMatching:
@@ -397,6 +391,9 @@ class TestFailureManagerErrorHandling:
     def test_run_monte_carlo_parallel_execution_error(
         self, failure_manager: FailureManager
     ) -> None:
+        """Force two unique patterns so the parallel path is taken, then assert
+        errors in worker execution propagate.
+        """
         with patch(
             "ngraph.failure.manager.manager.ProcessPoolExecutor"
         ) as mock_pool_executor:
@@ -404,8 +401,16 @@ class TestFailureManagerErrorHandling:
             mock_pool_executor.return_value.__enter__.return_value = mock_pool
             mock_pool.map.side_effect = RuntimeError("Parallel execution failed")
 
-            with patch(
-                "ngraph.failure.manager.manager.pickle.dumps", return_value=b"fake_data"
+            with (
+                patch(
+                    "ngraph.failure.manager.manager.pickle.dumps",
+                    return_value=b"fake_data",
+                ),
+                patch.object(
+                    failure_manager,
+                    "compute_exclusions",
+                    side_effect=[({"n1"}, set()), ({"n2"}, set())],
+                ),
             ):
                 with pytest.raises(RuntimeError, match="Parallel execution failed"):
                     failure_manager.run_monte_carlo_analysis(

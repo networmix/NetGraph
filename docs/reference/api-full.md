@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 09, 2025 at 13:04 UTC
+Generated from source code on: August 09, 2025 at 22:20 UTC
 
 Modules auto-discovered: 63
 
@@ -1982,7 +1982,7 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'` - Create NetworkView with specified exclusions.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
 - `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
 - `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze component criticality for flow capacity under failures.
@@ -2656,10 +2656,16 @@ YAML Configuration Example:
         baseline: true                     # Include baseline iteration first
         seed: 42                           # Optional reproducible seed
         store_failure_patterns: false      # Store failure patterns if needed
+        include_flow_details: true         # Collect per-demand cost distribution and edges
 
 Results stored in `scenario.results` under the step name:
 
-- placement_results: Per-iteration demand placement statistics (serializable)
+- placement_envelopes: Per-demand placement ratio envelopes with statistics
+
+      When ``include_flow_details`` is true, each envelope also includes
+      ``flow_summary_stats`` with aggregated ``cost_distribution_stats`` and
+      ``edge_usage_frequencies``.
+
 - failure_pattern_results: Failure pattern mapping (if requested)
 - metadata: Execution metadata (iterations, parallelism, baseline, etc.)
 
@@ -2676,6 +2682,9 @@ Attributes:
     baseline: Include baseline iteration without failures first.
     seed: Optional seed for reproducibility.
     store_failure_patterns: Whether to store failure pattern results.
+    include_flow_details: If True, collect per-demand cost distribution and
+        edges used per iteration, and aggregate into ``flow_summary_stats``
+        on each placement envelope.
 
 **Attributes:**
 
@@ -2688,6 +2697,7 @@ Attributes:
 - `placement_rounds` (int | str) = auto
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
+- `include_flow_details` (bool) = False
 
 **Methods:**
 
@@ -3029,7 +3039,7 @@ failure analysis scenarios.
 Note: This module is distinct from ngraph.workflow.analysis, which provides
 notebook visualization components for workflow results.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', **kwargs) -> 'dict[str, Any]'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'dict[str, Any]'
 
 Analyze traffic demand placement success rates.
 
@@ -3046,9 +3056,14 @@ Returns:
 - total_demand: Total demand volume.
 - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
 - demand_results: List of per-demand statistics preserving offered volume.
-- priority_results: Mapping from priority to aggregated statistics with keys
 
-      total_volume, placed_volume, unplaced_volume, placement_ratio,
+      When ``include_flow_details`` is True, each entry also includes
+      ``cost_distribution`` mapping path cost to placed volume and
+      ``edges_used`` as a list of edge identifiers seen in the placed flows.
+
+- priority_results: Mapping from priority to aggregated statistics with
+
+      keys total_volume, placed_volume, unplaced_volume, placement_ratio,
       and demand_count.
 
 ### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[tuple]'

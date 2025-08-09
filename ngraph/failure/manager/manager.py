@@ -502,7 +502,11 @@ class FailureManager:
         logger.debug("Pre-computing failure exclusions for all iterations")
         pre_compute_start = time.time()
 
-        worker_args = []
+        worker_args: list[tuple] = []
+        iteration_index_to_key: dict[int, tuple] = {}
+        key_to_first_arg: dict[tuple, tuple] = {}
+        key_to_members: dict[tuple, list[int]] = {}
+
         for i in range(mc_iters):
             seed_offset = None
             if seed is not None:
@@ -520,37 +524,87 @@ class FailureManager:
                     policy, seed_offset
                 )
 
-            # Create worker arguments
-            worker_args.append(
-                (
-                    excluded_nodes,
-                    excluded_links,
-                    analysis_func,
-                    analysis_kwargs,
-                    i,  # iteration_index
-                    is_baseline,
-                    func_name,
-                )
+            arg = (
+                excluded_nodes,
+                excluded_links,
+                analysis_func,
+                analysis_kwargs,
+                i,  # iteration_index
+                is_baseline,
+                func_name,
             )
+            worker_args.append(arg)
+
+            # Build deduplication key (excludes iteration index)
+            dedup_key = _create_cache_key(
+                excluded_nodes, excluded_links, func_name, analysis_kwargs
+            )
+            iteration_index_to_key[i] = dedup_key
+            if dedup_key not in key_to_first_arg:
+                key_to_first_arg[dedup_key] = arg
+            key_to_members.setdefault(dedup_key, []).append(i)
 
         pre_compute_time = time.time() - pre_compute_start
         logger.debug(
             f"Pre-computed {len(worker_args)} exclusion sets in {pre_compute_time:.2f}s"
         )
 
+        # Prepare unique tasks (deduplicated by failure pattern + analysis params)
+        unique_worker_args: list[tuple] = list(key_to_first_arg.values())
+        num_unique_tasks: int = len(unique_worker_args)
+        logger.info(
+            f"Monte-Carlo deduplication: {num_unique_tasks} unique patterns from {mc_iters} iterations"
+        )
+
         # Determine if we should run in parallel
-        use_parallel = parallelism > 1 and mc_iters > 1
+        use_parallel = parallelism > 1 and num_unique_tasks > 1
 
         start_time = time.time()
 
+        # Execute only unique tasks, then replicate results to original indices
         if use_parallel:
-            results, failure_patterns = self._run_parallel(
-                worker_args, mc_iters, store_failure_patterns, parallelism
+            unique_result_values, _ = self._run_parallel(
+                unique_worker_args, num_unique_tasks, False, parallelism
             )
         else:
-            results, failure_patterns = self._run_serial(
-                worker_args, store_failure_patterns
+            unique_result_values, _ = self._run_serial(unique_worker_args, False)
+
+        # Map unique task results back to their groups by zipping args with results
+        key_to_result: dict[tuple, Any] = {}
+        for arg, value in zip(unique_worker_args, unique_result_values, strict=False):
+            exc_nodes, exc_links = arg[0], arg[1]
+            dedup_key = _create_cache_key(
+                exc_nodes, exc_links, func_name, analysis_kwargs
             )
+            key_to_result[dedup_key] = value
+
+        # Build full results list in original order
+        results: list[Any] = [None] * mc_iters  # type: ignore[var-annotated]
+        for key, members in key_to_members.items():
+            if key not in key_to_result:
+                # Defensive: should not happen unless parallel map returned fewer tasks
+                continue
+            value = key_to_result[key]
+            for idx in members:
+                results[idx] = value
+
+        # Reconstruct failure patterns per original iteration if requested
+        failure_patterns: list[dict[str, Any]] = []
+        if store_failure_patterns:
+            for key, members in key_to_members.items():
+                # Use exclusions from the representative arg
+                rep_arg = key_to_first_arg[key]
+                exc_nodes: set[str] = rep_arg[0]
+                exc_links: set[str] = rep_arg[1]
+                for idx in members:
+                    failure_patterns.append(
+                        {
+                            "iteration_index": idx,
+                            "is_baseline": bool(baseline and idx == 0),
+                            "excluded_nodes": list(exc_nodes),
+                            "excluded_links": list(exc_links),
+                        }
+                    )
 
         elapsed_time = time.time() - start_time
 
@@ -564,19 +618,14 @@ class FailureManager:
                 "analysis_function": func_name,
                 "policy_name": self.policy_name,
                 "execution_time": elapsed_time,
-                "unique_patterns": len(
-                    set(
-                        (tuple(sorted(args[0])), tuple(sorted(args[1])))
-                        for args in worker_args
-                    )
-                ),
+                "unique_patterns": num_unique_tasks,
             },
         }
 
     def _run_parallel(
         self,
         worker_args: list[tuple],
-        mc_iters: int,
+        total_tasks: int,
         store_failure_patterns: bool,
         parallelism: int,
     ) -> tuple[list[Any], list[dict[str, Any]]]:
@@ -596,9 +645,9 @@ class FailureManager:
         Returns:
             Tuple of (results_list, failure_patterns_list).
         """
-        workers = min(parallelism, mc_iters)
+        workers = min(parallelism, total_tasks)
         logger.info(
-            f"Running parallel analysis with {workers} workers for {mc_iters} iterations"
+            f"Running parallel analysis with {workers} workers for {total_tasks} iterations"
         )
 
         # Serialize network once for all workers
@@ -606,7 +655,7 @@ class FailureManager:
         logger.debug(f"Serialized network once: {len(network_pickle)} bytes")
 
         # Calculate optimal chunksize to minimize IPC overhead
-        chunksize = max(1, mc_iters // (workers * 4))
+        chunksize = max(1, total_tasks // (workers * 4))
         logger.debug(f"Using chunksize={chunksize} for parallel execution")
 
         start_time = time.time()
@@ -622,7 +671,7 @@ class FailureManager:
             logger.debug(
                 f"ProcessPoolExecutor created with {workers} workers and shared network"
             )
-            logger.info(f"Starting parallel execution of {mc_iters} iterations")
+            logger.info(f"Starting parallel execution of {total_tasks} iterations")
 
             try:
                 for (
@@ -649,9 +698,9 @@ class FailureManager:
                         )
 
                     # Progress logging
-                    if completed_tasks % max(1, mc_iters // 10) == 0:
+                    if completed_tasks % max(1, total_tasks // 10) == 0:
                         logger.info(
-                            f"Parallel analysis progress: {completed_tasks}/{mc_iters} tasks completed"
+                            f"Parallel analysis progress: {completed_tasks}/{total_tasks} tasks completed"
                         )
 
             except Exception as e:
@@ -664,7 +713,7 @@ class FailureManager:
         elapsed_time = time.time() - start_time
         logger.info(f"Parallel analysis completed in {elapsed_time:.2f} seconds")
         logger.debug(
-            f"Average time per iteration: {elapsed_time / mc_iters:.3f} seconds"
+            f"Average time per iteration: {elapsed_time / total_tasks:.3f} seconds"
         )
 
         # Log exclusion pattern diversity for cache efficiency analysis
@@ -678,9 +727,9 @@ class FailureManager:
             unique_exclusions.add(exclusion_key)
 
         logger.info(
-            f"Generated {len(unique_exclusions)} unique exclusion patterns from {mc_iters} iterations"
+            f"Generated {len(unique_exclusions)} unique exclusion patterns from {total_tasks} iterations"
         )
-        cache_efficiency = (mc_iters - len(unique_exclusions)) / mc_iters * 100
+        cache_efficiency = (total_tasks - len(unique_exclusions)) / total_tasks * 100
         logger.debug(
             f"Potential cache efficiency: {cache_efficiency:.1f}% (worker processes benefit from caching)"
         )

@@ -60,8 +60,8 @@ workflow:
   # Single pairwise analysis generates complete 4x4 node-to-node capacity matrix
   - step_type: CapacityEnvelopeAnalysis
     name: "node_to_node_capacity_matrix"
-    source_path: "^N([1-4])$"        # Capturing group creates separate groups: "1", "2", "3", "4"
-    sink_path: "^N([1-4])$"          # Capturing group creates separate groups: "1", "2", "3", "4"
+    source_path: "^(N[1-4])$"        # Capturing group creates separate groups: "1", "2", "3", "4"
+    sink_path: "^(N[1-4])$"          # Capturing group creates separate groups: "1", "2", "3", "4"
     mode: "pairwise"                 # Generates all source-sink combinations (16 total)
     failure_policy: "single_link_failure"
     iterations: 10                   # Monte Carlo iterations per node pair
