@@ -56,6 +56,464 @@ def _format_table(headers: List[str], rows: List[List[str]], min_width: int = 8)
     return "\n".join(lines)
 
 
+def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
+    """Return (field, pattern) pairs for string fields that look like node patterns.
+
+    Fields considered: names ending with "_path" or "_regex" with non-empty string values.
+    """
+    fields: list[tuple[str, str]] = []
+    for key, value in step.__dict__.items():
+        if key.startswith("_"):
+            continue
+        if not isinstance(value, str):
+            continue
+        if not value.strip():
+            continue
+        if key.endswith("_path") or key.endswith("_regex"):
+            fields.append((key, value))
+    return fields
+
+
+def _summarize_pattern(pattern: str, net: Any) -> Dict[str, Any]:
+    """Summarize node matches for a given pattern against a network.
+
+    Returns dict with keys: pattern, groups, nodes, enabled_nodes, labels (preview) or error.
+    """
+    try:
+        groups = net.select_node_groups_by_path(pattern)
+    except Exception as exc:  # pragma: no cover (defensive)
+        return {"pattern": pattern, "error": f"{type(exc).__name__}: {exc}"}
+
+    labels = list(groups.keys())
+    total_nodes = sum(len(nodes) for nodes in groups.values())
+    enabled_nodes = sum(
+        1 for nodes in groups.values() for nd in nodes if not nd.disabled
+    )
+    return {
+        "pattern": pattern,
+        "groups": len(labels),
+        "nodes": total_nodes,
+        "enabled_nodes": enabled_nodes,
+        "labels": labels[:5],
+    }
+
+
+def _summarize_node_matches(step: Any, net: Any) -> Dict[str, Dict[str, Any]]:
+    """Summarize all path-like fields for a workflow step against a network."""
+    summary: Dict[str, Dict[str, Any]] = {}
+    fields = _collect_step_path_fields(step)
+    if not fields:
+        return summary
+    for name, pattern in fields:
+        summary[name] = _summarize_pattern(pattern, net)
+    return summary
+
+
+def _print_network_structure(
+    network: Any, components_library: Any, detail: bool
+) -> None:
+    nodes = network.nodes
+    links = network.links
+
+    print(f"   Total Nodes: {len(nodes):,}")
+    print(f"   Total Links: {len(links):,}")
+
+    enabled_nodes = [n for n in nodes.values() if not n.disabled]
+    disabled_nodes = [n for n in nodes.values() if n.disabled]
+    enabled_links = [link for link in links.values() if not link.disabled]
+    disabled_links = [link for link in links.values() if link.disabled]
+
+    print(f"   Enabled Nodes: {len(enabled_nodes):,}")
+    if disabled_nodes:
+        print(f"   Disabled Nodes: {len(disabled_nodes):,}")
+
+    print(f"   Enabled Links: {len(enabled_links):,}")
+    if disabled_links:
+        print(f"   Disabled Links: {len(disabled_links):,}")
+
+    # Network hierarchy analysis
+    if nodes:
+        original_level = logger.level
+        logger.setLevel(logging.WARNING)
+        try:
+            explorer = NetworkExplorer.explore_network(network, components_library)
+            print("\n   Network Hierarchy:")
+            explorer.print_tree(
+                max_depth=3 if not detail else None,
+                skip_leaves=not detail,
+                detailed=detail,
+            )
+        except Exception as e:
+            print(f"   Network Hierarchy: Unable to analyze ({e})")
+        finally:
+            logger.setLevel(original_level)
+
+    # Show complete node and link tables in detail mode
+    if detail:
+        # Nodes table
+        if nodes:
+            print("\n   Nodes:")
+            node_rows = []
+            for node_name in sorted(nodes.keys()):
+                node = nodes[node_name]
+                status = "disabled" if node.disabled else "enabled"
+
+                # Calculate total capacity and link count for this node
+                node_capacity = 0
+                node_link_count = 0
+                for link in links.values():
+                    if link.source == node_name or link.target == node_name:
+                        if not link.disabled:
+                            node_capacity += link.capacity
+                            node_link_count += 1
+
+                capacity_str = f"{node_capacity:,.0f}" if node_capacity > 0 else "0"
+
+                node_rows.append(
+                    [node_name, status, capacity_str, str(node_link_count)]
+                )
+
+            node_table = _format_table(
+                ["Node", "Status", "Tot. Capacity", "Links"], node_rows
+            )
+            print(node_table)
+
+        # Links table
+        if links:
+            print("\n   Links:")
+            link_rows = []
+            for _link_id, link in links.items():
+                status = "disabled" if link.disabled else "enabled"
+                capacity = f"{link.capacity:,.0f}"
+
+                # Get cost if available
+                cost = ""
+                if hasattr(link, "cost") and link.cost:
+                    cost = f"{link.cost:,.0f}"
+                elif hasattr(link, "attrs") and link.attrs and "cost" in link.attrs:
+                    cost = f"{link.attrs['cost']:,.0f}"
+
+                link_rows.append([link.source, link.target, status, capacity, cost])
+
+            link_table = _format_table(
+                ["Source", "Target", "Status", "Capacity", "Cost"], link_rows
+            )
+            print(link_table)
+
+    # Link capacity analysis as table
+    if links:
+        link_caps = [link.capacity for link in enabled_links]
+        if link_caps:
+            print("\n   Link Capacity Statistics:")
+            cap_table = _format_table(
+                ["Metric", "Value"],
+                [
+                    ["Min", f"{min(link_caps):,.1f}"],
+                    ["Max", f"{max(link_caps):,.1f}"],
+                    ["Mean", f"{sum(link_caps) / len(link_caps):,.1f}"],
+                    ["Total", f"{sum(link_caps):,.1f}"],
+                ],
+            )
+            print(cap_table)
+
+    # Node capacity analysis
+    if nodes and links:
+        print("\n   Node Capacity Statistics:")
+        node_capacities = []
+        for node_name in nodes.keys():
+            node_capacity = 0
+            for link in enabled_links:
+                if link.source == node_name or link.target == node_name:
+                    node_capacity += link.capacity
+            if node_capacity > 0:  # Only include nodes with links
+                node_capacities.append(node_capacity)
+
+        if node_capacities:
+            node_cap_table = _format_table(
+                ["Metric", "Value"],
+                [
+                    ["Min", f"{min(node_capacities):,.1f}"],
+                    ["Max", f"{max(node_capacities):,.1f}"],
+                    ["Mean", f"{sum(node_capacities) / len(node_capacities):,.1f}"],
+                    ["Total", f"{sum(node_capacities):,.1f}"],
+                ],
+            )
+            print(node_cap_table)
+
+
+def _print_risk_groups(network: Any, detail: bool) -> None:
+    print("\n3. RISK GROUPS")
+    print("-" * 30)
+    if network.risk_groups:
+        print(f"   Total: {len(network.risk_groups)}")
+        if detail:
+            for rg_name, rg in network.risk_groups.items():
+                status = "disabled" if rg.disabled else "enabled"
+                print(f"     {rg_name} ({status})")
+        else:
+            risk_items = list(network.risk_groups.items())[:5]
+            for rg_name, rg in risk_items:
+                status = "disabled" if rg.disabled else "enabled"
+                print(f"     {rg_name} ({status})")
+            if len(network.risk_groups) > 5:
+                remaining = len(network.risk_groups) - 5
+                print(f"     ... and {remaining} more")
+    else:
+        print("   Total: 0")
+
+
+def _print_components_library(components_library: Any, detail: bool) -> None:
+    print("\n4. COMPONENTS LIBRARY")
+    print("-" * 30)
+    comp_count = len(components_library.components)
+    print(f"   Total: {comp_count}")
+    if components_library.components:
+        if detail:
+            for comp_name in components_library.components.keys():
+                print(f"     {comp_name}")
+        else:
+            comp_items = list(components_library.components.keys())[:5]
+            for comp_name in comp_items:
+                print(f"     {comp_name}")
+            if comp_count > 5:
+                remaining = comp_count - 5
+                print(f"     ... and {remaining} more")
+
+
+def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
+    print("\n5. FAILURE POLICIES")
+    print("-" * 30)
+    policy_count = len(failure_policy_set.policies)
+    print(f"   Total: {policy_count}")
+    if failure_policy_set.policies:
+        policy_items = list(failure_policy_set.policies.items())[:5]
+        for policy_name, policy in policy_items:
+            rules_count = len(policy.rules)
+            print(
+                f"     {policy_name}: {rules_count} rule{'s' if rules_count != 1 else ''}"
+            )
+            if detail and rules_count > 0:
+                for i, rule in enumerate(policy.rules[:3]):  # Show first 3 rules
+                    print(f"       {i + 1}. {rule.entity_scope} {rule.rule_type}")
+                if rules_count > 3:
+                    print(f"       ... and {rules_count - 3} more rules")
+        if policy_count > 5:
+            remaining = policy_count - 5
+            print(f"     ... and {remaining} more")
+
+
+def _print_traffic_matrices(network: Any, tms: Any, detail: bool) -> None:
+    print("\n6. TRAFFIC MATRICES")
+    print("-" * 30)
+    matrix_count = len(tms.matrices)
+    print(f"   Total: {matrix_count}")
+    if not tms.matrices:
+        return
+
+    matrix_items = list(tms.matrices.items())[:5]
+    for matrix_name, demands in matrix_items:
+        demand_count = len(demands)
+        total_volume = sum(getattr(d, "demand", 0.0) for d in demands)
+        print(
+            f"     {matrix_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
+        )
+
+        src_counts: Dict[str, int] = {}
+        snk_counts: Dict[str, int] = {}
+        pair_counts: Dict[tuple[str, str], Dict[str, float | int]] = {}
+        for d in demands:
+            src_counts[d.source_path] = src_counts.get(d.source_path, 0) + 1
+            snk_counts[d.sink_path] = snk_counts.get(d.sink_path, 0) + 1
+            key = (d.source_path, d.sink_path)
+            stats = pair_counts.setdefault(key, {"count": 0, "volume": 0.0})
+            stats["count"] = int(stats["count"]) + 1
+            stats["volume"] = float(stats["volume"]) + float(getattr(d, "demand", 0.0))
+
+        if detail:
+            print(f"       total demand: {total_volume:,.0f}")
+            print(
+                f"       unique source patterns: {len(src_counts)}; unique sink patterns: {len(snk_counts)}"
+            )
+
+            rows: list[list[str]] = []
+            for (src_pat, snk_pat), stats in list(pair_counts.items())[:10]:
+                src_info = _summarize_pattern(src_pat, network)
+                snk_info = _summarize_pattern(snk_pat, network)
+                src_match = (
+                    f"{src_info['groups']}g/{src_info['nodes']}n ({src_info['enabled_nodes']}e)"
+                    if "error" not in src_info
+                    else f"ERROR {src_info['error']}"
+                )
+                snk_match = (
+                    f"{snk_info['groups']}g/{snk_info['nodes']}n ({snk_info['enabled_nodes']}e)"
+                    if "error" not in snk_info
+                    else f"ERROR {snk_info['error']}"
+                )
+                label_preview = ", ".join(src_info.get("labels", [])) or "-"
+                rows.append(
+                    [
+                        src_pat,
+                        snk_pat,
+                        str(int(stats["count"])),
+                        f"{float(stats['volume']):,.0f}",
+                        src_match,
+                        snk_match,
+                        label_preview,
+                    ]
+                )
+            if rows:
+                print("       Demand patterns:")
+                table = _format_table(
+                    [
+                        "Source Pattern",
+                        "Sink Pattern",
+                        "Demands",
+                        "Total",
+                        "Src Match",
+                        "Snk Match",
+                        "Src Labels",
+                    ],
+                    rows,
+                )
+                print("\n".join(f"         {line}" for line in table.split("\n")))
+
+            if demands:
+                for i, demand in enumerate(demands[:3]):  # Show first 3 demands
+                    print(
+                        f"       {i + 1}. {demand.source_path} → {demand.sink_path} ({demand.demand})"
+                    )
+                if demand_count > 3:
+                    print(f"       ... and {demand_count - 3} more demands")
+        else:
+            print(f"       total demand: {total_volume:,.0f}")
+            print("       Node selection preview:")
+            top_src = sorted(src_counts.items(), key=lambda kv: -kv[1])[:2]
+            top_snk = sorted(snk_counts.items(), key=lambda kv: -kv[1])[:2]
+            for name, _ in top_src:
+                info = _summarize_pattern(name, network)
+                if "error" in info:
+                    print(f"         source {name}: ERROR {info['error']}")
+                else:
+                    print(
+                        f"         source {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
+                    )
+            for name, _ in top_snk:
+                info = _summarize_pattern(name, network)
+                if "error" in info:
+                    print(f"         sink {name}: ERROR {info['error']}")
+                else:
+                    print(
+                        f"         sink {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
+                    )
+
+    if matrix_count > 5:
+        remaining = matrix_count - 5
+        print(f"     ... and {remaining} more")
+
+
+def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
+    print("\n7. WORKFLOW STEPS")
+    print("-" * 30)
+    step_count = len(scenario.workflow)
+    print(f"   Total: {step_count}")
+    if not scenario.workflow:
+        return
+    if not detail:
+        workflow_rows = []
+        for i, step in enumerate(scenario.workflow):
+            step_name = step.name or f"step_{i + 1}"
+            step_type = step.__class__.__name__
+            determinism = "deterministic" if scenario.seed is not None else "random"
+            workflow_rows.append([str(i + 1), step_name, step_type, determinism])
+
+        workflow_table = _format_table(["#", "Name", "Type", "Seed"], workflow_rows)
+        print(workflow_table)
+
+        print("\n   Node selection preview:")
+        any_preview = False
+        for i, step in enumerate(scenario.workflow):
+            match_info = _summarize_node_matches(step, network)
+            if not match_info:
+                continue
+            any_preview = True
+            parts: list[str] = []
+            for field_name, info in match_info.items():
+                if "error" in info:
+                    parts.append(f"{field_name}: ERROR {info['error']}")
+                else:
+                    parts.append(
+                        f"{field_name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
+                    )
+            label = step.name or step.__class__.__name__
+            print(f"     {i + 1}. {label}: " + "; ".join(parts))
+        if not any_preview:
+            print("     (no node selection fields in workflow steps)")
+    else:
+        for i, step in enumerate(scenario.workflow):
+            step_name = step.name or f"step_{i + 1}"
+            step_type = step.__class__.__name__
+            determinism = "deterministic" if scenario.seed is not None else "random"
+            seed_info = (
+                f" (seed: {step.seed}, {determinism})"
+                if step.seed is not None
+                else f" ({determinism})"
+            )
+            print(f"     {i + 1}. {step_name} ({step_type}){seed_info}")
+
+            step_dict = step.__dict__
+            param_rows = []
+            for key, value in step_dict.items():
+                if key not in ["name", "seed"] and not key.startswith("_"):
+                    param_rows.append([key, str(value)])
+
+            if param_rows:
+                param_table = _format_table(["Parameter", "Value"], param_rows)
+                indented_table = "\n".join(
+                    f"        {line}" for line in param_table.split("\n")
+                )
+                print(indented_table)
+
+            match_info = _summarize_node_matches(step, network)
+            if match_info:
+                rows: list[List[str]] = []
+                for field_name, info in match_info.items():
+                    if "error" in info:
+                        rows.append(
+                            [
+                                field_name,
+                                info["pattern"],
+                                "ERROR",
+                                info["error"],
+                            ]
+                        )
+                    else:
+                        label_preview = (
+                            ", ".join(info["labels"]) if info["labels"] else "-"
+                        )
+                        rows.append(
+                            [
+                                field_name,
+                                info["pattern"],
+                                f"{info['groups']} groups / {info['nodes']} nodes",
+                                f"{info['enabled_nodes']} enabled; labels: {label_preview}",
+                            ]
+                        )
+                if rows:
+                    print("        Node matches:")
+                    match_table = _format_table(
+                        ["Field", "Pattern", "Matches", "Details"], rows
+                    )
+                    indented = "\n".join(
+                        f"        {line}" for line in match_table.split("\n")
+                    )
+                    print(indented)
+                if all(
+                    (info.get("nodes", 0) == 0) and ("error" not in info)
+                    for info in match_info.values()
+                ):
+                    print("        WARNING: No nodes matched for the given patterns")
+
+
 def _inspect_scenario(path: Path, detail: bool = False) -> None:
     """Inspect a scenario file, validate it, and show key characteristics.
 
@@ -92,224 +550,22 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         # Network Analysis
         print("\n2. NETWORK STRUCTURE")
         print("-" * 30)
-
         network = scenario.network
-        nodes = network.nodes
-        links = network.links
+        _print_network_structure(network, scenario.components_library, detail)
 
-        print(f"   Total Nodes: {len(nodes):,}")
-        print(f"   Total Links: {len(links):,}")
-
-        # Show enabled/disabled breakdown
-        enabled_nodes = [n for n in nodes.values() if not n.disabled]
-        disabled_nodes = [n for n in nodes.values() if n.disabled]
-        enabled_links = [link for link in links.values() if not link.disabled]
-        disabled_links = [link for link in links.values() if link.disabled]
-
-        print(f"   Enabled Nodes: {len(enabled_nodes):,}")
-        if disabled_nodes:
-            print(f"   Disabled Nodes: {len(disabled_nodes):,}")
-
-        print(f"   Enabled Links: {len(enabled_links):,}")
-        if disabled_links:
-            print(f"   Disabled Links: {len(disabled_links):,}")
-
-        # Network hierarchy analysis
-        if nodes:
-            # Suppress the "Analyzing..." log message during inspect for cleaner output
-            original_level = logger.level
-            logger.setLevel(logging.WARNING)
-            try:
-                explorer = NetworkExplorer.explore_network(
-                    network, scenario.components_library
-                )
-                print("\n   Network Hierarchy:")
-                explorer.print_tree(
-                    max_depth=3 if not detail else None,
-                    skip_leaves=not detail,
-                    detailed=detail,
-                )
-            except Exception as e:
-                print(f"   Network Hierarchy: Unable to analyze ({e})")
-            finally:
-                logger.setLevel(original_level)
-
-        # Show complete node and link tables in detail mode
-        if detail:
-            # Nodes table
-            if nodes:
-                print("\n   Nodes:")
-                node_rows = []
-                for node_name in sorted(nodes.keys()):
-                    node = nodes[node_name]
-                    status = "disabled" if node.disabled else "enabled"
-
-                    # Calculate total capacity and link count for this node
-                    node_capacity = 0
-                    node_link_count = 0
-                    for link in links.values():
-                        if link.source == node_name or link.target == node_name:
-                            if not link.disabled:
-                                node_capacity += link.capacity
-                                node_link_count += 1
-
-                    capacity_str = f"{node_capacity:,.0f}" if node_capacity > 0 else "0"
-
-                    node_rows.append(
-                        [node_name, status, capacity_str, str(node_link_count)]
-                    )
-
-                node_table = _format_table(
-                    ["Node", "Status", "Tot. Capacity", "Links"], node_rows
-                )
-                print(node_table)
-
-            # Links table
-            if links:
-                print("\n   Links:")
-                link_rows = []
-                for _link_id, link in links.items():
-                    status = "disabled" if link.disabled else "enabled"
-                    capacity = f"{link.capacity:,.0f}"
-
-                    # Get cost if available
-                    cost = ""
-                    if hasattr(link, "cost") and link.cost:
-                        cost = f"{link.cost:,.0f}"
-                    elif hasattr(link, "attrs") and link.attrs and "cost" in link.attrs:
-                        cost = f"{link.attrs['cost']:,.0f}"
-
-                    link_rows.append([link.source, link.target, status, capacity, cost])
-
-                link_table = _format_table(
-                    ["Source", "Target", "Status", "Capacity", "Cost"], link_rows
-                )
-                print(link_table)
-
-        # Link capacity analysis as table
-        if links:
-            link_caps = [link.capacity for link in enabled_links]
-            if link_caps:
-                print("\n   Link Capacity Statistics:")
-                cap_table = _format_table(
-                    ["Metric", "Value"],
-                    [
-                        ["Min", f"{min(link_caps):,.1f}"],
-                        ["Max", f"{max(link_caps):,.1f}"],
-                        ["Mean", f"{sum(link_caps) / len(link_caps):,.1f}"],
-                        ["Total", f"{sum(link_caps):,.1f}"],
-                    ],
-                )
-                print(cap_table)
-
-        # Node capacity analysis
-        if nodes and links:
-            print("\n   Node Capacity Statistics:")
-            node_capacities = []
-            for node_name in nodes.keys():
-                node_capacity = 0
-                for link in enabled_links:
-                    if link.source == node_name or link.target == node_name:
-                        node_capacity += link.capacity
-                if node_capacity > 0:  # Only include nodes with links
-                    node_capacities.append(node_capacity)
-
-            if node_capacities:
-                node_cap_table = _format_table(
-                    ["Metric", "Value"],
-                    [
-                        ["Min", f"{min(node_capacities):,.1f}"],
-                        ["Max", f"{max(node_capacities):,.1f}"],
-                        ["Mean", f"{sum(node_capacities) / len(node_capacities):,.1f}"],
-                        ["Total", f"{sum(node_capacities):,.1f}"],
-                    ],
-                )
-                print(node_cap_table)
+        # (details printed by helper)
 
         # Risk Groups Analysis
-        print("\n3. RISK GROUPS")
-        print("-" * 30)
-        if network.risk_groups:
-            print(f"   Total: {len(network.risk_groups)}")
-            if detail:
-                # Show all risk groups in detail mode
-                for rg_name, rg in network.risk_groups.items():
-                    status = "disabled" if rg.disabled else "enabled"
-                    print(f"     {rg_name} ({status})")
-            else:
-                # Show first 5 risk groups, then summary
-                risk_items = list(network.risk_groups.items())[:5]
-                for rg_name, rg in risk_items:
-                    status = "disabled" if rg.disabled else "enabled"
-                    print(f"     {rg_name} ({status})")
-                if len(network.risk_groups) > 5:
-                    remaining = len(network.risk_groups) - 5
-                    print(f"     ... and {remaining} more")
-        else:
-            print("   Total: 0")
+        _print_risk_groups(network, detail)
 
         # Components Library
-        print("\n4. COMPONENTS LIBRARY")
-        print("-" * 30)
-        comp_count = len(scenario.components_library.components)
-        print(f"   Total: {comp_count}")
-        if scenario.components_library.components:
-            if detail:
-                # Show all components in detail mode
-                for comp_name in scenario.components_library.components.keys():
-                    print(f"     {comp_name}")
-            else:
-                # Show first 5 components, then summary
-                comp_items = list(scenario.components_library.components.keys())[:5]
-                for comp_name in comp_items:
-                    print(f"     {comp_name}")
-                if comp_count > 5:
-                    remaining = comp_count - 5
-                    print(f"     ... and {remaining} more")
+        _print_components_library(scenario.components_library, detail)
 
         # Failure Policies Analysis
-        print("\n5. FAILURE POLICIES")
-        print("-" * 30)
-        policy_count = len(scenario.failure_policy_set.policies)
-        print(f"   Total: {policy_count}")
-        if scenario.failure_policy_set.policies:
-            policy_items = list(scenario.failure_policy_set.policies.items())[:5]
-            for policy_name, policy in policy_items:
-                rules_count = len(policy.rules)
-                print(
-                    f"     {policy_name}: {rules_count} rule{'s' if rules_count != 1 else ''}"
-                )
-                if detail and rules_count > 0:
-                    for i, rule in enumerate(policy.rules[:3]):  # Show first 3 rules
-                        print(f"       {i + 1}. {rule.entity_scope} {rule.rule_type}")
-                    if rules_count > 3:
-                        print(f"       ... and {rules_count - 3} more rules")
-            if policy_count > 5:
-                remaining = policy_count - 5
-                print(f"     ... and {remaining} more")
+        _print_failure_policies(scenario.failure_policy_set, detail)
 
         # Traffic Matrices Analysis
-        print("\n6. TRAFFIC MATRICES")
-        print("-" * 30)
-        matrix_count = len(scenario.traffic_matrix_set.matrices)
-        print(f"   Total: {matrix_count}")
-        if scenario.traffic_matrix_set.matrices:
-            matrix_items = list(scenario.traffic_matrix_set.matrices.items())[:5]
-            for matrix_name, demands in matrix_items:
-                demand_count = len(demands)
-                print(
-                    f"     {matrix_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
-                )
-                if detail and demands:
-                    for i, demand in enumerate(demands[:3]):  # Show first 3 demands
-                        print(
-                            f"       {i + 1}. {demand.source_path} → {demand.sink_path} ({demand.demand})"
-                        )
-                    if demand_count > 3:
-                        print(f"       ... and {demand_count - 3} more demands")
-            if matrix_count > 5:
-                remaining = matrix_count - 5
-                print(f"     ... and {remaining} more")
+        _print_traffic_matrices(network, scenario.traffic_matrix_set, detail)
 
         # Helper: collect step path-like fields and summarize node matches
         def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
