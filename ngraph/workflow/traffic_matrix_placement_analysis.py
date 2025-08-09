@@ -133,8 +133,16 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
 
         from ngraph.results.artifacts import PlacementEnvelope
 
-        # Collect per-demand placement ratios across iterations keyed by (src,dst,prio)
+        # Single-pass accumulation across all iterations
+        # - placement ratios always
+        # - optional cost distributions and edge usage when include_flow_details=True
         per_demand_ratios: dict[tuple[str, str, int], list[float]] = defaultdict(list)
+        cost_map: dict[tuple[str, str, int], dict[float, list[float]]] | None = None
+        edge_counts: dict[tuple[str, str, int], dict[str, int]] | None = None
+
+        if self.include_flow_details:
+            cost_map = defaultdict(lambda: defaultdict(list))
+            edge_counts = defaultdict(lambda: defaultdict(int))
 
         for iter_result in results.raw_results.get("results", []):
             for d_entry in iter_result.get("demand_results", []):
@@ -143,6 +151,28 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 prio = int(d_entry.get("priority", 0))
                 ratio = float(d_entry.get("placement_ratio", 0.0))
                 per_demand_ratios[(src, dst, prio)].append(ratio)
+
+                if (
+                    self.include_flow_details
+                    and cost_map is not None
+                    and edge_counts is not None
+                ):
+                    cd = d_entry.get("cost_distribution")
+                    if isinstance(cd, dict):
+                        for cost_key, vol in cd.items():
+                            try:
+                                cost_val = float(cost_key)
+                                vol_f = float(vol)
+                            except (TypeError, ValueError) as exc:
+                                raise ValueError(
+                                    f"Invalid cost_distribution entry for {src}->{dst} prio={prio}: {cost_key!r}={vol!r}: {exc}"
+                                ) from exc
+                            cost_map[(src, dst, prio)][cost_val].append(vol_f)
+
+                    used_edges = d_entry.get("edges_used") or []
+                    if isinstance(used_edges, list):
+                        for e in used_edges:
+                            edge_counts[(src, dst, prio)][str(e)] += 1
 
         # Create PlacementEnvelope per demand; use 'pairwise' as mode because expanded demands are per pair
         envelopes: dict[str, dict[str, Any]] = {}
@@ -162,37 +192,11 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             envelopes[key] = data
 
         # If flow details were requested, aggregate them into per-demand flow_summary_stats
-        if self.include_flow_details:
-            from collections import defaultdict
-
-            # Accumulate per-demand cost distributions and edge usage across iterations
-            cost_map: dict[tuple[str, str, int], dict[float, list[float]]] = (
-                defaultdict(lambda: defaultdict(list))
-            )
-            edge_counts: dict[tuple[str, str, int], dict[str, int]] = defaultdict(
-                lambda: defaultdict(int)
-            )
-
-            for iter_result in results.raw_results.get("results", []):
-                for d_entry in iter_result.get("demand_results", []):
-                    src = str(d_entry.get("src", ""))
-                    dst = str(d_entry.get("dst", ""))
-                    prio = int(d_entry.get("priority", 0))
-                    # cost_distribution present only if include_flow_details was enabled
-                    cd = d_entry.get("cost_distribution")
-                    if isinstance(cd, dict):
-                        for cost_str, vol in cd.items():
-                            # cost keys can be str or float; normalize to float
-                            try:
-                                cost_val = float(cost_str)
-                            except Exception:
-                                continue
-                            cost_map[(src, dst, prio)][cost_val].append(float(vol))
-                    used_edges = d_entry.get("edges_used") or []
-                    if isinstance(used_edges, list):
-                        for e in used_edges:
-                            edge_counts[(src, dst, prio)][str(e)] += 1
-
+        if (
+            self.include_flow_details
+            and cost_map is not None
+            and edge_counts is not None
+        ):
             # Reduce accumulations into stats and attach to envelopes
             for (src, dst, prio), costs in cost_map.items():
                 key = f"{src}->{dst}|prio={prio}"
