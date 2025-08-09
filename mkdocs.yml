@@ -8,6 +8,7 @@ theme:
     - navigation.sections
     - navigation.tabs
     - navigation.top
+    - content.code.copy
 markdown_extensions:
   - admonition
   - pymdownx.highlight:
@@ -25,7 +26,6 @@ nav:
   - Examples:
       - Basic Example: examples/basic.md
       - Clos Fabric: examples/clos-fabric.md
-      - NetworkView: examples/network_view.md
   - Reference:
       - DSL: reference/dsl.md
       - Workflow: reference/workflow.md
@@ -35,3 +35,4 @@ nav:
       - API Full: reference/api-full.md
 plugins:
   - search
+strict: true

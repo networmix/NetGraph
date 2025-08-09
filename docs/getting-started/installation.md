@@ -68,7 +68,7 @@ To exit the JupyterLab server, press `Ctrl+C` in the terminal where the server i
 
 2. Use the package in your Python code:
 
-    ```python
+```python
 from ngraph.scenario import Scenario
 
 scenario_yaml = """
@@ -93,7 +93,7 @@ network:
 scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 print(f"Created Clos fabric with {len(network.nodes)} nodes and {len(network.links)} links")
-   ```
+```
 
 ## Next Steps
 
