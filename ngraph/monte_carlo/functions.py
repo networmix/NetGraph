@@ -156,22 +156,15 @@ def demand_placement_analysis(
             # Summarize placed flows by path cost and collect edges used
             cost_distribution: dict[float, float] = {}
             edge_strings: set[str] = set()
-            try:
-                for flow in dmd.flow_policy.flows.values():  # type: ignore[union-attr]
-                    # Path cost for the flow
-                    cost_val = float(getattr(flow.path_bundle, "cost", 0.0))
-                    placed_flow = float(getattr(flow, "placed_flow", 0.0))
-                    if placed_flow > 0.0:
-                        cost_distribution[cost_val] = (
-                            cost_distribution.get(cost_val, 0.0) + placed_flow
-                        )
-                    # Record edges used by this flow
-                    for eid in getattr(flow.path_bundle, "edges", set()):
-                        edge_strings.add(str(eid))
-            except Exception:
-                # Be defensive: omit details if anything unexpected occurs
-                cost_distribution = {}
-                edge_strings = set()
+            for flow in dmd.flow_policy.flows.values():  # type: ignore[union-attr]
+                cost_val = float(getattr(flow.path_bundle, "cost", 0.0))
+                placed_flow = float(getattr(flow, "placed_flow", 0.0))
+                if placed_flow > 0.0:
+                    cost_distribution[cost_val] = (
+                        cost_distribution.get(cost_val, 0.0) + placed_flow
+                    )
+                for eid in getattr(flow.path_bundle, "edges", set()):
+                    edge_strings.add(str(eid))
 
             if cost_distribution:
                 entry["cost_distribution"] = cost_distribution
