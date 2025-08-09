@@ -1,8 +1,8 @@
-"""NetGraph: High-performance network modeling and analysis library.
+"""NetGraph: Network modeling and analysis library.
 
-Provides a convenient interface for network topology modeling, traffic analysis,
-and capacity planning. Exports key modules and result classes for easy access
-to the most commonly used NetGraph functionality.
+Provides interfaces for network topology modeling, traffic analysis, and
+capacity planning. Exposes selected modules and artifact types at the package
+root for convenience.
 """
 
 from __future__ import annotations

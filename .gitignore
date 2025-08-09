@@ -116,7 +116,6 @@ notebooks/private/
 data/
 datasets/
 output/
-results/
 exports/
 *.h5
 *.hdf5
