@@ -30,9 +30,9 @@ from concurrent.futures import ProcessPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, Protocol, Set, TypeVar
 
 from ngraph.algorithms.base import FlowPlacement
+from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.logging import get_logger
 from ngraph.model.view import NetworkView
-from ngraph.results.artifacts import FailurePolicySet
 
 if TYPE_CHECKING:
     import cProfile
@@ -1254,10 +1254,11 @@ class FailureManager:
         | Any,  # List of demand configs or TrafficMatrixSet
         iterations: int = 100,
         parallelism: int = 1,
-        placement_rounds: int = 50,
+        placement_rounds: int | str = "auto",
         baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
+        include_flow_details: bool = False,
         **kwargs,
     ) -> Any:  # Will be DemandPlacementResults when imports are enabled
         """Analyze traffic demand placement success under failures.
@@ -1280,20 +1281,29 @@ class FailureManager:
         from ngraph.monte_carlo.functions import demand_placement_analysis
         from ngraph.monte_carlo.results import DemandPlacementResults
 
-        # Convert TrafficMatrixSet to serializable format if needed
-        if hasattr(demands_config, "demands") and not isinstance(demands_config, list):
-            # This is a TrafficMatrixSet - convert to config list
-            serializable_demands = []
-            for demand in demands_config.demands:  # type: ignore
-                config = {
-                    "source_path": demand.source_path,
-                    "sink_path": demand.sink_path,
-                    "demand": demand.demand,
-                    "mode": getattr(demand, "mode", "pairwise"),
-                    "flow_policy_config": getattr(demand, "flow_policy_config", None),
-                    "priority": getattr(demand, "priority", 0),
-                }
-                serializable_demands.append(config)
+        # If caller passed a sequence of TrafficDemand objects, convert to dicts
+        if not isinstance(demands_config, list):
+            # Accept TrafficMatrixSet or any container providing get_matrix()/matrices
+            serializable_demands: list[dict[str, Any]] = []
+            if hasattr(demands_config, "get_all_demands"):
+                td_iter = demands_config.get_all_demands()  # TrafficMatrixSet helper
+            elif hasattr(demands_config, "demands"):
+                td_iter = demands_config.demands  # Backward-compat mock path in tests
+            else:
+                td_iter = []
+            for demand in td_iter:  # type: ignore[assignment]
+                serializable_demands.append(
+                    {
+                        "source_path": getattr(demand, "source_path", ""),
+                        "sink_path": getattr(demand, "sink_path", ""),
+                        "demand": float(getattr(demand, "demand", 0.0)),
+                        "mode": getattr(demand, "mode", "pairwise"),
+                        "flow_policy_config": getattr(
+                            demand, "flow_policy_config", None
+                        ),
+                        "priority": int(getattr(demand, "priority", 0)),
+                    }
+                )
             demands_config = serializable_demands
 
         raw_results = self.run_monte_carlo_analysis(
@@ -1305,6 +1315,7 @@ class FailureManager:
             store_failure_patterns=store_failure_patterns,
             demands_config=demands_config,
             placement_rounds=placement_rounds,
+            include_flow_details=include_flow_details,
             **kwargs,
         )
 

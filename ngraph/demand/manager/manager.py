@@ -8,21 +8,21 @@ per-demand `FlowPolicy` instances.
 from __future__ import annotations
 
 import statistics
-from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, NamedTuple, Optional, Tuple, Union
 
-from ngraph.algorithms import base
 from ngraph.algorithms.flow_init import init_flow_graph
 from ngraph.demand import Demand
+from ngraph.demand.manager.expand import expand_demands as expand_demands_helper
+from ngraph.demand.manager.schedule import place_demands_round_robin
 from ngraph.demand.spec import TrafficDemand
-from ngraph.flows.policy import FlowPolicyConfig, get_flow_policy
+from ngraph.flows.policy import FlowPolicyConfig
 from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
-from ngraph.model.network import Network, Node
+from ngraph.model.network import Network
 
 if TYPE_CHECKING:
+    from ngraph.demand.matrix import TrafficMatrixSet
     from ngraph.model.view import NetworkView
-    from ngraph.results.artifacts import TrafficMatrixSet
 
 
 def _new_td_map() -> Dict[str, List[Demand]]:
@@ -137,35 +137,13 @@ class TrafficManager:
         Raises:
             ValueError: If an unknown mode is encountered.
         """
-        self._td_to_demands.clear()
-        expanded: List[Demand] = []
-
-        for td in self._get_traffic_demands():
-            # Gather node groups for source and sink
-            src_groups = self.network.select_node_groups_by_path(td.source_path)
-            snk_groups = self.network.select_node_groups_by_path(td.sink_path)
-
-            if not src_groups or not snk_groups:
-                # No matching nodes; skip
-                self._td_to_demands[td.id] = []
-                continue
-
-            # Expand demands according to the specified mode
-            if td.mode == "combine":
-                demands_of_td: List[Demand] = []
-                self._expand_combine(demands_of_td, td, src_groups, snk_groups)
-                expanded.extend(demands_of_td)
-                self._td_to_demands[td.id] = demands_of_td
-            elif td.mode == "pairwise":
-                demands_of_td: List[Demand] = []
-                self._expand_pairwise(demands_of_td, td, src_groups, snk_groups)
-                expanded.extend(demands_of_td)
-                self._td_to_demands[td.id] = demands_of_td
-            else:
-                raise ValueError(f"Unknown mode: {td.mode}")
-
-        # Sort final demands by ascending demand_class (i.e., priority)
-        expanded.sort(key=lambda d: d.demand_class)
+        expanded, td_map = expand_demands_helper(
+            network=self.network,
+            graph=self.graph,
+            traffic_demands=self._get_traffic_demands(),
+            default_flow_policy_config=self.default_flow_policy_config,
+        )
+        self._td_to_demands = td_map
         self.demands = expanded
 
     def place_all_demands(
@@ -203,41 +181,12 @@ class TrafficManager:
             else placement_rounds
         )
 
-        # Group demands by priority class
-        prio_map: Dict[int, List[Demand]] = defaultdict(list)
-        for dmd in self.demands:
-            prio_map[dmd.demand_class].append(dmd)
-
-        total_placed = 0.0
-        sorted_priorities = sorted(prio_map.keys())
-
-        for priority_class in sorted_priorities:
-            demands_in_class = prio_map[priority_class]
-
-            for round_idx in range(placement_rounds_int):
-                placed_in_this_round = 0.0
-                rounds_left = placement_rounds_int - round_idx
-
-                for demand in demands_in_class:
-                    leftover = demand.volume - demand.placed_demand
-                    if leftover < base.MIN_FLOW:
-                        continue
-
-                    step_to_place = leftover / float(rounds_left)
-                    placed_now, _remain = demand.place(
-                        flow_graph=self.graph,
-                        max_placement=step_to_place,
-                    )
-                    total_placed += placed_now
-                    placed_in_this_round += placed_now
-
-                # Optionally reoptimize flows in this class
-                if reoptimize_after_each_round and placed_in_this_round > 0.0:
-                    self._reoptimize_priority_demands(demands_in_class)
-
-                # If no progress was made, no need to continue extra rounds
-                if placed_in_this_round < base.MIN_FLOW:
-                    break
+        total_placed = place_demands_round_robin(
+            graph=self.graph,
+            demands=self.demands,
+            placement_rounds=placement_rounds_int,
+            reoptimize_after_each_round=reoptimize_after_each_round,
+        )
 
         # Update each TrafficDemand's placed volume
         for td in self._get_traffic_demands():
@@ -352,16 +301,10 @@ class TrafficManager:
         return results
 
     def _reoptimize_priority_demands(self, demands_in_prio: List[Demand]) -> None:
-        """Re-run placement for each demand in the same priority class.
-
-        Allows the policy to adjust to capacity changes due to other demands.
-
-        Args:
-            demands_in_prio: All demands of the same priority class.
-        """
+        # Retained for backward-compat within this class; internal only. The
+        # scheduling module provides its own implementation.
         if self.graph is None:
             return
-
         for dmd in demands_in_prio:
             if not dmd.flow_policy:
                 continue
@@ -375,138 +318,6 @@ class TrafficManager:
                 placed_volume,
             )
             dmd.placed_demand = dmd.flow_policy.placed_demand
-
-    def _expand_combine(
-        self,
-        expanded: List[Demand],
-        td: TrafficDemand,
-        src_groups: Dict[str, List[Node]],
-        snk_groups: Dict[str, List[Node]],
-    ) -> None:
-        """Expand a single demand using the ``combine`` mode.
-
-        Adds pseudo-source and pseudo-sink nodes, connects them to real nodes
-        with infinite-capacity, zero-cost edges, and creates one aggregate
-        `Demand` from pseudo-source to pseudo-sink with the full volume.
-
-        Args:
-            expanded: Accumulates newly created `Demand` objects.
-            td: The original `TrafficDemand` specification.
-            src_groups: Matched source nodes by label.
-            snk_groups: Matched sink nodes by label.
-        """
-        # Flatten the source and sink node lists
-        src_nodes = [
-            node for group_nodes in src_groups.values() for node in group_nodes
-        ]
-        dst_nodes = [
-            node for group_nodes in snk_groups.values() for node in group_nodes
-        ]
-
-        if not src_nodes or not dst_nodes or self.graph is None:
-            # If no valid nodes or no graph, skip
-            return
-
-        # Create pseudo-source / pseudo-sink names
-        pseudo_source_name = f"combine_src::{td.id}"
-        pseudo_sink_name = f"combine_snk::{td.id}"
-
-        # Add pseudo nodes to the graph (no-op if they already exist)
-        self.graph.add_node(pseudo_source_name)
-        self.graph.add_node(pseudo_sink_name)
-
-        # Link pseudo-source to real sources, and real sinks to pseudo-sink
-        for s_node in src_nodes:
-            self.graph.add_edge(
-                pseudo_source_name,
-                s_node.name,
-                capacity=float("inf"),
-                cost=0,
-            )
-        for t_node in dst_nodes:
-            self.graph.add_edge(
-                t_node.name,
-                pseudo_sink_name,
-                capacity=float("inf"),
-                cost=0,
-            )
-
-        init_flow_graph(self.graph)  # Re-initialize flow-related attributes
-
-        # Create a single Demand with the full volume
-        if td.flow_policy:
-            flow_policy = td.flow_policy.deep_copy()
-        else:
-            fp_config = td.flow_policy_config or self.default_flow_policy_config
-            flow_policy = get_flow_policy(fp_config)
-
-        expanded.append(
-            Demand(
-                src_node=pseudo_source_name,
-                dst_node=pseudo_sink_name,
-                volume=td.demand,
-                demand_class=td.priority,
-                flow_policy=flow_policy,
-            )
-        )
-
-    def _expand_pairwise(
-        self,
-        expanded: List[Demand],
-        td: TrafficDemand,
-        src_groups: Dict[str, List[Node]],
-        snk_groups: Dict[str, List[Node]],
-    ) -> None:
-        """Expand a single demand using the ``pairwise`` mode.
-
-        Creates one `Demand` for each valid source-destination pair (excluding
-        self-pairs) and splits total volume evenly across pairs.
-
-        Args:
-            expanded: Accumulates newly created `Demand` objects.
-            td: The original `TrafficDemand` specification.
-            src_groups: Matched source nodes by label.
-            snk_groups: Matched sink nodes by label.
-        """
-        # Flatten the source and sink node lists
-        src_nodes = [
-            node for group_nodes in src_groups.values() for node in group_nodes
-        ]
-        dst_nodes = [
-            node for group_nodes in snk_groups.values() for node in group_nodes
-        ]
-
-        # Generate all valid (src, dst) pairs
-        valid_pairs = [
-            (s_node, t_node)
-            for s_node in src_nodes
-            for t_node in dst_nodes
-            if s_node.name != t_node.name
-        ]
-        pair_count = len(valid_pairs)
-        if pair_count == 0:
-            return
-
-        demand_per_pair = td.demand / float(pair_count)
-
-        for s_node, t_node in valid_pairs:
-            if td.flow_policy:
-                # Already a FlowPolicy instance, so deep copy it
-                flow_policy = td.flow_policy.deep_copy()
-            else:
-                # Build from enum-based factory
-                fp_config = td.flow_policy_config or self.default_flow_policy_config
-                flow_policy = get_flow_policy(fp_config)
-
-            expanded.append(
-                Demand(
-                    src_node=s_node.name,
-                    dst_node=t_node.name,
-                    volume=demand_per_pair,
-                    demand_class=td.priority,
-                    flow_policy=flow_policy,
-                )
-            )
 
     def _estimate_rounds(self) -> int:
         """Estimate a suitable number of placement rounds.

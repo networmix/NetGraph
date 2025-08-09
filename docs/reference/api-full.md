@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 09, 2025 at 04:52 UTC
+Generated from source code on: August 09, 2025 at 13:04 UTC
 
-Modules auto-discovered: 59
+Modules auto-discovered: 63
 
 ---
 
@@ -1670,9 +1670,60 @@ Raises:
 
 ## ngraph.demand.manager.builder
 
+Builders for traffic matrices.
+
+Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
+This logic was previously embedded in `Scenario.from_yaml`.
+
+### build_traffic_matrix_set(raw: 'Dict[str, List[dict]]') -> 'TrafficMatrixSet'
+
+Build a `TrafficMatrixSet` from a mapping of name -> list of dicts.
+
+Args:
+    raw: Mapping where each key is a matrix name and each value is a list of
+        dictionaries with `TrafficDemand` constructor fields.
+
+Returns:
+    Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
+
+Raises:
+    ValueError: If ``raw`` is not a mapping of name -> list[dict].
+
 ---
 
 ## ngraph.demand.manager.expand
+
+Expansion helpers for traffic demand specifications.
+
+Public functions here convert user-facing `TrafficDemand` specifications into
+concrete `Demand` objects that can be placed on a `StrictMultiDiGraph`.
+
+This module provides the pure expansion logic that was previously embedded in
+`TrafficManager`.
+
+### expand_demands(network: "Union[Network, 'NetworkView']", graph: 'StrictMultiDiGraph | None', traffic_demands: 'List[TrafficDemand]', default_flow_policy_config: 'FlowPolicyConfig') -> 'Tuple[List[Demand], Dict[str, List[Demand]]]'
+
+Expand traffic demands into concrete `Demand` objects.
+
+The result is a flat list of `Demand` plus a mapping from
+``TrafficDemand.id`` to the list of expanded demands for that entry.
+
+Args:
+    network: Network or NetworkView used for node group selection.
+    graph: Flow graph to operate on. If ``None``, expansion that requires
+        graph mutation (pseudo nodes/edges) is skipped.
+    traffic_demands: List of high-level traffic demand specifications.
+    default_flow_policy_config: Default policy to apply when a demand does
+        not specify an explicit `flow_policy`.
+
+Returns:
+    A tuple ``(expanded, td_map)`` where:
+
+- ``expanded`` is the flattened, sorted list of all expanded demands
+
+      (sorted by ascending ``demand_class``).
+
+- ``td_map`` maps ``TrafficDemand.id`` to its expanded demands.
 
 ---
 
@@ -1763,6 +1814,57 @@ Attributes:
 ---
 
 ## ngraph.demand.manager.schedule
+
+Scheduling utilities for demand placement rounds.
+
+Provides the simple priority-aware round-robin scheduler that was previously
+implemented in `TrafficManager`.
+
+### place_demands_round_robin(graph: 'StrictMultiDiGraph', demands: 'List[Demand]', placement_rounds: 'int', reoptimize_after_each_round: 'bool' = False) -> 'float'
+
+Place demands using priority buckets and round-robin within each bucket.
+
+Args:
+    graph: Active flow graph.
+    demands: Expanded demands to place.
+    placement_rounds: Number of passes per priority class.
+    reoptimize_after_each_round: Whether to re-run placement for each demand
+        after a round to better share capacity.
+
+Returns:
+    Total volume successfully placed across all demands.
+
+---
+
+## ngraph.demand.matrix
+
+Traffic matrix containers.
+
+Provides `TrafficMatrixSet`, a named collection of `TrafficDemand` lists
+used as input to demand expansion and placement. This module contains input
+containers, not analysis results.
+
+### TrafficMatrixSet
+
+Named collection of TrafficDemand lists.
+
+This mutable container maps scenario names to lists of TrafficDemand objects,
+allowing management of multiple traffic matrices for analysis.
+
+Attributes:
+    matrices: Dictionary mapping scenario names to TrafficDemand lists.
+
+**Attributes:**
+
+- `matrices` (dict[str, list[TrafficDemand]]) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a traffic matrix to the collection.
+- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all matrices combined.
+- `get_default_matrix(self) -> 'list[TrafficDemand]'` - Get default traffic matrix.
+- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific traffic matrix by name.
+- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ---
 
@@ -1880,7 +1982,7 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'` - Create NetworkView with specified exclusions.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int' = 50, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
 - `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
 - `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze component criticality for flow capacity under failures.
@@ -2065,6 +2167,37 @@ Attributes:
 
 ---
 
+## ngraph.failure.policy_set
+
+Failure policy containers.
+
+Provides `FailurePolicySet`, a named collection of `FailurePolicy` objects
+used as input to failure analysis workflows. This module contains input
+containers, not analysis results.
+
+### FailurePolicySet
+
+Named collection of FailurePolicy objects.
+
+This mutable container maps failure policy names to FailurePolicy objects,
+allowing management of multiple failure policies for analysis.
+
+Attributes:
+    policies: Dictionary mapping failure policy names to FailurePolicy objects.
+
+**Attributes:**
+
+- `policies` (dict[str, FailurePolicy]) = {}
+
+**Methods:**
+
+- `add(self, name: 'str', policy: 'FailurePolicy') -> 'None'` - Add a failure policy to the collection.
+- `get_all_policies(self) -> 'list[FailurePolicy]'` - Get all failure policies from the collection.
+- `get_policy(self, name: 'str') -> 'FailurePolicy'` - Get a specific failure policy by name.
+- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
+
+---
+
 ## ngraph.workflow.analysis.base
 
 Base classes for notebook analysis components.
@@ -2166,6 +2299,27 @@ Manage package installation and imports for notebooks.
 
 - `check_and_install_packages() -> Dict[str, Any]` - Check for required packages and install if missing.
 - `setup_environment() -> Dict[str, Any]` - Set up the notebook environment.
+
+---
+
+## ngraph.workflow.analysis.placement_matrix
+
+Placement envelope analysis utilities.
+
+Processes placement envelope results from TrafficMatrixPlacementAnalysis into
+placement matrices and summaries suitable for notebooks.
+
+### PlacementMatrixAnalyzer
+
+Analyze placement envelopes and display matrices/statistics.
+
+**Methods:**
+
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze placement envelopes for a given step.
+- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Display analysis results in notebook format.
+- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
 
@@ -2479,6 +2633,69 @@ Attributes:
 
 ---
 
+## ngraph.workflow.traffic_matrix_placement_analysis
+
+Traffic matrix demand placement workflow component.
+
+Executes Monte Carlo analysis of traffic demand placement under failures using
+FailureManager. Takes a named traffic matrix from the scenario's
+TrafficMatrixSet. Optionally includes a baseline iteration (no failures).
+
+YAML Configuration Example:
+
+    workflow:
+
+- step_type: TrafficMatrixPlacementAnalysis
+
+        name: "tm_placement_monte_carlo"
+        matrix_name: "default"           # Required: Name of traffic matrix to use
+        failure_policy: "random_failures" # Optional: Named failure policy
+        iterations: 100                    # Number of Monte Carlo trials
+        parallelism: 4                     # Number of worker processes
+        placement_rounds: "auto"          # Optimization rounds per priority (int or "auto")
+        baseline: true                     # Include baseline iteration first
+        seed: 42                           # Optional reproducible seed
+        store_failure_patterns: false      # Store failure patterns if needed
+
+Results stored in `scenario.results` under the step name:
+
+- placement_results: Per-iteration demand placement statistics (serializable)
+- failure_pattern_results: Failure pattern mapping (if requested)
+- metadata: Execution metadata (iterations, parallelism, baseline, etc.)
+
+### TrafficMatrixPlacementAnalysis
+
+Monte Carlo demand placement analysis using a named traffic matrix.
+
+Attributes:
+    matrix_name: Name of the traffic matrix in scenario.traffic_matrix_set.
+    failure_policy: Optional policy name in scenario.failure_policy_set.
+    iterations: Number of Monte Carlo iterations.
+    parallelism: Number of parallel worker processes.
+    placement_rounds: Placement optimization rounds (int or "auto").
+    baseline: Include baseline iteration without failures first.
+    seed: Optional seed for reproducibility.
+    store_failure_patterns: Whether to store failure pattern results.
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (int | None)
+- `matrix_name` (str)
+- `failure_policy` (str | None)
+- `iterations` (int) = 1
+- `parallelism` (int) = 1
+- `placement_rounds` (int | str) = auto
+- `baseline` (bool) = False
+- `store_failure_patterns` (bool) = False
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute demand placement Monte Carlo analysis.
+
+---
+
 ## ngraph.dsl.blueprints.expand
 
 Network topology blueprints and generation.
@@ -2569,8 +2786,39 @@ Returns:
 
 Parsing helpers for the network DSL.
 
-This module is reserved for future parsing utilities. The main expansion
-entry point is `ngraph.dsl.blueprints.expand.expand_network_dsl`.
+This module factors out pure parsing/validation helpers from the expansion
+module so they can be tested independently and reused.
+
+### check_adjacency_keys(adj_def: 'Dict[str, Any]', context: 'str') -> 'None'
+
+Ensure adjacency definitions only contain recognized keys.
+
+### check_link_params(link_params: 'Dict[str, Any]', context: 'str') -> 'None'
+
+Ensure link_params contain only recognized keys.
+
+### check_no_extra_keys(data_dict: 'Dict[str, Any]', allowed: 'set[str]', context: 'str') -> 'None'
+
+Raise if ``data_dict`` contains keys outside ``allowed``.
+
+Args:
+    data_dict: The dict to check.
+    allowed: Set of recognized keys.
+    context: Short description used in error messages.
+
+### expand_name_patterns(name: 'str') -> 'List[str]'
+
+Expand bracket expressions in a group name.
+
+Examples:
+
+- "fa[1-3]" -> ["fa1", "fa2", "fa3"]
+- "dc[1,3,5-6]" -> ["dc1", "dc3", "dc5", "dc6"]
+- "fa[1-2]_plane[5-6]" -> ["fa1_plane5", "fa1_plane6", "fa2_plane5", "fa2_plane6"]
+
+### join_paths(parent_path: 'str', rel_path: 'str') -> 'str'
+
+Join two path segments according to the DSL conventions.
 
 ---
 
@@ -2578,12 +2826,10 @@ entry point is `ngraph.dsl.blueprints.expand.expand_network_dsl`.
 
 Serializable result artifacts for analysis workflows.
 
-This module defines small dataclasses that capture outputs from analyses
-and simulations in a JSON-serializable form:
+This module defines dataclasses that capture outputs from analyses and
+simulations in a JSON-serializable form:
 
-- `TrafficMatrixSet`: named collections of `TrafficDemand` lists
 - `PlacementResultSet`: aggregated placement results and statistics
-- `FailurePolicySet`: named collections of failure policies
 - `CapacityEnvelope`: frequency-based capacity distributions and optional
 
   aggregated flow statistics
@@ -2653,26 +2899,42 @@ Attributes:
 
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
-### FailurePolicySet
+### PlacementEnvelope
 
-Named collection of FailurePolicy objects.
+Per-demand placement envelope keyed like capacity envelopes.
 
-This mutable container maps failure policy names to FailurePolicy objects,
-allowing management of multiple failure policies for analysis.
+Each envelope captures frequency distribution of placement ratio for a
+specific demand definition across Monte Carlo iterations.
 
 Attributes:
-    policies: Dictionary mapping failure policy names to FailurePolicy objects.
+    source: Source selection regex or node label.
+    sink: Sink selection regex or node label.
+    mode: Demand expansion mode ("combine" or "pairwise").
+    priority: Demand priority class.
+    frequencies: Mapping of placement ratio to occurrence count.
+    min: Minimum observed placement ratio.
+    max: Maximum observed placement ratio.
+    mean: Mean placement ratio.
+    stdev: Standard deviation of placement ratio.
+    total_samples: Number of iterations represented.
 
 **Attributes:**
 
-- `policies` (dict[str, 'FailurePolicy']) = {}
+- `source` (str)
+- `sink` (str)
+- `mode` (str)
+- `priority` (int)
+- `frequencies` (Dict[float, int])
+- `min` (float)
+- `max` (float)
+- `mean` (float)
+- `stdev` (float)
+- `total_samples` (int)
 
 **Methods:**
 
-- `add(self, name: 'str', policy: "'FailurePolicy'") -> 'None'` - Add a failure policy to the collection.
-- `get_all_policies(self) -> "list['FailurePolicy']"` - Get all failure policies from the collection.
-- `get_policy(self, name: 'str') -> "'FailurePolicy'"` - Get a specific failure policy by name.
-- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
+- `from_values(source: 'str', sink: 'str', mode: 'str', priority: 'int', ratios: 'List[float]', rounding_decimals: 'int' = 4) -> "'PlacementEnvelope'"`
+- `to_dict(self) -> 'Dict[str, Any]'`
 
 ### PlacementResultSet
 
@@ -2696,31 +2958,9 @@ Attributes:
 
 - `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
-### TrafficMatrixSet
-
-Named collection of TrafficDemand lists.
-
-This mutable container maps scenario names to lists of TrafficDemand objects,
-allowing management of multiple traffic matrices for analysis.
-
-Attributes:
-    matrices: Dictionary mapping scenario names to TrafficDemand lists.
-
-**Attributes:**
-
-- `matrices` (dict[str, list[TrafficDemand]]) = {}
-
-**Methods:**
-
-- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a traffic matrix to the collection.
-- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all matrices combined.
-- `get_default_matrix(self) -> 'list[TrafficDemand]'` - Get default traffic matrix.
-- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific traffic matrix by name.
-- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
 ---
 
-## ngraph.results.results
+## ngraph.results.store
 
 Generic results store for workflow steps and their metadata.
 
@@ -2751,8 +2991,8 @@ Example usage:
 
 - `get(self, step_name: str, key: str, default: Any = None) -> Any` - Retrieve the value from (step_name, key). If the key is missing, return `default`.
 - `get_all(self, key: str) -> Dict[str, Any]` - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
-- `get_all_step_metadata(self) -> Dict[str, ngraph.results.results.WorkflowStepMetadata]` - Get metadata for all workflow steps.
-- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.results.WorkflowStepMetadata]` - Get metadata for a workflow step.
+- `get_all_step_metadata(self) -> Dict[str, ngraph.results.store.WorkflowStepMetadata]` - Get metadata for all workflow steps.
+- `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.store.WorkflowStepMetadata]` - Get metadata for a workflow step.
 - `get_steps_by_execution_order(self) -> list[str]` - Get step names ordered by their execution order.
 - `put(self, step_name: str, key: str, value: Any) -> None` - Store a value under (step_name, key).
 - `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None` - Store metadata for a workflow step.
@@ -2789,7 +3029,7 @@ failure analysis scenarios.
 Note: This module is distinct from ngraph.workflow.analysis, which provides
 notebook visualization components for workflow results.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int' = 50, **kwargs) -> 'dict[str, Any]'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', **kwargs) -> 'dict[str, Any]'
 
 Analyze traffic demand placement success rates.
 
@@ -2805,7 +3045,8 @@ Returns:
 - total_placed: Total placed demand volume.
 - total_demand: Total demand volume.
 - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
-- priority_results: Mapping from priority to statistics with keys
+- demand_results: List of per-demand statistics preserving offered volume.
+- priority_results: Mapping from priority to aggregated statistics with keys
 
       total_volume, placed_volume, unplaced_volume, placement_ratio,
       and demand_count.

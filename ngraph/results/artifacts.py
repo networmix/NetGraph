@@ -1,11 +1,9 @@
 """Serializable result artifacts for analysis workflows.
 
-This module defines small dataclasses that capture outputs from analyses
-and simulations in a JSON-serializable form:
+This module defines dataclasses that capture outputs from analyses and
+simulations in a JSON-serializable form:
 
-- `TrafficMatrixSet`: named collections of `TrafficDemand` lists
 - `PlacementResultSet`: aggregated placement results and statistics
-- `FailurePolicySet`: named collections of failure policies
 - `CapacityEnvelope`: frequency-based capacity distributions and optional
   aggregated flow statistics
 - `FailurePatternResult`: capacity results for specific failure patterns
@@ -14,100 +12,9 @@ and simulations in a JSON-serializable form:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import Any, Dict, List
 
 from ngraph.demand.manager.manager import TrafficResult
-from ngraph.demand.spec import TrafficDemand
-
-if TYPE_CHECKING:
-    from ngraph.failure.policy import FailurePolicy
-
-
-@dataclass
-class TrafficMatrixSet:
-    """Named collection of TrafficDemand lists.
-
-    This mutable container maps scenario names to lists of TrafficDemand objects,
-    allowing management of multiple traffic matrices for analysis.
-
-    Attributes:
-        matrices: Dictionary mapping scenario names to TrafficDemand lists.
-    """
-
-    matrices: dict[str, list[TrafficDemand]] = field(default_factory=dict)
-
-    def add(self, name: str, demands: list[TrafficDemand]) -> None:
-        """Add a traffic matrix to the collection.
-
-        Args:
-            name: Scenario name identifier.
-            demands: List of TrafficDemand objects for this scenario.
-        """
-        self.matrices[name] = demands
-
-    def get_matrix(self, name: str) -> list[TrafficDemand]:
-        """Get a specific traffic matrix by name.
-
-        Args:
-            name: Name of the matrix to retrieve.
-
-        Returns:
-            List of TrafficDemand objects for the named matrix.
-
-        Raises:
-            KeyError: If the matrix name doesn't exist.
-        """
-        return self.matrices[name]
-
-    def get_default_matrix(self) -> list[TrafficDemand]:
-        """Get default traffic matrix.
-
-        Returns the matrix named 'default' if it exists. If there is exactly
-        one matrix, returns that single matrix. If there are no matrices,
-        returns an empty list. If there are multiple matrices and none is
-        named 'default', raises an error.
-
-        Returns:
-            List of TrafficDemand objects for the default matrix.
-
-        Raises:
-            ValueError: If multiple matrices exist without a 'default' matrix.
-        """
-        if not self.matrices:
-            return []
-
-        if "default" in self.matrices:
-            return self.matrices["default"]
-
-        if len(self.matrices) == 1:
-            return next(iter(self.matrices.values()))
-
-        raise ValueError(
-            f"Multiple matrices exist ({list(self.matrices.keys())}) but no 'default' matrix. "
-            f"Please specify which matrix to use or add a 'default' matrix."
-        )
-
-    def get_all_demands(self) -> list[TrafficDemand]:
-        """Get all traffic demands from all matrices combined.
-
-        Returns:
-            Flattened list of all TrafficDemand objects across all matrices.
-        """
-        all_demands = []
-        for demands in self.matrices.values():
-            all_demands.extend(demands)
-        return all_demands
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization.
-
-        Returns:
-            Dictionary mapping scenario names to lists of TrafficDemand dictionaries.
-        """
-        return {
-            name: [demand.__dict__ for demand in demands]
-            for name, demands in self.matrices.items()
-        }
 
 
 @dataclass(frozen=True)
@@ -155,59 +62,6 @@ class PlacementResultSet:
             "cases": cases,
             "demand_stats": demand_stats,
         }
-
-
-@dataclass
-class FailurePolicySet:
-    """Named collection of FailurePolicy objects.
-
-    This mutable container maps failure policy names to FailurePolicy objects,
-    allowing management of multiple failure policies for analysis.
-
-    Attributes:
-        policies: Dictionary mapping failure policy names to FailurePolicy objects.
-    """
-
-    policies: dict[str, "FailurePolicy"] = field(default_factory=dict)
-
-    def add(self, name: str, policy: "FailurePolicy") -> None:
-        """Add a failure policy to the collection.
-
-        Args:
-            name: Failure policy name identifier.
-            policy: FailurePolicy object for this failure policy.
-        """
-        self.policies[name] = policy
-
-    def get_policy(self, name: str) -> "FailurePolicy":
-        """Get a specific failure policy by name.
-
-        Args:
-            name: Name of the policy to retrieve.
-
-        Returns:
-            FailurePolicy object for the named policy.
-
-        Raises:
-            KeyError: If the policy name doesn't exist.
-        """
-        return self.policies[name]
-
-    def get_all_policies(self) -> list["FailurePolicy"]:
-        """Get all failure policies from the collection.
-
-        Returns:
-            List of all FailurePolicy objects.
-        """
-        return list(self.policies.values())
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization.
-
-        Returns:
-            Dictionary mapping failure policy names to FailurePolicy dictionaries.
-        """
-        return {name: policy.to_dict() for name, policy in self.policies.items()}
 
 
 @dataclass
@@ -461,3 +315,91 @@ class FailurePatternResult:
         # Create deterministic key from excluded entities
         excluded_str = ",".join(sorted(self.excluded_nodes + self.excluded_links))
         return f"pattern_{hash(excluded_str) & 0x7FFFFFFF:08x}"
+
+
+@dataclass
+class PlacementEnvelope:
+    """Per-demand placement envelope keyed like capacity envelopes.
+
+    Each envelope captures frequency distribution of placement ratio for a
+    specific demand definition across Monte Carlo iterations.
+
+    Attributes:
+        source: Source selection regex or node label.
+        sink: Sink selection regex or node label.
+        mode: Demand expansion mode ("combine" or "pairwise").
+        priority: Demand priority class.
+        frequencies: Mapping of placement ratio to occurrence count.
+        min: Minimum observed placement ratio.
+        max: Maximum observed placement ratio.
+        mean: Mean placement ratio.
+        stdev: Standard deviation of placement ratio.
+        total_samples: Number of iterations represented.
+    """
+
+    source: str
+    sink: str
+    mode: str
+    priority: int
+    frequencies: Dict[float, int]
+    min: float
+    max: float
+    mean: float
+    stdev: float
+    total_samples: int
+
+    @staticmethod
+    def _compute_stats(values: List[float]) -> tuple[float, float, float, float]:
+        n = len(values)
+        total = sum(values)
+        mean = total / n
+        sum_squares = sum(v * v for v in values)
+        variance = (sum_squares / n) - (mean * mean)
+        stdev = variance**0.5
+        return (min(values), max(values), mean, stdev)
+
+    @classmethod
+    def from_values(
+        cls,
+        source: str,
+        sink: str,
+        mode: str,
+        priority: int,
+        ratios: List[float],
+        rounding_decimals: int = 4,
+    ) -> "PlacementEnvelope":
+        if not ratios:
+            raise ValueError("Cannot create placement envelope from empty ratios list")
+        freqs: Dict[float, int] = {}
+        quantized: List[float] = []
+        for r in ratios:
+            q = round(float(r), rounding_decimals)
+            quantized.append(q)
+            freqs[q] = freqs.get(q, 0) + 1
+        mn, mx, mean, stdev = cls._compute_stats(quantized)
+        return cls(
+            source=source,
+            sink=sink,
+            mode=mode,
+            priority=int(priority),
+            frequencies=freqs,
+            min=mn,
+            max=mx,
+            mean=mean,
+            stdev=stdev,
+            total_samples=len(quantized),
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "source": self.source,
+            "sink": self.sink,
+            "mode": self.mode,
+            "priority": self.priority,
+            "frequencies": self.frequencies,
+            "min": self.min,
+            "max": self.max,
+            "mean": self.mean,
+            "stdev": self.stdev,
+            "total_samples": self.total_samples,
+        }

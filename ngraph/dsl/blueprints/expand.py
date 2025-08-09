@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import copy
-import re
 from dataclasses import dataclass
 from itertools import product, zip_longest
 from typing import Any, Dict, List, Set
 
+from ngraph.dsl.blueprints import parse as _bp_parse
 from ngraph.model.network import Link, Network, Node
 
 
@@ -90,7 +90,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
                 raise ValueError(
                     f"Blueprint definition for '{bp_name}' must be a dict."
                 )
-            _check_no_extra_keys(
+            _bp_parse.check_no_extra_keys(
                 bp_data,
                 allowed={"groups", "adjacency"},
                 context=f"blueprint '{bp_name}'",
@@ -191,7 +191,7 @@ def _expand_group(
     """
     if inherited_risk_groups is None:
         inherited_risk_groups = set()
-    expanded_names = _expand_name_patterns(group_name)
+    expanded_names = _bp_parse.expand_name_patterns(group_name)
     # If bracket expansions exist, replicate for each expansion
     if len(expanded_names) > 1 or expanded_names[0] != group_name:
         for expanded_name in expanded_names:
@@ -208,7 +208,7 @@ def _expand_group(
 
     if "use_blueprint" in group_def:
         # Blueprint usage => recognized keys
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             group_def,
             allowed={"use_blueprint", "parameters", "attrs", "disabled", "risk_groups"},
             context=f"group '{group_name}' using blueprint",
@@ -276,7 +276,7 @@ def _expand_group(
 
     else:
         # Direct node group => recognized keys
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             group_def,
             allowed={"node_count", "name_template", "attrs", "disabled", "risk_groups"},
             context=f"group '{group_name}'",
@@ -329,7 +329,7 @@ def _expand_blueprint_adjacency(
         adj_def (Dict[str, Any]): The adjacency definition inside the blueprint.
         parent_path (str): The path serving as the base for the blueprint's node paths.
     """
-    _check_adjacency_keys(adj_def, context="blueprint adjacency")
+    _bp_parse.check_adjacency_keys(adj_def, context="blueprint adjacency")
     expand_vars = adj_def.get("expand_vars", {})
     if expand_vars:
         _expand_adjacency_with_variables(ctx, adj_def, parent_path)
@@ -339,11 +339,11 @@ def _expand_blueprint_adjacency(
     target_rel = adj_def["target"]
     pattern = adj_def.get("pattern", "mesh")
     link_params = adj_def.get("link_params", {})
-    _check_link_params(link_params, context="blueprint adjacency")
+    _bp_parse.check_link_params(link_params, context="blueprint adjacency")
     link_count = adj_def.get("link_count", 1)
 
-    src_path = _join_paths(parent_path, source_rel)
-    tgt_path = _join_paths(parent_path, target_rel)
+    src_path = _bp_parse.join_paths(parent_path, source_rel)
+    tgt_path = _bp_parse.join_paths(parent_path, target_rel)
 
     _expand_adjacency_pattern(ctx, src_path, tgt_path, pattern, link_params, link_count)
 
@@ -360,7 +360,7 @@ def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None
         ctx (DSLExpansionContext): The context containing the target network.
         adj_def (Dict[str, Any]): The adjacency definition dict.
     """
-    _check_adjacency_keys(adj_def, context="top-level adjacency")
+    _bp_parse.check_adjacency_keys(adj_def, context="top-level adjacency")
     expand_vars = adj_def.get("expand_vars", {})
     if expand_vars:
         _expand_adjacency_with_variables(ctx, adj_def, parent_path="")
@@ -371,10 +371,10 @@ def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None
     pattern = adj_def.get("pattern", "mesh")
     link_count = adj_def.get("link_count", 1)
     link_params = adj_def.get("link_params", {})
-    _check_link_params(link_params, context="top-level adjacency")
+    _bp_parse.check_link_params(link_params, context="top-level adjacency")
 
-    source_path = _join_paths("", source_path_raw)
-    target_path = _join_paths("", target_path_raw)
+    source_path = _bp_parse.join_paths("", source_path_raw)
+    target_path = _bp_parse.join_paths("", target_path_raw)
 
     _expand_adjacency_pattern(
         ctx, source_path, target_path, pattern, link_params, link_count
@@ -397,7 +397,7 @@ def _expand_adjacency_with_variables(
     target_template = adj_def["target"]
     pattern = adj_def.get("pattern", "mesh")
     link_params = adj_def.get("link_params", {})
-    _check_link_params(link_params, context="adjacency with expand_vars")
+    _bp_parse.check_link_params(link_params, context="adjacency with expand_vars")
     link_count = adj_def.get("link_count", 1)
     expand_vars = adj_def["expand_vars"]
     expansion_mode = adj_def.get("expansion_mode", "cartesian")
@@ -414,10 +414,10 @@ def _expand_adjacency_with_variables(
 
         for combo_tuple in zip_longest(*lists_of_values, fillvalue=None):
             combo_dict = dict(zip(var_names, combo_tuple, strict=False))
-            expanded_src = _join_paths(
+            expanded_src = _bp_parse.join_paths(
                 parent_path, source_template.format(**combo_dict)
             )
-            expanded_tgt = _join_paths(
+            expanded_tgt = _bp_parse.join_paths(
                 parent_path, target_template.format(**combo_dict)
             )
             _expand_adjacency_pattern(
@@ -427,10 +427,10 @@ def _expand_adjacency_with_variables(
         # "cartesian" default
         for combo_tuple in product(*lists_of_values):
             combo_dict = dict(zip(var_names, combo_tuple, strict=False))
-            expanded_src = _join_paths(
+            expanded_src = _bp_parse.join_paths(
                 parent_path, source_template.format(**combo_dict)
             )
-            expanded_tgt = _join_paths(
+            expanded_tgt = _bp_parse.join_paths(
                 parent_path, target_template.format(**combo_dict)
             )
             _expand_adjacency_pattern(
@@ -536,7 +536,9 @@ def _create_link(
             'capacity', 'cost', 'disabled', 'risk_groups', 'attrs'.
         link_count (int): Number of parallel links to create between source and target.
     """
-    _check_link_params(link_params, context=f"creating link {source}->{target}")
+    _bp_parse.check_link_params(
+        link_params, context=f"creating link {source}->{target}"
+    )
 
     for _ in range(link_count):
         capacity = link_params.get("capacity", 1.0)
@@ -576,7 +578,7 @@ def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
     for node_name, raw_def in nodes_dict.items():
         if not isinstance(raw_def, dict):
             raise ValueError(f"Node definition for '{node_name}' must be a dict.")
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             raw_def,
             allowed={"disabled", "attrs", "risk_groups"},
             context=f"node '{node_name}'",
@@ -618,7 +620,7 @@ def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
     for link_info in links_list:
         if not isinstance(link_info, dict):
             raise ValueError("Each link definition must be a dictionary.")
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             link_info,
             allowed={"source", "target", "link_params", "link_count"},
             context="direct link",
@@ -665,7 +667,7 @@ def _process_link_overrides(net: Network, network_data: Dict[str, Any]) -> None:
     for link_override in link_overrides:
         if not isinstance(link_override, dict):
             raise ValueError("Each link_override must be a dict.")
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             link_override,
             allowed={"source", "target", "link_params", "any_direction"},
             context="link override",
@@ -702,7 +704,7 @@ def _process_node_overrides(net: Network, network_data: Dict[str, Any]) -> None:
     for override in node_overrides:
         if not isinstance(override, dict):
             raise ValueError("Each node_override must be a dict.")
-        _check_no_extra_keys(
+        _bp_parse.check_no_extra_keys(
             override,
             allowed={"path", "attrs", "disabled", "risk_groups"},
             context="node override",
@@ -745,7 +747,7 @@ def _update_links(
             (capacity, cost, disabled, risk_groups, attrs).
         any_direction (bool): If True, also update reversed direction links.
     """
-    _check_link_params(link_params, context="link override processing")
+    _bp_parse.check_link_params(link_params, context="link override processing")
 
     source_node_groups = net.select_node_groups_by_path(source)
     target_node_groups = net.select_node_groups_by_path(target)
@@ -867,151 +869,3 @@ def _apply_nested_path(
     if key not in node_def or not isinstance(node_def[key], dict):
         node_def[key] = {}
     _apply_nested_path(node_def[key], path_parts[1:], value)
-
-
-_RANGE_REGEX = re.compile(r"\[([^\]]+)\]")
-
-
-def _expand_name_patterns(name: str) -> List[str]:
-    """Parses and expands bracketed expressions in a group name. For example:
-
-        "fa[1-3]" -> ["fa1", "fa2", "fa3"]
-        "dc[1,3,5-6]" -> ["dc1", "dc3", "dc5", "dc6"]
-        "fa[1-2]_plane[5-6]" ->
-          ["fa1_plane5", "fa1_plane6", "fa2_plane5", "fa2_plane6"]
-
-    If no bracket expressions are present, returns [name] unchanged.
-
-    Args:
-        name (str): A group name that may contain bracket expansions.
-
-    Returns:
-        List[str]: All expanded names. If no expansion was needed, returns
-            a single-element list with 'name' itself.
-    """
-    matches = list(_RANGE_REGEX.finditer(name))
-    if not matches:
-        return [name]  # no expansions
-
-    expansions_list = []
-    for match in matches:
-        range_expr = match.group(1)
-        expansions_list.append(_parse_range_expr(range_expr))
-
-    expanded_names = []
-    for combo in product(*expansions_list):
-        result_str = ""
-        last_end = 0
-        for m_idx, match in enumerate(matches):
-            start, end = match.span()
-            result_str += name[last_end:start]
-            result_str += combo[m_idx]
-            last_end = end
-        result_str += name[last_end:]
-        expanded_names.append(result_str)
-
-    return expanded_names
-
-
-def _parse_range_expr(expr: str) -> List[str]:
-    """Parses a bracket expression that might have commas, single values, and dash ranges.
-    For example: "1-3,5,7-9" -> ["1", "2", "3", "5", "7", "8", "9"].
-
-    Args:
-        expr (str): The raw expression from inside brackets, e.g. "1-3,5,7-9".
-
-    Returns:
-        List[str]: A sorted list of all expansions.
-    """
-    values = []
-    parts = [x.strip() for x in expr.split(",")]
-    for part in parts:
-        if "-" in part:
-            start_str, end_str = part.split("-", 1)
-            start = int(start_str)
-            end = int(end_str)
-            for val in range(start, end + 1):
-                values.append(str(val))
-        else:
-            values.append(part)
-    return values
-
-
-def _join_paths(parent_path: str, rel_path: str) -> str:
-    """Joins two path segments according to NetGraph's DSL conventions:
-
-    - If rel_path starts with '/', we strip the leading slash and treat it as
-      appended to parent_path if parent_path is not empty.
-    - Otherwise, simply append rel_path to parent_path if parent_path is non-empty.
-
-    Args:
-        parent_path (str): The existing path prefix.
-        rel_path (str): A relative path that may start with '/'.
-
-    Returns:
-        str: The combined path as a single string.
-    """
-    if rel_path.startswith("/"):
-        rel_path = rel_path[1:]
-        if parent_path:
-            return f"{parent_path}/{rel_path}"
-        return rel_path
-
-    if parent_path:
-        return f"{parent_path}/{rel_path}"
-    return rel_path
-
-
-def _check_no_extra_keys(
-    data_dict: Dict[str, Any], allowed: set[str], context: str
-) -> None:
-    """Checks that data_dict only has keys in 'allowed'. Raises ValueError if not.
-
-    Args:
-        data_dict (Dict[str, Any]): The dict to check.
-        allowed (set[str]): The set of recognized keys.
-        context (str): A short description of what we are validating.
-    """
-    extra_keys = set(data_dict.keys()) - allowed
-    if extra_keys:
-        raise ValueError(
-            f"Unrecognized key(s) in {context}: {', '.join(sorted(extra_keys))}. "
-            f"Allowed keys are: {sorted(allowed)}"
-        )
-
-
-def _check_adjacency_keys(adj_def: Dict[str, Any], context: str) -> None:
-    """Ensures adjacency definitions only contain recognized keys.
-
-    Recognized adjacency keys are:
-      {"source", "target", "pattern", "link_count", "link_params",
-       "expand_vars", "expansion_mode"}.
-    """
-    _check_no_extra_keys(
-        adj_def,
-        allowed={
-            "source",
-            "target",
-            "pattern",
-            "link_count",
-            "link_params",
-            "expand_vars",
-            "expansion_mode",
-        },
-        context=context,
-    )
-    if "source" not in adj_def or "target" not in adj_def:
-        raise ValueError(f"Adjacency in {context} must have 'source' and 'target'.")
-
-
-def _check_link_params(link_params: Dict[str, Any], context: str) -> None:
-    """Checks that link_params only has recognized keys:
-    {"capacity", "cost", "disabled", "risk_groups", "attrs"}.
-    """
-    recognized = {"capacity", "cost", "disabled", "risk_groups", "attrs"}
-    extra = set(link_params.keys()) - recognized
-    if extra:
-        raise ValueError(
-            f"Unrecognized link_params key(s) in {context}: {', '.join(sorted(extra))}. "
-            f"Allowed: {sorted(recognized)}"
-        )

@@ -8,7 +8,8 @@ root for convenience.
 from __future__ import annotations
 
 from . import cli, config, logging
-from .results.artifacts import CapacityEnvelope, PlacementResultSet, TrafficMatrixSet
+from .demand.matrix import TrafficMatrixSet
+from .results.artifacts import CapacityEnvelope, PlacementResultSet
 
 __all__ = [
     "cli",

@@ -176,6 +176,7 @@ class ReportGenerator:
         setup_code = """# Setup analysis environment
 from ngraph.workflow.analysis import (
     CapacityMatrixAnalyzer,
+    PlacementMatrixAnalyzer,
     SummaryAnalyzer,
     PackageManager,
     DataLoader,

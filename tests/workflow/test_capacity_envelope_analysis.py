@@ -6,9 +6,9 @@ import pytest
 
 from ngraph.algorithms.base import FlowPlacement
 from ngraph.failure.policy import FailurePolicy, FailureRule
+from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node
 from ngraph.results import Results
-from ngraph.results.artifacts import FailurePolicySet
 from ngraph.scenario import Scenario
 from ngraph.workflow.capacity_envelope_analysis import (
     CapacityEnvelopeAnalysis,

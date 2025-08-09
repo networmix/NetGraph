@@ -149,4 +149,14 @@ def get_default_registry() -> AnalysisRegistry:
         section_title="Graph Construction",
     )
 
+    # Traffic matrix placement analysis - dedicated analyzer
+    from .placement_matrix import PlacementMatrixAnalyzer
+
+    registry.register(
+        "TrafficMatrixPlacementAnalysis",
+        PlacementMatrixAnalyzer,
+        method_name="analyze_and_display_step",
+        section_title="Traffic Matrix Placement Analysis",
+    )
+
     return registry

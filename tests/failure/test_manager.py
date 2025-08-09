@@ -11,9 +11,9 @@ import pytest
 
 from ngraph.failure.manager.manager import FailureManager
 from ngraph.failure.policy import FailurePolicy
+from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network
 from ngraph.model.view import NetworkView
-from ngraph.results.artifacts import FailurePolicySet
 
 
 @pytest.fixture
