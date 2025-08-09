@@ -27,8 +27,8 @@ The CLI provides three primary commands:
 
 **Global options** (must be placed before the command):
 
-- `--verbose`, `-v`: Enable verbose (DEBUG) logging
-- `--quiet`, `-q`: Enable quiet mode (WARNING+ only)
+- `--verbose`, `-v`: Enable debug logging
+- `--quiet`: Suppress console output (logs only)
 
 ### Quick Start
 

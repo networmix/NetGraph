@@ -528,17 +528,26 @@ def main(argv: Optional[List[str]] = None) -> None:
         argv: Optional list of command-line arguments. If ``None``, ``sys.argv``
             is used.
     """
-    parser = argparse.ArgumentParser(prog="ngraph")
+    parser = argparse.ArgumentParser(
+        prog="ngraph",
+        description="Run and analyze network scenarios.",
+    )
 
     # Global options
     parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Enable verbose (DEBUG) logging"
+        "--verbose", "-v", action="store_true", help="Enable debug logging"
     )
     parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Enable quiet mode (WARNING+ only)"
+        "--quiet", action="store_true", help="Suppress console output (logs only)"
     )
 
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        title="Available commands",
+        metavar="{run,inspect,report}",
+        help="Available commands",
+    )
 
     # Run command
     run_parser = subparsers.add_parser("run", help="Run a scenario")
@@ -613,6 +622,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         action="store_true",
         help="Include code cells in HTML output (default: report without code)",
     )
+
+    # If no arguments are provided, show help and exit cleanly
+    if not argv:
+        parser.print_help()
+        raise SystemExit(0)
 
     args = parser.parse_args(argv)
 
