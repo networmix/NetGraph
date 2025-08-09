@@ -623,12 +623,15 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Include code cells in HTML output (default: report without code)",
     )
 
+    # Determine effective arguments (support both direct calls and module entrypoint)
+    effective_args = sys.argv[1:] if argv is None else argv
+
     # If no arguments are provided, show help and exit cleanly
-    if not argv:
+    if not effective_args:
         parser.print_help()
         raise SystemExit(0)
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(effective_args)
 
     # Configure logging based on arguments
     if args.verbose:
