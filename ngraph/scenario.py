@@ -8,16 +8,17 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from ngraph.components import ComponentsLibrary
-from ngraph.demand.spec import TrafficDemand
+from ngraph.demand.manager.builder import build_traffic_matrix_set
+from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.failure.policy import (
     FailureCondition,
     FailurePolicy,
     FailureRule,
 )
+from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network, RiskGroup
 from ngraph.results import Results
-from ngraph.results.artifacts import FailurePolicySet, TrafficMatrixSet
 from ngraph.seed_manager import SeedManager
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
 from ngraph.yaml_utils import normalize_yaml_dict_keys
@@ -165,20 +166,7 @@ class Scenario:
 
         # 3) Build traffic matrix set
         raw = data.get("traffic_matrix_set", {})
-        if not isinstance(raw, dict):
-            raise ValueError(
-                "'traffic_matrix_set' must be a mapping of name -> list[TrafficDemand]"
-            )
-
-        # Normalize dictionary keys to handle YAML boolean keys
-        normalized_raw = normalize_yaml_dict_keys(raw)
-        tms = TrafficMatrixSet()
-        for name, td_list in normalized_raw.items():
-            if not isinstance(td_list, list):
-                raise ValueError(
-                    f"Matrix '{name}' must map to a list of TrafficDemand dicts"
-                )
-            tms.add(name, [TrafficDemand(**d) for d in td_list])
+        tms = build_traffic_matrix_set(raw)
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])

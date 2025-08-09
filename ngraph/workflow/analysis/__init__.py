@@ -36,6 +36,7 @@ from .base import AnalysisContext, NotebookAnalyzer
 from .capacity_matrix import CapacityMatrixAnalyzer
 from .data_loader import DataLoader
 from .package_manager import PackageManager
+from .placement_matrix import PlacementMatrixAnalyzer
 from .registry import AnalysisConfig, AnalysisRegistry, get_default_registry
 from .summary import SummaryAnalyzer
 
@@ -70,6 +71,7 @@ __all__ = [
     "AnalysisRegistry",
     "get_default_registry",
     "CapacityMatrixAnalyzer",
+    "PlacementMatrixAnalyzer",
     "SummaryAnalyzer",
     "PackageManager",
     "DataLoader",

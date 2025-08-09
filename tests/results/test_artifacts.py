@@ -3,11 +3,12 @@ import json
 import pytest
 
 from ngraph.demand.manager.manager import TrafficResult
+from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.demand.spec import TrafficDemand
 from ngraph.results.artifacts import (
     CapacityEnvelope,
+    PlacementEnvelope,
     PlacementResultSet,
-    TrafficMatrixSet,
 )
 
 
@@ -194,7 +195,7 @@ def test_placement_result_set_complex_scenarios():
 def test_all_artifacts_json_roundtrip():
     """Test that all result artifacts can roundtrip through JSON."""
     from ngraph.demand.spec import TrafficDemand
-    from ngraph.results.artifacts import PlacementResultSet, TrafficMatrixSet
+    from ngraph.results.artifacts import PlacementResultSet
 
     # Create instances of all artifact types
     env = CapacityEnvelope.from_values("src", "dst", "combine", [100, 150, 200])
@@ -236,6 +237,25 @@ def test_all_artifacts_json_roundtrip():
                 assert obj is None or isinstance(obj, (str, int, float, bool))
 
         check_primitives(parsed)
+
+
+def test_placement_envelope_from_values_basic():
+    env = PlacementEnvelope.from_values(
+        source="A",
+        sink="B",
+        mode="pairwise",
+        priority=1,
+        ratios=[1.0, 0.8, 0.8],
+    )
+    assert env.source == "A"
+    assert env.sink == "B"
+    assert env.mode == "pairwise"
+    assert env.priority == 1
+    assert env.frequencies.get(1.0) == 1
+    assert env.frequencies.get(0.8) == 2
+    assert env.total_samples == 3
+    d = env.to_dict()
+    json.dumps(d)
 
 
 def test_traffic_matrix_set_get_default_single_matrix():

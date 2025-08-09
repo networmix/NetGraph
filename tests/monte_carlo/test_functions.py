@@ -195,7 +195,15 @@ class TestDemandPlacementAnalysis:
             # Verify results structure
             assert "total_placed" in result
             assert "priority_results" in result
+            assert "demand_results" in result
             assert result["total_placed"] == 130.0
+
+            # Check demand_results preserve offered and placed volumes
+            dr = sorted(result["demand_results"], key=lambda x: x["priority"])  # type: ignore[arg-type]
+            assert dr[0]["offered_demand"] == 100.0
+            assert dr[0]["placed_demand"] == 80.0
+            assert dr[1]["offered_demand"] == 50.0
+            assert dr[1]["placed_demand"] == 50.0
 
             priority_results = result["priority_results"]
             assert 0 in priority_results

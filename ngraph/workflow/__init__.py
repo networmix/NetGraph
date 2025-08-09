@@ -4,6 +4,7 @@ from .base import WorkflowStep, register_workflow_step
 from .build_graph import BuildGraph
 from .capacity_envelope_analysis import CapacityEnvelopeAnalysis
 from .network_stats import NetworkStats
+from .traffic_matrix_placement_analysis import TrafficMatrixPlacementAnalysis
 
 __all__ = [
     "WorkflowStep",
@@ -11,4 +12,5 @@ __all__ = [
     "BuildGraph",
     "CapacityEnvelopeAnalysis",
     "NetworkStats",
+    "TrafficMatrixPlacementAnalysis",
 ]

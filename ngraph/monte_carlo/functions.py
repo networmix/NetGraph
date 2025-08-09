@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 from ngraph.algorithms.base import FlowPlacement
 from ngraph.demand.manager.manager import TrafficManager
+from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.demand.spec import TrafficDemand
-from ngraph.results.artifacts import TrafficMatrixSet
 
 if TYPE_CHECKING:
     from ngraph.model.view import NetworkView
@@ -80,7 +80,7 @@ def max_flow_analysis(
 def demand_placement_analysis(
     network_view: "NetworkView",
     demands_config: list[dict[str, Any]],
-    placement_rounds: int = 50,
+    placement_rounds: int | str = "auto",
     **kwargs,
 ) -> dict[str, Any]:
     """Analyze traffic demand placement success rates.
@@ -96,7 +96,8 @@ def demand_placement_analysis(
         - total_placed: Total placed demand volume.
         - total_demand: Total demand volume.
         - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
-        - priority_results: Mapping from priority to statistics with keys
+        - demand_results: List of per-demand statistics preserving offered volume.
+        - priority_results: Mapping from priority to aggregated statistics with keys
           total_volume, placed_volume, unplaced_volume, placement_ratio,
           and demand_count.
     """
@@ -125,14 +126,32 @@ def demand_placement_analysis(
     tm.expand_demands()
     total_placed = tm.place_all_demands(placement_rounds=placement_rounds)
 
-    # Aggregate results by priority
+    # Build per-demand results from expanded demands to preserve offered volumes
+    demand_results: list[dict[str, Any]] = []
+    # Aggregate by priority as well
     demand_stats = defaultdict(
         lambda: {"total_volume": 0.0, "placed_volume": 0.0, "count": 0}
     )
-    for demand in tm.demands:
-        priority = getattr(demand, "priority", 0)
-        demand_stats[priority]["total_volume"] += demand.volume
-        demand_stats[priority]["placed_volume"] += demand.placed_demand
+    for dmd in tm.demands:
+        offered = float(getattr(dmd, "volume", 0.0))
+        placed = float(getattr(dmd, "placed_demand", 0.0))
+        unplaced = offered - placed
+        priority = int(getattr(dmd, "priority", getattr(dmd, "demand_class", 0)))
+
+        demand_results.append(
+            {
+                "src": str(getattr(dmd, "src_node", "")),
+                "dst": str(getattr(dmd, "dst_node", "")),
+                "priority": priority,
+                "offered_demand": offered,
+                "placed_demand": placed,
+                "unplaced_demand": unplaced,
+                "placement_ratio": (placed / offered) if offered > 0 else 0.0,
+            }
+        )
+
+        demand_stats[priority]["total_volume"] += offered
+        demand_stats[priority]["placed_volume"] += placed
         demand_stats[priority]["count"] += 1
 
     priority_results = {}
@@ -157,6 +176,7 @@ def demand_placement_analysis(
         "total_placed": total_placed,
         "total_demand": total_demand,
         "overall_placement_ratio": overall_placement_ratio,
+        "demand_results": demand_results,
         "priority_results": priority_results,
     }
 

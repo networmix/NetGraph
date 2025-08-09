@@ -4,9 +4,9 @@ import pytest
 
 from ngraph.failure.manager.manager import FailureManager
 from ngraph.failure.policy import FailurePolicy, FailureRule
+from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network
 from ngraph.monte_carlo.functions import max_flow_analysis
-from ngraph.results.artifacts import FailurePolicySet
 
 
 class TestFailureManagerCore:

@@ -3,7 +3,7 @@
 import pytest
 
 from ngraph.failure.policy import FailurePolicy, FailureRule
-from ngraph.results.artifacts import FailurePolicySet
+from ngraph.failure.policy_set import FailurePolicySet
 
 
 class TestFailurePolicySet:

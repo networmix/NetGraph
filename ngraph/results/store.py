@@ -96,7 +96,7 @@ class Results:
         Returns:
             Dict[str, Any]: A dict mapping step_name -> value for all steps that have stored something under 'key'.
         """
-        result = {}
+        result: Dict[str, Any] = {}
         for step_name, data in self._store.items():
             if key in data:
                 result[step_name] = data[key]

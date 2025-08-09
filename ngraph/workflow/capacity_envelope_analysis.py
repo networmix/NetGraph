@@ -157,11 +157,20 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
 
         logger.info(f"Generated {len(envelope_results.envelopes)} capacity envelopes")
 
-        # Convert envelope objects to serializable format for scenario storage
-        envelopes_dict = {
-            flow_key: envelope.to_dict()
-            for flow_key, envelope in envelope_results.envelopes.items()
-        }
+        # Convert envelope objects to serializable format and enrich with flow labels/metric
+        envelopes_dict = {}
+        for flow_key, envelope in envelope_results.envelopes.items():
+            data = envelope.to_dict()
+            # Parse labels from key like "A->B"
+            if "->" in flow_key:
+                src_label, dst_label = flow_key.split("->", 1)
+                data["src"] = src_label
+                data["dst"] = dst_label
+            else:
+                data["src"] = flow_key
+                data["dst"] = flow_key
+            data["metric"] = "capacity"
+            envelopes_dict[flow_key] = data
 
         # Store results in scenario
         scenario.results.put(self.name, "capacity_envelopes", envelopes_dict)

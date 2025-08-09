@@ -49,6 +49,13 @@ failure_policy_set:
         rule_type: choice
         count: 1
 
+traffic_matrix_set:
+  default:
+    - source_path: "^N([1-4])$"
+      sink_path: "^N([1-4])$"
+      demand: 12.0
+      mode: "pairwise"
+
 workflow:
   # Single pairwise analysis generates complete 4x4 node-to-node capacity matrix
   - step_type: CapacityEnvelopeAnalysis
@@ -63,5 +70,16 @@ workflow:
     flow_placement: "PROPORTIONAL"   # Distribute flow proportionally across paths
     baseline: true                   # Include baseline (no failure) analysis
     seed: 42                         # Reproducible results
-    store_failure_patterns: false    # Retain failure patterns for analysis
+    store_failure_patterns: true     # Retain failure patterns for analysis
     include_flow_summary: true       # Include cost distribution and min-cut analysis
+
+  - step_type: TrafficMatrixPlacementAnalysis
+    name: "tm_placement"
+    matrix_name: "default"
+    failure_policy: "single_link_failure"
+    iterations: 10
+    parallelism: 8
+    placement_rounds: "auto"
+    baseline: true
+    seed: 42
+    store_failure_patterns: true
