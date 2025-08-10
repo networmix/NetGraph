@@ -115,10 +115,12 @@ failure_policy_set:
   default:
     attrs:
       description: "Evaluate traffic routing under any single link failure."
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 1
 
 traffic_matrix_set:
   default:

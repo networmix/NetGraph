@@ -39,13 +39,16 @@ network:
 
 failure_policy_set:
   single_link:
-    rules:
-      - name: "single_failure"
-        condition: "COUNT"
-        value: 1
-        risk_groups: ["link"]
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: link
+            rule_type: choice
+            count: 1
   no_failures:
-    rules: []
+    modes:
+      - weight: 1.0
+        rules: []
 
 workflow:
   - step_type: NetworkStats

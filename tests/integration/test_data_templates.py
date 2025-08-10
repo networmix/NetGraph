@@ -263,7 +263,14 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": "Single link failure scenario",
             },
-            "rules": [{"entity_scope": "link", "rule_type": "choice", "count": 1}],
+            "modes": [
+                {
+                    "weight": 1.0,
+                    "rules": [
+                        {"entity_scope": "link", "rule_type": "choice", "count": 1}
+                    ],
+                }
+            ],
         }
 
     @staticmethod
@@ -273,7 +280,14 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": "Single node failure scenario",
             },
-            "rules": [{"entity_scope": "node", "rule_type": "choice", "count": 1}],
+            "modes": [
+                {
+                    "weight": 1.0,
+                    "rules": [
+                        {"entity_scope": "node", "rule_type": "choice", "count": 1}
+                    ],
+                }
+            ],
         }
 
     @staticmethod
@@ -283,8 +297,17 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": f"Multiple {entity_scope} failure scenario",
             },
-            "rules": [
-                {"entity_scope": entity_scope, "rule_type": "choice", "count": count}
+            "modes": [
+                {
+                    "weight": 1.0,
+                    "rules": [
+                        {
+                            "entity_scope": entity_scope,
+                            "rule_type": "choice",
+                            "count": count,
+                        }
+                    ],
+                }
             ],
         }
 
@@ -295,7 +318,9 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": "All links failure scenario",
             },
-            "rules": [{"entity_scope": "link", "rule_type": "all"}],
+            "modes": [
+                {"weight": 1.0, "rules": [{"entity_scope": "link", "rule_type": "all"}]}
+            ],
         }
 
     @staticmethod
@@ -306,11 +331,22 @@ class FailurePolicyTemplates:
                 "description": f"Failure of risk group {risk_group_name}",
             },
             "fail_risk_groups": True,
-            "rules": [
+            "modes": [
                 {
-                    "entity_scope": "link",
-                    "rule_type": "conditional",
-                    "conditions": [f"risk_groups.contains('{risk_group_name}')"],
+                    "weight": 1.0,
+                    "rules": [
+                        {
+                            "entity_scope": "link",
+                            "rule_type": "all",
+                            "conditions": [
+                                {
+                                    "attr": "risk_groups",
+                                    "operator": "contains",
+                                    "value": risk_group_name,
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
         }

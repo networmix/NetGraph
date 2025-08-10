@@ -99,7 +99,8 @@ class TestBlueprintTemplates:
 class TestFailurePolicyTemplates:
     def test_single_link_failure_template_minimal(self):
         policy = FailurePolicyTemplates.single_link_failure()
-        assert len(policy["rules"]) == 1
+        assert "modes" in policy and len(policy["modes"]) == 1
+        assert len(policy["modes"][0]["rules"]) == 1
 
 
 @pytest.mark.slow

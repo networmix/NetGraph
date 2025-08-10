@@ -27,7 +27,11 @@ def test_expand_by_shared_risk_groups() -> None:
         rule_type="all",
     )
 
-    policy = FailurePolicy(rules=[rule], fail_risk_groups=True)
+    from ngraph.failure.policy import FailureMode
+
+    policy = FailurePolicy(
+        modes=[FailureMode(weight=1.0, rules=[rule])], fail_risk_groups=True
+    )
     failed = set(policy.apply_failures(nodes, links))
 
     # Both N1 and L1 should be included due to shared risk group; N2/L2 unaffected
@@ -48,7 +52,11 @@ def test_expand_failed_risk_group_children() -> None:
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule], fail_risk_group_children=True)
+    from ngraph.failure.policy import FailureMode
+
+    policy = FailurePolicy(
+        modes=[FailureMode(weight=1.0, rules=[rule])], fail_risk_group_children=True
+    )
 
     # Risk group hierarchy as dicts (the policy supports dict objects for groups)
     risk_groups = {

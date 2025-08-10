@@ -18,7 +18,9 @@ class TestFailurePolicySet:
     def test_add_and_get_policy(self):
         """Test adding and retrieving policies."""
         fps = FailurePolicySet()
-        policy = FailurePolicy(rules=[])
+        from ngraph.failure.policy import FailureMode
+
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
 
         fps.add("test_policy", policy)
         assert len(fps.policies) == 1
@@ -33,8 +35,10 @@ class TestFailurePolicySet:
     def test_get_all_policies(self):
         """Test getting all policies."""
         fps = FailurePolicySet()
-        policy1 = FailurePolicy(rules=[])
-        policy2 = FailurePolicy(rules=[])
+        from ngraph.failure.policy import FailureMode
+
+        policy1 = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
+        policy2 = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
 
         fps.add("policy1", policy1)
         fps.add("policy2", policy2)
@@ -50,8 +54,10 @@ class TestFailurePolicySet:
 
         # Create a policy with some rules and attributes
         rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        from ngraph.failure.policy import FailureMode
+
         policy = FailurePolicy(
-            rules=[rule],
+            modes=[FailureMode(weight=1.0, rules=[rule])],
             attrs={"name": "test_policy", "description": "Test policy"},
             fail_risk_groups=True,
             use_cache=False,
@@ -62,14 +68,17 @@ class TestFailurePolicySet:
         result = fps.to_dict()
 
         assert "test" in result
-        assert "rules" in result["test"]
+        assert "modes" in result["test"]
         assert "attrs" in result["test"]
         assert result["test"]["fail_risk_groups"] is True
         assert result["test"]["use_cache"] is False
-        assert len(result["test"]["rules"]) == 1
+        # Modes present
+        assert "modes" in result["test"] and len(result["test"]["modes"]) == 1
 
-        # Check rule serialization
-        rule_dict = result["test"]["rules"][0]
+        # Check rule serialization inside modes
+        mode = result["test"]["modes"][0]
+        assert len(mode["rules"]) == 1
+        rule_dict = mode["rules"][0]
         assert rule_dict["entity_scope"] == "node"
         assert rule_dict["rule_type"] == "choice"
         assert rule_dict["count"] == 1
@@ -78,8 +87,14 @@ class TestFailurePolicySet:
         """Test serialization with multiple policies."""
         fps = FailurePolicySet()
 
-        policy1 = FailurePolicy(rules=[], attrs={"name": "policy1"})
-        policy2 = FailurePolicy(rules=[], attrs={"name": "policy2"})
+        from ngraph.failure.policy import FailureMode
+
+        policy1 = FailurePolicy(
+            modes=[FailureMode(weight=1.0, rules=[])], attrs={"name": "policy1"}
+        )
+        policy2 = FailurePolicy(
+            modes=[FailureMode(weight=1.0, rules=[])], attrs={"name": "policy2"}
+        )
 
         fps.add("first", policy1)
         fps.add("second", policy2)

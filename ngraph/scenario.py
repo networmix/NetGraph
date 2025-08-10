@@ -13,6 +13,7 @@ from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.failure.policy import (
     FailureCondition,
+    FailureMode,
     FailurePolicy,
     FailureRule,
 )
@@ -275,47 +276,66 @@ class Scenario:
         use_cache = fp_data.get("use_cache", False)
         attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
 
-        # Extract rules
-        rules_data = fp_data.get("rules", [])
-        if not isinstance(rules_data, list):
-            raise ValueError("failure_policy 'rules' must be a list if present.")
-
-        rules: List[FailureRule] = []
-        for rule_dict in rules_data:
-            entity_scope = rule_dict.get("entity_scope", "node")
-            conditions_data = rule_dict.get("conditions", [])
-            if not isinstance(conditions_data, list):
-                raise ValueError("Each rule's 'conditions' must be a list if present.")
-            conditions: List[FailureCondition] = []
-            for cond_dict in conditions_data:
-                conditions.append(
-                    FailureCondition(
-                        attr=cond_dict["attr"],
-                        operator=cond_dict["operator"],
-                        value=cond_dict["value"],
+        def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
+            rules_local: List[FailureRule] = []
+            for rule_dict in rule_dicts:
+                entity_scope = rule_dict.get("entity_scope", "node")
+                conditions_data = rule_dict.get("conditions", [])
+                if not isinstance(conditions_data, list):
+                    raise ValueError(
+                        "Each rule's 'conditions' must be a list if present."
                     )
-                )
+                conditions: List[FailureCondition] = []
+                for cond_dict in conditions_data:
+                    conditions.append(
+                        FailureCondition(
+                            attr=cond_dict["attr"],
+                            operator=cond_dict["operator"],
+                            value=cond_dict["value"],
+                        )
+                    )
 
-            rule = FailureRule(
-                entity_scope=entity_scope,
-                conditions=conditions,
-                logic=rule_dict.get("logic", "or"),
-                rule_type=rule_dict.get("rule_type", "all"),
-                probability=rule_dict.get("probability", 1.0),
-                count=rule_dict.get("count", 1),
-            )
-            rules.append(rule)
+                rule = FailureRule(
+                    entity_scope=entity_scope,
+                    conditions=conditions,
+                    logic=rule_dict.get("logic", "or"),
+                    rule_type=rule_dict.get("rule_type", "all"),
+                    probability=rule_dict.get("probability", 1.0),
+                    count=rule_dict.get("count", 1),
+                    weight_by=rule_dict.get("weight_by"),
+                )
+                rules_local.append(rule)
+            return rules_local
+
+        # Extract weighted modes (required)
+        modes: List[FailureMode] = []
+        modes_data = fp_data.get("modes", [])
+        if not isinstance(modes_data, list) or not modes_data:
+            raise ValueError("failure_policy requires non-empty 'modes' list.")
+        for _m_idx, m in enumerate(modes_data):
+            if not isinstance(m, dict):
+                raise ValueError("Each mode must be a mapping.")
+            try:
+                weight = float(m.get("weight", 0.0))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Each mode 'weight' must be a number.") from exc
+            mode_rules_data = m.get("rules", [])
+            if not isinstance(mode_rules_data, list):
+                raise ValueError("Each mode 'rules' must be a list.")
+            mode_rules = build_rules(mode_rules_data)
+            mode_attrs = normalize_yaml_dict_keys(m.get("attrs", {}))
+            modes.append(FailureMode(weight=weight, rules=mode_rules, attrs=mode_attrs))
 
         # Derive seed for this failure policy
         policy_seed = seed_manager.derive_seed("failure_policy", policy_name)
 
         return FailurePolicy(
-            rules=rules,
             attrs=attrs,
             fail_risk_groups=fail_srg,
             fail_risk_group_children=fail_rg_children,
             use_cache=use_cache,
             seed=policy_seed,
+            modes=modes,
         )
 
     @staticmethod

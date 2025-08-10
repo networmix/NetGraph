@@ -9,6 +9,12 @@ from ngraph.failure.policy import (
 )
 
 
+def _single_mode_policy(rule: FailureRule, **kwargs) -> FailurePolicy:
+    from ngraph.failure.policy import FailureMode
+
+    return FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])], **kwargs)
+
+
 def test_failure_rule_invalid_probability():
     """Test FailureRule validation for invalid probability values."""
     # Test probability > 1.0
@@ -72,7 +78,7 @@ def test_node_scope_all():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco", "location": "dallas"},
@@ -99,7 +105,7 @@ def test_node_scope_random():
         rule_type="random",
         probability=0.5,
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco"},
@@ -129,7 +135,7 @@ def test_node_scope_choice():
         rule_type="choice",
         count=1,
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco"},
@@ -153,7 +159,7 @@ def test_link_scope_all():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {"N1": {}, "N2": {}}
     links = {
@@ -175,7 +181,7 @@ def test_link_scope_random():
         rule_type="random",
         probability=0.4,
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {}
     links = {
@@ -203,7 +209,7 @@ def test_link_scope_choice():
         rule_type="choice",
         count=1,
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {}
     links = {
@@ -230,7 +236,7 @@ def test_complex_conditions_and_logic():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco", "location": "dallas"},
@@ -255,7 +261,7 @@ def test_complex_conditions_or_logic():
         logic="or",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco", "location": "dallas"},
@@ -288,7 +294,11 @@ def test_multiple_rules():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[node_rule, link_rule])
+    from ngraph.failure.policy import FailureMode
+
+    policy = FailurePolicy(
+        modes=[FailureMode(weight=1.0, rules=[node_rule, link_rule])]
+    )
 
     nodes = {
         "N1": {"equipment_vendor": "cisco"},
@@ -314,7 +324,7 @@ def test_condition_operators():
         logic="and",
         rule_type="all",
     )
-    policy_neq = FailurePolicy(rules=[rule_neq])
+    policy_neq = _single_mode_policy(rule_neq)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco"},
@@ -334,7 +344,7 @@ def test_condition_operators():
         logic="and",
         rule_type="all",
     )
-    policy_missing = FailurePolicy(rules=[rule_missing])
+    policy_missing = _single_mode_policy(rule_missing)
 
     nodes = {
         "N1": {"vendor": "cisco"},
@@ -356,12 +366,16 @@ def test_serialization():
         probability=0.2,
         count=3,
     )
-    policy = FailurePolicy(rules=[rule])
+    from ngraph.failure.policy import FailureMode
+
+    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
     policy_dict = policy.to_dict()
-    assert len(policy_dict["rules"]) == 1
+    assert "modes" in policy_dict and len(policy_dict["modes"]) == 1
+    mode_dict = policy_dict["modes"][0]
+    assert len(mode_dict["rules"]) == 1
 
-    rule_dict = policy_dict["rules"][0]
+    rule_dict = mode_dict["rules"][0]
     assert rule_dict["entity_scope"] == "node"
     assert rule_dict["logic"] == "and"
     assert rule_dict["rule_type"] == "random"
@@ -385,7 +399,7 @@ def test_missing_attributes():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     nodes = {
         "N1": {"equipment_vendor": "cisco"},
@@ -398,7 +412,9 @@ def test_missing_attributes():
 
 def test_empty_policy():
     """Test policy with no rules."""
-    policy = FailurePolicy(rules=[])
+    from ngraph.failure.policy import FailureMode
+
+    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
 
     nodes = {"N1": {"equipment_vendor": "cisco"}}
     links = {"L1": {"link_type": "fiber"}}
@@ -417,7 +433,7 @@ def test_empty_entities():
         logic="and",
         rule_type="all",
     )
-    policy = FailurePolicy(rules=[rule])
+    policy = _single_mode_policy(rule)
 
     failed = policy.apply_failures({}, {})
     assert failed == []

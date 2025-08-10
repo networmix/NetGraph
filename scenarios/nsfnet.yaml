@@ -163,23 +163,27 @@ failure_policy_set:
     fail_risk_groups: false
     fail_risk_group_children: false
     use_cache: false
-    rules:
-      # link reliability - random independent failures
-      - entity_scope: link
-        rule_type: random
-        probability: 0.001      # 0.1 % chance a given circuit is down
-      # node reliability - random independent router failures
-      - entity_scope: node
-        rule_type: random
-        probability: 0.0005     # 0.05 % chance a given node is down
+    modes:
+        - weight: 1.0
+          rules:
+            # link reliability - random independent failures
+            - entity_scope: link
+              rule_type: random
+              probability: 0.001      # 0.1 % chance a given circuit is down
+            # node reliability - random independent router failures
+            - entity_scope: node
+              rule_type: random
+              probability: 0.0005     # 0.05 % chance a given node is down
 
   single_random_link_failure:
     attrs:
       description: Fails exactly one random link to test network resilience
-    rules:
-      - entity_scope: link
-        rule_type: choice
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: link
+            rule_type: choice
+            count: 1
 
 ###############################################################################
 # Workflow

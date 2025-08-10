@@ -275,15 +275,19 @@ class ScenarioTestHelper:
             )
             return
 
-        # Policy exists - validate rule count
-        actual_rules = len(policy.rules)
+        # Policy exists - validate rule count (modes-based API)
+        actual_rules = sum(len(mode.rules) for mode in getattr(policy, "modes", []))
         assert actual_rules == expected_rules, (
             f"Failure policy rule count mismatch: expected {expected_rules}, found {actual_rules}"
         )
 
         # Validate rule scopes if specified
         if expected_scopes:
-            actual_scopes = [rule.entity_scope for rule in policy.rules]
+            actual_scopes = [
+                rule.entity_scope
+                for mode in getattr(policy, "modes", [])
+                for rule in mode.rules
+            ]
             assert set(actual_scopes) == set(expected_scopes), (
                 f"Failure policy scopes mismatch: expected {expected_scopes}, found {actual_scopes}"
             )

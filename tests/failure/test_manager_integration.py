@@ -38,11 +38,15 @@ class TestFailureManagerCore:
             rule_type="choice",
             count=1,
         )
-        policy = FailurePolicy(rules=[rule])
+        from ngraph.failure.policy import FailureMode
+
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set.policies["single_failures"] = policy
 
         # No failure policy
-        no_fail_policy = FailurePolicy(rules=[])
+        from ngraph.failure.policy import FailureMode
+
+        no_fail_policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
         policy_set.policies["no_failures"] = no_fail_policy
 
         return policy_set
@@ -227,7 +231,9 @@ class TestFailureManagerIntegration:
             rule_type="choice",
             count=2,
         )
-        policy = FailurePolicy(rules=[rule])
+        from ngraph.failure.policy import FailureMode
+
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set.policies["dual_link_failures"] = policy
 
         manager = FailureManager(network, policy_set, "dual_link_failures")
@@ -273,7 +279,9 @@ class TestFailureManagerIntegration:
 
         # Policy that excludes nothing
         policy_set = FailurePolicySet()
-        policy = FailurePolicy(rules=[])
+        from ngraph.failure.policy import FailureMode
+
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
         policy_set.policies["no_failures"] = policy
 
         manager = FailureManager(network, policy_set, "no_failures")

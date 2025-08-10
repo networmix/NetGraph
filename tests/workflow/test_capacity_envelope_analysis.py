@@ -35,7 +35,13 @@ def simple_failure_policy() -> FailurePolicy:
         rule_type="choice",
         count=1,
     )
-    return FailurePolicy(rules=[rule])
+    return FailurePolicy(
+        modes=[
+            __import__("ngraph.failure.policy", fromlist=["FailureMode"]).FailureMode(
+                weight=1.0, rules=[rule]
+            )
+        ]
+    )
 
 
 @pytest.fixture

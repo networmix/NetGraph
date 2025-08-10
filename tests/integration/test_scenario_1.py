@@ -166,7 +166,8 @@ class TestScenario1:
         # Additional validation of the specific rule
         policies = helper.scenario.failure_policy_set.get_all_policies()
         policy = policies[0]  # Get first policy for validation
-        rule = policy.rules[0]
+        # Access first rule via modes-based API
+        rule = policy.modes[0].rules[0]
 
         assert rule.logic == "or", f"Expected rule logic 'or', found '{rule.logic}'"
         assert rule.rule_type == "choice", (

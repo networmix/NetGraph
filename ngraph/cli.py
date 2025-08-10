@@ -288,15 +288,31 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
     if failure_policy_set.policies:
         policy_items = list(failure_policy_set.policies.items())[:5]
         for policy_name, policy in policy_items:
-            rules_count = len(policy.rules)
+            mode_count = len(getattr(policy, "modes", []) or [])
             print(
-                f"     {policy_name}: {rules_count} rule{'s' if rules_count != 1 else ''}"
+                f"     {policy_name}: {mode_count} mode{'s' if mode_count != 1 else ''}"
             )
-            if detail and rules_count > 0:
-                for i, rule in enumerate(policy.rules[:3]):  # Show first 3 rules
-                    print(f"       {i + 1}. {rule.entity_scope} {rule.rule_type}")
-                if rules_count > 3:
-                    print(f"       ... and {rules_count - 3} more rules")
+            if detail and mode_count > 0:
+                for mi, mode in enumerate(policy.modes[:3]):
+                    rule_count = len(mode.rules)
+                    print(
+                        f"       {mi + 1}. weight={mode.weight:g} | {rule_count} rule{'s' if rule_count != 1 else ''}"
+                    )
+                    for ri, rule in enumerate(mode.rules[:3]):
+                        extra = (
+                            f" count={getattr(rule, 'count', '')}"
+                            if rule.rule_type == "choice"
+                            else (
+                                f" p={getattr(rule, 'probability', '')}"
+                                if rule.rule_type == "random"
+                                else ""
+                            )
+                        )
+                        print(
+                            f"           - {ri + 1}. {rule.entity_scope} {rule.rule_type}{extra}"
+                        )
+                    if rule_count > 3:
+                        print(f"           ... and {rule_count - 3} more rules")
         if policy_count > 5:
             remaining = policy_count - 5
             print(f"     ... and {remaining} more")

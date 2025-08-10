@@ -330,13 +330,13 @@ class TestScenario4:
             "single_link_failure"
         )
         assert single_link_policy is not None, "single_link_failure policy should exist"
-        assert len(single_link_policy.rules) == 1
+        assert sum(len(m.rules) for m in single_link_policy.modes) == 1
 
         single_node_policy = helper.scenario.failure_policy_set.policies.get(
             "single_node_failure"
         )
         assert single_node_policy is not None, "single_node_failure policy should exist"
-        assert len(single_node_policy.rules) == 1
+        assert sum(len(m.rules) for m in single_node_policy.modes) == 1
 
     def test_advanced_workflow_steps(self, helper):
         """Test that advanced workflow steps executed correctly."""

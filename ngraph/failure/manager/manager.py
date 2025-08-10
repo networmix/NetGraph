@@ -478,8 +478,11 @@ class FailureManager:
         """
         policy = self.get_failure_policy()
 
-        # Validate iterations parameter based on failure policy
-        if (policy is None or not policy.rules) and iterations > 1 and not baseline:
+        # Validate iterations parameter based on failure policy (modes-only policies)
+        has_effective_rules = bool(
+            policy and any(len(m.rules) > 0 for m in policy.modes)
+        )
+        if (not has_effective_rules) and iterations > 1 and not baseline:
             raise ValueError(
                 f"iterations={iterations} has no effect without a failure policy. "
                 "Without failures, all iterations produce the same results. "
@@ -496,8 +499,8 @@ class FailureManager:
         parallelism = _auto_adjust_parallelism(parallelism, analysis_func)
 
         # Determine actual number of iterations to run
-        if policy is None or not policy.rules:
-            mc_iters = 1  # Baseline only, no failures
+        if not has_effective_rules:
+            mc_iters = 1  # No failures => single iteration
         else:
             mc_iters = iterations
 

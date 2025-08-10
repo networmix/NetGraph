@@ -35,10 +35,10 @@ def mock_network() -> Network:
 @pytest.fixture
 def mock_failure_policy() -> FailurePolicy:
     """Create a mock FailurePolicy for testing."""
-    from ngraph.failure.policy import FailureRule
+    from ngraph.failure.policy import FailureMode, FailureRule
 
     rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
-    policy = FailurePolicy(rules=[rule])
+    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
     policy.apply_failures = MagicMock(return_value=["node1", "link1"])  # type: ignore[attr-defined]
     return policy
@@ -307,7 +307,12 @@ class TestFailureManagerTopLevelMatching:
         mock_network.nodes["node1"].disabled = True
         mock_network.nodes["node2"].disabled = False
 
-        from ngraph.failure.policy import FailureCondition, FailurePolicy, FailureRule
+        from ngraph.failure.policy import (
+            FailureCondition,
+            FailureMode,
+            FailurePolicy,
+            FailureRule,
+        )
 
         rule = FailureRule(
             entity_scope="node",
@@ -315,7 +320,7 @@ class TestFailureManagerTopLevelMatching:
             logic="and",
             rule_type="all",
         )
-        policy = FailurePolicy(rules=[rule])
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
         fm = FailureManager(
             network=mock_network,
@@ -335,7 +340,12 @@ class TestFailureManagerTopLevelMatching:
         mock_network.links["link1"].capacity = 100.0
         mock_network.links["link2"].capacity = 50.0
 
-        from ngraph.failure.policy import FailureCondition, FailurePolicy, FailureRule
+        from ngraph.failure.policy import (
+            FailureCondition,
+            FailureMode,
+            FailurePolicy,
+            FailureRule,
+        )
 
         rule = FailureRule(
             entity_scope="link",
@@ -343,7 +353,7 @@ class TestFailureManagerTopLevelMatching:
             logic="and",
             rule_type="all",
         )
-        policy = FailurePolicy(rules=[rule])
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
         fm = FailureManager(
             network=mock_network,
@@ -367,10 +377,10 @@ class TestFailureManagerTopLevelMatching:
         mock_network.nodes["node1"].risk_groups = {"rg1"}
         mock_network.links["link1"].risk_groups = {"rg1"}
 
-        from ngraph.failure.policy import FailurePolicy, FailureRule
+        from ngraph.failure.policy import FailureMode, FailurePolicy, FailureRule
 
         rule = FailureRule(entity_scope="risk_group", rule_type="all")
-        policy = FailurePolicy(rules=[rule])
+        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy.apply_failures = MagicMock(return_value=["rg1"])  # type: ignore[attr-defined]
 
         fm = FailureManager(

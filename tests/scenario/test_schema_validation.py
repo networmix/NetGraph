@@ -53,10 +53,12 @@ failure_policy_set:
   default:
     attrs:
       description: "Test single link failure policy"
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 1
 
 workflow:
   - step_type: BuildGraph
@@ -168,8 +170,17 @@ workflow:
             "failure_policy_set": {
                 "default": {
                     "attrs": {"name": "test_policy"},
-                    "rules": [
-                        {"entity_scope": "link", "rule_type": "choice", "count": 1}
+                    "modes": [
+                        {
+                            "weight": 1.0,
+                            "rules": [
+                                {
+                                    "entity_scope": "link",
+                                    "rule_type": "choice",
+                                    "count": 1,
+                                }
+                            ],
+                        }
                     ],
                 }
             },
@@ -282,25 +293,29 @@ workflow:
         complex_failure_scenario = """
 failure_policy_set:
   conditional_failure:
-    rules:
-      - entity_scope: "node"
-        rule_type: "choice"
-        count: 2
-        conditions:
-          - attr: "attrs.role"
-            operator: "=="
-            value: "spine"
-          - attr: "attrs.criticality"
-            operator: ">="
-            value: 5
-        logic: "and"
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "node"
+            rule_type: "choice"
+            count: 2
+            conditions:
+              - attr: "attrs.role"
+                operator: "=="
+                value: "spine"
+              - attr: "attrs.criticality"
+                operator: ">="
+                value: 5
+            logic: "and"
   risk_group_failure:
     fail_risk_groups: true
     fail_risk_group_children: true
-    rules:
-      - entity_scope: "risk_group"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "risk_group"
+            rule_type: "choice"
+            count: 1
 
 network:
   name: Complex Failure Test Network

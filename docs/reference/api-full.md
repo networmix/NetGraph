@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 09, 2025 at 22:20 UTC
+Generated from source code on: August 10, 2025 at 17:58 UTC
 
 Modules auto-discovered: 63
 
@@ -2037,6 +2037,26 @@ Attributes:
 - `operator` (str)
 - `value` (Any)
 
+### FailureMode
+
+A weighted mode that encapsulates a set of rules applied together.
+
+Exactly one mode is selected per failure iteration according to the
+mode weights. Within a mode, all contained rules are applied and their
+selections are unioned into the failure set.
+
+Attributes:
+    weight: Non-negative weight used for mode selection. All weights are
+        normalized internally. Modes with zero weight are never selected.
+    rules: A list of `FailureRule` applied together when this mode is chosen.
+    attrs: Optional metadata.
+
+**Attributes:**
+
+- `weight` (float)
+- `rules` (List[FailureRule]) = []
+- `attrs` (Dict[str, Any]) = {}
+
 ### FailurePolicy
 
 A container for multiple FailureRules plus optional metadata in `attrs`.
@@ -2119,17 +2139,17 @@ Attributes:
 
 **Attributes:**
 
-- `rules` (List[FailureRule]) = []
 - `attrs` (Dict[str, Any]) = {}
 - `fail_risk_groups` (bool) = False
 - `fail_risk_group_children` (bool) = False
 - `use_cache` (bool) = False
 - `seed` (Optional[int])
+- `modes` (List[FailureMode]) = []
 - `_match_cache` (Dict[int, Set[str]]) = {}
 
 **Methods:**
 
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None) -> 'List[str]'` - Identify which entities fail given the defined rules, then optionally
+- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None) -> 'List[str]'` - Identify which entities fail for this iteration.
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### FailureRule
@@ -2164,6 +2184,7 @@ Attributes:
 - `rule_type` (Literal['random', 'choice', 'all']) = all
 - `probability` (float) = 1.0
 - `count` (int) = 1
+- `weight_by` (Optional[str])
 
 ---
 
@@ -2519,7 +2540,7 @@ YAML Configuration Example:
         mode: "combine"                        # "combine" or "pairwise" flow analysis
         failure_policy: "random_failures"      # Optional: Named failure policy to use
         iterations: 1000                       # Number of Monte-Carlo trials
-        parallelism: 4                         # Number of parallel worker processes
+        parallelism: auto                      # Number of parallel worker processes (int or "auto")
         shortest_path: false                   # Use shortest paths only
         flow_placement: "PROPORTIONAL"         # Flow placement strategy
         baseline: true                         # Optional: Run first iteration without failures
@@ -2564,7 +2585,7 @@ Attributes:
 - `mode` (str) = combine
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
-- `parallelism` (int) = 1
+- `parallelism` (int | str) = auto
 - `shortest_path` (bool) = False
 - `flow_placement` (FlowPlacement | str) = 1
 - `baseline` (bool) = False
@@ -2693,7 +2714,7 @@ Attributes:
 - `matrix_name` (str)
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
-- `parallelism` (int) = 1
+- `parallelism` (int | str) = auto
 - `placement_rounds` (int | str) = auto
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
@@ -3217,9 +3238,8 @@ Attributes:
 Profiling for NetGraph workflow execution.
 
 Provides CPU and wall-clock timing per workflow step using ``cProfile`` and
-aggregates results into structured summaries. Supports identification of
-time-dominant steps (bottlenecks) and function-level analysis for targeted
-performance improvements.
+optionally peak memory via ``tracemalloc``. Aggregates results into structured
+summaries and identifies time-dominant steps (bottlenecks).
 
 ### PerformanceProfiler
 
@@ -3279,7 +3299,7 @@ Attributes:
     wall_time: Total wall-clock time in seconds.
     cpu_time: CPU time spent in step execution.
     function_calls: Number of function calls during execution.
-    memory_peak: Peak memory usage during step (if available).
+    memory_peak: Peak memory usage during step in bytes (if available).
     cprofile_stats: Detailed cProfile statistics object.
     worker_profiles_merged: Number of worker profiles merged into this step.
 

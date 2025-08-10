@@ -258,26 +258,29 @@ failure_policy_set:
     use_cache: true
     attrs:
       custom_key: "value"
-    rules:
-      - entity_scope: "node"
-        conditions:
-          - attr: "role"
-            operator: "=="
-            value: "spine"
-        logic: "and"
-        rule_type: "all"
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "node"
+            conditions:
+              - attr: "role"
+                operator: "=="
+                value: "spine"
+            logic: "and"
+            rule_type: "all"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
     assert len(scenario.failure_policy_set.policies) == 1
     policies = scenario.failure_policy_set.get_all_policies()
     assert len(policies) > 0
-    # Since the policy was named "default", access it directly
     default_policy = scenario.failure_policy_set.get_policy("default")
     assert default_policy.fail_risk_groups
     assert not default_policy.fail_risk_group_children
-    assert len(default_policy.rules) == 1
-    rule = default_policy.rules[0]
+    assert len(default_policy.modes) == 1
+    mode = default_policy.modes[0]
+    assert len(mode.rules) == 1
+    rule = mode.rules[0]
     assert rule.entity_scope == "node"
     assert len(rule.conditions) == 1
 

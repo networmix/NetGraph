@@ -277,26 +277,32 @@ failure_policy_set:
   single_link_failure:
     attrs:
       description: "Single link failure"
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 1
 
   single_node_failure:
     attrs:
       description: "Single node failure"
-    rules:
-      - entity_scope: "node"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "node"
+            rule_type: "choice"
+            count: 1
 
   default:
     attrs:
       description: "Random single link failure"
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 1
 
 # Multi-step workflow demonstrating various workflow steps
 workflow:

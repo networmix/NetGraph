@@ -13,7 +13,7 @@ from __future__ import annotations
 import random as _random
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Set
+from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
 
 @dataclass
@@ -74,6 +74,11 @@ class FailureRule:
     rule_type: Literal["random", "choice", "all"] = "all"
     probability: float = 1.0
     count: int = 1
+    # Optional attribute for weighted sampling in choice mode
+    # When set and rule_type=="choice", items are sampled without replacement
+    # with probability proportional to the non-negative numeric value of this attribute.
+    # If all weights are non-positive or missing, fallback to uniform sampling.
+    weight_by: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.rule_type == "random":
@@ -82,6 +87,26 @@ class FailureRule:
                     f"probability={self.probability} must be within [0,1] "
                     f"for rule_type='random'."
                 )
+
+
+@dataclass
+class FailureMode:
+    """A weighted mode that encapsulates a set of rules applied together.
+
+    Exactly one mode is selected per failure iteration according to the
+    mode weights. Within a mode, all contained rules are applied and their
+    selections are unioned into the failure set.
+
+    Attributes:
+        weight: Non-negative weight used for mode selection. All weights are
+            normalized internally. Modes with zero weight are never selected.
+        rules: A list of `FailureRule` applied together when this mode is chosen.
+        attrs: Optional metadata.
+    """
+
+    weight: float
+    rules: List[FailureRule] = field(default_factory=list)
+    attrs: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -158,12 +183,12 @@ class FailurePolicy:
 
     """
 
-    rules: List[FailureRule] = field(default_factory=list)
     attrs: Dict[str, Any] = field(default_factory=dict)
     fail_risk_groups: bool = False
     fail_risk_group_children: bool = False
     use_cache: bool = False
     seed: Optional[int] = None
+    modes: List[FailureMode] = field(default_factory=list)
 
     # Internal cache for matched sets:  (rule_index -> set_of_entities)
     _match_cache: Dict[int, Set[str]] = field(default_factory=dict, init=False)
@@ -176,21 +201,19 @@ class FailurePolicy:
         *,
         seed: Optional[int] = None,
     ) -> List[str]:
-        """Identify which entities fail given the defined rules, then optionally
-        expand by shared-risk groups or nested risk groups.
+        """Identify which entities fail for this iteration.
+
+        Select exactly one mode using configured weights and apply its rules.
+        If no modes are configured, no failures are applied.
 
         Args:
-            network_nodes: {node_id -> node_object_or_dict}, each with top-level attributes
-                           (capacity, disabled, risk_groups, etc.).
-            network_links: {link_id -> link_object_or_dict}, similarly.
-            network_risk_groups: {rg_name -> RiskGroup} or dict. If you don't have risk
-                                 groups, pass None or {}.
-            seed: Optional seed for deterministic selection. Overrides the policy's
-                internal seed when provided.
+            network_nodes: Mapping of node_id -> flattened attribute dict.
+            network_links: Mapping of link_id -> flattened attribute dict.
+            network_risk_groups: Mapping of risk_group_name -> RiskGroup or dict.
+            seed: Optional deterministic seed for selection.
 
         Returns:
-            A list of IDs that fail (union of all rule matches, possibly expanded).
-            For risk groups, the ID is the risk group's name.
+            Sorted list of failed entity IDs (nodes, links, and/or risk group names).
         """
         if network_risk_groups is None:
             network_risk_groups = {}
@@ -199,8 +222,15 @@ class FailurePolicy:
         failed_links: Set[str] = set()
         failed_risk_groups: Set[str] = set()
 
-        # 1) Collect matched from each rule
-        for idx, rule in enumerate(self.rules):
+        # Determine rules from a selected mode (or none if no modes)
+        rules_to_apply: Sequence[FailureRule] = []
+        if self.modes:
+            effective_seed = seed if seed is not None else self.seed
+            mode_index = self._select_mode_index(self.modes, effective_seed)
+            rules_to_apply = self.modes[mode_index].rules
+
+        # Collect matched from each rule, then select
+        for idx, rule in enumerate(rules_to_apply):
             matched_ids = self._match_scope(
                 idx,
                 rule,
@@ -208,11 +238,19 @@ class FailurePolicy:
                 network_links,
                 network_risk_groups,
             )
-            # Then select a subset from matched_ids according to rule_type
-            # When an explicit seed is provided, it overrides the policy's seed
-            # for deterministic selection without creating a policy copy.
             effective_seed = seed if seed is not None else self.seed
-            selected = self._select_entities(matched_ids, rule, effective_seed)
+            selected = self._select_entities(
+                matched_ids,
+                rule,
+                effective_seed,
+                network_nodes
+                if rule.entity_scope == "node"
+                else (
+                    network_links
+                    if rule.entity_scope == "link"
+                    else network_risk_groups
+                ),
+            )
 
             # Add them to the respective fail sets
             if rule.entity_scope == "node":
@@ -222,20 +260,18 @@ class FailurePolicy:
             elif rule.entity_scope == "risk_group":
                 failed_risk_groups |= set(selected)
 
-        # 2) Optionally expand failures by risk groups
+        # Optionally expand by risk groups
         if self.fail_risk_groups:
             self._expand_risk_groups(
                 failed_nodes, failed_links, network_nodes, network_links
             )
 
-        # 3) Optionally expand risk-group children (if a risk group is failed, recursively fail children)
+        # Optionally expand failed risk-group children
         if self.fail_risk_group_children and failed_risk_groups:
             self._expand_failed_risk_group_children(
                 failed_risk_groups, network_risk_groups
             )
 
-        # Return union: node IDs, link IDs, and risk_group names
-        # For the code that uses this, you can interpret them in your manager.
         all_failed = set(failed_nodes) | set(failed_links) | set(failed_risk_groups)
         return sorted(all_failed)
 
@@ -312,45 +348,166 @@ class FailurePolicy:
 
     @staticmethod
     def _select_entities(
-        entity_ids: Set[str], rule: FailureRule, seed: Optional[int] = None
+        entity_ids: Set[str],
+        rule: FailureRule,
+        seed: Optional[int],
+        entity_map: Dict[str, Any],
     ) -> Set[str]:
-        """From the matched IDs, pick which entities fail under the given rule_type.
+        """Select entities for failure per rule.
 
-        Args:
-            entity_ids: Set of entity IDs that matched the rule conditions.
-            rule: The FailureRule specifying how to select from matched entities.
-            seed: Optional seed for reproducible random operations.
-
-        Returns:
-            Set of entity IDs selected for failure.
+        For rule_type="choice" and rule.weight_by set, perform weighted sampling
+        without replacement according to the specified attribute. If all weights
+        are non-positive or missing, fallback to uniform sampling.
         """
         if not entity_ids:
             return set()
 
         if rule.rule_type == "random":
             if seed is not None:
-                # Use seeded random state for deterministic results
                 rng = _random.Random(seed)
                 return {eid for eid in entity_ids if rng.random() < rule.probability}
             else:
-                # Use global random state when no seed provided
                 return {
                     eid for eid in entity_ids if _random.random() < rule.probability
                 }
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
+            if count <= 0:
+                return set()
+
+            # Weighted without replacement if weight_by provided
+            if rule.weight_by:
+                weights: Dict[str, float] = {}
+                positives: Dict[str, float] = {}
+                zeros: list[str] = []
+                for eid in entity_ids:
+                    w = FailurePolicy._extract_weight(
+                        entity_map.get(eid), rule.weight_by
+                    )
+                    w = float(w) if isinstance(w, (int, float)) else 0.0
+                    if w <= 0.0:
+                        zeros.append(eid)
+                        weights[eid] = 0.0
+                    else:
+                        positives[eid] = w
+                        weights[eid] = w
+
+                selected: set[str] = set()
+                if positives:
+                    k = min(count, len(positives))
+                    selected |= FailurePolicy._weighted_sample_without_replacement(
+                        positives, k, seed
+                    )
+                # If we still need more picks, fill uniformly from zero-weight items
+                remaining = count - len(selected)
+                if remaining > 0 and zeros:
+                    pool = [z for z in zeros if z not in selected]
+                    if pool:
+                        if seed is not None:
+                            rng = _random.Random(seed)
+                            selected |= set(
+                                rng.sample(pool, k=min(remaining, len(pool)))
+                            )
+                        else:
+                            selected |= set(
+                                _random.sample(pool, k=min(remaining, len(pool)))
+                            )
+                if selected:
+                    return selected
+
+            # Fallback to uniform sampling
             entity_list = list(entity_ids)
             if seed is not None:
-                # Use seeded random state for deterministic results
                 rng = _random.Random(seed)
                 return set(rng.sample(entity_list, k=count))
-            else:
-                # Use global random state when no seed provided
-                return set(_random.sample(entity_list, k=count))
+            return set(_random.sample(entity_list, k=count))
         elif rule.rule_type == "all":
             return entity_ids
         else:
             raise ValueError(f"Unsupported rule_type: {rule.rule_type}")
+
+    @staticmethod
+    def _extract_weight(entity: Any, attr_name: str) -> float:
+        """Extract weight attribute from entity which can be dict-like or object.
+
+        Returns 0.0 on missing attributes or non-numeric values.
+        """
+        if entity is None:
+            return 0.0
+        # Dict mapping from merged attributes
+        if isinstance(entity, dict):
+            value = entity.get(attr_name)
+        else:
+            # RiskGroup object or similar with .attrs
+            value = getattr(entity, "attrs", {}).get(attr_name)
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _weighted_sample_without_replacement(
+        weights: Dict[str, float], count: int, seed: Optional[int]
+    ) -> Set[str]:
+        """Sample `count` keys without replacement proportionally to `weights`.
+
+        Implements Efraimidis-Spirakis algorithm (2006) using keys k_i = U_i^(1/w_i)
+        for w_i > 0, where U_i is uniform(0,1). Picks items with largest keys.
+
+        Args:
+            weights: Mapping from item id -> non-negative weight.
+            count: Number of items to sample (<= len(weights)).
+            seed: Optional deterministic seed.
+
+        Returns:
+            Set of selected item ids.
+        """
+        positive_items: List[Tuple[str, float]] = [
+            (k, w) for k, w in weights.items() if w > 0.0
+        ]
+        if not positive_items:
+            return set()
+
+        rng = _random.Random(seed) if seed is not None else _random
+        # Compute keys and select top `count`
+        scored: List[Tuple[float, str]] = []
+        for item_id, w in positive_items:
+            u = rng.random()
+            # Guard against u=0.0 -> use minimal positive number
+            if u <= 0.0:
+                u = 1e-12
+            key = u ** (1.0 / w)
+            scored.append((key, item_id))
+        # Largest keys first
+        scored.sort(reverse=True)
+        selected_ids = {item_id for _, item_id in scored[:count]}
+        return selected_ids
+
+    @staticmethod
+    def _select_mode_index(modes: Sequence["FailureMode"], seed: Optional[int]) -> int:
+        """Select a mode index based on normalized weights.
+
+        Modes with non-positive weights are ignored.
+        """
+        # Build cumulative weights
+        effective: List[Tuple[int, float]] = [
+            (idx, float(m.weight))
+            for idx, m in enumerate(modes)
+            if float(m.weight) > 0.0
+        ]
+        if not effective:
+            # Degenerate: no positive weights -> fall back to first mode if exists
+            return 0
+        total = sum(w for _, w in effective)
+        rng = _random.Random(seed) if seed is not None else _random
+        r = rng.random() * total
+        cumulative = 0.0
+        for idx, w in effective:
+            cumulative += w
+            if r < cumulative:
+                return idx
+        # Fallback due to FP rounding
+        return effective[-1][0]
 
     def _expand_risk_groups(
         self,
@@ -449,31 +606,41 @@ class FailurePolicy:
         Returns:
             Dictionary representation with all fields as JSON-serializable primitives.
         """
-        return {
-            "rules": [
-                {
-                    "entity_scope": rule.entity_scope,
-                    "conditions": [
-                        {
-                            "attr": cond.attr,
-                            "operator": cond.operator,
-                            "value": cond.value,
-                        }
-                        for cond in rule.conditions
-                    ],
-                    "logic": rule.logic,
-                    "rule_type": rule.rule_type,
-                    "probability": rule.probability,
-                    "count": rule.count,
-                }
-                for rule in self.rules
-            ],
+        data: Dict[str, Any] = {
             "attrs": self.attrs,
             "fail_risk_groups": self.fail_risk_groups,
             "fail_risk_group_children": self.fail_risk_group_children,
             "use_cache": self.use_cache,
             "seed": self.seed,
         }
+        if self.modes:
+            data["modes"] = [
+                {
+                    "weight": mode.weight,
+                    "rules": [
+                        {
+                            "entity_scope": rule.entity_scope,
+                            "conditions": [
+                                {
+                                    "attr": cond.attr,
+                                    "operator": cond.operator,
+                                    "value": cond.value,
+                                }
+                                for cond in rule.conditions
+                            ],
+                            "logic": rule.logic,
+                            "rule_type": rule.rule_type,
+                            "probability": rule.probability,
+                            "count": rule.count,
+                            **({"weight_by": rule.weight_by} if rule.weight_by else {}),
+                        }
+                        for rule in mode.rules
+                    ],
+                    "attrs": mode.attrs,
+                }
+                for mode in self.modes
+            ]
+        return data
 
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
