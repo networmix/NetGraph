@@ -675,6 +675,18 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         logger.info("✓ YAML file loaded successfully")
 
         scenario = Scenario.from_yaml(yaml_text)
+        logger.debug(
+            "Scenario loaded: nodes=%d, links=%d, steps=%d, policies=%d, matrices=%d",
+            len(getattr(scenario.network, "nodes", {})),
+            len(getattr(scenario.network, "links", {})),
+            len(
+                getattr(scenario.workflow, "__iter__", [])
+                and list(scenario.workflow)
+                or []
+            ),
+            len(getattr(scenario.failure_policy_set, "policies", {})),
+            len(getattr(scenario.traffic_matrix_set, "matrices", {})),
+        )
         logger.info("✓ Scenario validated and loaded successfully")
 
         # Show scenario metadata

@@ -462,7 +462,7 @@
       "type": "object",
       "description": "Hardware component library",
       "patternProperties": {
-        "^[a-zA-Z0-9_-]+$": {
+        "^[a-zA-Z0-9_\\-\\+]+$": {
           "type": "object",
           "properties": {
             "component_type": {"type": "string"},
@@ -477,7 +477,7 @@
             "children": {
               "type": "object",
               "patternProperties": {
-                "^[a-zA-Z0-9_-]+$": {
+                "^[a-zA-Z0-9_\\-\\+]+$": {
                   "type": "object",
                   "additionalProperties": true
                 }

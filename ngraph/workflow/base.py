@@ -98,6 +98,13 @@ class WorkflowStep(ABC):
         )
         _execution_counter += 1
 
+        if self.seed is not None:
+            logger.debug(
+                "Executing step: %s (%s) with seed=%s",
+                step_name,
+                step_type,
+                str(self.seed),
+            )
         logger.info(f"Starting workflow step: {step_name} ({step_type})")
         start_time = time.time()
 
@@ -108,6 +115,17 @@ class WorkflowStep(ABC):
             logger.info(
                 f"Completed workflow step: {step_name} ({step_type}) "
                 f"in {duration:.3f} seconds"
+            )
+            try:
+                store = getattr(scenario.results, "_store", {})
+                keys = ", ".join(sorted(list(store.get(step_name, {}).keys())))
+            except Exception:
+                keys = "-"
+            logger.debug(
+                "Step %s finished: duration=%.3fs, results_keys=%s",
+                step_name,
+                duration,
+                keys or "-",
             )
         except Exception as e:
             end_time = time.time()

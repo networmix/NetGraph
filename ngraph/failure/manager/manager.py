@@ -23,6 +23,7 @@ workloads.
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import pickle
 import time
@@ -141,6 +142,17 @@ def _worker_init(network_pickle: bytes) -> None:
     # Each worker process has its own copy of globals (process isolation)
     _shared_network = pickle.loads(network_pickle)
     _analysis_cache.clear()
+
+    # Respect parent-requested log level if provided
+    try:
+        env_level = os.getenv("NGRAPH_LOG_LEVEL")
+        if env_level:
+            level_value = getattr(logging, env_level.upper(), logging.INFO)
+            from ngraph.logging import set_global_log_level
+
+            set_global_log_level(level_value)
+    except Exception:
+        pass
 
     worker_logger = get_logger(f"{__name__}.worker")
     worker_logger.debug(f"Worker {os.getpid()} initialized with network")
@@ -677,6 +689,13 @@ class FailureManager:
         completed_tasks = 0
         results = []
         failure_patterns = []
+
+        # Propagate logging level to workers via environment
+        try:
+            parent_level = logging.getLogger("ngraph").getEffectiveLevel()
+            os.environ["NGRAPH_LOG_LEVEL"] = logging.getLevelName(parent_level)
+        except Exception:
+            pass
 
         with ProcessPoolExecutor(
             max_workers=workers,

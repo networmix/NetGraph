@@ -18,6 +18,7 @@ from ngraph.failure.policy import (
     FailureRule,
 )
 from ngraph.failure.policy_set import FailurePolicySet
+from ngraph.logging import get_logger
 from ngraph.model.network import Network, RiskGroup
 from ngraph.results import Results
 from ngraph.seed_manager import SeedManager
@@ -52,6 +53,9 @@ class Scenario:
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
     seed: Optional[int] = None
+
+    # Module-level logger
+    _logger = get_logger(__name__)
 
     @property
     def seed_manager(self) -> SeedManager:
@@ -145,6 +149,16 @@ class Scenario:
         network_obj = expand_network_dsl(data)
         if network_obj is None:
             network_obj = Network()
+        else:
+            try:
+                Scenario._logger.debug(
+                    "Expanded network: nodes=%d, links=%d",
+                    len(getattr(network_obj, "nodes", {})),
+                    len(getattr(network_obj, "links", {})),
+                )
+            except Exception:
+                # Defensive: network object may not be fully initialised in some error paths
+                pass
 
         # 2) Build the failure policy set
         fps_data = data.get("failure_policy_set", {})
@@ -165,13 +179,58 @@ class Scenario:
             failure_policy = cls._build_failure_policy(fp_data, seed_manager, name)
             failure_policy_set.add(name, failure_policy)
 
+        if failure_policy_set.policies:
+            try:
+                policy_names = sorted(list(failure_policy_set.policies.keys()))
+                Scenario._logger.debug(
+                    "Built FailurePolicySet: %d policies (%s)",
+                    len(policy_names),
+                    ", ".join(policy_names[:5])
+                    + ("..." if len(policy_names) > 5 else ""),
+                )
+            except Exception:
+                pass
+
         # 3) Build traffic matrix set
         raw = data.get("traffic_matrix_set", {})
         tms = build_traffic_matrix_set(raw)
+        try:
+            matrix_names = sorted(list(getattr(tms, "matrices", {}).keys()))
+            total_demands = 0
+            for _mname, demands in getattr(tms, "matrices", {}).items():
+                total_demands += len(demands)
+            Scenario._logger.debug(
+                "Constructed TrafficMatrixSet: matrices=%d, total_demands=%d%s",
+                len(matrix_names),
+                total_demands,
+                (
+                    f" ({', '.join(matrix_names[:5])}{'...' if len(matrix_names) > 5 else ''})"
+                    if matrix_names
+                    else ""
+                ),
+            )
+        except Exception:
+            pass
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
         workflow_steps = cls._build_workflow_steps(workflow_data, seed_manager)
+        try:
+            labels: list[str] = []
+            for idx, step in enumerate(workflow_steps):
+                label = (step.name or step.__class__.__name__) or f"step_{idx}"
+                labels.append(label)
+            Scenario._logger.debug(
+                "Built workflow: steps=%d%s",
+                len(workflow_steps),
+                (
+                    f" ({', '.join(labels[:8])}{'...' if len(labels) > 8 else ''})"
+                    if labels
+                    else ""
+                ),
+            )
+        except Exception:
+            pass
 
         # 5) Build/merge components library
         scenario_comps_data = data.get("components", {})
@@ -194,8 +253,15 @@ class Scenario:
                 network_obj.risk_groups[rg.name] = rg
                 if rg.disabled:
                     network_obj.disable_risk_group(rg.name, recursive=True)
+            try:
+                Scenario._logger.debug(
+                    "Attached risk groups: %d",
+                    len(getattr(network_obj, "risk_groups", {})),
+                )
+            except Exception:
+                pass
 
-        return Scenario(
+        scenario_obj = Scenario(
             network=network_obj,
             failure_policy_set=failure_policy_set,
             workflow=workflow_steps,
@@ -203,6 +269,20 @@ class Scenario:
             components_library=final_components,
             seed=seed,
         )
+
+        try:
+            Scenario._logger.debug(
+                "Scenario constructed: nodes=%d, links=%d, policies=%d, matrices=%d, steps=%d",
+                len(getattr(network_obj, "nodes", {})),
+                len(getattr(network_obj, "links", {})),
+                len(getattr(failure_policy_set, "policies", {})),
+                len(getattr(tms, "matrices", {})),
+                len(workflow_steps),
+            )
+        except Exception:
+            pass
+
+        return scenario_obj
 
     @staticmethod
     def _build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:

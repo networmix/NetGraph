@@ -118,6 +118,16 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         logger.info(
             f"Starting demand placement analysis: {self.name or self.__class__.__name__}"
         )
+        logger.debug(
+            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, failure_policy=%s",
+            self.matrix_name,
+            self.iterations,
+            str(self.parallelism),
+            str(self.placement_rounds),
+            str(self.baseline),
+            str(self.include_flow_details),
+            str(self.failure_policy),
+        )
 
         # Extract and serialize the requested traffic matrix to simple dicts
         try:
@@ -139,6 +149,16 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                     "priority": getattr(td, "priority", 0),
                 }
             )
+        logger.debug(
+            "Extracted %d demands from matrix '%s' (example: %s)",
+            len(demands_config),
+            self.matrix_name,
+            (
+                f"{demands_config[0]['source_path']}->{demands_config[0]['sink_path']} demand={demands_config[0]['demand']}"
+                if demands_config
+                else "-"
+            ),
+        )
 
         # Run via FailureManager convenience method
         fm = FailureManager(
@@ -158,6 +178,13 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
             include_flow_details=self.include_flow_details,
+        )
+        logger.debug(
+            "Placement MC completed: iterations=%d, parallelism=%d, baseline=%s, overall_ratio=%.4f",
+            results.metadata.get("iterations", 0),
+            results.metadata.get("parallelism", 0),
+            str(results.metadata.get("baseline", False)),
+            float(results.raw_results.get("overall_placement_ratio", 0.0)),
         )
 
         # Build per-demand placement envelopes similar to capacity envelopes
@@ -261,6 +288,17 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 self.name, "failure_pattern_results", results.failure_patterns
             )
         scenario.results.put(self.name, "metadata", results.metadata)
+        # Provide a concise per-step debug summary to aid troubleshooting in CI logs
+        try:
+            env_count = len(envelopes)
+            priorities = sorted({int(k.split("=", 1)[1]) for k in envelopes.keys()})
+            logger.debug(
+                "Placement envelopes: %d demands; priorities=%s",
+                env_count,
+                ", ".join(map(str, priorities)) if priorities else "-",
+            )
+        except Exception:
+            pass
 
         logger.info(
             f"Demand placement analysis completed: {self.name or self.__class__.__name__}"
