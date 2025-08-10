@@ -342,14 +342,14 @@ class FailurePolicy:
         if not entity_ids:
             return set()
 
+        # Ensure deterministic mapping from RNG draws to entity IDs by
+        # iterating entities in a stable order. Set iteration order is
+        # intentionally non-deterministic across processes (hash randomization).
+        ordered_ids = sorted(entity_ids)
+
         if rule.rule_type == "random":
-            if seed is not None:
-                rng = _random.Random(seed)
-                return {eid for eid in entity_ids if rng.random() < rule.probability}
-            else:
-                return {
-                    eid for eid in entity_ids if _random.random() < rule.probability
-                }
+            rng = _random.Random(seed) if seed is not None else _random
+            return {eid for eid in ordered_ids if rng.random() < rule.probability}
         elif rule.rule_type == "choice":
             count = min(rule.count, len(entity_ids))
             if count <= 0:
@@ -360,7 +360,7 @@ class FailurePolicy:
                 weights: Dict[str, float] = {}
                 positives: Dict[str, float] = {}
                 zeros: list[str] = []
-                for eid in entity_ids:
+                for eid in ordered_ids:
                     w = FailurePolicy._extract_weight(
                         entity_map.get(eid), rule.weight_by
                     )
@@ -381,26 +381,18 @@ class FailurePolicy:
                 # If we still need more picks, fill uniformly from zero-weight items
                 remaining = count - len(selected)
                 if remaining > 0 and zeros:
+                    # zeros already follow ordered_ids order; preserve that
                     pool = [z for z in zeros if z not in selected]
                     if pool:
-                        if seed is not None:
-                            rng = _random.Random(seed)
-                            selected |= set(
-                                rng.sample(pool, k=min(remaining, len(pool)))
-                            )
-                        else:
-                            selected |= set(
-                                _random.sample(pool, k=min(remaining, len(pool)))
-                            )
+                        rng = _random.Random(seed) if seed is not None else _random
+                        selected |= set(rng.sample(pool, k=min(remaining, len(pool))))
                 if selected:
                     return selected
 
             # Fallback to uniform sampling
-            entity_list = list(entity_ids)
-            if seed is not None:
-                rng = _random.Random(seed)
-                return set(rng.sample(entity_list, k=count))
-            return set(_random.sample(entity_list, k=count))
+            entity_list = ordered_ids
+            rng = _random.Random(seed) if seed is not None else _random
+            return set(rng.sample(entity_list, k=count))
         elif rule.rule_type == "all":
             return entity_ids
         else:
@@ -442,9 +434,10 @@ class FailurePolicy:
         Returns:
             Set of selected item ids.
         """
-        positive_items: List[Tuple[str, float]] = [
-            (k, w) for k, w in weights.items() if w > 0.0
-        ]
+        # Sort by item id to ensure a stable order of RNG draws per item
+        positive_items: List[Tuple[str, float]] = sorted(
+            [(k, w) for k, w in weights.items() if w > 0.0], key=lambda x: x[0]
+        )
         if not positive_items:
             return set()
 

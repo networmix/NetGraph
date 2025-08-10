@@ -368,6 +368,7 @@ class NetworkExplorer:
         skip_leaves: bool = False,
         detailed: bool = False,
         include_disabled: bool = True,
+        max_external_lines: Optional[int] = None,
     ) -> None:
         """Print the hierarchy from 'node' down (default: root).
 
@@ -426,14 +427,25 @@ class NetworkExplorer:
                 accum.link_count += info.link_count
                 accum.link_capacity += info.link_capacity
 
-            for path_str in sorted(rolled_map.keys()):
-                ext_info = rolled_map[path_str]
+            # Sort by descending capacity, then path
+            items = sorted(
+                rolled_map.items(),
+                key=lambda kv: (-kv[1].link_capacity, kv[0]),
+            )
+            displayed = 0
+            for path_str, ext_info in items:
                 if path_str == "":
                     path_str = "[root]"
                 print(
                     f"{'  ' * indent}   -> External to [{path_str}]: "
                     f"{ext_info.link_count} links, cap={ext_info.link_capacity}"
                 )
+                displayed += 1
+                if max_external_lines is not None and displayed >= max_external_lines:
+                    remaining = len(items) - displayed
+                    if remaining > 0:
+                        print(f"{'  ' * indent}     ... and {remaining} more")
+                    break
 
         # Recurse on children
         for child in node.children.values():
@@ -444,6 +456,7 @@ class NetworkExplorer:
                 skip_leaves=skip_leaves,
                 detailed=detailed,
                 include_disabled=include_disabled,
+                max_external_lines=max_external_lines,
             )
 
     def _roll_up_if_leaf(self, path: str) -> str:

@@ -326,6 +326,41 @@ workflow:
     assert "WARNING: No nodes matched" in out
 
 
+def test_inspect_capacity_vs_demand_summary_basic(tmp_path: Path) -> None:
+    scenario_file = tmp_path / "cap_vs_demand.yaml"
+    scenario_file.write_text(
+        """
+seed: 1
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 100
+traffic_matrix_set:
+  default:
+    - source_path: "^A$"
+      sink_path: "^B$"
+      demand: 50
+workflow:
+  - step_type: BuildGraph
+"""
+    )
+
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+        cli.main(["inspect", str(scenario_file)])
+
+    out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
+    assert "Capacity vs Demand:" in out
+    assert "enabled link capacity: 100.0" in out
+    assert "total demand (all matrices): 50.0" in out
+    assert "capacity/demand: 2.00x" in out
+    assert "demand/capacity: 50.00%" in out
+
+
 # Report command tests (fast path with fake generator)
 
 

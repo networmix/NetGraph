@@ -1,6 +1,8 @@
 # Toy scenario: 4-node full mesh topology with single-link failure analysis
 # Each node connected to every other node with identical link parameters
 
+seed: 42
+
 network:
   nodes:
     N1: {}

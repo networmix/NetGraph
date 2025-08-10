@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from statistics import median
 from typing import Any, Dict, List, Optional
 
 from ngraph.explorer import NetworkExplorer
@@ -19,7 +20,12 @@ from ngraph.scenario import Scenario
 logger = get_logger(__name__)
 
 
-def _format_table(headers: List[str], rows: List[List[str]], min_width: int = 8) -> str:
+def _format_table(
+    headers: List[str],
+    rows: List[List[str]],
+    min_width: int = 8,
+    max_col_width: Optional[int] = None,
+) -> str:
     """Format data as a simple ASCII table.
 
     Args:
@@ -33,10 +39,21 @@ def _format_table(headers: List[str], rows: List[List[str]], min_width: int = 8)
     if not rows:
         return ""
 
-    # Calculate column widths
-    all_data = [headers] + rows
+    # Optionally clip cells to max_col_width for visual consistency
+    def clip(val: Any) -> str:
+        s = str(val)
+        if max_col_width is not None and len(s) > max_col_width:
+            # Use ASCII ellipsis for consistency
+            return s[: max_col_width - 3] + "..."
+        return s
+
+    clipped_headers = [clip(h) for h in headers]
+    clipped_rows = [[clip(item) for item in row] for row in rows]
+
+    # Calculate column widths from clipped content
+    all_data = [clipped_headers] + clipped_rows
     col_widths = []
-    for col_idx in range(len(headers)):
+    for col_idx in range(len(clipped_headers)):
         max_width = max(len(str(row[col_idx])) for row in all_data)
         col_widths.append(max(max_width, min_width))
 
@@ -48,12 +65,28 @@ def _format_table(headers: List[str], rows: List[List[str]], min_width: int = 8)
 
     # Build table
     lines = []
-    lines.append(format_row(headers))
+    lines.append(format_row(clipped_headers))
     lines.append("   " + "-+-".join("-" * width for width in col_widths))
-    for row in rows:
+    for row in clipped_rows:
         lines.append(format_row(row))
 
     return "\n".join(lines)
+
+
+def _plural(n: int, singular: str, plural: Optional[str] = None) -> str:
+    """Return grammatically correct unit for count n.
+
+    Args:
+        n: Count.
+        singular: Singular form.
+        plural: Optional plural form; defaults to singular + 's' when None.
+
+    Returns:
+        Appropriate unit string for the count.
+    """
+    if n == 1:
+        return singular
+    return plural or (singular + "s")
 
 
 def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
@@ -111,7 +144,18 @@ def _summarize_node_matches(step: Any, net: Any) -> Dict[str, Dict[str, Any]]:
 
 def _print_network_structure(
     network: Any, components_library: Any, detail: bool
-) -> None:
+) -> float:
+    """Print network structure summary and return total enabled link capacity.
+
+    Args:
+        network: Network model instance.
+        components_library: Components library used for hierarchy analysis.
+        detail: Whether to show detailed tables.
+
+    Returns:
+        Total capacity across enabled links as a float. Returns 0.0 when
+        there are no enabled links.
+    """
     nodes = network.nodes
     links = network.links
 
@@ -123,11 +167,13 @@ def _print_network_structure(
     enabled_links = [link for link in links.values() if not link.disabled]
     disabled_links = [link for link in links.values() if link.disabled]
 
-    print(f"   Enabled Nodes: {len(enabled_nodes):,}")
+    enabled_nodes_pct = (len(enabled_nodes) / len(nodes) * 100.0) if nodes else 0.0
+    print(f"   Enabled Nodes: {len(enabled_nodes):,} ({enabled_nodes_pct:.1f}%)")
     if disabled_nodes:
         print(f"   Disabled Nodes: {len(disabled_nodes):,}")
 
-    print(f"   Enabled Links: {len(enabled_links):,}")
+    enabled_links_pct = (len(enabled_links) / len(links) * 100.0) if links else 0.0
+    print(f"   Enabled Links: {len(enabled_links):,} ({enabled_links_pct:.1f}%)")
     if disabled_links:
         print(f"   Disabled Links: {len(disabled_links):,}")
 
@@ -138,10 +184,15 @@ def _print_network_structure(
         try:
             explorer = NetworkExplorer.explore_network(network, components_library)
             print("\n   Network Hierarchy:")
+            print(
+                "   Legend: counts are for enabled (active) nodes/links; cost/power are\n"
+                "           aggregated from components if defined."
+            )
             explorer.print_tree(
                 max_depth=3 if not detail else None,
                 skip_leaves=not detail,
                 detailed=detail,
+                max_external_lines=8 if detail else 4,
             )
         except Exception as e:
             print(f"   Network Hierarchy: Unable to analyze ({e})")
@@ -201,9 +252,11 @@ def _print_network_structure(
             print(link_table)
 
     # Link capacity analysis as table
+    total_enabled_link_capacity: float = 0.0
     if links:
-        link_caps = [link.capacity for link in enabled_links]
+        link_caps = [float(link.capacity) for link in enabled_links]
         if link_caps:
+            total_enabled_link_capacity = float(sum(link_caps))
             print("\n   Link Capacity Statistics:")
             cap_table = _format_table(
                 ["Metric", "Value"],
@@ -211,7 +264,8 @@ def _print_network_structure(
                     ["Min", f"{min(link_caps):,.1f}"],
                     ["Max", f"{max(link_caps):,.1f}"],
                     ["Mean", f"{sum(link_caps) / len(link_caps):,.1f}"],
-                    ["Total", f"{sum(link_caps):,.1f}"],
+                    ["Median", f"{median(link_caps):,.1f}"],
+                    ["Total", f"{total_enabled_link_capacity:,.1f}"],
                 ],
             )
             print(cap_table)
@@ -235,10 +289,13 @@ def _print_network_structure(
                     ["Min", f"{min(node_capacities):,.1f}"],
                     ["Max", f"{max(node_capacities):,.1f}"],
                     ["Mean", f"{sum(node_capacities) / len(node_capacities):,.1f}"],
+                    ["Median", f"{median(node_capacities):,.1f}"],
                     ["Total", f"{sum(node_capacities):,.1f}"],
                 ],
             )
             print(node_cap_table)
+
+    return total_enabled_link_capacity
 
 
 def _print_risk_groups(network: Any, detail: bool) -> None:
@@ -318,13 +375,53 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
             print(f"     ... and {remaining} more")
 
 
-def _print_traffic_matrices(network: Any, tms: Any, detail: bool) -> None:
+def _print_traffic_matrices(
+    network: Any, tms: Any, detail: bool, total_enabled_link_capacity: float
+) -> None:
+    """Print traffic matrices summary and capacity-vs-demand ratio if available.
+
+    Args:
+        network: Network instance for node pattern summarization.
+        tms: TrafficMatrixSet with defined matrices.
+        detail: Whether to print detailed tables.
+        total_enabled_link_capacity: Sum of capacities of enabled links.
+    """
     print("\n6. TRAFFIC MATRICES")
     print("-" * 30)
     matrix_count = len(tms.matrices)
     print(f"   Total: {matrix_count}")
     if not tms.matrices:
         return
+
+    # Capacity vs Demand summary across all matrices (shown first for visibility)
+    try:
+        grand_total_demand = 0.0
+        grand_demand_count = 0
+        for demands in tms.matrices.values():
+            grand_demand_count += len(demands)
+            for d in demands:
+                grand_total_demand += float(getattr(d, "demand", 0.0))
+
+        print("\n   Capacity vs Demand:")
+        print(f"     enabled link capacity: {total_enabled_link_capacity:,.1f}")
+        print(
+            f"     total demand (all matrices): {grand_total_demand:,.1f} ({grand_demand_count:,} demands)"
+        )
+        if total_enabled_link_capacity > 0.0 and grand_total_demand > 0.0:
+            cap_per_demand = total_enabled_link_capacity / grand_total_demand
+            demand_util = grand_total_demand / total_enabled_link_capacity
+            headroom = total_enabled_link_capacity - grand_total_demand
+            status = "✅ under capacity" if headroom >= 0 else "❌ over capacity"
+            print(f"     capacity/demand: {cap_per_demand:,.2f}x")
+            print(f"     demand/capacity: {demand_util:,.2%}")
+            if headroom >= 0:
+                print(f"     status: {status} (headroom {headroom:,.1f})")
+            else:
+                print(f"     status: {status} by {abs(headroom):,.1f}")
+        else:
+            print("     ratio: N/A (zero capacity or zero demand)")
+    except Exception as exc:  # pragma: no cover (defensive)
+        print(f"   Capacity vs Demand: unable to compute ({type(exc).__name__}: {exc})")
 
     matrix_items = list(tms.matrices.items())[:5]
     for matrix_name, demands in matrix_items:
@@ -393,6 +490,36 @@ def _print_traffic_matrices(network: Any, tms: Any, detail: bool) -> None:
                 )
                 print("\n".join(f"         {line}" for line in table.split("\n")))
 
+            # Optional: Top N demands by offered volume for quick understanding
+            try:
+                top_n = 5
+                sorted_demands = sorted(
+                    demands,
+                    key=lambda d: float(getattr(d, "demand", 0.0)),
+                    reverse=True,
+                )[:top_n]
+                if sorted_demands:
+                    print("       Top demands (by offered volume):")
+                    top_rows: list[list[str]] = []
+                    for d in sorted_demands:
+                        top_rows.append(
+                            [
+                                getattr(d, "source_path", ""),
+                                getattr(d, "sink_path", ""),
+                                f"{float(getattr(d, 'demand', 0.0)):,.1f}",
+                                str(getattr(d, "priority", 0)),
+                            ]
+                        )
+                    top_table = _format_table(
+                        ["Source Pattern", "Sink Pattern", "Offered", "Priority"],
+                        top_rows,
+                    )
+                    print(
+                        "\n".join(f"         {line}" for line in top_table.split("\n"))
+                    )
+            except Exception:
+                pass
+
             if demands:
                 for i, demand in enumerate(demands[:3]):  # Show first 3 demands
                     print(
@@ -442,7 +569,10 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
             determinism = "deterministic" if scenario.seed is not None else "random"
             workflow_rows.append([str(i + 1), step_name, step_type, determinism])
 
-        workflow_table = _format_table(["#", "Name", "Type", "Seed"], workflow_rows)
+        # Column shows determinism (scenario-level), not the numeric step seed
+        workflow_table = _format_table(
+            ["#", "Name", "Type", "Determinism"], workflow_rows
+        )
         print(workflow_table)
 
         print("\n   Node selection preview:")
@@ -552,6 +682,81 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         print("NETGRAPH SCENARIO INSPECTION")
         print("=" * 60)
 
+        # Overview: quick summary for fast scanning
+        try:
+            network = scenario.network
+            nodes = network.nodes
+            links = network.links
+            enabled_nodes = [n for n in nodes.values() if not n.disabled]
+            enabled_links = [lk for lk in links.values() if not lk.disabled]
+            en_nodes_pct = (len(enabled_nodes) / len(nodes) * 100.0) if nodes else 0.0
+            en_links_pct = (len(enabled_links) / len(links) * 100.0) if links else 0.0
+            total_enabled_capacity = float(
+                sum(float(lk.capacity) for lk in enabled_links)
+            )
+
+            # Traffic matrices
+            tms = scenario.traffic_matrix_set
+            matrix_count = len(tms.matrices)
+            total_demands = 0
+            total_demand_volume = 0.0
+            for demands in tms.matrices.values():
+                total_demands += len(demands)
+                for d in demands:
+                    total_demand_volume += float(getattr(d, "demand", 0.0))
+
+            util = (
+                (total_demand_volume / total_enabled_capacity)
+                if total_enabled_capacity > 0
+                else 0.0
+            )
+            headroom = total_enabled_capacity - total_demand_volume
+            status = "✅ under capacity" if headroom >= 0 else "❌ over capacity"
+
+            # Risk groups quick count
+            rg_total = (
+                len(network.risk_groups) if getattr(network, "risk_groups", None) else 0
+            )
+            rg_disabled = (
+                sum(1 for rg in network.risk_groups.values() if rg.disabled)
+                if rg_total
+                else 0
+            )
+
+            # Workflow steps count
+            wf_steps = len(scenario.workflow)
+
+            print("\nOVERVIEW")
+            print("-" * 30)
+            rows: List[List[str]] = [
+                ["Nodes", f"{len(nodes):,}"],
+                ["Links", f"{len(links):,}"],
+                [
+                    "Enabled",
+                    f"{len(enabled_nodes):,} nodes ({en_nodes_pct:.1f}%), {len(enabled_links):,} links ({en_links_pct:.1f}%)",
+                ],
+                ["Capacity (enabled)", f"{total_enabled_capacity:,.1f}"],
+                [
+                    "Demand (all matrices)",
+                    f"{total_demand_volume:,.1f} ({total_demands:,} demands across {matrix_count} matrices)",
+                ],
+                ["Utilization", f"{util:,.2%}"],
+                ["Headroom", f"{headroom:,.1f} ({status})"],
+                ["Risk groups", f"{rg_total} total; {rg_disabled} disabled"],
+                ["Workflow steps", f"{wf_steps}"],
+            ]
+            overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
+            print(overview_table)
+
+            # Simple ASCII utilization bar (width 20)
+            bar_width = 20
+            fill = int(max(0.0, min(1.0, util)) * bar_width)
+            bar = "#" * fill + "." * (bar_width - fill)
+            print(f"   utilization: [{bar}] {util:,.2%}")
+        except Exception:
+            # Non-fatal; proceed with normal sections
+            pass
+
         print("\n1. SCENARIO METADATA")
         print("-" * 30)
         if scenario.seed is not None:
@@ -567,7 +772,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         print("\n2. NETWORK STRUCTURE")
         print("-" * 30)
         network = scenario.network
-        _print_network_structure(network, scenario.components_library, detail)
+        total_enabled_link_capacity = _print_network_structure(
+            network, scenario.components_library, detail
+        )
 
         # (details printed by helper)
 
@@ -581,7 +788,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         _print_failure_policies(scenario.failure_policy_set, detail)
 
         # Traffic Matrices Analysis
-        _print_traffic_matrices(network, scenario.traffic_matrix_set, detail)
+        _print_traffic_matrices(
+            network, scenario.traffic_matrix_set, detail, total_enabled_link_capacity
+        )
 
         # Helper: collect step path-like fields and summarize node matches
         def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
@@ -648,8 +857,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                         [str(i + 1), step_name, step_type, determinism]
                     )
 
+                # Column shows determinism (scenario-level), not the numeric step seed
                 workflow_table = _format_table(
-                    ["#", "Name", "Type", "Seed"], workflow_rows
+                    ["#", "Name", "Type", "Determinism"], workflow_rows
                 )
                 print(workflow_table)
 
