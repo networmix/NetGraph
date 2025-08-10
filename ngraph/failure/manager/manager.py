@@ -109,7 +109,6 @@ def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
 
 # Global shared state for worker processes
 _shared_network: "Network | None" = None
-_analysis_cache: dict[tuple, Any] = {}
 
 T = TypeVar("T")
 
@@ -137,11 +136,10 @@ def _worker_init(network_pickle: bytes) -> None:
     Args:
         network_pickle: Serialized Network object to deserialize and share.
     """
-    global _shared_network, _analysis_cache
+    global _shared_network
 
     # Each worker process has its own copy of globals (process isolation)
     _shared_network = pickle.loads(network_pickle)
-    _analysis_cache.clear()
 
     # Respect parent-requested log level if provided
     try:
@@ -173,7 +171,7 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
         Tuple of (analysis_result, iteration_index, is_baseline,
                  excluded_nodes, excluded_links).
     """
-    global _shared_network, _analysis_cache
+    global _shared_network
 
     if _shared_network is None:
         raise RuntimeError("Worker not initialized with network data")
@@ -219,41 +217,19 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
         f"excluded_nodes={len(excluded_nodes)}, excluded_links={len(excluded_links)}"
     )
 
-    # Create cache key from all parameters affecting analysis computation
-    # Sorting ensures consistent keys for same sets regardless of iteration order
-    cache_key = _create_cache_key(
-        excluded_nodes, excluded_links, analysis_name, analysis_kwargs
+    # Use NetworkView for exclusion without copying network
+    worker_logger.debug(f"Worker {worker_pid} computing analysis")
+    network_view = NetworkView.from_excluded_sets(
+        _shared_network,
+        excluded_nodes=excluded_nodes,
+        excluded_links=excluded_links,
     )
+    worker_logger.debug(f"Worker {worker_pid} created NetworkView")
 
-    # Check cache first since analysis computation is deterministic
-    if cache_key in _analysis_cache:
-        worker_logger.debug(f"Worker {worker_pid} using cached analysis results")
-        result = _analysis_cache[cache_key]
-    else:
-        worker_logger.debug(f"Worker {worker_pid} computing analysis (cache miss)")
-
-        # Use NetworkView for exclusion without copying network
-        network_view = NetworkView.from_excluded_sets(
-            _shared_network,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
-        )
-        worker_logger.debug(f"Worker {worker_pid} created NetworkView")
-
-        # Execute analysis function
-        worker_logger.debug(f"Worker {worker_pid} executing {analysis_name}")
-        result = analysis_func(network_view, **analysis_kwargs)
-
-        # Cache results for future computations
-        _analysis_cache[cache_key] = result
-
-        # Bound cache size to prevent memory exhaustion (FIFO eviction)
-        if len(_analysis_cache) > 1000:
-            # Remove oldest entries (simple FIFO)
-            for _ in range(100):
-                _analysis_cache.pop(next(iter(_analysis_cache)))
-
-        worker_logger.debug(f"Worker {worker_pid} completed analysis")
+    # Execute analysis function
+    worker_logger.debug(f"Worker {worker_pid} executing {analysis_name}")
+    result = analysis_func(network_view, **analysis_kwargs)
+    worker_logger.debug(f"Worker {worker_pid} completed analysis")
 
     # Dump profile if enabled (for performance analysis)
     if profiler is not None:
@@ -750,23 +726,10 @@ class FailureManager:
             f"Average time per iteration: {elapsed_time / total_tasks:.3f} seconds"
         )
 
-        # Log exclusion pattern diversity for cache efficiency analysis
-        unique_exclusions = set()
-        for args in worker_args:
-            excluded_nodes, excluded_links = args[0], args[1]
-            exclusion_key = (
-                tuple(sorted(excluded_nodes)),
-                tuple(sorted(excluded_links)),
-            )
-            unique_exclusions.add(exclusion_key)
-
-        logger.info(
-            f"Generated {len(unique_exclusions)} unique exclusion patterns from {total_tasks} iterations"
-        )
-        cache_efficiency = (total_tasks - len(unique_exclusions)) / total_tasks * 100
-        logger.debug(
-            f"Potential cache efficiency: {cache_efficiency:.1f}% (worker processes benefit from caching)"
-        )
+        # Note: Task deduplication was performed earlier across
+        # (exclusions + analysis parameters), so worker-level caches
+        # see only unique work items. Additional cache efficiency
+        # metrics here would not be meaningful and are intentionally omitted.
 
         return results, failure_patterns
 
@@ -865,9 +828,6 @@ class FailureManager:
             logger.debug(
                 f"Average time per iteration: {elapsed_time / len(worker_args):.3f} seconds"
             )
-        logger.info(
-            f"Analysis cache contains {len(_analysis_cache)} unique patterns after serial analysis"
-        )
 
         return results, failure_patterns
 
