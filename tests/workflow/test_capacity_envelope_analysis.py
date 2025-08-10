@@ -65,7 +65,7 @@ class TestCapacityEnvelopeAnalysis:
         assert step.mode == "combine"
         assert step.failure_policy is None
         assert step.iterations == 1
-        assert step.parallelism == 1
+        assert step.parallelism == "auto"
         assert step.shortest_path is False
         assert step.flow_placement == FlowPlacement.PROPORTIONAL
         assert step.baseline is False
@@ -149,9 +149,13 @@ class TestCapacityEnvelopeAnalysis:
             mock_envelope_results
         )
 
-        # Create and run the step
+        # Create and run the step (explicit parallelism=1 for deterministic expectation)
         step = CapacityEnvelopeAnalysis(
-            source_path="^A", sink_path="^C", failure_policy="test_policy", iterations=1
+            source_path="^A",
+            sink_path="^C",
+            failure_policy="test_policy",
+            iterations=1,
+            parallelism=1,
         )
         step.run(mock_scenario)
 
@@ -218,6 +222,7 @@ class TestCapacityEnvelopeAnalysis:
             sink_path="^C",
             iterations=2,
             store_failure_patterns=True,
+            parallelism=1,
         )
         step.run(mock_scenario)
 
@@ -323,7 +328,11 @@ class TestCapacityEnvelopeAnalysis:
 
         # Test with include_flow_summary=True
         step = CapacityEnvelopeAnalysis(
-            source_path="^A", sink_path="^C", iterations=1, include_flow_summary=True
+            source_path="^A",
+            sink_path="^C",
+            iterations=1,
+            include_flow_summary=True,
+            parallelism=1,
         )
         step.run(mock_scenario)
 

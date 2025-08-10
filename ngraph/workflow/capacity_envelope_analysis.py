@@ -18,7 +18,7 @@ YAML Configuration Example:
         mode: "combine"                        # "combine" or "pairwise" flow analysis
         failure_policy: "random_failures"      # Optional: Named failure policy to use
         iterations: 1000                       # Number of Monte-Carlo trials
-        parallelism: 4                         # Number of parallel worker processes
+        parallelism: auto                      # Number of parallel worker processes (int or "auto")
         shortest_path: false                   # Use shortest paths only
         flow_placement: "PROPORTIONAL"         # Flow placement strategy
         baseline: true                         # Optional: Run first iteration without failures
@@ -34,6 +34,7 @@ Results stored in `scenario.results`:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -76,7 +77,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
     mode: str = "combine"
     failure_policy: str | None = None
     iterations: int = 1
-    parallelism: int = 1
+    parallelism: int | str = "auto"
     shortest_path: bool = False
     flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL
     baseline: bool = False
@@ -92,8 +93,13 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         """
         if self.iterations < 1:
             raise ValueError("iterations must be >= 1")
-        if self.parallelism < 1:
-            raise ValueError("parallelism must be >= 1")
+        # Allow "auto" for parallelism, otherwise enforce >= 1
+        if isinstance(self.parallelism, str):
+            if self.parallelism != "auto":
+                raise ValueError("parallelism must be an integer or 'auto'")
+        else:
+            if self.parallelism < 1:
+                raise ValueError("parallelism must be >= 1")
         if self.mode not in {"combine", "pairwise"}:
             raise ValueError("mode must be 'combine' or 'pairwise'")
         if self.baseline and self.iterations < 2:
@@ -112,6 +118,20 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                     f"Invalid flow_placement '{self.flow_placement}'. "
                     f"Valid values are: {valid_values}"
                 ) from None
+
+    @staticmethod
+    def _resolve_parallelism(parallelism: int | str) -> int:
+        """Resolve requested parallelism, supporting the "auto" keyword.
+
+        Args:
+            parallelism: Requested parallelism as int or the string "auto".
+
+        Returns:
+            Concrete parallelism value (>= 1).
+        """
+        if isinstance(parallelism, str):
+            return max(1, int(os.cpu_count() or 1))
+        return max(1, int(parallelism))
 
     def run(self, scenario: "Scenario") -> None:
         """Execute capacity envelope analysis using `FailureManager`.
@@ -138,15 +158,16 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         )
 
         # Use the convenience method to get results
+        effective_parallelism = self._resolve_parallelism(self.parallelism)
         logger.debug(
-            f"Running {self.iterations} iterations with parallelism={self.parallelism}"
+            f"Running {self.iterations} iterations with parallelism={effective_parallelism}"
         )
         envelope_results = failure_manager.run_max_flow_monte_carlo(
             source_path=self.source_path,
             sink_path=self.sink_path,
             mode=self.mode,
             iterations=self.iterations,
-            parallelism=self.parallelism,
+            parallelism=effective_parallelism,
             shortest_path=self.shortest_path,
             flow_placement=self.flow_placement,
             baseline=self.baseline,

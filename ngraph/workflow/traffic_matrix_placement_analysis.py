@@ -30,6 +30,7 @@ Results stored in `scenario.results` under the step name:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -64,12 +65,41 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
     matrix_name: str = ""
     failure_policy: str | None = None
     iterations: int = 1
-    parallelism: int = 1
+    parallelism: int | str = "auto"
     placement_rounds: int | str = "auto"
     baseline: bool = False
     seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
+
+    def __post_init__(self) -> None:
+        """Validate parameters.
+
+        Raises:
+            ValueError: If parameters are invalid.
+        """
+        if self.iterations < 1:
+            raise ValueError("iterations must be >= 1")
+        if isinstance(self.parallelism, str):
+            if self.parallelism != "auto":
+                raise ValueError("parallelism must be an integer or 'auto'")
+        else:
+            if self.parallelism < 1:
+                raise ValueError("parallelism must be >= 1")
+
+    @staticmethod
+    def _resolve_parallelism(parallelism: int | str) -> int:
+        """Resolve requested parallelism, supporting the "auto" keyword.
+
+        Args:
+            parallelism: Requested parallelism as int or the string "auto".
+
+        Returns:
+            Concrete parallelism value (>= 1).
+        """
+        if isinstance(parallelism, str):
+            return max(1, int(os.cpu_count() or 1))
+        return max(1, int(parallelism))
 
     def run(self, scenario: "Scenario") -> None:
         """Execute demand placement Monte Carlo analysis.
@@ -117,10 +147,12 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             policy_name=self.failure_policy,
         )
 
+        effective_parallelism = self._resolve_parallelism(self.parallelism)
+
         results = fm.run_demand_placement_monte_carlo(
             demands_config=demands_config,
             iterations=self.iterations,
-            parallelism=self.parallelism,
+            parallelism=effective_parallelism,
             placement_rounds=self.placement_rounds,
             baseline=self.baseline,
             seed=self.seed,
