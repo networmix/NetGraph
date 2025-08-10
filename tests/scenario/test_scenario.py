@@ -98,7 +98,6 @@ failure_policy_set:
       description: "Testing modal policy."
     fail_risk_groups: false
     fail_risk_group_children: false
-    use_cache: false
     modes:
       - weight: 1.0
         rules:
@@ -291,7 +290,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert isinstance(simple_policy, FailurePolicy)
     assert not simple_policy.fail_risk_groups
     assert not simple_policy.fail_risk_group_children
-    assert not simple_policy.use_cache
+    # use_cache was removed
 
     assert len(simple_policy.modes) == 1
     assert simple_policy.attrs.get("name") == "multi_rule_example"

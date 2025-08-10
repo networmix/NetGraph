@@ -2068,13 +2068,7 @@ The main entry point is `apply_failures`, which:
   4) Collect the union of all failed entities across all rules.
   5) Optionally expand failures by shared-risk groups or sub-risks.
 
-Large-scale performance:
 
-- If you set `use_cache=True`, matched sets for each rule are cached,
-
-    so repeated calls to `apply_failures` can skip re-matching if the
-    network hasn't changed. If your network changes between calls,
-    you should clear the cache or re-initialize the policy.
 
 Example YAML configuration:
     ```yaml
@@ -2129,10 +2123,6 @@ Attributes:
     fail_risk_group_children (bool):
         If True, and if a risk_group is marked as failed, expand to
         children risk_groups recursively.
-    use_cache (bool):
-        If True, match results for each rule are cached to speed up
-        repeated calls. If the network changes, the cached results
-        may be stale.
     seed (Optional[int]):
         Seed for reproducible random operations. If None, operations
         will be non-deterministic.
@@ -2142,10 +2132,8 @@ Attributes:
 - `attrs` (Dict[str, Any]) = {}
 - `fail_risk_groups` (bool) = False
 - `fail_risk_group_children` (bool) = False
-- `use_cache` (bool) = False
 - `seed` (Optional[int])
 - `modes` (List[FailureMode]) = []
-- `_match_cache` (Dict[int, Set[str]]) = {}
 
 **Methods:**
 

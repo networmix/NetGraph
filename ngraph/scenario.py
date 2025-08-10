@@ -240,14 +240,13 @@ class Scenario:
     ) -> FailurePolicy:
         """Constructs a FailurePolicy from data that may specify multiple rules plus
         optional top-level fields like fail_risk_groups, fail_risk_group_children,
-        use_cache, and attrs.
+        and attrs.
 
         Example:
             failure_policy_set:
               default:
                 fail_risk_groups: true
                 fail_risk_group_children: false
-                use_cache: true
                 attrs:
                   custom_key: custom_val
                 rules:
@@ -273,7 +272,6 @@ class Scenario:
         """
         fail_srg = fp_data.get("fail_risk_groups", False)
         fail_rg_children = fp_data.get("fail_risk_group_children", False)
-        use_cache = fp_data.get("use_cache", False)
         attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
 
         def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
@@ -333,7 +331,6 @@ class Scenario:
             attrs=attrs,
             fail_risk_groups=fail_srg,
             fail_risk_group_children=fail_rg_children,
-            use_cache=use_cache,
             seed=policy_seed,
             modes=modes,
         )

@@ -120,12 +120,6 @@ class FailurePolicy:
       4) Collect the union of all failed entities across all rules.
       5) Optionally expand failures by shared-risk groups or sub-risks.
 
-    Large-scale performance:
-      - If you set `use_cache=True`, matched sets for each rule are cached,
-        so repeated calls to `apply_failures` can skip re-matching if the
-        network hasn't changed. If your network changes between calls,
-        you should clear the cache or re-initialize the policy.
-
     Example YAML configuration:
         ```yaml
         failure_policy:
@@ -173,10 +167,6 @@ class FailurePolicy:
         fail_risk_group_children (bool):
             If True, and if a risk_group is marked as failed, expand to
             children risk_groups recursively.
-        use_cache (bool):
-            If True, match results for each rule are cached to speed up
-            repeated calls. If the network changes, the cached results
-            may be stale.
         seed (Optional[int]):
             Seed for reproducible random operations. If None, operations
             will be non-deterministic.
@@ -186,12 +176,8 @@ class FailurePolicy:
     attrs: Dict[str, Any] = field(default_factory=dict)
     fail_risk_groups: bool = False
     fail_risk_group_children: bool = False
-    use_cache: bool = False
     seed: Optional[int] = None
     modes: List[FailureMode] = field(default_factory=list)
-
-    # Internal cache for matched sets:  (rule_index -> set_of_entities)
-    _match_cache: Dict[int, Set[str]] = field(default_factory=dict, init=False)
 
     def apply_failures(
         self,
@@ -286,9 +272,6 @@ class FailurePolicy:
         """Get the set of IDs matched by the given rule, either from cache
         or by performing a fresh match over the relevant entity type.
         """
-        if self.use_cache and rule_idx in self._match_cache:
-            return self._match_cache[rule_idx]
-
         # Decide which mapping to iterate
         if rule.entity_scope == "node":
             matched = self._match_entities(network_nodes, rule.conditions, rule.logic)
@@ -298,9 +281,6 @@ class FailurePolicy:
             matched = self._match_entities(
                 network_risk_groups, rule.conditions, rule.logic
             )
-
-        if self.use_cache:
-            self._match_cache[rule_idx] = matched
         return matched
 
     def _match_entities(
@@ -610,7 +590,6 @@ class FailurePolicy:
             "attrs": self.attrs,
             "fail_risk_groups": self.fail_risk_groups,
             "fail_risk_group_children": self.fail_risk_group_children,
-            "use_cache": self.use_cache,
             "seed": self.seed,
         }
         if self.modes:

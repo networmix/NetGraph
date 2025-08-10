@@ -60,7 +60,6 @@ class TestFailurePolicySet:
             modes=[FailureMode(weight=1.0, rules=[rule])],
             attrs={"name": "test_policy", "description": "Test policy"},
             fail_risk_groups=True,
-            use_cache=False,
         )
 
         fps.add("test", policy)
@@ -71,7 +70,6 @@ class TestFailurePolicySet:
         assert "modes" in result["test"]
         assert "attrs" in result["test"]
         assert result["test"]["fail_risk_groups"] is True
-        assert result["test"]["use_cache"] is False
         # Modes present
         assert "modes" in result["test"] and len(result["test"]["modes"]) == 1
 

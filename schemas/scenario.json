@@ -346,10 +346,7 @@
               "type": "boolean",
               "description": "Whether to recursively fail risk group children"
             },
-            "use_cache": {
-              "type": "boolean",
-              "description": "Whether to use caching for failure calculations"
-            },
+
                 "modes": {
                   "type": "array",
                   "description": "Weighted mode list; exactly one mode is chosen per iteration.",

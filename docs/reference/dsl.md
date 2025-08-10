@@ -384,7 +384,6 @@ failure_policy_set:
 
   random_failures:
     fail_risk_groups: true
-    use_cache: true
     rules:
       - entity_scope: "node"
         rule_type: "random"
