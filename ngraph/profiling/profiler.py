@@ -1,9 +1,8 @@
 """Profiling for NetGraph workflow execution.
 
 Provides CPU and wall-clock timing per workflow step using ``cProfile`` and
-aggregates results into structured summaries. Supports identification of
-time-dominant steps (bottlenecks) and function-level analysis for targeted
-performance improvements.
+optionally peak memory via ``tracemalloc``. Aggregates results into structured
+summaries and identifies time-dominant steps (bottlenecks).
 """
 
 from __future__ import annotations
@@ -12,6 +11,7 @@ import cProfile
 import io
 import pstats
 import time
+import tracemalloc
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -32,7 +32,7 @@ class StepProfile:
         wall_time: Total wall-clock time in seconds.
         cpu_time: CPU time spent in step execution.
         function_calls: Number of function calls during execution.
-        memory_peak: Peak memory usage during step (if available).
+        memory_peak: Peak memory usage during step in bytes (if available).
         cprofile_stats: Detailed cProfile statistics object.
         worker_profiles_merged: Number of worker profiles merged into this step.
     """
@@ -74,11 +74,16 @@ class PerformanceProfiler:
     Profiles workflow steps using cProfile and identifies bottlenecks.
     """
 
-    def __init__(self):
-        """Initialize the performance profiler."""
+    def __init__(self, track_memory: bool = False):
+        """Initialize the performance profiler.
+
+        Args:
+            track_memory: If True, record peak memory per step using tracemalloc.
+        """
         self.results = ProfileResults()
         self._scenario_start_time: Optional[float] = None
         self._scenario_end_time: Optional[float] = None
+        self._track_memory: bool = bool(track_memory)
 
     def start_scenario(self) -> None:
         """Start profiling for the entire scenario execution."""
@@ -130,6 +135,16 @@ class PerformanceProfiler:
         profiler = cProfile.Profile()
         profiler.enable()
 
+        # Optional: per-step tracemalloc to capture peak memory
+        mem_tracing_started = False
+        if self._track_memory:
+            try:
+                tracemalloc.start()
+                mem_tracing_started = True
+            except RuntimeError:
+                # Another tracemalloc session might be active; skip memory tracking
+                mem_tracing_started = False
+
         try:
             yield
         finally:
@@ -156,6 +171,20 @@ class PerformanceProfiler:
                 stat_tuple[0] for stat_tuple in stats_data.values()
             )  # cc = call count
 
+            # Optional: capture peak memory usage
+            memory_peak_bytes: Optional[int] = None
+            if mem_tracing_started:
+                try:
+                    current, peak = tracemalloc.get_traced_memory()
+                    memory_peak_bytes = int(peak)
+                except Exception:
+                    memory_peak_bytes = None
+                finally:
+                    try:
+                        tracemalloc.stop()
+                    except Exception:
+                        pass
+
             # Create step profile
             step_profile = StepProfile(
                 step_name=step_name,
@@ -163,6 +192,9 @@ class PerformanceProfiler:
                 wall_time=wall_time,
                 cpu_time=cpu_time,
                 function_calls=function_calls,
+                memory_peak=float(memory_peak_bytes)
+                if memory_peak_bytes is not None
+                else None,
                 cprofile_stats=stats,
             )
 
@@ -453,6 +485,7 @@ class PerformanceReporter:
             "CPU Time",
             "Calls",
             "% Total",
+            "Memory",
             "Workers",
         ]
 
@@ -466,6 +499,12 @@ class PerformanceReporter:
                 if self.results.total_wall_time > 0
                 else 0
             )
+            # Format memory column if available
+            mem_str = "-"
+            if step.memory_peak is not None:
+                mem_mb = float(step.memory_peak) / (1024 * 1024)
+                mem_str = f"{mem_mb:.1f}MB"
+
             row = [
                 step.step_name,
                 step.step_type,
@@ -473,6 +512,7 @@ class PerformanceReporter:
                 f"{step.cpu_time:.3f}s",
                 f"{step.function_calls:,}",
                 f"{percentage:.1f}%",
+                mem_str,
                 f"{step.worker_profiles_merged}"
                 if step.worker_profiles_merged > 0
                 else "-",

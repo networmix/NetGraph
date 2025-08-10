@@ -184,10 +184,22 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 
     profiler: "cProfile.Profile | None" = None
     if collect_profile:
-        import cProfile
+        # Guard against nested profilers in the main process when the parent
+        # already enabled a profiler (e.g., CLI --profile wrapping the step).
+        # Some profilers (and cProfile in certain environments) do not allow
+        # installing a second profile function concurrently.
+        try:
+            import cProfile
 
-        profiler = cProfile.Profile()
-        profiler.enable()
+            profiler = cProfile.Profile()
+            profiler.enable()
+        except (RuntimeError, ValueError) as exc:
+            worker_logger.warning(
+                "Worker profiling disabled due to active profiler: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            profiler = None
 
     worker_pid = os.getpid()
     worker_logger.debug(
@@ -760,6 +772,19 @@ class FailureManager:
         results = []
         failure_patterns = []
 
+        # In serial mode, disable worker-level profiling in the current process
+        # to avoid nesting profilers when the CLI has already enabled step-level
+        # profiling. This prevents errors from profilers that require exclusivity.
+        _restore_profile_env = False
+        _saved_profile_dir = os.environ.get("NGRAPH_PROFILE_DIR")
+        if _saved_profile_dir:
+            # Temporarily remove the env var so _generic_worker skips profiling
+            os.environ.pop("NGRAPH_PROFILE_DIR", None)
+            _restore_profile_env = True
+            logger.debug(
+                "Temporarily disabled NGRAPH_PROFILE_DIR for serial execution to avoid nested profilers"
+            )
+
         try:
             for i, args in enumerate(worker_args):
                 iter_start = time.time()
@@ -808,6 +833,9 @@ class FailureManager:
         finally:
             # Clean up global network reference
             _shared_network = None
+            # Restore worker profiling env var if we changed it
+            if _restore_profile_env:
+                os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir or ""
 
         elapsed_time = time.time() - start_time
         logger.info(f"Serial analysis completed in {elapsed_time:.2f} seconds")

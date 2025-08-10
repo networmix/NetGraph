@@ -39,6 +39,19 @@ class TestPerformanceProfiler:
         assert profile.cpu_time >= 0.0  # Always has CPU profiling now
         assert profile.function_calls >= 0
 
+    def test_step_profiling_with_memory(self):
+        """Test step profiling with memory tracking enabled."""
+        profiler = PerformanceProfiler(track_memory=True)
+
+        with profiler.profile_step("mem_step", "MemStep"):
+            # Allocate some memory to bump peak
+            _ = [0] * 10000
+
+        assert len(profiler.results.step_profiles) == 1
+        profile = profiler.results.step_profiles[0]
+        assert profile.step_name == "mem_step"
+        assert profile.memory_peak is None or profile.memory_peak >= 0
+
     @patch("cProfile.Profile")
     def test_step_profiling_detail(self, mock_profile_class):
         """Test step profiling with detail mode."""

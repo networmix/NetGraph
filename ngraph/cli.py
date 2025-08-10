@@ -765,6 +765,7 @@ def _run_scenario(
     stdout: bool,
     keys: Optional[list[str]] = None,
     profile: bool = False,
+    profile_memory: bool = False,
 ) -> None:
     """Run a scenario file and export results as JSON by default.
 
@@ -786,7 +787,7 @@ def _run_scenario(
         if profile:
             logger.info("Performance profiling enabled")
             # Initialize detailed profiler
-            profiler = PerformanceProfiler()
+            profiler = PerformanceProfiler(track_memory=profile_memory)
 
             # Start scenario-level profiling
             profiler.start_scenario()
@@ -947,6 +948,11 @@ def main(argv: Optional[List[str]] = None) -> None:
         action="store_true",
         help="Enable performance profiling with CPU analysis and bottleneck detection",
     )
+    run_parser.add_argument(
+        "--profile-memory",
+        action="store_true",
+        help="Also track peak memory per step (via tracemalloc)",
+    )
 
     # Inspect command
     inspect_parser = subparsers.add_parser(
@@ -1017,6 +1023,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             args.stdout,
             args.keys,
             args.profile,
+            args.profile_memory,
         )
     elif args.command == "inspect":
         _inspect_scenario(args.scenario, args.detail)
