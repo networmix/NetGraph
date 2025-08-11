@@ -9062,32 +9062,22 @@ traffic_matrix_set:
     priority: 0
     demand: 201.0
 workflow:
-# - step_type: NetworkStats
-#   name: network_statistics
-# - step_type: CapacityEnvelopeAnalysis
-#   name: capacity_envelope
-#   source_path: (metro[0-9]+/dc[0-9]+)
-#   sink_path: (metro[0-9]+/dc[0-9]+)
-#   mode: pairwise
-#   parallelism: auto
-#   shortest_path: false
-#   flow_placement: PROPORTIONAL
-#   seed: 42
-#   iterations: 10
-#   baseline: true
-#   store_failure_patterns: false
-#   include_flow_summary: false
-# - step_type: TrafficMatrixPlacementAnalysis
-#   name: tm_placement
-#   matrix_name: baseline_traffic_matrix
-#   failure_policy: mc_baseline
-#   iterations: 10
-#   parallelism: auto
-#   placement_rounds: auto
-#   baseline: true
-#   seed: 42
-#   store_failure_patterns: false
-#   include_flow_details: false
+- step_type: NetworkStats
+  name: network_statistics
+- step_type: CapacityEnvelopeAnalysis
+  name: capacity_envelope
+  source_path: (metro[0-9]+/dc[0-9]+)
+  sink_path: (metro[0-9]+/dc[0-9]+)
+  mode: pairwise
+  parallelism: auto
+  shortest_path: false
+  flow_placement: PROPORTIONAL
+  seed: 42
+  iterations: 10
+  baseline: true
+  failure_policy: mc_baseline
+  store_failure_patterns: false
+  include_flow_summary: false
 - step_type: MaximumSupportedDemandAnalysis
   name: msd_baseline_tm
   matrix_name: baseline_traffic_matrix
@@ -9099,3 +9089,15 @@ workflow:
   max_bisect_iters: 32
   seeds_per_alpha: 3
   placement_rounds: auto
+- step_type: TrafficMatrixPlacementAnalysis
+  name: tm_placement
+  matrix_name: baseline_traffic_matrix
+  alpha: "auto"
+  failure_policy: mc_baseline
+  iterations: 10
+  parallelism: auto
+  placement_rounds: auto
+  baseline: true
+  seed: 42
+  store_failure_patterns: false
+  include_flow_details: false

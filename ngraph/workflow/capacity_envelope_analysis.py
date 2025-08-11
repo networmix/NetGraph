@@ -206,6 +206,52 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
                 self.name, "failure_pattern_results", pattern_results_dict
             )
 
+        # INFO-level outcome summary across envelopes and metadata
+        try:
+            meta = getattr(envelope_results, "metadata", {}) or {}
+            iterations = int(meta.get("iterations", self.iterations))
+            workers = int(
+                meta.get("parallelism", self._resolve_parallelism(self.parallelism))
+            )
+            unique = int(meta.get("unique_patterns", len(envelope_results.envelopes)))
+
+            means: list[float] = []
+            for env in envelope_results.envelopes.values():
+                try:
+                    means.append(float(getattr(env, "mean_capacity", 0.0)))
+                except Exception:
+                    pass
+
+            def _percentile(values: list[float], p: float) -> float:
+                if not values:
+                    return 0.0
+                s = sorted(values)
+                k = max(0, min(len(s) - 1, int(round((p / 100.0) * (len(s) - 1)))))
+                return float(s[k])
+
+            flows = len(means)
+            mean_of_means = (sum(means) / flows) if flows else 0.0
+            p50 = _percentile(means, 50.0)
+            p95 = _percentile(means, 95.0)
+            vmin = min(means) if means else 0.0
+            vmax = max(means) if means else 0.0
+
+            logger.info(
+                "CapacityEnvelope summary: name=%s flows=%d iters=%d unique=%d workers=%d mean=%.3f p50=%.3f p95=%.3f min=%.3f max=%.3f",
+                self.name,
+                flows,
+                iterations,
+                unique,
+                workers,
+                mean_of_means,
+                p50,
+                p95,
+                vmin,
+                vmax,
+            )
+        except Exception:
+            pass
+
         logger.info(f"Capacity envelope analysis completed: {self.name}")
 
 

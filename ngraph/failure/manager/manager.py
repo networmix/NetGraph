@@ -707,11 +707,14 @@ class FailureManager:
                             }
                         )
 
-                    # Progress logging
-                    if completed_tasks % max(1, total_tasks // 10) == 0:
-                        logger.info(
-                            f"Parallel analysis progress: {completed_tasks}/{total_tasks} tasks completed"
-                        )
+                    # Progress logging (throttle for small N at INFO)
+                    if total_tasks >= 20:
+                        # Show approx 10% increments
+                        step = max(1, total_tasks // 10)
+                        if completed_tasks % step == 0:
+                            logger.info(
+                                f"Parallel analysis progress: {completed_tasks}/{total_tasks} tasks completed"
+                            )
 
             except Exception as e:
                 logger.error(

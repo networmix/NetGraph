@@ -346,6 +346,76 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         except Exception:
             pass
 
+        # INFO-level outcome summary for workflow users
+        try:
+            stats = None
+            try:
+                from ngraph.monte_carlo.results import DemandPlacementResults
+
+                dpr = DemandPlacementResults(
+                    raw_results=results.raw_results,
+                    iterations=results.iterations,
+                    baseline=results.baseline,
+                    failure_patterns=results.failure_patterns,
+                    metadata=results.metadata,
+                )
+                stats = dpr.summary_statistics()
+            except Exception:
+                # Fallback: compute mean from overall_placement_ratio if present
+                ratios = [
+                    float(r.get("overall_placement_ratio", 0.0))
+                    for r in results.raw_results.get("results", [])
+                    if isinstance(r, dict)
+                ]
+                if ratios:
+                    import statistics
+
+                    stats = {
+                        "mean": float(statistics.mean(ratios)),
+                        "min": float(min(ratios)),
+                        "max": float(max(ratios)),
+                    }
+
+            meta = results.metadata or {}
+            iterations = int(meta.get("iterations", self.iterations))
+            workers = int(
+                meta.get("parallelism", self._resolve_parallelism(self.parallelism))
+            )
+            # Alpha transparency: print effective alpha and its source (explicit or MSD:<step>)
+            try:
+                alpha_value = float(step_metadata.get("alpha"))  # type: ignore[arg-type]
+            except Exception:
+                try:
+                    alpha_value = float(effective_alpha)
+                except Exception:
+                    alpha_value = 1.0
+            alpha_source = (
+                step_metadata.get("alpha_source")
+                if isinstance(step_metadata, dict)
+                else getattr(self, "_alpha_source", None)
+            )
+            alpha_source_str = (
+                str(alpha_source)
+                if alpha_source
+                else ("explicit" if not isinstance(self.alpha, str) else "auto")
+            )
+            logger.info(
+                "Placement summary: name=%s alpha=%.6g source=%s demands=%d iters=%d workers=%d ratio_mean=%.3f p50=%.3f p95=%.3f min=%.3f max=%.3f",
+                self.name,
+                alpha_value,
+                alpha_source_str,
+                len(envelopes),
+                iterations,
+                workers,
+                float(stats.get("mean", 0.0)) if stats else 0.0,
+                float(stats.get("p50", 0.0)) if stats else 0.0,
+                float(stats.get("p95", 0.0)) if stats else 0.0,
+                float(stats.get("min", 0.0)) if stats else 0.0,
+                float(stats.get("max", 0.0)) if stats else 0.0,
+            )
+        except Exception:
+            pass
+
         logger.info(
             f"Demand placement analysis completed: {self.name or self.__class__.__name__}"
         )

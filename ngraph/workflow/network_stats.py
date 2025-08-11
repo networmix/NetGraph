@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from statistics import mean, median
 from typing import TYPE_CHECKING, Dict, Iterable, List
 
+from ngraph.logging import get_logger
 from ngraph.model.view import NetworkView
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -115,6 +116,7 @@ class NetworkStats(WorkflowStep):
             scenario.results.put(self.name, "max_cost", max(costs))
 
         # Compute degree statistics (only for enabled nodes)
+        degree_values: List[int] = []
         if nodes:
             degrees: Dict[str, int] = {name: 0 for name in nodes}
 
@@ -124,11 +126,30 @@ class NetworkStats(WorkflowStep):
                 if link.target in degrees:
                     degrees[link.target] += 1
 
-            degree_values: List[int] = list(degrees.values())
+            degree_values = list(degrees.values())
             scenario.results.put(self.name, "mean_degree", mean(degree_values))
             scenario.results.put(self.name, "median_degree", median(degree_values))
             scenario.results.put(self.name, "min_degree", min(degree_values))
             scenario.results.put(self.name, "max_degree", max(degree_values))
+
+        # INFO summary for workflow users (outcome-focused, not debug noise)
+        try:
+            logger = get_logger(__name__)
+            total_capacity = 0.0
+            if links:
+                total_capacity = float(sum(link.capacity for link in links.values()))
+            mean_deg = float(mean(degree_values)) if degree_values else 0.0
+            logger.info(
+                "NetworkStats summary: name=%s nodes=%d links=%d total_capacity=%.1f mean_degree=%.2f",
+                self.name,
+                node_count,
+                link_count,
+                total_capacity,
+                mean_deg,
+            )
+        except Exception:
+            # Do not fail the workflow on logging errors
+            pass
 
 
 # Register the class after definition to avoid decorator ordering issues

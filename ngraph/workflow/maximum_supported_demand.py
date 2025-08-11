@@ -196,6 +196,38 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
         )
         scenario.results.put(self.name or self.__class__.__name__, "probes", probes)
 
+        # INFO-level outcome summary for CLI logs
+        try:
+            feasible_seeds = 0
+            min_ratio = 1.0
+            if probes:
+                # Find probe closest to alpha_star (last feasible 'left')
+                # We logged probes in evaluation order; take the last feasible
+                last_feasible = None
+                for pr in probes:
+                    if (
+                        bool(pr.get("feasible"))
+                        and float(pr.get("alpha", -1.0)) <= alpha_star + 1e-12
+                    ):
+                        last_feasible = pr
+                if last_feasible is None:
+                    last_feasible = probes[-1]
+                feasible_seeds = int(last_feasible.get("feasible_seeds", 0))
+                min_ratio = float(last_feasible.get("min_placement_ratio", 0.0))
+
+            logger.info(
+                "MSD summary: name=%s alpha_star=%.6g resolution=%.6g probes=%d feasible_seeds=%d min_ratio=%.3f",
+                self.name or self.__class__.__name__,
+                float(alpha_star),
+                float(self.resolution),
+                len(probes),
+                feasible_seeds,
+                min_ratio,
+            )
+        except Exception:
+            # Logging must not raise
+            pass
+
     # --- Helpers -------------------------------------------------------------
 
     @staticmethod
