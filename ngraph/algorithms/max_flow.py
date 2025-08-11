@@ -233,7 +233,10 @@ def calc_max_flow(
 
     # First path-finding iteration.
     costs, pred = spf(
-        flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
+        flow_graph,
+        src_node,
+        edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+        dst_node=dst_node,
     )
     flow_meta = place_flow_on_graph(
         flow_graph,
@@ -271,7 +274,10 @@ def calc_max_flow(
     # Otherwise, repeatedly find augmenting paths until no new flow can be placed.
     while True:
         costs, pred = spf(
-            flow_graph, src_node, edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
+            flow_graph,
+            src_node,
+            edge_select=EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            dst_node=dst_node,
         )
         if dst_node not in pred:
             # No path found; we've reached max flow.

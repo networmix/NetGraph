@@ -3,6 +3,13 @@
 Implements Dijkstra-like SPF with pluggable edge-selection policies and a
 Yen-like KSP generator. Specialized fast paths exist for common selection
 strategies without exclusions.
+
+Notes:
+    When a destination node is known, SPF supports an optimized mode that
+    terminates once the destination's minimal distance is settled. In this mode:
+    - The destination node is not expanded (no neighbor relaxation from ``dst``).
+    - The algorithm continues processing any nodes with equal distance to capture
+      equal-cost predecessors (needed by proportional flow placement).
 """
 
 from heapq import heappop, heappush
@@ -35,6 +42,7 @@ def _spf_fast_all_min_cost_dijkstra(
     graph: StrictMultiDiGraph,
     src_node: NodeID,
     multipath: bool,
+    dst_node: Optional[NodeID] = None,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
     """Specialized Dijkstra SPF for:
       - EdgeSelect.ALL_MIN_COST
@@ -48,6 +56,10 @@ def _spf_fast_all_min_cost_dijkstra(
         graph: Directed graph (StrictMultiDiGraph).
         src_node: Source node for SPF.
         multipath: Whether to record multiple equal-cost paths.
+        dst_node: Optional destination node. If provided, Dijkstra terminates
+            once ``dst_node`` is popped at minimal distance. The destination is
+            not expanded, but equal-cost predecessors up to that distance are
+            retained.
 
     Returns:
         A tuple of (costs, pred):
@@ -64,35 +76,52 @@ def _spf_fast_all_min_cost_dijkstra(
     pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {src_node: {}}
     min_pq: List[Tuple[Cost, NodeID]] = [(0.0, src_node)]
 
+    best_dst_cost: Optional[Cost] = None
+
     while min_pq:
         current_cost, node_id = heappop(min_pq)
         if current_cost > costs[node_id]:
             continue
 
-        # Explore neighbors
-        for neighbor_id, edges_map in outgoing_adjacencies[node_id].items():
-            min_edge_cost: Optional[Cost] = None
-            selected_edges: List[EdgeID] = []
+        # Early exit: once we have popped the destination at minimal cost,
+        # we only need to process nodes with cost <= best_dst_cost to collect
+        # equal-cost predecessor alternatives. When the next node to pop has
+        # cost greater than best_dst_cost, we can stop.
+        if dst_node is not None and node_id == dst_node and best_dst_cost is None:
+            best_dst_cost = current_cost
 
-            # Gather the minimal cost edge(s)
-            for e_id, e_attr in edges_map.items():
-                edge_cost = e_attr["cost"]
-                if min_edge_cost is None or edge_cost < min_edge_cost:
-                    min_edge_cost = edge_cost
-                    selected_edges = [e_id]
-                elif multipath and edge_cost == min_edge_cost:
-                    selected_edges.append(e_id)
+        # Explore neighbors (skip expanding from destination itself)
+        if not (dst_node is not None and node_id == dst_node):
+            for neighbor_id, edges_map in outgoing_adjacencies[node_id].items():
+                min_edge_cost: Optional[Cost] = None
+                selected_edges: List[EdgeID] = []
 
-            if min_edge_cost is None:
-                continue
+                # Gather the minimal cost edge(s)
+                for e_id, e_attr in edges_map.items():
+                    edge_cost = e_attr["cost"]
+                    if min_edge_cost is None or edge_cost < min_edge_cost:
+                        min_edge_cost = edge_cost
+                        selected_edges = [e_id]
+                    elif multipath and edge_cost == min_edge_cost:
+                        selected_edges.append(e_id)
 
-            new_cost = current_cost + min_edge_cost
-            if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
-                costs[neighbor_id] = new_cost
-                pred[neighbor_id] = {node_id: selected_edges}
-                heappush(min_pq, (new_cost, neighbor_id))
-            elif multipath and new_cost == costs[neighbor_id]:
-                pred[neighbor_id][node_id] = selected_edges
+                if min_edge_cost is None:
+                    continue
+
+                new_cost = current_cost + min_edge_cost
+                if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
+                    costs[neighbor_id] = new_cost
+                    pred[neighbor_id] = {node_id: selected_edges}
+                    heappush(min_pq, (new_cost, neighbor_id))
+                elif multipath and new_cost == costs[neighbor_id]:
+                    pred[neighbor_id][node_id] = selected_edges
+
+        if best_dst_cost is not None:
+            # If the next candidate in the heap has a strictly higher cost,
+            # all remaining nodes are farther than the destination's minimal cost.
+            # Stop the search.
+            if not min_pq or min_pq[0][0] > best_dst_cost:
+                break
 
     return costs, pred
 
@@ -101,6 +130,7 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
     graph: StrictMultiDiGraph,
     src_node: NodeID,
     multipath: bool,
+    dst_node: Optional[NodeID] = None,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
     """Specialized Dijkstra SPF for:
       - EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING
@@ -113,6 +143,10 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
         graph: Directed graph (StrictMultiDiGraph).
         src_node: Source node for SPF.
         multipath: Whether to record multiple equal-cost paths.
+        dst_node: Optional destination node. If provided, Dijkstra terminates
+            once ``dst_node`` is popped at minimal distance. The destination is
+            not expanded, but equal-cost predecessors up to that distance are
+            retained.
 
     Returns:
         A tuple of (costs, pred):
@@ -128,35 +162,46 @@ def _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
     pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {src_node: {}}
     min_pq: List[Tuple[Cost, NodeID]] = [(0.0, src_node)]
 
+    best_dst_cost: Optional[Cost] = None
+
     while min_pq:
         current_cost, node_id = heappop(min_pq)
         if current_cost > costs[node_id]:
             continue
 
+        if dst_node is not None and node_id == dst_node and best_dst_cost is None:
+            best_dst_cost = current_cost
+
         # Explore neighbors; skip edges without enough remaining capacity
-        for neighbor_id, edges_map in outgoing_adjacencies[node_id].items():
-            min_edge_cost: Optional[Cost] = None
-            selected_edges: List[EdgeID] = []
+        # and do not expand from destination itself
+        if not (dst_node is not None and node_id == dst_node):
+            for neighbor_id, edges_map in outgoing_adjacencies[node_id].items():
+                min_edge_cost: Optional[Cost] = None
+                selected_edges: List[EdgeID] = []
 
-            for e_id, e_attr in edges_map.items():
-                if (e_attr["capacity"] - e_attr["flow"]) >= MIN_CAP:
-                    edge_cost = e_attr["cost"]
-                    if min_edge_cost is None or edge_cost < min_edge_cost:
-                        min_edge_cost = edge_cost
-                        selected_edges = [e_id]
-                    elif multipath and edge_cost == min_edge_cost:
-                        selected_edges.append(e_id)
+                for e_id, e_attr in edges_map.items():
+                    if (e_attr["capacity"] - e_attr["flow"]) >= MIN_CAP:
+                        edge_cost = e_attr["cost"]
+                        if min_edge_cost is None or edge_cost < min_edge_cost:
+                            min_edge_cost = edge_cost
+                            selected_edges = [e_id]
+                        elif multipath and edge_cost == min_edge_cost:
+                            selected_edges.append(e_id)
 
-            if min_edge_cost is None:
-                continue
+                if min_edge_cost is None:
+                    continue
 
-            new_cost = current_cost + min_edge_cost
-            if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
-                costs[neighbor_id] = new_cost
-                pred[neighbor_id] = {node_id: selected_edges}
-                heappush(min_pq, (new_cost, neighbor_id))
-            elif multipath and new_cost == costs[neighbor_id]:
-                pred[neighbor_id][node_id] = selected_edges
+                new_cost = current_cost + min_edge_cost
+                if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
+                    costs[neighbor_id] = new_cost
+                    pred[neighbor_id] = {node_id: selected_edges}
+                    heappush(min_pq, (new_cost, neighbor_id))
+                elif multipath and new_cost == costs[neighbor_id]:
+                    pred[neighbor_id][node_id] = selected_edges
+
+        if best_dst_cost is not None:
+            if not min_pq or min_pq[0][0] > best_dst_cost:
+                break
 
     return costs, pred
 
@@ -181,6 +226,7 @@ def spf(
     multipath: bool = True,
     excluded_edges: Optional[Set[EdgeID]] = None,
     excluded_nodes: Optional[Set[NodeID]] = None,
+    dst_node: Optional[NodeID] = None,
 ) -> Tuple[Dict[NodeID, Cost], Dict[NodeID, Dict[NodeID, List[EdgeID]]]]:
     """Compute shortest paths from a source node.
 
@@ -199,6 +245,11 @@ def spf(
         multipath: Whether to record multiple same-cost paths.
         excluded_edges: A set of edge IDs to ignore in the graph.
         excluded_nodes: A set of node IDs to ignore in the graph.
+        dst_node: Optional destination node. If provided, SPF avoids expanding
+            from the destination and performs early termination once the next
+            candidate in the heap would exceed the settled distance for
+            ``dst_node``. This preserves equal-cost predecessors while avoiding
+            unnecessary relaxations beyond the destination.
 
     Returns:
         tuple[dict[NodeID, Cost], dict[NodeID, dict[NodeID, list[EdgeID]]]]:
@@ -216,10 +267,12 @@ def spf(
     if edge_select_func is None:
         if not excluded_edges and not excluded_nodes:
             if edge_select == EdgeSelect.ALL_MIN_COST:
-                return _spf_fast_all_min_cost_dijkstra(graph, src_node, multipath)
+                return _spf_fast_all_min_cost_dijkstra(
+                    graph, src_node, multipath, dst_node
+                )
             elif edge_select == EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING:
                 return _spf_fast_all_min_cost_with_cap_remaining_dijkstra(
-                    graph, src_node, multipath
+                    graph, src_node, multipath, dst_node
                 )
         else:
             edge_select_func = edge_select_fabric(edge_select)
@@ -236,6 +289,8 @@ def spf(
     pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {src_node: {}}
     min_pq: List[Tuple[Cost, NodeID]] = [(0.0, src_node)]
 
+    best_dst_cost: Optional[Cost] = None
+
     while min_pq:
         current_cost, node_id = heappop(min_pq)
         if current_cost > costs[node_id]:
@@ -243,29 +298,37 @@ def spf(
         if node_id in excluded_nodes:
             continue
 
-        # Evaluate each neighbor using the provided edge_select_func
-        for neighbor_id, edges_dict in outgoing_adjacencies[node_id].items():
-            if neighbor_id in excluded_nodes:
-                continue
+        if dst_node is not None and node_id == dst_node and best_dst_cost is None:
+            best_dst_cost = current_cost
 
-            edge_cost, selected_edges = edge_select_func(
-                graph,
-                node_id,
-                neighbor_id,
-                edges_dict,
-                excluded_edges,
-                excluded_nodes,
-            )
-            if not selected_edges:
-                continue
+        # Evaluate each neighbor using the provided edge_select_func.
+        if not (dst_node is not None and node_id == dst_node):
+            for neighbor_id, edges_dict in outgoing_adjacencies[node_id].items():
+                if neighbor_id in excluded_nodes:
+                    continue
 
-            new_cost = current_cost + edge_cost
-            if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
-                costs[neighbor_id] = new_cost
-                pred[neighbor_id] = {node_id: selected_edges}
-                heappush(min_pq, (new_cost, neighbor_id))
-            elif multipath and new_cost == costs[neighbor_id]:
-                pred[neighbor_id][node_id] = selected_edges
+                edge_cost, selected_edges = edge_select_func(
+                    graph,
+                    node_id,
+                    neighbor_id,
+                    edges_dict,
+                    excluded_edges,
+                    excluded_nodes,
+                )
+                if not selected_edges:
+                    continue
+
+                new_cost = current_cost + edge_cost
+                if (neighbor_id not in costs) or (new_cost < costs[neighbor_id]):
+                    costs[neighbor_id] = new_cost
+                    pred[neighbor_id] = {node_id: selected_edges}
+                    heappush(min_pq, (new_cost, neighbor_id))
+                elif multipath and new_cost == costs[neighbor_id]:
+                    pred[neighbor_id][node_id] = selected_edges
+
+        if best_dst_cost is not None:
+            if not min_pq or min_pq[0][0] > best_dst_cost:
+                break
 
     return costs, pred
 
@@ -338,7 +401,7 @@ def ksp(
     ] = []
     visited = set()  # Tracks path signatures to avoid duplicates
 
-    # 1) Compute the initial shortest path
+    # 1) Compute the initial shortest path. Pass dst_node to enable SPF early-exit.
     costs_init, pred_init = spf(
         graph,
         src_node,
@@ -347,6 +410,7 @@ def ksp(
         multipath,
         excluded_edges,
         excluded_nodes,
+        dst_node=dst_node,
     )
     if dst_node not in pred_init:
         return  # No path exists from src_node to dst_node
@@ -392,6 +456,7 @@ def ksp(
                             excl_n.update(sp_ex_n)
                             excl_n.update(n_e[0] for n_e in p[:idx])
 
+                # Spur SPF with early-exit toward dst_node
                 spur_costs, spur_pred = spf(
                     graph,
                     spur_node,
@@ -400,6 +465,7 @@ def ksp(
                     multipath,
                     excl_e,
                     excl_n,
+                    dst_node=dst_node,
                 )
                 if dst_node not in spur_pred:
                     continue

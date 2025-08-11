@@ -1,5 +1,31 @@
 seed: 42
 blueprints:
+  Clos_16_8:
+    groups:
+      spine:
+        node_count: 8
+        name_template: spine{node_num}
+        attrs:
+          role: spine
+          hw_type: router_chassis
+          tier: spine
+      leaf:
+        node_count: 16
+        name_template: leaf{node_num}
+        attrs:
+          role: core
+          hw_type: router_chassis
+          tier: leaf
+          hw_component: CoreRouter
+    adjacency:
+    - source: /leaf
+      target: /spine
+      pattern: mesh
+      link_params:
+        capacity: 3200
+        cost: 0.1
+        attrs:
+          link_type: leaf_spine
   DCRegion:
     groups:
       dc:
@@ -8,16 +34,6 @@ blueprints:
         attrs:
           role: dc
           hw_type: dc_node
-    adjacency: []
-  SingleRouter:
-    groups:
-      core:
-        node_count: 1
-        name_template: core
-        attrs:
-          role: core
-          hw_type: router_chassis
-          hw_component: CoreRouter
     adjacency: []
 components:
   800G-ZR+:
@@ -42,7 +58,7 @@ components:
 network:
   groups:
     metro1/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: denver-aurora
         metro_name_orig: Denver--Aurora, CO
@@ -64,7 +80,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro2/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: minneapolis-st-paul
         metro_name_orig: Minneapolis--St. Paul, MN
@@ -86,7 +102,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro3/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: salt-lake-city
         metro_name_orig: Salt Lake City, UT
@@ -108,7 +124,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro4/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: las-vegas-henderson-paradise
         metro_name_orig: Las Vegas--Henderson--Paradise, NV
@@ -130,7 +146,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro5/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: phoenix-mesa-scottsdale
         metro_name_orig: Phoenix--Mesa--Scottsdale, AZ
@@ -152,7 +168,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro6/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: atlanta
         metro_name_orig: Atlanta, GA
@@ -174,7 +190,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro7/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: portland
         metro_name_orig: Portland, OR--WA
@@ -196,7 +212,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro8/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: omaha
         metro_name_orig: Omaha, NE--IA
@@ -218,7 +234,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro9/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: boise-city
         metro_name_orig: Boise City, ID
@@ -240,7 +256,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro10/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: albuquerque
         metro_name_orig: Albuquerque, NM
@@ -262,7 +278,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro11/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: new-orleans
         metro_name_orig: New Orleans, LA
@@ -284,7 +300,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro12/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: buffalo
         metro_name_orig: Buffalo, NY
@@ -306,7 +322,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro13/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: chicago
         metro_name_orig: Chicago, IL--IN
@@ -328,7 +344,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro14/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: dallas-fort-worth-arlington
         metro_name_orig: Dallas--Fort Worth--Arlington, TX
@@ -350,7 +366,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro15/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: kansas-city
         metro_name_orig: Kansas City, MO--KS
@@ -372,7 +388,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro16/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: st-louis
         metro_name_orig: St. Louis, MO--IL
@@ -394,7 +410,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro17/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: charlotte
         metro_name_orig: Charlotte, NC--SC
@@ -416,7 +432,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro18/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: nashville-davidson
         metro_name_orig: Nashville-Davidson, TN
@@ -438,7 +454,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro19/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: pittsburgh
         metro_name_orig: Pittsburgh, PA
@@ -460,7 +476,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro20/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: sacramento
         metro_name_orig: Sacramento, CA
@@ -482,7 +498,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro21/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: new-york-jersey-city-newark
         metro_name_orig: New York--Jersey City--Newark, NY--NJ
@@ -504,7 +520,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro22/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: philadelphia
         metro_name_orig: Philadelphia, PA--NJ--DE--MD
@@ -526,7 +542,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro23/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: houston
         metro_name_orig: Houston, TX
@@ -548,7 +564,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro24/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: boston
         metro_name_orig: Boston, MA--NH
@@ -570,7 +586,7 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
     metro25/pop[1-2]:
-      use_blueprint: SingleRouter
+      use_blueprint: Clos_16_8
       attrs:
         metro_name: los-angeles-long-beach-anaheim
         metro_name_orig: Los Angeles--Long Beach--Anaheim, CA
@@ -592,12 +608,23 @@ network:
         mw_per_dc_region: 50.0
         gbps_per_mw: 250.0
   adjacency:
-  # Intra-metro adjacency (connectivity within each metro's sites)
-  - source: /metro1/pop[1-2]
-    target: /metro1/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro1/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro1/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 73
       attrs:
         link_type: intra_metro
@@ -606,11 +633,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 23.05
         pop_count: 2
-  - source: /metro2/pop[1-2]
-    target: /metro2/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro2/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro2/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 91
       attrs:
         link_type: intra_metro
@@ -619,11 +658,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 28.92
         pop_count: 2
-  - source: /metro3/pop[1-2]
-    target: /metro3/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro3/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro3/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 50
       attrs:
         link_type: intra_metro
@@ -632,11 +683,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 15.74
         pop_count: 2
-  - source: /metro4/pop[1-2]
-    target: /metro4/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro4/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro4/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 60
       attrs:
         link_type: intra_metro
@@ -645,11 +708,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 18.94
         pop_count: 2
-  - source: /metro5/pop[1-2]
-    target: /metro5/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro5/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro5/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 96
       attrs:
         link_type: intra_metro
@@ -658,11 +733,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 30.26
         pop_count: 2
-  - source: /metro6/pop[1-2]
-    target: /metro6/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro6/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro6/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 142
       attrs:
         link_type: intra_metro
@@ -671,11 +758,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 44.95
         pop_count: 2
-  - source: /metro7/pop[1-2]
-    target: /metro7/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro7/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro7/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 65
       attrs:
         link_type: intra_metro
@@ -684,11 +783,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 20.69
         pop_count: 2
-  - source: /metro8/pop[1-2]
-    target: /metro8/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro8/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro8/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 47
       attrs:
         link_type: intra_metro
@@ -697,11 +808,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 14.94
         pop_count: 2
-  - source: /metro9/pop[1-2]
-    target: /metro9/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro9/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro9/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 34
       attrs:
         link_type: intra_metro
@@ -710,11 +833,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 10.71
         pop_count: 2
-  - source: /metro10/pop[1-2]
-    target: /metro10/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro10/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro10/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 47
       attrs:
         link_type: intra_metro
@@ -723,11 +858,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 14.73
         pop_count: 2
-  - source: /metro11/pop[1-2]
-    target: /metro11/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro11/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro11/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 45
       attrs:
         link_type: intra_metro
@@ -736,11 +883,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 14.05
         pop_count: 2
-  - source: /metro12/pop[1-2]
-    target: /metro12/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro12/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro12/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 53
       attrs:
         link_type: intra_metro
@@ -749,11 +908,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 16.75
         pop_count: 2
-  - source: /metro13/pop[1-2]
-    target: /metro13/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro13/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro13/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 138
       attrs:
         link_type: intra_metro
@@ -762,11 +933,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 43.9
         pop_count: 2
-  - source: /metro14/pop[1-2]
-    target: /metro14/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro14/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro14/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 120
       attrs:
         link_type: intra_metro
@@ -775,11 +958,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 37.95
         pop_count: 2
-  - source: /metro15/pop[1-2]
-    target: /metro15/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro15/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro15/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 77
       attrs:
         link_type: intra_metro
@@ -788,11 +983,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 24.26
         pop_count: 2
-  - source: /metro16/pop[1-2]
-    target: /metro16/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro16/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro16/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 87
       attrs:
         link_type: intra_metro
@@ -801,11 +1008,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 27.4
         pop_count: 2
-  - source: /metro17/pop[1-2]
-    target: /metro17/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro17/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro17/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 74
       attrs:
         link_type: intra_metro
@@ -814,11 +1033,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 23.28
         pop_count: 2
-  - source: /metro18/pop[1-2]
-    target: /metro18/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro18/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro18/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 69
       attrs:
         link_type: intra_metro
@@ -827,11 +1058,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 21.96
         pop_count: 2
-  - source: /metro19/pop[1-2]
-    target: /metro19/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro19/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro19/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 86
       attrs:
         link_type: intra_metro
@@ -840,11 +1083,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 27.34
         pop_count: 2
-  - source: /metro20/pop[1-2]
-    target: /metro20/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro20/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro20/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 62
       attrs:
         link_type: intra_metro
@@ -853,11 +1108,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 19.63
         pop_count: 2
-  - source: /metro21/pop[1-2]
-    target: /metro21/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro21/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro21/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 163
       attrs:
         link_type: intra_metro
@@ -866,11 +1133,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 51.75
         pop_count: 2
-  - source: /metro22/pop[1-2]
-    target: /metro22/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro22/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro22/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 125
       attrs:
         link_type: intra_metro
@@ -879,11 +1158,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 39.56
         pop_count: 2
-  - source: /metro23/pop[1-2]
-    target: /metro23/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro23/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro23/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 120
       attrs:
         link_type: intra_metro
@@ -892,11 +1183,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 38.01
         pop_count: 2
-  - source: /metro24/pop[1-2]
-    target: /metro24/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro24/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro24/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 117
       attrs:
         link_type: intra_metro
@@ -905,11 +1208,23 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 36.95
         pop_count: 2
-  - source: /metro25/pop[1-2]
-    target: /metro25/pop[1-2]
-    pattern: mesh
+  - source:
+      path: /metro25/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    target:
+      path: /metro25/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
+    pattern: one_to_one
     link_params:
-      capacity: 12800
+      capacity: 800
       cost: 116
       attrs:
         link_type: intra_metro
@@ -918,251 +1233,551 @@ network:
         distance_model: metro_circle_arc
         circle_radius_km: 36.73
         pop_count: 2
-  - source: /metro1/dc[1-1]
-    target: /metro1/pop[1-2]
+  - source:
+      path: /metro1/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro1/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: denver-aurora
         metro_name_orig: Denver--Aurora, CO
-  - source: /metro2/dc[1-1]
-    target: /metro2/pop[1-2]
+  - source:
+      path: /metro2/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro2/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: minneapolis-st-paul
         metro_name_orig: Minneapolis--St. Paul, MN
-  - source: /metro3/dc[1-1]
-    target: /metro3/pop[1-2]
+  - source:
+      path: /metro3/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro3/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: salt-lake-city
         metro_name_orig: Salt Lake City, UT
-  - source: /metro4/dc[1-1]
-    target: /metro4/pop[1-2]
+  - source:
+      path: /metro4/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro4/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: las-vegas-henderson-paradise
         metro_name_orig: Las Vegas--Henderson--Paradise, NV
-  - source: /metro5/dc[1-1]
-    target: /metro5/pop[1-2]
+  - source:
+      path: /metro5/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro5/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: phoenix-mesa-scottsdale
         metro_name_orig: Phoenix--Mesa--Scottsdale, AZ
-  - source: /metro6/dc[1-1]
-    target: /metro6/pop[1-2]
+  - source:
+      path: /metro6/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro6/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: atlanta
         metro_name_orig: Atlanta, GA
-  - source: /metro7/dc[1-1]
-    target: /metro7/pop[1-2]
+  - source:
+      path: /metro7/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro7/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: portland
         metro_name_orig: Portland, OR--WA
-  - source: /metro8/dc[1-1]
-    target: /metro8/pop[1-2]
+  - source:
+      path: /metro8/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro8/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: omaha
         metro_name_orig: Omaha, NE--IA
-  - source: /metro9/dc[1-1]
-    target: /metro9/pop[1-2]
+  - source:
+      path: /metro9/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro9/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: boise-city
         metro_name_orig: Boise City, ID
-  - source: /metro10/dc[1-1]
-    target: /metro10/pop[1-2]
+  - source:
+      path: /metro10/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro10/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: albuquerque
         metro_name_orig: Albuquerque, NM
-  - source: /metro11/dc[1-1]
-    target: /metro11/pop[1-2]
+  - source:
+      path: /metro11/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro11/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: new-orleans
         metro_name_orig: New Orleans, LA
-  - source: /metro12/dc[1-1]
-    target: /metro12/pop[1-2]
+  - source:
+      path: /metro12/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro12/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: buffalo
         metro_name_orig: Buffalo, NY
-  - source: /metro13/dc[1-1]
-    target: /metro13/pop[1-2]
+  - source:
+      path: /metro13/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro13/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: chicago
         metro_name_orig: Chicago, IL--IN
-  - source: /metro14/dc[1-1]
-    target: /metro14/pop[1-2]
+  - source:
+      path: /metro14/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro14/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: dallas-fort-worth-arlington
         metro_name_orig: Dallas--Fort Worth--Arlington, TX
-  - source: /metro15/dc[1-1]
-    target: /metro15/pop[1-2]
+  - source:
+      path: /metro15/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro15/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: kansas-city
         metro_name_orig: Kansas City, MO--KS
-  - source: /metro16/dc[1-1]
-    target: /metro16/pop[1-2]
+  - source:
+      path: /metro16/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro16/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: st-louis
         metro_name_orig: St. Louis, MO--IL
-  - source: /metro17/dc[1-1]
-    target: /metro17/pop[1-2]
+  - source:
+      path: /metro17/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro17/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: charlotte
         metro_name_orig: Charlotte, NC--SC
-  - source: /metro18/dc[1-1]
-    target: /metro18/pop[1-2]
+  - source:
+      path: /metro18/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro18/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: nashville-davidson
         metro_name_orig: Nashville-Davidson, TN
-  - source: /metro19/dc[1-1]
-    target: /metro19/pop[1-2]
+  - source:
+      path: /metro19/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro19/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: pittsburgh
         metro_name_orig: Pittsburgh, PA
-  - source: /metro20/dc[1-1]
-    target: /metro20/pop[1-2]
+  - source:
+      path: /metro20/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro20/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: sacramento
         metro_name_orig: Sacramento, CA
-  - source: /metro21/dc[1-1]
-    target: /metro21/pop[1-2]
+  - source:
+      path: /metro21/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro21/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: new-york-jersey-city-newark
         metro_name_orig: New York--Jersey City--Newark, NY--NJ
-  - source: /metro22/dc[1-1]
-    target: /metro22/pop[1-2]
+  - source:
+      path: /metro22/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro22/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: philadelphia
         metro_name_orig: Philadelphia, PA--NJ--DE--MD
-  - source: /metro23/dc[1-1]
-    target: /metro23/pop[1-2]
+  - source:
+      path: /metro23/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro23/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: houston
         metro_name_orig: Houston, TX
-  - source: /metro24/dc[1-1]
-    target: /metro24/pop[1-2]
+  - source:
+      path: /metro24/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro24/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
         metro_name: boston
         metro_name_orig: Boston, MA--NH
-  - source: /metro25/dc[1-1]
-    target: /metro25/pop[1-2]
+  - source:
+      path: /metro25/dc[1-1]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: dc
+    target:
+      path: /metro25/pop[1-2]
+      match:
+        conditions:
+        - attr: role
+          operator: ==
+          value: core
     pattern: mesh
     link_params:
-      capacity: 25600
+      capacity: 1600
       cost: 1
       attrs:
         link_type: dc_to_pop
@@ -1173,7 +1788,7 @@ network:
     target: metro3/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 939
       attrs:
         link_type: inter_metro_corridor
@@ -1190,7 +1805,7 @@ network:
     target: metro3/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 939
       attrs:
         link_type: inter_metro_corridor
@@ -1204,7 +1819,7 @@ network:
     target: metro3/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 939
       attrs:
         link_type: inter_metro_corridor
@@ -1218,7 +1833,7 @@ network:
     target: metro3/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 939
       attrs:
         link_type: inter_metro_corridor
@@ -1232,7 +1847,7 @@ network:
     target: metro8/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 908
       attrs:
         link_type: inter_metro_corridor
@@ -1247,7 +1862,7 @@ network:
     target: metro8/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 908
       attrs:
         link_type: inter_metro_corridor
@@ -1261,7 +1876,7 @@ network:
     target: metro8/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 908
       attrs:
         link_type: inter_metro_corridor
@@ -1275,7 +1890,7 @@ network:
     target: metro8/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 908
       attrs:
         link_type: inter_metro_corridor
@@ -1289,7 +1904,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1023
       attrs:
         link_type: inter_metro_corridor
@@ -1306,7 +1921,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1023
       attrs:
         link_type: inter_metro_corridor
@@ -1320,7 +1935,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1023
       attrs:
         link_type: inter_metro_corridor
@@ -1334,7 +1949,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1023
       attrs:
         link_type: inter_metro_corridor
@@ -1348,7 +1963,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1610
       attrs:
         link_type: inter_metro_corridor
@@ -1367,7 +1982,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1610
       attrs:
         link_type: inter_metro_corridor
@@ -1381,7 +1996,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1610
       attrs:
         link_type: inter_metro_corridor
@@ -1395,7 +2010,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1610
       attrs:
         link_type: inter_metro_corridor
@@ -1409,7 +2024,7 @@ network:
     target: metro4/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1670
       attrs:
         link_type: inter_metro_corridor
@@ -1430,7 +2045,7 @@ network:
     target: metro4/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1670
       attrs:
         link_type: inter_metro_corridor
@@ -1444,7 +2059,7 @@ network:
     target: metro4/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1670
       attrs:
         link_type: inter_metro_corridor
@@ -1458,7 +2073,7 @@ network:
     target: metro4/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1670
       attrs:
         link_type: inter_metro_corridor
@@ -1472,7 +2087,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 784
       attrs:
         link_type: inter_metro_corridor
@@ -1489,7 +2104,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 784
       attrs:
         link_type: inter_metro_corridor
@@ -1503,7 +2118,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 784
       attrs:
         link_type: inter_metro_corridor
@@ -1517,7 +2132,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 784
       attrs:
         link_type: inter_metro_corridor
@@ -1531,7 +2146,7 @@ network:
     target: metro8/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 640
       attrs:
         link_type: inter_metro_corridor
@@ -1551,7 +2166,7 @@ network:
     target: metro8/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 640
       attrs:
         link_type: inter_metro_corridor
@@ -1565,7 +2180,7 @@ network:
     target: metro8/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 640
       attrs:
         link_type: inter_metro_corridor
@@ -1579,7 +2194,7 @@ network:
     target: metro8/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 640
       attrs:
         link_type: inter_metro_corridor
@@ -1593,7 +2208,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1107
       attrs:
         link_type: inter_metro_corridor
@@ -1610,7 +2225,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1107
       attrs:
         link_type: inter_metro_corridor
@@ -1624,7 +2239,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1107
       attrs:
         link_type: inter_metro_corridor
@@ -1638,7 +2253,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1107
       attrs:
         link_type: inter_metro_corridor
@@ -1652,7 +2267,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 694
       attrs:
         link_type: inter_metro_corridor
@@ -1668,7 +2283,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 694
       attrs:
         link_type: inter_metro_corridor
@@ -1682,7 +2297,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 694
       attrs:
         link_type: inter_metro_corridor
@@ -1696,7 +2311,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 694
       attrs:
         link_type: inter_metro_corridor
@@ -1710,7 +2325,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 740
       attrs:
         link_type: inter_metro_corridor
@@ -1727,7 +2342,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 740
       attrs:
         link_type: inter_metro_corridor
@@ -1741,7 +2356,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 740
       attrs:
         link_type: inter_metro_corridor
@@ -1755,7 +2370,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 740
       attrs:
         link_type: inter_metro_corridor
@@ -1769,7 +2384,7 @@ network:
     target: metro4/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 735
       attrs:
         link_type: inter_metro_corridor
@@ -1788,7 +2403,7 @@ network:
     target: metro4/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 735
       attrs:
         link_type: inter_metro_corridor
@@ -1802,7 +2417,7 @@ network:
     target: metro4/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 735
       attrs:
         link_type: inter_metro_corridor
@@ -1816,7 +2431,7 @@ network:
     target: metro4/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 735
       attrs:
         link_type: inter_metro_corridor
@@ -1830,7 +2445,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1667
       attrs:
         link_type: inter_metro_corridor
@@ -1854,7 +2469,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1667
       attrs:
         link_type: inter_metro_corridor
@@ -1868,7 +2483,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1667
       attrs:
         link_type: inter_metro_corridor
@@ -1882,7 +2497,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1667
       attrs:
         link_type: inter_metro_corridor
@@ -1896,7 +2511,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 611
       attrs:
         link_type: inter_metro_corridor
@@ -1913,7 +2528,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 611
       attrs:
         link_type: inter_metro_corridor
@@ -1927,7 +2542,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 611
       attrs:
         link_type: inter_metro_corridor
@@ -1941,7 +2556,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 611
       attrs:
         link_type: inter_metro_corridor
@@ -1955,7 +2570,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1716
       attrs:
         link_type: inter_metro_corridor
@@ -1974,7 +2589,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1716
       attrs:
         link_type: inter_metro_corridor
@@ -1988,7 +2603,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1716
       attrs:
         link_type: inter_metro_corridor
@@ -2002,7 +2617,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1716
       attrs:
         link_type: inter_metro_corridor
@@ -2016,7 +2631,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1142
       attrs:
         link_type: inter_metro_corridor
@@ -2032,7 +2647,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1142
       attrs:
         link_type: inter_metro_corridor
@@ -2046,7 +2661,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1142
       attrs:
         link_type: inter_metro_corridor
@@ -2060,7 +2675,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1142
       attrs:
         link_type: inter_metro_corridor
@@ -2074,7 +2689,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1209
       attrs:
         link_type: inter_metro_corridor
@@ -2097,7 +2712,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1209
       attrs:
         link_type: inter_metro_corridor
@@ -2111,7 +2726,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1209
       attrs:
         link_type: inter_metro_corridor
@@ -2125,7 +2740,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1209
       attrs:
         link_type: inter_metro_corridor
@@ -2139,7 +2754,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 476
       attrs:
         link_type: inter_metro_corridor
@@ -2159,7 +2774,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 476
       attrs:
         link_type: inter_metro_corridor
@@ -2173,7 +2788,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 476
       attrs:
         link_type: inter_metro_corridor
@@ -2187,7 +2802,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 476
       attrs:
         link_type: inter_metro_corridor
@@ -2201,7 +2816,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 934
       attrs:
         link_type: inter_metro_corridor
@@ -2222,7 +2837,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 934
       attrs:
         link_type: inter_metro_corridor
@@ -2236,7 +2851,7 @@ network:
     target: metro5/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 934
       attrs:
         link_type: inter_metro_corridor
@@ -2250,7 +2865,7 @@ network:
     target: metro5/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 934
       attrs:
         link_type: inter_metro_corridor
@@ -2264,7 +2879,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1129
       attrs:
         link_type: inter_metro_corridor
@@ -2285,7 +2900,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1129
       attrs:
         link_type: inter_metro_corridor
@@ -2299,7 +2914,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1129
       attrs:
         link_type: inter_metro_corridor
@@ -2313,7 +2928,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1129
       attrs:
         link_type: inter_metro_corridor
@@ -2327,7 +2942,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1344
       attrs:
         link_type: inter_metro_corridor
@@ -2348,7 +2963,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1344
       attrs:
         link_type: inter_metro_corridor
@@ -2362,7 +2977,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1344
       attrs:
         link_type: inter_metro_corridor
@@ -2376,7 +2991,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1344
       attrs:
         link_type: inter_metro_corridor
@@ -2390,7 +3005,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1428
       attrs:
         link_type: inter_metro_corridor
@@ -2412,7 +3027,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1428
       attrs:
         link_type: inter_metro_corridor
@@ -2426,7 +3041,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1428
       attrs:
         link_type: inter_metro_corridor
@@ -2440,7 +3055,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1428
       attrs:
         link_type: inter_metro_corridor
@@ -2454,7 +3069,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 829
       attrs:
         link_type: inter_metro_corridor
@@ -2471,7 +3086,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 829
       attrs:
         link_type: inter_metro_corridor
@@ -2485,7 +3100,7 @@ network:
     target: metro10/pop1
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 829
       attrs:
         link_type: inter_metro_corridor
@@ -2499,7 +3114,7 @@ network:
     target: metro10/pop2
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 829
       attrs:
         link_type: inter_metro_corridor
@@ -2513,7 +3128,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 656
       attrs:
         link_type: inter_metro_corridor
@@ -2530,7 +3145,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 656
       attrs:
         link_type: inter_metro_corridor
@@ -2544,7 +3159,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 656
       attrs:
         link_type: inter_metro_corridor
@@ -2558,7 +3173,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 656
       attrs:
         link_type: inter_metro_corridor
@@ -2572,7 +3187,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 44800
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2589,7 +3204,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 44800
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2603,7 +3218,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 44800
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2617,7 +3232,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 44800
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2631,7 +3246,7 @@ network:
     target: metro17/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2647,7 +3262,7 @@ network:
     target: metro17/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2661,7 +3276,7 @@ network:
     target: metro17/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2675,7 +3290,7 @@ network:
     target: metro17/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 445
       attrs:
         link_type: inter_metro_corridor
@@ -2689,7 +3304,7 @@ network:
     target: metro11/pop1
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 869
       attrs:
         link_type: inter_metro_corridor
@@ -2706,7 +3321,7 @@ network:
     target: metro11/pop2
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 869
       attrs:
         link_type: inter_metro_corridor
@@ -2720,7 +3335,7 @@ network:
     target: metro11/pop1
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 869
       attrs:
         link_type: inter_metro_corridor
@@ -2734,7 +3349,7 @@ network:
     target: metro11/pop2
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 869
       attrs:
         link_type: inter_metro_corridor
@@ -2748,7 +3363,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1155
       attrs:
         link_type: inter_metro_corridor
@@ -2765,7 +3380,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1155
       attrs:
         link_type: inter_metro_corridor
@@ -2779,7 +3394,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1155
       attrs:
         link_type: inter_metro_corridor
@@ -2793,7 +3408,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1155
       attrs:
         link_type: inter_metro_corridor
@@ -2807,7 +3422,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1342
       attrs:
         link_type: inter_metro_corridor
@@ -2827,7 +3442,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1342
       attrs:
         link_type: inter_metro_corridor
@@ -2841,7 +3456,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1342
       attrs:
         link_type: inter_metro_corridor
@@ -2855,7 +3470,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1342
       attrs:
         link_type: inter_metro_corridor
@@ -2869,7 +3484,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
@@ -2890,7 +3505,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
@@ -2904,7 +3519,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
@@ -2918,7 +3533,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
@@ -2932,7 +3547,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1049
       attrs:
         link_type: inter_metro_corridor
@@ -2947,7 +3562,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1049
       attrs:
         link_type: inter_metro_corridor
@@ -2961,7 +3576,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1049
       attrs:
         link_type: inter_metro_corridor
@@ -2975,7 +3590,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1049
       attrs:
         link_type: inter_metro_corridor
@@ -2989,7 +3604,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 102400
+      capacity: 200
       cost: 792
       attrs:
         link_type: inter_metro_corridor
@@ -3004,7 +3619,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 102400
+      capacity: 200
       cost: 792
       attrs:
         link_type: inter_metro_corridor
@@ -3018,7 +3633,7 @@ network:
     target: metro9/pop1
     pattern: one_to_one
     link_params:
-      capacity: 102400
+      capacity: 200
       cost: 792
       attrs:
         link_type: inter_metro_corridor
@@ -3032,7 +3647,7 @@ network:
     target: metro9/pop2
     pattern: one_to_one
     link_params:
-      capacity: 102400
+      capacity: 200
       cost: 792
       attrs:
         link_type: inter_metro_corridor
@@ -3046,7 +3661,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 739
       attrs:
         link_type: inter_metro_corridor
@@ -3067,7 +3682,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 739
       attrs:
         link_type: inter_metro_corridor
@@ -3081,7 +3696,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 739
       attrs:
         link_type: inter_metro_corridor
@@ -3095,7 +3710,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 739
       attrs:
         link_type: inter_metro_corridor
@@ -3109,7 +3724,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 777
       attrs:
         link_type: inter_metro_corridor
@@ -3129,7 +3744,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 777
       attrs:
         link_type: inter_metro_corridor
@@ -3143,7 +3758,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 777
       attrs:
         link_type: inter_metro_corridor
@@ -3157,7 +3772,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 777
       attrs:
         link_type: inter_metro_corridor
@@ -3171,7 +3786,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1249
       attrs:
         link_type: inter_metro_corridor
@@ -3194,7 +3809,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1249
       attrs:
         link_type: inter_metro_corridor
@@ -3208,7 +3823,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1249
       attrs:
         link_type: inter_metro_corridor
@@ -3222,7 +3837,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1249
       attrs:
         link_type: inter_metro_corridor
@@ -3236,7 +3851,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 336
       attrs:
         link_type: inter_metro_corridor
@@ -3255,7 +3870,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 336
       attrs:
         link_type: inter_metro_corridor
@@ -3269,7 +3884,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 336
       attrs:
         link_type: inter_metro_corridor
@@ -3283,7 +3898,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 336
       attrs:
         link_type: inter_metro_corridor
@@ -3297,7 +3912,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1722
       attrs:
         link_type: inter_metro_corridor
@@ -3315,7 +3930,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1722
       attrs:
         link_type: inter_metro_corridor
@@ -3329,7 +3944,7 @@ network:
     target: metro20/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1722
       attrs:
         link_type: inter_metro_corridor
@@ -3343,7 +3958,7 @@ network:
     target: metro20/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 1722
       attrs:
         link_type: inter_metro_corridor
@@ -3357,7 +3972,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1263
       attrs:
         link_type: inter_metro_corridor
@@ -3375,7 +3990,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1263
       attrs:
         link_type: inter_metro_corridor
@@ -3389,7 +4004,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1263
       attrs:
         link_type: inter_metro_corridor
@@ -3403,7 +4018,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1263
       attrs:
         link_type: inter_metro_corridor
@@ -3417,7 +4032,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1217
       attrs:
         link_type: inter_metro_corridor
@@ -3434,7 +4049,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1217
       attrs:
         link_type: inter_metro_corridor
@@ -3448,7 +4063,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1217
       attrs:
         link_type: inter_metro_corridor
@@ -3462,7 +4077,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1217
       attrs:
         link_type: inter_metro_corridor
@@ -3476,7 +4091,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 931
       attrs:
         link_type: inter_metro_corridor
@@ -3492,7 +4107,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 931
       attrs:
         link_type: inter_metro_corridor
@@ -3506,7 +4121,7 @@ network:
     target: metro14/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 931
       attrs:
         link_type: inter_metro_corridor
@@ -3520,7 +4135,7 @@ network:
     target: metro14/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 931
       attrs:
         link_type: inter_metro_corridor
@@ -3534,7 +4149,7 @@ network:
     target: metro23/pop1
     pattern: one_to_one
     link_params:
-      capacity: 105600
+      capacity: 200
       cost: 613
       attrs:
         link_type: inter_metro_corridor
@@ -3550,7 +4165,7 @@ network:
     target: metro23/pop2
     pattern: one_to_one
     link_params:
-      capacity: 105600
+      capacity: 200
       cost: 613
       attrs:
         link_type: inter_metro_corridor
@@ -3564,7 +4179,7 @@ network:
     target: metro23/pop1
     pattern: one_to_one
     link_params:
-      capacity: 105600
+      capacity: 200
       cost: 613
       attrs:
         link_type: inter_metro_corridor
@@ -3578,7 +4193,7 @@ network:
     target: metro23/pop2
     pattern: one_to_one
     link_params:
-      capacity: 105600
+      capacity: 200
       cost: 613
       attrs:
         link_type: inter_metro_corridor
@@ -3592,7 +4207,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 398
       attrs:
         link_type: inter_metro_corridor
@@ -3610,7 +4225,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 398
       attrs:
         link_type: inter_metro_corridor
@@ -3624,7 +4239,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 398
       attrs:
         link_type: inter_metro_corridor
@@ -3638,7 +4253,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 28800
+      capacity: 200
       cost: 398
       attrs:
         link_type: inter_metro_corridor
@@ -3652,7 +4267,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 720
       attrs:
         link_type: inter_metro_corridor
@@ -3669,7 +4284,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 720
       attrs:
         link_type: inter_metro_corridor
@@ -3683,7 +4298,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 720
       attrs:
         link_type: inter_metro_corridor
@@ -3697,7 +4312,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 41600
+      capacity: 200
       cost: 720
       attrs:
         link_type: inter_metro_corridor
@@ -3711,7 +4326,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 691
       attrs:
         link_type: inter_metro_corridor
@@ -3728,7 +4343,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 691
       attrs:
         link_type: inter_metro_corridor
@@ -3742,7 +4357,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 691
       attrs:
         link_type: inter_metro_corridor
@@ -3756,7 +4371,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 691
       attrs:
         link_type: inter_metro_corridor
@@ -3770,7 +4385,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 980
       attrs:
         link_type: inter_metro_corridor
@@ -3788,7 +4403,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 980
       attrs:
         link_type: inter_metro_corridor
@@ -3802,7 +4417,7 @@ network:
     target: metro13/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 980
       attrs:
         link_type: inter_metro_corridor
@@ -3816,7 +4431,7 @@ network:
     target: metro13/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 980
       attrs:
         link_type: inter_metro_corridor
@@ -3830,7 +4445,7 @@ network:
     target: metro17/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1260
       attrs:
         link_type: inter_metro_corridor
@@ -3851,7 +4466,7 @@ network:
     target: metro17/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1260
       attrs:
         link_type: inter_metro_corridor
@@ -3865,7 +4480,7 @@ network:
     target: metro17/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1260
       attrs:
         link_type: inter_metro_corridor
@@ -3879,7 +4494,7 @@ network:
     target: metro17/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 1260
       attrs:
         link_type: inter_metro_corridor
@@ -3893,7 +4508,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 803
       attrs:
         link_type: inter_metro_corridor
@@ -3913,7 +4528,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 803
       attrs:
         link_type: inter_metro_corridor
@@ -3927,7 +4542,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 803
       attrs:
         link_type: inter_metro_corridor
@@ -3941,7 +4556,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 803
       attrs:
         link_type: inter_metro_corridor
@@ -3955,7 +4570,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 541
       attrs:
         link_type: inter_metro_corridor
@@ -3971,7 +4586,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 541
       attrs:
         link_type: inter_metro_corridor
@@ -3985,7 +4600,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 541
       attrs:
         link_type: inter_metro_corridor
@@ -3999,7 +4614,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 541
       attrs:
         link_type: inter_metro_corridor
@@ -4013,7 +4628,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 877
       attrs:
         link_type: inter_metro_corridor
@@ -4030,7 +4645,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 877
       attrs:
         link_type: inter_metro_corridor
@@ -4044,7 +4659,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 877
       attrs:
         link_type: inter_metro_corridor
@@ -4058,7 +4673,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 877
       attrs:
         link_type: inter_metro_corridor
@@ -4072,7 +4687,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 879
       attrs:
         link_type: inter_metro_corridor
@@ -4091,7 +4706,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 879
       attrs:
         link_type: inter_metro_corridor
@@ -4105,7 +4720,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 879
       attrs:
         link_type: inter_metro_corridor
@@ -4119,7 +4734,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 879
       attrs:
         link_type: inter_metro_corridor
@@ -4133,7 +4748,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 843
       attrs:
         link_type: inter_metro_corridor
@@ -4151,7 +4766,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 843
       attrs:
         link_type: inter_metro_corridor
@@ -4165,7 +4780,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 843
       attrs:
         link_type: inter_metro_corridor
@@ -4179,7 +4794,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 843
       attrs:
         link_type: inter_metro_corridor
@@ -4193,7 +4808,7 @@ network:
     target: metro23/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 447
       attrs:
         link_type: inter_metro_corridor
@@ -4208,7 +4823,7 @@ network:
     target: metro23/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 447
       attrs:
         link_type: inter_metro_corridor
@@ -4222,7 +4837,7 @@ network:
     target: metro23/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 447
       attrs:
         link_type: inter_metro_corridor
@@ -4236,7 +4851,7 @@ network:
     target: metro23/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 447
       attrs:
         link_type: inter_metro_corridor
@@ -4250,7 +4865,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 959
       attrs:
         link_type: inter_metro_corridor
@@ -4269,7 +4884,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 959
       attrs:
         link_type: inter_metro_corridor
@@ -4283,7 +4898,7 @@ network:
     target: metro15/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 959
       attrs:
         link_type: inter_metro_corridor
@@ -4297,7 +4912,7 @@ network:
     target: metro15/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 959
       attrs:
         link_type: inter_metro_corridor
@@ -4311,7 +4926,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1189
       attrs:
         link_type: inter_metro_corridor
@@ -4329,7 +4944,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1189
       attrs:
         link_type: inter_metro_corridor
@@ -4343,7 +4958,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1189
       attrs:
         link_type: inter_metro_corridor
@@ -4357,7 +4972,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1189
       attrs:
         link_type: inter_metro_corridor
@@ -4371,7 +4986,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 405
       attrs:
         link_type: inter_metro_corridor
@@ -4388,7 +5003,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 405
       attrs:
         link_type: inter_metro_corridor
@@ -4402,7 +5017,7 @@ network:
     target: metro16/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 405
       attrs:
         link_type: inter_metro_corridor
@@ -4416,7 +5031,7 @@ network:
     target: metro16/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 405
       attrs:
         link_type: inter_metro_corridor
@@ -4430,7 +5045,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1185
       attrs:
         link_type: inter_metro_corridor
@@ -4451,7 +5066,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1185
       attrs:
         link_type: inter_metro_corridor
@@ -4465,7 +5080,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1185
       attrs:
         link_type: inter_metro_corridor
@@ -4479,7 +5094,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 32000
+      capacity: 200
       cost: 1185
       attrs:
         link_type: inter_metro_corridor
@@ -4493,7 +5108,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 804
       attrs:
         link_type: inter_metro_corridor
@@ -4512,7 +5127,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 804
       attrs:
         link_type: inter_metro_corridor
@@ -4526,7 +5141,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 804
       attrs:
         link_type: inter_metro_corridor
@@ -4540,7 +5155,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 804
       attrs:
         link_type: inter_metro_corridor
@@ -4554,7 +5169,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 771
       attrs:
         link_type: inter_metro_corridor
@@ -4571,7 +5186,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 771
       attrs:
         link_type: inter_metro_corridor
@@ -4585,7 +5200,7 @@ network:
     target: metro18/pop1
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 771
       attrs:
         link_type: inter_metro_corridor
@@ -4599,7 +5214,7 @@ network:
     target: metro18/pop2
     pattern: one_to_one
     link_params:
-      capacity: 38400
+      capacity: 200
       cost: 771
       attrs:
         link_type: inter_metro_corridor
@@ -4613,7 +5228,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 909
       attrs:
         link_type: inter_metro_corridor
@@ -4633,7 +5248,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 909
       attrs:
         link_type: inter_metro_corridor
@@ -4647,7 +5262,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 909
       attrs:
         link_type: inter_metro_corridor
@@ -4661,7 +5276,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 909
       attrs:
         link_type: inter_metro_corridor
@@ -4675,7 +5290,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1037
       attrs:
         link_type: inter_metro_corridor
@@ -4693,7 +5308,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1037
       attrs:
         link_type: inter_metro_corridor
@@ -4707,7 +5322,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1037
       attrs:
         link_type: inter_metro_corridor
@@ -4721,7 +5336,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1037
       attrs:
         link_type: inter_metro_corridor
@@ -4735,7 +5350,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1162
       attrs:
         link_type: inter_metro_corridor
@@ -4758,7 +5373,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1162
       attrs:
         link_type: inter_metro_corridor
@@ -4772,7 +5387,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1162
       attrs:
         link_type: inter_metro_corridor
@@ -4786,7 +5401,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 35200
+      capacity: 200
       cost: 1162
       attrs:
         link_type: inter_metro_corridor
@@ -4800,7 +5415,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1016
       attrs:
         link_type: inter_metro_corridor
@@ -4821,7 +5436,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1016
       attrs:
         link_type: inter_metro_corridor
@@ -4835,7 +5450,7 @@ network:
     target: metro19/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1016
       attrs:
         link_type: inter_metro_corridor
@@ -4849,7 +5464,7 @@ network:
     target: metro19/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1016
       attrs:
         link_type: inter_metro_corridor
@@ -4863,7 +5478,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 676
       attrs:
         link_type: inter_metro_corridor
@@ -4883,7 +5498,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 676
       attrs:
         link_type: inter_metro_corridor
@@ -4897,7 +5512,7 @@ network:
     target: metro21/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 676
       attrs:
         link_type: inter_metro_corridor
@@ -4911,7 +5526,7 @@ network:
     target: metro21/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 676
       attrs:
         link_type: inter_metro_corridor
@@ -4925,7 +5540,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 560
       attrs:
         link_type: inter_metro_corridor
@@ -4943,7 +5558,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 560
       attrs:
         link_type: inter_metro_corridor
@@ -4957,7 +5572,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 560
       attrs:
         link_type: inter_metro_corridor
@@ -4971,7 +5586,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 560
       attrs:
         link_type: inter_metro_corridor
@@ -4985,7 +5600,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1094
       attrs:
         link_type: inter_metro_corridor
@@ -5007,7 +5622,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1094
       attrs:
         link_type: inter_metro_corridor
@@ -5021,7 +5636,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1094
       attrs:
         link_type: inter_metro_corridor
@@ -5035,7 +5650,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 25600
+      capacity: 200
       cost: 1094
       attrs:
         link_type: inter_metro_corridor
@@ -5049,7 +5664,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 704
       attrs:
         link_type: inter_metro_corridor
@@ -5065,7 +5680,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 704
       attrs:
         link_type: inter_metro_corridor
@@ -5079,7 +5694,7 @@ network:
     target: metro25/pop1
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 704
       attrs:
         link_type: inter_metro_corridor
@@ -5093,7 +5708,7 @@ network:
     target: metro25/pop2
     pattern: one_to_one
     link_params:
-      capacity: 51200
+      capacity: 200
       cost: 704
       attrs:
         link_type: inter_metro_corridor
@@ -5107,7 +5722,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 153
       attrs:
         link_type: inter_metro_corridor
@@ -5126,7 +5741,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 153
       attrs:
         link_type: inter_metro_corridor
@@ -5140,7 +5755,7 @@ network:
     target: metro22/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 153
       attrs:
         link_type: inter_metro_corridor
@@ -5154,7 +5769,7 @@ network:
     target: metro22/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 153
       attrs:
         link_type: inter_metro_corridor
@@ -5168,7 +5783,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 421
       attrs:
         link_type: inter_metro_corridor
@@ -5186,7 +5801,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 421
       attrs:
         link_type: inter_metro_corridor
@@ -5200,7 +5815,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 421
       attrs:
         link_type: inter_metro_corridor
@@ -5214,7 +5829,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 57600
+      capacity: 200
       cost: 421
       attrs:
         link_type: inter_metro_corridor
@@ -5228,7 +5843,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 572
       attrs:
         link_type: inter_metro_corridor
@@ -5249,7 +5864,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 572
       attrs:
         link_type: inter_metro_corridor
@@ -5263,7 +5878,7 @@ network:
     target: metro24/pop1
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 572
       attrs:
         link_type: inter_metro_corridor
@@ -5277,7 +5892,7 @@ network:
     target: metro24/pop2
     pattern: one_to_one
     link_params:
-      capacity: 54400
+      capacity: 200
       cost: 572
       attrs:
         link_type: inter_metro_corridor
