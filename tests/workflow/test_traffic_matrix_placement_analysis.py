@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ngraph.workflow.traffic_matrix_placement_analysis import (
     TrafficMatrixPlacementAnalysis,
 )
@@ -166,3 +168,191 @@ def test_traffic_matrix_placement_analysis_flow_details_aggregated(
     edge_freq = stats.get("edge_usage_frequencies", {})
     assert edge_freq.get("(u,v,k1)") == 2
     assert edge_freq.get("(x,y,k2)") == 1
+
+
+@patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
+def test_traffic_matrix_placement_analysis_alpha_scales_demands(
+    mock_failure_manager_class,
+) -> None:
+    # Prepare mock scenario with a single traffic demand
+    mock_scenario = MagicMock()
+    mock_td = MagicMock()
+    mock_td.source_path = "S"
+    mock_td.sink_path = "T"
+    mock_td.demand = 10.0
+    mock_td.mode = "pairwise"
+    mock_td.priority = 0
+    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+
+    # Mock FailureManager return value (minimal valid structure)
+    mock_results = MagicMock()
+    mock_results.raw_results = {"results": [[]]}
+    mock_results.failure_patterns = {}
+    mock_results.metadata = {"iterations": 1}
+    mock_failure_manager = MagicMock()
+    mock_failure_manager_class.return_value = mock_failure_manager
+    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_results
+
+    # Run with alpha scaling
+    step = TrafficMatrixPlacementAnalysis(
+        name="tm_step_alpha",
+        matrix_name="default",
+        iterations=1,
+        baseline=False,
+        alpha=2.5,
+    )
+    step.run(mock_scenario)
+
+    # Verify demands_config passed into FailureManager had scaled demand
+    assert mock_failure_manager.run_demand_placement_monte_carlo.called
+    _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
+    dcfg = kwargs.get("demands_config")
+    assert isinstance(dcfg, list) and len(dcfg) == 1
+    assert dcfg[0]["source_path"] == "S"
+    assert dcfg[0]["sink_path"] == "T"
+    assert abs(float(dcfg[0]["demand"]) - 25.0) < 1e-12
+
+
+@patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
+def test_traffic_matrix_placement_analysis_metadata_includes_alpha(
+    mock_failure_manager_class,
+) -> None:
+    mock_scenario = MagicMock()
+    mock_td = MagicMock()
+    mock_td.source_path = "A"
+    mock_td.sink_path = "B"
+    mock_td.demand = 1.0
+    mock_td.mode = "pairwise"
+    mock_td.priority = 0
+    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+
+    mock_results = MagicMock()
+    mock_results.raw_results = {"results": [[]]}
+    mock_results.failure_patterns = {}
+    mock_results.metadata = {"iterations": 1, "baseline": False}
+    mock_failure_manager = MagicMock()
+    mock_failure_manager_class.return_value = mock_failure_manager
+    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_results
+
+    step = TrafficMatrixPlacementAnalysis(
+        name="tm_step_meta",
+        matrix_name="default",
+        iterations=1,
+        baseline=False,
+        alpha=3.0,
+    )
+    step.run(mock_scenario)
+
+    # Find metadata put call and assert it contains alpha
+    put_calls = mock_scenario.results.put.call_args_list
+    meta_values = [
+        args[2] for args, _ in (call for call in put_calls) if args[1] == "metadata"
+    ]
+    assert meta_values, "metadata not stored"
+    metadata = meta_values[-1]
+    assert isinstance(metadata, dict)
+    assert metadata.get("alpha") == 3.0
+
+
+@patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
+def test_traffic_matrix_placement_analysis_alpha_auto_uses_msd(
+    mock_failure_manager_class,
+) -> None:
+    # Scenario with one TD
+    mock_scenario = MagicMock()
+    td = MagicMock()
+    td.source_path = "S"
+    td.sink_path = "T"
+    td.demand = 4.0
+    td.mode = "pairwise"
+    td.priority = 0
+    td.flow_policy_config = None
+    mock_scenario.traffic_matrix_set.get_matrix.return_value = [td]
+
+    # Populate results metadata: prior MSD step
+    from ngraph.results.store import WorkflowStepMetadata
+
+    msd_meta = WorkflowStepMetadata(
+        step_type="MaximumSupportedDemandAnalysis", step_name="msd1", execution_order=0
+    )
+    tmpa_meta = WorkflowStepMetadata(
+        step_type="TrafficMatrixPlacementAnalysis",
+        step_name="tm_auto",
+        execution_order=1,
+    )
+    # get_all_step_metadata returns dict
+    mock_scenario.results.get_all_step_metadata.return_value = {
+        "msd1": msd_meta,
+        "tm_auto": tmpa_meta,
+    }
+    # MSD stored values
+    mock_scenario.results.get.side_effect = (
+        # First calls come from TrafficMatrixPlacementAnalysis logic:
+        # Will call get(step_name, "context") for msd1
+        {"matrix_name": "default", "placement_rounds": "auto"},
+        # Then get(step_name, "base_demands")
+        [
+            {
+                "source_path": "S",
+                "sink_path": "T",
+                "demand": 4.0,
+                "mode": "pairwise",
+                "priority": 0,
+                "flow_policy_config": None,
+            }
+        ],
+        # Then get(step_name, "alpha_star")
+        2.0,
+    )
+
+    # Minimal MC results
+    mock_results = MagicMock()
+    mock_results.raw_results = {"results": [[]]}
+    mock_results.failure_patterns = {}
+    mock_results.metadata = {"iterations": 1}
+    mock_failure_manager = MagicMock()
+    mock_failure_manager_class.return_value = mock_failure_manager
+    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_results
+
+    step = TrafficMatrixPlacementAnalysis(
+        name="tm_auto",
+        matrix_name="default",
+        iterations=1,
+        baseline=False,
+        alpha="auto",
+    )
+    step.run(mock_scenario)
+
+    # Effective demand should be scaled by alpha_star=2.0
+    _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
+    dcfg = kwargs.get("demands_config")
+    assert isinstance(dcfg, list) and len(dcfg) == 1
+    assert abs(float(dcfg[0]["demand"]) - 8.0) < 1e-12
+
+
+@patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
+def test_traffic_matrix_placement_analysis_alpha_auto_missing_msd_raises(
+    mock_failure_manager_class,
+) -> None:
+    mock_scenario = MagicMock()
+    td = MagicMock()
+    td.source_path = "S"
+    td.sink_path = "T"
+    td.demand = 4.0
+    td.mode = "pairwise"
+    td.priority = 0
+    td.flow_policy_config = None
+    mock_scenario.traffic_matrix_set.get_matrix.return_value = [td]
+
+    # No MSD metadata
+    mock_scenario.results.get_all_step_metadata.return_value = {}
+
+    step = TrafficMatrixPlacementAnalysis(
+        name="tm_auto",
+        matrix_name="default",
+        iterations=1,
+        baseline=False,
+        alpha="auto",
+    )
+    with pytest.raises(ValueError):
+        step.run(mock_scenario)

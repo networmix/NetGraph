@@ -18,6 +18,7 @@ YAML Configuration Example:
         seed: 42                           # Optional reproducible seed
         store_failure_patterns: false      # Store failure patterns if needed
         include_flow_details: true         # Collect per-demand cost distribution and edges
+        alpha: 1.0                        # Optional scaling factor for all demands
 
 Results stored in `scenario.results` under the step name:
     - placement_envelopes: Per-demand placement ratio envelopes with statistics
@@ -60,6 +61,11 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         include_flow_details: If True, collect per-demand cost distribution and
             edges used per iteration, and aggregate into ``flow_summary_stats``
             on each placement envelope.
+        alpha: Scaling factor applied to all demand values prior to analysis.
+            Accepts a positive float or the string "auto". When "auto", the
+            step looks up the most recent prior MaximumSupportedDemandAnalysis for
+            the same matrix with identical base demands and uses its alpha_star.
+            Raises ValueError if no suitable MSD result is found or validation fails.
     """
 
     matrix_name: str = ""
@@ -71,6 +77,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
     seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
+    alpha: float | str = 1.0
 
     def __post_init__(self) -> None:
         """Validate parameters.
@@ -86,6 +93,12 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         else:
             if self.parallelism < 1:
                 raise ValueError("parallelism must be >= 1")
+        if isinstance(self.alpha, str):
+            if self.alpha != "auto":
+                raise ValueError("alpha must be a positive float or 'auto'")
+        else:
+            if not (self.alpha > 0.0):
+                raise ValueError("alpha must be > 0.0")
 
     @staticmethod
     def _resolve_parallelism(parallelism: int | str) -> int:
@@ -119,7 +132,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             f"Starting demand placement analysis: {self.name or self.__class__.__name__}"
         )
         logger.debug(
-            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, failure_policy=%s",
+            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, failure_policy=%s, alpha=%s",
             self.matrix_name,
             self.iterations,
             str(self.parallelism),
@@ -127,6 +140,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             str(self.baseline),
             str(self.include_flow_details),
             str(self.failure_policy),
+            str(self.alpha),
         )
 
         # Extract and serialize the requested traffic matrix to simple dicts
@@ -137,13 +151,16 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 f"Traffic matrix '{self.matrix_name}' not found in scenario."
             ) from exc
 
+        # Determine effective alpha
+        effective_alpha = self._resolve_alpha_from_results_if_needed(scenario, td_list)
+
         demands_config: list[dict[str, Any]] = []
         for td in td_list:
             demands_config.append(
                 {
                     "source_path": td.source_path,
                     "sink_path": td.sink_path,
-                    "demand": td.demand,
+                    "demand": float(td.demand) * float(effective_alpha),
                     "mode": getattr(td, "mode", "pairwise"),
                     "flow_policy_config": getattr(td, "flow_policy_config", None),
                     "priority": getattr(td, "priority", 0),
@@ -307,7 +324,16 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             scenario.results.put(
                 self.name, "failure_pattern_results", results.failure_patterns
             )
-        scenario.results.put(self.name, "metadata", results.metadata)
+        # Augment metadata with step-specific parameters for reproducibility
+        try:
+            step_metadata = dict(results.metadata)
+            step_metadata["alpha"] = float(effective_alpha)
+            if isinstance(self.alpha, str) and self.alpha == "auto":
+                src = self._alpha_source if hasattr(self, "_alpha_source") else "auto"
+                step_metadata["alpha_source"] = src
+        except Exception:  # Fallback to original metadata if unexpected type
+            step_metadata = results.metadata
+        scenario.results.put(self.name, "metadata", step_metadata)
         # Provide a concise per-step debug summary to aid troubleshooting in CI logs
         try:
             env_count = len(envelopes)
@@ -323,6 +349,113 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         logger.info(
             f"Demand placement analysis completed: {self.name or self.__class__.__name__}"
         )
+
+    # --- Alpha resolution helpers -------------------------------------------------
+    def _resolve_alpha_from_results_if_needed(
+        self, scenario: "Scenario", td_list: list[Any]
+    ) -> float:
+        """Resolve effective alpha.
+
+        If alpha is a float, return it. If alpha == "auto", search prior MSD
+        results for a matching matrix and identical base demands, and return
+        alpha_star. Raises ValueError if no suitable match is found.
+
+        Args:
+            scenario: Scenario with results store.
+            td_list: Current traffic demand objects from the matrix.
+
+        Returns:
+            Effective numeric alpha.
+        """
+        if not isinstance(self.alpha, str):
+            return float(self.alpha)
+        if self.alpha != "auto":  # Defensive; validated earlier
+            raise ValueError("alpha must be a positive float or 'auto'")
+
+        # Build current base demands snapshot for strict comparison
+        current_base: list[dict[str, Any]] = [
+            {
+                "source_path": getattr(td, "source_path", ""),
+                "sink_path": getattr(td, "sink_path", ""),
+                "demand": float(getattr(td, "demand", 0.0)),
+                "mode": getattr(td, "mode", "pairwise"),
+                "priority": int(getattr(td, "priority", 0)),
+                "flow_policy_config": getattr(td, "flow_policy_config", None),
+            }
+            for td in td_list
+        ]
+
+        # Iterate prior steps by execution order; pick most recent matching MSD
+        meta = scenario.results.get_all_step_metadata()
+        step_names_by_order = sorted(
+            meta.keys(), key=lambda name: meta[name].execution_order
+        )
+        chosen_alpha: float | None = None
+        chosen_source: str | None = None
+        for step_name in reversed(step_names_by_order):
+            md = meta[step_name]
+            if md.step_type != "MaximumSupportedDemandAnalysis":
+                continue
+            ctx = scenario.results.get(step_name, "context")
+            if not isinstance(ctx, dict):
+                continue
+            if ctx.get("matrix_name") != self.matrix_name:
+                continue
+            base = scenario.results.get(step_name, "base_demands")
+            if not isinstance(base, list):
+                continue
+            if not self._base_demands_match(base, current_base):
+                continue
+            alpha_star = scenario.results.get(step_name, "alpha_star")
+            try:
+                chosen_alpha = float(alpha_star)
+                chosen_source = f"MSD:{step_name}"
+                break
+            except (TypeError, ValueError):
+                continue
+
+        if chosen_alpha is None:
+            raise ValueError(
+                "alpha='auto' requires a prior MaximumSupportedDemandAnalysis for "
+                f"matrix '{self.matrix_name}' with identical base demands executed earlier in the workflow. "
+                "Add an MSD step before this step or set a numeric alpha."
+            )
+
+        # Record source for metadata
+        self._alpha_source = chosen_source or "auto"
+        return chosen_alpha
+
+    @staticmethod
+    def _base_demands_match(
+        a: list[dict[str, Any]], b: list[dict[str, Any]], tol: float = 1e-12
+    ) -> bool:
+        """Return True if two base_demand lists are equivalent.
+
+        Compares length and per-entry fields with stable ordering by a key.
+        Floats are compared with an absolute tolerance.
+        """
+        if len(a) != len(b):
+            return False
+
+        def key_fn(d: dict[str, Any]) -> tuple:
+            return (
+                str(d.get("source_path", "")),
+                str(d.get("sink_path", "")),
+                int(d.get("priority", 0)),
+                str(d.get("mode", "pairwise")),
+                str(d.get("flow_policy_config", None)),
+            )
+
+        a_sorted = sorted(a, key=key_fn)
+        b_sorted = sorted(b, key=key_fn)
+        for da, db in zip(a_sorted, b_sorted, strict=False):
+            if key_fn(da) != key_fn(db):
+                return False
+            va = float(da.get("demand", 0.0))
+            vb = float(db.get("demand", 0.0))
+            if abs(va - vb) > tol:
+                return False
+        return True
 
 
 # Register the workflow step

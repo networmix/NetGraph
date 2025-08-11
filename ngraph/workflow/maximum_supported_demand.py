@@ -184,6 +184,7 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
             "max_bisect_iters": self.max_bisect_iters,
             "seeds_per_alpha": self.seeds_per_alpha,
             "matrix_name": self.matrix_name,
+            "placement_rounds": self.placement_rounds,
         }
 
         scenario.results.put(
