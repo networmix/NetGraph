@@ -15,30 +15,14 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
+from .conditions import FailureCondition as EvalCondition
+from .conditions import evaluate_condition as _shared_evaluate_condition
+from .conditions import evaluate_conditions as _shared_evaluate_conditions
+
 
 @dataclass
-class FailureCondition:
-    """A single condition for matching an entity's attribute with an operator and value.
-
-    Example usage (YAML):
-      conditions:
-        - attr: "capacity"
-          operator: "<"
-          value: 100
-
-    Attributes:
-        attr (str):
-            The name of the attribute to inspect (e.g., "capacity", "region").
-        operator (str):
-            The comparison operator: "==", "!=", "<", "<=", ">", ">=",
-            "contains", "not_contains", "any_value", or "no_value".
-        value (Any):
-            The value to compare against (e.g., 100, True, "foo", etc.).
-    """
-
-    attr: str
-    operator: str
-    value: Any
+class FailureCondition(EvalCondition):
+    """Alias for the shared condition dataclass for backward compatibility."""
 
 
 # Supported entity scopes for a rule
@@ -319,12 +303,7 @@ class FailurePolicy:
         """Evaluate multiple conditions on a single entity. All or any condition(s)
         must pass, depending on 'logic'.
         """
-        if logic == "and":
-            return all(_evaluate_condition(attrs, c) for c in conditions)
-        elif logic == "or":
-            return any(_evaluate_condition(attrs, c) for c in conditions)
-        else:
-            raise ValueError(f"Unsupported logic: {logic}")
+        return _shared_evaluate_conditions(attrs, conditions, logic)
 
     @staticmethod
     def _select_entities(
@@ -616,45 +595,5 @@ class FailurePolicy:
 
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
-    """Evaluate a single FailureCondition against entity attributes.
-
-    Operators supported:
-      ==, !=, <, <=, >, >=
-      contains, not_contains
-      any_value, no_value
-
-    If entity_attrs does not have cond.attr => derived_value=None.
-
-    Returns True if condition passes, else False.
-    """
-    has_attr = cond.attr in entity_attrs
-    derived_value = entity_attrs.get(cond.attr, None)
-    op = cond.operator
-
-    if op == "==":
-        return derived_value == cond.value
-    elif op == "!=":
-        return derived_value != cond.value
-    elif op == "<":
-        return (derived_value is not None) and (derived_value < cond.value)
-    elif op == "<=":
-        return (derived_value is not None) and (derived_value <= cond.value)
-    elif op == ">":
-        return (derived_value is not None) and (derived_value > cond.value)
-    elif op == ">=":
-        return (derived_value is not None) and (derived_value >= cond.value)
-    elif op == "contains":
-        if derived_value is None:
-            return False
-        return cond.value in derived_value
-    elif op == "not_contains":
-        if derived_value is None:
-            return True
-        return cond.value not in derived_value
-    elif op == "any_value":
-        return has_attr  # True if attribute key exists
-    elif op == "no_value":
-        # Pass if the attribute key is missing or the value is None
-        return (not has_attr) or (derived_value is None)
-    else:
-        raise ValueError(f"Unsupported operator: {op}")
+    """Backward-compatible wrapper using the shared evaluator."""
+    return _shared_evaluate_condition(entity_attrs, cond)

@@ -228,6 +228,35 @@ workflow:
         data = yaml.safe_load(blueprint_scenario)
         jsonschema.validate(data, schema)
 
+    def test_schema_validates_adjacency_selector_objects(self, schema):
+        """Adjacency with selector objects for source/target should validate."""
+        valid = {
+            "network": {
+                "nodes": {},
+                "links": [],
+                "adjacency": [
+                    {
+                        "source": {
+                            "path": "/A",
+                            "match": {
+                                "logic": "and",
+                                "conditions": [
+                                    {
+                                        "attr": "role",
+                                        "operator": "==",
+                                        "value": "compute",
+                                    }
+                                ],
+                            },
+                        },
+                        "target": {"path": "/B"},
+                        "pattern": "mesh",
+                    }
+                ],
+            }
+        }
+        jsonschema.validate(valid, schema)
+
     def test_schema_validates_node_link_overrides(self, schema):
         """Test that the schema validates node and link overrides."""
         override_scenario = """

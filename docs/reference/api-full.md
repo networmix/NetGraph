@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 11, 2025 at 01:29 UTC
+Generated from source code on: August 11, 2025 at 12:27 UTC
 
-Modules auto-discovered: 64
+Modules auto-discovered: 65
 
 ---
 
@@ -1909,6 +1909,63 @@ Attributes:
 
 ---
 
+## ngraph.failure.conditions
+
+Shared condition primitives and evaluators.
+
+This module provides a small, dependency-free condition evaluation utility
+that can be reused by failure policies and DSL selection filters.
+
+Operators supported:
+
+- ==, !=, <, <=, >, >=
+- contains, not_contains
+- any_value, no_value
+
+The evaluator operates on a flat attribute mapping for an entity. Callers are
+responsible for constructing that mapping (e.g. merging top-level fields with
+``attrs`` and ensuring appropriate precedence rules).
+
+### FailureCondition
+
+A single condition for matching an entity attribute.
+
+Args:
+    attr: Attribute name to inspect in the entity mapping.
+    operator: Comparison operator. See module docstring for the list.
+    value: Right-hand operand for the comparison (unused for any_value/no_value).
+
+**Attributes:**
+
+- `attr` (str)
+- `operator` (str)
+- `value` (Any | None)
+
+### evaluate_condition(entity_attrs: 'dict[str, Any]', cond: 'FailureCondition') -> 'bool'
+
+Evaluate a single condition against an entity attribute mapping.
+
+Args:
+    entity_attrs: Flat mapping of attributes for the entity.
+    cond: Condition to evaluate.
+
+Returns:
+    True if the condition passes, False otherwise.
+
+### evaluate_conditions(entity_attrs: 'dict[str, Any]', conditions: 'Iterable[FailureCondition]', logic: 'str') -> 'bool'
+
+Evaluate multiple conditions with AND/OR logic.
+
+Args:
+    entity_attrs: Flat mapping of attributes for the entity.
+    conditions: Iterable of conditions to evaluate.
+    logic: "and" or "or".
+
+Returns:
+    True if the combined predicate passes, False otherwise.
+
+---
+
 ## ngraph.failure.manager.aggregate
 
 Aggregation helpers for failure analysis results.
@@ -2012,30 +2069,13 @@ or by risk-group children.
 
 ### FailureCondition
 
-A single condition for matching an entity's attribute with an operator and value.
-
-Example usage (YAML):
-  conditions:
-
-- attr: "capacity"
-
-      operator: "<"
-      value: 100
-
-Attributes:
-    attr (str):
-        The name of the attribute to inspect (e.g., "capacity", "region").
-    operator (str):
-        The comparison operator: "==", "!=", "<", "<=", ">", ">=",
-        "contains", "not_contains", "any_value", or "no_value".
-    value (Any):
-        The value to compare against (e.g., 100, True, "foo", etc.).
+Alias for the shared condition dataclass for backward compatibility.
 
 **Attributes:**
 
 - `attr` (str)
 - `operator` (str)
-- `value` (Any)
+- `value` (Any | None)
 
 ### FailureMode
 

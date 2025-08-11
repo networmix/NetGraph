@@ -114,6 +114,71 @@ network:
         cost: 1
 ```
 
+### Attribute-filtered Adjacency (selector objects)
+
+You can filter the source or target node sets by attributes using the same condition syntax as failure policies. Replace a string `source`/`target` with an object that has `path` and optional `match`:
+
+```yaml
+network:
+  adjacency:
+    - source:
+        path: "/servers"
+        match:
+          logic: "and"         # default: "or"
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "compute"
+            - attr: "rack"
+              operator: "!="
+              value: "rack-9"
+      target:
+        path: "/switches"
+        match:
+          conditions:
+            - attr: "tier"
+              operator: "=="
+              value: "spine"
+      pattern: "mesh"
+      link_params:
+        capacity: 100
+        cost: 1
+```
+
+Notes:
+
+- `path` uses the same semantics as before: regex on node name or `attr:<name>` directive grouping.
+- Supported operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
+- Conditions evaluate over a flat view of node attributes combining top-level fields (`name`, `disabled`, `risk_groups`) and `node.attrs`.
+- Selectors filter node candidates before the adjacency `pattern` is applied.
+- Cross-endpoint predicates (e.g., comparing a source attribute to a target attribute) are not supported.
+
+Example with OR logic to match multiple roles:
+
+```yaml
+network:
+  adjacency:
+    - source:
+        path: "/metro1/dc[1-1]"
+        match:
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "dc"
+      target:
+        path: "/metro1/pop[1-2]"
+        match:
+          logic: "or"
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "leaf"
+            - attr: "role"
+              operator: "=="
+              value: "spine"
+      pattern: "mesh"
+```
+
 **Connectivity Patterns:**
 
 - `mesh`: Full connectivity between all source and target nodes

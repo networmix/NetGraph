@@ -69,6 +69,62 @@ network:
     assert len(list(graph.edges())) == 8
 
 
+def test_adjacency_selector_match_filters_nodes():
+    """Adjacency selectors with match should filter nodes by attributes."""
+    yaml_content = """
+network:
+  groups:
+    servers:
+      node_count: 4
+      name_template: "srv-{node_num}"
+      attrs:
+        role: "compute"
+        rack: "rack-1"
+    servers_b:
+      node_count: 2
+      name_template: "srvb-{node_num}"
+      attrs:
+        role: "compute"
+        rack: "rack-9"
+    switches:
+      node_count: 2
+      name_template: "sw-{node_num}"
+      attrs:
+        tier: "spine"
+
+  adjacency:
+    - source:
+        path: "/servers"
+        match:
+          logic: "and"
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "compute"
+            - attr: "rack"
+              operator: "!="
+              value: "rack-9"
+      target:
+        path: "/switches"
+        match:
+          conditions:
+            - attr: "tier"
+              operator: "=="
+              value: "spine"
+      pattern: "mesh"
+      link_params:
+        capacity: 10
+        cost: 1
+"""
+
+    scenario = Scenario.from_yaml(yaml_content)
+    # Expect only /servers (4 nodes) to be considered (servers_b excluded via rack != rack-9)
+    # Mesh between 4 servers and 2 switches => 8 directed pairs but dedup as bidirectional added later.
+    graph = scenario.network.to_strict_multidigraph()
+    # 4*2*2 directions = 16 edges
+    assert len(list(graph.edges())) == 16
+
+
 def test_bracket_expansion():
     """Test bracket expansion in group names."""
     yaml_content = """

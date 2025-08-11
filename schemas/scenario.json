@@ -133,8 +133,100 @@
           "items": {
             "type": "object",
             "properties": {
-              "source": {"type": "string"},
-              "target": {"type": "string"},
+              "source": {
+                "oneOf": [
+                  {"type": "string"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "path": {"type": "string"},
+                      "match": {
+                        "type": "object",
+                        "properties": {
+                          "logic": {"type": "string", "enum": ["and", "or"]},
+                          "conditions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "attr": {"type": "string"},
+                                "operator": {
+                                  "type": "string",
+                                  "enum": [
+                                    "==",
+                                    "!=",
+                                    ">",
+                                    "<",
+                                    ">=",
+                                    "<=",
+                                    "contains",
+                                    "not_contains",
+                                    "any_value",
+                                    "no_value"
+                                  ]
+                                },
+                                "value": {}
+                              },
+                              "required": ["attr", "operator"],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["path"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "target": {
+                "oneOf": [
+                  {"type": "string"},
+                  {
+                    "type": "object",
+                    "properties": {
+                      "path": {"type": "string"},
+                      "match": {
+                        "type": "object",
+                        "properties": {
+                          "logic": {"type": "string", "enum": ["and", "or"]},
+                          "conditions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "attr": {"type": "string"},
+                                "operator": {
+                                  "type": "string",
+                                  "enum": [
+                                    "==",
+                                    "!=",
+                                    ">",
+                                    "<",
+                                    ">=",
+                                    "<=",
+                                    "contains",
+                                    "not_contains",
+                                    "any_value",
+                                    "no_value"
+                                  ]
+                                },
+                                "value": {}
+                              },
+                              "required": ["attr", "operator"],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["path"],
+                    "additionalProperties": false
+                  }
+                ]
+              },
               "pattern": {
                 "type": "string",
                 "enum": ["mesh", "one_to_one"]

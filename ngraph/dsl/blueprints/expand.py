@@ -8,6 +8,8 @@ from itertools import product, zip_longest
 from typing import Any, Dict, List, Set
 
 from ngraph.dsl.blueprints import parse as _bp_parse
+from ngraph.failure.conditions import FailureCondition as _Cond
+from ngraph.failure.conditions import evaluate_conditions as _eval_conditions
 from ngraph.model.network import Link, Network, Node
 
 
@@ -342,10 +344,24 @@ def _expand_blueprint_adjacency(
     _bp_parse.check_link_params(link_params, context="blueprint adjacency")
     link_count = adj_def.get("link_count", 1)
 
-    src_path = _bp_parse.join_paths(parent_path, source_rel)
-    tgt_path = _bp_parse.join_paths(parent_path, target_rel)
+    def _normalize_selector(sel: Any, base: str) -> Dict[str, Any]:
+        if isinstance(sel, str):
+            return {"path": _bp_parse.join_paths(base, sel)}
+        if isinstance(sel, dict):
+            path = sel.get("path")
+            if not isinstance(path, str):
+                raise ValueError("Selector object must contain string 'path'.")
+            out = dict(sel)
+            out["path"] = _bp_parse.join_paths(base, path)
+            return out
+        raise ValueError(
+            "Adjacency 'source'/'target' must be string or object with 'path'."
+        )
 
-    _expand_adjacency_pattern(ctx, src_path, tgt_path, pattern, link_params, link_count)
+    src_sel = _normalize_selector(source_rel, parent_path)
+    tgt_sel = _normalize_selector(target_rel, parent_path)
+
+    _expand_adjacency_pattern(ctx, src_sel, tgt_sel, pattern, link_params, link_count)
 
 
 def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None:
@@ -373,12 +389,24 @@ def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None
     link_params = adj_def.get("link_params", {})
     _bp_parse.check_link_params(link_params, context="top-level adjacency")
 
-    source_path = _bp_parse.join_paths("", source_path_raw)
-    target_path = _bp_parse.join_paths("", target_path_raw)
+    def _normalize_selector(sel: Any, base: str) -> Dict[str, Any]:
+        if isinstance(sel, str):
+            return {"path": _bp_parse.join_paths(base, sel)}
+        if isinstance(sel, dict):
+            path = sel.get("path")
+            if not isinstance(path, str):
+                raise ValueError("Selector object must contain string 'path'.")
+            out = dict(sel)
+            out["path"] = _bp_parse.join_paths(base, path)
+            return out
+        raise ValueError(
+            "Adjacency 'source'/'target' must be string or object with 'path'."
+        )
 
-    _expand_adjacency_pattern(
-        ctx, source_path, target_path, pattern, link_params, link_count
-    )
+    src_sel = _normalize_selector(source_path_raw, "")
+    tgt_sel = _normalize_selector(target_path_raw, "")
+
+    _expand_adjacency_pattern(ctx, src_sel, tgt_sel, pattern, link_params, link_count)
 
 
 def _expand_adjacency_with_variables(
@@ -421,7 +449,12 @@ def _expand_adjacency_with_variables(
                 parent_path, target_template.format(**combo_dict)
             )
             _expand_adjacency_pattern(
-                ctx, expanded_src, expanded_tgt, pattern, link_params, link_count
+                ctx,
+                {"path": expanded_src},
+                {"path": expanded_tgt},
+                pattern,
+                link_params,
+                link_count,
             )
     else:
         # "cartesian" default
@@ -434,14 +467,19 @@ def _expand_adjacency_with_variables(
                 parent_path, target_template.format(**combo_dict)
             )
             _expand_adjacency_pattern(
-                ctx, expanded_src, expanded_tgt, pattern, link_params, link_count
+                ctx,
+                {"path": expanded_src},
+                {"path": expanded_tgt},
+                pattern,
+                link_params,
+                link_count,
             )
 
 
 def _expand_adjacency_pattern(
     ctx: DSLExpansionContext,
-    source_path: str,
-    target_path: str,
+    source_selector: Any,
+    target_selector: Any,
     pattern: str,
     link_params: Dict[str, Any],
     link_count: int = 1,
@@ -460,17 +498,75 @@ def _expand_adjacency_pattern(
 
     Args:
         ctx (DSLExpansionContext): The context with the target network.
-        source_path (str): Path pattern identifying source node group(s).
-        target_path (str): Path pattern identifying target node group(s).
+        source_selector (str|dict): Path string or selector object {path, match}.
+        target_selector (str|dict): Path string or selector object {path, match}.
         pattern (str): "mesh" or "one_to_one".
         link_params (Dict[str, Any]): Additional link parameters (capacity, cost, disabled, risk_groups, attrs).
         link_count (int): Number of parallel links to create for each adjacency.
     """
+
+    def _normalize(sel: Any) -> tuple[str, Dict[str, Any] | None]:
+        if isinstance(sel, str):
+            return sel, None
+        if isinstance(sel, dict):
+            path = sel.get("path")
+            if not isinstance(path, str):
+                raise ValueError("Selector object must contain string 'path'.")
+            match = sel.get("match")
+            if match is not None and not isinstance(match, dict):
+                raise ValueError("'match' must be a dictionary if provided.")
+            return path, match
+        raise ValueError("source/target must be string or selector object with 'path'.")
+
+    source_path, source_match = _normalize(source_selector)
+    target_path, target_match = _normalize(target_selector)
+
     source_node_groups = ctx.network.select_node_groups_by_path(source_path)
     target_node_groups = ctx.network.select_node_groups_by_path(target_path)
 
-    source_nodes = [node for _, nodes in source_node_groups.items() for node in nodes]
-    target_nodes = [node for _, nodes in target_node_groups.items() for node in nodes]
+    def _flatten_node(node: Node) -> Dict[str, Any]:
+        return {
+            "name": node.name,
+            "disabled": node.disabled,
+            "risk_groups": node.risk_groups,
+            **{
+                k: v
+                for k, v in node.attrs.items()
+                if k not in {"name", "disabled", "risk_groups"}
+            },
+        }
+
+    def _apply_match(nodes: List[Node], match: Dict[str, Any] | None) -> List[Node]:
+        if not match:
+            return nodes
+        logic = match.get("logic", "or")
+        cond_dicts = match.get("conditions", [])
+        if not isinstance(cond_dicts, list):
+            raise ValueError("match.conditions must be a list if provided.")
+        conditions: List[_Cond] = []
+        for cd in cond_dicts:
+            if not isinstance(cd, dict) or "attr" not in cd or "operator" not in cd:
+                raise ValueError(
+                    "Each condition must be a dict with 'attr' and 'operator'."
+                )
+            conditions.append(
+                _Cond(attr=cd["attr"], operator=cd["operator"], value=cd.get("value"))
+            )
+        filtered: List[Node] = []
+        for n in nodes:
+            attrs = _flatten_node(n)
+            if _eval_conditions(attrs, conditions, logic):
+                filtered.append(n)
+        return filtered
+
+    source_nodes = _apply_match(
+        [node for _, nodes in source_node_groups.items() for node in nodes],
+        source_match,
+    )
+    target_nodes = _apply_match(
+        [node for _, nodes in target_node_groups.items() for node in nodes],
+        target_match,
+    )
 
     if not source_nodes or not target_nodes:
         return
