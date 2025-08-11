@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 11, 2025 at 12:27 UTC
+Generated from source code on: August 11, 2025 at 19:00 UTC
 
-Modules auto-discovered: 65
+Modules auto-discovered: 66
 
 ---
 
@@ -1194,6 +1194,15 @@ Implements Dijkstra-like SPF with pluggable edge-selection policies and a
 Yen-like KSP generator. Specialized fast paths exist for common selection
 strategies without exclusions.
 
+Notes:
+    When a destination node is known, SPF supports an optimized mode that
+    terminates once the destination's minimal distance is settled. In this mode:
+
+- The destination node is not expanded (no neighbor relaxation from ``dst``).
+- The algorithm continues processing any nodes with equal distance to capture
+
+      equal-cost predecessors (needed by proportional flow placement).
+
 ### ksp(graph: ngraph.graph.strict_multidigraph.StrictMultiDiGraph, src_node: Hashable, dst_node: Hashable, edge_select: ngraph.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.graph.strict_multidigraph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, max_k: Optional[int] = None, max_path_cost: Union[int, float] = inf, max_path_cost_factor: Optional[float] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Iterator[Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]]
 
 Yield up to k shortest paths using a Yen-like algorithm.
@@ -1220,7 +1229,7 @@ Args:
 Yields:
     Tuple of ``(costs, pred)`` per discovered path in ascending cost order.
 
-### spf(graph: ngraph.graph.strict_multidigraph.StrictMultiDiGraph, src_node: Hashable, edge_select: ngraph.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.graph.strict_multidigraph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None) -> Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]
+### spf(graph: ngraph.graph.strict_multidigraph.StrictMultiDiGraph, src_node: Hashable, edge_select: ngraph.algorithms.base.EdgeSelect = <EdgeSelect.ALL_MIN_COST: 1>, edge_select_func: Optional[Callable[[ngraph.graph.strict_multidigraph.StrictMultiDiGraph, Hashable, Hashable, Dict[Hashable, Dict[str, Any]], Set[Hashable], Set[Hashable]], Tuple[Union[int, float], List[Hashable]]]] = None, multipath: bool = True, excluded_edges: Optional[Set[Hashable]] = None, excluded_nodes: Optional[Set[Hashable]] = None, dst_node: Optional[Hashable] = None) -> Tuple[Dict[Hashable, Union[int, float]], Dict[Hashable, Dict[Hashable, List[Hashable]]]]
 
 Compute shortest paths from a source node.
 
@@ -1239,6 +1248,11 @@ Args:
     multipath: Whether to record multiple same-cost paths.
     excluded_edges: A set of edge IDs to ignore in the graph.
     excluded_nodes: A set of node IDs to ignore in the graph.
+    dst_node: Optional destination node. If provided, SPF avoids expanding
+        from the destination and performs early termination once the next
+        candidate in the heap would exceed the settled distance for
+        ``dst_node``. This preserves equal-cost predecessors while avoiding
+        unnecessary relaxations beyond the destination.
 
 Returns:
     tuple[dict[NodeID, Cost], dict[NodeID, dict[NodeID, list[EdgeID]]]]:
@@ -2622,6 +2636,59 @@ Attributes:
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
 - `run(self, scenario: "'Scenario'") -> 'None'` - Execute capacity envelope analysis using `FailureManager`.
+
+---
+
+## ngraph.workflow.maximum_supported_demand
+
+Maximum Supported Demand (MSD) search workflow step.
+
+Search for the largest scaling factor ``alpha`` such that the selected traffic
+matrix is feasible under the demand placement procedure. The search brackets a
+feasible/infeasible interval, then performs bisection on feasibility.
+
+This implementation provides the hard-feasibility rule only: every OD must be
+fully placed. The step records search parameters, the decision rule, and the
+original (unscaled) demands so the result is interpretable without the scenario.
+
+### MaximumSupportedDemandAnalysis
+
+Search for Maximum Supported Demand (MSD) by scaling and bisection.
+
+Args:
+    matrix_name: Name of the traffic matrix to scale and test.
+    acceptance_rule: Only "hard" is implemented: all OD pairs must be fully placed.
+    alpha_start: Initial guess for alpha.
+    growth_factor: Factor g>1 to expand/shrink during bracketing.
+    alpha_min: Minimum alpha allowed during bracketing.
+    alpha_max: Maximum alpha allowed during bracketing.
+    resolution: Stop when upper-lower <= resolution.
+    max_bracket_iters: Limit on growth/shrink iterations during bracketing.
+    max_bisect_iters: Limit on iterations during bisection.
+    seeds_per_alpha: Number of repeated runs per alpha; alpha is feasible if
+        majority of seeds satisfy the rule. Deterministic policies will yield identical results.
+    placement_rounds: Rounds passed to TrafficManager.place_all_demands().
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (Optional[int])
+- `matrix_name` (str) = default
+- `acceptance_rule` (str) = hard
+- `alpha_start` (float) = 1.0
+- `growth_factor` (float) = 2.0
+- `alpha_min` (float) = 1e-06
+- `alpha_max` (float) = 1000000000.0
+- `resolution` (float) = 0.01
+- `max_bracket_iters` (int) = 32
+- `max_bisect_iters` (int) = 32
+- `seeds_per_alpha` (int) = 1
+- `placement_rounds` (int | str) = auto
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
+- `run(self, scenario: "'Any'") -> 'None'` - Execute MSD search and store results.
 
 ---
 

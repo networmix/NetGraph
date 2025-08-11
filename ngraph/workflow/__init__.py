@@ -3,6 +3,7 @@
 from .base import WorkflowStep, register_workflow_step
 from .build_graph import BuildGraph
 from .capacity_envelope_analysis import CapacityEnvelopeAnalysis
+from .maximum_supported_demand import MaximumSupportedDemandAnalysis
 from .network_stats import NetworkStats
 from .traffic_matrix_placement_analysis import TrafficMatrixPlacementAnalysis
 
@@ -13,4 +14,5 @@ __all__ = [
     "CapacityEnvelopeAnalysis",
     "NetworkStats",
     "TrafficMatrixPlacementAnalysis",
+    "MaximumSupportedDemandAnalysis",
 ]
