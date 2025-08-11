@@ -294,13 +294,13 @@ components:
   ToRSwitch48p:
     component_type: "switch"
     description: "48-port ToR switch"
-    cost: 8000.0
+    capex: 8000.0
     power_watts: 350.0
     ports: 48
     children:
       SFP28_25G:
         component_type: "optic"
-        cost: 150.0
+        capex: 150.0
         count: 48
 
 network:

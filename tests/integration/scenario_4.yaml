@@ -8,7 +8,7 @@ components:
   ToRSwitch48p:
     component_type: "switch"
     description: "48-port Top of Rack switch"
-    cost: 8000.0
+    capex: 8000.0
     power_watts: 350.0
     power_watts_max: 600.0
     capacity: 2400.0 # 48 * 50G aggregate
@@ -22,7 +22,7 @@ components:
       SFP28_25G:
         component_type: "optic"
         description: "25G SFP28 optic"
-        cost: 150.0
+        capex: 150.0
         power_watts: 1.5
         capacity: 25.0
         count: 48
@@ -33,7 +33,7 @@ components:
   SpineSwitch32p:
     component_type: "switch"
     description: "32-port spine switch"
-    cost: 25000.0
+    capex: 25000.0
     power_watts: 800.0
     power_watts_max: 1000.0
     capacity: 12800.0 # 32 * 400G aggregate
@@ -47,7 +47,7 @@ components:
       QSFP_DD_400G:
         component_type: "optic"
         description: "400G QSFP-DD optic"
-        cost: 2500.0
+        capex: 2500.0
         power_watts: 15.0
         capacity: 400.0
         count: 32
@@ -58,7 +58,7 @@ components:
   ServerNode:
     component_type: "server"
     description: "Dual-socket server node"
-    cost: 12000.0
+    capex: 12000.0
     power_watts: 400.0
     power_watts_max: 500.0
     ports: 2

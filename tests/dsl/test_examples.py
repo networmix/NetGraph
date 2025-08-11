@@ -193,7 +193,7 @@ components:
   SpineChassis:
     component_type: "chassis"
     description: "High-capacity spine router chassis"
-    cost: 50000.0
+    capex: 50000.0
     power_watts: 2500.0
     power_watts_max: 3000.0
     capacity: 64000.0
@@ -205,7 +205,7 @@ components:
     children:
       LineCard400G:
         component_type: "linecard"
-        cost: 8000.0
+        capex: 8000.0
         power_watts: 400.0
         capacity: 12800.0
         ports: 32
@@ -224,7 +224,7 @@ network:
     component = scenario.components_library.get("SpineChassis")
     assert component is not None
     assert component.component_type == "chassis"
-    assert component.cost == 50000.0
+    assert component.capex == 50000.0
 
 
 def test_risk_groups_example():

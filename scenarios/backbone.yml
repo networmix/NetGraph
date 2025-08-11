@@ -23,7 +23,7 @@ components:
   800G-ZR+:
     component_type: optic
     description: 800G ZR+ pluggable optic
-    cost: 10000.0
+    capex: 10000.0
     power_watts: 29.0
     power_watts_max: 30.0
     capacity: 800.0
@@ -32,7 +32,7 @@ components:
   CoreRouter:
     component_type: chassis
     description: 16 slot, 36x800G ports per slot, 576 ports total
-    cost: 650000.0
+    capex: 650000.0
     power_watts: 23000.0
     power_watts_max: 30000.0
     capacity: 460800.0

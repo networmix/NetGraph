@@ -15,12 +15,12 @@ def create_mock_components_library() -> ComponentsLibrary:
     # Add a couple of known components for testing cost/power aggregation
     lib.components["known_hw"] = Component(
         name="known_hw",
-        cost=10.0,
+        capex=10.0,
         power_watts=2.0,
     )
     lib.components["optic_hw"] = Component(
         name="optic_hw",
-        cost=5.0,
+        capex=5.0,
         power_watts=1.0,
     )
     return lib
@@ -51,7 +51,7 @@ def test_explore_empty_network():
     assert explorer.root_node.stats.node_count == 0
     assert explorer.root_node.stats.internal_link_count == 0
     assert explorer.root_node.stats.external_link_count == 0
-    assert explorer.root_node.stats.total_cost == 0
+    assert explorer.root_node.stats.total_capex == 0
     assert explorer.root_node.stats.total_power == 0
 
 
@@ -162,7 +162,7 @@ def test_explore_network_with_links():
     assert root.stats.internal_link_capacity == 300.0
     assert root.stats.external_link_count == 0
     assert root.stats.external_link_capacity == 0.0
-    assert root.stats.total_cost == 15.0  # 10 (node) + 5 (link) for known
+    assert root.stats.total_capex == 15.0  # 10 (node) + 5 (link) for known
     assert root.stats.total_power == 3.0  # 2 (node) + 1 (link)
 
     # From dc1's perspective, the link to dc2 is external

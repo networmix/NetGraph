@@ -1,4 +1,4 @@
-"""Component and ComponentsLibrary classes for hardware cost modeling."""
+"""Component and ComponentsLibrary classes for hardware capex/power modeling."""
 
 from __future__ import annotations
 
@@ -14,13 +14,13 @@ from ngraph.yaml_utils import normalize_yaml_dict_keys
 @dataclass
 class Component:
     """A generic component that can represent chassis, line cards, optics, etc.
-    Components can have nested children, each with their own cost, power, etc.
+    Components can have nested children, each with their own capex, power, etc.
 
     Attributes:
         name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
         component_type (str): A string label (e.g., "chassis", "linecard", "optic").
         description (str): A human-readable description of this component.
-        cost (float): Cost (capex) of a single instance of this component.
+        capex (float): Monetary capex of a single instance of this component.
         power_watts (float): Typical/nominal power usage (watts) for one instance.
         power_watts_max (float): Maximum/peak power usage (watts) for one instance.
         capacity (float): A generic capacity measure (e.g., platform capacity).
@@ -34,7 +34,7 @@ class Component:
     name: str
     component_type: str = "generic"
     description: str = ""
-    cost: float = 0.0
+    capex: float = 0.0
 
     power_watts: float = 0.0  # Typical power usage
     power_watts_max: float = 0.0  # Peak power usage
@@ -46,17 +46,12 @@ class Component:
     attrs: Dict[str, Any] = field(default_factory=dict)
     children: Dict[str, Component] = field(default_factory=dict)
 
-    def total_cost(self) -> float:
-        """Computes the total (recursive) cost of this component, including children,
-        multiplied by this component's count.
-
-        Returns:
-            float: The total cost.
-        """
-        single_instance_cost = self.cost
+    def total_capex(self) -> float:
+        """Computes total capex including children, multiplied by count."""
+        single_instance_capex = self.capex
         for child in self.children.values():
-            single_instance_cost += child.total_cost()
-        return single_instance_cost * self.count
+            single_instance_capex += child.total_capex()
+        return single_instance_capex * self.count
 
     def total_power(self) -> float:
         """Computes the total *typical* (recursive) power usage of this component,
@@ -107,7 +102,7 @@ class Component:
             "name": self.name,
             "component_type": self.component_type,
             "description": self.description,
-            "cost": self.cost,
+            "capex": self.capex,
             "power_watts": self.power_watts,
             "power_watts_max": self.power_watts_max,
             "capacity": self.capacity,
@@ -217,7 +212,7 @@ class ComponentsLibrary:
             Component: The constructed Component instance.
         """
         comp_type = definition_data.get("component_type", "generic")
-        cost = float(definition_data.get("cost", 0.0))
+        capex = float(definition_data.get("capex", 0.0))
         power = float(definition_data.get("power_watts", 0.0))
         power_max = float(definition_data.get("power_watts_max", 0.0))
         capacity = float(definition_data.get("capacity", 0.0))
@@ -233,7 +228,7 @@ class ComponentsLibrary:
 
         recognized_keys = {
             "component_type",
-            "cost",
+            "capex",
             "power_watts",
             "power_watts_max",
             "capacity",
@@ -257,7 +252,7 @@ class ComponentsLibrary:
             name=name,
             component_type=comp_type,
             description=definition_data.get("description", ""),
-            cost=cost,
+            capex=capex,
             power_watts=power,
             power_watts_max=power_max,
             capacity=capacity,

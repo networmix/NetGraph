@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 11, 2025 at 19:00 UTC
+Generated from source code on: August 11, 2025 at 21:22 UTC
 
-Modules auto-discovered: 66
+Modules auto-discovered: 67
 
 ---
 
@@ -34,18 +34,18 @@ Args:
 
 ## ngraph.components
 
-Component and ComponentsLibrary classes for hardware cost modeling.
+Component and ComponentsLibrary classes for hardware capex/power modeling.
 
 ### Component
 
 A generic component that can represent chassis, line cards, optics, etc.
-Components can have nested children, each with their own cost, power, etc.
+Components can have nested children, each with their own capex, power, etc.
 
 Attributes:
     name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
     component_type (str): A string label (e.g., "chassis", "linecard", "optic").
     description (str): A human-readable description of this component.
-    cost (float): Cost (capex) of a single instance of this component.
+    capex (float): Monetary capex of a single instance of this component.
     power_watts (float): Typical/nominal power usage (watts) for one instance.
     power_watts_max (float): Maximum/peak power usage (watts) for one instance.
     capacity (float): A generic capacity measure (e.g., platform capacity).
@@ -60,7 +60,7 @@ Attributes:
 - `name` (str)
 - `component_type` (str) = generic
 - `description` (str)
-- `cost` (float) = 0.0
+- `capex` (float) = 0.0
 - `power_watts` (float) = 0.0
 - `power_watts_max` (float) = 0.0
 - `capacity` (float) = 0.0
@@ -73,7 +73,7 @@ Attributes:
 
 - `as_dict(self, include_children: 'bool' = True) -> 'Dict[str, Any]'` - Returns a dictionary containing all properties of this component.
 - `total_capacity(self) -> 'float'` - Computes the total (recursive) capacity of this component,
-- `total_cost(self) -> 'float'` - Computes the total (recursive) cost of this component, including children,
+- `total_capex(self) -> 'float'` - Computes total capex including children, multiplied by count.
 - `total_power(self) -> 'float'` - Computes the total *typical* (recursive) power usage of this component,
 - `total_power_max(self) -> 'float'` - Computes the total *peak* (recursive) power usage of this component,
 
@@ -186,8 +186,8 @@ Attributes:
 - `children` (Dict[str, TreeNode]) = {}
 - `subtree_nodes` (Set[str]) = set()
 - `active_subtree_nodes` (Set[str]) = set()
-- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
-- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_cost=0.0, total_power=0.0)
+- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0)
+- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0)
 - `raw_nodes` (List[Node]) = []
 
 **Methods:**
@@ -206,7 +206,7 @@ Attributes:
     external_link_count (int): Number of external links from this subtree to another.
     external_link_capacity (float): Sum of capacities for those external links.
     external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown by other subtree path.
-    total_cost (float): Cumulative cost (nodes + links).
+    total_capex (float): Cumulative capex (nodes + links).
     total_power (float): Cumulative power (nodes + links).
 
 **Attributes:**
@@ -217,7 +217,7 @@ Attributes:
 - `external_link_count` (int) = 0
 - `external_link_capacity` (float) = 0.0
 - `external_link_details` (Dict[str, ExternalLinkBreakdown]) = {}
-- `total_cost` (float) = 0.0
+- `total_capex` (float) = 0.0
 - `total_power` (float) = 0.0
 
 ---
@@ -2639,6 +2639,64 @@ Attributes:
 
 ---
 
+## ngraph.workflow.cost_power_efficiency
+
+Workflow step to compute cost/power efficiency metrics.
+
+Computes total capex and power for the active network inventory, and normalizes
+by a provided delivered-bandwidth figure (e.g., BAC at availability target).
+
+This step does not compute BAC itself; it expects callers to pass the delivered
+bandwidth value explicitly or to point to a prior step result.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: CostPowerEfficiency
+
+        name: "cost_power_efficiency"   # Optional custom name
+        delivered_bandwidth_gbps: 10000  # Optional explicit denominator (float)
+        delivered_bandwidth_key: "delivered_bandwidth_gbps"  # Lookup key in results
+        include_disabled: true           # Whether to include disabled nodes/links in totals
+    ```
+
+Results stored in `scenario.results` under the step name:
+
+- total_capex: Sum of component capex (float)
+- total_power_watts: Sum of component power (float)
+- delivered_bandwidth_gbps: Denominator used for normalization (float)
+- dollars_per_gbit: Normalized capex (float, inf if denominator <= 0)
+- watts_per_gbit: Normalized power (float, inf if denominator <= 0)
+
+### CostPowerEfficiency
+
+Compute $/Gbit and W/Gbit given delivered bandwidth.
+
+Attributes:
+    delivered_bandwidth_gbps: Delivered bandwidth in Gbit/s used as denominator.
+        If not provided, the step will attempt to read a value from
+        ``scenario.results`` using ``delivered_bandwidth_key``.
+    delivered_bandwidth_key: Results key to read if ``delivered_bandwidth_gbps``
+        is None. The key is looked up under this step's own namespace first; if
+        not present, the key is treated as a global results key.
+    include_disabled: If False, only enabled nodes/links are counted for totals.
+        Default ``True`` aggregates regardless of disabled flags.
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (Optional[int])
+- `delivered_bandwidth_gbps` (Optional[float])
+- `delivered_bandwidth_key` (str) = delivered_bandwidth_gbps
+- `include_disabled` (bool) = True
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
+- `run(self, scenario: 'Any') -> 'None'` - Compute totals and normalized efficiency metrics.
+
+---
+
 ## ngraph.workflow.maximum_supported_demand
 
 Maximum Supported Demand (MSD) search workflow step.
@@ -2650,6 +2708,32 @@ feasible/infeasible interval, then performs bisection on feasibility.
 This implementation provides the hard-feasibility rule only: every OD must be
 fully placed. The step records search parameters, the decision rule, and the
 original (unscaled) demands so the result is interpretable without the scenario.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: MaximumSupportedDemandAnalysis
+
+        name: msd_baseline_tm          # Optional step name
+        matrix_name: baseline_traffic_matrix
+        acceptance_rule: hard          # currently only 'hard' supported
+        alpha_start: 1.0
+        growth_factor: 2.0
+        alpha_min: 1e-6
+        alpha_max: 1e9
+        resolution: 0.01
+        max_bracket_iters: 16
+        max_bisect_iters: 32
+        seeds_per_alpha: 3
+        placement_rounds: auto
+    ```
+
+Results stored in `scenario.results` under the step name:
+
+- alpha_star: Final feasible alpha (float)
+- context: Search parameters and decision rule (dict)
+- base_demands: Unscaled base demands for the matrix (list[dict])
+- probes: Per-alpha probe summaries with feasibility and placement ratio (list)
 
 ### MaximumSupportedDemandAnalysis
 
@@ -2771,6 +2855,7 @@ YAML Configuration Example:
         seed: 42                           # Optional reproducible seed
         store_failure_patterns: false      # Store failure patterns if needed
         include_flow_details: true         # Collect per-demand cost distribution and edges
+        alpha: 1.0                        # Optional scaling factor for all demands
 
 Results stored in `scenario.results` under the step name:
 
@@ -2799,6 +2884,11 @@ Attributes:
     include_flow_details: If True, collect per-demand cost distribution and
         edges used per iteration, and aggregate into ``flow_summary_stats``
         on each placement envelope.
+    alpha: Scaling factor applied to all demand values prior to analysis.
+        Accepts a positive float or the string "auto". When "auto", the
+        step looks up the most recent prior MaximumSupportedDemandAnalysis for
+        the same matrix with identical base demands and uses its alpha_star.
+        Raises ValueError if no suitable MSD result is found or validation fails.
 
 **Attributes:**
 
@@ -2812,6 +2902,7 @@ Attributes:
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
+- `alpha` (float | str) = 1.0
 
 **Methods:**
 

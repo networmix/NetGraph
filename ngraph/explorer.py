@@ -36,7 +36,7 @@ class TreeStats:
         external_link_count (int): Number of external links from this subtree to another.
         external_link_capacity (float): Sum of capacities for those external links.
         external_link_details (Dict[str, ExternalLinkBreakdown]): Breakdown by other subtree path.
-        total_cost (float): Cumulative cost (nodes + links).
+        total_capex (float): Cumulative capex (nodes + links).
         total_power (float): Cumulative power (nodes + links).
     """
 
@@ -52,7 +52,7 @@ class TreeStats:
         default_factory=dict
     )
 
-    total_cost: float = 0.0
+    total_capex: float = 0.0
     total_power: float = 0.0
 
 
@@ -253,7 +253,7 @@ class NetworkExplorer:
         if self.root_node:
             set_node_counts(self.root_node)
 
-        # 2) Accumulate node cost/power
+        # 2) Accumulate node capex/power
         for nd in self.network.nodes.values():
             hw_comp_name = nd.attrs.get("hw_component")
             comp = None
@@ -265,22 +265,22 @@ class NetworkExplorer:
                         nd.name,
                         hw_comp_name,
                     )
-            cost_val = comp.total_cost() if comp else 0.0
+            cost_val = comp.total_capex() if comp else 0.0
             power_val = comp.total_power() if comp else 0.0
 
             tree_node = self._node_map[nd.name]
             # "All" includes disabled
             for an in self._get_ancestors(tree_node):
-                an.stats.total_cost += cost_val
+                an.stats.total_capex += cost_val
                 an.stats.total_power += power_val
 
             # "Active" excludes disabled
             if not nd.attrs.get("disabled"):
                 for an in self._get_ancestors(tree_node):
-                    an.active_stats.total_cost += cost_val
+                    an.active_stats.total_capex += cost_val
                     an.active_stats.total_power += power_val
 
-        # 3) Accumulate link stats (internal/external + cost/power)
+        # 3) Accumulate link stats (internal/external + capex/power)
         for link in self.network.links.values():
             src = link.source
             dst = link.target
@@ -296,7 +296,7 @@ class NetworkExplorer:
                         dst,
                         link_comp_name,
                     )
-            link_cost = link_comp.total_cost() if link_comp else 0.0
+            link_cost = link_comp.total_capex() if link_comp else 0.0
             link_power = link_comp.total_power() if link_comp else 0.0
             cap = link.capacity
 
@@ -312,12 +312,12 @@ class NetworkExplorer:
             for an in inter_anc:
                 an.stats.internal_link_count += 1
                 an.stats.internal_link_capacity += cap
-                an.stats.total_cost += link_cost
+                an.stats.total_capex += link_cost
                 an.stats.total_power += link_power
             for an in xor_anc:
                 an.stats.external_link_count += 1
                 an.stats.external_link_capacity += cap
-                an.stats.total_cost += link_cost
+                an.stats.total_capex += link_cost
                 an.stats.total_power += link_power
 
                 if an in A_src:
@@ -342,12 +342,12 @@ class NetworkExplorer:
             for an in inter_anc:
                 an.active_stats.internal_link_count += 1
                 an.active_stats.internal_link_capacity += cap
-                an.active_stats.total_cost += link_cost
+                an.active_stats.total_capex += link_cost
                 an.active_stats.total_power += link_power
             for an in xor_anc:
                 an.active_stats.external_link_count += 1
                 an.active_stats.external_link_capacity += cap
-                an.active_stats.total_cost += link_cost
+                an.active_stats.total_capex += link_cost
                 an.active_stats.total_power += link_power
 
                 if an in A_src:
@@ -405,7 +405,7 @@ class NetworkExplorer:
         line = (
             f"{'  ' * indent}- {node.name or 'root'} | "
             f"Nodes={stats.node_count}, Links={total_links}, "
-            f"Cost={stats.total_cost}, Power={stats.total_power}"
+            f"CapEx={stats.total_capex}, Power={stats.total_power}"
         )
         if detailed:
             line += (

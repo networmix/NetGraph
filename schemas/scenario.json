@@ -556,10 +556,10 @@
       "patternProperties": {
         "^[a-zA-Z0-9_\\-\\+]+$": {
           "type": "object",
-          "properties": {
+            "properties": {
             "component_type": {"type": "string"},
             "description": {"type": "string"},
-            "cost": {"type": "number"},
+              "capex": {"type": "number"},
             "power_watts": {"type": "number"},
             "power_watts_max": {"type": "number"},
             "capacity": {"type": "number"},

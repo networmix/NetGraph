@@ -11,7 +11,7 @@ def test_component_totals_with_count_and_children() -> None:
     """
     child_a = Component(
         name="ChildA",
-        cost=10.0,
+        capex=10.0,
         power_watts=2.0,
         power_watts_max=3.0,
         capacity=5.0,
@@ -19,7 +19,7 @@ def test_component_totals_with_count_and_children() -> None:
     )
     child_b = Component(
         name="ChildB",
-        cost=4.0,
+        capex=4.0,
         power_watts=1.0,
         power_watts_max=1.5,
         capacity=2.0,
@@ -27,7 +27,7 @@ def test_component_totals_with_count_and_children() -> None:
     )
     parent = Component(
         name="Parent",
-        cost=20.0,
+        capex=20.0,
         power_watts=5.0,
         power_watts_max=7.0,
         capacity=11.0,
@@ -53,7 +53,7 @@ def test_component_totals_with_count_and_children() -> None:
     agg_capacity = 11.0 + child_a_capacity + child_b_capacity
 
     # Apply parent count multiplicity
-    assert parent.total_cost() == agg_cost * 2
+    assert parent.total_capex() == agg_cost * 2
     assert parent.total_power() == agg_power * 2
     assert parent.total_power_max() == agg_power_max * 2
     assert parent.total_capacity() == agg_capacity * 2
@@ -63,8 +63,8 @@ def test_component_total_cost_and_power_no_children() -> None:
     """
     Test total_cost and total_power with no child components.
     """
-    comp = Component(name="Solo", cost=200.0, power_watts=10.0)
-    assert comp.total_cost() == 200.0
+    comp = Component(name="Solo", capex=200.0, power_watts=10.0)
+    assert comp.total_capex() == 200.0
     assert comp.total_power() == 10.0
 
 
@@ -72,16 +72,16 @@ def test_component_total_cost_and_power_with_children() -> None:
     """
     Test total_cost and total_power with nested child components.
     """
-    child1 = Component(name="Child1", cost=50.0, power_watts=5.0)
-    child2 = Component(name="Child2", cost=20.0, power_watts=2.0)
+    child1 = Component(name="Child1", capex=50.0, power_watts=5.0)
+    child2 = Component(name="Child2", capex=20.0, power_watts=2.0)
     parent = Component(
         name="Parent",
-        cost=100.0,
+        capex=100.0,
         power_watts=10.0,
         children={"Child1": child1, "Child2": child2},
     )
 
-    assert parent.total_cost() == 100.0 + 50.0 + 20.0
+    assert parent.total_capex() == 100.0 + 50.0 + 20.0
     assert parent.total_power() == 10.0 + 5.0 + 2.0
 
 
@@ -90,10 +90,10 @@ def test_component_as_dict() -> None:
     Test that as_dict returns a dictionary with correct fields,
     and that we can exclude child data if desired.
     """
-    child = Component(name="Child", cost=10.0)
+    child = Component(name="Child", capex=10.0)
     parent = Component(
         name="Parent",
-        cost=100.0,
+        capex=100.0,
         power_watts=25.0,
         children={"Child": child},
         attrs={"location": "rack1"},
@@ -102,13 +102,13 @@ def test_component_as_dict() -> None:
     # Include children
     parent_dict_incl = parent.as_dict(include_children=True)
     assert parent_dict_incl["name"] == "Parent"
-    assert parent_dict_incl["cost"] == 100.0
+    assert parent_dict_incl["capex"] == 100.0
     assert parent_dict_incl["power_watts"] == 25.0
     assert parent_dict_incl["attrs"]["location"] == "rack1"
     assert "children" in parent_dict_incl
     assert len(parent_dict_incl["children"]) == 1
     assert parent_dict_incl["children"]["Child"]["name"] == "Child"
-    assert parent_dict_incl["children"]["Child"]["cost"] == 10.0
+    assert parent_dict_incl["children"]["Child"]["capex"] == 10.0
 
     # Exclude children
     parent_dict_excl = parent.as_dict(include_children=False)
@@ -139,19 +139,19 @@ def test_components_library_merge_override_true() -> None:
     Test merging two libraries with override=True.
     Components with duplicate names in 'other' should overwrite the original.
     """
-    original_comp = Component("Overlap", cost=100.0)
+    original_comp = Component("Overlap", capex=100.0)
     lib1 = ComponentsLibrary(
         components={
             "Overlap": original_comp,
-            "UniqueLib1": Component("UniqueLib1", cost=50.0),
+            "UniqueLib1": Component("UniqueLib1", capex=50.0),
         }
     )
 
-    new_comp = Component("Overlap", cost=200.0)
+    new_comp = Component("Overlap", capex=200.0)
     lib2 = ComponentsLibrary(
         components={
             "Overlap": new_comp,
-            "UniqueLib2": Component("UniqueLib2", cost=75.0),
+            "UniqueLib2": Component("UniqueLib2", capex=75.0),
         }
     )
 
@@ -169,19 +169,19 @@ def test_components_library_merge_override_false() -> None:
     Test merging two libraries with override=False.
     Original components should remain in case of a name clash.
     """
-    original_comp = Component("Overlap", cost=100.0)
+    original_comp = Component("Overlap", capex=100.0)
     lib1 = ComponentsLibrary(
         components={
             "Overlap": original_comp,
-            "UniqueLib1": Component("UniqueLib1", cost=50.0),
+            "UniqueLib1": Component("UniqueLib1", capex=50.0),
         }
     )
 
-    new_comp = Component("Overlap", cost=200.0)
+    new_comp = Component("Overlap", capex=200.0)
     lib2 = ComponentsLibrary(
         components={
             "Overlap": new_comp,
-            "UniqueLib2": Component("UniqueLib2", cost=75.0),
+            "UniqueLib2": Component("UniqueLib2", capex=75.0),
         }
     )
 
@@ -196,8 +196,8 @@ def test_components_library_clone() -> None:
     """
     Test that clone() creates a deep copy of the library.
     """
-    comp_a = Component("CompA", cost=10.0)
-    comp_b = Component("CompB", cost=20.0)
+    comp_a = Component("CompA", capex=10.0)
+    comp_b = Component("CompB", capex=20.0)
     original = ComponentsLibrary(components={"CompA": comp_a, "CompB": comp_b})
     clone_lib = original.clone()
 
@@ -216,18 +216,18 @@ def test_components_library_from_dict() -> None:
     data = {
         "BigSwitch": {
             "component_type": "chassis",
-            "cost": 20000,
+            "capex": 20000,
             "power_watts": 1000,
             "children": {
                 "LC-48x10G": {
                     "component_type": "linecard",
-                    "cost": 5000,
+                    "capex": 5000,
                     "power_watts": 300,
                     "ports": 48,
                 }
             },
         },
-        "400G-LR4": {"component_type": "optic", "cost": 2000, "power_watts": 10},
+        "400G-LR4": {"component_type": "optic", "capex": 2000, "power_watts": 10},
     }
 
     lib = ComponentsLibrary.from_dict(data)
@@ -237,14 +237,14 @@ def test_components_library_from_dict() -> None:
     big_switch = lib.get("BigSwitch")
     assert big_switch is not None
     assert big_switch.component_type == "chassis"
-    assert big_switch.total_cost() == 20000 + 5000
+    assert big_switch.total_capex() == 20000 + 5000
     assert big_switch.total_power() == 1000 + 300
     assert "LC-48x10G" in big_switch.children
 
     optic = lib.get("400G-LR4")
     assert optic is not None
     assert optic.component_type == "optic"
-    assert optic.cost == 2000
+    assert optic.capex == 2000
     assert optic.power_watts == 10
 
 
@@ -256,11 +256,11 @@ def test_components_library_from_yaml_valid() -> None:
 components:
   MyChassis:
     component_type: chassis
-    cost: 5000
+    capex: 5000
     power_watts: 300
   MyOptic:
     component_type: optic
-    cost: 200
+    capex: 200
     power_watts: 5
     """
     lib = ComponentsLibrary.from_yaml(yaml_str)
@@ -268,9 +268,9 @@ components:
     assert lib.get("MyOptic") is not None
     chassis = lib.get("MyChassis")
     optic = lib.get("MyOptic")
-    assert chassis and chassis.cost == 5000
+    assert chassis and chassis.capex == 5000
     assert chassis.power_watts == 300
-    assert optic and optic.cost == 200
+    assert optic and optic.capex == 200
     assert optic.power_watts == 5
 
 
@@ -282,13 +282,13 @@ def test_components_library_from_yaml_no_components_key() -> None:
     yaml_str = """
 MyChassis:
   component_type: chassis
-  cost: 4000
+  capex: 4000
   power_watts: 250
 """
     lib = ComponentsLibrary.from_yaml(yaml_str)
     chassis = lib.get("MyChassis")
     assert chassis is not None
-    assert chassis.cost == 4000
+    assert chassis.capex == 4000
     assert chassis.power_watts == 250
 
 
@@ -326,33 +326,33 @@ components:
   # Regular string key
   MyChassis:
     component_type: chassis
-    cost: 1000
+    capex: 1000
     power_watts: 100
 
   # YAML 1.1 boolean keys - these get parsed as Python booleans
   true:
     component_type: optic
-    cost: 200
+    capex: 200
     power_watts: 5
   false:
     component_type: linecard
-    cost: 500
+    capex: 500
     power_watts: 25
   yes:
     component_type: switch
-    cost: 800
+    capex: 800
     power_watts: 40
   no:
     component_type: router
-    cost: 1200
+    capex: 1200
     power_watts: 60
   on:
     component_type: module
-    cost: 300
+    capex: 300
     power_watts: 15
   off:
     component_type: port
-    cost: 150
+    capex: 150
     power_watts: 8
 """
 
@@ -365,7 +365,7 @@ components:
     # Regular string key
     my_chassis = lib.get("MyChassis")
     assert my_chassis is not None
-    assert my_chassis.cost == 1000
+    assert my_chassis.capex == 1000
 
     # All true-like YAML values become "True" component (last one wins)
     # NOTE: When multiple YAML keys collapse to the same boolean value,
@@ -373,13 +373,13 @@ components:
     true_comp = lib.get("True")
     assert true_comp is not None
     assert true_comp.component_type == "module"  # from 'on:', the last true-like key
-    assert true_comp.cost == 300
+    assert true_comp.capex == 300
 
     # All false-like YAML values become "False" component (last one wins)
     false_comp = lib.get("False")
     assert false_comp is not None
     assert false_comp.component_type == "port"  # from 'off:', the last false-like key
-    assert false_comp.cost == 150
+    assert false_comp.capex == 150
 
 
 def test_components_library_yaml_boolean_child_keys():
@@ -388,28 +388,28 @@ def test_components_library_yaml_boolean_child_keys():
 components:
   ParentChassis:
     component_type: chassis
-    cost: 2000
+    capex: 2000
     power_watts: 200
     children:
       LineCard1:
         component_type: linecard
-        cost: 500
+        capex: 500
         power_watts: 25
       true:
         component_type: optic
-        cost: 100
+        capex: 100
         power_watts: 5
       false:
         component_type: module
-        cost: 200
+        capex: 200
         power_watts: 10
       yes:
         component_type: switch
-        cost: 150
+        capex: 150
         power_watts: 8
       no:
         component_type: port
-        cost: 75
+        capex: 75
         power_watts: 3
 """
 
@@ -422,13 +422,13 @@ components:
     assert child_names == {"LineCard1", "True", "False"}
 
     # Regular string child key
-    assert parent.children["LineCard1"].cost == 500
+    assert parent.children["LineCard1"].capex == 500
 
     # Boolean child keys converted to strings
     true_child = parent.children["True"]
     assert true_child.component_type == "switch"  # from 'yes:', the last true-like key
-    assert true_child.cost == 150
+    assert true_child.capex == 150
 
     false_child = parent.children["False"]
     assert false_child.component_type == "port"  # from 'no:', the last false-like key
-    assert false_child.cost == 75
+    assert false_child.capex == 75

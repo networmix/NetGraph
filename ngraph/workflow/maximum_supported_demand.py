@@ -7,6 +7,30 @@ feasible/infeasible interval, then performs bisection on feasibility.
 This implementation provides the hard-feasibility rule only: every OD must be
 fully placed. The step records search parameters, the decision rule, and the
 original (unscaled) demands so the result is interpretable without the scenario.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - step_type: MaximumSupportedDemandAnalysis
+        name: msd_baseline_tm          # Optional step name
+        matrix_name: baseline_traffic_matrix
+        acceptance_rule: hard          # currently only 'hard' supported
+        alpha_start: 1.0
+        growth_factor: 2.0
+        alpha_min: 1e-6
+        alpha_max: 1e9
+        resolution: 0.01
+        max_bracket_iters: 16
+        max_bisect_iters: 32
+        seeds_per_alpha: 3
+        placement_rounds: auto
+    ```
+
+Results stored in `scenario.results` under the step name:
+    - alpha_star: Final feasible alpha (float)
+    - context: Search parameters and decision rule (dict)
+    - base_demands: Unscaled base demands for the matrix (list[dict])
+    - probes: Per-alpha probe summaries with feasibility and placement ratio (list)
 """
 
 from __future__ import annotations

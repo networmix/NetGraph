@@ -78,20 +78,20 @@ class TestScenario4:
         tor_switch = components_lib.get(expected_components["tor_switches"])
         assert tor_switch is not None
         assert tor_switch.component_type == "switch"
-        assert tor_switch.cost == 8000.0
+        assert tor_switch.capex == 8000.0
         assert tor_switch.power_watts == 350.0
         assert len(tor_switch.children) == 1  # SFP28_25G optics
 
         spine_switch = components_lib.get(expected_components["spine_switches"])
         assert spine_switch is not None
         assert spine_switch.component_type == "switch"
-        assert spine_switch.cost == 25000.0
+        assert spine_switch.capex == 25000.0
         assert spine_switch.power_watts == 800.0
 
         server = components_lib.get(expected_components["servers"])
         assert server is not None
         assert server.component_type == "server"
-        assert server.cost == 12000.0
+        assert server.capex == 12000.0
 
     def test_component_references_in_nodes(self, helper):
         """Test that nodes correctly reference components from the library."""
@@ -394,8 +394,8 @@ class TestScenario4:
             explorer.root_node.stats.node_count >= 80
         )  # Should have substantial node count
 
-        # Test component cost/power aggregation
-        assert explorer.root_node.stats.total_cost > 0
+        # Test component capex/power aggregation
+        assert explorer.root_node.stats.total_capex > 0
         assert explorer.root_node.stats.total_power > 0
 
     def test_topology_semantic_correctness(self, helper):
