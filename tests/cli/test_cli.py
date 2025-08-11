@@ -57,8 +57,8 @@ def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> 
     payload = json.loads(extract_json_from_stdout(captured.out))
 
     assert "build_graph" in payload
-    # default results.json is created when --results not passed
-    assert (tmp_path / "results.json").exists()
+    # default <scenario_name>.json is created when --results not passed
+    assert (tmp_path / "scenario_1.json").exists()
 
 
 def test_run_no_results_flag_produces_no_file(
@@ -70,7 +70,7 @@ def test_run_no_results_flag_produces_no_file(
     cli.main(["run", str(scenario), "--no-results"])  # still prints a status line
     captured = capsys.readouterr()
 
-    assert not (tmp_path / "results.json").exists()
+    assert not (tmp_path / "scenario_1.json").exists()
     assert "Scenario execution completed" in captured.out
 
 
@@ -82,7 +82,7 @@ def test_run_custom_results_path_disables_default(tmp_path: Path, monkeypatch) -
     cli.main(["run", str(scenario), "--results", str(out_path)])
 
     assert out_path.exists()
-    assert not (tmp_path / "results.json").exists()
+    assert not (tmp_path / "scenario_1.json").exists()
 
 
 def test_run_filter_by_step_names_subsets_results(tmp_path: Path, monkeypatch) -> None:
@@ -405,6 +405,43 @@ def test_report_fast_paths(monkeypatch, capsys) -> None:
         out = capsys.readouterr().out
         assert "Notebook generated:" in out and "HTML report generated:" in out
         assert nb.exists() and html.exists()
+
+
+def test_report_default_names_from_results(monkeypatch, capsys, tmp_path: Path) -> None:
+    # Prepare a results file with a specific name
+    results = tmp_path / "baseline_scenario.json"
+    results.write_text(
+        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"x": 1}}'
+    )
+
+    class FakeRG:
+        def __init__(self, results_path):
+            self.results_path = Path(results_path)
+
+        def load_results(self):
+            json.loads(self.results_path.read_text())
+
+        def generate_notebook(self, output_path):
+            Path(output_path).write_text("{}")
+            return Path(output_path)
+
+        def generate_html_report(self, notebook_path, html_path, include_code=False):
+            Path(notebook_path).write_text("{}")
+            Path(html_path).write_text("<html></html>")
+            return Path(html_path)
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+    # Request HTML without a custom path and without specifying notebook path
+    cli.main(["report", str(results), "--html"])
+
+    out = capsys.readouterr().out
+    assert "Notebook generated:" in out and "HTML report generated:" in out
+
+    # The defaults should be derived from the results filename stem
+    assert (tmp_path / "baseline_scenario.ipynb").exists()
+    assert (tmp_path / "baseline_scenario.html").exists()
 
 
 def test_report_error_paths(capsys) -> None:

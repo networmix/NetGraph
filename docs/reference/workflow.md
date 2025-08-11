@@ -34,7 +34,7 @@ workflow:
 
 ### BuildGraph
 
-Exports the network graph to results.json for external analysis. Not required for workflow analysis steps, which build graphs internally as needed.
+Exports the network graph to a JSON file for external analysis. Not required for workflow analysis steps, which build graphs internally as needed.
 
 ```yaml
 - step_type: BuildGraph
@@ -195,11 +195,11 @@ workflow:
 Generate analysis reports using the CLI:
 
 ```bash
-# Jupyter notebook
-python -m ngraph report results.json --notebook analysis.ipynb
+# Jupyter notebook (defaults to <results_name>.ipynb)
+python -m ngraph report baseline_scenario.json
 
-# HTML report
-python -m ngraph report results.json --html report.html
+# HTML report (defaults to <results_name>.html when --html is used)
+python -m ngraph report baseline_scenario.json --html
 ```
 
 See [CLI Reference](cli.md#report) for complete options.
@@ -230,4 +230,4 @@ See [CLI Reference](cli.md#report) for complete options.
 
 - Reference failure policies from `failure_policy_set` section
 - Ensure failure policies exist before workflow execution
-- Include `BuildGraph` only when graph export to results.json is needed for external analysis
+- Include `BuildGraph` only when graph export to JSON is needed for external analysis

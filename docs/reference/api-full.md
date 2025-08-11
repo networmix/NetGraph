@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 10, 2025 at 17:58 UTC
+Generated from source code on: August 11, 2025 at 01:29 UTC
 
-Modules auto-discovered: 63
+Modules auto-discovered: 64
 
 ---
 
@@ -163,7 +163,7 @@ Provides hierarchical exploration of a Network, computing statistics in two mode
 **Methods:**
 
 - `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'` - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
-- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True) -> 'None'` - Print the hierarchy from 'node' down (default: root).
+- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None) -> 'None'` - Print the hierarchy from 'node' down (default: root).
 
 ### TreeNode
 
@@ -2068,8 +2068,6 @@ The main entry point is `apply_failures`, which:
   4) Collect the union of all failed entities across all rules.
   5) Optionally expand failures by shared-risk groups or sub-risks.
 
-
-
 Example YAML configuration:
     ```yaml
     failure_policy:
@@ -3048,7 +3046,7 @@ failure analysis scenarios.
 Note: This module is distinct from ngraph.workflow.analysis, which provides
 notebook visualization components for workflow results.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'dict[str, Any]'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'list[FlowResult]'
 
 Analyze traffic demand placement success rates.
 
@@ -3059,23 +3057,14 @@ Args:
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    Dictionary with placement statistics for this run, including:
+    List of FlowResult dicts, one per expanded demand, with metric=
+    "placement_ratio" and value in [0,1]. When include_flow_details is True,
+    stats contains:
 
-- total_placed: Total placed demand volume.
-- total_demand: Total demand volume.
-- overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
-- demand_results: List of per-demand statistics preserving offered volume.
+- cost_distribution: {cost: placed_volume}
+- edges: [edge_id,...] with edges_kind="used"
 
-      When ``include_flow_details`` is True, each entry also includes
-      ``cost_distribution`` mapping path cost to placed volume and
-      ``edges_used`` as a list of edge identifiers seen in the placed flows.
-
-- priority_results: Mapping from priority to aggregated statistics with
-
-      keys total_volume, placed_volume, unplaced_volume, placement_ratio,
-      and demand_count.
-
-### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[tuple]'
+### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[FlowResult]'
 
 Analyze maximum flow capacity between node groups.
 
@@ -3090,8 +3079,9 @@ Args:
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    List of tuples. If include_flow_summary is False: (source, sink, capacity).
-    If include_flow_summary is True: (source, sink, capacity, flow_summary).
+    List of FlowResult dicts with metric="capacity". When include_flow_summary
+    is True, each entry includes compact stats with cost_distribution and
+    min-cut edges (as strings).
 
 ### sensitivity_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'dict[str, dict[str, float]]'
 
@@ -3218,6 +3208,36 @@ Attributes:
 - `get_flow_sensitivity(self, flow_key: 'str') -> 'Dict[str, Dict[str, float]]'` - Get component sensitivity scores for a specific flow.
 - `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'` - Get summary statistics for component impact across all flows.
 - `to_dataframe(self) -> 'pd.DataFrame'` - Convert sensitivity results to DataFrame for analysis.
+
+---
+
+## ngraph.monte_carlo.types
+
+Typed protocols for Monte Carlo analysis IPC payloads.
+
+Defines lightweight, serializable structures used across worker boundaries.
+
+### FlowResult
+
+Normalized result record for a flow pair in one iteration.
+
+Keys:
+    src: Source label
+    dst: Destination label
+    metric: Name of metric ('capacity' or 'placement_ratio')
+    value: Numeric value for the metric
+    stats: Optional FlowStats with compact details
+    priority: Optional demand priority (only for placement results)
+
+### FlowStats
+
+Compact per-flow statistics for aggregation.
+
+Keys:
+    cost_distribution: Mapping of path cost to flow volume.
+    edges: List of edge identifiers (string form).
+    edges_kind: Meaning of edges list: 'min_cut' for capacity analysis,
+        'used' for demand placement edge usage.
 
 ---
 

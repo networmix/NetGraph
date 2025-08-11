@@ -187,17 +187,29 @@ class CapacityEnvelope:
             return {}
 
         for summary in valid_summaries:
-            # Process cost distribution
-            if hasattr(summary, "cost_distribution") and summary.cost_distribution:
-                for cost, flow_volume in summary.cost_distribution.items():
+            # Support compact dict summaries coming from workers
+            if isinstance(summary, dict):
+                cd = summary.get("cost_distribution", {})
+                mc = summary.get("min_cut", [])
+                if isinstance(cd, dict):
+                    for cost, flow_volume in cd.items():
+                        cost_data[cost].append(flow_volume)
+                if isinstance(mc, list):
+                    for edge in mc:
+                        edge_key = str(edge)
+                        min_cut_frequencies[edge_key] += 1
+                continue
+
+            # Process object-like summaries with attributes
+            if hasattr(summary, "cost_distribution"):
+                for cost, flow_volume in getattr(
+                    summary, "cost_distribution", {}
+                ).items():
                     cost_data[cost].append(flow_volume)
 
-            # Process min cut edges
-            if hasattr(summary, "min_cut") and summary.min_cut:
-                for edge in summary.min_cut:
-                    edge_key = str(
-                        edge
-                    )  # Convert edge tuple to string for JSON serialization
+            if hasattr(summary, "min_cut"):
+                for edge in getattr(summary, "min_cut", []) or []:
+                    edge_key = str(edge)
                     min_cut_frequencies[edge_key] += 1
 
         # Calculate cost distribution statistics

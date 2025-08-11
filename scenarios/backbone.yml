@@ -9073,19 +9073,19 @@ workflow:
   shortest_path: false
   flow_placement: PROPORTIONAL
   seed: 42
-  iterations: 10000
+  iterations: 100
   baseline: true
   failure_policy: mc_baseline
   store_failure_patterns: false
-  include_flow_summary: false
+  include_flow_summary: true
 - step_type: TrafficMatrixPlacementAnalysis
   name: tm_placement
   matrix_name: baseline_traffic_matrix
   failure_policy: mc_baseline
-  iterations: 10000
+  iterations: 100
   parallelism: auto
   placement_rounds: auto
   baseline: true
   seed: 42
   store_failure_patterns: false
-  include_flow_details: false
+  include_flow_details: true

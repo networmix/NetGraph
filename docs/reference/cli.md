@@ -36,7 +36,7 @@ The CLI provides three primary commands:
 # Inspect a scenario to understand its structure
 python -m ngraph inspect my_scenario.yaml
 
-# Run a scenario (generates results.json by default)
+# Run a scenario (generates my_scenario.json by default)
 python -m ngraph run my_scenario.yaml
 
 # Generate analysis report from results
@@ -115,7 +115,7 @@ python -m ngraph [--verbose|--quiet] run <scenario_file> [options]
 
 **Options:**
 
-- `--results`, `-r`: Path to export results as JSON (default: "results.json")
+- `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.json`)
 - `--no-results`: Disable results file generation (for edge cases)
 - `--stdout`: Print results to stdout in addition to saving file
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
@@ -134,12 +134,12 @@ python -m ngraph [--verbose|--quiet] report [results_file] [options]
 
 **Arguments:**
 
-- `results_file`: Path to the JSON results file (default: "results.json")
+- `results_file`: Path to the JSON results file (default: `results.json`)
 
 **Options:**
 
-- `--notebook`, `-n`: Output path for Jupyter notebook (default: "analysis.ipynb")
-- `--html`: Generate HTML report (default: "analysis.html" if no path specified)
+- `--notebook`, `-n`: Output path for Jupyter notebook (default: `<results_name>.ipynb`)
+- `--html`: Generate HTML report (default: `<results_name>.html` if no path specified)
 - `--include-code`: Include code cells in HTML output (default: report without code)
 - `--help`, `-h`: Show help message
 
@@ -147,8 +147,8 @@ python -m ngraph [--verbose|--quiet] report [results_file] [options]
 
 The `report` command generates analysis reports from results files created by the `run` command. It creates:
 
-- **Jupyter notebook**: Interactive analysis notebook with code cells, visualizations, and explanations (default: "analysis.ipynb")
-- **HTML report** (optional): Static report for viewing without Jupyter, optionally including code (default: "analysis.html" when --html is used)
+- **Jupyter notebook**: Interactive analysis notebook with code cells, visualizations, and explanations (default: `<results_name>.ipynb`)
+- **HTML report** (optional): Static report for viewing without Jupyter, optionally including code (default: `<results_name>.html` when `--html` is used)
 
 The report detects and analyzes the workflow steps present in the results file, creating appropriate sections and visualizations for each analysis type.
 
@@ -161,14 +161,14 @@ python -m ngraph report
 # Generate notebook with custom paths
 python -m ngraph report my_results.json --notebook my_analysis.ipynb
 
-# Generate both notebook and HTML report (default filenames)
-python -m ngraph report results.json --html
+# Generate both notebook and HTML report (defaults derived from results filename)
+python -m ngraph report baseline_scenario.json --html
 
 # Generate HTML report with custom filename
 python -m ngraph report results.json --html custom_report.html
 
 # Generate HTML report without code cells
-python -m ngraph report results.json --html
+python -m ngraph report baseline_scenario.json --html
 
 # Generate HTML report with code cells included
 python -m ngraph report results.json --html --include-code
@@ -186,7 +186,7 @@ python -m ngraph report results.json --html --include-code
 ### Basic Execution
 
 ```bash
-# Run a scenario (creates results.json by default)
+# Run a scenario (creates my_network.json by default)
 python -m ngraph run my_network.yaml
 
 # Run a scenario and save results to custom file
@@ -386,7 +386,7 @@ python -m ngraph run scenario.yaml --no-results
 - Only shows execution logs and completion status
 - Useful for testing, CI/CD validation, or when only logs are needed
 
-**This design prioritizes the common case:** Most users want to save their analysis results, so this is now the default behavior.
+Results default to preserving the scenario or results name, which makes downstream `report` outputs consistent and easy to track.
 
 ## Integration with Workflows
 
@@ -402,8 +402,8 @@ The CLI executes the complete workflow defined in your scenario file, running al
 ```bash
 # Development workflow
 python -m ngraph inspect my_scenario.yaml --detail  # Validate and debug
-python -m ngraph run my_scenario.yaml              # Execute (creates results.json)
-python -m ngraph report results.json --notebook    # Generate analysis report
+python -m ngraph run my_scenario.yaml              # Execute (creates my_scenario.json)
+python -m ngraph report my_scenario.json --html    # Generate my_scenario.ipynb/html
 ```
 
 ### Debugging Scenarios

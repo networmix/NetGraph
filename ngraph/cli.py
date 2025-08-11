@@ -998,7 +998,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
 
 def _run_scenario(
     path: Path,
-    output: Path,
+    output: Optional[Path],
     no_results: bool,
     stdout: bool,
     keys: Optional[list[str]] = None,
@@ -1009,7 +1009,8 @@ def _run_scenario(
 
     Args:
         path: Scenario YAML file.
-        output: Path where JSON results should be written.
+        output: Optional explicit path where JSON results should be written. When
+            ``None``, defaults to ``<scenario_name>.json`` in the current directory.
         no_results: Whether to disable results file generation.
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
@@ -1098,10 +1099,13 @@ def _run_scenario(
 
             json_str = json.dumps(results_dict, indent=2, default=str)
 
-            logger.info(f"Writing results to: {output}")
-            output.write_text(json_str)
+            # Derive default results file name from scenario when not provided
+            effective_output = output or Path(f"{path.stem}.json")
+
+            logger.info(f"Writing results to: {effective_output}")
+            effective_output.write_text(json_str)
             logger.info("Results written successfully")
-            print(f"✅ Results written to: {output}")
+            print(f"✅ Results written to: {effective_output}")
 
             if stdout:
                 print(json_str)
@@ -1162,8 +1166,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--results",
         "-r",
         type=Path,
-        default=Path("results.json"),
-        help="Export results to JSON file (default: results.json)",
+        default=None,
+        help=(
+            "Export results to JSON file (default: <scenario_name>.json in current directory)"
+        ),
     )
     run_parser.add_argument(
         "--no-results",
@@ -1219,14 +1225,18 @@ def main(argv: Optional[List[str]] = None) -> None:
         "--notebook",
         "-n",
         type=Path,
-        help="Output path for Jupyter notebook (default: analysis.ipynb)",
+        help=(
+            "Output path for Jupyter notebook (default: <results_name>.ipynb in current directory)"
+        ),
     )
     report_parser.add_argument(
         "--html",
         type=Path,
         nargs="?",
         const=Path("analysis.html"),
-        help="Generate HTML report (default: analysis.html if no path specified)",
+        help=(
+            "Generate HTML report (default: <results_name>.html in current directory if no path specified)"
+        ),
     )
     report_parser.add_argument(
         "--include-code",
@@ -1295,13 +1305,17 @@ def _generate_report(
         generator = ReportGenerator(results_path)
         generator.load_results()
 
-        # Generate notebook
-        notebook_output = notebook_path or Path("analysis.ipynb")
+        # Generate notebook (default derives from results file name)
+        notebook_output = notebook_path or Path(f"{results_path.stem}.ipynb")
         generated_notebook = generator.generate_notebook(notebook_output)
         print(f"✅ Notebook generated: {generated_notebook}")
 
         # Generate HTML if requested
         if html_path:
+            # If --html was passed without an explicit path, argparse provides the const
+            # value. In that case, derive the HTML name from the results file stem.
+            if html_path == Path("analysis.html"):
+                html_path = Path(f"{results_path.stem}.html")
             generated_html = generator.generate_html_report(
                 notebook_path=generated_notebook,
                 html_path=html_path,

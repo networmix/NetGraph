@@ -41,8 +41,8 @@ class TestMaxFlowAnalysis:
 
         # Verify return format
         assert result == [
-            ("datacenter", "edge", 100.0),
-            ("edge", "datacenter", 80.0),
+            {"src": "datacenter", "dst": "edge", "metric": "capacity", "value": 100.0},
+            {"src": "edge", "dst": "datacenter", "metric": "capacity", "value": 80.0},
         ]
 
     def test_max_flow_analysis_with_summary(self) -> None:
@@ -70,8 +70,11 @@ class TestMaxFlowAnalysis:
             flow_placement=FlowPlacement.PROPORTIONAL,
         )
 
-        assert ("X", "Y", 10.0, summary_obj_1) in result
-        assert ("Y", "X", 5.0, summary_obj_2) in result
+        fr_xy = next(fr for fr in result if fr["src"] == "X" and fr["dst"] == "Y")
+        assert fr_xy["metric"] == "capacity" and fr_xy["value"] == 10.0
+        assert isinstance(fr_xy.get("stats"), dict)
+        fr_yx = next(fr for fr in result if fr["src"] == "Y" and fr["dst"] == "X")
+        assert fr_yx["metric"] == "capacity" and fr_yx["value"] == 5.0
 
     def test_max_flow_analysis_with_optional_params(self) -> None:
         """Test max_flow_analysis with optional parameters."""
@@ -96,7 +99,7 @@ class TestMaxFlowAnalysis:
             flow_placement=FlowPlacement.EQUAL_BALANCED,
         )
 
-        assert result == [("A", "B", 50.0)]
+        assert result == [{"src": "A", "dst": "B", "metric": "capacity", "value": 50.0}]
 
     def test_max_flow_analysis_empty_result(self) -> None:
         """Test max_flow_analysis with empty result."""
@@ -192,36 +195,12 @@ class TestDemandPlacementAnalysis:
             mock_tm.expand_demands.assert_called_once()
             mock_tm.place_all_demands.assert_called_once_with(placement_rounds=25)
 
-            # Verify results structure
-            assert "total_placed" in result
-            assert "priority_results" in result
-            assert "demand_results" in result
-            assert result["total_placed"] == 130.0
-
-            # Check demand_results preserve offered and placed volumes
-            dr = sorted(result["demand_results"], key=lambda x: x["priority"])  # type: ignore[arg-type]
-            assert dr[0]["offered_demand"] == 100.0
-            assert dr[0]["placed_demand"] == 80.0
-            assert dr[1]["offered_demand"] == 50.0
-            assert dr[1]["placed_demand"] == 50.0
-
-            priority_results = result["priority_results"]
-            assert 0 in priority_results
-            assert 1 in priority_results
-
-            # Check priority 0 results - note: field is 'demand_count', not 'count'
-            p0_results = priority_results[0]
-            assert p0_results["total_volume"] == 100.0
-            assert p0_results["placed_volume"] == 80.0
-            assert p0_results["placement_ratio"] == 0.8
-            assert p0_results["demand_count"] == 1
-
-            # Check priority 1 results
-            p1_results = priority_results[1]
-            assert p1_results["total_volume"] == 50.0
-            assert p1_results["placed_volume"] == 50.0
-            assert p1_results["placement_ratio"] == 1.0
-            assert p1_results["demand_count"] == 1
+            # Verify results structure (FlowResult list)
+            assert isinstance(result, list)
+            assert len(result) == 2
+            dr = sorted(result, key=lambda x: x["priority"])  # type: ignore[arg-type]
+            assert dr[0]["value"] == 0.8 and dr[0]["priority"] == 0
+            assert dr[1]["value"] == 1.0 and dr[1]["priority"] == 1
 
     def test_demand_placement_analysis_zero_total_demand(self) -> None:
         """Handles zero total demand without division by zero."""
@@ -261,9 +240,9 @@ class TestDemandPlacementAnalysis:
                 placement_rounds=1,
             )
 
-            assert result["total_placed"] == 0.0
-            assert result["total_demand"] == 0.0
-            assert result["overall_placement_ratio"] == 0.0
+            assert isinstance(result, list)
+            assert len(result) == 1
+            assert result[0]["value"] == 0.0
 
 
 class TestSensitivityAnalysis:

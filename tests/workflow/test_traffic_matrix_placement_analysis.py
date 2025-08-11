@@ -25,32 +25,24 @@ def test_traffic_matrix_placement_analysis_stores_envelopes(
     mock_results = MagicMock()
     mock_results.raw_results = {
         "results": [
-            {
-                "demand_results": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_demand": 10.0,
-                        "placed_demand": 8.0,
-                        "unplaced_demand": 2.0,
-                        "placement_ratio": 0.8,
-                    }
-                ]
-            },
-            {
-                "demand_results": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_demand": 10.0,
-                        "placed_demand": 10.0,
-                        "unplaced_demand": 0.0,
-                        "placement_ratio": 1.0,
-                    }
-                ]
-            },
+            [
+                {
+                    "src": "A",
+                    "dst": "B",
+                    "priority": 0,
+                    "metric": "placement_ratio",
+                    "value": 0.8,
+                }
+            ],
+            [
+                {
+                    "src": "A",
+                    "dst": "B",
+                    "priority": 0,
+                    "metric": "placement_ratio",
+                    "value": 1.0,
+                }
+            ],
         ]
     }
     mock_results.failure_patterns = {}
@@ -111,36 +103,34 @@ def test_traffic_matrix_placement_analysis_flow_details_aggregated(
     mock_results = MagicMock()
     mock_results.raw_results = {
         "results": [
-            {
-                "demand_results": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_demand": 10.0,
-                        "placed_demand": 8.0,
-                        "unplaced_demand": 2.0,
-                        "placement_ratio": 0.8,
+            [
+                {
+                    "src": "A",
+                    "dst": "B",
+                    "priority": 0,
+                    "metric": "placement_ratio",
+                    "value": 0.8,
+                    "stats": {
                         "cost_distribution": {1.0: 5.0, 2.0: 3.0},
-                        "edges_used": ["(u,v,k1)", "(x,y,k2)"],
-                    }
-                ]
-            },
-            {
-                "demand_results": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_demand": 10.0,
-                        "placed_demand": 10.0,
-                        "unplaced_demand": 0.0,
-                        "placement_ratio": 1.0,
+                        "edges": ["(u,v,k1)", "(x,y,k2)"],
+                        "edges_kind": "used",
+                    },
+                }
+            ],
+            [
+                {
+                    "src": "A",
+                    "dst": "B",
+                    "priority": 0,
+                    "metric": "placement_ratio",
+                    "value": 1.0,
+                    "stats": {
                         "cost_distribution": {1.0: 7.0, 3.0: 2.0},
-                        "edges_used": ["(u,v,k1)"],
-                    }
-                ]
-            },
+                        "edges": ["(u,v,k1)"],
+                        "edges_kind": "used",
+                    },
+                }
+            ],
         ]
     }
     mock_results.failure_patterns = {}

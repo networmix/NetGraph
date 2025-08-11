@@ -204,11 +204,25 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             edge_counts = defaultdict(lambda: defaultdict(int))
 
         for iter_result in results.raw_results.get("results", []):
-            for d_entry in iter_result.get("demand_results", []):
-                src = str(d_entry.get("src", ""))
-                dst = str(d_entry.get("dst", ""))
-                prio = int(d_entry.get("priority", 0))
-                ratio = float(d_entry.get("placement_ratio", 0.0))
+            # Unified FlowResult list only (strict)
+            if not isinstance(iter_result, list):
+                raise TypeError(
+                    f"Invalid iteration result type: expected list[FlowResult], got {type(iter_result).__name__}"
+                )
+            for fr in iter_result:
+                if not isinstance(fr, dict):
+                    raise TypeError(
+                        f"Invalid FlowResult entry: expected dict, got {type(fr).__name__}"
+                    )
+                metric = fr.get("metric")
+                if metric != "placement_ratio":
+                    raise ValueError(
+                        f"Unexpected FlowResult metric: {metric!r} (expected 'placement_ratio')"
+                    )
+                src = str(fr.get("src", ""))
+                dst = str(fr.get("dst", ""))
+                prio = int(fr.get("priority", 0))
+                ratio = float(fr.get("value", 0.0))
                 per_demand_ratios[(src, dst, prio)].append(ratio)
 
                 if (
@@ -216,7 +230,12 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                     and cost_map is not None
                     and edge_counts is not None
                 ):
-                    cd = d_entry.get("cost_distribution")
+                    stats = fr.get("stats") or {}
+                    cd = (
+                        stats.get("cost_distribution")
+                        if isinstance(stats, dict)
+                        else None
+                    )
                     if isinstance(cd, dict):
                         for cost_key, vol in cd.items():
                             try:
@@ -228,9 +247,9 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                                 ) from exc
                             cost_map[(src, dst, prio)][cost_val].append(vol_f)
 
-                    used_edges = d_entry.get("edges_used") or []
-                    if isinstance(used_edges, list):
-                        for e in used_edges:
+                    edges = stats.get("edges") if isinstance(stats, dict) else None
+                    if isinstance(edges, list):
+                        for e in edges:
                             edge_counts[(src, dst, prio)][str(e)] += 1
 
         # Create PlacementEnvelope per demand; use 'pairwise' as mode because expanded demands are per pair
@@ -260,19 +279,20 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             for (src, dst, prio), costs in cost_map.items():
                 key = f"{src}->{dst}|prio={prio}"
                 if key not in envelopes:
-                    continue
+                    raise KeyError(
+                        f"Envelope not found for demand {key} during flow details aggregation"
+                    )
                 cost_stats: dict[float, dict[str, Any]] = {}
                 for cost, vols in costs.items():
-                    if not vols:
-                        continue
-                    freq = {v: vols.count(v) for v in set(vols)}
-                    cost_stats[float(cost)] = {
-                        "mean": sum(vols) / len(vols),
-                        "min": min(vols),
-                        "max": max(vols),
-                        "total_samples": len(vols),
-                        "frequencies": freq,
-                    }
+                    if vols:
+                        freq = {v: vols.count(v) for v in set(vols)}
+                        cost_stats[float(cost)] = {
+                            "mean": sum(vols) / len(vols),
+                            "min": min(vols),
+                            "max": max(vols),
+                            "total_samples": len(vols),
+                            "frequencies": freq,
+                        }
                 flow_stats: dict[str, Any] = {"cost_distribution_stats": cost_stats}
                 # Attach edge usage frequencies if collected
                 ec = edge_counts.get((src, dst, prio))

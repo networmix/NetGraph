@@ -922,7 +922,7 @@ class FailureManager:
             **kwargs,
         )
 
-        # Process results with support for flow summary data
+        # Process results (unified FlowResult list)
         if include_flow_summary:
             samples, flow_summaries = self._process_results_with_summaries(
                 raw_results["results"]
@@ -954,7 +954,7 @@ class FailureManager:
         )
 
     def _process_results_to_samples(
-        self, results: list[list[tuple[str, str, float]]]
+        self, results: list[list[Any]]
     ) -> dict[tuple[str, str], list[float]]:
         """Convert raw results from FailureManager to samples dictionary.
 
@@ -970,8 +970,19 @@ class FailureManager:
         samples = defaultdict(list)
 
         for flow_results in results:
-            for src, dst, capacity in flow_results:
-                samples[(src, dst)].append(capacity)
+            # Expect unified FlowResult dicts per iteration
+            for fr in flow_results:
+                try:
+                    src = str(fr["src"])  # type: ignore[index]
+                    dst = str(fr["dst"])  # type: ignore[index]
+                    metric = fr.get("metric")  # type: ignore[union-attr]
+                    if metric != "capacity":
+                        continue
+                    value = float(fr.get("value", 0.0))  # type: ignore[union-attr]
+                    samples[(src, dst)].append(value)
+                except Exception:
+                    # Skip malformed entries
+                    continue
 
         logger.debug(f"Processed samples for {len(samples)} flow pairs")
         return samples
@@ -1026,7 +1037,7 @@ class FailureManager:
         return envelopes
 
     def _process_results_with_summaries(
-        self, results: list[list[tuple]]
+        self, results: list[list[Any]]
     ) -> tuple[dict[tuple[str, str], list[float]], dict[tuple[str, str], list[Any]]]:
         """Convert raw results with FlowSummary data to samples and summaries dictionaries.
 
@@ -1045,20 +1056,31 @@ class FailureManager:
         flow_summaries = defaultdict(list)
 
         for flow_results in results:
-            for result_tuple in flow_results:
-                if len(result_tuple) == 4:
-                    # Format: (src, dst, capacity, flow_summary)
-                    src, dst, capacity, summary = result_tuple
-                    samples[(src, dst)].append(capacity)
-                    flow_summaries[(src, dst)].append(summary)
-                elif len(result_tuple) == 3:
-                    # Fallback for backwards compatibility: (src, dst, capacity)
-                    src, dst, capacity = result_tuple
-                    samples[(src, dst)].append(capacity)
-                    # No summary available, append None
-                    flow_summaries[(src, dst)].append(None)
-                else:
-                    logger.warning(f"Unexpected result tuple format: {result_tuple}")
+            for fr in flow_results:
+                try:
+                    src = str(fr["src"])  # type: ignore[index]
+                    dst = str(fr["dst"])  # type: ignore[index]
+                    metric = fr.get("metric")  # type: ignore[union-attr]
+                    if metric != "capacity":
+                        continue
+                    value = float(fr.get("value", 0.0))  # type: ignore[union-attr]
+                    samples[(src, dst)].append(value)
+                    stats = fr.get("stats")  # type: ignore[union-attr]
+                    if isinstance(stats, dict):
+                        # Normalize to keys expected by CapacityEnvelope aggregator
+                        norm: dict[str, Any] = {}
+                        cd = stats.get("cost_distribution")
+                        if isinstance(cd, dict):
+                            norm["cost_distribution"] = cd
+                        edges = stats.get("edges")
+                        kind = stats.get("edges_kind")
+                        if isinstance(edges, list) and kind == "min_cut":
+                            norm["min_cut"] = edges
+                        flow_summaries[(src, dst)].append(norm)
+                    else:
+                        flow_summaries[(src, dst)].append(None)
+                except Exception:
+                    continue
 
         logger.debug(f"Processed samples and summaries for {len(samples)} flow pairs")
         return samples, flow_summaries

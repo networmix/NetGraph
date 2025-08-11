@@ -13,13 +13,13 @@ notebook visualization components for workflow results.
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from ngraph.algorithms.base import FlowPlacement
 from ngraph.demand.manager.manager import TrafficManager
 from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.demand.spec import TrafficDemand
+from ngraph.monte_carlo.types import FlowResult, FlowStats
 
 if TYPE_CHECKING:
     from ngraph.model.view import NetworkView
@@ -34,7 +34,7 @@ def max_flow_analysis(
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     include_flow_summary: bool = False,
     **kwargs,
-) -> list[tuple]:
+) -> list[FlowResult]:
     """Analyze maximum flow capacity between node groups.
 
     Args:
@@ -48,8 +48,9 @@ def max_flow_analysis(
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        List of tuples. If include_flow_summary is False: (source, sink, capacity).
-        If include_flow_summary is True: (source, sink, capacity, flow_summary).
+        List of FlowResult dicts with metric="capacity". When include_flow_summary
+        is True, each entry includes compact stats with cost_distribution and
+        min-cut edges (as strings).
     """
     if include_flow_summary:
         # Use max_flow_with_summary to get detailed flow analytics
@@ -60,10 +61,25 @@ def max_flow_analysis(
             shortest_path=shortest_path,
             flow_placement=flow_placement,
         )
-        # Return with complete FlowSummary data
-        return [
-            (src, dst, val, summary) for (src, dst), (val, summary) in flows.items()
-        ]
+        results: list[FlowResult] = []
+        for (src, dst), (val, summary) in flows.items():
+            cost_dist = getattr(summary, "cost_distribution", {}) or {}
+            min_cut = getattr(summary, "min_cut", []) or []
+            stats: FlowStats = {
+                "cost_distribution": {float(k): float(v) for k, v in cost_dist.items()},
+                "edges": [str(e) for e in min_cut],
+                "edges_kind": "min_cut",
+            }
+            results.append(
+                {
+                    "src": src,
+                    "dst": dst,
+                    "metric": "capacity",
+                    "value": float(val),
+                    "stats": stats,
+                }
+            )
+        return results
     else:
         # Use regular max_flow for capacity-only analysis (existing behavior)
         flows = network_view.max_flow(
@@ -73,8 +89,11 @@ def max_flow_analysis(
             shortest_path=shortest_path,
             flow_placement=flow_placement,
         )
-        # Convert to serializable format for inter-process communication
-        return [(src, dst, val) for (src, dst), val in flows.items()]
+        # Convert to FlowResult format for inter-process communication
+        return [
+            {"src": src, "dst": dst, "metric": "capacity", "value": float(val)}
+            for (src, dst), val in flows.items()
+        ]
 
 
 def demand_placement_analysis(
@@ -83,7 +102,7 @@ def demand_placement_analysis(
     placement_rounds: int | str = "auto",
     include_flow_details: bool = False,
     **kwargs,
-) -> dict[str, Any]:
+) -> list[FlowResult]:
     """Analyze traffic demand placement success rates.
 
     Args:
@@ -93,17 +112,11 @@ def demand_placement_analysis(
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        Dictionary with placement statistics for this run, including:
-        - total_placed: Total placed demand volume.
-        - total_demand: Total demand volume.
-        - overall_placement_ratio: total_placed / total_demand (0.0 if undefined).
-        - demand_results: List of per-demand statistics preserving offered volume.
-          When ``include_flow_details`` is True, each entry also includes
-          ``cost_distribution`` mapping path cost to placed volume and
-          ``edges_used`` as a list of edge identifiers seen in the placed flows.
-        - priority_results: Mapping from priority to aggregated statistics with
-          keys total_volume, placed_volume, unplaced_volume, placement_ratio,
-          and demand_count.
+        List of FlowResult dicts, one per expanded demand, with metric=
+        "placement_ratio" and value in [0,1]. When include_flow_details is True,
+        stats contains:
+        - cost_distribution: {cost: placed_volume}
+        - edges: [edge_id,...] with edges_kind="used"
     """
     # Reconstruct demands from config to avoid passing complex objects
     demands = []
@@ -128,30 +141,17 @@ def demand_placement_analysis(
     )
     tm.build_graph()
     tm.expand_demands()
-    total_placed = tm.place_all_demands(placement_rounds=placement_rounds)
+    tm.place_all_demands(placement_rounds=placement_rounds)
 
-    # Build per-demand results from expanded demands to preserve offered volumes
-    demand_results: list[dict[str, Any]] = []
-    # Aggregate by priority as well
-    demand_stats = defaultdict(
-        lambda: {"total_volume": 0.0, "placed_volume": 0.0, "count": 0}
-    )
+    # Build FlowResult list per expanded demand
+    flow_results: list[FlowResult] = []
     for dmd in tm.demands:
         offered = float(getattr(dmd, "volume", 0.0))
         placed = float(getattr(dmd, "placed_demand", 0.0))
-        unplaced = offered - placed
+        ratio = (placed / offered) if offered > 0 else 0.0
         priority = int(getattr(dmd, "priority", getattr(dmd, "demand_class", 0)))
 
-        entry: dict[str, Any] = {
-            "src": str(getattr(dmd, "src_node", "")),
-            "dst": str(getattr(dmd, "dst_node", "")),
-            "priority": priority,
-            "offered_demand": offered,
-            "placed_demand": placed,
-            "unplaced_demand": unplaced,
-            "placement_ratio": (placed / offered) if offered > 0 else 0.0,
-        }
-
+        stats: FlowStats | None = None
         if include_flow_details and getattr(dmd, "flow_policy", None) is not None:
             # Summarize placed flows by path cost and collect edges used
             cost_distribution: dict[float, float] = {}
@@ -165,43 +165,25 @@ def demand_placement_analysis(
                     )
                 for eid in getattr(flow.path_bundle, "edges", set()):
                     edge_strings.add(str(eid))
-
+            stats = {}
             if cost_distribution:
-                entry["cost_distribution"] = cost_distribution
+                stats["cost_distribution"] = cost_distribution
             if edge_strings:
-                entry["edges_used"] = sorted(edge_strings)
+                stats["edges"] = sorted(edge_strings)
+                stats["edges_kind"] = "used"
 
-        demand_results.append(entry)
-
-        demand_stats[priority]["total_volume"] += offered
-        demand_stats[priority]["placed_volume"] += placed
-        demand_stats[priority]["count"] += 1
-
-    priority_results = {}
-    for priority, stats in demand_stats.items():
-        placement_ratio = (
-            stats["placed_volume"] / stats["total_volume"]
-            if stats["total_volume"] > 0
-            else 0.0
+        flow_results.append(
+            {
+                "src": str(getattr(dmd, "src_node", "")),
+                "dst": str(getattr(dmd, "dst_node", "")),
+                "metric": "placement_ratio",
+                "value": ratio,
+                "priority": priority,
+                "stats": stats,
+            }
         )
-        priority_results[priority] = {
-            "total_volume": stats["total_volume"],
-            "placed_volume": stats["placed_volume"],
-            "unplaced_volume": stats["total_volume"] - stats["placed_volume"],
-            "placement_ratio": placement_ratio,
-            "demand_count": stats["count"],
-        }
 
-    total_demand = sum(stats["total_volume"] for stats in demand_stats.values())
-    overall_placement_ratio = total_placed / total_demand if total_demand > 0 else 0.0
-
-    return {
-        "total_placed": total_placed,
-        "total_demand": total_demand,
-        "overall_placement_ratio": overall_placement_ratio,
-        "demand_results": demand_results,
-        "priority_results": priority_results,
-    }
+    return flow_results
 
 
 def sensitivity_analysis(

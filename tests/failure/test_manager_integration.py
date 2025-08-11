@@ -130,9 +130,10 @@ class TestFailureManagerCore:
         # Should have results from all iterations
         # First result should be higher capacity (no failures)
         # Later results should show reduced capacity (with failures)
+        # Extract first FlowResult per iteration and read metric value
         flow_values = [
-            result[0][2] for result in results["results"]
-        ]  # Extract flow values
+            float(result[0]["value"]) for result in results["results"] if result
+        ]
         assert max(flow_values) == 10.0  # Full capacity without failures
         assert min(flow_values) == 5.0  # Reduced capacity with failures
 
@@ -256,12 +257,13 @@ class TestFailureManagerIntegration:
         # Should have results for each iteration
         assert len(results["results"]) == 10
 
-        # Each result should be a list of (source, sink, capacity) tuples
+        # Each result should be a list of FlowResult dicts for capacity
         for result in results["results"]:
             assert isinstance(result, list)
             if result:  # May be empty if no flows possible
                 for flow_tuple in result:
-                    assert len(flow_tuple) == 3  # (source, sink, capacity)
+                    assert isinstance(flow_tuple, dict)
+                    assert flow_tuple.get("metric") == "capacity"
 
     def test_error_handling_in_analysis(self):
         """Test error handling during analysis execution."""
