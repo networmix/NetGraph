@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
-from ngraph.components import ComponentsLibrary
+from ngraph.components import (
+    ComponentsLibrary,
+    resolve_hw_component,
+    totals_with_multiplier,
+)
 from ngraph.logging import get_logger
 from ngraph.model.network import Network, Node
 
@@ -253,20 +257,25 @@ class NetworkExplorer:
         if self.root_node:
             set_node_counts(self.root_node)
 
-        # 2) Accumulate node capex/power
+        # 2) Accumulate node capex/power and validate hardware capacity vs attached links
         for nd in self.network.nodes.values():
-            hw_comp_name = nd.attrs.get("hw_component")
-            comp = None
-            if hw_comp_name:
-                comp = self.components_library.get(hw_comp_name)
-                if comp is None:
-                    logger.warning(
-                        "Node '%s' references unknown hw_component '%s'.",
-                        nd.name,
-                        hw_comp_name,
-                    )
-            cost_val = comp.total_capex() if comp else 0.0
-            power_val = comp.total_power() if comp else 0.0
+            comp, hw_count = resolve_hw_component(nd.attrs, self.components_library)
+            if nd.attrs.get("hw_component") and comp is None:
+                logger.warning(
+                    "Node '%s' references unknown hw_component '%s'.",
+                    nd.name,
+                    nd.attrs.get("hw_component"),
+                )
+
+            # Totals with external multiplier
+            if comp is not None:
+                cost_val, power_val, node_comp_capacity = totals_with_multiplier(
+                    comp, hw_count
+                )
+            else:
+                cost_val = 0.0
+                power_val = 0.0
+                node_comp_capacity = 0.0
 
             tree_node = self._node_map[nd.name]
             # "All" includes disabled
@@ -280,24 +289,66 @@ class NetworkExplorer:
                     an.active_stats.total_capex += cost_val
                     an.active_stats.total_power += power_val
 
-        # 3) Accumulate link stats (internal/external + capex/power)
+            # Validation only if component has a positive capacity and node is enabled
+            if (
+                comp is not None
+                and node_comp_capacity > 0.0
+                and not nd.attrs.get("disabled")
+            ):
+                # Sum capacities of all enabled links attached to this node
+                attached_capacity = 0.0
+                for lk in self.network.links.values():
+                    if lk.attrs.get("disabled"):
+                        continue
+                    if lk.source == nd.name or lk.target == nd.name:
+                        # If the opposite endpoint is disabled, skip in active view
+                        other = lk.target if lk.source == nd.name else lk.source
+                        if self.network.nodes.get(other, Node(name=other)).attrs.get(
+                            "disabled"
+                        ):
+                            continue
+                        attached_capacity += float(lk.capacity)
+
+                # Require that total attached link capacity does not exceed HW capacity
+                if attached_capacity > node_comp_capacity:
+                    raise ValueError(
+                        (
+                            "Node '%s' total attached capacity %.6g exceeds hardware "
+                            "capacity %.6g from component '%s' (hw_count=%.6g)."
+                        )
+                        % (
+                            nd.name,
+                            attached_capacity,
+                            node_comp_capacity,
+                            comp.name,
+                            hw_count,
+                        )
+                    )
+
+        # 3) Accumulate link stats (internal/external + capex/power) and validate
         for link in self.network.links.values():
             src = link.source
             dst = link.target
 
-            link_comp_name = link.attrs.get("hw_component")
-            link_comp = None
-            if link_comp_name:
-                link_comp = self.components_library.get(link_comp_name)
-                if link_comp is None:
-                    logger.warning(
-                        "Link '%s->%s' references unknown hw_component '%s'.",
-                        src,
-                        dst,
-                        link_comp_name,
-                    )
-            link_cost = link_comp.total_capex() if link_comp else 0.0
-            link_power = link_comp.total_power() if link_comp else 0.0
+            link_comp, link_hw_count = resolve_hw_component(
+                link.attrs, self.components_library
+            )
+            if link.attrs.get("hw_component") and link_comp is None:
+                logger.warning(
+                    "Link '%s->%s' references unknown hw_component '%s'.",
+                    src,
+                    dst,
+                    link.attrs.get("hw_component"),
+                )
+
+            if link_comp is not None:
+                link_cost, link_power, link_comp_capacity = totals_with_multiplier(
+                    link_comp, link_hw_count
+                )
+            else:
+                link_cost = 0.0
+                link_power = 0.0
+                link_comp_capacity = 0.0
             cap = link.capacity
 
             src_node = self._node_map[src]
@@ -330,7 +381,7 @@ class NetworkExplorer:
                 bd.link_count += 1
                 bd.link_capacity += cap
 
-            # ----- "ACTIVE" stats -----
+            # ----- "ACTIVE" stats and validations -----
             # If link or either endpoint is disabled, skip
             if link.attrs.get("disabled"):
                 continue
@@ -338,6 +389,24 @@ class NetworkExplorer:
                 continue
             if self.network.nodes[dst].attrs.get("disabled"):
                 continue
+
+            # Validation: if link has component capacity, ensure link capacity fits
+            if link_comp is not None and link_comp_capacity > 0.0:
+                if float(cap) > link_comp_capacity:
+                    raise ValueError(
+                        (
+                            "Link '%s->%s' capacity %.6g exceeds hardware "
+                            "capacity %.6g from component '%s' (hw_count=%.6g)."
+                        )
+                        % (
+                            src,
+                            dst,
+                            float(cap),
+                            link_comp_capacity,
+                            link_comp.name,
+                            link_hw_count,
+                        )
+                    )
 
             for an in inter_anc:
                 an.active_stats.internal_link_count += 1
@@ -402,15 +471,16 @@ class NetworkExplorer:
             return
 
         total_links = stats.internal_link_count + stats.external_link_count
+        # Format numbers with separators; keep one decimal for capacities
         line = (
             f"{'  ' * indent}- {node.name or 'root'} | "
-            f"Nodes={stats.node_count}, Links={total_links}, "
-            f"CapEx={stats.total_capex}, Power={stats.total_power}"
+            f"Nodes={stats.node_count:,}, Links={total_links:,}, "
+            f"CapEx={stats.total_capex:,.0f}, Power={stats.total_power:,.0f}"
         )
         if detailed:
             line += (
-                f" | IntLinkCap={stats.internal_link_capacity}, "
-                f"ExtLinkCap={stats.external_link_capacity}"
+                f" | IntLinkCap={stats.internal_link_capacity:,.1f}, "
+                f"ExtLinkCap={stats.external_link_capacity:,.1f}"
             )
 
         print(line)
@@ -438,7 +508,7 @@ class NetworkExplorer:
                     path_str = "[root]"
                 print(
                     f"{'  ' * indent}   -> External to [{path_str}]: "
-                    f"{ext_info.link_count} links, cap={ext_info.link_capacity}"
+                    f"{ext_info.link_count:,} links, cap={ext_info.link_capacity:,.1f}"
                 )
                 displayed += 1
                 if max_external_lines is not None and displayed >= max_external_lines:

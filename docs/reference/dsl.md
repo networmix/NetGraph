@@ -332,12 +332,14 @@ network:
     spine-1:
       attrs:
         hw_component: "SpineRouter"
+        hw_count: 2   # Optional multiplier; defaults to 1 if not set
   links:
     - source: spine-1
       target: leaf-1
       link_params:
         attrs:
           hw_component: "Optic400G"
+          hw_count: 4  # Optional multiplier for link hardware
 ```
 
 ## `risk_groups` - Hardware Risk Modeling

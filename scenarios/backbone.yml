@@ -7,7 +7,6 @@ blueprints:
         name_template: dc
         attrs:
           role: dc
-          hw_type: dc_node
     adjacency: []
   SingleRouter:
     groups:
@@ -16,7 +15,6 @@ blueprints:
         name_template: core
         attrs:
           role: core
-          hw_type: router_chassis
           hw_component: CoreRouter
     adjacency: []
 components:
@@ -9101,3 +9099,8 @@ workflow:
   seed: 42
   store_failure_patterns: false
   include_flow_details: false
+- step_type: CostPowerEfficiency
+  name: cost_power_efficiency
+  delivered_bandwidth_gbps: 10000
+  delivered_bandwidth_key: delivered_bandwidth_gbps
+  include_disabled: true

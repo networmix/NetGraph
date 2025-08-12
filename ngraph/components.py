@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
@@ -287,3 +287,57 @@ class ComponentsLibrary:
             raise ValueError("'components' must be a dict if present.")
 
         return cls.from_dict(components_data)
+
+
+# ----------------------------- Helper utilities -----------------------------
+def resolve_hw_component(
+    attrs: Dict[str, Any], library: ComponentsLibrary
+) -> Tuple[Optional[Component], float]:
+    """Resolve hardware component and multiplier from entity attributes.
+
+    Looks up ``attrs['hw_component']`` in the provided ``library``. If present,
+    also reads an optional ``attrs['hw_count']`` multiplier. The multiplier
+    defaults to 1 if not provided.
+
+    Args:
+        attrs: Attribute mapping from a node or link.
+        library: Component library used for lookups.
+
+    Returns:
+        A tuple ``(component, hw_count)`` where ``component`` is ``None`` if
+        ``hw_component`` is absent or unknown, and ``hw_count`` is a positive
+        float multiplier (defaults to 1.0).
+    """
+    name = attrs.get("hw_component")
+    raw_count = attrs.get("hw_count", 1)
+
+    try:
+        hw_count = float(raw_count)
+    except Exception:
+        hw_count = 1.0
+
+    if hw_count <= 0:
+        # Guard against invalid values; treat as 1.0 to avoid divide-by-zero and
+        # make behavior predictable.
+        hw_count = 1.0
+
+    comp = library.get(name) if name else None
+    return comp, hw_count
+
+
+def totals_with_multiplier(
+    comp: Component, hw_count: float
+) -> Tuple[float, float, float]:
+    """Return (capex, power_watts, capacity) totals multiplied by ``hw_count``.
+
+    Args:
+        comp: Component definition (may include nested children and internal ``count``).
+        hw_count: External multiplier (e.g., number of modules used for a link or node).
+
+    Returns:
+        Tuple of total capex, total power (typical), and total capacity as floats.
+    """
+    capex = comp.total_capex() * hw_count
+    power = comp.total_power() * hw_count
+    capacity = comp.total_capacity() * hw_count
+    return capex, power, capacity

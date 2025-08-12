@@ -37,7 +37,7 @@
               "properties": {
                 "attrs": {
                   "type": "object",
-                  "description": "Node attributes"
+                  "description": "Node attributes (supports 'hw_component' and optional 'hw_count' multiplier)"
                 },
                 "disabled": {
                   "type": "boolean",
@@ -90,7 +90,7 @@
                   },
                   "attrs": {
                     "type": "object",
-                    "description": "Additional link attributes"
+                    "description": "Additional link attributes (supports 'hw_component' and optional 'hw_count' multiplier)"
                   }
                 },
                 "additionalProperties": false
