@@ -395,11 +395,13 @@ def calc_graph_capacity(
         min_ratio = float("inf")
         for u, neighbors in succ.items():
             for v in neighbors:
-                assigned_flow = flow_dict[u][v]
+                # Use safe lookup: some edges may not receive any nominal flow (e.g. due to very high branching)
+                assigned_flow = flow_dict.get(u, {}).get(v, 0.0)
                 if assigned_flow >= MIN_FLOW:
-                    cap_uv = residual_cap[u].get(v, 0.0)
+                    cap_uv = residual_cap.get(u, {}).get(v, 0.0)
+                    # Only consider positive assignments for scaling
                     if assigned_flow > 0.0:
-                        ratio = cap_uv / assigned_flow
+                        ratio = cap_uv / assigned_flow if assigned_flow != 0.0 else 0.0
                         if ratio < min_ratio:
                             min_ratio = ratio
 
