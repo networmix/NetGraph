@@ -202,23 +202,142 @@ def _print_network_structure(
     if nodes:
         original_level = logger.level
         logger.setLevel(logging.WARNING)
+        explorer = None
         try:
-            explorer = NetworkExplorer.explore_network(network, components_library)
+            # Use non-strict validation so hierarchy is printable even with issues
+            explorer = NetworkExplorer.explore_network(
+                network, components_library, strict_validation=False
+            )
             print("\n   Network Hierarchy:")
             print(
                 "   Legend: counts are for enabled (active) nodes/links; cost/power are\n"
                 "           aggregated from components if defined."
             )
+            # Keep the printed tree shallow in non-detailed mode for readability
             explorer.print_tree(
-                max_depth=3 if not detail else None,
+                max_depth=2 if not detail else None,
                 skip_leaves=not detail,
                 detailed=detail,
                 max_external_lines=8 if detail else 4,
+                line_prefix="   ",
             )
         except Exception as e:
             print(f"   Network Hierarchy: Unable to analyze ({e})")
         finally:
             logger.setLevel(original_level)
+
+        # Hardware utilization and validation summary (non-fatal)
+        try:
+            if explorer is not None:
+                node_utils = explorer.get_node_utilization(include_disabled=False)
+                link_issues = explorer.get_link_issues()
+
+                # Node capacity violations
+                cap_viol = [u for u in node_utils if u.capacity_violation]
+                port_viol = [u for u in node_utils if u.ports_violation]
+
+                print("\n   Validation & Hardware Utilization:")
+                print(
+                    f"     nodes with capacity violations: {len(cap_viol):,}; ports violations: {len(port_viol):,}"
+                )
+
+                # Show over-capacity nodes table (top N by utilization)
+                if cap_viol:
+                    cap_viol_sorted = sorted(
+                        cap_viol,
+                        key=lambda u: (u.capacity_utilization, u.node_name),
+                        reverse=True,
+                    )
+                    top = cap_viol_sorted if detail else cap_viol_sorted[:10]
+                    rows: list[list[str]] = []
+                    for u in top:
+                        rows.append(
+                            [
+                                u.node_name,
+                                str(u.component_name or "-"),
+                                f"{u.hw_count:g}",
+                                f"{u.capacity_supported:,.1f}",
+                                f"{u.attached_capacity_active:,.1f}",
+                                f"{u.capacity_utilization:,.2f}",
+                            ]
+                        )
+                    print("     Over-capacity nodes:")
+                    tbl = _format_table(
+                        [
+                            "Node",
+                            "Component",
+                            "HW Cnt",
+                            "Supported",
+                            "Attached",
+                            "Util",
+                        ],
+                        rows,
+                        max_col_width=48,
+                    )
+                    print("\n".join(f"       {ln}" for ln in tbl.split("\n")))
+                    if not detail and len(cap_viol_sorted) > len(top):
+                        print(f"       ... and {len(cap_viol_sorted) - len(top)} more")
+
+                # Optional port violations table
+                if detail and port_viol:
+                    port_sorted = sorted(
+                        port_viol,
+                        key=lambda u: (u.ports_utilization, u.node_name),
+                        reverse=True,
+                    )
+                    rows2: list[list[str]] = []
+                    for u in port_sorted:
+                        rows2.append(
+                            [
+                                u.node_name,
+                                str(u.component_name or "-"),
+                                f"{u.hw_count:g}",
+                                f"{u.ports_available:,.1f}",
+                                f"{u.ports_used:,.1f}",
+                                f"{u.ports_utilization:,.2f}",
+                            ]
+                        )
+                    print("     Port capacity violations:")
+                    tbl2 = _format_table(
+                        [
+                            "Node",
+                            "Component",
+                            "HW Cnt",
+                            "Ports Avail",
+                            "Ports Used",
+                            "Util",
+                        ],
+                        rows2,
+                        max_col_width=48,
+                    )
+                    print("\n".join(f"       {ln}" for ln in tbl2.split("\n")))
+
+                # Link issues
+                if link_issues:
+                    issues = link_issues if detail else link_issues[:10]
+                    rows3: list[list[str]] = []
+                    for iss in issues:
+                        rows3.append(
+                            [
+                                iss.source,
+                                iss.target,
+                                f"{iss.capacity:,.1f}",
+                                f"{iss.limit:,.1f}",
+                                iss.reason,
+                            ]
+                        )
+                    print(
+                        f"     links exceeding per-end HW capacity: {len(link_issues):,}"
+                    )
+                    tbl3 = _format_table(
+                        ["Source", "Target", "Capacity", "Limit", "Reason"], rows3
+                    )
+                    print("\n".join(f"       {ln}" for ln in tbl3.split("\n")))
+                    if not detail and len(link_issues) > len(issues):
+                        print(f"       ... and {len(link_issues) - len(issues)} more")
+        except Exception:
+            # Non-fatal
+            pass
 
     # Show complete node and link tables in detail mode
     if detail:

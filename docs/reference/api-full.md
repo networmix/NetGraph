@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 12, 2025 at 18:57 UTC
+Generated from source code on: August 13, 2025 at 00:54 UTC
 
 Modules auto-discovered: 67
 
@@ -207,6 +207,25 @@ Attributes:
 - `link_count` (int) = 0
 - `link_capacity` (float) = 0.0
 
+### LinkCapacityIssue
+
+Represents a link capacity constraint violation in active topology.
+
+Attributes:
+    source: Source node name.
+    target: Target node name.
+    capacity: Configured link capacity.
+    limit: Effective capacity limit from per-end hardware (min of ends).
+    reason: Brief reason tag.
+
+**Attributes:**
+
+- `source` (str)
+- `target` (str)
+- `capacity` (float)
+- `limit` (float)
+- `reason` (str)
+
 ### NetworkExplorer
 
 Provides hierarchical exploration of a Network, computing statistics in two modes:
@@ -214,11 +233,48 @@ Provides hierarchical exploration of a Network, computing statistics in two mode
 
 **Methods:**
 
-- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'` - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
+- `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None, strict_validation: 'bool' = True) -> 'NetworkExplorer'` - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
 - `get_bom(self, include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return aggregated hardware BOM for the whole network.
 - `get_bom_by_path(self, path: 'str', include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return the hardware BOM for a specific hierarchy path.
 - `get_bom_map(self, include_disabled: 'bool' = True, include_root: 'bool' = True, root_label: 'str' = '') -> 'Dict[str, Dict[str, float]]'` - Return a mapping from hierarchy path to BOM for each subtree.
-- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None) -> 'None'` - Print the hierarchy from 'node' down (default: root).
+- `get_link_issues(self) -> 'List[LinkCapacityIssue]'` - Return recorded link capacity issues discovered in non-strict mode.
+- `get_node_utilization(self, include_disabled: 'bool' = True) -> 'List[NodeUtilization]'` - Return hardware utilization per node based on active topology.
+- `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None, line_prefix: 'str' = '') -> 'None'` - Print the hierarchy from 'node' down (default: root).
+
+### NodeUtilization
+
+Per-node hardware utilization snapshot based on active topology.
+
+Attributes:
+    node_name: Fully qualified node name.
+    component_name: Hardware component name if present.
+    hw_count: Hardware multiplicity used for capacity/power scaling.
+    capacity_supported: Total capacity supported by node hardware.
+    attached_capacity_active: Sum of capacities of enabled adjacent links where the
+        opposite endpoint is also enabled.
+    capacity_utilization: Ratio of attached to supported capacity (0.0 when N/A).
+    ports_available: Total port equivalents available on the node (0.0 when N/A).
+    ports_used: Sum of port equivalents used by per-end link optics attached to this
+        node on active links.
+    ports_utilization: Ratio of used to available ports (0.0 when N/A).
+    capacity_violation: True if attached capacity exceeds supported capacity.
+    ports_violation: True if used ports exceed available ports.
+    disabled: True if the node itself is disabled.
+
+**Attributes:**
+
+- `node_name` (str)
+- `component_name` (Optional[str])
+- `hw_count` (float)
+- `capacity_supported` (float)
+- `attached_capacity_active` (float)
+- `capacity_utilization` (float)
+- `ports_available` (float)
+- `ports_used` (float)
+- `ports_utilization` (float)
+- `capacity_violation` (bool)
+- `ports_violation` (bool)
+- `disabled` (bool)
 
 ### TreeNode
 

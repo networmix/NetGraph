@@ -64,6 +64,60 @@ class TreeStats:
     active_bom: Dict[str, float] = field(default_factory=dict)
 
 
+@dataclass
+class NodeUtilization:
+    """Per-node hardware utilization snapshot based on active topology.
+
+    Attributes:
+        node_name: Fully qualified node name.
+        component_name: Hardware component name if present.
+        hw_count: Hardware multiplicity used for capacity/power scaling.
+        capacity_supported: Total capacity supported by node hardware.
+        attached_capacity_active: Sum of capacities of enabled adjacent links where the
+            opposite endpoint is also enabled.
+        capacity_utilization: Ratio of attached to supported capacity (0.0 when N/A).
+        ports_available: Total port equivalents available on the node (0.0 when N/A).
+        ports_used: Sum of port equivalents used by per-end link optics attached to this
+            node on active links.
+        ports_utilization: Ratio of used to available ports (0.0 when N/A).
+        capacity_violation: True if attached capacity exceeds supported capacity.
+        ports_violation: True if used ports exceed available ports.
+        disabled: True if the node itself is disabled.
+    """
+
+    node_name: str
+    component_name: Optional[str]
+    hw_count: float
+    capacity_supported: float
+    attached_capacity_active: float
+    capacity_utilization: float
+    ports_available: float
+    ports_used: float
+    ports_utilization: float
+    capacity_violation: bool
+    ports_violation: bool
+    disabled: bool
+
+
+@dataclass
+class LinkCapacityIssue:
+    """Represents a link capacity constraint violation in active topology.
+
+    Attributes:
+        source: Source node name.
+        target: Target node name.
+        capacity: Configured link capacity.
+        limit: Effective capacity limit from per-end hardware (min of ends).
+        reason: Brief reason tag.
+    """
+
+    source: str
+    target: str
+    capacity: float
+    limit: float
+    reason: str
+
+
 @dataclass(eq=False)
 class TreeNode:
     """Represents a node in the hierarchical tree.
@@ -118,9 +172,11 @@ class NetworkExplorer:
         self,
         network: Network,
         components_library: Optional[ComponentsLibrary] = None,
+        strict_validation: bool = True,
     ) -> None:
         self.network = network
         self.components_library = components_library or ComponentsLibrary()
+        self.strict_validation = strict_validation
 
         self.root_node: Optional[TreeNode] = None
 
@@ -131,11 +187,16 @@ class NetworkExplorer:
         # Cache for ancestor sets:
         self._ancestors_cache: Dict[TreeNode, Set[TreeNode]] = {}
 
+        # Validation/utilization artifacts (filled during statistics computation)
+        self._node_utilization: Dict[str, NodeUtilization] = {}
+        self._link_issues: List[LinkCapacityIssue] = []
+
     @classmethod
     def explore_network(
         cls,
         network: Network,
         components_library: Optional[ComponentsLibrary] = None,
+        strict_validation: bool = True,
     ) -> NetworkExplorer:
         """Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
 
@@ -144,8 +205,14 @@ class NetworkExplorer:
         - active_stats.bom: counts by component for enabled topology only
         Counts include fractional usage for sharable optics; exclusive endpoints
         are rounded up in per-link aggregation.
+
+        Args:
+            network: Network model instance.
+            components_library: Components definition library.
+            strict_validation: When True, raise on capacity/ports violations; when False,
+                record issues and continue (useful for inspection flows).
         """
-        instance = cls(network, components_library)
+        instance = cls(network, components_library, strict_validation=strict_validation)
 
         # 1) Build hierarchy
         instance.root_node = instance._build_hierarchy_tree()
@@ -355,8 +422,43 @@ class NetworkExplorer:
                                 if ports_per_optic > 0:
                                     used_ports += end_cnt * ports_per_optic
 
-                # Require that total attached link capacity does not exceed HW capacity
-                if attached_capacity > node_comp_capacity:
+                # Compute ports availability and violations
+                total_ports_available = float(getattr(comp, "ports", 0) or 0) * float(
+                    hw_count
+                )
+                capacity_violation = attached_capacity > node_comp_capacity
+                ports_violation = False
+                if getattr(comp, "ports", 0) and comp.ports > 0:
+                    ports_violation = used_ports > total_ports_available + 1e-9
+
+                # Record per-node utilization snapshot for active topology
+                capacity_utilization = (
+                    (attached_capacity / node_comp_capacity)
+                    if node_comp_capacity > 0.0
+                    else 0.0
+                )
+                ports_utilization = (
+                    (used_ports / total_ports_available)
+                    if total_ports_available > 0.0
+                    else 0.0
+                )
+                self._node_utilization[nd.name] = NodeUtilization(
+                    node_name=nd.name,
+                    component_name=comp.name,
+                    hw_count=float(hw_count),
+                    capacity_supported=float(node_comp_capacity),
+                    attached_capacity_active=float(attached_capacity),
+                    capacity_utilization=float(capacity_utilization),
+                    ports_available=float(total_ports_available),
+                    ports_used=float(used_ports),
+                    ports_utilization=float(ports_utilization),
+                    capacity_violation=bool(capacity_violation),
+                    ports_violation=bool(ports_violation),
+                    disabled=bool(nd.attrs.get("disabled")),
+                )
+
+                # Enforce strict behavior after recording
+                if capacity_violation and self.strict_validation:
                     raise ValueError(
                         (
                             "Node '%s' total attached capacity %.6g exceeds hardware "
@@ -370,24 +472,20 @@ class NetworkExplorer:
                             hw_count,
                         )
                     )
-
-                # Port-based validation when component declares ports
-                if getattr(comp, "ports", 0) and comp.ports > 0:
-                    total_ports_available = float(comp.ports) * float(hw_count)
-                    if used_ports > total_ports_available + 1e-9:
-                        raise ValueError(
-                            (
-                                "Node '%s' requires %.6g ports for link optics but only %.6g ports "
-                                "are available on '%s' (count=%.6g)."
-                            )
-                            % (
-                                nd.name,
-                                used_ports,
-                                total_ports_available,
-                                comp.name,
-                                hw_count,
-                            )
+                if ports_violation and self.strict_validation:
+                    raise ValueError(
+                        (
+                            "Node '%s' requires %.6g ports for link optics but only %.6g ports "
+                            "are available on '%s' (count=%.6g)."
                         )
+                        % (
+                            nd.name,
+                            used_ports,
+                            total_ports_available,
+                            comp.name,
+                            hw_count,
+                        )
+                    )
 
         # 3) Accumulate link stats (internal/external + capex/power) and validate
         for link in self.network.links.values():
@@ -400,9 +498,13 @@ class NetworkExplorer:
             )
 
             # Inspect provided names for warnings
-            link_cost = 0.0
-            link_power = 0.0
             link_comp_capacity = 0.0
+
+            # Initialize defaults for cost/power even when no per-end hardware
+            src_cost = 0.0
+            src_power = 0.0
+            dst_cost = 0.0
+            dst_power = 0.0
 
             if per_end:
                 src_comp, src_cnt, src_exclusive = src_end
@@ -460,9 +562,6 @@ class NetworkExplorer:
                     if not dst_endpoint_has_hw:
                         dst_comp = None
 
-                link_cost = src_cost + dst_cost
-                link_power = src_power + dst_power
-
                 # Capacity limit: only enforce if both ends specify positive capacity
                 if src_cap > 0.0 and dst_cap > 0.0:
                     link_comp_capacity = min(src_cap, dst_cap)
@@ -487,32 +586,9 @@ class NetworkExplorer:
             for an in inter_anc:
                 an.stats.internal_link_count += 1
                 an.stats.internal_link_capacity += cap
-                an.stats.total_capex += link_cost
-                an.stats.total_power += link_power
-                if per_end:
-                    if src_comp is not None:
-                        an.stats.bom[src_comp.name] = (
-                            an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                        )
-                    if dst_comp is not None:
-                        an.stats.bom[dst_comp.name] = (
-                            an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                        )
             for an in xor_anc:
                 an.stats.external_link_count += 1
                 an.stats.external_link_capacity += cap
-                an.stats.total_capex += link_cost
-                an.stats.total_power += link_power
-                if per_end:
-                    if src_comp is not None:
-                        an.stats.bom[src_comp.name] = (
-                            an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                        )
-                    if dst_comp is not None:
-                        an.stats.bom[dst_comp.name] = (
-                            an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                        )
-
                 if an in A_src:
                     other_path = self._compute_full_path(dst_node)
                 else:
@@ -522,6 +598,22 @@ class NetworkExplorer:
                 )
                 bd.link_count += 1
                 bd.link_capacity += cap
+
+            # Attribute per-end hardware cost/power/BOM only to that endpoint's ancestors
+            for an in A_src:
+                an.stats.total_capex += src_cost
+                an.stats.total_power += src_power
+                if per_end and src_comp is not None:
+                    an.stats.bom[src_comp.name] = (
+                        an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                    )
+            for an in A_dst:
+                an.stats.total_capex += dst_cost
+                an.stats.total_power += dst_power
+                if per_end and dst_comp is not None:
+                    an.stats.bom[dst_comp.name] = (
+                        an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                    )
 
             # ----- "ACTIVE" stats and validations -----
             # If link or either endpoint is disabled, skip
@@ -535,48 +627,36 @@ class NetworkExplorer:
             # Validation: if both ends provide capacity, enforce min-end capacity
             if link_comp_capacity > 0.0:
                 if float(cap) > link_comp_capacity:
-                    raise ValueError(
-                        (
-                            "Link '%s->%s' capacity %.6g exceeds per-end hardware "
-                            "capacity limit %.6g (min of src/dst ends)."
+                    if self.strict_validation:
+                        raise ValueError(
+                            (
+                                "Link '%s->%s' capacity %.6g exceeds per-end hardware "
+                                "capacity limit %.6g (min of src/dst ends)."
+                            )
+                            % (
+                                src,
+                                dst,
+                                float(cap),
+                                link_comp_capacity,
+                            )
                         )
-                        % (
-                            src,
-                            dst,
-                            float(cap),
-                            link_comp_capacity,
+                    else:
+                        self._link_issues.append(
+                            LinkCapacityIssue(
+                                source=src,
+                                target=dst,
+                                capacity=float(cap),
+                                limit=float(link_comp_capacity),
+                                reason="link_capacity_exceeds_end_hw",
+                            )
                         )
-                    )
 
             for an in inter_anc:
                 an.active_stats.internal_link_count += 1
                 an.active_stats.internal_link_capacity += cap
-                an.active_stats.total_capex += link_cost
-                an.active_stats.total_power += link_power
-                if per_end:
-                    if src_comp is not None:
-                        an.active_stats.bom[src_comp.name] = (
-                            an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                        )
-                    if dst_comp is not None:
-                        an.active_stats.bom[dst_comp.name] = (
-                            an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                        )
             for an in xor_anc:
                 an.active_stats.external_link_count += 1
                 an.active_stats.external_link_capacity += cap
-                an.active_stats.total_capex += link_cost
-                an.active_stats.total_power += link_power
-                if per_end:
-                    if src_comp is not None:
-                        an.active_stats.bom[src_comp.name] = (
-                            an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                        )
-                    if dst_comp is not None:
-                        an.active_stats.bom[dst_comp.name] = (
-                            an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                        )
-
                 if an in A_src:
                     other_path = self._compute_full_path(dst_node)
                 else:
@@ -587,6 +667,22 @@ class NetworkExplorer:
                 bd.link_count += 1
                 bd.link_capacity += cap
 
+            # Attribute active per-end cost/power/BOM only to the endpoint's ancestors
+            for an in A_src:
+                an.active_stats.total_capex += src_cost
+                an.active_stats.total_power += src_power
+                if per_end and src_comp is not None:
+                    an.active_stats.bom[src_comp.name] = (
+                        an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                    )
+            for an in A_dst:
+                an.active_stats.total_capex += dst_cost
+                an.active_stats.total_power += dst_power
+                if per_end and dst_comp is not None:
+                    an.active_stats.bom[dst_comp.name] = (
+                        an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                    )
+
     def print_tree(
         self,
         node: Optional[TreeNode] = None,
@@ -596,6 +692,7 @@ class NetworkExplorer:
         detailed: bool = False,
         include_disabled: bool = True,
         max_external_lines: Optional[int] = None,
+        line_prefix: str = "",
     ) -> None:
         """Print the hierarchy from 'node' down (default: root).
 
@@ -611,7 +708,7 @@ class NetworkExplorer:
         if node is None:
             node = self.root_node
             if node is None:
-                print("No hierarchy built yet.")
+                print(f"{line_prefix}No hierarchy built yet.")
                 return
 
         if max_depth is not None and indent > max_depth:
@@ -641,7 +738,7 @@ class NetworkExplorer:
                 f"ExtLinkCap={stats.external_link_capacity:,.1f}"
             )
 
-        print(line)
+        print(f"{line_prefix}{line}")
 
         # If detailed, show external link breakdown
         if detailed and stats.external_link_details:
@@ -665,14 +762,16 @@ class NetworkExplorer:
                 if path_str == "":
                     path_str = "[root]"
                 print(
-                    f"{'  ' * indent}   -> External to [{path_str}]: "
+                    f"{line_prefix}{'  ' * indent}   -> External to [{path_str}]: "
                     f"{ext_info.link_count:,} links, cap={ext_info.link_capacity:,.1f}"
                 )
                 displayed += 1
                 if max_external_lines is not None and displayed >= max_external_lines:
                     remaining = len(items) - displayed
                     if remaining > 0:
-                        print(f"{'  ' * indent}     ... and {remaining} more")
+                        print(
+                            f"{line_prefix}{'  ' * indent}     ... and {remaining} more"
+                        )
                     break
 
         # Recurse on children
@@ -685,6 +784,7 @@ class NetworkExplorer:
                 detailed=detailed,
                 include_disabled=include_disabled,
                 max_external_lines=max_external_lines,
+                line_prefix=line_prefix,
             )
 
     def _roll_up_if_leaf(self, path: str) -> str:
@@ -757,3 +857,24 @@ class NetworkExplorer:
             stats = node.stats if include_disabled else node.active_stats
             result[path] = dict(stats.bom)
         return result
+
+    # ---------------------- Validation/utilization accessors ----------------------
+    def get_node_utilization(
+        self, include_disabled: bool = True
+    ) -> List[NodeUtilization]:
+        """Return hardware utilization per node based on active topology.
+
+        Args:
+            include_disabled: Include nodes marked disabled in the result.
+
+        Returns:
+            List of NodeUtilization entries for nodes with declared hardware.
+        """
+        items = list(self._node_utilization.values())
+        if include_disabled:
+            return list(items)
+        return [u for u in items if not u.disabled]
+
+    def get_link_issues(self) -> List[LinkCapacityIssue]:
+        """Return recorded link capacity issues discovered in non-strict mode."""
+        return list(self._link_issues)

@@ -1,0 +1,326 @@
+{
+  "workflow": {
+    "network_statistics": {
+      "step_type": "NetworkStats",
+      "step_name": "network_statistics",
+      "execution_order": 0
+    },
+    "capacity_envelope": {
+      "step_type": "CapacityEnvelopeAnalysis",
+      "step_name": "capacity_envelope",
+      "execution_order": 1
+    },
+    "tm_placement": {
+      "step_type": "TrafficMatrixPlacementAnalysis",
+      "step_name": "tm_placement",
+      "execution_order": 2
+    }
+  },
+  "network_statistics": {
+    "node_count": 151,
+    "link_count": 1366,
+    "total_capacity": 3779200.0,
+    "mean_capacity": 2766.617862371889,
+    "median_capacity": 3200.0,
+    "min_capacity": 200.0,
+    "max_capacity": 16000.0,
+    "mean_cost": 306.8345534407028,
+    "median_cost": 1.0,
+    "min_cost": 1,
+    "max_cost": 1302,
+    "mean_degree": 18.09271523178808,
+    "median_degree": 16,
+    "min_degree": 14,
+    "max_degree": 67
+  },
+  "capacity_envelope": {
+    "capacity_envelopes": {
+      "metro1/dc1->metro1/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "0.0": 10
+        },
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "total_samples": 10,
+        "src": "metro1/dc1",
+        "dst": "metro1/dc1",
+        "metric": "capacity"
+      },
+      "metro1/dc1->metro2/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 5,
+          "0.0": 2,
+          "115200.0": 3
+        },
+        "min": 0.0,
+        "max": 179200.0,
+        "mean": 124160.0,
+        "stdev": 67984.75123143425,
+        "total_samples": 10,
+        "src": "metro1/dc1",
+        "dst": "metro2/dc1",
+        "metric": "capacity"
+      },
+      "metro1/dc1->metro5/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 2,
+          "0.0": 2,
+          "166400.0": 3,
+          "12800.0": 3
+        },
+        "min": 0.0,
+        "max": 179200.0,
+        "mean": 89600.0,
+        "stdev": 82159.6494637118,
+        "total_samples": 10,
+        "src": "metro1/dc1",
+        "dst": "metro5/dc1",
+        "metric": "capacity"
+      },
+      "metro2/dc1->metro1/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 5,
+          "0.0": 2,
+          "115200.0": 3
+        },
+        "min": 0.0,
+        "max": 179200.0,
+        "mean": 124160.0,
+        "stdev": 67984.75123143425,
+        "total_samples": 10,
+        "src": "metro2/dc1",
+        "dst": "metro1/dc1",
+        "metric": "capacity"
+      },
+      "metro2/dc1->metro2/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "0.0": 10
+        },
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "total_samples": 10,
+        "src": "metro2/dc1",
+        "dst": "metro2/dc1",
+        "metric": "capacity"
+      },
+      "metro2/dc1->metro5/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 2,
+          "12800.0": 5,
+          "166400.0": 3
+        },
+        "min": 12800.0,
+        "max": 179200.0,
+        "mean": 92160.0,
+        "stdev": 79483.77444485133,
+        "total_samples": 10,
+        "src": "metro2/dc1",
+        "dst": "metro5/dc1",
+        "metric": "capacity"
+      },
+      "metro5/dc1->metro1/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 2,
+          "0.0": 2,
+          "166400.0": 3,
+          "12800.0": 3
+        },
+        "min": 0.0,
+        "max": 179200.0,
+        "mean": 89600.0,
+        "stdev": 82159.6494637118,
+        "total_samples": 10,
+        "src": "metro5/dc1",
+        "dst": "metro1/dc1",
+        "metric": "capacity"
+      },
+      "metro5/dc1->metro2/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "179200.0": 2,
+          "12800.0": 5,
+          "166400.0": 3
+        },
+        "min": 12800.0,
+        "max": 179200.0,
+        "mean": 92160.0,
+        "stdev": 79483.77444485133,
+        "total_samples": 10,
+        "src": "metro5/dc1",
+        "dst": "metro2/dc1",
+        "metric": "capacity"
+      },
+      "metro5/dc1->metro5/dc1": {
+        "source": "(metro[0-9]+/dc[0-9]+)",
+        "sink": "(metro[0-9]+/dc[0-9]+)",
+        "mode": "pairwise",
+        "frequencies": {
+          "0.0": 10
+        },
+        "min": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "stdev": 0.0,
+        "total_samples": 10,
+        "src": "metro5/dc1",
+        "dst": "metro5/dc1",
+        "metric": "capacity"
+      }
+    }
+  },
+  "tm_placement": {
+    "placement_envelopes": {
+      "metro1/dc1/dc/dc->metro2/dc1/dc/dc|prio=0": {
+        "source": "metro1/dc1/dc/dc",
+        "sink": "metro2/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3422": 5,
+          "0.0": 2,
+          "0.3259": 3
+        },
+        "min": 0.0,
+        "max": 0.3422,
+        "mean": 0.26887,
+        "stdev": 0.13462015488031503,
+        "total_samples": 10,
+        "src": "metro1/dc1/dc/dc",
+        "dst": "metro2/dc1/dc/dc",
+        "metric": "placement_ratio"
+      },
+      "metro2/dc1/dc/dc->metro1/dc1/dc/dc|prio=0": {
+        "source": "metro2/dc1/dc/dc",
+        "sink": "metro1/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3422": 5,
+          "0.0": 2,
+          "0.3259": 3
+        },
+        "min": 0.0,
+        "max": 0.3422,
+        "mean": 0.26887,
+        "stdev": 0.13462015488031503,
+        "total_samples": 10,
+        "src": "metro2/dc1/dc/dc",
+        "dst": "metro1/dc1/dc/dc",
+        "metric": "placement_ratio"
+      },
+      "metro1/dc1/dc/dc->metro5/dc1/dc/dc|prio=0": {
+        "source": "metro1/dc1/dc/dc",
+        "sink": "metro5/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3657": 5,
+          "0.0": 2,
+          "0.0629": 3
+        },
+        "min": 0.0,
+        "max": 0.3657,
+        "mean": 0.20172000000000004,
+        "stdev": 0.16542130938908686,
+        "total_samples": 10,
+        "src": "metro1/dc1/dc/dc",
+        "dst": "metro5/dc1/dc/dc",
+        "metric": "placement_ratio"
+      },
+      "metro5/dc1/dc/dc->metro1/dc1/dc/dc|prio=0": {
+        "source": "metro5/dc1/dc/dc",
+        "sink": "metro1/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3657": 5,
+          "0.0": 2,
+          "0.0629": 3
+        },
+        "min": 0.0,
+        "max": 0.3657,
+        "mean": 0.20172000000000004,
+        "stdev": 0.16542130938908686,
+        "total_samples": 10,
+        "src": "metro5/dc1/dc/dc",
+        "dst": "metro1/dc1/dc/dc",
+        "metric": "placement_ratio"
+      },
+      "metro2/dc1/dc/dc->metro5/dc1/dc/dc|prio=0": {
+        "source": "metro2/dc1/dc/dc",
+        "sink": "metro5/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3758": 5,
+          "0.1074": 2,
+          "0.0612": 3
+        },
+        "min": 0.0612,
+        "max": 0.3758,
+        "mean": 0.22774,
+        "stdev": 0.14892245096022294,
+        "total_samples": 10,
+        "src": "metro2/dc1/dc/dc",
+        "dst": "metro5/dc1/dc/dc",
+        "metric": "placement_ratio"
+      },
+      "metro5/dc1/dc/dc->metro2/dc1/dc/dc|prio=0": {
+        "source": "metro5/dc1/dc/dc",
+        "sink": "metro2/dc1/dc/dc",
+        "mode": "pairwise",
+        "priority": 0,
+        "frequencies": {
+          "0.3758": 5,
+          "0.1074": 2,
+          "0.0612": 3
+        },
+        "min": 0.0612,
+        "max": 0.3758,
+        "mean": 0.22774,
+        "stdev": 0.14892245096022294,
+        "total_samples": 10,
+        "src": "metro5/dc1/dc/dc",
+        "dst": "metro2/dc1/dc/dc",
+        "metric": "placement_ratio"
+      }
+    },
+    "metadata": {
+      "iterations": 10,
+      "parallelism": 14,
+      "baseline": true,
+      "analysis_function": "demand_placement_analysis",
+      "policy_name": "mc_baseline",
+      "execution_time": 0.9161410331726074,
+      "unique_patterns": 7,
+      "alpha": 1.0
+    }
+  }
+}
