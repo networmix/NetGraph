@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 11, 2025 at 21:22 UTC
+Generated from source code on: August 12, 2025 at 16:01 UTC
 
 Modules auto-discovered: 67
 
@@ -113,6 +113,34 @@ Example (YAML-like):
 - `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'` - Constructs a ComponentsLibrary from a YAML string. If the YAML contains
 - `get(self, name: 'str') -> 'Optional[Component]'` - Retrieves a Component by its name from the library.
 - `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'` - Merges another ComponentsLibrary into this one. By default (override=True),
+
+### resolve_hw_component(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float]'
+
+Resolve hardware component and multiplier from entity attributes.
+
+Looks up ``attrs['hw_component']`` in the provided ``library``. If present,
+also reads an optional ``attrs['hw_count']`` multiplier. The multiplier
+defaults to 1 if not provided.
+
+Args:
+    attrs: Attribute mapping from a node or link.
+    library: Component library used for lookups.
+
+Returns:
+    A tuple ``(component, hw_count)`` where ``component`` is ``None`` if
+    ``hw_component`` is absent or unknown, and ``hw_count`` is a positive
+    float multiplier (defaults to 1.0).
+
+### totals_with_multiplier(comp: 'Component', hw_count: 'float') -> 'Tuple[float, float, float]'
+
+Return (capex, power_watts, capacity) totals multiplied by ``hw_count``.
+
+Args:
+    comp: Component definition (may include nested children and internal ``count``).
+    hw_count: External multiplier (e.g., number of modules used for a link or node).
+
+Returns:
+    Tuple of total capex, total power (typical), and total capacity as floats.
 
 ---
 
@@ -974,7 +1002,7 @@ Returns:
 
 Maximum-flow computation via iterative shortest-path augmentation.
 
-Implements a practical Edmonds–Karp-like procedure using SPF with capacity
+Implements a practical Edmonds-Karp-like procedure using SPF with capacity
 constraints and configurable flow-splitting across equal-cost parallel edges.
 Provides helpers for saturated-edge detection and simple sensitivity analysis.
 
@@ -2083,7 +2111,9 @@ or by risk-group children.
 
 ### FailureCondition
 
-Alias for the shared condition dataclass for backward compatibility.
+Alias to the shared condition dataclass.
+
+This maintains a consistent import path within the failure policy module.
 
 **Attributes:**
 
@@ -2641,10 +2671,15 @@ Attributes:
 
 ## ngraph.workflow.cost_power_efficiency
 
-Workflow step to compute cost/power efficiency metrics.
+Workflow step to compute cost/power efficiency metrics and optional HW inventory.
 
-Computes total capex and power for the active network inventory, and normalizes
-by a provided delivered-bandwidth figure (e.g., BAC at availability target).
+Computes total capex and power for the selected network inventory (all or only
+active), and normalizes by a provided delivered-bandwidth figure (e.g., BAC at
+availability target).
+
+Optionally collects node and/or link hardware entries to provide an inventory
+view of hardware usage. Each entry includes hardware capacity, allocated
+capacity, typical and maximum power, component name, and component count.
 
 This step does not compute BAC itself; it expects callers to pass the delivered
 bandwidth value explicitly or to point to a prior step result.
@@ -2657,16 +2692,27 @@ YAML Configuration Example:
         name: "cost_power_efficiency"   # Optional custom name
         delivered_bandwidth_gbps: 10000  # Optional explicit denominator (float)
         delivered_bandwidth_key: "delivered_bandwidth_gbps"  # Lookup key in results
-        include_disabled: true           # Whether to include disabled nodes/links in totals
+        include_disabled: true           # Whether to include disabled nodes/links
+        collect_node_hw_entries: true    # Optional: collect per-node HW entries
+        collect_link_hw_entries: false   # Optional: collect per-link HW entries
     ```
 
-Results stored in `scenario.results` under the step name:
+Results stored in `scenario.results`:
 
 - total_capex: Sum of component capex (float)
 - total_power_watts: Sum of component power (float)
 - delivered_bandwidth_gbps: Denominator used for normalization (float)
 - dollars_per_gbit: Normalized capex (float, inf if denominator <= 0)
 - watts_per_gbit: Normalized power (float, inf if denominator <= 0)
+- node_hw_entries: Optional list of node-level hardware dicts with keys:
+
+        node, hw_component, hw_count, hw_capacity, allocated_capacity,
+        power_watts, power_watts_max
+
+- link_hw_entries: Optional list of link-level hardware dicts with keys:
+
+        link_id, source, target, capacity, hw_component, hw_count, hw_capacity,
+        power_watts, power_watts_max
 
 ### CostPowerEfficiency
 
@@ -2681,6 +2727,10 @@ Attributes:
         not present, the key is treated as a global results key.
     include_disabled: If False, only enabled nodes/links are counted for totals.
         Default ``True`` aggregates regardless of disabled flags.
+    collect_node_hw_entries: If True, store per-node hardware entries with
+        component, count, capacity, allocated capacity, and power metrics.
+    collect_link_hw_entries: If True, store per-link hardware entries with
+        component, count, capacity, and power metrics.
 
 **Attributes:**
 
@@ -2689,6 +2739,8 @@ Attributes:
 - `delivered_bandwidth_gbps` (Optional[float])
 - `delivered_bandwidth_key` (str) = delivered_bandwidth_gbps
 - `include_disabled` (bool) = True
+- `collect_node_hw_entries` (bool) = False
+- `collect_link_hw_entries` (bool) = False
 
 **Methods:**
 

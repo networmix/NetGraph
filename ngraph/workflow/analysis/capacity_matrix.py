@@ -465,7 +465,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     # Public display helpers
     # ------------------------------------------------------------------
 
-    def get_description(self) -> str:  # noqa: D401 – simple return
+    def get_description(self) -> str:  # noqa: D401 - simple return
         return "Processes capacity envelope data into matrices and flow availability analysis"
 
     # ----------------------------- display ------------------------------

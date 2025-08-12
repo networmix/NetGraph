@@ -10,6 +10,8 @@ Let's start by defining a simple two-tier Clos (leaf-spine) fabric:
 from ngraph.scenario import Scenario
 
 scenario_yaml = """
+seed: 42  # Optional: ensures reproducible results for debugging/testing
+
 network:
   name: "Two-Tier Clos Fabric"
   groups:
@@ -76,9 +78,10 @@ blueprints:
           capacity: 40
           cost: 1
 
+seed: 42  # Optional: ensures reproducible results for debugging/testing
+
 network:
   name: "Three-Tier Clos Fabric"
-  seed: 42  # Optional: ensures reproducible results for debugging/testing
   groups:
     pod[1-2]:  # Creates pod1 and pod2
       use_blueprint: clos_pod

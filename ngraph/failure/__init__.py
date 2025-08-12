@@ -8,6 +8,6 @@ iterative analyses.
 
 Public entry points:
 
-- `ngraph.failure.policy` – failure selection rules and policy application
-- `ngraph.failure.manager` – `FailureManager` for running analyses
+- `ngraph.failure.policy` - failure selection rules and policy application
+- `ngraph.failure.manager` - `FailureManager` for running analyses
 """

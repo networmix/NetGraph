@@ -61,6 +61,12 @@ network:
         hw_type: "router_model_B"
 ```
 
+Recognized keys for each node entry:
+
+- `disabled`: boolean (optional)
+- `attrs`: mapping of attributes (optional)
+- `risk_groups`: list of risk-group names (optional)
+
 **Individual Links:**
 
 ```yaml
@@ -75,6 +81,12 @@ network:
           distance_km: 1369.13
           media_type: "fiber"
 ```
+
+Recognized keys for each link entry:
+
+- `source`, `target`: node names (required)
+- `link_params`: mapping with only these keys allowed: `capacity`, `cost`, `disabled`, `risk_groups`, `attrs`
+- `link_count`: integer number of parallel links to create (optional; default 1)
 
 ### Group-Based Definitions
 
@@ -106,9 +118,12 @@ network:
       link_params:
         capacity: 10
         cost: 1
+        # Only the following keys are allowed inside link_params:
+        # capacity, cost, disabled, risk_groups, attrs
     - source: /switches
       target: /switches
       pattern: "one_to_one"     # Connect switches pairwise
+      link_count: 2              # Create 2 parallel links per adjacency (optional)
       link_params:
         capacity: 40
         cost: 1
@@ -148,10 +163,15 @@ network:
 Notes:
 
 - `path` uses the same semantics as before: regex on node name or `attr:<name>` directive grouping.
-- Supported operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
+- `match.conditions` uses the failure-policy language (same operators as below): `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
 - Conditions evaluate over a flat view of node attributes combining top-level fields (`name`, `disabled`, `risk_groups`) and `node.attrs`.
+- `logic` in the `match` block accepts `"and"` or `"or"` (default `"or"`).
 - Selectors filter node candidates before the adjacency `pattern` is applied.
 - Cross-endpoint predicates (e.g., comparing a source attribute to a target attribute) are not supported.
+
+Path semantics inside blueprints:
+
+- Within a blueprint's `adjacency`, a leading `/` is treated as relative to the blueprint instantiation path, not a global root. For example, if a blueprint is used under group `pod1`, then `source: /leaf` resolves to `pod1/leaf`.
 
 Example with OR logic to match multiple roles:
 
@@ -191,7 +211,7 @@ Create multiple similar groups using bracket notation:
 ```yaml
 network:
   groups:
-    dc[1-3]/rack[a-b]:     # Creates dc1/racka, dc1/rackb, dc2/racka, etc.
+    dc[1-3]/rack[a,b]:     # Creates dc1/racka, dc1/rackb, dc2/racka, etc.
       node_count: 4
       name_template: "srv-{node_num}"
 ```
@@ -199,7 +219,6 @@ network:
 **Expansion Types:**
 
 - Numeric ranges: `[1-4]` → 1, 2, 3, 4
-- Character ranges: `[a-c]` → a, b, c
 - Explicit lists: `[red,blue,green]` → red, blue, green
 
 ### Variable Expansion in Adjacency
@@ -280,7 +299,8 @@ network:
   link_overrides:
     - source: "^pod1/leaf/.*$"
       target: "^pod1/spine/.*$"
-      capacity: 100                     # Override capacity
+      link_params:
+        capacity: 100                   # Override capacity
     - source: ".*/spine/.*"
       target: ".*/spine/.*"
       any_direction: true               # Bidirectional matching
@@ -288,6 +308,11 @@ network:
         cost: 5
         attrs:
           link_type: "backbone"
+
+Notes:
+
+- For `link_overrides`, only the keys `source`, `target`, `link_params`, and optional `any_direction` are allowed at the top level. All parameter changes must be nested under `link_params`.
+- `any_direction` defaults to `true` if omitted.
 ```
 
 ## `components` - Hardware Library
@@ -444,29 +469,35 @@ Define failure policies for resilience testing:
 ```yaml
 failure_policy_set:
   single_link_failure:
-    rules:
-      - entity_scope: "link"
-        rule_type: "choice"
-        count: 1
+    modes:                       # Weighted modes; exactly one mode fires per iteration
+      - weight: 1.0
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 1
 
   random_failures:
-    fail_risk_groups: true
-    rules:
-      - entity_scope: "node"
-        rule_type: "random"
-        probability: 0.001
-      - entity_scope: "link"
-        rule_type: "random"
-        probability: 0.002
+    fail_risk_groups: true       # Optional expansion by shared-risk groups
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "node"
+            rule_type: "random"
+            probability: 0.001
+          - entity_scope: "link"
+            rule_type: "random"
+            probability: 0.002
 
   maintenance_scenario:
-    rules:
-      - entity_scope: "node"
-        conditions:
-          - attr: "maintenance_mode"
-            operator: "=="
-            value: "scheduled"
-        rule_type: "all"
+    modes:
+      - weight: 1.0
+        rules:
+          - entity_scope: "node"
+            conditions:
+              - attr: "maintenance_mode"
+                operator: "=="
+                value: "scheduled"
+            rule_type: "all"
 ```
 
 **Rule Types:**
@@ -474,6 +505,12 @@ failure_policy_set:
 - `all`: Select all matching entities
 - `choice`: Select specific count of entities
 - `random`: Select entities with given probability
+
+Notes:
+
+- Policies are mode-based. Each mode has a non-negative `weight`. One mode is chosen per iteration with probability proportional to weights, then all rules in that mode are applied and their selections are unioned.
+- Each rule has `entity_scope` ("node" | "link" | "risk_group"), optional `logic` ("and" | "or"; defaults to "or"), optional `conditions`, and one of `rule_type` parameters (`count` for choice, `probability` for random). `weight_by` can be provided for weighted sampling in `choice` rules.
+- Condition language is the same as used in adjacency `match` selectors (see below) and supports: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`. Conditions evaluate on a flat attribute mapping that includes top-level fields and `attrs`.
 
 **Conditions:**
 

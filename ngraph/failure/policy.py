@@ -22,7 +22,10 @@ from .conditions import evaluate_conditions as _shared_evaluate_conditions
 
 @dataclass
 class FailureCondition(EvalCondition):
-    """Alias for the shared condition dataclass for backward compatibility."""
+    """Alias to the shared condition dataclass.
+
+    This maintains a consistent import path within the failure policy module.
+    """
 
 
 # Supported entity scopes for a rule
@@ -595,5 +598,5 @@ class FailurePolicy:
 
 
 def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
-    """Backward-compatible wrapper using the shared evaluator."""
+    """Wrapper using the shared evaluator."""
     return _shared_evaluate_condition(entity_attrs, cond)

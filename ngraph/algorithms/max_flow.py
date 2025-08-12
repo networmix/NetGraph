@@ -1,6 +1,6 @@
 """Maximum-flow computation via iterative shortest-path augmentation.
 
-Implements a practical Edmonds–Karp-like procedure using SPF with capacity
+Implements a practical Edmonds-Karp-like procedure using SPF with capacity
 constraints and configurable flow-splitting across equal-cost parallel edges.
 Provides helpers for saturated-edge detection and simple sensitivity analysis.
 """

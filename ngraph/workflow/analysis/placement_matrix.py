@@ -16,7 +16,7 @@ from .base import NotebookAnalyzer
 class PlacementMatrixAnalyzer(NotebookAnalyzer):
     """Analyze placement envelopes and display matrices/statistics."""
 
-    def get_description(self) -> str:  # noqa: D401 – simple return
+    def get_description(self) -> str:  # noqa: D401 - simple return
         return "Processes placement envelope data into matrices and summaries"
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:

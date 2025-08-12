@@ -1372,7 +1372,8 @@ class FailureManager:
             if hasattr(demands_config, "get_all_demands"):
                 td_iter = demands_config.get_all_demands()  # TrafficMatrixSet helper
             elif hasattr(demands_config, "demands"):
-                td_iter = demands_config.demands  # Backward-compat mock path in tests
+                # Accept a mock object exposing 'demands' for tests
+                td_iter = demands_config.demands
             else:
                 td_iter = []
             for demand in td_iter:  # type: ignore[assignment]

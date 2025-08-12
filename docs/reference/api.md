@@ -26,7 +26,7 @@ from ngraph.scenario import Scenario
 scenario = Scenario.from_yaml(yaml_content)
 
 # Or build programmatically
-from ngraph.network import Network
+from ngraph.model.network import Network
 scenario = Scenario(network=Network(), workflow=[])
 
 # Execute the scenario
@@ -50,7 +50,7 @@ print(scenario.results.get("NetworkStats", "node_count"))
 **When to use:** Core component for representing network structure. Used directly for programmatic topology creation or accessed via `scenario.network`.
 
 ```python
-from ngraph.network import Network, Node, Link
+from ngraph.model.network import Network, Node, Link
 
 # Create network topology
 network = Network()
@@ -126,7 +126,7 @@ Essential analysis capabilities for network evaluation.
 **When to use:** Fundamental analysis for understanding network capacity, bottlenecks, and traffic engineering scenarios.
 
 ```python
-from ngraph.core.algorithms.base import FlowPlacement
+from ngraph.algorithms.base import FlowPlacement
 
 # Basic maximum flow (returns dict)
 max_flow = network.max_flow(
@@ -177,7 +177,7 @@ print(f"Cost distribution: {summary.cost_distribution}")
 **When to use:** Simulate component failures, analyze degraded network states, or perform parallel analysis with different exclusions.
 
 ```python
-from ngraph.network_view import NetworkView
+from ngraph.model.view import NetworkView
 
 # Create view with failed components (for failure simulation)
 failed_view = NetworkView.from_excluded_sets(
@@ -212,9 +212,9 @@ Sophisticated analysis capabilities using Monte Carlo methods and parallel proce
 **When to use:** Capacity envelope analysis, demand placement studies, component sensitivity analysis, or custom Monte Carlo simulations.
 
 ```python
-from ngraph.failure_manager import FailureManager
-from ngraph.failure_policy import FailurePolicy, FailureRule
-from ngraph.results_artifacts import FailurePolicySet
+from ngraph.failure.manager.manager import FailureManager
+from ngraph.failure.policy import FailurePolicy, FailureRule
+from ngraph.results.artifacts import FailurePolicySet
 
 # Setup failure policies
 policy_set = FailurePolicySet()
@@ -297,7 +297,7 @@ Working with analysis outputs and implementing custom result storage.
 **When to use:** Working with stored analysis results, implementing custom workflow steps, or exporting data for external analysis.
 
 ```python
-from ngraph.results_artifacts import CapacityEnvelope, FailurePatternResult
+from ngraph.results.artifacts import CapacityEnvelope, FailurePatternResult
 
 # Access capacity envelopes from analysis results
 envelope_dict = scenario.results.get("CapacityEnvelopeAnalysis", "capacity_envelopes")
@@ -389,9 +389,9 @@ Advanced capabilities for custom analysis and low-level operations.
 **When to use:** Custom analysis requiring NetworkX integration, performance-critical algorithms, or when you need direct control over graph operations.
 
 ```python
-from ngraph.core.util import to_digraph, from_digraph
-from ngraph.core.algorithms.spf import spf
-from ngraph.core.algorithms.max_flow import calc_max_flow
+from ngraph.graph.convert import to_digraph, from_digraph
+from ngraph.algorithms.spf import spf
+from ngraph.algorithms.max_flow import calc_max_flow
 
 # Convert to NetworkX for custom algorithms
 nx_graph = to_digraph(scenario.network.to_strict_multidigraph())
