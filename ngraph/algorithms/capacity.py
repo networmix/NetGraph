@@ -100,8 +100,10 @@ def _init_graph_data(
                 residual_cap[node][adj_node] = (
                     fwd_capacity if fwd_capacity >= MIN_CAP else 0.0
                 )
-                # Reverse edge in the BFS sense starts with 0 capacity
-                residual_cap[adj_node][node] = 0.0
+                # Reverse edge in the BFS sense starts with 0 capacity.
+                # Do not overwrite if a positive capacity was already assigned
+                # when processing the opposite orientation (bidirectional links).
+                residual_cap[adj_node].setdefault(node, 0.0)
 
             elif flow_placement == FlowPlacement.EQUAL_BALANCED:
                 # min(...) * number_of_parallel_edges
@@ -112,8 +114,9 @@ def _init_graph_data(
                     )
                 else:
                     residual_cap[adj_node][node] = 0.0
-                # The forward edge in reversed orientation starts at 0 capacity
-                residual_cap[node][adj_node] = 0.0
+                # The forward edge in reversed orientation starts at 0 capacity.
+                # Do not overwrite non-zero value if already assigned earlier.
+                residual_cap[node].setdefault(adj_node, 0.0)
 
             else:
                 raise ValueError(f"Unsupported flow placement: {flow_placement}")

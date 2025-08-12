@@ -514,6 +514,63 @@ class TestMaxFlowExtended:
         max_flow_b_b = calc_max_flow(g, "B", "B")
         assert max_flow_b_b == 0.0
 
+    def test_dc_leaf_bidirectional_parallel_branches(self):
+        """DC→leaf reversed hop with two parallel branches; compare placements.
+
+        Topology (all costs=1 unless noted):
+          S -> A_dc (inf)
+          A_dc -> A_leaf1 (cap=50)
+          A_dc -> A_leaf2 (cap=50)
+          A_leaf1 -> B_leaf1 (cap=100)
+          A_leaf2 -> B_leaf1 (cap=1)
+          B_leaf1 -> B_dc (cap=100)
+          B_dc -> T (inf)
+
+        Expected:
+          - PROPORTIONAL: branch1 min(50,100)=50, branch2 min(50,1)=1 → total 51
+          - EQUAL_BALANCED: nominal split 0.5 at A_dc; limiting ratio at edge (A_leaf2->B_leaf1): 1/0.5=2 → total 2
+        """
+        g = StrictMultiDiGraph()
+        for n in ("S", "A_dc", "A_leaf1", "A_leaf2", "B_leaf1", "B_dc", "T"):
+            g.add_node(n)
+
+        # Pseudo edges
+        g.add_edge("S", "A_dc", capacity=float("inf"), cost=0)
+        g.add_edge("B_dc", "T", capacity=float("inf"), cost=0)
+
+        # Reversed hop from DC to leaves (present as real edges here)
+        g.add_edge("A_dc", "A_leaf1", capacity=50.0, cost=1)
+        g.add_edge("A_dc", "A_leaf2", capacity=50.0, cost=1)
+
+        # Leaf to leaf aggregation
+        g.add_edge("A_leaf1", "B_leaf1", capacity=100.0, cost=1)
+        g.add_edge("A_leaf2", "B_leaf1", capacity=1.0, cost=1)
+
+        # Final hop into destination DC
+        g.add_edge("B_leaf1", "B_dc", capacity=100.0, cost=1)
+
+        # Full max flow: both placements reach the same min-cut (51)
+        flow_prop = calc_max_flow(
+            g, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert flow_prop == 51.0
+
+        flow_eq = calc_max_flow(
+            g, "S", "T", flow_placement=FlowPlacement.EQUAL_BALANCED
+        )
+        assert flow_eq == 51.0
+
+        # Single augmentation differs by placement
+        flow_prop_sp = calc_max_flow(
+            g, "S", "T", shortest_path=True, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert flow_prop_sp == 51.0
+
+        flow_eq_sp = calc_max_flow(
+            g, "S", "T", shortest_path=True, flow_placement=FlowPlacement.EQUAL_BALANCED
+        )
+        assert flow_eq_sp == 2.0
+
     def test_max_flow_self_loop_all_return_modes(self):
         """
         Test self-loop (s == t) behavior with all possible return value combinations.

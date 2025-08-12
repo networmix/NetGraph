@@ -3,7 +3,11 @@ from typing import Dict, List
 
 import pytest
 
-from ngraph.algorithms.capacity import FlowPlacement, calc_graph_capacity
+from ngraph.algorithms.capacity import (
+    FlowPlacement,
+    _init_graph_data,
+    calc_graph_capacity,
+)
 from ngraph.algorithms.flow_init import init_flow_graph
 from ngraph.algorithms.spf import spf
 from ngraph.graph.strict_multidigraph import EdgeID, NodeID, StrictMultiDiGraph
@@ -390,6 +394,138 @@ class TestGraphCapacity:
             r, "A", "B", pred_regular, flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert max_flow_regular == 5.0  # Should be limited by A->B capacity
+
+    def test_reverse_residual_init_graph_data_proportional(self):
+        """_init_graph_data should expose dst->leaf residual capacity in PROPORTIONAL.
+
+        Build a tiny graph with forward edges leaf->dc and dc->sink, and reverse dc->leaf.
+        SPF pred contains dc predecessors (leaves) and sink predecessor (dc).
+        The reversed residual must have positive capacity dc->leaf equal to sum(capacity - flow).
+        """
+        g = StrictMultiDiGraph()
+        for n in ("source", "A/dc", "A/leaf", "sink"):
+            g.add_node(n)
+        # Forward edges
+        e1 = g.add_edge("A/leaf", "A/dc", capacity=10.0, cost=1, flow=0.0, flows={})
+        g.add_edge("A/dc", "sink", capacity=float("inf"), cost=0, flow=0.0, flows={})
+        # Reverse edge to simulate bidirectional link
+        g.add_edge("A/dc", "A/leaf", capacity=10.0, cost=1, flow=0.0, flows={})
+
+        # SPF-like predecessor dict: include both directions present in graph
+        # sink<-A/dc, A/dc<-A/leaf, and A/leaf<-A/dc (reverse link)
+        pred: PredDict = {
+            "source": {},
+            "A/dc": {"A/leaf": [e1]},
+            "A/leaf": {"A/dc": list(g.edges_between("A/dc", "A/leaf"))},
+            "sink": {"A/dc": list(g.edges_between("A/dc", "sink"))},
+        }
+
+        # Run init
+        succ, levels, residual_cap, flow_dict = _init_graph_data(
+            g,
+            pred,
+            init_node="sink",
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            capacity_attr="capacity",
+            flow_attr="flow",
+        )
+        # residuals must reflect both forward directions, and zero-init must not overwrite
+        assert residual_cap["A/dc"]["A/leaf"] == 10.0
+        assert residual_cap["A/leaf"]["A/dc"] == 10.0
+
+    def test_reverse_residual_init_graph_data_equal_balanced(self):
+        """_init_graph_data should set reverse residual in EQUAL_BALANCED as min*count.
+
+        With two parallel edges leaf->dc with caps (5, 7), min=5 and count=2 -> reverse cap = 10.
+        """
+        g = StrictMultiDiGraph()
+        for n in ("source", "A/dc", "A/leaf", "sink"):
+            g.add_node(n)
+        # Two parallel forward edges leaf->dc
+        e1 = g.add_edge("A/leaf", "A/dc", capacity=5.0, cost=1, flow=0.0, flows={})
+        e2 = g.add_edge("A/leaf", "A/dc", capacity=7.0, cost=1, flow=0.0, flows={})
+        g.add_edge("A/dc", "sink", capacity=float("inf"), cost=0, flow=0.0, flows={})
+        # Reverse edge present too
+        g.add_edge("A/dc", "A/leaf", capacity=7.0, cost=1, flow=0.0, flows={})
+
+        pred: PredDict = {
+            "source": {},
+            "A/dc": {"A/leaf": [e1, e2]},
+            "sink": {"A/dc": list(g.edges_between("A/dc", "sink"))},
+        }
+
+        succ, levels, residual_cap, flow_dict = _init_graph_data(
+            g,
+            pred,
+            init_node="sink",
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+            capacity_attr="capacity",
+            flow_attr="flow",
+        )
+        # In EQUAL_BALANCED, the reverse residual is assigned on leaf->dc orientation (adj->node)
+        # i.e., residual_cap[leaf][dc] = min(capacities) * count = 5*2 = 10
+        assert residual_cap["A/leaf"]["A/dc"] == 10.0
+        # forward side initialized to 0 in reversed orientation
+        assert residual_cap["A/dc"]["A/leaf"] == 0.0
+
+    def test_dc_to_dc_reverse_edge_first_hop_proportional(self):
+        """Reverse-edge-first hop at destination should yield positive flow.
+
+        Topology (with reverse edges to simulate bidirectional links):
+          A_leaf -> A_dc  (10)
+          A_leaf -> B_leaf (10)
+          B_leaf -> B_dc  (10)
+          A_dc  -> A_leaf (10)  # reverse present
+          B_dc  -> B_leaf (10)  # reverse present
+
+        Pseudo nodes: source -> A_dc, B_dc -> sink
+        Expected max_flow(source, sink) = 10.0 in PROPORTIONAL mode.
+        """
+        g = StrictMultiDiGraph()
+        for n in ("A_dc", "A_leaf", "B_leaf", "B_dc", "source", "sink"):
+            g.add_node(n)
+
+        # Forward edges
+        g.add_edge("A_leaf", "A_dc", capacity=10.0, cost=1)
+        g.add_edge("A_leaf", "B_leaf", capacity=10.0, cost=1)
+        g.add_edge("B_leaf", "B_dc", capacity=10.0, cost=1)
+        # Reverse edges
+        g.add_edge("A_dc", "A_leaf", capacity=10.0, cost=1)
+        g.add_edge("B_dc", "B_leaf", capacity=10.0, cost=1)
+
+        # Pseudo source/sink
+        g.add_edge("source", "A_dc", capacity=float("inf"), cost=0)
+        g.add_edge("B_dc", "sink", capacity=float("inf"), cost=0)
+
+        r = init_flow_graph(g)
+        # Compute SPF with dst_node to mirror real usage in calc_max_flow
+        _costs, pred = spf(r, "source", dst_node="sink")
+        max_flow, _flow_dict = calc_graph_capacity(
+            r, "source", "sink", pred, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow == 10.0
+
+    def test_dc_to_dc_unidirectional_zero(self):
+        """Without reverse edges, DC cannot send to leaf; flow must be zero."""
+        g = StrictMultiDiGraph()
+        for n in ("A_dc", "A_leaf", "B_leaf", "B_dc", "source", "sink"):
+            g.add_node(n)
+
+        # Forward edges only
+        g.add_edge("A_leaf", "A_dc", capacity=10.0, cost=1)
+        g.add_edge("A_leaf", "B_leaf", capacity=10.0, cost=1)
+        g.add_edge("B_leaf", "B_dc", capacity=10.0, cost=1)
+
+        # Pseudo source/sink
+        g.add_edge("source", "A_dc", capacity=float("inf"), cost=0)
+        g.add_edge("B_dc", "sink", capacity=float("inf"), cost=0)
+
+        r = init_flow_graph(g)
+        _costs, pred = spf(r, "source", dst_node="sink")
+        max_flow, _flow_dict = calc_graph_capacity(
+            r, "source", "sink", pred, flow_placement=FlowPlacement.PROPORTIONAL
+        )
+        assert max_flow == 0.0
 
     def test_calc_graph_capacity_self_loop_empty_pred(self):
         """

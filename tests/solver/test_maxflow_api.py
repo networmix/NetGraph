@@ -174,3 +174,28 @@ def test_sensitivity_analysis_keys_align_with_saturated_edges() -> None:
     sat = net.saturated_edges("^S$", "^T$", mode="combine")[("^S$", "^T$")]
     assert set((u, v, k) for (u, v, k) in sat) == set(delta_by_edge.keys())
     assert all(isinstance(delta, (int, float)) for delta in delta_by_edge.values())
+
+
+def test_network_dc_to_dc_reverse_edge_first_hop() -> None:
+    """Integration: DC->DC flow that requires a reverse edge on first hop.
+
+    Nodes: A/dc, A/leaf, B/leaf, B/dc. Links (forward):
+      A/leaf->A/dc (10), A/leaf->B/leaf (10), B/leaf->B/dc (10)
+
+    The wrapper builds a StrictMultiDiGraph with add_reverse=True, creating
+    reverse DC->leaf edges, so A/dc can reach B/dc via DC->leaf->leaf->DC.
+
+    Expect positive flow (10.0) in combine mode.
+    """
+    net = Network()
+    for name in ["A/dc", "A/leaf", "B/leaf", "B/dc"]:
+        net.add_node(Node(name))
+
+    # Forward links only; the graph builder will add reverse edges
+    net.add_link(Link("A/leaf", "A/dc", capacity=10.0, cost=1.0))
+    net.add_link(Link("A/leaf", "B/leaf", capacity=10.0, cost=1.0))
+    net.add_link(Link("B/leaf", "B/dc", capacity=10.0, cost=1.0))
+
+    res = net.max_flow(r"^A/dc$", r"^B/dc$", mode="combine")
+    assert (r"^A/dc$", r"^B/dc$") in res
+    assert res[(r"^A/dc$", r"^B/dc$")] == 10.0
