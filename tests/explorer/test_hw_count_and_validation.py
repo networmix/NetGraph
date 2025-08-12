@@ -56,9 +56,10 @@ def test_hw_count_multiplier_applies_to_capex_and_power() -> None:
     assert root is not None
 
     # Node totals: 2 * (capex=100, power=10) => 200, 20
-    # Link totals per-end: src 4*(5,1) + dst 4*(5,1) => capex 40, power 8
-    assert root.stats.total_capex == pytest.approx(240.0)
-    assert root.stats.total_power == pytest.approx(28.0)
+    # Optics contribute only at endpoints with node hardware.
+    # Only source has hardware, so link totals per-end: src 4*(5,1) + dst 0 => capex 20, power 4
+    assert root.stats.total_capex == pytest.approx(220.0)
+    assert root.stats.total_power == pytest.approx(24.0)
 
 
 def test_node_capacity_validation_strict() -> None:
@@ -100,9 +101,9 @@ def test_link_capacity_validation_strict() -> None:
     )
 
     lib = _lib_with_box_and_optic()
-    with pytest.raises(ValueError) as exc:
-        NetworkExplorer.explore_network(net, components_library=lib)
-    assert "exceeds per-end hardware capacity" in str(exc.value)
+    # Without node hardware on endpoints, optics and their capacity are ignored.
+    # This should not raise.
+    NetworkExplorer.explore_network(net, components_library=lib)
 
 
 def test_link_capacity_with_multiplier_allows() -> None:

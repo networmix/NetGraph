@@ -270,8 +270,14 @@ class NetworkExplorer:
 
         # 2) Accumulate node capex/power and validate hardware capacity vs attached links
         #    Also validate that sum of endpoint optics usage does not exceed node port count
+        #    Track which nodes actually have chassis/hardware assigned; optics at a link
+        #    endpoint should contribute cost/power only when the endpoint node has
+        #    hardware. Without node hardware, optics cannot be installed and should be
+        #    ignored in aggregation and capacity validation.
+        node_has_hw: Dict[str, bool] = {}
         for nd in self.network.nodes.values():
             comp, hw_count = resolve_node_hardware(nd.attrs, self.components_library)
+            node_has_hw[nd.name] = comp is not None
             if nd.attrs.get("hardware") and comp is None:
                 logger.warning(
                     "Node '%s' references unknown node hardware component '%s'.",
@@ -427,7 +433,9 @@ class NetworkExplorer:
                         dst_name,
                     )
 
-                if src_comp is not None:
+                # Optics contribute only if the endpoint node has hardware
+                src_endpoint_has_hw = node_has_hw.get(src, False)
+                if src_comp is not None and src_endpoint_has_hw:
                     # For BOM, apply ceiling for exclusive use
                     src_cnt_bom = float(int(src_cnt) if src_exclusive else src_cnt)
                     src_cost, src_power, src_cap = totals_with_multiplier(
@@ -436,8 +444,12 @@ class NetworkExplorer:
                 else:
                     src_cost, src_power, src_cap = 0.0, 0.0, 0.0
                     src_cnt_bom = 0.0
+                    # Prevent BOM accumulation below
+                    if not src_endpoint_has_hw:
+                        src_comp = None
 
-                if dst_comp is not None:
+                dst_endpoint_has_hw = node_has_hw.get(dst, False)
+                if dst_comp is not None and dst_endpoint_has_hw:
                     dst_cnt_bom = float(int(dst_cnt) if dst_exclusive else dst_cnt)
                     dst_cost, dst_power, dst_cap = totals_with_multiplier(
                         dst_comp, dst_cnt
@@ -445,6 +457,8 @@ class NetworkExplorer:
                 else:
                     dst_cost, dst_power, dst_cap = 0.0, 0.0, 0.0
                     dst_cnt_bom = 0.0
+                    if not dst_endpoint_has_hw:
+                        dst_comp = None
 
                 link_cost = src_cost + dst_cost
                 link_power = src_power + dst_power

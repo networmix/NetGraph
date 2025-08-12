@@ -169,9 +169,10 @@ def test_explore_network_with_links():
     assert root.stats.internal_link_capacity == 300.0
     assert root.stats.external_link_count == 0
     assert root.stats.external_link_capacity == 0.0
-    # Node known_hw (10) + link endpoints (5 + 5) = 20
-    assert root.stats.total_capex == 20.0
-    assert root.stats.total_power == 4.0
+    # Optics on an endpoint contribute only if that endpoint node has hardware.
+    # Here only ssw-1 has hardware, so totals are: node (10) + one optic end (5) = 15.
+    assert root.stats.total_capex == 15.0
+    assert root.stats.total_power == 3.0
 
     # From dc1's perspective, the link to dc2 is external
     dc1_subtree_node = dc1_node

@@ -263,6 +263,12 @@ class CostPowerEfficiency(WorkflowStep):
                 # Reuse the same selection as links_for_sum to ensure endpoint-enabled check
                 links_iter = links_for_sum
 
+            # Precompute which nodes have chassis/hardware; optics are ignored when absent
+            node_has_hw: Dict[str, bool] = {}
+            for nd in network.nodes.values():
+                nd_comp, _nd_cnt = resolve_node_hardware(nd.attrs, library)
+                node_has_hw[nd.name] = nd_comp is not None
+
             for lk in links_iter:
                 (src_end, dst_end, per_end) = resolve_link_end_components(
                     lk.attrs, library
@@ -278,14 +284,20 @@ class CostPowerEfficiency(WorkflowStep):
                     power_max = float(c.total_power_max() * n)
                     return capex, power, cap, power_max
 
-                # Compute endpoints
-                src_capex, src_power, src_cap, src_power_max = _totals_with_max(
-                    src_comp, src_cnt
-                )
+                # Compute endpoints; ignore optics if the endpoint node has no hardware
+                if src_comp is not None and node_has_hw.get(lk.source, False):
+                    _, src_power, src_cap, src_power_max = _totals_with_max(
+                        src_comp, src_cnt
+                    )
+                else:
+                    src_power, src_cap, src_power_max = 0.0, 0.0, 0.0
 
-                dst_capex, dst_power, dst_cap, dst_power_max = _totals_with_max(
-                    dst_comp, dst_cnt
-                )
+                if dst_comp is not None and node_has_hw.get(lk.target, False):
+                    _, dst_power, dst_cap, dst_power_max = _totals_with_max(
+                        dst_comp, dst_cnt
+                    )
+                else:
+                    dst_power, dst_cap, dst_power_max = 0.0, 0.0, 0.0
 
                 # Aggregate per-link
                 power_watts = float(src_power + dst_power)
@@ -305,12 +317,14 @@ class CostPowerEfficiency(WorkflowStep):
                         "source": {
                             "component": src_comp.name
                             if src_comp is not None
+                            and node_has_hw.get(lk.source, False)
                             else None,
                             "count": float(src_cnt),
                         },
                         "target": {
                             "component": dst_comp.name
                             if dst_comp is not None
+                            and node_has_hw.get(lk.target, False)
                             else None,
                             "count": float(dst_cnt),
                         },
