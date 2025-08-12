@@ -365,7 +365,11 @@ def _coerce_positive_float(value: Any, default: float = 1.0) -> float:
 def resolve_link_end_components(
     attrs: Dict[str, Any],
     library: ComponentsLibrary,
-) -> tuple[tuple[Optional[Component], float], tuple[Optional[Component], float], bool]:
+) -> tuple[
+    tuple[Optional[Component], float, bool],
+    tuple[Optional[Component], float, bool],
+    bool,
+]:
     """Resolve per-end hardware components for a link.
 
     Input format inside ``link.attrs``:
@@ -378,17 +382,25 @@ def resolve_link_end_components(
         attrs: Link attributes mapping.
         library: Components library for lookups.
 
+    Exclusive usage:
+      - Optional ``exclusive: true`` per end indicates unsharable usage.
+        For exclusive ends, validation and BOM counting should round-up counts
+        to integers.
+
     Returns:
-        ((src_comp, src_count), (dst_comp, dst_count), per_end_specified)
+        ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive), per_end_specified)
         where components may be ``None`` if name is absent/unknown. ``per_end_specified``
         is True when a structured per-end mapping is present.
     """
 
-    def _from_mapping(mapping: Dict[str, Any]) -> tuple[Optional[Component], float]:
+    def _from_mapping(
+        mapping: Dict[str, Any],
+    ) -> tuple[Optional[Component], float, bool]:
         comp_name = mapping.get("component")
         count_val = mapping.get("count", 1)
+        exclusive = bool(mapping.get("exclusive", False))
         comp = library.get(str(comp_name)) if comp_name is not None else None
-        return comp, _coerce_positive_float(count_val, 1.0)
+        return comp, _coerce_positive_float(count_val, 1.0), exclusive
 
     # 1) Structured under "hardware": {source: {...}, target: {...}}
     hw_struct = attrs.get("hardware")
@@ -398,4 +410,4 @@ def resolve_link_end_components(
         return _from_mapping(src_map), _from_mapping(dst_map), True
 
     # No legacy or flattened formats supported.
-    return (None, 1.0), (None, 1.0), False
+    return (None, 1.0, False), (None, 1.0, False), False

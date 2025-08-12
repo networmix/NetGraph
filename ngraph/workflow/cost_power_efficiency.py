@@ -6,7 +6,7 @@ availability target).
 
 Optionally collects node and/or link hardware entries to provide an inventory
 view of hardware usage. Each entry includes hardware capacity, allocated
-capacity, typical and maximum power, component name, and component count.
+capacity, typical and maximum power, and a normalized hardware mapping.
 
 This step does not compute BAC itself; it expects callers to pass the delivered
 bandwidth value explicitly or to point to a prior step result.
@@ -30,11 +30,15 @@ Results stored in `scenario.results`:
     - dollars_per_gbit: Normalized capex (float, inf if denominator <= 0)
     - watts_per_gbit: Normalized power (float, inf if denominator <= 0)
     - node_hw_entries: Optional list of node-level hardware dicts with keys:
-        node, hw_component, hw_count, hw_capacity, allocated_capacity,
+        node, hardware {component, count}, hw_capacity, allocated_capacity,
         power_watts, power_watts_max
     - link_hw_entries: Optional list of link-level hardware dicts with keys:
-        link_id, source, target, capacity, hw_component, hw_count, hw_capacity,
-        power_watts, power_watts_max
+        link_id, source, target, capacity,
+        hardware {source {component, count, exclusive}, target {component, count, exclusive}},
+        hw_capacity, power_watts, power_watts_max
+    - hardware_bom_total: Aggregated hardware BOM for the whole network (Dict[str, float])
+    - hardware_bom_by_path: Mapping of hierarchy path -> BOM dict for each subtree
+      (root is stored under the empty string key "")
 """
 
 from __future__ import annotations
@@ -66,9 +70,9 @@ class CostPowerEfficiency(WorkflowStep):
         include_disabled: If False, only enabled nodes/links are counted for totals.
             Default ``True`` aggregates regardless of disabled flags.
         collect_node_hw_entries: If True, store per-node hardware entries with
-            component, count, capacity, allocated capacity, and power metrics.
+            hardware mapping, capacity, allocated capacity, and power metrics.
         collect_link_hw_entries: If True, store per-link hardware entries with
-            component, count, capacity, and power metrics.
+            per-end hardware mapping, capacity, and power metrics.
     """
 
     delivered_bandwidth_gbps: Optional[float] = None
@@ -86,6 +90,7 @@ class CostPowerEfficiency(WorkflowStep):
         Returns:
             None
         """
+        # Build explorer FIRST to trigger all validations before collecting metrics
         explorer = NetworkExplorer.explore_network(
             scenario.network, components_library=scenario.components_library
         )
@@ -137,6 +142,14 @@ class CostPowerEfficiency(WorkflowStep):
         scenario.results.put(step_name, "delivered_bandwidth_gbps", denom)
         scenario.results.put(step_name, "dollars_per_gbit", dollars_per_gbit)
         scenario.results.put(step_name, "watts_per_gbit", watts_per_gbit)
+
+        # Hardware BOMs (total and per-path), matching include_disabled view
+        bom_total = explorer.get_bom(include_disabled=self.include_disabled)
+        bom_by_path = explorer.get_bom_map(
+            include_disabled=self.include_disabled, include_root=True, root_label=""
+        )
+        scenario.results.put(step_name, "hardware_bom_total", bom_total)
+        scenario.results.put(step_name, "hardware_bom_by_path", bom_by_path)
 
         # Optional hardware inventory
         if self.collect_node_hw_entries or self.collect_link_hw_entries:
@@ -229,8 +242,10 @@ class CostPowerEfficiency(WorkflowStep):
 
                 entry = {
                     "node": nd.name,
-                    "hw_component": nd.attrs.get("hw_component"),
-                    "hw_count": float(hw_count),
+                    "hardware": {
+                        "component": comp.name if comp is not None else None,
+                        "count": float(hw_count),
+                    },
                     "hw_capacity": hw_capacity,
                     "allocated_capacity": float(allocated_by_node.get(nd.name, 0.0)),
                     "power_watts": power_watts,
@@ -253,8 +268,8 @@ class CostPowerEfficiency(WorkflowStep):
                     lk.attrs, library
                 )
 
-                src_comp, src_cnt = src_end
-                dst_comp, dst_cnt = dst_end
+                src_comp, src_cnt, _ = src_end
+                dst_comp, dst_cnt, _ = dst_end
 
                 def _totals_with_max(c, n) -> tuple[float, float, float, float]:
                     if c is None:
@@ -286,11 +301,20 @@ class CostPowerEfficiency(WorkflowStep):
                     "source": lk.source,
                     "target": lk.target,
                     "capacity": float(lk.capacity),
-                    # Emit per-end hardware for clarity
-                    "src_hw_component": src_comp.name if src_comp is not None else None,
-                    "src_hw_count": float(src_cnt),
-                    "dst_hw_component": dst_comp.name if dst_comp is not None else None,
-                    "dst_hw_count": float(dst_cnt),
+                    "hardware": {
+                        "source": {
+                            "component": src_comp.name
+                            if src_comp is not None
+                            else None,
+                            "count": float(src_cnt),
+                        },
+                        "target": {
+                            "component": dst_comp.name
+                            if dst_comp is not None
+                            else None,
+                            "count": float(dst_cnt),
+                        },
+                    },
                     "hw_capacity": hw_capacity,
                     "power_watts": power_watts,
                     "power_watts_max": power_watts_max,

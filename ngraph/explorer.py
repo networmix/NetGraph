@@ -59,6 +59,9 @@ class TreeStats:
 
     total_capex: float = 0.0
     total_power: float = 0.0
+    # Hardware BOM aggregation
+    bom: Dict[str, float] = field(default_factory=dict)
+    active_bom: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(eq=False)
@@ -134,7 +137,14 @@ class NetworkExplorer:
         network: Network,
         components_library: Optional[ComponentsLibrary] = None,
     ) -> NetworkExplorer:
-        """Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats."""
+        """Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
+
+        The Explorer also constructs hardware Bills-of-Materials (BOM):
+        - stats.bom: total counts by component for all nodes/links (ignores disabled)
+        - active_stats.bom: counts by component for enabled topology only
+        Counts include fractional usage for sharable optics; exclusive endpoints
+        are rounded up in per-link aggregation.
+        """
         instance = cls(network, components_library)
 
         # 1) Build hierarchy
@@ -259,6 +269,7 @@ class NetworkExplorer:
             set_node_counts(self.root_node)
 
         # 2) Accumulate node capex/power and validate hardware capacity vs attached links
+        #    Also validate that sum of endpoint optics usage does not exceed node port count
         for nd in self.network.nodes.values():
             comp, hw_count = resolve_node_hardware(nd.attrs, self.components_library)
             if nd.attrs.get("hardware") and comp is None:
@@ -283,12 +294,20 @@ class NetworkExplorer:
             for an in self._get_ancestors(tree_node):
                 an.stats.total_capex += cost_val
                 an.stats.total_power += power_val
+                if comp is not None:
+                    an.stats.bom[comp.name] = an.stats.bom.get(comp.name, 0.0) + float(
+                        hw_count
+                    )
 
             # "Active" excludes disabled
             if not nd.attrs.get("disabled"):
                 for an in self._get_ancestors(tree_node):
                     an.active_stats.total_capex += cost_val
                     an.active_stats.total_power += power_val
+                    if comp is not None:
+                        an.active_stats.bom[comp.name] = an.active_stats.bom.get(
+                            comp.name, 0.0
+                        ) + float(hw_count)
 
             # Validation only if component has a positive capacity and node is enabled
             if (
@@ -298,6 +317,9 @@ class NetworkExplorer:
             ):
                 # Sum capacities of all enabled links attached to this node
                 attached_capacity = 0.0
+                # Track optics usage in "equivalent optics" and ports tally
+                used_optics_equiv = 0.0
+                used_ports = 0.0
                 for lk in self.network.links.values():
                     if lk.attrs.get("disabled"):
                         continue
@@ -309,6 +331,23 @@ class NetworkExplorer:
                         ):
                             continue
                         attached_capacity += float(lk.capacity)
+
+                        # Compute optics usage for this endpoint if per-end hardware is set
+                        (src_end, dst_end, per_end) = resolve_link_end_components(
+                            lk.attrs, self.components_library
+                        )
+                        if per_end:
+                            end = src_end if lk.source == nd.name else dst_end
+                            end_comp, end_cnt, end_excl = end
+                            if end_comp is not None:
+                                # Count optics-equivalents by component count
+                                used_optics_equiv += end_cnt
+                                # Ports used equals count * ports per optic (fractional allowed)
+                                ports_per_optic = float(
+                                    getattr(end_comp, "ports", 0) or 0
+                                )
+                                if ports_per_optic > 0:
+                                    used_ports += end_cnt * ports_per_optic
 
                 # Require that total attached link capacity does not exceed HW capacity
                 if attached_capacity > node_comp_capacity:
@@ -326,6 +365,24 @@ class NetworkExplorer:
                         )
                     )
 
+                # Port-based validation when component declares ports
+                if getattr(comp, "ports", 0) and comp.ports > 0:
+                    total_ports_available = float(comp.ports) * float(hw_count)
+                    if used_ports > total_ports_available + 1e-9:
+                        raise ValueError(
+                            (
+                                "Node '%s' requires %.6g ports for link optics but only %.6g ports "
+                                "are available on '%s' (count=%.6g)."
+                            )
+                            % (
+                                nd.name,
+                                used_ports,
+                                total_ports_available,
+                                comp.name,
+                                hw_count,
+                            )
+                        )
+
         # 3) Accumulate link stats (internal/external + capex/power) and validate
         for link in self.network.links.values():
             src = link.source
@@ -342,8 +399,8 @@ class NetworkExplorer:
             link_comp_capacity = 0.0
 
             if per_end:
-                src_comp, src_cnt = src_end
-                dst_comp, dst_cnt = dst_end
+                src_comp, src_cnt, src_exclusive = src_end
+                dst_comp, dst_cnt, dst_exclusive = dst_end
 
                 # Unknown component warnings with names
                 hw_struct = link.attrs.get("hardware")
@@ -371,18 +428,23 @@ class NetworkExplorer:
                     )
 
                 if src_comp is not None:
+                    # For BOM, apply ceiling for exclusive use
+                    src_cnt_bom = float(int(src_cnt) if src_exclusive else src_cnt)
                     src_cost, src_power, src_cap = totals_with_multiplier(
                         src_comp, src_cnt
                     )
                 else:
                     src_cost, src_power, src_cap = 0.0, 0.0, 0.0
+                    src_cnt_bom = 0.0
 
                 if dst_comp is not None:
+                    dst_cnt_bom = float(int(dst_cnt) if dst_exclusive else dst_cnt)
                     dst_cost, dst_power, dst_cap = totals_with_multiplier(
                         dst_comp, dst_cnt
                     )
                 else:
                     dst_cost, dst_power, dst_cap = 0.0, 0.0, 0.0
+                    dst_cnt_bom = 0.0
 
                 link_cost = src_cost + dst_cost
                 link_power = src_power + dst_power
@@ -400,17 +462,42 @@ class NetworkExplorer:
             inter_anc = A_src & A_dst  # sees link as "internal"
             xor_anc = A_src ^ A_dst  # sees link as "external"
 
+            # Initialize defaults for BOM variables if per_end is False
+            # Establish defaults to satisfy type checker; will be overwritten when per_end
+            src_comp = None
+            dst_comp = None
+            src_cnt_bom = 0.0
+            dst_cnt_bom = 0.0
+
             # ----- "ALL" stats -----
             for an in inter_anc:
                 an.stats.internal_link_count += 1
                 an.stats.internal_link_capacity += cap
                 an.stats.total_capex += link_cost
                 an.stats.total_power += link_power
+                if per_end:
+                    if src_comp is not None:
+                        an.stats.bom[src_comp.name] = (
+                            an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                        )
+                    if dst_comp is not None:
+                        an.stats.bom[dst_comp.name] = (
+                            an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                        )
             for an in xor_anc:
                 an.stats.external_link_count += 1
                 an.stats.external_link_capacity += cap
                 an.stats.total_capex += link_cost
                 an.stats.total_power += link_power
+                if per_end:
+                    if src_comp is not None:
+                        an.stats.bom[src_comp.name] = (
+                            an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                        )
+                    if dst_comp is not None:
+                        an.stats.bom[dst_comp.name] = (
+                            an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                        )
 
                 if an in A_src:
                     other_path = self._compute_full_path(dst_node)
@@ -452,11 +539,29 @@ class NetworkExplorer:
                 an.active_stats.internal_link_capacity += cap
                 an.active_stats.total_capex += link_cost
                 an.active_stats.total_power += link_power
+                if per_end:
+                    if src_comp is not None:
+                        an.active_stats.bom[src_comp.name] = (
+                            an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                        )
+                    if dst_comp is not None:
+                        an.active_stats.bom[dst_comp.name] = (
+                            an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                        )
             for an in xor_anc:
                 an.active_stats.external_link_count += 1
                 an.active_stats.external_link_capacity += cap
                 an.active_stats.total_capex += link_cost
                 an.active_stats.total_power += link_power
+                if per_end:
+                    if src_comp is not None:
+                        an.active_stats.bom[src_comp.name] = (
+                            an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
+                        )
+                    if dst_comp is not None:
+                        an.active_stats.bom[dst_comp.name] = (
+                            an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
+                        )
 
                 if an in A_src:
                     other_path = self._compute_full_path(dst_node)
@@ -576,3 +681,65 @@ class NetworkExplorer:
         while node.parent and node.parent.name != "root" and node.is_leaf():
             node = node.parent
         return self._compute_full_path(node)
+
+    # ----------------------------- BOM accessors -----------------------------
+    def get_bom(self, include_disabled: bool = True) -> Dict[str, float]:
+        """Return aggregated hardware BOM for the whole network.
+
+        Args:
+            include_disabled: If True, include disabled nodes/links. If False,
+                aggregate only enabled topology.
+
+        Returns:
+            Mapping component_name -> count.
+        """
+        if self.root_node is None:
+            return {}
+        stats = (
+            self.root_node.stats if include_disabled else self.root_node.active_stats
+        )
+        return dict(stats.bom)
+
+    def get_bom_by_path(
+        self, path: str, include_disabled: bool = True
+    ) -> Dict[str, float]:
+        """Return the hardware BOM for a specific hierarchy path.
+
+        Args:
+            path: Hierarchy path (e.g., "dc1/plane1"). Empty string returns the root BOM.
+            include_disabled: If True, include disabled nodes/links.
+
+        Returns:
+            Mapping component_name -> count for the subtree.
+        """
+        if path == "":
+            return self.get_bom(include_disabled=include_disabled)
+        node = self._path_map.get(path)
+        if node is None:
+            return {}
+        stats = node.stats if include_disabled else node.active_stats
+        return dict(stats.bom)
+
+    def get_bom_map(
+        self,
+        include_disabled: bool = True,
+        include_root: bool = True,
+        root_label: str = "",
+    ) -> Dict[str, Dict[str, float]]:
+        """Return a mapping from hierarchy path to BOM for each subtree.
+
+        Args:
+            include_disabled: Include disabled nodes/links in BOMs.
+            include_root: Include the root entry under ``root_label``.
+            root_label: Label for the root entry (default: "").
+
+        Returns:
+            Dict mapping path -> {component_name -> count}.
+        """
+        result: Dict[str, Dict[str, float]] = {}
+        if include_root:
+            result[root_label] = self.get_bom(include_disabled=include_disabled)
+        for path, node in self._path_map.items():
+            stats = node.stats if include_disabled else node.active_stats
+            result[path] = dict(stats.bom)
+        return result

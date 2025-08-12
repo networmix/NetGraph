@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 12, 2025 at 16:01 UTC
+Generated from source code on: August 12, 2025 at 18:57 UTC
 
 Modules auto-discovered: 67
 
@@ -114,22 +114,46 @@ Example (YAML-like):
 - `get(self, name: 'str') -> 'Optional[Component]'` - Retrieves a Component by its name from the library.
 - `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'` - Merges another ComponentsLibrary into this one. By default (override=True),
 
-### resolve_hw_component(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float]'
+### resolve_link_end_components(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'tuple[tuple[Optional[Component], float, bool], tuple[Optional[Component], float, bool], bool]'
 
-Resolve node hardware component and multiplier from node attributes.
+Resolve per-end hardware components for a link.
 
-Looks up ``attrs['hw_component']`` in the provided ``library``. If present,
-also reads an optional ``attrs['hw_count']`` multiplier. The multiplier
-defaults to 1 if not provided.
+Input format inside ``link.attrs``:
+
+Structured mapping under ``hardware`` key only:
+  ``{"hardware": {"source": {"component": NAME, "count": N},
+                   "target": {"component": NAME, "count": N}}}``
 
 Args:
-    attrs: Node attribute mapping.
+    attrs: Link attributes mapping.
+    library: Components library for lookups.
+
+Exclusive usage:
+
+- Optional ``exclusive: true`` per end indicates unsharable usage.
+
+    For exclusive ends, validation and BOM counting should round-up counts
+    to integers.
+
+Returns:
+    ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive), per_end_specified)
+    where components may be ``None`` if name is absent/unknown. ``per_end_specified``
+    is True when a structured per-end mapping is present.
+
+### resolve_node_hardware(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float]'
+
+Resolve node hardware from ``attrs['hardware']``.
+
+Expects the mapping: ``{"hardware": {"component": NAME, "count": N}}``.
+``count`` defaults to 1 if missing or invalid. If ``component`` is missing
+or unknown, returns ``(None, 1.0)``.
+
+Args:
+    attrs: Node attributes mapping.
     library: Component library used for lookups.
 
 Returns:
-    A tuple ``(component, hw_count)`` where ``component`` is ``None`` if
-    ``hw_component`` is absent or unknown, and ``hw_count`` is a positive
-    float multiplier (defaults to 1.0).
+    Tuple of (component or None, positive multiplier).
 
 ### totals_with_multiplier(comp: 'Component', hw_count: 'float') -> 'Tuple[float, float, float]'
 
@@ -191,6 +215,9 @@ Provides hierarchical exploration of a Network, computing statistics in two mode
 **Methods:**
 
 - `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None) -> 'NetworkExplorer'` - Build a NetworkExplorer, constructing a tree plus 'all' and 'active' stats.
+- `get_bom(self, include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return aggregated hardware BOM for the whole network.
+- `get_bom_by_path(self, path: 'str', include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return the hardware BOM for a specific hierarchy path.
+- `get_bom_map(self, include_disabled: 'bool' = True, include_root: 'bool' = True, root_label: 'str' = '') -> 'Dict[str, Dict[str, float]]'` - Return a mapping from hierarchy path to BOM for each subtree.
 - `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None) -> 'None'` - Print the hierarchy from 'node' down (default: root).
 
 ### TreeNode
@@ -214,8 +241,8 @@ Attributes:
 - `children` (Dict[str, TreeNode]) = {}
 - `subtree_nodes` (Set[str]) = set()
 - `active_subtree_nodes` (Set[str]) = set()
-- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0)
-- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0)
+- `stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0, bom={}, active_bom={})
+- `active_stats` (TreeStats) = TreeStats(node_count=0, internal_link_count=0, internal_link_capacity=0.0, external_link_count=0, external_link_capacity=0.0, external_link_details={}, total_capex=0.0, total_power=0.0, bom={}, active_bom={})
 - `raw_nodes` (List[Node]) = []
 
 **Methods:**
@@ -247,6 +274,8 @@ Attributes:
 - `external_link_details` (Dict[str, ExternalLinkBreakdown]) = {}
 - `total_capex` (float) = 0.0
 - `total_power` (float) = 0.0
+- `bom` (Dict[str, float]) = {}
+- `active_bom` (Dict[str, float]) = {}
 
 ---
 
@@ -2679,7 +2708,7 @@ availability target).
 
 Optionally collects node and/or link hardware entries to provide an inventory
 view of hardware usage. Each entry includes hardware capacity, allocated
-capacity, typical and maximum power, component name, and component count.
+capacity, typical and maximum power, and a normalized hardware mapping.
 
 This step does not compute BAC itself; it expects callers to pass the delivered
 bandwidth value explicitly or to point to a prior step result.
@@ -2706,15 +2735,19 @@ Results stored in `scenario.results`:
 - watts_per_gbit: Normalized power (float, inf if denominator <= 0)
 - node_hw_entries: Optional list of node-level hardware dicts with keys:
 
-        node, hw_component, hw_count, hw_capacity, allocated_capacity,
+        node, hardware {component, count}, hw_capacity, allocated_capacity,
         power_watts, power_watts_max
 
 - link_hw_entries: Optional list of link-level hardware dicts with keys:
 
         link_id, source, target, capacity,
-        src_hw_component, src_hw_count,
-        dst_hw_component, dst_hw_count,
+        hardware {source {component, count, exclusive}, target {component, count, exclusive}},
         hw_capacity, power_watts, power_watts_max
+
+- hardware_bom_total: Aggregated hardware BOM for the whole network (Dict[str, float])
+- hardware_bom_by_path: Mapping of hierarchy path -> BOM dict for each subtree
+
+      (root is stored under the empty string key "")
 
 ### CostPowerEfficiency
 
@@ -2730,9 +2763,9 @@ Attributes:
     include_disabled: If False, only enabled nodes/links are counted for totals.
         Default ``True`` aggregates regardless of disabled flags.
     collect_node_hw_entries: If True, store per-node hardware entries with
-        component, count, capacity, allocated capacity, and power metrics.
+        hardware mapping, capacity, allocated capacity, and power metrics.
     collect_link_hw_entries: If True, store per-link hardware entries with
-        component, count, capacity, and power metrics.
+        per-end hardware mapping, capacity, and power metrics.
 
 **Attributes:**
 
@@ -3065,6 +3098,9 @@ Ensure adjacency definitions only contain recognized keys.
 ### check_link_params(link_params: 'Dict[str, Any]', context: 'str') -> 'None'
 
 Ensure link_params contain only recognized keys.
+
+Link attributes may include "hardware" per-end mapping when set under
+link_params.attrs. This function only validates top-level link_params keys.
 
 ### check_no_extra_keys(data_dict: 'Dict[str, Any]', allowed: 'set[str]', context: 'str') -> 'None'
 

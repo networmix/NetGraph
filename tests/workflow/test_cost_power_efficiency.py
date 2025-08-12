@@ -117,8 +117,8 @@ def test_collect_link_hw_entries_basic() -> None:
     assert entry["source"] == "A"
     assert entry["target"] == "B"
     assert entry["capacity"] == 30.0
-    assert entry["src_hw_component"] == "LinkHW"
-    assert entry["dst_hw_component"] == "LinkHW"
+    assert entry["hardware"]["source"]["component"] == "LinkHW"
+    assert entry["hardware"]["target"]["component"] == "LinkHW"
     assert entry["hw_capacity"] == 100.0
     assert entry["power_watts"] == 2.0
     assert entry["power_watts_max"] == 3.0

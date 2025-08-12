@@ -110,7 +110,8 @@
                             "type": "object",
                             "properties": {
                               "component": {"type": "string"},
-                              "count": {"type": "number", "minimum": 0}
+                              "count": {"type": "number", "minimum": 0},
+                              "exclusive": {"type": "boolean"}
                             },
                             "additionalProperties": false
                           },
@@ -118,7 +119,8 @@
                             "type": "object",
                             "properties": {
                               "component": {"type": "string"},
-                              "count": {"type": "number", "minimum": 0}
+                              "count": {"type": "number", "minimum": 0},
+                              "exclusive": {"type": "boolean"}
                             },
                             "additionalProperties": false
                           }
