@@ -32,15 +32,22 @@ def _lib_with_box_and_optic() -> ComponentsLibrary:
 def test_hw_count_multiplier_applies_to_capex_and_power() -> None:
     """Verify that node/link totals are multiplied by optional hw_count."""
     net = Network()
-    net.nodes["A"] = Node(name="A", attrs={"hw_component": "box", "hw_count": 2})
+    net.nodes["A"] = Node(
+        name="A", attrs={"hardware": {"component": "box", "count": 2}}
+    )
     net.nodes["B"] = Node(name="B")
 
-    # Link uses 4 optics; capacity 80 <= optic.capacity * hw_count (100 * 4)
+    # Link uses per-end optics; capacity 80 <= min(src,dst) capacity
     net.links["L1"] = Link(
         source="A",
         target="B",
         capacity=80.0,
-        attrs={"hw_component": "optic", "hw_count": 4},
+        attrs={
+            "hardware": {
+                "source": {"component": "optic", "count": 4},
+                "target": {"component": "optic", "count": 4},
+            }
+        },
     )
 
     lib = _lib_with_box_and_optic()
@@ -49,16 +56,16 @@ def test_hw_count_multiplier_applies_to_capex_and_power() -> None:
     assert root is not None
 
     # Node totals: 2 * (capex=100, power=10) => 200, 20
-    # Link totals: 4 * (capex=5, power=1) => 20, 4
-    assert root.stats.total_capex == pytest.approx(220.0)
-    assert root.stats.total_power == pytest.approx(24.0)
+    # Link totals per-end: src 4*(5,1) + dst 4*(5,1) => capex 40, power 8
+    assert root.stats.total_capex == pytest.approx(240.0)
+    assert root.stats.total_power == pytest.approx(28.0)
 
 
 def test_node_capacity_validation_strict() -> None:
     """Total attached link capacity must not exceed node HW capacity * hw_count."""
     net = Network()
     # Node A: capacity 200 (count=1)
-    net.nodes["A"] = Node(name="A", attrs={"hw_component": "box"})
+    net.nodes["A"] = Node(name="A", attrs={"hardware": {"component": "box"}})
     net.nodes["B"] = Node(name="B")
 
     # Three links of 100 each from A -> B (active)
@@ -71,7 +78,7 @@ def test_node_capacity_validation_strict() -> None:
     lib.components["box"].capacity = 200.0
     with pytest.raises(ValueError) as exc:
         NetworkExplorer.explore_network(net, components_library=lib)
-    assert "exceeds hardware capacity" in str(exc.value)
+    assert "Node 'A' total attached capacity" in str(exc.value)
 
 
 def test_link_capacity_validation_strict() -> None:
@@ -84,13 +91,18 @@ def test_link_capacity_validation_strict() -> None:
         source="A",
         target="B",
         capacity=120.0,
-        attrs={"hw_component": "optic"},
+        attrs={
+            "hardware": {
+                "source": {"component": "optic", "count": 1},
+                "target": {"component": "optic", "count": 1},
+            }
+        },
     )
 
     lib = _lib_with_box_and_optic()
     with pytest.raises(ValueError) as exc:
         NetworkExplorer.explore_network(net, components_library=lib)
-    assert "exceeds hardware capacity" in str(exc.value)
+    assert "exceeds per-end hardware capacity" in str(exc.value)
 
 
 def test_link_capacity_with_multiplier_allows() -> None:
@@ -98,12 +110,17 @@ def test_link_capacity_with_multiplier_allows() -> None:
     net = Network()
     net.nodes["A"] = Node(name="A")
     net.nodes["B"] = Node(name="B")
-    # Optic capacity 100, hw_count=2 -> 200 allows 180
+    # Optic capacity 100 each end, count=2 -> min(200, 200) allows 180
     net.links["L1"] = Link(
         source="A",
         target="B",
         capacity=180.0,
-        attrs={"hw_component": "optic", "hw_count": 2},
+        attrs={
+            "hardware": {
+                "source": {"component": "optic", "count": 2},
+                "target": {"component": "optic", "count": 2},
+            }
+        },
     )
 
     lib = _lib_with_box_and_optic()

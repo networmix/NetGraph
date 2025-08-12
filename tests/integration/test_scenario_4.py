@@ -99,24 +99,30 @@ class TestScenario4:
         tor_nodes = [
             node
             for node in helper.network.nodes.values()
-            if "tor" in node.name and node.attrs.get("hw_component") == "ToRSwitch48p"
+            if "tor" in node.name
+            and ((node.attrs.get("hardware") or {}).get("component") == "ToRSwitch48p")
         ]
         assert len(tor_nodes) > 0, "Should have ToR switches with component references"
 
         for tor_node in tor_nodes[:5]:  # Check first few
-            assert tor_node.attrs.get("hw_component") == "ToRSwitch48p"
+            assert (tor_node.attrs.get("hardware") or {}).get(
+                "component"
+            ) == "ToRSwitch48p"
             assert tor_node.attrs.get("role") == "top_of_rack"
 
         # Test server nodes have correct component references
         server_nodes = [
             node
             for node in helper.network.nodes.values()
-            if "srv" in node.name and node.attrs.get("hw_component") == "ServerNode"
+            if "srv" in node.name
+            and ((node.attrs.get("hardware") or {}).get("component") == "ServerNode")
         ]
         assert len(server_nodes) > 0, "Should have servers with component references"
 
         for server_node in server_nodes[:5]:  # Check first few
-            assert server_node.attrs.get("hw_component") == "ServerNode"
+            assert (server_node.attrs.get("hardware") or {}).get(
+                "component"
+            ) == "ServerNode"
             assert server_node.attrs.get("role") in ["compute", "gpu_compute"]
 
     def test_bracket_expansion_functionality(self, helper):
@@ -206,9 +212,9 @@ class TestScenario4:
                 server.attrs.get("role") == "gpu_compute"
             )  # Technical role, not marketing
             assert server.attrs.get("gpu_count") == 8  # Specific technical spec
-            assert (
-                server.attrs.get("hw_component") == "ServerNode"
-            )  # Technical component reference
+            assert (server.attrs.get("hardware") or {}).get(
+                "component"
+            ) == "ServerNode"  # Technical component reference
 
             # Ensure no marketing language attributes remain
             assert "server_type" not in server.attrs, (
@@ -227,8 +233,8 @@ class TestScenario4:
                 f"Server role should be technical, found: {role}"
             )
 
-            # Should have technical hw_component reference
-            assert server.attrs.get("hw_component") == "ServerNode"
+            # Should have technical component reference
+            assert (server.attrs.get("hardware") or {}).get("component") == "ServerNode"
 
         # Validate that attributes are meaningful and contextually appropriate
         # Check that ToR switches have appropriate technical attributes
@@ -240,9 +246,9 @@ class TestScenario4:
 
         for tor in tor_switches[:2]:  # Check a couple
             assert tor.attrs.get("role") == "top_of_rack"  # Technical role
-            assert (
-                tor.attrs.get("hw_component") == "ToRSwitch48p"
-            )  # Technical component reference
+            assert (tor.attrs.get("hardware") or {}).get(
+                "component"
+            ) == "ToRSwitch48p"  # Technical component reference
 
     def test_complex_link_overrides(self, helper):
         """Test complex link override patterns with regex."""

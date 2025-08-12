@@ -290,26 +290,29 @@ class ComponentsLibrary:
 
 
 # ----------------------------- Helper utilities -----------------------------
-def resolve_hw_component(
+def resolve_node_hardware(
     attrs: Dict[str, Any], library: ComponentsLibrary
 ) -> Tuple[Optional[Component], float]:
-    """Resolve hardware component and multiplier from entity attributes.
+    """Resolve node hardware from ``attrs['hardware']``.
 
-    Looks up ``attrs['hw_component']`` in the provided ``library``. If present,
-    also reads an optional ``attrs['hw_count']`` multiplier. The multiplier
-    defaults to 1 if not provided.
+    Expects the mapping: ``{"hardware": {"component": NAME, "count": N}}``.
+    ``count`` defaults to 1 if missing or invalid. If ``component`` is missing
+    or unknown, returns ``(None, 1.0)``.
 
     Args:
-        attrs: Attribute mapping from a node or link.
+        attrs: Node attributes mapping.
         library: Component library used for lookups.
 
     Returns:
-        A tuple ``(component, hw_count)`` where ``component`` is ``None`` if
-        ``hw_component`` is absent or unknown, and ``hw_count`` is a positive
-        float multiplier (defaults to 1.0).
+        Tuple of (component or None, positive multiplier).
     """
-    name = attrs.get("hw_component")
-    raw_count = attrs.get("hw_count", 1)
+    hw = attrs.get("hardware")
+    if not isinstance(hw, dict):
+        return None, 1.0
+
+    name_raw = hw.get("component")
+    name = str(name_raw) if name_raw is not None else None
+    raw_count = hw.get("count", 1)
 
     try:
         hw_count = float(raw_count)
@@ -317,8 +320,6 @@ def resolve_hw_component(
         hw_count = 1.0
 
     if hw_count <= 0:
-        # Guard against invalid values; treat as 1.0 to avoid divide-by-zero and
-        # make behavior predictable.
         hw_count = 1.0
 
     comp = library.get(name) if name else None
@@ -341,3 +342,60 @@ def totals_with_multiplier(
     power = comp.total_power() * hw_count
     capacity = comp.total_capacity() * hw_count
     return capex, power, capacity
+
+
+# ------------------------- Link endpoint HW helpers -------------------------
+def _coerce_positive_float(value: Any, default: float = 1.0) -> float:
+    """Return ``value`` coerced to a positive float, else ``default``.
+
+    Args:
+        value: Arbitrary value to parse as float.
+        default: Value to return if parsing fails or non-positive.
+
+    Returns:
+        Positive float.
+    """
+    try:
+        out = float(value)
+    except Exception:
+        return default
+    return out if out > 0 else default
+
+
+def resolve_link_end_components(
+    attrs: Dict[str, Any],
+    library: ComponentsLibrary,
+) -> tuple[tuple[Optional[Component], float], tuple[Optional[Component], float], bool]:
+    """Resolve per-end hardware components for a link.
+
+    Input format inside ``link.attrs``:
+
+    Structured mapping under ``hardware`` key only:
+      ``{"hardware": {"source": {"component": NAME, "count": N},
+                       "target": {"component": NAME, "count": N}}}``
+
+    Args:
+        attrs: Link attributes mapping.
+        library: Components library for lookups.
+
+    Returns:
+        ((src_comp, src_count), (dst_comp, dst_count), per_end_specified)
+        where components may be ``None`` if name is absent/unknown. ``per_end_specified``
+        is True when a structured per-end mapping is present.
+    """
+
+    def _from_mapping(mapping: Dict[str, Any]) -> tuple[Optional[Component], float]:
+        comp_name = mapping.get("component")
+        count_val = mapping.get("count", 1)
+        comp = library.get(str(comp_name)) if comp_name is not None else None
+        return comp, _coerce_positive_float(count_val, 1.0)
+
+    # 1) Structured under "hardware": {source: {...}, target: {...}}
+    hw_struct = attrs.get("hardware")
+    if isinstance(hw_struct, dict):
+        src_map = hw_struct.get("source", {})
+        dst_map = hw_struct.get("target", {})
+        return _from_mapping(src_map), _from_mapping(dst_map), True
+
+    # No legacy or flattened formats supported.
+    return (None, 1.0), (None, 1.0), False

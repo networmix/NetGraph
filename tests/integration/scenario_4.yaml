@@ -97,14 +97,18 @@ blueprints:
         node_count: 1
         name_template: "tor-{node_num}"
         attrs:
-          hw_component: "ToRSwitch48p"
+          hardware:
+            component: "ToRSwitch48p"
+            count: 1
           role: "top_of_rack"
         risk_groups: ["RackSRG"]
       servers:
         node_count: 8 # 8 servers per rack for test efficiency
         name_template: "srv-{node_num}"
         attrs:
-          hw_component: "ServerNode"
+          hardware:
+            component: "ServerNode"
+            count: 1
           role: "compute"
         risk_groups: ["RackSRG"]
     adjacency:
@@ -124,14 +128,18 @@ blueprints:
         node_count: 2 # 2 leaf switches per fabric
         name_template: "leaf-{node_num}"
         attrs:
-          hw_component: "ToRSwitch48p"
+          hardware:
+            component: "ToRSwitch48p"
+            count: 1
           role: "leaf"
         risk_groups: ["LeafSRG"]
       spine:
         node_count: 2 # 2 spine switches per fabric
         name_template: "spine-{node_num}"
         attrs:
-          hw_component: "SpineSwitch32p"
+          hardware:
+            component: "SpineSwitch32p"
+            count: 1
           role: "spine"
         risk_groups: ["Spine_Fabric_SRG"]
     adjacency:
@@ -206,7 +214,9 @@ network:
     # Override all spine switches with specific hardware model
     - path: ".*/fabric/spine/spine-[1-2]"
       attrs:
-        hw_component: "SpineSwitch32p"
+        hardware:
+          component: "SpineSwitch32p"
+          count: 1
         role: "spine"
       risk_groups: ["Spine_Fabric_SRG"]
 
@@ -215,7 +225,9 @@ network:
       attrs:
         role: "gpu_compute"
         gpu_count: 8
-        hw_component: "ServerNode"
+        hardware:
+          component: "ServerNode"
+          count: 1
 
     # Mark certain racks as disabled for maintenance
     - path: "dc2_podb_rack2/.*"

@@ -116,14 +116,14 @@ Example (YAML-like):
 
 ### resolve_hw_component(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float]'
 
-Resolve hardware component and multiplier from entity attributes.
+Resolve node hardware component and multiplier from node attributes.
 
 Looks up ``attrs['hw_component']`` in the provided ``library``. If present,
 also reads an optional ``attrs['hw_count']`` multiplier. The multiplier
 defaults to 1 if not provided.
 
 Args:
-    attrs: Attribute mapping from a node or link.
+    attrs: Node attribute mapping.
     library: Component library used for lookups.
 
 Returns:
@@ -2711,8 +2711,10 @@ Results stored in `scenario.results`:
 
 - link_hw_entries: Optional list of link-level hardware dicts with keys:
 
-        link_id, source, target, capacity, hw_component, hw_count, hw_capacity,
-        power_watts, power_watts_max
+        link_id, source, target, capacity,
+        src_hw_component, src_hw_count,
+        dst_hw_component, dst_hw_count,
+        hw_capacity, power_watts, power_watts_max
 
 ### CostPowerEfficiency
 

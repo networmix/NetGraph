@@ -49,7 +49,11 @@ def check_adjacency_keys(adj_def: Dict[str, Any], context: str) -> None:
 
 
 def check_link_params(link_params: Dict[str, Any], context: str) -> None:
-    """Ensure link_params contain only recognized keys."""
+    """Ensure link_params contain only recognized keys.
+
+    Link attributes may include "hardware" per-end mapping when set under
+    link_params.attrs. This function only validates top-level link_params keys.
+    """
     recognized = {"capacity", "cost", "disabled", "risk_groups", "attrs"}
     extra = set(link_params.keys()) - recognized
     if extra:

@@ -7,7 +7,8 @@ from typing import Dict, List, Optional, Set
 
 from ngraph.components import (
     ComponentsLibrary,
-    resolve_hw_component,
+    resolve_link_end_components,
+    resolve_node_hardware,
     totals_with_multiplier,
 )
 from ngraph.logging import get_logger
@@ -259,12 +260,12 @@ class NetworkExplorer:
 
         # 2) Accumulate node capex/power and validate hardware capacity vs attached links
         for nd in self.network.nodes.values():
-            comp, hw_count = resolve_hw_component(nd.attrs, self.components_library)
-            if nd.attrs.get("hw_component") and comp is None:
+            comp, hw_count = resolve_node_hardware(nd.attrs, self.components_library)
+            if nd.attrs.get("hardware") and comp is None:
                 logger.warning(
-                    "Node '%s' references unknown hw_component '%s'.",
+                    "Node '%s' references unknown node hardware component '%s'.",
                     nd.name,
-                    nd.attrs.get("hw_component"),
+                    (nd.attrs.get("hardware") or {}).get("component"),
                 )
 
             # Totals with external multiplier
@@ -330,25 +331,65 @@ class NetworkExplorer:
             src = link.source
             dst = link.target
 
-            link_comp, link_hw_count = resolve_hw_component(
+            # Resolve per-end link hardware (no legacy support)
+            (src_end, dst_end, per_end) = resolve_link_end_components(
                 link.attrs, self.components_library
             )
-            if link.attrs.get("hw_component") and link_comp is None:
-                logger.warning(
-                    "Link '%s->%s' references unknown hw_component '%s'.",
-                    src,
-                    dst,
-                    link.attrs.get("hw_component"),
-                )
 
-            if link_comp is not None:
-                link_cost, link_power, link_comp_capacity = totals_with_multiplier(
-                    link_comp, link_hw_count
-                )
-            else:
-                link_cost = 0.0
-                link_power = 0.0
-                link_comp_capacity = 0.0
+            # Inspect provided names for warnings
+            link_cost = 0.0
+            link_power = 0.0
+            link_comp_capacity = 0.0
+
+            if per_end:
+                src_comp, src_cnt = src_end
+                dst_comp, dst_cnt = dst_end
+
+                # Unknown component warnings with names
+                hw_struct = link.attrs.get("hardware")
+                src_name = None
+                dst_name = None
+                if isinstance(hw_struct, dict):
+                    src_map = hw_struct.get("source", {})
+                    dst_map = hw_struct.get("target", {})
+                    src_name = src_map.get("component")
+                    dst_name = dst_map.get("component")
+
+                if src_comp is None and src_name:
+                    logger.warning(
+                        "Link '%s->%s' unknown src hardware component '%s'.",
+                        src,
+                        dst,
+                        src_name,
+                    )
+                if dst_comp is None and dst_name:
+                    logger.warning(
+                        "Link '%s->%s' unknown dst hardware component '%s'.",
+                        src,
+                        dst,
+                        dst_name,
+                    )
+
+                if src_comp is not None:
+                    src_cost, src_power, src_cap = totals_with_multiplier(
+                        src_comp, src_cnt
+                    )
+                else:
+                    src_cost, src_power, src_cap = 0.0, 0.0, 0.0
+
+                if dst_comp is not None:
+                    dst_cost, dst_power, dst_cap = totals_with_multiplier(
+                        dst_comp, dst_cnt
+                    )
+                else:
+                    dst_cost, dst_power, dst_cap = 0.0, 0.0, 0.0
+
+                link_cost = src_cost + dst_cost
+                link_power = src_power + dst_power
+
+                # Capacity limit: only enforce if both ends specify positive capacity
+                if src_cap > 0.0 and dst_cap > 0.0:
+                    link_comp_capacity = min(src_cap, dst_cap)
             cap = link.capacity
 
             src_node = self._node_map[src]
@@ -390,21 +431,19 @@ class NetworkExplorer:
             if self.network.nodes[dst].attrs.get("disabled"):
                 continue
 
-            # Validation: if link has component capacity, ensure link capacity fits
-            if link_comp is not None and link_comp_capacity > 0.0:
+            # Validation: if both ends provide capacity, enforce min-end capacity
+            if link_comp_capacity > 0.0:
                 if float(cap) > link_comp_capacity:
                     raise ValueError(
                         (
-                            "Link '%s->%s' capacity %.6g exceeds hardware "
-                            "capacity %.6g from component '%s' (hw_count=%.6g)."
+                            "Link '%s->%s' capacity %.6g exceeds per-end hardware "
+                            "capacity limit %.6g (min of src/dst ends)."
                         )
                         % (
                             src,
                             dst,
                             float(cap),
                             link_comp_capacity,
-                            link_comp.name,
-                            link_hw_count,
                         )
                     )
 

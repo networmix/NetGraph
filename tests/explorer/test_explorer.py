@@ -22,6 +22,7 @@ def create_mock_components_library() -> ComponentsLibrary:
         name="optic_hw",
         capex=5.0,
         power_watts=1.0,
+        capacity=100.0,
     )
     return lib
 
@@ -109,12 +110,13 @@ def test_explore_network_with_links():
     # Create some nodes
     # "dc1/plane1/ssw-1" and "dc1/plane1/ssw-2" share a common prefix, so they are in the same subtree
     network.nodes["dc1/plane1/ssw-1"] = Node(
-        name="dc1/plane1/ssw-1", attrs={"hw_component": "known_hw"}
+        name="dc1/plane1/ssw-1",
+        attrs={"hardware": {"component": "known_hw", "count": 1}},
     )
     network.nodes["dc1/plane1/ssw-2"] = Node(name="dc1/plane1/ssw-2")  # no hw component
     # "dc2/plane2/ssw-3" is in a different subtree
     network.nodes["dc2/plane2/ssw-3"] = Node(
-        name="dc2/plane2/ssw-3", attrs={"hw_component": "unknown_hw"}
+        name="dc2/plane2/ssw-3", attrs={"hardware": {"component": "unknown_hw"}}
     )
 
     # Add links: one internal link (within dc1 subtree), one crossing subtree boundary
@@ -122,7 +124,12 @@ def test_explore_network_with_links():
         source="dc1/plane1/ssw-1",
         target="dc1/plane1/ssw-2",
         capacity=100.0,
-        attrs={"hw_component": "optic_hw"},
+        attrs={
+            "hardware": {
+                "source": {"component": "optic_hw", "count": 1},
+                "target": {"component": "optic_hw", "count": 1},
+            }
+        },
     )
     network.links["l2"] = Link(
         source="dc1/plane1/ssw-1",
@@ -162,8 +169,9 @@ def test_explore_network_with_links():
     assert root.stats.internal_link_capacity == 300.0
     assert root.stats.external_link_count == 0
     assert root.stats.external_link_capacity == 0.0
-    assert root.stats.total_capex == 15.0  # 10 (node) + 5 (link) for known
-    assert root.stats.total_power == 3.0  # 2 (node) + 1 (link)
+    # Node known_hw (10) + link endpoints (5 + 5) = 20
+    assert root.stats.total_capex == 20.0
+    assert root.stats.total_power == 4.0
 
     # From dc1's perspective, the link to dc2 is external
     dc1_subtree_node = dc1_node
@@ -181,10 +189,14 @@ def test_explore_network_with_links():
 def test_unknown_hw_warnings(caplog, caplog_info_level):
     """Test that unknown hw_component on nodes/links triggers a warning."""
     network = Network()
-    network.nodes["n1"] = Node(name="n1", attrs={"hw_component": "unknown_node_hw"})
+    network.nodes["n1"] = Node(
+        name="n1", attrs={"hardware": {"component": "unknown_node_hw"}}
+    )
     network.nodes["n2"] = Node(name="n2")
     network.links["l1"] = Link(
-        source="n1", target="n2", attrs={"hw_component": "unknown_link_hw"}
+        source="n1",
+        target="n2",
+        attrs={"hardware": {"source": {"component": "unknown_link_hw"}}},
     )
 
     lib = create_mock_components_library()

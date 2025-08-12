@@ -37,7 +37,18 @@
               "properties": {
                 "attrs": {
                   "type": "object",
-                  "description": "Node attributes (supports 'hw_component' and optional 'hw_count' multiplier)"
+                  "description": "Node attributes. Supports 'hardware': {component, count} for node hardware component definition.",
+                  "properties": {
+                    "hardware": {
+                      "type": "object",
+                      "properties": {
+                        "component": {"type": "string"},
+                        "count": {"type": "number", "minimum": 0}
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "additionalProperties": true
                 },
                 "disabled": {
                   "type": "boolean",
@@ -90,7 +101,32 @@
                   },
                   "attrs": {
                     "type": "object",
-                    "description": "Additional link attributes (supports 'hw_component' and optional 'hw_count' multiplier)"
+                    "description": "Additional link attributes. Supports per-end hardware under 'hardware': {src|lhs|source: {component, count}, dst|rhs|target: {component, count}}",
+                    "properties": {
+                      "hardware": {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "object",
+                            "properties": {
+                              "component": {"type": "string"},
+                              "count": {"type": "number", "minimum": 0}
+                            },
+                            "additionalProperties": false
+                          },
+                          "target": {
+                            "type": "object",
+                            "properties": {
+                              "component": {"type": "string"},
+                              "count": {"type": "number", "minimum": 0}
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": true
                   }
                 },
                 "additionalProperties": false

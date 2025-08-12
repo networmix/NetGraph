@@ -40,12 +40,19 @@ def _scenario_stub() -> MagicMock:
     scenario.components_library = _basic_components()
 
     # Nodes with hardware
-    scenario.network.add_node(Node("A", attrs={"hw_component": "NodeHW"}))
-    scenario.network.add_node(Node("B", attrs={"hw_component": "NodeHW"}))
+    scenario.network.add_node(
+        Node("A", attrs={"hardware": {"component": "NodeHW", "count": 1}})
+    )
+    scenario.network.add_node(
+        Node("B", attrs={"hardware": {"component": "NodeHW", "count": 1}})
+    )
 
-    # One enabled link with hardware and capacity
+    # One enabled link with per-end hardware and capacity
     link = Link("A", "B", capacity=30.0)
-    link.attrs["hw_component"] = "LinkHW"
+    link.attrs["hardware"] = {
+        "source": {"component": "LinkHW", "count": 1},
+        "target": {"component": "LinkHW", "count": 1},
+    }
     scenario.network.add_link(link)
 
     return scenario
@@ -110,7 +117,8 @@ def test_collect_link_hw_entries_basic() -> None:
     assert entry["source"] == "A"
     assert entry["target"] == "B"
     assert entry["capacity"] == 30.0
-    assert entry["hw_component"] == "LinkHW"
+    assert entry["src_hw_component"] == "LinkHW"
+    assert entry["dst_hw_component"] == "LinkHW"
     assert entry["hw_capacity"] == 100.0
-    assert entry["power_watts"] == 1.0
-    assert entry["power_watts_max"] == 1.5
+    assert entry["power_watts"] == 2.0
+    assert entry["power_watts_max"] == 3.0

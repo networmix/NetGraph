@@ -177,10 +177,11 @@ class TestScenario3:
             )
 
         # Test general spine-spine link overrides
+        # Now only risk_groups remain validated at link-level; per-end HW moved under attrs.hardware
         helper.validate_link_attributes(
             source_pattern=r"my_clos1/spine/t3-2$",
             target_pattern=r"my_clos2/spine/t3-2$",
-            expected_attrs={"risk_groups": {"SpineSRG"}, "hw_component": "400G-LR4"},
+            expected_attrs={"risk_groups": {"SpineSRG"}},
         )
 
     def test_link_capacity_configuration(self, helper):

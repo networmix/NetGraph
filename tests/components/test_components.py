@@ -435,15 +435,15 @@ components:
 
 
 def test_helper_resolve_and_totals_with_multiplier() -> None:
-    """Helpers return component and apply hw_count multiplier correctly."""
-    from ngraph.components import resolve_hw_component, totals_with_multiplier
+    """Helpers return component and apply count multiplier correctly."""
+    from ngraph.components import resolve_node_hardware, totals_with_multiplier
 
     lib = ComponentsLibrary()
     lib.components["box"] = Component(
         name="box", capex=5.0, power_watts=2.0, capacity=10.0
     )
-    attrs = {"hw_component": "box", "hw_count": 3}
-    comp, count = resolve_hw_component(attrs, lib)
+    attrs = {"hardware": {"component": "box", "count": 3}}
+    comp, count = resolve_node_hardware(attrs, lib)
     assert comp is not None and comp.name == "box"
     assert count == 3
     capex, power, capacity = totals_with_multiplier(comp, count)

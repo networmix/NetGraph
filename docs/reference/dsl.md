@@ -74,12 +74,15 @@ network:
   links:
     - source: SEA
       target: SFO
-      link_params:
-        capacity: 200
-        cost: 6846
-        attrs:
-          distance_km: 1369.13
-          media_type: "fiber"
+       link_params:
+         capacity: 200
+         cost: 6846
+         attrs:
+           distance_km: 1369.13
+           media_type: "fiber"
+           hardware:
+             source: {component: "800G-ZR+", count: 1}
+             target: {component: "1600G-2xDR4", count: 1}
 ```
 
 Recognized keys for each link entry:
@@ -124,9 +127,13 @@ network:
       target: /switches
       pattern: "one_to_one"     # Connect switches pairwise
       link_count: 2              # Create 2 parallel links per adjacency (optional)
-      link_params:
-        capacity: 40
-        cost: 1
+       link_params:
+         capacity: 40
+         cost: 1
+         attrs:
+           hardware:
+             source: {component: "800G-DR4", count: 2}
+             target: {component: "800G-DR4", count: 2}
 ```
 
 ### Attribute-filtered Adjacency (selector objects)
@@ -356,15 +363,17 @@ network:
   nodes:
     spine-1:
       attrs:
-        hw_component: "SpineRouter"
-        hw_count: 2   # Optional multiplier; defaults to 1 if not set
+        hardware:
+          component: "SpineRouter"
+          count: 2   # Optional multiplier; defaults to 1 if not set
   links:
     - source: spine-1
       target: leaf-1
       link_params:
         attrs:
-          hw_component: "Optic400G"
-          hw_count: 4  # Optional multiplier for link hardware
+          hardware:
+            source: {component: "Optic400G", count: 4}
+            target: {component: "Optic400G", count: 4}
 ```
 
 ## `risk_groups` - Hardware Risk Modeling
@@ -394,7 +403,8 @@ network:
     server-1:
       risk_groups: ["Rack1"]
       attrs:
-        hw_component: "ServerChassis"
+        hardware:
+          component: "ServerChassis"
 ```
 
 ## `vars` - YAML Anchors
@@ -406,7 +416,9 @@ vars:
   default_cap: &cap 10000
   base_attrs: &attrs {cost: 100, region: "dc1"}
   spine_config: &spine_cfg
-    hw_component: "SpineRouter"
+    hardware:
+      component: "SpineRouter"
+      count: 1
     power_budget: 2500
 
 network:

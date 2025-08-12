@@ -42,7 +42,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from ngraph.components import ComponentsLibrary, resolve_hw_component
+from ngraph.components import (
+    ComponentsLibrary,
+    resolve_link_end_components,
+    resolve_node_hardware,
+    totals_with_multiplier,
+)
 from ngraph.explorer import NetworkExplorer
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -212,7 +217,7 @@ class CostPowerEfficiency(WorkflowStep):
                 ]
 
             for nd in node_iter:
-                comp, hw_count = resolve_hw_component(nd.attrs, library)
+                comp, hw_count = resolve_node_hardware(nd.attrs, library)
                 if comp is not None:
                     hw_capacity = float(comp.total_capacity() * hw_count)
                     power_watts = float(comp.total_power() * hw_count)
@@ -244,23 +249,48 @@ class CostPowerEfficiency(WorkflowStep):
                 links_iter = links_for_sum
 
             for lk in links_iter:
-                comp, hw_count = resolve_hw_component(lk.attrs, library)
-                if comp is not None:
-                    hw_capacity = float(comp.total_capacity() * hw_count)
-                    power_watts = float(comp.total_power() * hw_count)
-                    power_watts_max = float(comp.total_power_max() * hw_count)
+                (src_end, dst_end, per_end) = resolve_link_end_components(
+                    lk.attrs, library
+                )
+
+                src_comp, src_cnt = src_end
+                dst_comp, dst_cnt = dst_end
+
+                def _totals_with_max(c, n) -> tuple[float, float, float, float]:
+                    if c is None:
+                        return 0.0, 0.0, 0.0, 0.0
+                    capex, power, cap = totals_with_multiplier(c, n)
+                    power_max = float(c.total_power_max() * n)
+                    return capex, power, cap, power_max
+
+                # Compute endpoints
+                src_capex, src_power, src_cap, src_power_max = _totals_with_max(
+                    src_comp, src_cnt
+                )
+
+                dst_capex, dst_power, dst_cap, dst_power_max = _totals_with_max(
+                    dst_comp, dst_cnt
+                )
+
+                # Aggregate per-link
+                power_watts = float(src_power + dst_power)
+                power_watts_max = float(src_power_max + dst_power_max)
+                # Capacity for validation/reporting: min of specified ends when both present
+                if src_cap > 0.0 and dst_cap > 0.0:
+                    hw_capacity = float(min(src_cap, dst_cap))
                 else:
                     hw_capacity = 0.0
-                    power_watts = 0.0
-                    power_watts_max = 0.0
 
                 entry = {
                     "link_id": lk.id,
                     "source": lk.source,
                     "target": lk.target,
                     "capacity": float(lk.capacity),
-                    "hw_component": lk.attrs.get("hw_component"),
-                    "hw_count": float(hw_count),
+                    # Emit per-end hardware for clarity
+                    "src_hw_component": src_comp.name if src_comp is not None else None,
+                    "src_hw_count": float(src_cnt),
+                    "dst_hw_component": dst_comp.name if dst_comp is not None else None,
+                    "dst_hw_count": float(dst_cnt),
                     "hw_capacity": hw_capacity,
                     "power_watts": power_watts,
                     "power_watts_max": power_watts_max,

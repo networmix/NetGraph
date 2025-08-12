@@ -78,7 +78,9 @@ network:
       link_params:
         risk_groups: ["SpineSRG"]
         attrs:
-          hw_component: "400G-LR4"
+          hardware:
+            source: {component: "400G-LR4", count: 1}
+            target: {component: "400G-LR4", count: 1}
 
   # Node overrides for risk groups and hardware types
   node_overrides:
