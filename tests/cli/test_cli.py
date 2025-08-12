@@ -253,6 +253,34 @@ workflow:
     assert "Links:" in out
 
 
+def test_inspect_detail_mode_cost_shows_decimals(tmp_path: Path) -> None:
+    scenario_file = tmp_path / "s_cost.yaml"
+    scenario_file.write_text(
+        """
+seed: 1
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 10
+        cost: 0.1
+workflow:
+  - step_type: BuildGraph
+"""
+    )
+
+    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+        cli.main(["inspect", str(scenario_file), "--detail"])
+
+    out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
+    # Expect decimal cost to be preserved, not rounded to integer "0"
+    assert "0.1" in out
+
+
 def test_inspect_errors_for_missing_and_invalid_files(tmp_path: Path) -> None:
     invalid = tmp_path / "bad.yaml"
     invalid.write_text("invalid: yaml: content: [")

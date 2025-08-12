@@ -73,6 +73,27 @@ def _format_table(
     return "\n".join(lines)
 
 
+def _format_cost(value: Any) -> str:
+    """Return cost formatted with up to three decimals.
+
+    Uses thousands separators, trims trailing zeros and the decimal point when
+    not needed. Falls back to ``str(value)`` if the input cannot be parsed as a
+    float.
+
+    Examples:
+        0.1 -> "0.1"; 10.0 -> "10"; 1234.567 -> "1,234.567".
+    """
+    try:
+        v = float(value)
+    except Exception:
+        return str(value)
+
+    s = f"{v:,.3f}"
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s
+
+
 def _plural(n: int, singular: str, plural: Optional[str] = None) -> str:
     """Return grammatically correct unit for count n.
 
@@ -238,11 +259,16 @@ def _print_network_structure(
                 capacity = f"{link.capacity:,.0f}"
 
                 # Get cost if available
-                cost = ""
-                if hasattr(link, "cost") and link.cost:
-                    cost = f"{link.cost:,.0f}"
-                elif hasattr(link, "attrs") and link.attrs and "cost" in link.attrs:
-                    cost = f"{link.attrs['cost']:,.0f}"
+                cost_val: Any | None = None
+                if hasattr(link, "cost"):
+                    cost_val = link.cost
+                elif (
+                    hasattr(link, "attrs")
+                    and isinstance(link.attrs, dict)
+                    and "cost" in link.attrs
+                ):
+                    cost_val = link.attrs["cost"]
+                cost = _format_cost(cost_val) if cost_val is not None else ""
 
                 link_rows.append([link.source, link.target, status, capacity, cost])
 
