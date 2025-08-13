@@ -83,3 +83,33 @@ def test_expand_combine_uses_pseudo_nodes_and_single_demand() -> None:
     # Pseudo nodes and link edges should exist
     assert d.src_node in graph.nodes
     assert d.dst_node in graph.nodes
+
+
+def test_expand_pairwise_deterministic_ordering() -> None:
+    """Expanded pairwise demands should be deterministic in ordering.
+
+    We ensure stability by verifying that a fixed input produces a stable
+    sequence of (src,dst) tuples.
+    """
+    mapping = {
+        "src": {"S": [_NodeStub("B"), _NodeStub("A")]},
+        "dst": {"T": [_NodeStub("D"), _NodeStub("C")]},
+    }
+    net: _NetworkLike = _NetworkStub(mapping)
+    graph = StrictMultiDiGraph()
+    # Create real nodes; ordering in graph should not affect expanded order
+    for n in ("D", "C", "B", "A"):
+        graph.add_node(n)
+
+    td = TrafficDemand(source_path="src", sink_path="dst", demand=40.0, mode="pairwise")
+    expanded, _ = expand_demands(
+        network=net,  # type: ignore[arg-type]
+        graph=graph,
+        traffic_demands=[td],
+        default_flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
+    )
+
+    pair_seq = [(str(d.src_node), str(d.dst_node)) for d in expanded]
+    # Expected deterministic pair order: sorted by src then dst
+    expected = sorted(pair_seq)
+    assert pair_seq == expected

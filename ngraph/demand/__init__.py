@@ -108,12 +108,25 @@ class Demand:
             # If max_fraction <= 0, do not place any new volume (unless volume is infinite).
             to_place = self.volume if self.volume == float("inf") else 0.0
 
-        # Delegate flow placement
+        # Ensure we request at least MIN_FLOW when there is meaningful leftover
+        if 0.0 < to_place < MIN_FLOW:
+            to_place = min(self.volume - self.placed_demand, MIN_FLOW)
+
+        # Delegate flow placement (do not force min_flow threshold here; policy handles it)
+        # Use a demand-unique flow_class to avoid collisions across different
+        # Demand instances that share the same numerical demand_class.
+        demand_unique_flow_class = (
+            self.demand_class,
+            self.src_node,
+            self.dst_node,
+            id(self),
+        )
+
         self.flow_policy.place_demand(
             flow_graph,
             self.src_node,
             self.dst_node,
-            self.demand_class,
+            demand_unique_flow_class,
             to_place,
         )
 

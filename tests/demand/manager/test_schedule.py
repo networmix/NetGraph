@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ngraph.algorithms.base import PathAlg
+from ngraph.algorithms.base import MIN_FLOW, PathAlg
 from ngraph.algorithms.flow_init import init_flow_graph
 from ngraph.demand import Demand
 from ngraph.demand.manager.schedule import place_demands_round_robin
@@ -58,3 +58,20 @@ def test_round_robin_stops_when_no_progress() -> None:
     total = place_demands_round_robin(g, [d1, d2], placement_rounds=50)
     # The two available links should allow at most 2 units total
     assert abs(total - 2.0) < 1e-9
+
+
+def test_round_robin_small_demand_with_many_rounds_places_full_volume() -> None:
+    """Ensure tiny but valid demand does not stall across many rounds.
+
+    This guards against step sizes dropping below MIN_FLOW when rounds_left is large.
+    """
+    g = _graph_square()
+    init_flow_graph(g)
+
+    tiny = MIN_FLOW * 1.1
+    demands = [Demand("A", "C", tiny, demand_class=0, flow_policy=_policy())]
+
+    total = place_demands_round_robin(g, demands, placement_rounds=100)
+    # May leave remainder < MIN_FLOW due to threshold semantics
+    assert abs(total - tiny) <= MIN_FLOW
+    assert abs(demands[0].placed_demand - tiny) <= MIN_FLOW

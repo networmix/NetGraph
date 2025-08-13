@@ -488,9 +488,8 @@ class TestFlowPolicy:
 
     def test_flow_policy_place_demand_9(self, line1):
         """
-        Tests infinite loop detection with a flow policy that creates many flows
-        but can't place meaningful volume. The algorithm should detect this as an
-        infinite loop and raise a descriptive RuntimeError.
+        Algorithm must terminate gracefully via diminishing-returns cutoff,
+        leaving remaining volume without raising.
         """
         flow_policy = FlowPolicy(
             path_alg=PathAlg.SPF,
@@ -500,13 +499,14 @@ class TestFlowPolicy:
             max_flow_count=1000000,
         )
         r = init_flow_graph(line1)
-        # Should raise RuntimeError due to infinite loop detection
-        with pytest.raises(
-            RuntimeError, match="Infinite loop detected in place_demand"
-        ):
-            placed_flow, remaining_flow = flow_policy.place_demand(
-                r, "A", "C", "test_flow", 7
-            )
+        # Should not raise; should leave some volume unplaced in this configuration
+        placed_flow, remaining_flow = flow_policy.place_demand(
+            r, "A", "C", ("test_flow", "9"), 7
+        )
+        assert placed_flow >= 0.0
+        assert remaining_flow >= 0.0
+        # Expect not all volume is placed under this setup
+        assert remaining_flow > 0.0
 
     def test_flow_policy_place_demand_normal_termination(self, line1):
         """

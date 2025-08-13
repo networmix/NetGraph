@@ -32,6 +32,7 @@ Results stored in `scenario.results` under the step name:
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -129,6 +130,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 "'matrix_name' is required for TrafficMatrixPlacementAnalysis"
             )
 
+        t0 = time.perf_counter()
         logger.info(
             f"Starting demand placement analysis: {self.name or self.__class__.__name__}"
         )
@@ -154,6 +156,20 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
 
         # Determine effective alpha
         effective_alpha = self._resolve_alpha_from_results_if_needed(scenario, td_list)
+        # Emit the resolved alpha at INFO for visibility in long runs
+        try:
+            alpha_src = (
+                getattr(self, "_alpha_source", None)
+                if isinstance(self.alpha, str)
+                else "explicit"
+            )
+            logger.info(
+                "Using alpha: value=%.6g source=%s",
+                float(effective_alpha),
+                str(alpha_src) if alpha_src else "explicit",
+            )
+        except Exception:
+            pass
 
         demands_config: list[dict[str, Any]] = []
         for td in td_list:
@@ -440,14 +456,27 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             min_v = float(stats.get("min", 0.0)) if stats else 0.0
             max_v = float(stats.get("max", 0.0)) if stats else 0.0
 
+            duration_sec = time.perf_counter() - t0
+            rounds_str = str(self.placement_rounds)
+            seed_str = str(self.seed) if self.seed is not None else "-"
+            baseline_str = str(meta.get("baseline", self.baseline))
             logger.info(
-                "Placement summary: name=%s alpha=%.6g source=%s demands=%d iters=%d workers=%d iter_mean=%.4f p50=%.4f p95=%.4f min=%.4f max=%.4f env_mean=%.4f",
+                (
+                    "Placement summary: name=%s alpha=%.6g source=%s "
+                    "demands=%d iters=%d workers=%d rounds=%s baseline=%s "
+                    "seed=%s duration=%.3fs iter_mean=%.4f p50=%.4f p95=%.4f "
+                    "min=%.4f max=%.4f env_mean=%.4f"
+                ),
                 self.name,
                 alpha_value,
                 alpha_source_str,
                 len(envelopes),
                 iterations,
                 workers,
+                rounds_str,
+                baseline_str,
+                seed_str,
+                duration_sec,
                 mean_v,
                 p50_v,
                 p95_v,

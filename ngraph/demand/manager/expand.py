@@ -108,9 +108,15 @@ def _expand_combine(
     with infinite-capacity, zero-cost edges, and creates one aggregate
     `Demand` from pseudo-source to pseudo-sink with the full volume.
     """
-    # Flatten the source and sink node lists
-    src_nodes = [node for group_nodes in src_groups.values() for node in group_nodes]
-    dst_nodes = [node for group_nodes in snk_groups.values() for node in group_nodes]
+    # Flatten and sort source and sink node lists for deterministic order
+    src_nodes = sorted(
+        (node for group_nodes in src_groups.values() for node in group_nodes),
+        key=lambda n: n.name,
+    )
+    dst_nodes = sorted(
+        (node for group_nodes in snk_groups.values() for node in group_nodes),
+        key=lambda n: n.name,
+    )
 
     if not src_nodes or not dst_nodes or graph is None:
         return
@@ -161,17 +167,22 @@ def _expand_pairwise(
     Creates one `Demand` for each valid source-destination pair (excluding
     self-pairs) and splits total volume evenly across pairs.
     """
-    # Flatten the source and sink node lists
-    src_nodes = [node for group_nodes in src_groups.values() for node in group_nodes]
-    dst_nodes = [node for group_nodes in snk_groups.values() for node in group_nodes]
+    # Flatten and sort source and sink node lists for deterministic order
+    src_nodes = sorted(
+        (node for group_nodes in src_groups.values() for node in group_nodes),
+        key=lambda n: n.name,
+    )
+    dst_nodes = sorted(
+        (node for group_nodes in snk_groups.values() for node in group_nodes),
+        key=lambda n: n.name,
+    )
 
-    # Generate all valid (src, dst) pairs
-    valid_pairs = [
-        (s_node, t_node)
-        for s_node in src_nodes
-        for t_node in dst_nodes
-        if s_node.name != t_node.name
-    ]
+    # Generate all valid (src, dst) pairs in deterministic lexicographic order
+    valid_pairs = []
+    for s_node in src_nodes:
+        for t_node in dst_nodes:
+            if s_node.name != t_node.name:
+                valid_pairs.append((s_node, t_node))
     pair_count = len(valid_pairs)
     if pair_count == 0:
         return

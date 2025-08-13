@@ -35,6 +35,7 @@ Results stored in `scenario.results` under the step name:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -104,6 +105,17 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
         """
         if self.acceptance_rule != "hard":
             raise ValueError("Only 'hard' acceptance_rule is implemented")
+
+        t0 = time.perf_counter()
+        logger.info(
+            "Starting MSD analysis: name=%s matrix=%s alpha_start=%.6g growth=%.3f seeds=%d resolution=%.6g",
+            self.name or self.__class__.__name__,
+            self.matrix_name,
+            float(self.alpha_start),
+            float(self.growth_factor),
+            int(self.seeds_per_alpha),
+            float(self.resolution),
+        )
 
         # Snapshot base demands for portability
         base_tds = scenario.traffic_matrix_set.get_matrix(self.matrix_name)
@@ -253,6 +265,8 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
         try:
             feasible_seeds = 0
             min_ratio = 1.0
+            total_probes = len(probes)
+            bracket_iters = min(self.max_bracket_iters, total_probes)
             if probes:
                 # Find probe closest to alpha_star (last feasible 'left')
                 # We logged probes in evaluation order; take the last feasible
@@ -269,11 +283,20 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
                 min_ratio = float(last_feasible.get("min_placement_ratio", 0.0))
 
             logger.info(
-                "MSD summary: name=%s alpha_star=%.6g resolution=%.6g probes=%d feasible_seeds=%d min_ratio=%.3f",
+                (
+                    "MSD summary: name=%s matrix=%s alpha_star=%.6g resolution=%.6g "
+                    "probes=%d bracket_iters=%d bisect_iters=%d seeds_per_alpha=%d "
+                    "duration=%.3fs feasible_seeds=%d min_ratio=%.3f"
+                ),
                 self.name or self.__class__.__name__,
+                self.matrix_name,
                 float(alpha_star),
                 float(self.resolution),
-                len(probes),
+                total_probes,
+                bracket_iters,
+                iters,
+                int(self.seeds_per_alpha),
+                time.perf_counter() - t0,
                 feasible_seeds,
                 min_ratio,
             )

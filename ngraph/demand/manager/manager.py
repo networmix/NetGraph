@@ -65,8 +65,13 @@ class TrafficManager:
           on a configurable 'mode' ("combine" or "pairwise").
       3) Each Demand is associated with a FlowPolicy, which handles how flows
          are placed (split across paths, balancing, etc.).
-      4) Provides methods to place all demands incrementally with optional
-         re-optimization, reset usage, and retrieve flow/usage summaries.
+         4) Provides methods to place all demands incrementally with optional
+          re-optimization, reset usage, and retrieve flow/usage summaries.
+
+     Auto rounds semantics:
+       - placement_rounds="auto" performs up to a small number of fairness passes
+         (at most 3), with early stop when diminishing returns are detected. Each
+         pass asks the scheduler to place full leftovers without step splitting.
 
     In particular:
       - 'combine' mode:
@@ -172,21 +177,57 @@ class TrafficManager:
             raise RuntimeError("Graph not built yet. Call build_graph() first.")
 
         if isinstance(placement_rounds, str) and placement_rounds.lower() == "auto":
-            placement_rounds = self._estimate_rounds()
+            # Simple, reliable auto: up to 3 passes with early stop.
+            from ngraph.algorithms.base import MIN_FLOW
 
-        # Ensure placement_rounds is an int for range() and arithmetic operations
-        placement_rounds_int = (
-            int(placement_rounds)
-            if isinstance(placement_rounds, str)
-            else placement_rounds
-        )
+            total_placed = 0.0
+            max_auto_rounds = 3
+            for _ in range(max_auto_rounds):
+                placed_now = place_demands_round_robin(
+                    graph=self.graph,
+                    demands=self.demands,
+                    placement_rounds=1,
+                    reoptimize_after_each_round=False,
+                )
+                total_placed += placed_now
 
-        total_placed = place_demands_round_robin(
-            graph=self.graph,
-            demands=self.demands,
-            placement_rounds=placement_rounds_int,
-            reoptimize_after_each_round=reoptimize_after_each_round,
-        )
+                # Early stops: no progress or negligible leftover
+                if placed_now < MIN_FLOW:
+                    break
+
+                leftover_total = sum(
+                    max(0.0, d.volume - d.placed_demand) for d in self.demands
+                )
+                if leftover_total < 0.05 * placed_now:
+                    break
+
+                # Fairness check: if served ratios are already close, stop
+                served = [
+                    (d.placed_demand / d.volume)
+                    for d in self.demands
+                    if d.volume > 0.0 and (d.volume - d.placed_demand) >= MIN_FLOW
+                ]
+                if served:
+                    s_min, s_max = min(served), max(served)
+                    if s_max <= 0.0 or s_min >= 0.8 * s_max:
+                        break
+        else:
+            # Ensure placement_rounds is an int for range() and arithmetic operations
+            placement_rounds_int = (
+                int(placement_rounds)
+                if isinstance(placement_rounds, str)
+                else placement_rounds
+            )
+
+            if placement_rounds_int <= 0:
+                raise ValueError("placement_rounds must be positive")
+
+            total_placed = place_demands_round_robin(
+                graph=self.graph,
+                demands=self.demands,
+                placement_rounds=placement_rounds_int,
+                reoptimize_after_each_round=reoptimize_after_each_round,
+            )
 
         # Update each TrafficDemand's placed volume
         for td in self._get_traffic_demands():

@@ -66,6 +66,10 @@ class FlowPolicy:
         reoptimize_flows_on_each_placement: bool = False,
         max_no_progress_iterations: int = 100,
         max_total_iterations: int = 10000,
+        # Diminishing-returns cutoff configuration
+        diminishing_returns_enabled: bool = True,
+        diminishing_returns_window: int = 16,
+        diminishing_returns_epsilon_frac: float = 1e-6,
     ) -> None:
         """Initialize a policy instance.
 
@@ -111,6 +115,11 @@ class FlowPolicy:
         self.max_no_progress_iterations: int = max_no_progress_iterations
         self.max_total_iterations: int = max_total_iterations
 
+        # Diminishing-returns cutoff parameters
+        self.diminishing_returns_enabled: bool = diminishing_returns_enabled
+        self.diminishing_returns_window: int = diminishing_returns_window
+        self.diminishing_returns_epsilon_frac: float = diminishing_returns_epsilon_frac
+
         # Dictionary to track all flows by their FlowIndex.
         self.flows: Dict[Tuple, Flow] = {}
 
@@ -119,6 +128,17 @@ class FlowPolicy:
 
         # Internal flow ID counter.
         self._next_flow_id: int = 0
+
+        # Basic placement metrics (cumulative totals over lifetime of this policy)
+        self._metrics_totals: Dict[str, float] = {
+            "spf_calls_total": 0.0,
+            "flows_created_total": 0.0,
+            "reopt_calls_total": 0.0,
+            "place_iterations_total": 0.0,
+            "placed_total": 0.0,
+        }
+        # Snapshot of last place_demand call
+        self.last_metrics: Dict[str, float] = {}
 
         # Validate static_paths versus max_flow_count constraints.
         if static_paths:
@@ -217,6 +237,12 @@ class FlowPolicy:
         else:
             raise ValueError(f"Unsupported path algorithm {self.path_alg}")
 
+        # Count SPF invocations for metrics
+        try:
+            self._metrics_totals["spf_calls_total"] += 1.0
+        except Exception:
+            pass
+
         cost, pred = path_func(
             flow_graph,
             src_node=src_node,
@@ -282,6 +308,10 @@ class FlowPolicy:
         )
         flow = Flow(path_bundle, flow_index)
         self.flows[flow_index] = flow
+        try:
+            self._metrics_totals["flows_created_total"] += 1.0
+        except Exception:
+            pass
         return flow
 
     def _create_flows(
@@ -386,6 +416,10 @@ class FlowPolicy:
         )
         new_flow.place_flow(flow_graph, current_flow_volume, self.flow_placement)
         self.flows[flow_index] = new_flow
+        try:
+            self._metrics_totals["reopt_calls_total"] += 1.0
+        except Exception:
+            pass
         return new_flow
 
     def place_demand(
@@ -424,9 +458,17 @@ class FlowPolicy:
         flow_queue = deque(self.flows.values())
         target_flow_volume = target_flow_volume or volume
 
+        # Metrics snapshot at entry
+        totals_before = dict(self._metrics_totals)
+        initial_request = volume
+
         total_placed_flow = 0.0
         consecutive_no_progress = 0
         total_iterations = 0
+
+        # Track diminishing returns over a sliding window
+        recent_placements = deque(maxlen=self.diminishing_returns_window)
+        cutoff_triggered = False
 
         while volume >= base.MIN_FLOW and flow_queue:
             flow = flow_queue.popleft()
@@ -436,6 +478,11 @@ class FlowPolicy:
             volume -= placed_flow
             total_placed_flow += placed_flow
             total_iterations += 1
+            recent_placements.append(placed_flow)
+            try:
+                self._metrics_totals["place_iterations_total"] += 1.0
+            except Exception:
+                pass
 
             # Track progress to detect infinite loops in flow creation/optimization
             if placed_flow < base.MIN_FLOW:
@@ -483,31 +530,62 @@ class FlowPolicy:
                     f"Maximum iteration limit ({self.max_total_iterations}) exceeded in place_demand."
                 )
 
+            # Diminishing-returns cutoff: if the recent placements collectively fall
+            # below a meaningful threshold, stop iterating to avoid chasing dust.
+            if (
+                self.diminishing_returns_enabled
+                and len(recent_placements) == self.diminishing_returns_window
+            ):
+                recent_sum = sum(recent_placements)
+                threshold = max(
+                    base.MIN_FLOW,
+                    self.diminishing_returns_epsilon_frac * float(initial_request),
+                )
+                if recent_sum < threshold:
+                    # Gracefully stop iterating for this demand; leave remaining volume.
+                    try:
+                        self._logger.debug(
+                            "place_demand cutoff: src=%s dst=%s recent_sum=%.6g threshold=%.6g "
+                            "remaining=%.6g flows=%d iters=%d edge_sel=%s placement=%s multipath=%s",
+                            str(src_node),
+                            str(dst_node),
+                            float(recent_sum),
+                            float(threshold),
+                            float(volume),
+                            len(self.flows),
+                            total_iterations,
+                            self.edge_select.name,
+                            self.flow_placement.name,
+                            str(self.multipath),
+                        )
+                    except Exception:
+                        pass
+                    cutoff_triggered = True
+                    break
+
             # If the flow can accept more volume, attempt to create or update.
             if (
                 target_flow_volume - flow.placed_flow >= base.MIN_FLOW
                 and not self.static_paths
             ):
-                # Guard against pathological expansion under capacity-aware selection:
-                # when no progress was made, creating additional flows does not help and may loop.
-                capacity_aware_edge_selects = {
-                    base.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
-                    base.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
-                    base.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING,
-                    base.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED,
-                }
                 if not self.max_flow_count or len(self.flows) < self.max_flow_count:
-                    if not (
+                    # Avoid unbounded flow creation under non-capacity-aware selection
+                    # with PROPORTIONAL placement when no progress was made.
+                    non_cap_selects = {
+                        base.EdgeSelect.ALL_MIN_COST,
+                        base.EdgeSelect.SINGLE_MIN_COST,
+                    }
+                    if (
                         placed_flow < base.MIN_FLOW
-                        and self.edge_select in capacity_aware_edge_selects
+                        and self.flow_placement == FlowPlacement.PROPORTIONAL
+                        and self.edge_select in non_cap_selects
                     ):
+                        new_flow = None
+                    else:
                         new_flow = self._create_flow(
                             flow_graph, src_node, dst_node, flow_class
                         )
-                    else:
-                        new_flow = None
                 else:
-                    # Always allow re-optimization path even when no progress was made.
                     new_flow = self._reoptimize_flow(
                         flow_graph, flow.flow_index, headroom=base.MIN_FLOW
                     )
@@ -524,23 +602,67 @@ class FlowPolicy:
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
         if self.flow_placement == FlowPlacement.EQUAL_BALANCED and len(self.flows) > 0:
-            target_flow_volume = self.placed_demand / float(len(self.flows))
+            target_flow_volume_eq = self.placed_demand / float(len(self.flows))
             # If flows are not already near balanced, rebalance them.
             if any(
-                abs(target_flow_volume - f.placed_flow) >= base.MIN_FLOW
+                abs(target_flow_volume_eq - f.placed_flow) >= base.MIN_FLOW
                 for f in self.flows.values()
             ):
-                total_placed_flow, excess_flow = self.rebalance_demand(
-                    flow_graph, src_node, dst_node, flow_class, target_flow_volume
-                )
-                volume += excess_flow
+                # Perform a single rebalance pass; do not recurse into rebalancing again
+                prev_reopt = self.reoptimize_flows_on_each_placement
+                self.reoptimize_flows_on_each_placement = False
+                try:
+                    total_placed_flow, excess_flow = self.rebalance_demand(
+                        flow_graph,
+                        src_node,
+                        dst_node,
+                        flow_class,
+                        target_flow_volume_eq,
+                    )
+                    volume += excess_flow
+                finally:
+                    self.reoptimize_flows_on_each_placement = prev_reopt
 
         # Optionally re-run optimization for all flows after placement.
         if self.reoptimize_flows_on_each_placement:
             for flow in self.flows.values():
                 self._reoptimize_flow(flow_graph, flow.flow_index)
 
+        # Update totals and last_metrics
+        try:
+            self._metrics_totals["placed_total"] += float(total_placed_flow)
+        except Exception:
+            pass
+
+        totals_after = self._metrics_totals
+        self.last_metrics = {
+            "placed": float(total_placed_flow),
+            "remaining": float(volume),
+            "iterations": float(total_iterations),
+            "flows_created": float(
+                totals_after["flows_created_total"]
+                - totals_before["flows_created_total"]
+            ),
+            "spf_calls": float(
+                totals_after["spf_calls_total"] - totals_before["spf_calls_total"]
+            ),
+            "reopt_calls": float(
+                totals_after["reopt_calls_total"] - totals_before["reopt_calls_total"]
+            ),
+            "cutoff_triggered": float(1.0 if cutoff_triggered else 0.0),
+            "initial_request": float(initial_request),
+        }
+
         return total_placed_flow, volume
+
+    def get_metrics(self) -> Dict[str, float]:
+        """Return cumulative placement metrics for this policy instance.
+
+        Returns:
+            dict[str, float]: Totals including 'spf_calls_total', 'flows_created_total',
+                'reopt_calls_total', 'place_iterations_total', 'placed_total'.
+        """
+        return dict(self._metrics_totals)
 
     def rebalance_demand(
         self,

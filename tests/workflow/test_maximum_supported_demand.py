@@ -155,3 +155,45 @@ def test_msd_end_to_end_single_link() -> None:
         placed = float(r.placed_volume)
         ratios.append(1.0 if total == 0 else placed / total)
     assert any(x < 1.0 - 1e-9 for x in ratios)
+
+
+def test_msd_auto_vs_one_equivalence_single_link() -> None:
+    # Same single-link scenario; compare auto vs 1 rounds
+    from ngraph.workflow.maximum_supported_demand import (
+        MaximumSupportedDemandAnalysis as MSD,
+    )
+    from tests.integration.helpers import ScenarioDataBuilder
+
+    scenario = (
+        ScenarioDataBuilder()
+        .with_simple_nodes(["A", "B"])
+        .with_simple_links([("A", "B", 10.0)])
+        .with_traffic_demand("A", "B", 5.0, matrix_name="default")
+        .build_scenario()
+    )
+
+    step_auto = MSD(
+        name="msd_auto",
+        matrix_name="default",
+        alpha_start=1.0,
+        growth_factor=2.0,
+        resolution=0.01,
+        seeds_per_alpha=1,
+        placement_rounds="auto",
+    )
+    step_one = MSD(
+        name="msd_one",
+        matrix_name="default",
+        alpha_start=1.0,
+        growth_factor=2.0,
+        resolution=0.01,
+        seeds_per_alpha=1,
+        placement_rounds=1,
+    )
+
+    step_auto.run(scenario)
+    step_one.run(scenario)
+
+    alpha_auto = float(scenario.results.get("msd_auto", "alpha_star"))
+    alpha_one = float(scenario.results.get("msd_one", "alpha_star"))
+    assert abs(alpha_auto - alpha_one) <= 0.02

@@ -42,30 +42,52 @@ def place_demands_round_robin(
 
     for priority_class in sorted_priorities:
         demands_in_class = prio_map[priority_class]
+        placed_before_class = sum(d.placed_demand for d in demands_in_class)
 
+        # Unified fairness loop: attempt to place full leftover per demand each round.
+        # For rounds > 0, reorder by least-served ratio to improve fairness.
+        reopt_attempted = False
         for round_idx in range(placement_rounds):
             placed_in_this_round = 0.0
-            rounds_left = placement_rounds - round_idx
 
-            for demand in demands_in_class:
+            if round_idx == 0:
+                iteration_order = list(demands_in_class)
+            else:
+                iteration_order = sorted(
+                    demands_in_class,
+                    key=lambda d: (
+                        (d.placed_demand / d.volume) if d.volume > 0 else 1.0,
+                        d.placed_demand,
+                    ),
+                )
+
+            for demand in iteration_order:
                 leftover = demand.volume - demand.placed_demand
                 if leftover < base.MIN_FLOW:
                     continue
 
-                step_to_place = leftover / float(rounds_left)
-                placed_now, _remain = demand.place(
-                    flow_graph=graph,
-                    max_placement=step_to_place,
-                )
-                total_placed += placed_now
+                placed_now, _remain = demand.place(flow_graph=graph)
                 placed_in_this_round += placed_now
 
             if reoptimize_after_each_round and placed_in_this_round > 0.0:
                 _reoptimize_priority_demands(graph, demands_in_class)
 
-            # If no progress was made, no need to continue extra rounds
             if placed_in_this_round < base.MIN_FLOW:
+                any_leftover = any(
+                    (d.volume - d.placed_demand) >= base.MIN_FLOW
+                    for d in demands_in_class
+                )
+                if not any_leftover:
+                    break
+                if not reopt_attempted:
+                    _reoptimize_priority_demands(graph, demands_in_class)
+                    reopt_attempted = True
+                    continue
                 break
+
+        # Add only the net increase for this class to avoid double counting
+        placed_after_class = sum(d.placed_demand for d in demands_in_class)
+        total_placed += max(0.0, placed_after_class - placed_before_class)
 
     return total_placed
 
@@ -82,11 +104,18 @@ def _reoptimize_priority_demands(
             continue
         placed_volume = dmd.placed_demand
         dmd.flow_policy.remove_demand(graph)
+        # Use a demand-unique flow_class key to keep policy flows consistent
+        flow_class_key = (
+            dmd.demand_class,
+            dmd.src_node,
+            dmd.dst_node,
+            id(dmd),
+        )
         dmd.flow_policy.place_demand(
             graph,
             dmd.src_node,
             dmd.dst_node,
-            dmd.demand_class,
+            flow_class_key,
             placed_volume,
         )
         dmd.placed_demand = dmd.flow_policy.placed_demand

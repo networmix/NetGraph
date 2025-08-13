@@ -35,6 +35,7 @@ Results stored in `scenario.results`:
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -142,6 +143,7 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
         Returns:
             None
         """
+        t0 = time.perf_counter()
         logger.info(f"Starting capacity envelope analysis: {self.name}")
         logger.debug(
             f"Analysis parameters: source_path={self.source_path}, sink_path={self.sink_path}, "
@@ -236,13 +238,23 @@ class CapacityEnvelopeAnalysis(WorkflowStep):
             vmin = min(means) if means else 0.0
             vmax = max(means) if means else 0.0
 
+            duration_sec = time.perf_counter() - t0
+            seed_str = str(self.seed) if self.seed is not None else "-"
+            baseline_str = str(self.baseline)
             logger.info(
-                "CapacityEnvelope summary: name=%s flows=%d iters=%d unique=%d workers=%d mean=%.3f p50=%.3f p95=%.3f min=%.3f max=%.3f",
+                (
+                    "CapacityEnvelope summary: name=%s flows=%d iters=%d unique=%d "
+                    "workers=%d baseline=%s seed=%s duration=%.3fs mean=%.3f "
+                    "p50=%.3f p95=%.3f min=%.3f max=%.3f"
+                ),
                 self.name,
                 flows,
                 iterations,
                 unique,
                 workers,
+                baseline_str,
+                seed_str,
+                duration_sec,
                 mean_of_means,
                 p50,
                 p95,
