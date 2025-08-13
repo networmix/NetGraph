@@ -16,6 +16,13 @@ from ngraph.logging import get_logger, set_global_log_level
 from ngraph.profiling import PerformanceProfiler, PerformanceReporter
 from ngraph.report import ReportGenerator
 from ngraph.scenario import Scenario
+from ngraph.utils.output_paths import (
+    build_artifact_path,
+    ensure_parent_dir,
+    profiles_dir_for_run,
+    resolve_override_path,
+    results_path_for_run,
+)
 
 logger = get_logger(__name__)
 
@@ -1143,19 +1150,21 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
 
 def _run_scenario(
     path: Path,
-    output: Optional[Path],
+    results_override: Optional[Path],
     no_results: bool,
     stdout: bool,
     keys: Optional[list[str]] = None,
     profile: bool = False,
     profile_memory: bool = False,
+    output_dir: Optional[Path] = None,
 ) -> None:
     """Run a scenario file and export results as JSON by default.
 
     Args:
         path: Scenario YAML file.
         output: Optional explicit path where JSON results should be written. When
-            ``None``, defaults to ``<scenario_name>.json`` in the current directory.
+            ``None``, defaults to ``<scenario_name>.results.json`` in the current directory,
+            or under ``--output`` if provided.
         no_results: Whether to disable results file generation.
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
@@ -1179,8 +1188,8 @@ def _run_scenario(
             logger.info("Starting scenario execution with profiling")
 
             # Enable child-process profiling for parallel workflows
-            child_profile_dir = Path("worker_profiles")
-            child_profile_dir.mkdir(exist_ok=True)
+            child_profile_dir = profiles_dir_for_run(path, output_dir)
+            child_profile_dir.mkdir(parents=True, exist_ok=True)
             os.environ["NGRAPH_PROFILE_DIR"] = str(child_profile_dir.resolve())
             logger.info(f"Worker profiles will be saved to: {child_profile_dir}")
 
@@ -1214,10 +1223,13 @@ def _run_scenario(
                             f.unlink()
                         except Exception:
                             pass
-                try:
-                    child_profile_dir.rmdir()  # Remove dir if empty
-                except Exception:
-                    pass
+                # Keep the profiles directory when an explicit output dir is used
+                # to make artifact paths consistent and discoverable.
+                if output_dir is None:
+                    try:
+                        child_profile_dir.rmdir()  # Remove dir if empty
+                    except Exception:
+                        pass
 
             # Generate and display performance report
             reporter = PerformanceReporter(profiler.results)
@@ -1244,9 +1256,14 @@ def _run_scenario(
 
             json_str = json.dumps(results_dict, indent=2, default=str)
 
-            # Derive default results file name from scenario when not provided
-            effective_output = output or Path(f"{path.stem}.json")
+            # Derive default results file path using output directory policy
+            effective_output = results_path_for_run(
+                scenario_path=path,
+                output_dir=output_dir,
+                results_override=results_override,
+            )
 
+            ensure_parent_dir(effective_output)
             logger.info(f"Writing results to: {effective_output}")
             effective_output.write_text(json_str)
             logger.info("Results written successfully")
@@ -1313,7 +1330,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         type=Path,
         default=None,
         help=(
-            "Export results to JSON file (default: <scenario_name>.json in current directory)"
+            "Export results to JSON file (default: <scenario_name>.results.json;"
+            " placed under --output when provided)"
         ),
     )
     run_parser.add_argument(
@@ -1371,7 +1389,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         "-n",
         type=Path,
         help=(
-            "Output path for Jupyter notebook (default: <results_name>.ipynb in current directory)"
+            "Output path for Jupyter notebook (default: <results_name>.ipynb;"
+            " placed under --output when provided)"
         ),
     )
     report_parser.add_argument(
@@ -1380,7 +1399,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         nargs="?",
         const=Path("analysis.html"),
         help=(
-            "Generate HTML report (default: <results_name>.html in current directory if no path specified)"
+            "Generate HTML report (default: <results_name>.html if no path specified;"
+            " placed under --output when provided)"
         ),
     )
     report_parser.add_argument(
@@ -1388,6 +1408,20 @@ def main(argv: Optional[List[str]] = None) -> None:
         action="store_true",
         help="Include code cells in HTML output (default: report without code)",
     )
+
+    # Global output directory for all commands
+    for p in (run_parser, inspect_parser, report_parser):
+        p.add_argument(
+            "--output",
+            "-o",
+            type=Path,
+            default=None,
+            help=(
+                "Output directory for generated artifacts. When provided,"
+                " all files will be written under this folder using a"
+                " consistent '<prefix>.<suffix>' naming convention."
+            ),
+        )
 
     # Determine effective arguments (support both direct calls and module entrypoint)
     effective_args = sys.argv[1:] if argv is None else argv
@@ -1410,22 +1444,24 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if args.command == "run":
         _run_scenario(
-            args.scenario,
-            args.results,
-            args.no_results,
-            args.stdout,
-            args.keys,
-            args.profile,
-            args.profile_memory,
+            path=args.scenario,
+            results_override=args.results,
+            no_results=args.no_results,
+            stdout=args.stdout,
+            keys=args.keys,
+            profile=args.profile,
+            profile_memory=args.profile_memory,
+            output_dir=args.output,
         )
     elif args.command == "inspect":
         _inspect_scenario(args.scenario, args.detail)
     elif args.command == "report":
         _generate_report(
-            args.results,
-            args.notebook,
-            args.html,
-            args.include_code,
+            results_path=args.results,
+            notebook_path=args.notebook,
+            html_path=args.html,
+            include_code=args.include_code,
+            output_dir=args.output,
         )
 
 
@@ -1434,6 +1470,7 @@ def _generate_report(
     notebook_path: Optional[Path],
     html_path: Optional[Path],
     include_code: bool,
+    output_dir: Optional[Path] = None,
 ) -> None:
     """Generate analysis reports from results file.
 
@@ -1450,20 +1487,28 @@ def _generate_report(
         generator = ReportGenerator(results_path)
         generator.load_results()
 
-        # Generate notebook (default derives from results file name)
-        notebook_output = notebook_path or Path(f"{results_path.stem}.ipynb")
-        generated_notebook = generator.generate_notebook(notebook_output)
+        # Determine notebook output path
+        nb_out = resolve_override_path(notebook_path, output_dir)
+        if nb_out is None:
+            nb_out = build_artifact_path(output_dir, results_path.stem, ".ipynb")
+
+        ensure_parent_dir(nb_out)
+        generated_notebook = generator.generate_notebook(nb_out)
         print(f"✅ Notebook generated: {generated_notebook}")
 
         # Generate HTML if requested
-        if html_path:
-            # If --html was passed without an explicit path, argparse provides the const
-            # value. In that case, derive the HTML name from the results file stem.
+        html_out: Optional[Path] = None
+        if html_path is not None:
             if html_path == Path("analysis.html"):
-                html_path = Path(f"{results_path.stem}.html")
+                html_out = build_artifact_path(output_dir, results_path.stem, ".html")
+            else:
+                html_out = resolve_override_path(html_path, output_dir)
+
+        if html_out is not None:
+            ensure_parent_dir(html_out)
             generated_html = generator.generate_html_report(
                 notebook_path=generated_notebook,
-                html_path=html_path,
+                html_path=html_out,
                 include_code=include_code,
             )
             print(f"✅ HTML report generated: {generated_html}")

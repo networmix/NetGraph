@@ -36,7 +36,7 @@ The CLI provides three primary commands:
 # Inspect a scenario to understand its structure
 python -m ngraph inspect my_scenario.yaml
 
-# Run a scenario (generates my_scenario.json by default)
+# Run a scenario (generates my_scenario.results.json by default)
 python -m ngraph run my_scenario.yaml
 
 # Generate analysis report from results
@@ -115,7 +115,7 @@ python -m ngraph [--verbose|--quiet] run <scenario_file> [options]
 
 **Options:**
 
-- `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.json`)
+- `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.results.json`)
 - `--no-results`: Disable results file generation (for edge cases)
 - `--stdout`: Print results to stdout in addition to saving file
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
@@ -186,7 +186,7 @@ python -m ngraph report results.json --html --include-code
 ### Basic Execution
 
 ```bash
-# Run a scenario (creates my_network.json by default)
+# Run a scenario (creates my_network.results.json by default)
 python -m ngraph run my_network.yaml
 
 # Run a scenario and save results to custom file
@@ -402,8 +402,8 @@ The CLI executes the complete workflow defined in your scenario file, running al
 ```bash
 # Development workflow
 python -m ngraph inspect my_scenario.yaml --detail  # Validate and debug
-python -m ngraph run my_scenario.yaml              # Execute (creates my_scenario.json)
-python -m ngraph report my_scenario.json --html    # Generate my_scenario.ipynb/html
+python -m ngraph run my_scenario.yaml              # Execute (creates my_scenario.results.json)
+python -m ngraph report my_scenario.results.json --html    # Generate my_scenario.ipynb/html
 ```
 
 ### Debugging Scenarios

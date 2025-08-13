@@ -57,8 +57,8 @@ def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> 
     payload = json.loads(extract_json_from_stdout(captured.out))
 
     assert "build_graph" in payload
-    # default <scenario_name>.json is created when --results not passed
-    assert (tmp_path / "scenario_1.json").exists()
+    # default <scenario_name>.results.json is created when --results not passed
+    assert (tmp_path / "scenario_1.results.json").exists()
 
 
 def test_run_no_results_flag_produces_no_file(
@@ -70,7 +70,7 @@ def test_run_no_results_flag_produces_no_file(
     cli.main(["run", str(scenario), "--no-results"])  # still prints a status line
     captured = capsys.readouterr()
 
-    assert not (tmp_path / "scenario_1.json").exists()
+    assert not (tmp_path / "scenario_1.results.json").exists()
     assert "Scenario execution completed" in captured.out
 
 
@@ -82,7 +82,30 @@ def test_run_custom_results_path_disables_default(tmp_path: Path, monkeypatch) -
     cli.main(["run", str(scenario), "--results", str(out_path)])
 
     assert out_path.exists()
-    assert not (tmp_path / "scenario_1.json").exists()
+    assert not (tmp_path / "scenario_1.results.json").exists()
+
+
+def test_run_output_dir_default_naming(tmp_path: Path) -> None:
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
+
+    out_dir = tmp_path / "out"
+    cli.main(["run", str(scenario), "-o", str(out_dir)])
+
+    # With output dir, default naming uses '<prefix>.results.json'
+    expected = out_dir / "scenario_1.results.json"
+    assert expected.exists()
+
+
+def test_run_output_dir_with_relative_override(tmp_path: Path, monkeypatch) -> None:
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
+    out_dir = tmp_path / "out2"
+    monkeypatch.chdir(tmp_path)
+
+    # Relative override should be resolved under output dir
+    cli.main(["run", str(scenario), "-o", str(out_dir), "--results", "custom.json"])
+    assert (out_dir / "custom.json").exists()
+    # No default file should be created in CWD
+    assert not (tmp_path / "scenario_1.results.json").exists()
 
 
 def test_run_filter_by_step_names_subsets_results(tmp_path: Path, monkeypatch) -> None:
@@ -433,6 +456,82 @@ def test_report_fast_paths(monkeypatch, capsys) -> None:
         out = capsys.readouterr().out
         assert "Notebook generated:" in out and "HTML report generated:" in out
         assert nb.exists() and html.exists()
+
+
+def test_report_with_output_dir_defaults(monkeypatch, capsys, tmp_path: Path) -> None:
+    # Prepare a results file
+    results = tmp_path / "r.json"
+    results.write_text(
+        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"x": 1}}'
+    )
+
+    class FakeRG:
+        def __init__(self, results_path):
+            self.results_path = Path(results_path)
+
+        def load_results(self):
+            json.loads(self.results_path.read_text())
+
+        def generate_notebook(self, output_path):
+            Path(output_path).write_text("{}")
+            return Path(output_path)
+
+        def generate_html_report(self, notebook_path, html_path, include_code=False):
+            Path(notebook_path).write_text("{}")
+            Path(html_path).write_text("<html></html>")
+            return Path(html_path)
+
+    out_dir = tmp_path / "out"
+    monkeypatch.setattr(cli, "ReportGenerator", FakeRG)
+
+    cli.main(["report", str(results), "-o", str(out_dir), "--html"])  # defaults
+    out = capsys.readouterr().out
+    assert "Notebook generated:" in out and "HTML report generated:" in out
+
+    # Defaults should be derived from results name under output dir
+    assert (out_dir / "r.ipynb").exists()
+    assert (out_dir / "r.html").exists()
+
+
+def test_run_profile_uses_output_dir_profiles(tmp_path: Path, monkeypatch) -> None:
+    # Minimal scenario
+    scenario_file = tmp_path / "p.yaml"
+    scenario_file.write_text(
+        """
+seed: 1
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      link_params:
+        capacity: 1
+workflow:
+  - step_type: NetworkStats
+    name: stats
+"""
+    )
+    out_dir = tmp_path / "outprof"
+    res_path = out_dir / "res.json"
+    monkeypatch.chdir(tmp_path)
+
+    cli.main(
+        [
+            "run",
+            str(scenario_file),
+            "--profile",
+            "--results",
+            str(res_path),
+            "-o",
+            str(out_dir),
+        ]
+    )
+
+    assert res_path.exists()
+    # Worker profiles directory should be created under output dir, named '<prefix>.profiles'
+    assert (out_dir / "p.profiles").exists()
 
 
 def test_report_default_names_from_results(monkeypatch, capsys, tmp_path: Path) -> None:
