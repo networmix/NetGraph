@@ -16,6 +16,7 @@ from ngraph.graph.strict_multidigraph import (
     NodeID,
     StrictMultiDiGraph,
 )
+from ngraph.logging import get_logger
 from ngraph.paths.bundle import PathBundle
 
 
@@ -89,6 +90,8 @@ class FlowPolicy:
                         or if EQUAL_BALANCED placement is used without a
                         specified max_flow_count.
         """
+        # Module logger
+        self._logger = get_logger(__name__)
         self.path_alg: base.PathAlg = path_alg
         self.flow_placement: FlowPlacement = flow_placement
         self.edge_select: base.EdgeSelect = edge_select
@@ -437,6 +440,31 @@ class FlowPolicy:
             # Track progress to detect infinite loops in flow creation/optimization
             if placed_flow < base.MIN_FLOW:
                 consecutive_no_progress += 1
+                # Occasional debug to aid troubleshooting of misconfigured policies
+                if consecutive_no_progress == 1 or (consecutive_no_progress % 25 == 0):
+                    try:
+                        self._logger.debug(
+                            "place_demand no-progress: src=%s dst=%s vol_left=%.6g target=%.6g "
+                            "flows=%d queue=%d iters=%d last_cost=%s edge_sel=%s placement=%s multipath=%s",
+                            str(getattr(flow, "src_node", "")),
+                            str(getattr(flow, "dst_node", "")),
+                            float(volume),
+                            float(target_flow_volume),
+                            len(self.flows),
+                            len(flow_queue),
+                            total_iterations,
+                            str(
+                                getattr(
+                                    getattr(flow, "path_bundle", None), "cost", None
+                                )
+                            ),
+                            self.edge_select.name,
+                            self.flow_placement.name,
+                            str(self.multipath),
+                        )
+                    except Exception:
+                        # Logging must not raise
+                        pass
                 if consecutive_no_progress >= self.max_no_progress_iterations:
                     # This indicates an infinite loop where flows keep being created
                     # but can't place any meaningful volume
@@ -460,16 +488,39 @@ class FlowPolicy:
                 target_flow_volume - flow.placed_flow >= base.MIN_FLOW
                 and not self.static_paths
             ):
+                # Guard against pathological expansion under capacity-aware selection:
+                # when no progress was made, creating additional flows does not help and may loop.
+                capacity_aware_edge_selects = {
+                    base.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+                    base.EdgeSelect.ALL_ANY_COST_WITH_CAP_REMAINING,
+                    base.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING,
+                    base.EdgeSelect.SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED,
+                }
                 if not self.max_flow_count or len(self.flows) < self.max_flow_count:
-                    new_flow = self._create_flow(
-                        flow_graph, src_node, dst_node, flow_class
-                    )
+                    if not (
+                        placed_flow < base.MIN_FLOW
+                        and self.edge_select in capacity_aware_edge_selects
+                    ):
+                        new_flow = self._create_flow(
+                            flow_graph, src_node, dst_node, flow_class
+                        )
+                    else:
+                        new_flow = None
                 else:
+                    # Always allow re-optimization path even when no progress was made.
                     new_flow = self._reoptimize_flow(
                         flow_graph, flow.flow_index, headroom=base.MIN_FLOW
                     )
                 if new_flow:
                     flow_queue.append(new_flow)
+                    try:
+                        self._logger.debug(
+                            "place_demand appended flow: total_flows=%d new_cost=%s",
+                            len(self.flows),
+                            str(getattr(new_flow.path_bundle, "cost", None)),
+                        )
+                    except Exception:
+                        pass
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
         if self.flow_placement == FlowPlacement.EQUAL_BALANCED and len(self.flows) > 0:
