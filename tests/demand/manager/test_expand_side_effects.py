@@ -96,3 +96,44 @@ def test_expand_combine_adds_new_demand_without_resetting_flows() -> None:
     tm.expand_demands()
     flow_after = _sum_flow_between(g, "A", "B")
     assert flow_after == flow_before
+
+
+def test_reset_after_reexpand_clears_stray_flows() -> None:
+    # Place with one demand, then re-expand (losing references to old demand/policy).
+    # reset_all_flow_usages must clear all graph usage, including flows that belong
+    # to previously expanded demands.
+    net = _build_line()
+    tmset = TrafficMatrixSet()
+    td1 = TrafficDemand(
+        source_path="A",
+        sink_path="B",
+        demand=4.0,
+        mode="combine",
+        flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
+    )
+    tmset.add("default", [td1])
+
+    tm = TrafficManager(network=net, traffic_matrix_set=tmset)
+    tm.build_graph(add_reverse=True)
+    tm.expand_demands()
+    tm.place_all_demands(placement_rounds=2)
+
+    g = tm.graph
+    assert g is not None
+    assert _sum_flow_between(g, "A", "B") > 0.0
+
+    # Re-expand by replacing matrix contents (typical when updating inputs)
+    tmset.matrices["default"] = [
+        TrafficDemand(
+            source_path="A",
+            sink_path="B",
+            demand=1.0,
+            mode="combine",
+            flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
+        )
+    ]
+    tm.expand_demands()
+
+    # Now reset: must clear all flows from graph, including those from the old demand
+    tm.reset_all_flow_usages()
+    assert _sum_flow_between(g, "A", "B") == 0.0

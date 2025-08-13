@@ -244,10 +244,19 @@ class TrafficManager:
         if self.graph is None:
             return
 
+        # First, remove flows for currently tracked demands to reset internal
+        # policy state (placed_flow counters) without destroying flow objects.
         for dmd in self.demands:
             if dmd.flow_policy:
                 dmd.flow_policy.remove_demand(self.graph)
             dmd.placed_demand = 0.0
+
+        # Then, ensure the graph itself is clean of any stray flows that may have
+        # been created by previously expanded demands (no longer referenced).
+        # This guarantees a full graph-level reset regardless of demand set churn.
+        from ngraph.algorithms.flow_init import init_flow_graph
+
+        init_flow_graph(self.graph, reset_flow_graph=True)
 
         for td in self._get_traffic_demands():
             td.demand_placed = 0.0
