@@ -618,3 +618,58 @@ network:
     with pytest.raises(ValueError) as exc:
         Scenario.from_yaml(yaml_content)
     assert "Link references unknown node(s)" in str(exc.value)
+
+
+def test_attr_selector_inside_blueprint_paths():
+    """Attribute directive paths inside blueprint adjacency should not be prefixed.
+
+    When a blueprint adjacency uses a selector with path "attr:<name>", the
+    attribute directive must be treated as global, not joined with the blueprint
+    instantiation path. This test ensures the expansion connects leaf->spine
+    using attribute-based selectors inside the blueprint.
+    """
+    yaml_content = """
+blueprints:
+  bp_attr:
+    groups:
+      leaf:
+        node_count: 2
+        name_template: "leaf-{node_num}"
+        attrs:
+          role: "leaf"
+      spine:
+        node_count: 1
+        name_template: "spine-{node_num}"
+        attrs:
+          role: "spine"
+    adjacency:
+      - source:
+          path: "attr:role"
+          match:
+            conditions:
+              - attr: "role"
+                operator: "=="
+                value: "leaf"
+        target:
+          path: "attr:role"
+          match:
+            conditions:
+              - attr: "role"
+                operator: "=="
+                value: "spine"
+        pattern: "mesh"
+        link_params:
+          capacity: 10
+
+network:
+  groups:
+    pod1:
+      use_blueprint: bp_attr
+"""
+
+    scenario = Scenario.from_yaml(yaml_content)
+    # Expect 3 nodes total (2 leaf, 1 spine)
+    assert len(scenario.network.nodes) == 3
+    # Mesh between 2 leaf and 1 spine = 2 bidirectional adjacencies => 4 edges
+    graph = scenario.network.to_strict_multidigraph()
+    assert len(list(graph.edges())) == 4

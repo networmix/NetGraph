@@ -346,13 +346,19 @@ def _expand_blueprint_adjacency(
 
     def _normalize_selector(sel: Any, base: str) -> Dict[str, Any]:
         if isinstance(sel, str):
+            # Attribute directives must not be prefixed by parent_path
+            if sel.startswith("attr:"):
+                return {"path": sel}
             return {"path": _bp_parse.join_paths(base, sel)}
         if isinstance(sel, dict):
             path = sel.get("path")
             if not isinstance(path, str):
                 raise ValueError("Selector object must contain string 'path'.")
             out = dict(sel)
-            out["path"] = _bp_parse.join_paths(base, path)
+            if path.startswith("attr:"):
+                out["path"] = path
+            else:
+                out["path"] = _bp_parse.join_paths(base, path)
             return out
         raise ValueError(
             "Adjacency 'source'/'target' must be string or object with 'path'."
