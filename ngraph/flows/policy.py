@@ -231,28 +231,40 @@ class FlowPolicy:
         effective_select_value = (
             min_flow if min_flow is not None else self.edge_select_value
         )
-        # Reuse a cached selector when no custom function is provided
-        if self.edge_select_func is None:
-            cache_key = (self.edge_select, effective_select_value)
-            edge_select_func = self._edge_selector_cache.get(cache_key)
-            if edge_select_func is None:
+        # Determine whether we can use SPF's internal fast path.
+        # Fast path is available when:
+        #  - no custom edge selector is provided
+        #  - no custom select value is required (uses MIN_CAP internally)
+        # In that case, we pass only the EdgeSelect enum to spf.spf and avoid
+        # constructing an edge_select_func, which unlocks specialized inner loops.
+        use_spf_fast_path = (
+            self.edge_select_func is None and effective_select_value is None
+        )
+
+        edge_select_func = None
+        if not use_spf_fast_path:
+            # Build (and cache) a selector when fast path is not applicable
+            if self.edge_select_func is None:
+                cache_key = (self.edge_select, effective_select_value)
+                edge_select_func = self._edge_selector_cache.get(cache_key)
+                if edge_select_func is None:
+                    edge_select_func = edge_select.edge_select_fabric(
+                        edge_select=self.edge_select,
+                        select_value=effective_select_value,
+                        excluded_edges=None,
+                        excluded_nodes=None,
+                        edge_select_func=None,
+                    )
+                    self._edge_selector_cache[cache_key] = edge_select_func
+            else:
+                # Respect a user-provided selector (do not cache)
                 edge_select_func = edge_select.edge_select_fabric(
                     edge_select=self.edge_select,
                     select_value=effective_select_value,
                     excluded_edges=None,
                     excluded_nodes=None,
-                    edge_select_func=None,
+                    edge_select_func=self.edge_select_func,
                 )
-                self._edge_selector_cache[cache_key] = edge_select_func
-        else:
-            # Respect a user-provided selector (do not cache)
-            edge_select_func = edge_select.edge_select_fabric(
-                edge_select=self.edge_select,
-                select_value=effective_select_value,
-                excluded_edges=None,
-                excluded_nodes=None,
-                edge_select_func=self.edge_select_func,
-            )
 
         if self.path_alg == base.PathAlg.SPF:
             path_func = spf.spf
@@ -265,15 +277,28 @@ class FlowPolicy:
         except Exception:
             pass
 
-        cost, pred = path_func(
-            flow_graph,
-            src_node=src_node,
-            edge_select_func=edge_select_func,
-            multipath=self.multipath,
-            excluded_edges=excluded_edges,
-            excluded_nodes=excluded_nodes,
-            dst_node=dst_node,
-        )
+        if use_spf_fast_path:
+            cost, pred = path_func(
+                flow_graph,
+                src_node=src_node,
+                edge_select=self.edge_select,
+                edge_select_func=None,
+                multipath=self.multipath,
+                excluded_edges=excluded_edges,
+                excluded_nodes=excluded_nodes,
+                dst_node=dst_node,
+            )
+        else:
+            cost, pred = path_func(
+                flow_graph,
+                src_node=src_node,
+                edge_select=self.edge_select,
+                edge_select_func=edge_select_func,
+                multipath=self.multipath,
+                excluded_edges=excluded_edges,
+                excluded_nodes=excluded_nodes,
+                dst_node=dst_node,
+            )
 
         if dst_node in pred:
             dst_cost = cost[dst_node]
@@ -637,11 +662,14 @@ class FlowPolicy:
                 if new_flow:
                     flow_queue.append(new_flow)
                     try:
-                        self._logger.debug(
-                            "place_demand appended flow: total_flows=%d new_cost=%s",
-                            len(self.flows),
-                            str(getattr(new_flow.path_bundle, "cost", None)),
-                        )
+                        import logging as _logging
+
+                        if self._logger.isEnabledFor(_logging.DEBUG):
+                            self._logger.debug(
+                                "place_demand appended flow: total_flows=%d new_cost=%s",
+                                len(self.flows),
+                                str(getattr(new_flow.path_bundle, "cost", None)),
+                            )
                     except Exception:
                         pass
 
