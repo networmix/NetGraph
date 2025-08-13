@@ -68,8 +68,8 @@ class FlowPolicy:
         max_total_iterations: int = 10000,
         # Diminishing-returns cutoff configuration
         diminishing_returns_enabled: bool = True,
-        diminishing_returns_window: int = 16,
-        diminishing_returns_epsilon_frac: float = 1e-6,
+        diminishing_returns_window: int = 8,
+        diminishing_returns_epsilon_frac: float = 1e-3,
     ) -> None:
         """Initialize a policy instance.
 
@@ -272,10 +272,7 @@ class FlowPolicy:
             raise ValueError(f"Unsupported path algorithm {self.path_alg}")
 
         # Count SPF invocations for metrics
-        try:
-            self._metrics_totals["spf_calls_total"] += 1.0
-        except Exception:
-            pass
+        self._metrics_totals["spf_calls_total"] += 1.0
 
         if use_spf_fast_path:
             cost, pred = path_func(
@@ -345,6 +342,40 @@ class FlowPolicy:
         Returns:
             Flow | None: Newly created flow, or None if no valid path bundle is found.
         """
+        # Try last path bundle reuse for this (src,dst) if available and still valid
+        if path_bundle is None:
+            last_pb: Optional[PathBundle] = getattr(self, "_last_path_bundle", None)
+            if (
+                last_pb is not None
+                and last_pb.src_node == src_node
+                and last_pb.dst_node == dst_node
+            ):
+                # Attempt to reuse by checking that all edges exist and have remaining capacity >= min_flow
+                can_reuse = True
+                # Require at least MIN_FLOW to be deliverable to consider reuse
+                min_required = (
+                    float(min_flow) if min_flow is not None else float(base.MIN_FLOW)
+                )
+                edges = flow_graph.get_edges()
+                # Respect exclusions if provided
+                if excluded_edges and any(e in excluded_edges for e in last_pb.edges):
+                    can_reuse = False
+                if excluded_nodes and any(
+                    n in excluded_nodes for n in getattr(last_pb, "nodes", set())
+                ):
+                    can_reuse = False
+                for e_id in last_pb.edges:
+                    if e_id not in edges:
+                        can_reuse = False
+                        break
+                    cap = edges[e_id][3].get("capacity", 0.0)
+                    flow = edges[e_id][3].get("flow", 0.0)
+                    if (cap - flow) < min_required:
+                        can_reuse = False
+                        break
+                if can_reuse:
+                    path_bundle = last_pb
+
         path_bundle = path_bundle or self._get_path_bundle(
             flow_graph, src_node, dst_node, min_flow, excluded_edges, excluded_nodes
         )
@@ -356,10 +387,9 @@ class FlowPolicy:
         )
         flow = Flow(path_bundle, flow_index)
         self.flows[flow_index] = flow
-        try:
-            self._metrics_totals["flows_created_total"] += 1.0
-        except Exception:
-            pass
+        self._metrics_totals["flows_created_total"] += 1.0
+        # Cache last path bundle for potential reuse within this demand's placement session
+        self._last_path_bundle = path_bundle
         return flow
 
     def _create_flows(
@@ -543,42 +573,35 @@ class FlowPolicy:
             total_placed_flow += placed_flow
             total_iterations += 1
             recent_placements.append(placed_flow)
-            try:
-                self._metrics_totals["place_iterations_total"] += 1.0
-            except Exception:
-                pass
+            self._metrics_totals["place_iterations_total"] += 1.0
 
             # Track progress to detect infinite loops in flow creation/optimization
             if placed_flow < base.MIN_FLOW:
                 consecutive_no_progress += 1
                 # Occasional debug to aid troubleshooting of misconfigured policies
                 if consecutive_no_progress == 1 or (consecutive_no_progress % 25 == 0):
-                    try:
-                        import logging as _logging
+                    import logging as _logging
 
-                        if self._logger.isEnabledFor(_logging.DEBUG):
-                            self._logger.debug(
-                                "place_demand no-progress: src=%s dst=%s vol_left=%.6g target=%.6g "
-                                "flows=%d queue=%d iters=%d last_cost=%s edge_sel=%s placement=%s multipath=%s",
-                                str(getattr(flow, "src_node", "")),
-                                str(getattr(flow, "dst_node", "")),
-                                float(volume),
-                                float(target_flow_volume),
-                                len(self.flows),
-                                len(flow_queue),
-                                total_iterations,
-                                str(
-                                    getattr(
-                                        getattr(flow, "path_bundle", None), "cost", None
-                                    )
-                                ),
-                                self.edge_select.name,
-                                self.flow_placement.name,
-                                str(self.multipath),
-                            )
-                    except Exception:
-                        # Logging must not raise
-                        pass
+                    if self._logger.isEnabledFor(_logging.DEBUG):
+                        self._logger.debug(
+                            "place_demand no-progress: src=%s dst=%s vol_left=%.6g target=%.6g "
+                            "flows=%d queue=%d iters=%d last_cost=%s edge_sel=%s placement=%s multipath=%s",
+                            str(getattr(flow, "src_node", "")),
+                            str(getattr(flow, "dst_node", "")),
+                            float(volume),
+                            float(target_flow_volume),
+                            len(self.flows),
+                            len(flow_queue),
+                            total_iterations,
+                            str(
+                                getattr(
+                                    getattr(flow, "path_bundle", None), "cost", None
+                                )
+                            ),
+                            self.edge_select.name,
+                            self.flow_placement.name,
+                            str(self.multipath),
+                        )
                 if consecutive_no_progress >= self.max_no_progress_iterations:
                     # This indicates an infinite loop where flows keep being created
                     # but can't place any meaningful volume
@@ -610,26 +633,23 @@ class FlowPolicy:
                 )
                 if recent_sum < threshold:
                     # Gracefully stop iterating for this demand; leave remaining volume.
-                    try:
-                        import logging as _logging
+                    import logging as _logging
 
-                        if self._logger.isEnabledFor(_logging.DEBUG):
-                            self._logger.debug(
-                                "place_demand cutoff: src=%s dst=%s recent_sum=%.6g threshold=%.6g "
-                                "remaining=%.6g flows=%d iters=%d edge_sel=%s placement=%s multipath=%s",
-                                str(src_node),
-                                str(dst_node),
-                                float(recent_sum),
-                                float(threshold),
-                                float(volume),
-                                len(self.flows),
-                                total_iterations,
-                                self.edge_select.name,
-                                self.flow_placement.name,
-                                str(self.multipath),
-                            )
-                    except Exception:
-                        pass
+                    if self._logger.isEnabledFor(_logging.DEBUG):
+                        self._logger.debug(
+                            "place_demand cutoff: src=%s dst=%s recent_sum=%.6g threshold=%.6g "
+                            "remaining=%.6g flows=%d iters=%d edge_sel=%s placement=%s multipath=%s",
+                            str(src_node),
+                            str(dst_node),
+                            float(recent_sum),
+                            float(threshold),
+                            float(volume),
+                            len(self.flows),
+                            total_iterations,
+                            self.edge_select.name,
+                            self.flow_placement.name,
+                            str(self.multipath),
+                        )
                     cutoff_triggered = True
                     break
 
@@ -661,17 +681,14 @@ class FlowPolicy:
                     )
                 if new_flow:
                     flow_queue.append(new_flow)
-                    try:
-                        import logging as _logging
+                    import logging as _logging
 
-                        if self._logger.isEnabledFor(_logging.DEBUG):
-                            self._logger.debug(
-                                "place_demand appended flow: total_flows=%d new_cost=%s",
-                                len(self.flows),
-                                str(getattr(new_flow.path_bundle, "cost", None)),
-                            )
-                    except Exception:
-                        pass
+                    if self._logger.isEnabledFor(_logging.DEBUG):
+                        self._logger.debug(
+                            "place_demand appended flow: total_flows=%d new_cost=%s",
+                            len(self.flows),
+                            str(getattr(new_flow.path_bundle, "cost", None)),
+                        )
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
         if self.flow_placement == FlowPlacement.EQUAL_BALANCED and len(self.flows) > 0:
@@ -702,10 +719,7 @@ class FlowPolicy:
                 self._reoptimize_flow(flow_graph, flow.flow_index)
 
         # Update totals and last_metrics
-        try:
-            self._metrics_totals["placed_total"] += float(total_placed_flow)
-        except Exception:
-            pass
+        self._metrics_totals["placed_total"] += float(total_placed_flow)
 
         totals_after = self._metrics_totals
         self.last_metrics = {
