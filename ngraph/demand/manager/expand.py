@@ -125,17 +125,24 @@ def _expand_combine(
     pseudo_source_name = f"combine_src::{td.id}"
     pseudo_sink_name = f"combine_snk::{td.id}"
 
-    # Add pseudo nodes to the graph (no-op if they already exist)
-    graph.add_node(pseudo_source_name)
-    graph.add_node(pseudo_sink_name)
+    # Add pseudo nodes to the graph only if missing (idempotent)
+    if pseudo_source_name not in graph:
+        graph.add_node(pseudo_source_name)
+    if pseudo_sink_name not in graph:
+        graph.add_node(pseudo_sink_name)
 
-    # Link pseudo-source to real sources, and real sinks to pseudo-sink
+    # Link pseudo-source to real sources, and real sinks to pseudo-sink (idempotent)
     for s_node in src_nodes:
-        graph.add_edge(pseudo_source_name, s_node.name, capacity=float("inf"), cost=0)
+        if not graph.edges_between(pseudo_source_name, s_node.name):
+            graph.add_edge(
+                pseudo_source_name, s_node.name, capacity=float("inf"), cost=0
+            )
     for t_node in dst_nodes:
-        graph.add_edge(t_node.name, pseudo_sink_name, capacity=float("inf"), cost=0)
+        if not graph.edges_between(t_node.name, pseudo_sink_name):
+            graph.add_edge(t_node.name, pseudo_sink_name, capacity=float("inf"), cost=0)
 
-    init_flow_graph(graph)  # Re-initialize flow-related attributes
+    # Initialize flow-related attributes without resetting existing usage
+    init_flow_graph(graph, reset_flow_graph=False)
 
     # Create a single Demand with the full volume
     if td.flow_policy:
