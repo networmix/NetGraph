@@ -235,11 +235,44 @@ class DemandPlacementResults:
         Returns:
             DataFrame with success rates across iterations.
         """
-        results = []
-        for i, result in enumerate(self.raw_results["results"]):
-            success_rate = result.get("overall_placement_ratio", 0.0)
-            results.append({"iteration": i, "success_rate": success_rate})
-        return pd.DataFrame(results)
+        # Support two shapes for raw_results["results"]:
+        # 1) List[dict] with per-iteration overall summary containing
+        #    {"overall_placement_ratio": float}
+        # 2) List[list[FlowResult]] where FlowResult are per-demand dicts
+        #    with metric == "placement_ratio" and field "value" in [0, 1].
+        rows: list[dict[str, float | int]] = []
+        raw = self.raw_results.get("results", [])
+        for i, entry in enumerate(raw):
+            # Shape 1: dict with overall_placement_ratio
+            if isinstance(entry, dict):
+                try:
+                    success_rate = float(entry.get("overall_placement_ratio", 0.0))
+                except Exception:
+                    success_rate = 0.0
+                rows.append({"iteration": i, "success_rate": success_rate})
+                continue
+
+            # Shape 2: list of FlowResult dicts → aggregate mean of ratios
+            if isinstance(entry, list):
+                ratios: list[float] = []
+                for fr in entry:
+                    if not isinstance(fr, dict):
+                        continue
+                    metric = fr.get("metric")
+                    if metric != "placement_ratio":
+                        continue
+                    try:
+                        ratios.append(float(fr.get("value", 0.0)))
+                    except Exception:
+                        continue
+                agg = sum(ratios) / len(ratios) if ratios else 0.0
+                rows.append({"iteration": i, "success_rate": float(agg)})
+                continue
+
+            # Unknown entry type – record zero conservatively
+            rows.append({"iteration": i, "success_rate": 0.0})
+
+        return pd.DataFrame(rows)
 
     def summary_statistics(self) -> dict[str, float]:
         """Get summary statistics for success rates.

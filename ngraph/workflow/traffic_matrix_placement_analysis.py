@@ -368,47 +368,61 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
 
         # INFO-level outcome summary for workflow users
         try:
-            stats = None
+            from ngraph.monte_carlo.results import DemandPlacementResults
+
+            dpr = DemandPlacementResults(
+                raw_results=results.raw_results,
+                iterations=results.iterations,
+                baseline=results.baseline,
+                failure_patterns=results.failure_patterns,
+                metadata=results.metadata,
+            )
+
+            # Compute per-iteration success rates and summary statistics
+            dist_df = dpr.success_rate_distribution()
+            stats = dpr.summary_statistics() if not dist_df.empty else {}
+
+            # Also compute an overall demand-level mean from envelopes for validation
             try:
-                from ngraph.monte_carlo.results import DemandPlacementResults
-
-                dpr = DemandPlacementResults(
-                    raw_results=results.raw_results,
-                    iterations=results.iterations,
-                    baseline=results.baseline,
-                    failure_patterns=results.failure_patterns,
-                    metadata=results.metadata,
-                )
-                stats = dpr.summary_statistics()
-            except Exception:
-                # Fallback: compute mean from overall_placement_ratio if present
-                ratios = [
-                    float(r.get("overall_placement_ratio", 0.0))
-                    for r in results.raw_results.get("results", [])
-                    if isinstance(r, dict)
+                envelope_means = [
+                    float(env.get("mean", 0.0)) for env in envelopes.values()
                 ]
-                if ratios:
-                    import statistics
+                overall_envelope_mean = (
+                    sum(envelope_means) / len(envelope_means) if envelope_means else 0.0
+                )
+            except Exception:
+                overall_envelope_mean = 0.0
 
-                    stats = {
-                        "mean": float(statistics.mean(ratios)),
-                        "min": float(min(ratios)),
-                        "max": float(max(ratios)),
-                    }
+            # Add a concise per-step summary object to the results store
+            scenario.results.put(
+                self.name,
+                "placement_summary",
+                {
+                    "iterations": int(results.metadata.get("iterations", 0)),
+                    "parallelism": int(
+                        results.metadata.get(
+                            "parallelism", self._resolve_parallelism(self.parallelism)
+                        )
+                    ),
+                    "baseline": bool(results.metadata.get("baseline", False)),
+                    "alpha": float(step_metadata.get("alpha", 1.0)),
+                    "alpha_source": step_metadata.get("alpha_source", None),
+                    "demand_count": len(envelopes),
+                    "success_rate_stats": stats or {},
+                    "overall_envelope_mean": float(overall_envelope_mean),
+                },
+            )
 
+            # Prepare INFO log with consistent fields
             meta = results.metadata or {}
             iterations = int(meta.get("iterations", self.iterations))
             workers = int(
                 meta.get("parallelism", self._resolve_parallelism(self.parallelism))
             )
-            # Alpha transparency: print effective alpha and its source (explicit or MSD:<step>)
             try:
                 alpha_value = float(step_metadata.get("alpha"))  # type: ignore[arg-type]
             except Exception:
-                try:
-                    alpha_value = float(effective_alpha)
-                except Exception:
-                    alpha_value = 1.0
+                alpha_value = float(effective_alpha) if effective_alpha else 1.0
             alpha_source = (
                 step_metadata.get("alpha_source")
                 if isinstance(step_metadata, dict)
@@ -419,21 +433,30 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 if alpha_source
                 else ("explicit" if not isinstance(self.alpha, str) else "auto")
             )
+
+            mean_v = float(stats.get("mean", 0.0)) if stats else 0.0
+            p50_v = float(stats.get("p50", 0.0)) if stats else 0.0
+            p95_v = float(stats.get("p95", 0.0)) if stats else 0.0
+            min_v = float(stats.get("min", 0.0)) if stats else 0.0
+            max_v = float(stats.get("max", 0.0)) if stats else 0.0
+
             logger.info(
-                "Placement summary: name=%s alpha=%.6g source=%s demands=%d iters=%d workers=%d ratio_mean=%.3f p50=%.3f p95=%.3f min=%.3f max=%.3f",
+                "Placement summary: name=%s alpha=%.6g source=%s demands=%d iters=%d workers=%d iter_mean=%.4f p50=%.4f p95=%.4f min=%.4f max=%.4f env_mean=%.4f",
                 self.name,
                 alpha_value,
                 alpha_source_str,
                 len(envelopes),
                 iterations,
                 workers,
-                float(stats.get("mean", 0.0)) if stats else 0.0,
-                float(stats.get("p50", 0.0)) if stats else 0.0,
-                float(stats.get("p95", 0.0)) if stats else 0.0,
-                float(stats.get("min", 0.0)) if stats else 0.0,
-                float(stats.get("max", 0.0)) if stats else 0.0,
+                mean_v,
+                p50_v,
+                p95_v,
+                min_v,
+                max_v,
+                overall_envelope_mean,
             )
         except Exception:
+            # Logging must not raise
             pass
 
         logger.info(
