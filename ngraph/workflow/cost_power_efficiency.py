@@ -114,18 +114,34 @@ class CostPowerEfficiency(WorkflowStep):
         # Resolve denominator
         denom = self.delivered_bandwidth_gbps
         if denom is None:
-            # Prefer namespaced lookup
-            ns = self.name or self.__class__.__name__
+            # Prefer namespaced lookup under this step's namespace
+            ns = self.name
             try:
                 val = scenario.results.get(ns, self.delivered_bandwidth_key)
             except Exception:
                 val = None
+
             if val is None:
-                # Global lookup for convenience
+                # Global lookup across all prior steps: choose value from the most recent step
                 try:
-                    val = scenario.results.get(self.delivered_bandwidth_key)
+                    all_vals = scenario.results.get_all(self.delivered_bandwidth_key)
+                    if all_vals:
+                        # Order by execution order descending and pick first available
+                        meta = scenario.results.get_all_step_metadata()
+                        ordered_steps = sorted(
+                            all_vals.keys(),
+                            key=lambda s: meta.get(s).execution_order
+                            if meta.get(s)
+                            else -1,
+                            reverse=True,
+                        )
+                        for step_name in ordered_steps:
+                            val = all_vals.get(step_name)
+                            if val is not None:
+                                break
                 except Exception:
                     val = None
+
             denom = float(val) if val is not None else 0.0
 
         # Compute normalized metrics; guard zero denominator
@@ -136,7 +152,7 @@ class CostPowerEfficiency(WorkflowStep):
             dollars_per_gbit = total_capex / denom
             watts_per_gbit = total_power_watts / denom
 
-        step_name = self.name or self.__class__.__name__
+        step_name = self.name
         scenario.results.put(step_name, "total_capex", total_capex)
         scenario.results.put(step_name, "total_power_watts", total_power_watts)
         scenario.results.put(step_name, "delivered_bandwidth_gbps", denom)

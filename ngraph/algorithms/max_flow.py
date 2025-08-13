@@ -375,7 +375,11 @@ def _build_flow_summary(
         edge_flow[edge] = f
         residual_cap[edge] = d[capacity_attr] - f
 
-    # BFS in residual graph to find reachable nodes from source
+    # BFS in residual graph to find reachable nodes from source.
+    # Residual graph has:
+    #  - Forward residual capacity: capacity - flow
+    #  - Reverse residual capacity: flow
+    # We must traverse both to correctly identify the s-side of the min-cut.
     reachable = set()
     stack = [src_node]
     while stack:
@@ -383,12 +387,19 @@ def _build_flow_summary(
         if n in reachable:
             continue
         reachable.add(n)
+
+        # Forward residual arcs: u -> v when residual > tolerance
         for _, nbr, _, d in flow_graph.out_edges(n, data=True, keys=True):
             if (
                 d[capacity_attr] - d.get(flow_attr, 0.0) > tolerance
                 and nbr not in reachable
             ):
                 stack.append(nbr)
+
+        # Reverse residual arcs: v -> u when flow > tolerance on edge (u->v)
+        for pred, _, _, d in flow_graph.in_edges(n, data=True, keys=True):
+            if d.get(flow_attr, 0.0) > tolerance and pred not in reachable:
+                stack.append(pred)
 
     # Find min-cut edges (saturated edges crossing the cut)
     min_cut = [

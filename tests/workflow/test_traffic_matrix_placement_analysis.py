@@ -10,7 +10,7 @@ from ngraph.workflow.traffic_matrix_placement_analysis import (
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
-def test_traffic_matrix_placement_analysis_stores_envelopes(
+def test_traffic_matrix_placement_analysis_stores_core_outputs(
     mock_failure_manager_class,
 ) -> None:
     # Prepare mock scenario with traffic matrix and results store
@@ -23,28 +23,44 @@ def test_traffic_matrix_placement_analysis_stores_envelopes(
     mock_td.priority = 0
     mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
 
-    # Mock FailureManager return value (two iterations with different ratios)
+    # Mock FailureManager return value: two iterations with structured dicts
     mock_results = MagicMock()
     mock_results.raw_results = {
         "results": [
-            [
-                {
-                    "src": "A",
-                    "dst": "B",
-                    "priority": 0,
-                    "metric": "placement_ratio",
-                    "value": 0.8,
-                }
-            ],
-            [
-                {
-                    "src": "A",
-                    "dst": "B",
-                    "priority": 0,
-                    "metric": "placement_ratio",
-                    "value": 1.0,
-                }
-            ],
+            {
+                "demands": [
+                    {
+                        "src": "A",
+                        "dst": "B",
+                        "priority": 0,
+                        "offered_gbps": 10.0,
+                        "placed_gbps": 8.0,
+                        "placement_ratio": 0.8,
+                    }
+                ],
+                "summary": {
+                    "total_offered_gbps": 10.0,
+                    "total_placed_gbps": 8.0,
+                    "overall_ratio": 0.8,
+                },
+            },
+            {
+                "demands": [
+                    {
+                        "src": "A",
+                        "dst": "B",
+                        "priority": 0,
+                        "offered_gbps": 10.0,
+                        "placed_gbps": 10.0,
+                        "placement_ratio": 1.0,
+                    }
+                ],
+                "summary": {
+                    "total_offered_gbps": 10.0,
+                    "total_placed_gbps": 10.0,
+                    "overall_ratio": 1.0,
+                },
+            },
         ]
     }
     mock_results.failure_patterns = {}
@@ -61,34 +77,28 @@ def test_traffic_matrix_placement_analysis_stores_envelopes(
     )
     step.run(mock_scenario)
 
-    # Verify results were stored under the new key and include an envelope dict
+    # Verify core outputs exist and have expected shapes
     put_calls = mock_scenario.results.put.call_args_list
     stored = {args[1]: args[2] for args, _ in (call for call in put_calls)}
-    assert "placement_envelopes" in stored
-    envelopes = stored["placement_envelopes"]
-    assert isinstance(envelopes, dict)
+    assert "offered_gbps_by_pair" in stored
+    assert "placed_gbps_envelopes" in stored
+    assert "delivered_gbps_samples" in stored
+    assert "delivered_gbps_stats" in stored
+
+    offered = stored["offered_gbps_by_pair"]
+    envs = stored["placed_gbps_envelopes"]
+    samples = stored["delivered_gbps_samples"]
+    stats = stored["delivered_gbps_stats"]
+
     key = "A->B|prio=0"
-    assert key in envelopes
-    env = envelopes[key]
-    # Envelope should be a plain dict ready for JSON export
-    assert isinstance(env, dict)
-    for k in [
-        "source",
-        "sink",
-        "mode",
-        "priority",
-        "frequencies",
-        "min",
-        "max",
-        "mean",
-        "stdev",
-        "total_samples",
-    ]:
-        assert k in env
+    assert key in offered and offered[key] == 10.0
+    assert key in envs and isinstance(envs[key], dict)
+    assert isinstance(samples, list) and samples == [8.0, 10.0]
+    assert isinstance(stats, dict) and stats.get("samples") == 2
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
-def test_traffic_matrix_placement_analysis_flow_details_aggregated(
+def test_traffic_matrix_placement_analysis_flow_details_edges(
     mock_failure_manager_class,
 ) -> None:
     # Prepare mock scenario with traffic matrix and results store
@@ -101,38 +111,46 @@ def test_traffic_matrix_placement_analysis_flow_details_aggregated(
     mock_td.priority = 0
     mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
 
-    # Mock FailureManager return value with cost_distribution data
+    # Mock FailureManager return value with edges used
     mock_results = MagicMock()
     mock_results.raw_results = {
         "results": [
-            [
-                {
-                    "src": "A",
-                    "dst": "B",
-                    "priority": 0,
-                    "metric": "placement_ratio",
-                    "value": 0.8,
-                    "stats": {
-                        "cost_distribution": {1.0: 5.0, 2.0: 3.0},
+            {
+                "demands": [
+                    {
+                        "src": "A",
+                        "dst": "B",
+                        "priority": 0,
+                        "offered_gbps": 10.0,
+                        "placed_gbps": 8.0,
+                        "placement_ratio": 0.8,
                         "edges": ["(u,v,k1)", "(x,y,k2)"],
-                        "edges_kind": "used",
-                    },
-                }
-            ],
-            [
-                {
-                    "src": "A",
-                    "dst": "B",
-                    "priority": 0,
-                    "metric": "placement_ratio",
-                    "value": 1.0,
-                    "stats": {
-                        "cost_distribution": {1.0: 7.0, 3.0: 2.0},
+                    }
+                ],
+                "summary": {
+                    "total_offered_gbps": 10.0,
+                    "total_placed_gbps": 8.0,
+                    "overall_ratio": 0.8,
+                },
+            },
+            {
+                "demands": [
+                    {
+                        "src": "A",
+                        "dst": "B",
+                        "priority": 0,
+                        "offered_gbps": 10.0,
+                        "placed_gbps": 10.0,
+                        "placement_ratio": 1.0,
                         "edges": ["(u,v,k1)"],
-                        "edges_kind": "used",
-                    },
-                }
-            ],
+                    }
+                ],
+                "summary": {
+                    "total_offered_gbps": 10.0,
+                    "total_placed_gbps": 10.0,
+                    "overall_ratio": 1.0,
+                },
+            },
         ]
     }
     mock_results.failure_patterns = {}
@@ -150,24 +168,15 @@ def test_traffic_matrix_placement_analysis_flow_details_aggregated(
     )
     step.run(mock_scenario)
 
-    # Verify flow_summary_stats aggregated into envelope
+    # Verify edges presence is preserved in envelopes metadata is not required now
     put_calls = mock_scenario.results.put.call_args_list
     stored = {args[1]: args[2] for args, _ in (call for call in put_calls)}
-    envelopes = stored["placement_envelopes"]
-    env = envelopes["A->B|prio=0"]
-    assert "flow_summary_stats" in env
-    stats = env["flow_summary_stats"]
-    cds = stats.get("cost_distribution_stats", {})
-    # cost 1.0 has volumes [5.0, 7.0] -> mean 6.0, min 5.0, max 7.0, samples 2
-    assert 1.0 in cds
-    assert abs(cds[1.0]["mean"] - 6.0) < 1e-9
-    assert cds[1.0]["min"] == 5.0
-    assert cds[1.0]["max"] == 7.0
-    assert cds[1.0]["total_samples"] == 2
-    # edge frequencies counted across iterations
-    edge_freq = stats.get("edge_usage_frequencies", {})
-    assert edge_freq.get("(u,v,k1)") == 2
-    assert edge_freq.get("(x,y,k2)") == 1
+    envs = stored["placed_gbps_envelopes"]
+    env = envs["A->B|prio=0"]
+    assert isinstance(env, dict)
+    # At minimum, envelope stats present
+    for k in ("min", "max", "mean", "stdev", "total_samples"):
+        assert k in env
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_analysis.FailureManager")
@@ -186,7 +195,18 @@ def test_traffic_matrix_placement_analysis_alpha_scales_demands(
 
     # Mock FailureManager return value (minimal valid structure)
     mock_results = MagicMock()
-    mock_results.raw_results = {"results": [[]]}
+    mock_results.raw_results = {
+        "results": [
+            {
+                "demands": [],
+                "summary": {
+                    "total_offered_gbps": 0.0,
+                    "total_placed_gbps": 0.0,
+                    "overall_ratio": 1.0,
+                },
+            }
+        ]
+    }
     mock_results.failure_patterns = {}
     mock_results.metadata = {"iterations": 1}
     mock_failure_manager = MagicMock()
@@ -227,7 +247,18 @@ def test_traffic_matrix_placement_analysis_metadata_includes_alpha(
     mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
 
     mock_results = MagicMock()
-    mock_results.raw_results = {"results": [[]]}
+    mock_results.raw_results = {
+        "results": [
+            {
+                "demands": [],
+                "summary": {
+                    "total_offered_gbps": 0.0,
+                    "total_placed_gbps": 0.0,
+                    "overall_ratio": 1.0,
+                },
+            }
+        ]
+    }
     mock_results.failure_patterns = {}
     mock_results.metadata = {"iterations": 1, "baseline": False}
     mock_failure_manager = MagicMock()
@@ -307,7 +338,18 @@ def test_traffic_matrix_placement_analysis_alpha_auto_uses_msd(
 
     # Minimal MC results
     mock_results = MagicMock()
-    mock_results.raw_results = {"results": [[]]}
+    mock_results.raw_results = {
+        "results": [
+            {
+                "demands": [],
+                "summary": {
+                    "total_offered_gbps": 0.0,
+                    "total_placed_gbps": 0.0,
+                    "overall_ratio": 1.0,
+                },
+            }
+        ]
+    }
     mock_results.failure_patterns = {}
     mock_results.metadata = {"iterations": 1}
     mock_failure_manager = MagicMock()

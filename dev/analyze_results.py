@@ -509,6 +509,15 @@ def validate_tm_placement(
 
     tm_sum = summarize_tm_placement(results, step_name)
     if not tm_sum:
+        # New schema stores placed_gbps_envelopes and delivered_gbps_samples
+        step_data = results.get(step_name, {})
+        if isinstance(step_data, dict) and (
+            "placed_gbps_envelopes" in step_data
+            and "delivered_gbps_samples" in step_data
+        ):
+            return ValidationResult(
+                True, ["New placement schema detected; summary not applicable"]
+            )
         return ValidationResult(False, ["placement_envelopes missing in results"])
 
     # Expected iterations

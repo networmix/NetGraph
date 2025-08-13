@@ -195,12 +195,20 @@ class TestDemandPlacementAnalysis:
             mock_tm.expand_demands.assert_called_once()
             mock_tm.place_all_demands.assert_called_once_with(placement_rounds=25)
 
-            # Verify results structure (FlowResult list)
-            assert isinstance(result, list)
-            assert len(result) == 2
-            dr = sorted(result, key=lambda x: x["priority"])  # type: ignore[arg-type]
-            assert dr[0]["value"] == 0.8 and dr[0]["priority"] == 0
-            assert dr[1]["value"] == 1.0 and dr[1]["priority"] == 1
+            # Verify results structure (dict with per-demand records and summary)
+            assert isinstance(result, dict)
+            assert "demands" in result and "summary" in result
+            demands = result["demands"]
+            assert isinstance(demands, list) and len(demands) == 2
+            dr = sorted(demands, key=lambda x: x["priority"])  # type: ignore[arg-type]
+            assert dr[0]["placement_ratio"] == 0.8 and dr[0]["priority"] == 0
+            assert dr[1]["placement_ratio"] == 1.0 and dr[1]["priority"] == 1
+            summary = result["summary"]
+            assert summary["total_offered_gbps"] == 150.0
+            assert summary["total_placed_gbps"] == 130.0
+            from pytest import approx
+
+            assert summary["overall_ratio"] == approx(130.0 / 150.0)
 
     def test_demand_placement_analysis_zero_total_demand(self) -> None:
         """Handles zero total demand without division by zero."""
@@ -240,9 +248,15 @@ class TestDemandPlacementAnalysis:
                 placement_rounds=1,
             )
 
-            assert isinstance(result, list)
-            assert len(result) == 1
-            assert result[0]["value"] == 0.0
+            assert isinstance(result, dict)
+            assert "demands" in result and "summary" in result
+            demands = result["demands"]
+            assert isinstance(demands, list) and len(demands) == 1
+            assert demands[0]["placement_ratio"] == 0.0
+            summary = result["summary"]
+            assert summary["total_offered_gbps"] == 0.0
+            assert summary["total_placed_gbps"] == 0.0
+            assert summary["overall_ratio"] == 1.0
 
 
 class TestSensitivityAnalysis:

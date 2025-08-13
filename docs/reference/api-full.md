@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 13, 2025 at 00:54 UTC
+Generated from source code on: August 13, 2025 at 15:44 UTC
 
 Modules auto-discovered: 67
 
@@ -1529,6 +1529,7 @@ placement method.
 **Methods:**
 
 - `deep_copy(self) -> 'FlowPolicy'` - Return a deep copy of this policy including flows.
+- `get_metrics(self) -> 'Dict[str, float]'` - Return cumulative placement metrics for this policy instance.
 - `place_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', volume: 'float', target_flow_volume: 'Optional[float]' = None, min_flow: 'Optional[float]' = None) -> 'Tuple[float, float]'` - Place demand volume on the graph by splitting or creating flows as needed.
 - `rebalance_demand(self, flow_graph: 'StrictMultiDiGraph', src_node: 'NodeID', dst_node: 'NodeID', flow_class: 'Hashable', target_flow_volume: 'float') -> 'Tuple[float, float]'` - Rebalance demand across existing flows towards the target volume per flow.
 - `remove_demand(self, flow_graph: 'StrictMultiDiGraph') -> 'None'` - Removes all flows from the network graph without clearing internal state.
@@ -1873,8 +1874,15 @@ Manage expansion and placement of traffic demands on a `Network`.
       on a configurable 'mode' ("combine" or "pairwise").
   3) Each Demand is associated with a FlowPolicy, which handles how flows
      are placed (split across paths, balancing, etc.).
-  4) Provides methods to place all demands incrementally with optional
-     re-optimization, reset usage, and retrieve flow/usage summaries.
+     4) Provides methods to place all demands incrementally with optional
+      re-optimization, reset usage, and retrieve flow/usage summaries.
+
+ Auto rounds semantics:
+
+- placement_rounds="auto" performs up to a small number of fairness passes
+
+     (at most 3), with early stop when diminishing returns are detected. Each
+     pass asks the scheduler to place full leftovers without step splitting.
 
 In particular:
 
@@ -2480,18 +2488,24 @@ Manage package installation and imports for notebooks.
 
 ## ngraph.workflow.analysis.placement_matrix
 
-Placement envelope analysis utilities.
+Placement analysis utilities for placed Gbps envelopes (current design).
 
-Processes placement envelope results from TrafficMatrixPlacementAnalysis into
-placement matrices and summaries suitable for notebooks.
+Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with keys:
+
+- placed_gbps_envelopes: {"src->dst|prio=K": envelope}
+- offered_gbps_by_pair: {"src->dst|prio=K": float}
+- delivered_gbps_stats: {mean/min/max/stdev/samples/percentiles}
+
+and builds matrices of mean placed Gbps by pair (overall and per priority),
+with basic statistics.
 
 ### PlacementMatrixAnalyzer
 
-Analyze placement envelopes and display matrices/statistics.
+Analyze placed Gbps envelopes and display matrices/statistics.
 
 **Methods:**
 
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze placement envelopes for a given step.
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze placed Gbps envelopes for a given step.
 - `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
 - `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Display analysis results in notebook format.
@@ -2978,9 +2992,10 @@ Attributes:
 
 Traffic matrix demand placement workflow component.
 
-Executes Monte Carlo analysis of traffic demand placement under failures using
-FailureManager. Takes a named traffic matrix from the scenario's
-TrafficMatrixSet. Optionally includes a baseline iteration (no failures).
+Monte Carlo analysis of traffic demand placement under failures using
+FailureManager. Produces per-iteration delivered bandwidth samples and
+per-demand placed-bandwidth envelopes, enabling direct computation of
+delivered bandwidth at availability percentiles.
 
 YAML Configuration Example:
 
@@ -2988,35 +3003,37 @@ YAML Configuration Example:
 
 - step_type: TrafficMatrixPlacementAnalysis
 
-        name: "tm_placement_monte_carlo"
-        matrix_name: "default"           # Required: Name of traffic matrix to use
-        failure_policy: "random_failures" # Optional: Named failure policy
-        iterations: 100                    # Number of Monte Carlo trials
-        parallelism: 4                     # Number of worker processes
-        placement_rounds: "auto"          # Optimization rounds per priority (int or "auto")
-        baseline: true                     # Include baseline iteration first
-        seed: 42                           # Optional reproducible seed
-        store_failure_patterns: false      # Store failure patterns if needed
-        include_flow_details: true         # Collect per-demand cost distribution and edges
-        alpha: 1.0                        # Optional scaling factor for all demands
+        name: "tm_placement"
+        matrix_name: "default"            # Required
+        failure_policy: "random_failures"  # Optional
+        iterations: 100                    # Monte Carlo trials
+        parallelism: auto                  # Workers (int or "auto")
+        placement_rounds: "auto"           # Optimization rounds per priority
+        baseline: false                    # Include baseline iteration first
+        seed: 42                           # Optional seed
+        store_failure_patterns: false
+        include_flow_details: false
+        alpha: 1.0                         # Float or "auto" to use MSD alpha_star
+        availability_percentiles: [50, 90, 95, 99, 99.9, 99.99]
 
 Results stored in `scenario.results` under the step name:
 
-- placement_envelopes: Per-demand placement ratio envelopes with statistics
+- offered_gbps_by_pair: {"src->dst|prio=K": float}
+- placed_gbps_envelopes: {pair_key: {frequencies, min, max, mean, stdev, total_samples, src, dst, priority}}
+- delivered_gbps_samples: [float, ...]  # total placed per iteration
+- delivered_gbps_stats: {mean, min, max, stdev, samples, percentiles: {"p50": v, ...}}
 
-      When ``include_flow_details`` is true, each envelope also includes
-      ``flow_summary_stats`` with aggregated ``cost_distribution_stats`` and
-      ``edge_usage_frequencies``.
+      Also flattened keys per percentile, e.g., delivered_gbps_p99_99.
 
 - failure_pattern_results: Failure pattern mapping (if requested)
-- metadata: Execution metadata (iterations, parallelism, baseline, etc.)
+- metadata: Execution metadata (iterations, parallelism, baseline, alpha, etc.)
 
 ### TrafficMatrixPlacementAnalysis
 
 Monte Carlo demand placement analysis using a named traffic matrix.
 
 Attributes:
-    matrix_name: Name of the traffic matrix in scenario.traffic_matrix_set.
+    matrix_name: Name of the traffic matrix to analyze.
     failure_policy: Optional policy name in scenario.failure_policy_set.
     iterations: Number of Monte Carlo iterations.
     parallelism: Number of parallel worker processes.
@@ -3024,14 +3041,9 @@ Attributes:
     baseline: Include baseline iteration without failures first.
     seed: Optional seed for reproducibility.
     store_failure_patterns: Whether to store failure pattern results.
-    include_flow_details: If True, collect per-demand cost distribution and
-        edges used per iteration, and aggregate into ``flow_summary_stats``
-        on each placement envelope.
-    alpha: Scaling factor applied to all demand values prior to analysis.
-        Accepts a positive float or the string "auto". When "auto", the
-        step looks up the most recent prior MaximumSupportedDemandAnalysis for
-        the same matrix with identical base demands and uses its alpha_star.
-        Raises ValueError if no suitable MSD result is found or validation fails.
+    include_flow_details: If True, include edges used per demand.
+    alpha: Float scale or "auto" to use MSD alpha_star.
+    availability_percentiles: Percentiles to compute for delivered Gbps.
 
 **Attributes:**
 
@@ -3046,11 +3058,12 @@ Attributes:
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
 - `alpha` (float | str) = 1.0
+- `availability_percentiles` (list[float]) = (50.0, 90.0, 95.0, 99.0, 99.9, 99.99)
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute demand placement Monte Carlo analysis.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute demand placement Monte Carlo analysis and store results.
 
 ---
 
@@ -3233,6 +3246,7 @@ Attributes:
 **Methods:**
 
 - `expand_to_values(self) -> 'List[float]'` - Expand frequency map back to individual values.
+- `from_dict(data: 'Dict[str, Any]') -> "'CapacityEnvelope'"` - Construct a CapacityEnvelope from a dictionary.
 - `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]', flow_summaries: 'List[Any] | None' = None) -> "'CapacityEnvelope'"` - Create envelope from capacity values and optional flow summaries.
 - `get_percentile(self, percentile: 'float') -> 'float'` - Calculate percentile from frequency distribution.
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
@@ -3255,9 +3269,11 @@ Attributes:
 - `capacity_matrix` (Dict[str, float])
 - `count` (int)
 - `is_baseline` (bool) = False
+- `_pattern_key_cache` (str)
 
 **Methods:**
 
+- `from_dict(data: 'Dict[str, Any]') -> "'FailurePatternResult'"` - Construct FailurePatternResult from a dictionary.
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### PlacementEnvelope
@@ -3294,6 +3310,7 @@ Attributes:
 
 **Methods:**
 
+- `from_dict(data: 'Dict[str, Any]') -> "'PlacementEnvelope'"` - Construct a PlacementEnvelope from a dictionary.
 - `from_values(source: 'str', sink: 'str', mode: 'str', priority: 'int', ratios: 'List[float]', rounding_decimals: 'int' = 4) -> "'PlacementEnvelope'"`
 - `to_dict(self) -> 'Dict[str, Any]'`
 
@@ -3390,23 +3407,30 @@ failure analysis scenarios.
 Note: This module is distinct from ngraph.workflow.analysis, which provides
 notebook visualization components for workflow results.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'list[FlowResult]'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'dict[str, Any]'
 
 Analyze traffic demand placement success rates.
+
+Returns a structured dictionary per iteration containing per-demand offered
+and placed volumes (in Gbit/s) and an iteration-level summary. This shape
+is designed for downstream computation of delivered bandwidth percentiles
+without having to reconstruct per-iteration joint distributions.
 
 Args:
     network_view: NetworkView with potential exclusions applied.
     demands_config: List of demand configurations (serializable dicts).
     placement_rounds: Number of placement optimization rounds.
+    include_flow_details: If True, include edges used per demand.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    List of FlowResult dicts, one per expanded demand, with metric=
-    "placement_ratio" and value in [0,1]. When include_flow_details is True,
-    stats contains:
+    Dict with keys:
 
-- cost_distribution: {cost: placed_volume}
-- edges: [edge_id,...] with edges_kind="used"
+- "demands": list of per-demand dicts with fields
+
+          {src,dst,priority,offered_gbps,placed_gbps,placement_ratio,edges?}
+
+- "summary": {total_offered_gbps,total_placed_gbps,overall_ratio}
 
 ### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[FlowResult]'
 

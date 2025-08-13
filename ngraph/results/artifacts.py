@@ -11,6 +11,7 @@ simulations in a JSON-serializable form:
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
@@ -250,6 +251,39 @@ class CapacityEnvelope:
 
         return result
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CapacityEnvelope":
+        """Construct a CapacityEnvelope from a dictionary.
+
+        Args:
+            data: Dictionary as produced by to_dict().
+
+        Returns:
+            CapacityEnvelope
+        """
+        # Frequencies keys may arrive as strings via JSON; normalize to float
+        freqs_raw = data.get("frequencies", {}) or {}
+        freqs: Dict[float, int] = {}
+        for k, v in freqs_raw.items():
+            try:
+                key_f = float(k)
+            except (TypeError, ValueError):
+                key_f = float(k)  # Will raise again if irrecoverable
+            freqs[key_f] = int(v)
+
+        return cls(
+            source_pattern=str(data.get("source", "")),
+            sink_pattern=str(data.get("sink", "")),
+            mode=str(data.get("mode", "combine")),
+            frequencies=freqs,
+            min_capacity=float(data.get("min", 0.0)),
+            max_capacity=float(data.get("max", 0.0)),
+            mean_capacity=float(data.get("mean", 0.0)),
+            stdev_capacity=float(data.get("stdev", 0.0)),
+            total_samples=int(data.get("total_samples", 0)),
+            flow_summary_stats=dict(data.get("flow_summary_stats", {})),
+        )
+
     def get_percentile(self, percentile: float) -> float:
         """Calculate percentile from frequency distribution.
 
@@ -307,6 +341,7 @@ class FailurePatternResult:
     capacity_matrix: Dict[str, float]
     count: int
     is_baseline: bool = False
+    _pattern_key_cache: str = field(default="", init=False, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -320,13 +355,36 @@ class FailurePatternResult:
 
     @property
     def pattern_key(self) -> str:
-        """Generate a unique key for this failure pattern."""
+        """Generate a deterministic key for this failure pattern.
+
+        Uses a stable SHA1 hash of the sorted excluded entity list to avoid
+        Python's randomized hash() variability across processes.
+        """
         if self.is_baseline:
             return "baseline"
 
-        # Create deterministic key from excluded entities
+        # Cache to avoid recomputation when accessed repeatedly
+        if self._pattern_key_cache:
+            return self._pattern_key_cache
+
+        # Create deterministic key from excluded entities using fast BLAKE2s
         excluded_str = ",".join(sorted(self.excluded_nodes + self.excluded_links))
-        return f"pattern_{hash(excluded_str) & 0x7FFFFFFF:08x}"
+        digest = hashlib.blake2s(
+            excluded_str.encode("utf-8"), digest_size=8
+        ).hexdigest()
+        self._pattern_key_cache = f"pattern_{digest}"
+        return self._pattern_key_cache
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "FailurePatternResult":
+        """Construct FailurePatternResult from a dictionary."""
+        return cls(
+            excluded_nodes=list(data.get("excluded_nodes", [])),
+            excluded_links=list(data.get("excluded_links", [])),
+            capacity_matrix=dict(data.get("capacity_matrix", {})),
+            count=int(data.get("count", 0)),
+            is_baseline=bool(data.get("is_baseline", False)),
+        )
 
 
 @dataclass
@@ -415,3 +473,25 @@ class PlacementEnvelope:
             "stdev": self.stdev,
             "total_samples": self.total_samples,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PlacementEnvelope":
+        """Construct a PlacementEnvelope from a dictionary."""
+        freqs_raw = data.get("frequencies", {}) or {}
+        freqs: Dict[float, int] = {}
+        for k, v in freqs_raw.items():
+            key_f = float(k)
+            freqs[key_f] = int(v)
+
+        return cls(
+            source=str(data.get("source", "")),
+            sink=str(data.get("sink", "")),
+            mode=str(data.get("mode", "pairwise")),
+            priority=int(data.get("priority", 0)),
+            frequencies=freqs,
+            min=float(data.get("min", 0.0)),
+            max=float(data.get("max", 0.0)),
+            mean=float(data.get("mean", 0.0)),
+            stdev=float(data.get("stdev", 0.0)),
+            total_samples=int(data.get("total_samples", 0)),
+        )

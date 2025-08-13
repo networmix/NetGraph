@@ -1,32 +1,35 @@
 """Traffic matrix demand placement workflow component.
 
-Executes Monte Carlo analysis of traffic demand placement under failures using
-FailureManager. Takes a named traffic matrix from the scenario's
-TrafficMatrixSet. Optionally includes a baseline iteration (no failures).
+Monte Carlo analysis of traffic demand placement under failures using
+FailureManager. Produces per-iteration delivered bandwidth samples and
+per-demand placed-bandwidth envelopes, enabling direct computation of
+delivered bandwidth at availability percentiles.
 
 YAML Configuration Example:
 
     workflow:
       - step_type: TrafficMatrixPlacementAnalysis
-        name: "tm_placement_monte_carlo"
-        matrix_name: "default"           # Required: Name of traffic matrix to use
-        failure_policy: "random_failures" # Optional: Named failure policy
-        iterations: 100                    # Number of Monte Carlo trials
-        parallelism: 4                     # Number of worker processes
-        placement_rounds: "auto"          # Optimization rounds per priority (int or "auto")
-        baseline: true                     # Include baseline iteration first
-        seed: 42                           # Optional reproducible seed
-        store_failure_patterns: false      # Store failure patterns if needed
-        include_flow_details: true         # Collect per-demand cost distribution and edges
-        alpha: 1.0                        # Optional scaling factor for all demands
+        name: "tm_placement"
+        matrix_name: "default"            # Required
+        failure_policy: "random_failures"  # Optional
+        iterations: 100                    # Monte Carlo trials
+        parallelism: auto                  # Workers (int or "auto")
+        placement_rounds: "auto"           # Optimization rounds per priority
+        baseline: false                    # Include baseline iteration first
+        seed: 42                           # Optional seed
+        store_failure_patterns: false
+        include_flow_details: false
+        alpha: 1.0                         # Float or "auto" to use MSD alpha_star
+        availability_percentiles: [50, 90, 95, 99, 99.9, 99.99]
 
 Results stored in `scenario.results` under the step name:
-    - placement_envelopes: Per-demand placement ratio envelopes with statistics
-      When ``include_flow_details`` is true, each envelope also includes
-      ``flow_summary_stats`` with aggregated ``cost_distribution_stats`` and
-      ``edge_usage_frequencies``.
+    - offered_gbps_by_pair: {"src->dst|prio=K": float}
+    - placed_gbps_envelopes: {pair_key: {frequencies, min, max, mean, stdev, total_samples, src, dst, priority}}
+    - delivered_gbps_samples: [float, ...]  # total placed per iteration
+    - delivered_gbps_stats: {mean, min, max, stdev, samples, percentiles: {"p50": v, ...}}
+      Also flattened keys per percentile, e.g., delivered_gbps_p99_99.
     - failure_pattern_results: Failure pattern mapping (if requested)
-    - metadata: Execution metadata (iterations, parallelism, baseline, etc.)
+    - metadata: Execution metadata (iterations, parallelism, baseline, alpha, etc.)
 """
 
 from __future__ import annotations
@@ -52,7 +55,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
     """Monte Carlo demand placement analysis using a named traffic matrix.
 
     Attributes:
-        matrix_name: Name of the traffic matrix in scenario.traffic_matrix_set.
+        matrix_name: Name of the traffic matrix to analyze.
         failure_policy: Optional policy name in scenario.failure_policy_set.
         iterations: Number of Monte Carlo iterations.
         parallelism: Number of parallel worker processes.
@@ -60,14 +63,9 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         baseline: Include baseline iteration without failures first.
         seed: Optional seed for reproducibility.
         store_failure_patterns: Whether to store failure pattern results.
-        include_flow_details: If True, collect per-demand cost distribution and
-            edges used per iteration, and aggregate into ``flow_summary_stats``
-            on each placement envelope.
-        alpha: Scaling factor applied to all demand values prior to analysis.
-            Accepts a positive float or the string "auto". When "auto", the
-            step looks up the most recent prior MaximumSupportedDemandAnalysis for
-            the same matrix with identical base demands and uses its alpha_star.
-            Raises ValueError if no suitable MSD result is found or validation fails.
+        include_flow_details: If True, include edges used per demand.
+        alpha: Float scale or "auto" to use MSD alpha_star.
+        availability_percentiles: Percentiles to compute for delivered Gbps.
     """
 
     matrix_name: str = ""
@@ -80,6 +78,14 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
     store_failure_patterns: bool = False
     include_flow_details: bool = False
     alpha: float | str = 1.0
+    availability_percentiles: list[float] = (
+        50.0,
+        90.0,
+        95.0,
+        99.0,
+        99.9,
+        99.99,
+    )  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         """Validate parameters.
@@ -117,13 +123,10 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         return max(1, int(parallelism))
 
     def run(self, scenario: "Scenario") -> None:
-        """Execute demand placement Monte Carlo analysis.
+        """Execute demand placement Monte Carlo analysis and store results.
 
-        Args:
-            scenario: Scenario containing network, failure policies, and traffic matrices.
-
-        Raises:
-            ValueError: If matrix_name is not provided or not found in the scenario.
+        Produces per-pair placed-Gbps envelopes and per-iteration total
+        delivered bandwidth samples with percentile statistics.
         """
         if not self.matrix_name:
             raise ValueError(
@@ -153,6 +156,19 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             raise ValueError(
                 f"Traffic matrix '{self.matrix_name}' not found in scenario."
             ) from exc
+
+        # Snapshot base demands (unscaled) for context
+        base_demands: list[dict[str, Any]] = [
+            {
+                "source_path": getattr(td, "source_path", ""),
+                "sink_path": getattr(td, "sink_path", ""),
+                "demand": float(getattr(td, "demand", 0.0)),
+                "mode": getattr(td, "mode", "pairwise"),
+                "priority": int(getattr(td, "priority", 0)),
+                "flow_policy_config": getattr(td, "flow_policy_config", None),
+            }
+            for td in td_list
+        ]
 
         # Determine effective alpha
         effective_alpha = self._resolve_alpha_from_results_if_needed(scenario, td_list)
@@ -213,7 +229,7 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             # Logging must not raise
             pass
 
-        # Run via FailureManager convenience method
+        # Run via FailureManager convenience method (returns per-iteration dicts)
         fm = FailureManager(
             network=scenario.network,
             failure_policy_set=scenario.failure_policy_set,
@@ -240,122 +256,130 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
             float(results.raw_results.get("overall_placement_ratio", 0.0)),
         )
 
-        # Build per-demand placement envelopes similar to capacity envelopes
+        # Aggregate per-iteration outputs into:
+        # - per-pair placed_gbps envelopes
+        # - per-iteration total delivered_gbps samples
         from collections import defaultdict
 
-        from ngraph.results.artifacts import PlacementEnvelope
+        per_pair_values: dict[tuple[str, str, int], list[float]] = defaultdict(list)
+        per_pair_offered: dict[tuple[str, str, int], float] = {}
+        delivered_samples: list[float] = []
 
-        # Single-pass accumulation across all iterations
-        # - placement ratios always
-        # - optional cost distributions and edge usage when include_flow_details=True
-        per_demand_ratios: dict[tuple[str, str, int], list[float]] = defaultdict(list)
-        cost_map: dict[tuple[str, str, int], dict[float, list[float]]] | None = None
-        edge_counts: dict[tuple[str, str, int], dict[str, int]] | None = None
-
-        if self.include_flow_details:
-            cost_map = defaultdict(lambda: defaultdict(list))
-            edge_counts = defaultdict(lambda: defaultdict(int))
-
-        for iter_result in results.raw_results.get("results", []):
-            # Unified FlowResult list only (strict)
-            if not isinstance(iter_result, list):
+        raw_list = results.raw_results.get("results", [])
+        for iter_result in raw_list:
+            if not isinstance(iter_result, dict):
                 raise TypeError(
-                    f"Invalid iteration result type: expected list[FlowResult], got {type(iter_result).__name__}"
+                    f"Invalid iteration result type: expected dict, got {type(iter_result).__name__}"
                 )
-            for fr in iter_result:
-                if not isinstance(fr, dict):
-                    raise TypeError(
-                        f"Invalid FlowResult entry: expected dict, got {type(fr).__name__}"
-                    )
-                metric = fr.get("metric")
-                if metric != "placement_ratio":
-                    raise ValueError(
-                        f"Unexpected FlowResult metric: {metric!r} (expected 'placement_ratio')"
-                    )
-                src = str(fr.get("src", ""))
-                dst = str(fr.get("dst", ""))
-                prio = int(fr.get("priority", 0))
-                ratio = float(fr.get("value", 0.0))
-                per_demand_ratios[(src, dst, prio)].append(ratio)
+            demands_list = iter_result.get("demands")
+            summary = iter_result.get("summary")
+            if not isinstance(demands_list, list) or not isinstance(summary, dict):
+                raise ValueError(
+                    "Iteration result must have 'demands' list and 'summary' dict"
+                )
 
-                if (
-                    self.include_flow_details
-                    and cost_map is not None
-                    and edge_counts is not None
-                ):
-                    stats = fr.get("stats") or {}
-                    cd = (
-                        stats.get("cost_distribution")
-                        if isinstance(stats, dict)
-                        else None
-                    )
-                    if isinstance(cd, dict):
-                        for cost_key, vol in cd.items():
-                            try:
-                                cost_val = float(cost_key)
-                                vol_f = float(vol)
-                            except (TypeError, ValueError) as exc:
-                                raise ValueError(
-                                    f"Invalid cost_distribution entry for {src}->{dst} prio={prio}: {cost_key!r}={vol!r}: {exc}"
-                                ) from exc
-                            cost_map[(src, dst, prio)][cost_val].append(vol_f)
+            delivered = float(summary.get("total_placed_gbps", 0.0))
+            delivered_samples.append(delivered)
 
-                    edges = stats.get("edges") if isinstance(stats, dict) else None
-                    if isinstance(edges, list):
-                        for e in edges:
-                            edge_counts[(src, dst, prio)][str(e)] += 1
+            for rec in demands_list:
+                src = str(rec.get("src", ""))
+                dst = str(rec.get("dst", ""))
+                prio = int(rec.get("priority", 0))
+                placed = float(rec.get("placed_gbps", 0.0))
+                offered = float(rec.get("offered_gbps", 0.0))
+                key = (src, dst, prio)
+                per_pair_values[key].append(placed)
+                # Offered should be constant; set from first occurrence
+                if key not in per_pair_offered:
+                    per_pair_offered[key] = offered
 
-        # Create PlacementEnvelope per demand; use 'pairwise' as mode because expanded demands are per pair
-        envelopes: dict[str, dict[str, Any]] = {}
-        for (src, dst, prio), ratios in per_demand_ratios.items():
-            env = PlacementEnvelope.from_values(
-                source=src,
-                sink=dst,
-                mode="pairwise",
-                priority=prio,
-                ratios=ratios,
-            )
-            key = f"{src}->{dst}|prio={prio}"
-            data = env.to_dict()
-            data["src"] = src
-            data["dst"] = dst
-            data["metric"] = "placement_ratio"
-            envelopes[key] = data
+        # Helper: build envelope dict from values
+        def _envelope(values: list[float]) -> dict[str, Any]:
+            if not values:
+                return {
+                    "frequencies": {},
+                    "min": 0.0,
+                    "max": 0.0,
+                    "mean": 0.0,
+                    "stdev": 0.0,
+                    "total_samples": 0,
+                }
+            from math import sqrt
 
-        # If flow details were requested, aggregate them into per-demand flow_summary_stats
-        if (
-            self.include_flow_details
-            and cost_map is not None
-            and edge_counts is not None
-        ):
-            # Reduce accumulations into stats and attach to envelopes
-            for (src, dst, prio), costs in cost_map.items():
-                key = f"{src}->{dst}|prio={prio}"
-                if key not in envelopes:
-                    raise KeyError(
-                        f"Envelope not found for demand {key} during flow details aggregation"
-                    )
-                cost_stats: dict[float, dict[str, Any]] = {}
-                for cost, vols in costs.items():
-                    if vols:
-                        freq = {v: vols.count(v) for v in set(vols)}
-                        cost_stats[float(cost)] = {
-                            "mean": sum(vols) / len(vols),
-                            "min": min(vols),
-                            "max": max(vols),
-                            "total_samples": len(vols),
-                            "frequencies": freq,
-                        }
-                flow_stats: dict[str, Any] = {"cost_distribution_stats": cost_stats}
-                # Attach edge usage frequencies if collected
-                ec = edge_counts.get((src, dst, prio))
-                if ec:
-                    flow_stats["edge_usage_frequencies"] = dict(ec)
-                envelopes[key]["flow_summary_stats"] = flow_stats
+            freqs: dict[float, int] = {}
+            total = 0.0
+            sum_sq = 0.0
+            vmin = float("inf")
+            vmax = float("-inf")
+            for v in values:
+                freqs[v] = freqs.get(v, 0) + 1
+                total += v
+                sum_sq += v * v
+                vmin = min(vmin, v)
+                vmax = max(vmax, v)
+            n = len(values)
+            mean = total / n
+            var = max(0.0, (sum_sq / n) - (mean * mean))
+            return {
+                "frequencies": freqs,
+                "min": vmin,
+                "max": vmax,
+                "mean": mean,
+                "stdev": sqrt(var),
+                "total_samples": n,
+            }
 
-        # Convert to serializable dicts for results export
-        # Store serializable outputs
-        scenario.results.put(self.name, "placement_envelopes", envelopes)
+        # Build placed_gbps_envelopes
+        placed_envs: dict[str, dict[str, Any]] = {}
+        for (src, dst, prio), vals in per_pair_values.items():
+            env = _envelope(vals)
+            env["src"], env["dst"], env["priority"] = src, dst, prio
+            placed_envs[f"{src}->{dst}|prio={prio}"] = env
+
+        # Offered map keyed the same way
+        offered_by_pair = {
+            f"{src}->{dst}|prio={prio}": float(off)
+            for (src, dst, prio), off in per_pair_offered.items()
+        }
+
+        # Delivered samples + stats
+        def _percentile(sorted_vals: list[float], p: float) -> float:
+            if not sorted_vals:
+                return 0.0
+            if p <= 0:
+                return sorted_vals[0]
+            if p >= 100:
+                return sorted_vals[-1]
+            k = int(round((p / 100.0) * (len(sorted_vals) - 1)))
+            return float(sorted_vals[max(0, min(len(sorted_vals) - 1, k))])
+
+        samples_sorted = sorted(delivered_samples)
+        from statistics import mean, pstdev
+
+        stats_obj: dict[str, Any] = {
+            "samples": len(samples_sorted),
+            "min": float(samples_sorted[0]) if samples_sorted else 0.0,
+            "max": float(samples_sorted[-1]) if samples_sorted else 0.0,
+            "mean": float(mean(samples_sorted)) if samples_sorted else 0.0,
+            "stdev": float(pstdev(samples_sorted)) if samples_sorted else 0.0,
+            "percentiles": {},
+        }
+        # Ensure list for iteration
+        pcts = list(self.availability_percentiles)
+        # Normalize potential tuple default
+        pcts = [float(p) for p in pcts]
+        for p in pcts:
+            key = f"p{str(p).replace('.', '_')}"
+            stats_obj["percentiles"][key] = _percentile(samples_sorted, p)
+
+        # Store outputs
+        scenario.results.put(self.name, "offered_gbps_by_pair", offered_by_pair)
+        scenario.results.put(self.name, "placed_gbps_envelopes", placed_envs)
+        scenario.results.put(self.name, "delivered_gbps_samples", delivered_samples)
+        scenario.results.put(self.name, "delivered_gbps_stats", stats_obj)
+        # Flatten percentile keys for convenience
+        for p, val in stats_obj["percentiles"].items():
+            scenario.results.put(self.name, f"delivered_gbps_{p}", float(val))
         if self.store_failure_patterns and results.failure_patterns:
             scenario.results.put(
                 self.name, "failure_pattern_results", results.failure_patterns
@@ -370,23 +394,39 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
         except Exception:  # Fallback to original metadata if unexpected type
             step_metadata = results.metadata
         scenario.results.put(self.name, "metadata", step_metadata)
+        # Store context for reproducibility
+        scenario.results.put(
+            self.name,
+            "context",
+            {
+                "matrix_name": self.matrix_name,
+                "placement_rounds": self.placement_rounds,
+                "include_flow_details": self.include_flow_details,
+                "availability_percentiles": list(self.availability_percentiles),
+            },
+        )
+        scenario.results.put(self.name, "base_demands", base_demands)
         # Provide a concise per-step debug summary to aid troubleshooting in CI logs
         try:
-            env_count = len(envelopes)
-            priorities = sorted({int(k.split("=", 1)[1]) for k in envelopes.keys()})
+            env_count = len(placed_envs)
+            prios = sorted(
+                {int(k.split("=", 1)[1]) for k in placed_envs.keys() if "|prio=" in k}
+            )
             logger.debug(
-                "Placement envelopes: %d demands; priorities=%s",
+                "Placed-Gbps envelopes: %d demands; priorities=%s",
                 env_count,
-                ", ".join(map(str, priorities)) if priorities else "-",
+                ", ".join(map(str, prios)) if prios else "-",
             )
         except Exception:
             pass
 
         # INFO-level outcome summary for workflow users
         try:
+            # Materialize DemandPlacementResults for potential downstream use
+            # (not used directly here; kept for API symmetry and debugging hooks)
             from ngraph.monte_carlo.results import DemandPlacementResults
 
-            dpr = DemandPlacementResults(
+            _ = DemandPlacementResults(
                 raw_results=results.raw_results,
                 iterations=results.iterations,
                 baseline=results.baseline,
@@ -394,20 +434,15 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 metadata=results.metadata,
             )
 
-            # Compute per-iteration success rates and summary statistics
-            dist_df = dpr.success_rate_distribution()
-            stats = dpr.summary_statistics() if not dist_df.empty else {}
-
-            # Also compute an overall demand-level mean from envelopes for validation
+            # Compute concise distribution of delivered samples
             try:
-                envelope_means = [
-                    float(env.get("mean", 0.0)) for env in envelopes.values()
-                ]
-                overall_envelope_mean = (
-                    sum(envelope_means) / len(envelope_means) if envelope_means else 0.0
-                )
+                mean_v = float(stats_obj.get("mean", 0.0))
+                p50_v = float(stats_obj["percentiles"].get("p50", 0.0))
+                p95_v = float(stats_obj["percentiles"].get("p95", 0.0))
+                min_v = float(stats_obj.get("min", 0.0))
+                max_v = float(stats_obj.get("max", 0.0))
             except Exception:
-                overall_envelope_mean = 0.0
+                mean_v = p50_v = p95_v = min_v = max_v = 0.0
 
             # Add a concise per-step summary object to the results store
             scenario.results.put(
@@ -423,9 +458,12 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                     "baseline": bool(results.metadata.get("baseline", False)),
                     "alpha": float(step_metadata.get("alpha", 1.0)),
                     "alpha_source": step_metadata.get("alpha_source", None),
-                    "demand_count": len(envelopes),
-                    "success_rate_stats": stats or {},
-                    "overall_envelope_mean": float(overall_envelope_mean),
+                    "demand_count": len(per_pair_values),
+                    "delivered_mean_gbps": mean_v,
+                    "delivered_p50_gbps": p50_v,
+                    "delivered_p95_gbps": p95_v,
+                    "delivered_min_gbps": min_v,
+                    "delivered_max_gbps": max_v,
                 },
             )
 
@@ -450,11 +488,12 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 else ("explicit" if not isinstance(self.alpha, str) else "auto")
             )
 
-            mean_v = float(stats.get("mean", 0.0)) if stats else 0.0
-            p50_v = float(stats.get("p50", 0.0)) if stats else 0.0
-            p95_v = float(stats.get("p95", 0.0)) if stats else 0.0
-            min_v = float(stats.get("min", 0.0)) if stats else 0.0
-            max_v = float(stats.get("max", 0.0)) if stats else 0.0
+            # Use delivered samples stats for logging
+            mean_v = float(stats_obj.get("mean", 0.0))
+            p50_v = float(stats_obj["percentiles"].get("p50", 0.0))
+            p95_v = float(stats_obj["percentiles"].get("p95", 0.0))
+            min_v = float(stats_obj.get("min", 0.0))
+            max_v = float(stats_obj.get("max", 0.0))
 
             duration_sec = time.perf_counter() - t0
             rounds_str = str(self.placement_rounds)
@@ -464,13 +503,13 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 (
                     "Placement summary: name=%s alpha=%.6g source=%s "
                     "demands=%d iters=%d workers=%d rounds=%s baseline=%s "
-                    "seed=%s duration=%.3fs iter_mean=%.4f p50=%.4f p95=%.4f "
-                    "min=%.4f max=%.4f env_mean=%.4f"
+                    "seed=%s duration=%.3fs delivered_mean=%.4f p50=%.4f p95=%.4f "
+                    "min=%.4f max=%.4f"
                 ),
                 self.name,
                 alpha_value,
                 alpha_source_str,
-                len(envelopes),
+                len(per_pair_values),
                 iterations,
                 workers,
                 rounds_str,
@@ -482,7 +521,6 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                 p95_v,
                 min_v,
                 max_v,
-                overall_envelope_mean,
             )
         except Exception:
             # Logging must not raise

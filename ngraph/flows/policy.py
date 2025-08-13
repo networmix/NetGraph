@@ -140,6 +140,10 @@ class FlowPolicy:
         # Snapshot of last place_demand call
         self.last_metrics: Dict[str, float] = {}
 
+        # Cache for edge selectors to avoid rebuilding fabric callables
+        # Keyed by (edge_select, effective_select_value)
+        self._edge_selector_cache: Dict[Tuple[base.EdgeSelect, Any], Callable] = {}
+
         # Validate static_paths versus max_flow_count constraints.
         if static_paths:
             if max_flow_count is not None and len(static_paths) != max_flow_count:
@@ -224,13 +228,31 @@ class FlowPolicy:
         Raises:
             ValueError: If the selected path algorithm is not supported.
         """
-        edge_select_func = edge_select.edge_select_fabric(
-            edge_select=self.edge_select,
-            select_value=min_flow or self.edge_select_value,
-            excluded_edges=excluded_edges,
-            excluded_nodes=excluded_nodes,
-            edge_select_func=self.edge_select_func,
+        effective_select_value = (
+            min_flow if min_flow is not None else self.edge_select_value
         )
+        # Reuse a cached selector when no custom function is provided
+        if self.edge_select_func is None:
+            cache_key = (self.edge_select, effective_select_value)
+            edge_select_func = self._edge_selector_cache.get(cache_key)
+            if edge_select_func is None:
+                edge_select_func = edge_select.edge_select_fabric(
+                    edge_select=self.edge_select,
+                    select_value=effective_select_value,
+                    excluded_edges=None,
+                    excluded_nodes=None,
+                    edge_select_func=None,
+                )
+                self._edge_selector_cache[cache_key] = edge_select_func
+        else:
+            # Respect a user-provided selector (do not cache)
+            edge_select_func = edge_select.edge_select_fabric(
+                edge_select=self.edge_select,
+                select_value=effective_select_value,
+                excluded_edges=None,
+                excluded_nodes=None,
+                edge_select_func=self.edge_select_func,
+            )
 
         if self.path_alg == base.PathAlg.SPF:
             path_func = spf.spf
@@ -250,6 +272,7 @@ class FlowPolicy:
             multipath=self.multipath,
             excluded_edges=excluded_edges,
             excluded_nodes=excluded_nodes,
+            dst_node=dst_node,
         )
 
         if dst_node in pred:
@@ -452,6 +475,22 @@ class FlowPolicy:
             RuntimeError: If an infinite loop is detected due to misconfigured flow policy
                          parameters, or if maximum iteration limit is exceeded.
         """
+        # If flows exist but reference edges that no longer exist (e.g., after
+        # a graph rebuild), prune them so that placement can recreate valid flows.
+        if self.flows:
+            edges = flow_graph.get_edges()
+            invalid = [
+                flow_index
+                for flow_index, flow in list(self.flows.items())
+                if any(
+                    eid not in edges
+                    for eid in getattr(flow.path_bundle, "edges", set())
+                )
+            ]
+            for flow_index in invalid:
+                # Remove from internal registry; nothing to remove from graph for stale ids
+                self.flows.pop(flow_index, None)
+
         if not self.flows:
             self._create_flows(flow_graph, src_node, dst_node, flow_class, min_flow)
 
@@ -490,25 +529,28 @@ class FlowPolicy:
                 # Occasional debug to aid troubleshooting of misconfigured policies
                 if consecutive_no_progress == 1 or (consecutive_no_progress % 25 == 0):
                     try:
-                        self._logger.debug(
-                            "place_demand no-progress: src=%s dst=%s vol_left=%.6g target=%.6g "
-                            "flows=%d queue=%d iters=%d last_cost=%s edge_sel=%s placement=%s multipath=%s",
-                            str(getattr(flow, "src_node", "")),
-                            str(getattr(flow, "dst_node", "")),
-                            float(volume),
-                            float(target_flow_volume),
-                            len(self.flows),
-                            len(flow_queue),
-                            total_iterations,
-                            str(
-                                getattr(
-                                    getattr(flow, "path_bundle", None), "cost", None
-                                )
-                            ),
-                            self.edge_select.name,
-                            self.flow_placement.name,
-                            str(self.multipath),
-                        )
+                        import logging as _logging
+
+                        if self._logger.isEnabledFor(_logging.DEBUG):
+                            self._logger.debug(
+                                "place_demand no-progress: src=%s dst=%s vol_left=%.6g target=%.6g "
+                                "flows=%d queue=%d iters=%d last_cost=%s edge_sel=%s placement=%s multipath=%s",
+                                str(getattr(flow, "src_node", "")),
+                                str(getattr(flow, "dst_node", "")),
+                                float(volume),
+                                float(target_flow_volume),
+                                len(self.flows),
+                                len(flow_queue),
+                                total_iterations,
+                                str(
+                                    getattr(
+                                        getattr(flow, "path_bundle", None), "cost", None
+                                    )
+                                ),
+                                self.edge_select.name,
+                                self.flow_placement.name,
+                                str(self.multipath),
+                            )
                     except Exception:
                         # Logging must not raise
                         pass
@@ -544,20 +586,23 @@ class FlowPolicy:
                 if recent_sum < threshold:
                     # Gracefully stop iterating for this demand; leave remaining volume.
                     try:
-                        self._logger.debug(
-                            "place_demand cutoff: src=%s dst=%s recent_sum=%.6g threshold=%.6g "
-                            "remaining=%.6g flows=%d iters=%d edge_sel=%s placement=%s multipath=%s",
-                            str(src_node),
-                            str(dst_node),
-                            float(recent_sum),
-                            float(threshold),
-                            float(volume),
-                            len(self.flows),
-                            total_iterations,
-                            self.edge_select.name,
-                            self.flow_placement.name,
-                            str(self.multipath),
-                        )
+                        import logging as _logging
+
+                        if self._logger.isEnabledFor(_logging.DEBUG):
+                            self._logger.debug(
+                                "place_demand cutoff: src=%s dst=%s recent_sum=%.6g threshold=%.6g "
+                                "remaining=%.6g flows=%d iters=%d edge_sel=%s placement=%s multipath=%s",
+                                str(src_node),
+                                str(dst_node),
+                                float(recent_sum),
+                                float(threshold),
+                                float(volume),
+                                len(self.flows),
+                                total_iterations,
+                                self.edge_select.name,
+                                self.flow_placement.name,
+                                str(self.multipath),
+                            )
                     except Exception:
                         pass
                     cutoff_triggered = True

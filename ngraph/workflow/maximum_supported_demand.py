@@ -252,14 +252,11 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
             "placement_rounds": self.placement_rounds,
         }
 
-        scenario.results.put(
-            self.name or self.__class__.__name__, "alpha_star", alpha_star
-        )
-        scenario.results.put(self.name or self.__class__.__name__, "context", context)
-        scenario.results.put(
-            self.name or self.__class__.__name__, "base_demands", base_demands
-        )
-        scenario.results.put(self.name or self.__class__.__name__, "probes", probes)
+        step_name = self.name
+        scenario.results.put(step_name, "alpha_star", alpha_star)
+        scenario.results.put(step_name, "context", context)
+        scenario.results.put(step_name, "base_demands", base_demands)
+        scenario.results.put(step_name, "probes", probes)
 
         # INFO-level outcome summary for CLI logs
         try:
@@ -375,17 +372,18 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
         decisions: list[bool] = []
         min_ratios: list[float] = []
 
-        for _ in range(max(1, int(seeds))):
-            # Build scaled temporary matrix
-            tmset = cls._build_scaled_matrix(base_demands, alpha)
+        # Build scaled matrix once per alpha and reuse a single TrafficManager across seeds
+        tmset = cls._build_scaled_matrix(base_demands, alpha)
+        tm = TrafficManager(
+            network=scenario.network,
+            traffic_matrix_set=tmset,
+            matrix_name="temp",
+        )
+        tm.build_graph(add_reverse=True)
 
-            # Place using TrafficManager
-            tm = TrafficManager(
-                network=scenario.network,
-                traffic_matrix_set=tmset,
-                matrix_name="temp",
-            )
-            tm.build_graph(add_reverse=True)
+        for _ in range(max(1, int(seeds))):
+            # Reset flows and re-expand demands idempotently
+            tm.reset_all_flow_usages()
             tm.expand_demands()
             tm.place_all_demands(placement_rounds=placement_rounds)
 

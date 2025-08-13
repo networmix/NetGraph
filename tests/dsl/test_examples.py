@@ -673,3 +673,91 @@ network:
     # Mesh between 2 leaf and 1 spine = 2 bidirectional adjacencies => 4 edges
     graph = scenario.network.to_strict_multidigraph()
     assert len(list(graph.edges())) == 4
+
+
+def test_attr_selector_with_expand_vars_inside_blueprint_paths():
+    """Attribute directive with expand_vars inside blueprint adjacency should not be prefixed.
+
+    Use different attribute names for source and target to avoid cross-connections and
+    validate that at least some edges are created when using attr: paths generated via
+    expand_vars within a blueprint adjacency.
+    """
+    yaml_content = """
+blueprints:
+  bp_attr_vars:
+    groups:
+      leaf:
+        node_count: 2
+        name_template: "leaf-{node_num}"
+        attrs:
+          src_role: "leaf"
+      spine:
+        node_count: 1
+        name_template: "spine-{node_num}"
+        attrs:
+          dst_role: "spine"
+    adjacency:
+      - source: "attr:{src_key}"
+        target: "attr:{dst_key}"
+        expand_vars:
+          src_key: ["src_role"]
+          dst_key: ["dst_role"]
+        pattern: "mesh"
+        link_params:
+          capacity: 10
+
+network:
+  groups:
+    pod1:
+      use_blueprint: bp_attr_vars
+"""
+
+    scenario = Scenario.from_yaml(yaml_content)
+    # Expect 3 nodes total (2 leaf, 1 spine)
+    assert len(scenario.network.nodes) == 3
+    # Without the fix, zero edges would be created due to prefixed attr: paths.
+    graph = scenario.network.to_strict_multidigraph()
+    assert len(list(graph.edges())) > 0
+
+
+def test_invalid_nodes_type_raises():
+    """network.nodes must be a mapping; lists should raise a clear error."""
+    yaml_content = """
+network:
+  nodes: []
+"""
+
+    with pytest.raises(ValueError) as exc:
+        Scenario.from_yaml(yaml_content)
+    assert "'nodes' must be a mapping" in str(exc.value)
+
+
+def test_invalid_links_type_raises():
+    """network.links must be a list; mappings should raise a clear error."""
+    yaml_content = """
+network:
+  nodes:
+    A: {}
+    B: {}
+  links: {}
+"""
+
+    with pytest.raises(ValueError) as exc:
+        Scenario.from_yaml(yaml_content)
+    assert "'links' must be a list" in str(exc.value)
+
+
+def test_direct_link_missing_required_keys_raises():
+    """Each direct link entry must contain 'source' and 'target'."""
+    yaml_content = """
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - link_params: {capacity: 1}
+"""
+
+    with pytest.raises(ValueError) as exc:
+        Scenario.from_yaml(yaml_content)
+    assert "Each link definition must include 'source' and 'target'" in str(exc.value)

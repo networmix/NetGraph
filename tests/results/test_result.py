@@ -1,4 +1,5 @@
 from ngraph.results import Results
+from ngraph.results.artifacts import FailurePatternResult
 
 
 def test_put_and_get():
@@ -66,3 +67,24 @@ def test_empty_results():
     results = Results()
     assert results.get("StepX", "keyX") is None
     assert results.get_all("keyX") == {}
+
+
+def test_results_to_dict_includes_workflow_and_step_data():
+    results = Results()
+    # Simulate metadata
+    results.put_step_metadata("stepA", "DummyStep", 0)
+    results.put("stepA", "value", 1)
+    # Include an artifact object to confirm to_dict conversion
+    fpr = FailurePatternResult(
+        excluded_nodes=["n1"],
+        excluded_links=["l1"],
+        capacity_matrix={"A->B": 10.0},
+        count=2,
+    )
+    results.put("stepA", "pattern", fpr)
+
+    d = results.to_dict()
+    assert "workflow" in d
+    assert "stepA" in d["workflow"]
+    assert d["stepA"]["value"] == 1
+    assert isinstance(d["stepA"]["pattern"], dict)

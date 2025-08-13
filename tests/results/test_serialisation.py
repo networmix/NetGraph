@@ -50,3 +50,10 @@ def test_results_to_dict_json_serializable():
     assert parsed["Analysis"]["baseline"] == 100.0
     assert parsed["Analysis"]["envelope"]["source"] == "src"
     assert parsed["Analysis"]["metadata"]["version"] == "1.0"
+
+    # Construct an envelope back from dict and validate
+    env2 = CapacityEnvelope.from_dict(parsed["Analysis"]["envelope"])
+    assert env2.source_pattern == "src"
+    assert env2.sink_pattern == "dst"
+    assert env2.mode == "combine"
+    assert env2.total_samples == 3

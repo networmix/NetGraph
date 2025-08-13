@@ -90,9 +90,11 @@ class WorkflowStep(ABC):
         global _execution_counter
 
         step_type = self.__class__.__name__
-        step_name = self.name or step_type
+        # Use the raw name for results/metadata namespacing to avoid mismatches
+        step_name = self.name
+        display_name = step_name or step_type
 
-        # Store workflow metadata before execution
+        # Store workflow metadata before execution using the exact step namespace key
         scenario.results.put_step_metadata(
             step_name=step_name, step_type=step_type, execution_order=_execution_counter
         )
@@ -105,7 +107,7 @@ class WorkflowStep(ABC):
                 step_type,
                 str(self.seed),
             )
-        logger.info(f"Starting workflow step: {step_name} ({step_type})")
+        logger.info(f"Starting workflow step: {display_name} ({step_type})")
         start_time = time.time()
 
         try:
@@ -113,7 +115,7 @@ class WorkflowStep(ABC):
             end_time = time.time()
             duration = end_time - start_time
             logger.info(
-                f"Completed workflow step: {step_name} ({step_type}) "
+                f"Completed workflow step: {display_name} ({step_type}) "
                 f"in {duration:.3f} seconds"
             )
             try:
@@ -123,7 +125,7 @@ class WorkflowStep(ABC):
                 keys = "-"
             logger.debug(
                 "Step %s finished: duration=%.3fs, results_keys=%s",
-                step_name,
+                display_name,
                 duration,
                 keys or "-",
             )
@@ -131,7 +133,7 @@ class WorkflowStep(ABC):
             end_time = time.time()
             duration = end_time - start_time
             logger.error(
-                f"Failed workflow step: {step_name} ({step_type}) "
+                f"Failed workflow step: {display_name} ({step_type}) "
                 f"after {duration:.3f} seconds - {type(e).__name__}: {e}"
             )
             raise

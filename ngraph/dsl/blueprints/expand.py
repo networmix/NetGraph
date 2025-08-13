@@ -675,7 +675,7 @@ def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
     """
     nodes_dict = network_data.get("nodes", {})
     if not isinstance(nodes_dict, dict):
-        return
+        raise ValueError("'nodes' must be a mapping (dict) if present.")
 
     for node_name, raw_def in nodes_dict.items():
         if not isinstance(raw_def, dict):
@@ -717,7 +717,7 @@ def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
     """
     links_list = network_data.get("links", [])
     if not isinstance(links_list, list):
-        return
+        raise ValueError("'links' must be a list if present.")
 
     for link_info in links_list:
         if not isinstance(link_info, dict):
@@ -727,6 +727,9 @@ def _process_direct_links(net: Network, network_data: Dict[str, Any]) -> None:
             allowed={"source", "target", "link_params", "link_count"},
             context="direct link",
         )
+
+        if "source" not in link_info or "target" not in link_info:
+            raise ValueError("Each link definition must include 'source' and 'target'.")
 
         source = link_info["source"]
         target = link_info["target"]

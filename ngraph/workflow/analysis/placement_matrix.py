@@ -1,7 +1,11 @@
-"""Placement envelope analysis utilities.
+"""Placement analysis utilities for placed Gbps envelopes (current design).
 
-Processes placement envelope results from TrafficMatrixPlacementAnalysis into
-placement matrices and summaries suitable for notebooks.
+Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with keys:
+  - placed_gbps_envelopes: {"src->dst|prio=K": envelope}
+  - offered_gbps_by_pair: {"src->dst|prio=K": float}
+  - delivered_gbps_stats: {mean/min/max/stdev/samples/percentiles}
+and builds matrices of mean placed Gbps by pair (overall and per priority),
+with basic statistics.
 """
 
 from __future__ import annotations
@@ -14,35 +18,34 @@ from .base import NotebookAnalyzer
 
 
 class PlacementMatrixAnalyzer(NotebookAnalyzer):
-    """Analyze placement envelopes and display matrices/statistics."""
+    """Analyze placed Gbps envelopes and display matrices/statistics."""
 
     def get_description(self) -> str:  # noqa: D401 - simple return
         return "Processes placement envelope data into matrices and summaries"
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Analyze placement envelopes for a given step.
+        """Analyze placed Gbps envelopes for a given step.
 
-        Expects results[step_name]["placement_envelopes"] to be a dict keyed by
-        "src->dst|prio=K" mapping to a dict containing:
-          - source, sink, priority
-          - mean, min, max, stdev, total_samples
-          - frequencies
+        Expects results[step_name]["placed_gbps_envelopes"] (dict keyed by
+        "src->dst|prio=K") and produces matrices of mean placed Gbps.
         """
         step_name: Optional[str] = kwargs.get("step_name")
         if not step_name:
             raise ValueError("step_name required for placement matrix analysis")
 
         step_data = results.get(step_name, {})
-        envelopes = step_data.get("placement_envelopes", {})
+        envelopes = step_data.get("placed_gbps_envelopes", {})
         if not envelopes:
-            raise ValueError(f"No placement envelope data found for step: {step_name}")
+            raise ValueError(
+                f"No placed_gbps_envelopes data found for step: {step_name}"
+            )
 
         matrix_data = self._extract_matrix_data(envelopes)
         if not matrix_data:
             raise ValueError(f"No valid placement envelope data in step: {step_name}")
 
         df_matrix = pd.DataFrame(matrix_data)
-        # Build per-priority matrices and stats
+        # Build per-priority matrices and stats (Gbps)
         placement_matrices: Dict[int, pd.DataFrame] = {}
         statistics_by_priority: Dict[int, Dict[str, Any]] = {}
         for prio in sorted({int(row["priority"]) for row in matrix_data}):
@@ -90,14 +93,14 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             src = env.get("src") or env.get("source")
             dst = env.get("dst") or env.get("sink")
             prio = env.get("priority", 0)
-            mean_ratio = env.get("mean")
-            if src is None or dst is None or mean_ratio is None:
+            mean_gbps = env.get("mean")
+            if src is None or dst is None or mean_gbps is None:
                 continue
             data.append(
                 {
                     "source": str(src),
                     "destination": str(dst),
-                    "ratio": float(mean_ratio),
+                    "gbps": float(mean_gbps),
                     "flow_path": flow_key,
                     "priority": int(prio),
                 }
@@ -109,7 +112,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
         return df_matrix.pivot_table(
             index="source",
             columns="destination",
-            values="ratio",
+            values="gbps",
             aggfunc="mean",
             fill_value=0.0,
         )
@@ -122,9 +125,9 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             return {"has_data": False}
         return {
             "has_data": True,
-            "ratio_min": float(non_zero.min()),
-            "ratio_max": float(non_zero.max()),
-            "ratio_mean": float(non_zero.mean()),
+            "gbps_min": float(non_zero.min()),
+            "gbps_max": float(non_zero.max()),
+            "gbps_mean": float(non_zero.mean()),
             "num_sources": len(placement_matrix.index),
             "num_destinations": len(placement_matrix.columns),
         }
@@ -153,7 +156,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             print(f"  Sources: {stats['num_sources']:,} nodes")
             print(f"  Destinations: {stats['num_destinations']:,} columns")
             print(
-                f"  Placement ratio range: {stats['ratio_min']:.2f} - {stats['ratio_max']:.2f} (mean {stats['ratio_mean']:.2f})"
+                f"  Placed Gbps range: {stats['gbps_min']:.2f} - {stats['gbps_max']:.2f} (mean {stats['gbps_mean']:.2f})"
             )
 
             matrix_display = matrices[prio].copy()
@@ -163,7 +166,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
                 md = matrix_display.applymap(fmt)
                 show(
                     md,
-                    caption=f"Placement Matrix (priority {prio}) - {step_name}",
+                    caption=f"Placed Gbps Matrix (priority {prio}) - {step_name}",
                     scrollY="400px",
                     scrollX=True,
                     scrollCollapse=True,

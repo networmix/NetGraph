@@ -115,6 +115,10 @@ def _parse_range_expr(expr: str) -> List[str]:
 
 def join_paths(parent_path: str, rel_path: str) -> str:
     """Join two path segments according to the DSL conventions."""
+    # Attribute directive paths are global selectors and must not be prefixed
+    # by any parent blueprint path.
+    if rel_path.startswith("attr:"):
+        return rel_path
     if rel_path.startswith("/"):
         rel_path = rel_path[1:]
         if parent_path:

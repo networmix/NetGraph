@@ -102,21 +102,26 @@ def demand_placement_analysis(
     placement_rounds: int | str = "auto",
     include_flow_details: bool = False,
     **kwargs,
-) -> list[FlowResult]:
+) -> dict[str, Any]:
     """Analyze traffic demand placement success rates.
+
+    Returns a structured dictionary per iteration containing per-demand offered
+    and placed volumes (in Gbit/s) and an iteration-level summary. This shape
+    is designed for downstream computation of delivered bandwidth percentiles
+    without having to reconstruct per-iteration joint distributions.
 
     Args:
         network_view: NetworkView with potential exclusions applied.
         demands_config: List of demand configurations (serializable dicts).
         placement_rounds: Number of placement optimization rounds.
+        include_flow_details: If True, include edges used per demand.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        List of FlowResult dicts, one per expanded demand, with metric=
-        "placement_ratio" and value in [0,1]. When include_flow_details is True,
-        stats contains:
-        - cost_distribution: {cost: placed_volume}
-        - edges: [edge_id,...] with edges_kind="used"
+        Dict with keys:
+          - "demands": list of per-demand dicts with fields
+              {src,dst,priority,offered_gbps,placed_gbps,placement_ratio,edges?}
+          - "summary": {total_offered_gbps,total_placed_gbps,overall_ratio}
     """
     # Reconstruct demands from config to avoid passing complex objects
     demands = []
@@ -143,47 +148,45 @@ def demand_placement_analysis(
     tm.expand_demands()
     tm.place_all_demands(placement_rounds=placement_rounds)
 
-    # Build FlowResult list per expanded demand
-    flow_results: list[FlowResult] = []
+    # Build per-demand records and overall summary
+    per_demand: list[dict[str, Any]] = []
+    total_offered = 0.0
+    total_placed = 0.0
     for dmd in tm.demands:
-        offered = float(getattr(dmd, "volume", 0.0))
-        placed = float(getattr(dmd, "placed_demand", 0.0))
-        ratio = (placed / offered) if offered > 0 else 0.0
+        offered_gbps = float(getattr(dmd, "volume", 0.0))
+        placed_gbps = float(getattr(dmd, "placed_demand", 0.0))
+        ratio = (placed_gbps / offered_gbps) if offered_gbps > 0 else 0.0
         priority = int(getattr(dmd, "priority", getattr(dmd, "demand_class", 0)))
 
-        stats: FlowStats | None = None
+        record: dict[str, Any] = {
+            "src": str(getattr(dmd, "src_node", "")),
+            "dst": str(getattr(dmd, "dst_node", "")),
+            "priority": priority,
+            "offered_gbps": offered_gbps,
+            "placed_gbps": placed_gbps,
+            "placement_ratio": ratio,
+        }
+
         if include_flow_details and getattr(dmd, "flow_policy", None) is not None:
-            # Summarize placed flows by path cost and collect edges used
-            cost_distribution: dict[float, float] = {}
+            # Collect edges used for this demand
             edge_strings: set[str] = set()
             for flow in dmd.flow_policy.flows.values():  # type: ignore[union-attr]
-                cost_val = float(getattr(flow.path_bundle, "cost", 0.0))
-                placed_flow = float(getattr(flow, "placed_flow", 0.0))
-                if placed_flow > 0.0:
-                    cost_distribution[cost_val] = (
-                        cost_distribution.get(cost_val, 0.0) + placed_flow
-                    )
                 for eid in getattr(flow.path_bundle, "edges", set()):
                     edge_strings.add(str(eid))
-            stats = {}
-            if cost_distribution:
-                stats["cost_distribution"] = cost_distribution
             if edge_strings:
-                stats["edges"] = sorted(edge_strings)
-                stats["edges_kind"] = "used"
+                record["edges"] = sorted(edge_strings)
 
-        flow_results.append(
-            {
-                "src": str(getattr(dmd, "src_node", "")),
-                "dst": str(getattr(dmd, "dst_node", "")),
-                "metric": "placement_ratio",
-                "value": ratio,
-                "priority": priority,
-                "stats": stats,
-            }
-        )
+        per_demand.append(record)
+        total_offered += offered_gbps
+        total_placed += placed_gbps
 
-    return flow_results
+    summary = {
+        "total_offered_gbps": total_offered,
+        "total_placed_gbps": total_placed,
+        "overall_ratio": (total_placed / total_offered) if total_offered > 0 else 1.0,
+    }
+
+    return {"demands": per_demand, "summary": summary}
 
 
 def sensitivity_analysis(
