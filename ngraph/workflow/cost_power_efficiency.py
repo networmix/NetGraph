@@ -43,6 +43,7 @@ Results stored in `scenario.results`:
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -53,7 +54,10 @@ from ngraph.components import (
     totals_with_multiplier,
 )
 from ngraph.explorer import NetworkExplorer
+from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -90,6 +94,18 @@ class CostPowerEfficiency(WorkflowStep):
         Returns:
             None
         """
+        t0 = time.perf_counter()
+        logger.info(
+            "Starting cost/power efficiency analysis: name=%s include_disabled=%s "
+            "node_hw=%s link_hw=%s denom_key=%s denom_explicit=%s",
+            self.name,
+            str(self.include_disabled),
+            str(self.collect_node_hw_entries),
+            str(self.collect_link_hw_entries),
+            self.delivered_bandwidth_key,
+            str(self.delivered_bandwidth_gbps is not None),
+        )
+
         # Build explorer FIRST to trigger all validations before collecting metrics
         explorer = NetworkExplorer.explore_network(
             scenario.network, components_library=scenario.components_library
@@ -168,6 +184,8 @@ class CostPowerEfficiency(WorkflowStep):
         scenario.results.put(step_name, "hardware_bom_by_path", bom_by_path)
 
         # Optional hardware inventory
+        node_entries: List[Dict[str, Any]] = []
+        link_entries: List[Dict[str, Any]] = []
         if self.collect_node_hw_entries or self.collect_link_hw_entries:
             node_entries, link_entries = self._collect_hw_entries(
                 scenario.components_library, scenario
@@ -176,6 +194,51 @@ class CostPowerEfficiency(WorkflowStep):
                 scenario.results.put(step_name, "node_hw_entries", node_entries)
             if self.collect_link_hw_entries:
                 scenario.results.put(step_name, "link_hw_entries", link_entries)
+
+        # INFO-level outcome summary for quick visual inspection
+        try:
+            duration_sec = time.perf_counter() - t0
+            bom_count = len(bom_total) if isinstance(bom_total, dict) else 0
+            # Top-N components by count
+            top_n = 3
+            top_items = []
+            try:
+                top_items = sorted(
+                    bom_total.items(), key=lambda kv: (-float(kv[1]), kv[0])
+                )[:top_n]
+            except Exception:
+                top_items = []
+            top_str = (
+                ", ".join(f"{k}:{float(v):.3f}" for k, v in top_items)
+                if top_items
+                else "-"
+            )
+            logger.info(
+                (
+                    "CostPowerEfficiency summary: name=%s include_disabled=%s "
+                    "capex=%.3f power_watts=%.3f delivered_gbps=%.6g "
+                    "dollars_per_gbit=%.6g watts_per_gbit=%.6g "
+                    "bom_components=%d top=[%s] node_hw_entries=%d link_hw_entries=%d "
+                    "duration=%.3fs"
+                ),
+                self.name,
+                str(self.include_disabled),
+                total_capex,
+                total_power_watts,
+                denom,
+                dollars_per_gbit,
+                watts_per_gbit,
+                bom_count,
+                top_str,
+                len(node_entries) if self.collect_node_hw_entries else 0,
+                len(link_entries) if self.collect_link_hw_entries else 0,
+                duration_sec,
+            )
+        except Exception:
+            # Logging must not raise
+            pass
+
+        logger.info("Cost/power efficiency analysis completed: %s", self.name)
 
     def _collect_hw_entries(
         self, library: ComponentsLibrary, scenario: Any
