@@ -41,6 +41,7 @@ from typing import Any
 from ngraph.demand.manager.manager import TrafficManager, TrafficResult
 from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.demand.spec import TrafficDemand
+from ngraph.flows.policy import FlowPolicyConfig
 from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -117,6 +118,34 @@ class MaximumSupportedDemandAnalysis(WorkflowStep):
             }
             for td in base_tds
         ]
+
+        # Debug: log base demand snapshot summary including an example and policy
+        try:
+            example = "-"
+            if base_demands:
+                ex = base_demands[0]
+                src = str(ex.get("source_path", ""))
+                dst = str(ex.get("sink_path", ""))
+                dem = float(ex.get("demand", 0.0))
+                cfg = ex.get("flow_policy_config")
+                if isinstance(cfg, FlowPolicyConfig):
+                    policy_name = cfg.name
+                elif cfg is None:
+                    policy_name = f"default:{FlowPolicyConfig.SHORTEST_PATHS_ECMP.name}"
+                else:
+                    try:
+                        policy_name = FlowPolicyConfig(int(cfg)).name
+                    except Exception:
+                        policy_name = str(cfg)
+                example = f"{src}->{dst} demand={dem} policy={policy_name}"
+            logger.debug(
+                "Extracted %d base demands from matrix '%s' (example: %s)",
+                len(base_demands),
+                self.matrix_name,
+                example,
+            )
+        except Exception:
+            pass
 
         # Bracket: find feasible lower and infeasible upper (or the reverse)
         start_alpha = float(self.alpha_start)

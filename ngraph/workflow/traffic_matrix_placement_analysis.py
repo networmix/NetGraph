@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ngraph.failure.manager.manager import FailureManager
+from ngraph.flows.policy import FlowPolicyConfig
 from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
@@ -166,16 +167,35 @@ class TrafficMatrixPlacementAnalysis(WorkflowStep):
                     "priority": getattr(td, "priority", 0),
                 }
             )
-        logger.debug(
-            "Extracted %d demands from matrix '%s' (example: %s)",
-            len(demands_config),
-            self.matrix_name,
-            (
-                f"{demands_config[0]['source_path']}->{demands_config[0]['sink_path']} demand={demands_config[0]['demand']}"
-                if demands_config
-                else "-"
-            ),
-        )
+        # Debug summary including an example with policy
+        try:
+            example = "-"
+            if demands_config:
+                ex = demands_config[0]
+                src = ex.get("source_path", "")
+                dst = ex.get("sink_path", "")
+                dem = ex.get("demand", 0.0)
+                cfg = ex.get("flow_policy_config")
+                policy_name: str
+                if isinstance(cfg, FlowPolicyConfig):
+                    policy_name = cfg.name
+                elif cfg is None:
+                    policy_name = f"default:{FlowPolicyConfig.SHORTEST_PATHS_ECMP.name}"
+                else:
+                    try:
+                        policy_name = FlowPolicyConfig(int(cfg)).name
+                    except Exception:
+                        policy_name = str(cfg)
+                example = f"{src}->{dst} demand={dem} policy={policy_name}"
+            logger.debug(
+                "Extracted %d demands from matrix '%s' (example: %s)",
+                len(demands_config),
+                self.matrix_name,
+                example,
+            )
+        except Exception:
+            # Logging must not raise
+            pass
 
         # Run via FailureManager convenience method
         fm = FailureManager(
