@@ -9,6 +9,7 @@ recalculation, and enumeration into concrete ``Path`` instances.
 from __future__ import annotations
 
 from collections import deque
+from heapq import heappop, heappush
 from typing import Dict, Iterator, List, Optional, Set, Tuple
 
 from ngraph.algorithms.base import Cost, EdgeSelect
@@ -77,11 +78,13 @@ class PathBundle:
         while queue:
             node = queue.popleft()
             self.nodes.add(node)
+            # Ensure key exists even if `node` has no predecessors.
+            self.pred.setdefault(node, {})
 
             # Traverse all predecessors of `node`
             for prev_node, edges_list in pred[node].items():
                 # Record these edges in our local `pred` structure
-                self.pred.setdefault(node, {})[prev_node] = edges_list
+                self.pred[node][prev_node] = edges_list
                 # Update the set of all edges seen in this bundle
                 self.edges.update(edges_list)
                 # Store the tuple form for quick equality checks on parallel edges
@@ -284,11 +287,14 @@ class PathBundle:
         graph: StrictMultiDiGraph,
         cost_attr: str = "cost",
     ) -> PathBundle:
-        """Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
+        """Create a sub-bundle ending at `new_dst_node` with correct minimal cost.
 
-        This method performs a reverse traversal (BFS) from `new_dst_node` up to
-        `self.src_node`, collecting edges and recalculating the cost along the way
-        using the minimal edge attribute found.
+        The returned bundle contains the predecessor subgraph that reaches from
+        `self.src_node` to `new_dst_node` using only relations present in this
+        bundle's `pred`. The `cost` of the returned bundle is recomputed as the
+        minimal sum of per-hop costs along any valid path from `self.src_node`
+        to `new_dst_node`, where each hop cost is the minimum of `cost_attr`
+        across the parallel edges recorded for that hop.
 
         Args:
             new_dst_node: The new destination node, which must be present in `pred`.
@@ -305,30 +311,55 @@ class PathBundle:
             raise ValueError(f"{new_dst_node} not in this PathBundle's pred")
 
         edges_dict = graph.get_edges()
+
+        # 1) Build the restricted predecessor subgraph reachable from new_dst_node
+        #    back to self.src_node. This preserves all allowed predecessors without
+        #    collapsing to a single path.
         new_pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {self.src_node: {}}
-        new_cost: float = 0.0
-
-        visited: Set[NodeID] = set()
-        queue: deque[Tuple[float, NodeID]] = deque([(0.0, new_dst_node)])
-        visited.add(new_dst_node)
-
-        while queue:
-            cost_to_node, node = queue.popleft()
-            # For each predecessor of `node`, add them to new_pred
+        visited_build: Set[NodeID] = set([new_dst_node])
+        queue_build: deque[NodeID] = deque([new_dst_node])
+        while queue_build:
+            node = queue_build.popleft()
             for prev_node, edges_list in self.pred[node].items():
                 new_pred.setdefault(node, {})[prev_node] = edges_list
-                # Recompute the cost increment of traveling from prev_node to node
-                cost_increment = min(
-                    edges_dict[eid][3][cost_attr] for eid in edges_list
-                )
-                updated_cost = cost_to_node + cost_increment
+                if prev_node != self.src_node and prev_node not in visited_build:
+                    visited_build.add(prev_node)
+                    queue_build.append(prev_node)
 
-                # Enqueue predecessor if not source and not yet visited
-                if prev_node != self.src_node and prev_node not in visited:
-                    visited.add(prev_node)
-                    queue.append((updated_cost, prev_node))
-                else:
-                    # Once we reach the src_node, record the final cost
-                    new_cost = updated_cost
+        # 2) Compute minimal cost from self.src_node to new_dst_node over new_pred
+        #    using Dijkstra on the reversed edges (from dst backwards to src).
+        def hop_cost(u: NodeID, v: NodeID) -> float:
+            # cost to go from u<-v (i.e., v -> u in forward direction)
+            edges_list = new_pred[u][v]
+            return float(min(edges_dict[eid][3][cost_attr] for eid in edges_list))
 
-        return PathBundle(self.src_node, new_dst_node, new_pred, new_cost)
+        # Trivial case: src == dst
+        if new_dst_node == self.src_node:
+            return PathBundle(self.src_node, new_dst_node, new_pred, 0.0)
+
+        dist: Dict[NodeID, float] = {new_dst_node: 0.0}
+        heap: List[Tuple[float, NodeID]] = [(0.0, new_dst_node)]
+        best_cost: float = float("inf")
+
+        while heap:
+            cost_to_node, node = heappop(heap)
+            if cost_to_node > dist.get(node, float("inf")):
+                continue
+            if node == self.src_node:
+                best_cost = cost_to_node
+                break
+            # Relax predecessors of `node` (reverse traversal)
+            for prev_node in new_pred.get(node, {}):
+                c = cost_to_node + hop_cost(node, prev_node)
+                if c < dist.get(prev_node, float("inf")):
+                    dist[prev_node] = c
+                    heappush(heap, (c, prev_node))
+
+        # If src_node was not reached, this subgraph does not connect src->new_dst.
+        # Treat as an error to avoid silent mis-reporting.
+        if best_cost == float("inf"):
+            raise ValueError(
+                f"No path from '{self.src_node}' to '{new_dst_node}' within this PathBundle."
+            )
+
+        return PathBundle(self.src_node, new_dst_node, new_pred, float(best_cost))

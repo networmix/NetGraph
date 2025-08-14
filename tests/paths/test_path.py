@@ -165,3 +165,18 @@ def test_get_sub_path_empty_parallel_edges():
     sub = p.get_sub_path("N2", g)
     assert sub.cost == 10
     assert len(sub) == 2
+
+
+def test_get_sub_path_uses_min_cost_among_parallel_edges():
+    g = StrictMultiDiGraph()
+    for n in ("A", "B", "C"):
+        g.add_node(n)
+
+    e1 = g.add_edge("A", "B", cost=5)
+    e2 = g.add_edge("A", "B", cost=7)
+    e3 = g.add_edge("B", "C", cost=1)
+
+    path_tuple: PathTuple = (("A", (e1, e2)), ("B", (e3,)), ("C", ()))
+    p = Path(path_tuple, cost=0)
+    sub = p.get_sub_path("B", g, cost_attr="cost")
+    assert sub.cost == 5

@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 13, 2025 at 21:26 UTC
+Generated from source code on: August 14, 2025 at 01:51 UTC
 
 Modules auto-discovered: 68
 
@@ -1436,7 +1436,7 @@ are present, traversal may not terminate.
 - `add(self, other: 'PathBundle') -> 'PathBundle'` - Concatenate this bundle with another bundle (end-to-start).
 - `contains(self, other: 'PathBundle') -> 'bool'` - Check if this bundle's edge set contains all edges of `other`.
 - `from_path(path: 'Path', resolve_edges: 'bool' = False, graph: 'Optional[StrictMultiDiGraph]' = None, edge_select: 'Optional[EdgeSelect]' = None, cost_attr: 'str' = 'cost', capacity_attr: 'str' = 'capacity') -> 'PathBundle'` - Construct a PathBundle from a single `Path` object.
-- `get_sub_path_bundle(self, new_dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'PathBundle'` - Create a sub-bundle ending at `new_dst_node` (which must appear in this bundle).
+- `get_sub_path_bundle(self, new_dst_node: 'NodeID', graph: 'StrictMultiDiGraph', cost_attr: 'str' = 'cost') -> 'PathBundle'` - Create a sub-bundle ending at `new_dst_node` with correct minimal cost.
 - `is_disjoint_from(self, other: 'PathBundle') -> 'bool'` - Check if this bundle shares no edges with `other`.
 - `is_subset_of(self, other: 'PathBundle') -> 'bool'` - Check if this bundle's edge set is contained in `other`'s edge set.
 - `resolve_to_paths(self, split_parallel_edges: 'bool' = False) -> 'Iterator[Path]'` - Generate all concrete `Path` objects contained in this PathBundle.

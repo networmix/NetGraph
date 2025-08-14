@@ -1,9 +1,9 @@
-from typing import List, Set
+from typing import Dict, List, Set
 
 import pytest
 
 from ngraph.algorithms.base import EdgeSelect
-from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
+from ngraph.graph.strict_multidigraph import EdgeID, NodeID, StrictMultiDiGraph
 from ngraph.paths.bundle import Path, PathBundle
 
 
@@ -147,6 +147,51 @@ class TestPathBundle:
             "A": {},
         }
         assert sub_bundle.cost == 0
+
+    def test_get_sub_bundle_min_cost_across_alternatives(self):
+        g = StrictMultiDiGraph()
+        for n in ("A", "B", "C", "D"):
+            g.add_node(n)
+
+        # Two routes A->D: A->C->D cost 2 (1+1), A->B->D cost 20 (10+10)
+        e_ac = g.add_edge("A", "C", cost=1)
+        e_cd = g.add_edge("C", "D", cost=1)
+        e_ab = g.add_edge("A", "B", cost=10)
+        e_bd = g.add_edge("B", "D", cost=10)
+
+        pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {
+            "A": {},
+            "C": {"A": [e_ac]},
+            "B": {"A": [e_ab]},
+            "D": {"C": [e_cd], "B": [e_bd]},
+        }
+
+        bundle = PathBundle("A", "D", pred, cost=2)
+        sub = bundle.get_sub_path_bundle("D", g, cost_attr="cost")
+        assert sub.cost == 2
+
+    def test_get_sub_bundle_src_equals_dst_zero_cost(self):
+        g = StrictMultiDiGraph()
+        g.add_node("A")
+        pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {"A": {}}
+        bundle = PathBundle("A", "A", pred, cost=0)
+        sub = bundle.get_sub_path_bundle("A", g)
+        assert sub.cost == 0
+
+    def test_get_sub_bundle_raises_when_src_unreachable_in_subgraph(self):
+        g = StrictMultiDiGraph()
+        for n in ("A", "B", "C"):
+            g.add_node(n)
+        # pred missing any chain from A to C (only B->C exists)
+        e_bc = g.add_edge("B", "C", cost=1)
+        pred: Dict[NodeID, Dict[NodeID, List[EdgeID]]] = {
+            "A": {},
+            "B": {},
+            "C": {"B": [e_bc]},
+        }
+        bundle = PathBundle("A", "C", pred, cost=0)
+        with pytest.raises(ValueError, match="No path from 'A' to 'C'"):
+            _ = bundle.get_sub_path_bundle("C", g)
 
     def test_add_method(self):
         """Test concatenating two PathBundles with matching src/dst."""
