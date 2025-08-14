@@ -486,13 +486,25 @@ class Scenario:
             # Ensure the constructed WorkflowStep receives the resolved unique name
             normalized_ctor_args["name"] = step_name
 
-            # Add seed derivation for workflow steps that don't have explicit seed
-            if "seed" not in normalized_ctor_args:
+            # Determine seed provenance and possibly derive a step seed
+            seed_source: str = "none"
+            if (
+                "seed" in normalized_ctor_args
+                and normalized_ctor_args["seed"] is not None
+            ):
+                seed_source = "explicit-step"
+            else:
                 derived_seed = seed_manager.derive_seed("workflow_step", step_name)
                 if derived_seed is not None:
                     normalized_ctor_args["seed"] = derived_seed
+                    seed_source = "scenario-derived"
 
             step_obj = step_cls(**normalized_ctor_args)
+            # Attach internal provenance for metadata collection
+            try:
+                step_obj._seed_source = seed_source
+            except Exception:
+                pass
             steps.append(step_obj)
 
         return steps

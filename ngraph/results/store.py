@@ -18,11 +18,24 @@ class WorkflowStepMetadata:
         step_type: The workflow step class name (e.g., 'CapacityEnvelopeAnalysis').
         step_name: The instance name of the step.
         execution_order: Order in which this step was executed (0-based).
+        scenario_seed: Scenario-level seed provided in the YAML (if any).
+        step_seed: Seed assigned to this step (explicit or scenario-derived).
+        seed_source: Source for the step seed. One of:
+            - "scenario-derived": seed was derived from scenario.seed
+            - "explicit-step": seed was explicitly provided for the step
+            - "none": no seed provided/active for this step
+        active_seed: The effective base seed used by the step, if any. For steps
+            that use Monte Carlo execution, per-iteration seeds are derived from
+            active_seed (e.g., active_seed + iteration_index).
     """
 
     step_type: str
     step_name: str
     execution_order: int
+    scenario_seed: Optional[int] = None
+    step_seed: Optional[int] = None
+    seed_source: str = "none"
+    active_seed: Optional[int] = None
 
 
 @dataclass
@@ -61,7 +74,15 @@ class Results:
         self._store[step_name][key] = value
 
     def put_step_metadata(
-        self, step_name: str, step_type: str, execution_order: int
+        self,
+        step_name: str,
+        step_type: str,
+        execution_order: int,
+        *,
+        scenario_seed: Optional[int] = None,
+        step_seed: Optional[int] = None,
+        seed_source: str = "none",
+        active_seed: Optional[int] = None,
     ) -> None:
         """Store metadata for a workflow step.
 
@@ -69,9 +90,19 @@ class Results:
             step_name: The step instance name.
             step_type: The workflow step class name.
             execution_order: Order in which this step was executed (0-based).
+            scenario_seed: Scenario-level seed from YAML, if any.
+            step_seed: Seed attached to this step (explicit or derived), if any.
+            seed_source: Source of step seed ("scenario-derived", "explicit-step", or "none").
+            active_seed: Effective base seed used by the step, if any.
         """
         self._metadata[step_name] = WorkflowStepMetadata(
-            step_type=step_type, step_name=step_name, execution_order=execution_order
+            step_type=step_type,
+            step_name=step_name,
+            execution_order=execution_order,
+            scenario_seed=scenario_seed,
+            step_seed=step_seed,
+            seed_source=seed_source,
+            active_seed=active_seed,
         )
 
     def get(self, step_name: str, key: str, default: Any = None) -> Any:
@@ -148,6 +179,10 @@ class Results:
                 "step_type": metadata.step_type,
                 "step_name": metadata.step_name,
                 "execution_order": metadata.execution_order,
+                "scenario_seed": metadata.scenario_seed,
+                "step_seed": metadata.step_seed,
+                "seed_source": metadata.seed_source,
+                "active_seed": metadata.active_seed,
             }
             for step_name, metadata in self._metadata.items()
         }

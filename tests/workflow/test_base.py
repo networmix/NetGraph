@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from ngraph.scenario import Scenario
 from ngraph.workflow.base import (
     WORKFLOW_STEP_REGISTRY,
     WorkflowStep,
@@ -41,14 +42,38 @@ def test_workflow_step_subclass_run_method() -> None:
 
     class ConcreteStep(WorkflowStep):
         def run(self, scenario) -> None:
-            scenario.called = True
+            # Set a flag on the step instance to confirm invocation
+            self._ran = True
 
-    mock_scenario = MagicMock()
+    mock_scenario = MagicMock(spec=Scenario)
     step_instance = ConcreteStep(name="test_step")
     step_instance.run(mock_scenario)
 
     # Check if run() was actually invoked
-    # e.g., we set scenario.called = True in run()
-    # but here we can also rely on MagicMock calls or attributes if needed
-    assert hasattr(mock_scenario, "called") and mock_scenario.called is True
+    assert getattr(step_instance, "_ran", False) is True
     assert step_instance.name == "test_step"
+
+
+def test_execute_records_metadata_including_seed_fields() -> None:
+    """Execute a minimal step and verify metadata includes seed fields."""
+    from ngraph.results import Results
+
+    class Dummy(WorkflowStep):
+        def run(self, scenario) -> None:
+            scenario.results.put(self.name, "ok", True)
+
+    scen = MagicMock(spec=Scenario)
+    scen.results = Results()
+    scen.seed = 1010
+    step = Dummy(name="d1")
+    step.execute(scen)
+
+    md = scen.results.get_step_metadata("d1")
+    assert md is not None
+    assert md.step_type == "Dummy"
+    assert md.step_name == "d1"
+    assert isinstance(md.execution_order, int) and md.execution_order >= 0
+    # New fields
+    assert hasattr(md, "scenario_seed") and md.scenario_seed == 1010
+    assert hasattr(md, "step_seed")
+    assert hasattr(md, "seed_source")

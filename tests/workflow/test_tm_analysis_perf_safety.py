@@ -46,6 +46,7 @@ def test_tm_analysis_basic_behavior_unchanged(monkeypatch):
             return self._data.get(step, {}).get(key)
 
         def get_all_step_metadata(self):
+            # Return empty mapping; caller code should handle gracefully
             return {}
 
     class _FailurePolicySetStub:

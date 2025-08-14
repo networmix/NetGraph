@@ -145,6 +145,10 @@ workflow:
         metadata = simple_scenario.results.get_step_metadata("meta_test")
         assert metadata is not None
         assert metadata.step_type == "NetworkStats"
+        # Seed metadata presence (scenario has seed set in helper scenarios)
+        assert hasattr(metadata, "scenario_seed")
+        assert hasattr(metadata, "step_seed")
+        assert hasattr(metadata, "seed_source")
         assert metadata.step_name == "meta_test"
         assert metadata.execution_order >= 0
 

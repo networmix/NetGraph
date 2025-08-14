@@ -45,6 +45,10 @@ def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
                 def __init__(self, execution_order: int, step_type: str) -> None:
                     self.execution_order = execution_order
                     self.step_type = step_type
+                    # Optional fields added in metadata; harmless defaults for stub
+                    self.scenario_seed = None
+                    self.step_seed = None
+                    self.seed_source = "none"
 
             return {"msd": _MD(0, "MaximumSupportedDemandAnalysis")}
 

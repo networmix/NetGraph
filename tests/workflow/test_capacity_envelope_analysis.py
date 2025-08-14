@@ -189,6 +189,8 @@ class TestCapacityEnvelopeAnalysis:
 
         # Verify results were processed (just check that the step ran without error)
         # The analysis and results storage happened as evidenced by the log messages
+        # Metadata is recorded by the execute() wrapper; here we called run() directly,
+        # so metadata may be absent. This check is only applicable when using execute().
 
     @patch("ngraph.workflow.capacity_envelope_analysis.FailureManager")
     def test_run_with_failure_patterns(self, mock_failure_manager_class, mock_scenario):

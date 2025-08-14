@@ -70,6 +70,8 @@ class WorkflowStep(ABC):
 
     name: str = ""
     seed: Optional[int] = None
+    # Internal: provenance of the step seed ("explicit-step" or "scenario-derived" or "none").
+    _seed_source: str = ""
 
     def execute(self, scenario: "Scenario") -> None:
         """Execute the workflow step with logging and metadata storage.
@@ -94,9 +96,36 @@ class WorkflowStep(ABC):
         step_name = self.name
         display_name = step_name or step_type
 
+        # Determine seed provenance and effective seed for this step
+        scenario_seed = getattr(scenario, "seed", None)
+        step_seed = self.seed
+        explicit_source = getattr(self, "_seed_source", None)
+        if step_seed is not None and explicit_source == "explicit-step":
+            seed_source = "explicit-step"
+            active_seed = step_seed
+        elif step_seed is not None and explicit_source == "scenario-derived":
+            # Step received a derived seed at construction time
+            seed_source = "scenario-derived"
+            active_seed = step_seed
+        elif scenario_seed is not None:
+            seed_source = "scenario-derived"
+            # Scenario.from_yaml derives per-step seeds when seed is provided; if a
+            # concrete seed was not set on the step (self.seed is None), treat the
+            # scenario seed as the active base (workers may derive offsets internally).
+            active_seed = scenario_seed
+        else:
+            seed_source = "none"
+            active_seed = None
+
         # Store workflow metadata before execution using the exact step namespace key
         scenario.results.put_step_metadata(
-            step_name=step_name, step_type=step_type, execution_order=_execution_counter
+            step_name=step_name,
+            step_type=step_type,
+            execution_order=_execution_counter,
+            scenario_seed=scenario_seed,
+            step_seed=step_seed,
+            seed_source=seed_source,
+            active_seed=active_seed,
         )
         _execution_counter += 1
 
