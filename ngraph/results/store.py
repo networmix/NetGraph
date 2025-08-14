@@ -142,7 +142,7 @@ class Results:
         """
         out: Dict[str, Any] = {}
 
-        # Add workflow metadata
+        # Add workflow metadata (reserved key: 'workflow')
         out["workflow"] = {
             step_name: {
                 "step_type": metadata.step_type,

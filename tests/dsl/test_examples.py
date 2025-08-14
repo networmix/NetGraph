@@ -358,8 +358,9 @@ workflow:
 
     # Test running the workflow
     scenario.run()
-    # Check that build_graph step was executed (BuildGraph uses empty name by default)
-    build_graph_result = scenario.results.get("", "graph")
+    # Check that build_graph step was executed (default unique name assigned)
+    step_name = scenario.workflow[0].name
+    build_graph_result = scenario.results.get(step_name, "graph")
     assert build_graph_result is not None
 
 

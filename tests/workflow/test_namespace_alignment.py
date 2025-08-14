@@ -18,22 +18,24 @@ workflow:
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    # Sanity: BuildGraph step has empty name by default
-    assert scenario.workflow and (scenario.workflow[0].name == "")
+    # Default step naming assigns a unique non-empty name like "BuildGraph_0"
+    assert scenario.workflow
+    step_name = scenario.workflow[0].name
+    assert isinstance(step_name, str) and step_name != ""
 
     scenario.run()
 
-    # Stored results and metadata must share the exact same step name namespace (empty string)
-    graph = scenario.results.get("", "graph")
+    # Stored results and metadata must share the exact same step name namespace
+    graph = scenario.results.get(step_name, "graph")
     assert graph is not None
 
-    md = scenario.results.get_step_metadata("")
+    md = scenario.results.get_step_metadata(step_name)
     assert md is not None
-    assert md.step_name == ""
+    assert md.step_name == step_name
     assert md.step_type == "BuildGraph"
 
     # Execution order listing includes the empty-name step
-    assert scenario.results.get_steps_by_execution_order() == [""]
+    assert scenario.results.get_steps_by_execution_order() == [step_name]
 
 
 def test_cost_power_efficiency_denominator_global_fallback_uses_latest() -> None:

@@ -450,6 +450,8 @@ class Scenario:
             raise ValueError("'workflow' must be a list if present.")
 
         steps: List[WorkflowStep] = []
+        # Track assigned names to enforce uniqueness and avoid result/metadata collisions
+        assigned_names: set[str] = set()
         for step_index, step_info in enumerate(workflow_data):
             step_type = step_info.get("step_type")
             if not step_type:
@@ -466,8 +468,25 @@ class Scenario:
             # Normalize constructor argument keys to handle YAML boolean keys
             normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
 
+            # Resolve a concrete step name to prevent collisions in results/metadata
+            raw_name = normalized_ctor_args.get("name")
+            # Treat blank/whitespace names as missing
+            if isinstance(raw_name, str) and raw_name.strip() == "":
+                raw_name = None
+            step_name = raw_name or f"{step_type}_{step_index}"
+
+            # Enforce uniqueness across the workflow
+            if step_name in assigned_names:
+                raise ValueError(
+                    f"Duplicate workflow step name '{step_name}'. "
+                    "Each step must have a unique name."
+                )
+            assigned_names.add(step_name)
+
+            # Ensure the constructed WorkflowStep receives the resolved unique name
+            normalized_ctor_args["name"] = step_name
+
             # Add seed derivation for workflow steps that don't have explicit seed
-            step_name = normalized_ctor_args.get("name", f"{step_type}_{step_index}")
             if "seed" not in normalized_ctor_args:
                 derived_seed = seed_manager.derive_seed("workflow_step", step_name)
                 if derived_seed is not None:
