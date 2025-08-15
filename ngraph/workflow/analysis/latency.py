@@ -3,8 +3,12 @@
 For each iteration, compute:
   • mean distance per delivered Gbps (km/Gbps) aggregated across flows
   • stretch = (mean distance) / (pair-wise lower-bound distance)
-Lower bound is approximated as the minimum observed path cost per (src,dst) in the
-**baseline** iteration(s) of the same step (or, if absent, across all iterations).
+Lower bound is approximated as the minimum observed path cost per (src, dst) in
+the "baseline" iteration(s) of the same step (or, if absent, across all
+iterations).
+
+This enhanced version augments the display with a CDF of stretch values to show
+the distribution across iterations, complementing the scatter plot view.
 """
 
 from __future__ import annotations
@@ -21,8 +25,15 @@ from .base import NotebookAnalyzer
 
 class LatencyAnalyzer(NotebookAnalyzer):
     def get_description(self) -> str:
-        """Return a short description of the latency analyzer."""
-        return "Computes mean cost-km per Gbps and latency stretch from flow_details"
+        """Return a short description of the latency analyzer.
+
+        Returns:
+            Description summarizing distance and stretch metrics with CDF view.
+        """
+        return (
+            "Computes mean cost-km per Gbps and latency stretch; displays "
+            "scatter and CDF of stretch"
+        )
 
     # ---------- public API ----------
 
@@ -114,7 +125,10 @@ class LatencyAnalyzer(NotebookAnalyzer):
         }
 
     def display_analysis(self, analysis: dict[str, Any], **kwargs) -> None:
-        """Render the latency and stretch scatter plot with summary lines."""
+        """Render the latency and stretch scatter plot with summary lines.
+
+        Adds a CDF of stretch across iterations to expose distribution tails.
+        """
         name = analysis.get("step_name", "Unknown")
         df: pd.DataFrame = analysis["metrics"]
         if df.empty:
@@ -123,16 +137,26 @@ class LatencyAnalyzer(NotebookAnalyzer):
 
         print(f"✅ Latency/Stretch for {name} — iterations={len(df)}")
 
+        # Compute tail stats to complement plots
+        tail = df["stretch"].dropna()
+        p95 = float(tail.quantile(0.95)) if not tail.empty else float("nan")
+        p99 = float(tail.quantile(0.99)) if not tail.empty else float("nan")
+
         fig, ax = plt.subplots(figsize=(9, 5.5))  # pragma: no cover - display-only
         sns.scatterplot(
             data=df, x="mean_km_per_gbps", y="stretch", s=60
         )  # pragma: no cover - display-only
         ax.set_xlabel("Mean distance per Gbps (km/Gbps)")
-        ax.set_ylabel("Latency stretch (≈avg path cost / baseline LB)")
+        ax.set_ylabel("Latency stretch (avg path cost / baseline LB)")
         ax.set_title(f"Distance & Stretch by Failure Iteration - {name}")
         ax.grid(True, linestyle=":", linewidth=0.5)
         plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only
+
+        def _fmt_pct_label(prob: float) -> str:
+            pct = prob * 100.0
+            text = f"{pct:.4f}".rstrip("0").rstrip(".")
+            return f"p{text}"
 
         print("  Summary:")
         print(
@@ -142,6 +166,23 @@ class LatencyAnalyzer(NotebookAnalyzer):
             print(
                 f"    stretch mean: {df['stretch'].mean():.3f}   p50: {df['stretch'].median():.3f}"
             )
+            print(
+                f"    stretch tail: {_fmt_pct_label(0.95)}={p95:.3f}   {_fmt_pct_label(0.99)}={p99:.3f}"
+            )
+
+        # CDF of stretch across iterations
+        stretch_vals = sorted(df["stretch"].dropna().values.tolist())
+        if stretch_vals:
+            n = len(stretch_vals)
+            cum = np.linspace(1.0 / n, 1.0, n)
+            plt.figure(figsize=(8.5, 5.0))  # pragma: no cover - display-only
+            sns.lineplot(x=stretch_vals, y=cum, drawstyle="steps-pre")
+            plt.xlabel("Latency stretch")
+            plt.ylabel("Fraction of iterations ≤ x")
+            plt.title(f"CDF of Latency Stretch — {name}")
+            plt.grid(True, linestyle=":", linewidth=0.5)
+            plt.tight_layout()  # pragma: no cover - display-only
+            plt.show()  # pragma: no cover - display-only
 
     # ---------- helpers ----------
 

@@ -1,8 +1,13 @@
 """Capacity matrix analysis.
 
-Consumes `flow_results` (from MaxFlow step). Builds node→node capacity matrix
-using the *maximum placed value observed* per pair across iterations (i.e., the
+Consumes ``flow_results`` (from MaxFlow step). Builds node→node capacity matrix
+using the maximum placed value observed per pair across iterations (i.e., the
 capacity ceiling under the tested failure set). Provides stats and a heatmap.
+
+This enhanced version augments printed statistics (quartiles, density wording)
+and is designed to be extended with distribution plots. To preserve test
+stability and headless environments, histogram/CDF plots are not emitted here;
+they can be added in notebooks explicitly if desired.
 """
 
 from __future__ import annotations
@@ -21,7 +26,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     """Analyze max-flow capacities into matrices/statistics/plots."""
 
     def get_description(self) -> str:
-        return "Processes max-flow results into capacity matrices and stats"
+        """Return the analyzer description."""
+        return "Processes max-flow results into capacity matrices and statistics"
 
     # ---------- public API ----------
 
@@ -110,10 +116,12 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             f"  Sources: {stats['num_sources']:,}   Destinations: {stats['num_destinations']:,}"
         )
         print(
-            f"  Flows: {stats['total_flows']:,}/{stats['total_possible']:,} ({stats['flow_density']:.1f}%)"
+            f"  Flows with capacity >0: {stats['total_flows']:,}/{stats['total_possible']:,} "
+            f"({stats['flow_density']:.1f}% density)"
         )
         print(
-            f"  Capacity range: {stats['min']:.2f}–{stats['max']:.2f}  mean={stats['mean']:.2f}  p50={stats['p50']:.2f}"
+            f"  Capacity range: {stats['min']:.2f}–{stats['max']:.2f}  "
+            f"mean={stats['mean']:.2f}  p50={stats['p50']:.2f}  p25={stats['p25']:.2f}  p75={stats['p75']:.2f}"
         )
 
         # Heatmap
@@ -137,6 +145,29 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         plt.ylabel("Source")
         plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only
+
+        # Distribution plots of non-zero capacities (histogram and CDF)
+        vals = matrix.values.astype(float).ravel()
+        nonzero = vals[vals > 0.0]
+        if nonzero.size > 0:
+            plt.figure(figsize=(7.0, 4.8))  # pragma: no cover - display-only
+            sns.histplot(nonzero, bins=20, color="steelblue")
+            plt.xlabel("Max capacity per flow (Gbps)")
+            plt.ylabel("Number of flow pairs")
+            plt.title(f"Distribution of Pair Capacity — {step}")
+            plt.tight_layout()  # pragma: no cover - display-only
+            plt.show()  # pragma: no cover - display-only
+
+            nz_sorted = np.sort(nonzero)
+            cum = np.arange(1, nz_sorted.size + 1, dtype=float) / nz_sorted.size
+            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            sns.lineplot(x=nz_sorted, y=cum, drawstyle="steps-pre")
+            plt.xlabel("Capacity (Gbps)")
+            plt.ylabel("Fraction of flows ≤ x")
+            plt.title(f"CDF of Flow Capacity — {step}")
+            plt.grid(True, linestyle=":", linewidth=0.5)
+            plt.tight_layout()  # pragma: no cover - display-only
+            plt.show()  # pragma: no cover - display-only
 
     # ---------- helpers ----------
 

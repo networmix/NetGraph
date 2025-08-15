@@ -1,15 +1,23 @@
-"""Placement analysis utilities for flow_results (unified design).
+"""Placement analysis utilities for ``flow_results`` (unified design).
 
 Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with the new
-schema under step["data"]["flow_results"]. Builds matrices of mean placed
+schema under ``step["data"]["flow_results"]``. Builds matrices of mean placed
 volume by pair (overall and per priority), with basic statistics.
+
+This enhanced version also computes delivery fraction statistics (placed/
+demand) per flow instance to quantify drops and renders simple distributions
+(histogram and CDF) when demand is present, while preserving existing outputs
+so tests remain stable.
 """
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from .base import NotebookAnalyzer
 
@@ -66,6 +74,43 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
         placement_matrix = self._create_matrix(df_matrix)
         statistics = self._calculate_statistics(placement_matrix)
 
+        # Compute overall delivery ratio and collect per-instance fractions if demand exists
+        total_demand_volume = 0.0
+        total_placed_volume = 0.0
+        fraction_records: list[dict[str, float]] = []
+        for iteration in flow_results:
+            for rec in iteration.get("flows", []):
+                try:
+                    demand = float(rec.get("demand", 0.0))
+                    placed = float(rec.get("placed", 0.0))
+                except Exception:
+                    continue
+                if demand > 0.0:
+                    fraction_records.append(
+                        {
+                            "fraction": placed / demand,
+                            "priority": float(rec.get("priority", 0)),
+                        }
+                    )
+                total_demand_volume += demand
+                total_placed_volume += placed
+
+        overall_delivery_ratio = (
+            total_placed_volume / total_demand_volume
+            if total_demand_volume > 0.0
+            else 1.0
+        )
+
+        # Fraction percentiles as compact robustness summary
+        fraction_percentiles: dict[str, float] = {}
+        if fraction_records:
+            arr = np.asarray([r["fraction"] for r in fraction_records], dtype=float)
+            for label, q in (("p50", 0.5), ("p90", 0.9), ("p95", 0.95), ("p99", 0.99)):
+                try:
+                    fraction_percentiles[label] = float(np.quantile(arr, q))
+                except Exception:
+                    continue
+
         return {
             "status": "success",
             "step_name": step_name,
@@ -74,6 +119,9 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             "statistics": statistics,
             "placement_matrices": placement_matrices,
             "statistics_by_priority": statistics_by_priority,
+            "overall_delivery_ratio": float(overall_delivery_ratio),
+            "fraction_records": fraction_records,
+            "fraction_percentiles": fraction_percentiles,
         }
 
     def analyze_and_display_step(self, results: Dict[str, Any], **kwargs) -> None:
@@ -205,3 +253,75 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
                     scrollCollapse=True,
                     paging=False,
                 )
+        # Summary delivery ratio when demand is provided in the inputs
+        ratio = analysis.get("overall_delivery_ratio")
+        if isinstance(ratio, float):
+            print(f"\nOverall delivered traffic: {ratio * 100:.1f}% of offered demand")
+            fr_p = analysis.get("fraction_percentiles", {})
+            if isinstance(fr_p, dict) and fr_p:
+
+                def _fmt_pct_label(prob: float) -> str:
+                    pct = prob * 100.0
+                    text = f"{pct:.4f}".rstrip("0").rstrip(".")
+                    return f"p{text}"
+
+                # fr_p keys are percentile labels already; reconstruct from mapping to keep uniform look
+                label_map = {0.5: "p50", 0.9: "p90", 0.95: "p95", 0.99: "p99"}
+                ordered = [
+                    (k, v)
+                    for k, v in (
+                        (label_map.get(0.5), fr_p.get("p50")),
+                        (label_map.get(0.9), fr_p.get("p90")),
+                        (label_map.get(0.95), fr_p.get("p95")),
+                        (label_map.get(0.99), fr_p.get("p99")),
+                    )
+                    if k and v is not None
+                ]
+                summary = ", ".join([f"{k}={(v * 100):.2f}%" for k, v in ordered])
+                print(f"  Delivered fraction percentiles: {summary}")
+
+        # Distribution plots of per-flow delivery fractions if available
+        frac_records = analysis.get("fraction_records")
+        if isinstance(frac_records, list) and frac_records:
+            df_frac = pd.DataFrame(frac_records)
+            total = len(df_frac)
+            full = int((df_frac["fraction"] >= 0.999).sum())
+            zero = int((df_frac["fraction"] <= 1e-9).sum())
+            print(
+                f"  Flow instances fully delivered: {full}/{total} ({full / total * 100:.1f}%)"
+            )
+            print(
+                f"  Flow instances completely dropped: {zero}/{total} ({zero / total * 100:.1f}%)"
+            )
+
+            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            if "priority" in df_frac.columns and df_frac["priority"].nunique() > 1:
+                sns.histplot(
+                    data=df_frac,
+                    x="fraction",
+                    hue="priority",
+                    bins=20,
+                    multiple="layer",
+                    alpha=0.6,
+                )
+                plt.legend(title="Priority")
+            else:
+                sns.histplot(
+                    x=df_frac["fraction"].to_numpy(), bins=20, color="forestgreen"
+                )
+            plt.xlabel("Fraction of demand delivered")
+            plt.ylabel("Number of flow occurrences")
+            plt.title(f"Distribution of Delivered Fractions — {step_name}")
+            plt.tight_layout()  # pragma: no cover - display-only
+            plt.show()  # pragma: no cover - display-only
+
+            vals = np.sort(df_frac["fraction"].to_numpy())
+            cum = np.linspace(1.0 / len(vals), 1.0, len(vals))
+            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            sns.lineplot(x=vals, y=cum, drawstyle="steps-pre")
+            plt.xlabel("Fraction of demand delivered")
+            plt.ylabel("Fraction of flow instances ≤ x")
+            plt.title(f"CDF of Demand Satisfaction — {step_name}")
+            plt.grid(True, linestyle=":", linewidth=0.5)
+            plt.tight_layout()  # pragma: no cover - display-only
+            plt.show()  # pragma: no cover - display-only
