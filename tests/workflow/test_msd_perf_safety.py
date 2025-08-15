@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ngraph.workflow.maximum_supported_demand import MaximumSupportedDemandAnalysis
+from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 
 
 class _ScenarioStub:
@@ -30,32 +30,12 @@ def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
         [TrafficDemand(source_path="A", sink_path="C", demand=2.0, mode="pairwise")],
     )
 
-    class _ResultsStore:
-        def __init__(self) -> None:
-            self._data = {}
+    from ngraph.results.store import Results
 
-        def put(self, step: str, key: str, value: Any) -> None:
-            self._data.setdefault(step, {})[key] = value
-
-        def get(self, step: str, key: str) -> Any:
-            return self._data.get(step, {}).get(key)
-
-        def get_all_step_metadata(self):
-            class _MD:
-                def __init__(self, execution_order: int, step_type: str) -> None:
-                    self.execution_order = execution_order
-                    self.step_type = step_type
-                    # Optional fields added in metadata; harmless defaults for stub
-                    self.scenario_seed = None
-                    self.step_seed = None
-                    self.seed_source = "none"
-
-            return {"msd": _MD(0, "MaximumSupportedDemandAnalysis")}
-
-    scenario = _ScenarioStub(net, tmset, _ResultsStore())
+    scenario = _ScenarioStub(net, tmset, Results())
 
     # Run MSD with seeds=2; this exercises repeated evaluation within one TM build
-    msd = MaximumSupportedDemandAnalysis(
+    msd = MaximumSupportedDemand(
         matrix_name="default",
         seeds_per_alpha=2,
         alpha_start=1.0,
@@ -66,9 +46,10 @@ def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
     )
 
     msd.name = "msd"
-    msd.run(scenario)
+    msd.execute(scenario)
 
     # Expect alpha_star >= 1 because demand=2 fits capacity 5
-    alpha_star = scenario.results.get("msd", "alpha_star")
+    exported = scenario.results.to_dict()
+    alpha_star = exported["steps"]["msd"]["data"].get("alpha_star")
     assert alpha_star is not None
     assert float(alpha_star) >= 1.0

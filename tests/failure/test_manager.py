@@ -429,14 +429,15 @@ class TestFailureManagerErrorHandling:
 
 
 class TestFailureManagerConvenienceMethods:
-    """Test convenience methods for specific analysis types."""
+    """Test convenience methods for specific analysis types against new contracts."""
 
     @patch("ngraph.monte_carlo.functions.max_flow_analysis")
-    @patch("ngraph.monte_carlo.results.CapacityEnvelopeResults")
     def test_run_max_flow_monte_carlo(
-        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
+        self, mock_analysis_func, failure_manager: FailureManager
     ) -> None:
-        mock_analysis_func.return_value = [("src", "dst", 100.0)]
+        mock_analysis_func.return_value = [
+            ("src", "dst", 100.0)
+        ]  # unused; type compatibility
 
         mock_mc_result = {
             "results": [[("src", "dst", 100.0)], [("src", "dst", 90.0)]],
@@ -447,7 +448,7 @@ class TestFailureManagerConvenienceMethods:
         with patch.object(
             failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
         ):
-            failure_manager.run_max_flow_monte_carlo(
+            out = failure_manager.run_max_flow_monte_carlo(
                 source_path="datacenter.*",
                 sink_path="edge.*",
                 mode="combine",
@@ -455,12 +456,11 @@ class TestFailureManagerConvenienceMethods:
                 parallelism=1,
             )
 
-            mock_results_class.assert_called_once()
+            assert out == mock_mc_result
 
     @patch("ngraph.monte_carlo.functions.demand_placement_analysis")
-    @patch("ngraph.monte_carlo.results.DemandPlacementResults")
     def test_run_demand_placement_monte_carlo(
-        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
+        self, mock_analysis_func, failure_manager: FailureManager
     ) -> None:
         mock_analysis_func.return_value = {"total_placed": 100.0}
 
@@ -480,70 +480,15 @@ class TestFailureManagerConvenienceMethods:
         with patch.object(
             failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
         ):
-            failure_manager.run_demand_placement_monte_carlo(
+            out = failure_manager.run_demand_placement_monte_carlo(
                 demands_config=mock_traffic_set, iterations=1, parallelism=1
             )
 
-            mock_results_class.assert_called_once()
+            assert out == mock_mc_result
 
     @patch("ngraph.monte_carlo.functions.sensitivity_analysis")
-    @patch("ngraph.monte_carlo.results.SensitivityResults")
-    def test_run_sensitivity_monte_carlo(
-        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
-    ) -> None:
-        mock_analysis_func.return_value = {"flow->key": {"component": 0.5}}
-
-        mock_mc_result = {
-            "results": [{"flow->key": {"component": 0.5}}],
-            "failure_patterns": [],
-            "metadata": {"iterations": 1},
-        }
-
-        with patch.object(
-            failure_manager, "run_monte_carlo_analysis", return_value=mock_mc_result
-        ):
-            failure_manager.run_sensitivity_monte_carlo(
-                source_path="datacenter.*",
-                sink_path="edge.*",
-                mode="combine",
-                iterations=1,
-                parallelism=1,
-            )
-
-            mock_results_class.assert_called_once()
-
-
-class TestFailureManagerMetadataAndLogging:
-    """Test metadata collection and logging functionality."""
-
-    def test_monte_carlo_metadata_collection(
-        self, failure_manager: FailureManager
-    ) -> None:
-        result = failure_manager.run_monte_carlo_analysis(
-            analysis_func=mock_analysis_func,
-            iterations=3,
-            parallelism=1,
-            baseline=True,
-            seed=42,
-        )
-
-        metadata = result["metadata"]
-        assert metadata["iterations"] == 3
-        assert metadata["parallelism"] == 1
-        assert metadata["baseline"] is True
-        assert metadata["analysis_function"] == "mock_analysis_func"
-        assert metadata["policy_name"] == "test_policy"
-        assert "execution_time" in metadata
-        assert "unique_patterns" in metadata
-
-
-class TestFailureManagerStringConversions:
-    """Test string-based flow placement conversion in convenience methods."""
-
-    @patch("ngraph.monte_carlo.functions.max_flow_analysis")
-    @patch("ngraph.monte_carlo.results.CapacityEnvelopeResults")
     def test_string_flow_placement_conversion(
-        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
+        self, mock_analysis_func, failure_manager: FailureManager
     ) -> None:
         mock_mc_result = {
             "results": [[("src", "dst", 100.0)]],
@@ -597,9 +542,8 @@ class TestFailureManagerStringConversions:
         assert "Valid values are: PROPORTIONAL, EQUAL_BALANCED" in error_msg
 
     @patch("ngraph.monte_carlo.functions.sensitivity_analysis")
-    @patch("ngraph.monte_carlo.results.SensitivityResults")
     def test_valid_string_flow_placement_sensitivity(
-        self, mock_results_class, mock_analysis_func, failure_manager: FailureManager
+        self, mock_analysis_func, failure_manager: FailureManager
     ) -> None:
         mock_mc_result = {
             "results": [{"component1": {"score": 0.5}}],

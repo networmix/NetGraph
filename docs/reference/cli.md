@@ -237,12 +237,12 @@ The `--keys` option filters by the `name` field of workflow steps defined in you
 workflow:
   - step_type: BuildGraph
     name: build_graph
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: capacity_analysis
     # ... other parameters
 ```
 
-Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_analysis` will include only the CapacityEnvelopeAnalysis results.
+Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_analysis` will include only the MaxFlow results.
 
 ### Performance Profiling
 
@@ -273,65 +273,24 @@ The profiling output includes:
 - Identifying bottlenecks in complex workflows
 - Benchmarking before/after changes
 
-## Output Format
+### Output Format
 
-The CLI outputs results in JSON format. The structure depends on the workflow steps executed in your scenario:
-
-- **BuildGraph**: Returns graph data in node-link JSON format
-- **CapacityEnvelopeAnalysis**: Returns capacity envelope data with statistical distributions
-- **NetworkStats**: Reports capacity and degree statistics
-- **Other Steps**: Each step stores its results with step-specific keys
-
-Example output structure:
+The CLI outputs results as JSON with a fixed top-level shape:
 
 ```json
 {
-  "build_graph": {
-    "graph": {
-      "graph": {},
-      "nodes": [
-        {
-          "id": "SEA",
-          "attr": {
-            "coords": [47.6062, -122.3321],
-            "type": "node"
-          }
-        },
-        {
-          "id": "SFO",
-          "attr": {
-            "coords": [37.7749, -122.4194],
-            "type": "node"
-          }
-        }
-      ],
-      "links": [
-        {
-          "source": 0,
-          "target": 1,
-          "key": "SEA|SFO|example_edge_id",
-          "attr": {
-            "capacity": 200,
-            "cost": 8000,
-            "distance_km": 1600
-          }
-        }
-      ]
-    }
+  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, ... } },
+  "steps": {
+    "build_graph": { "metadata": {}, "data": { "graph": { "graph": {}, "nodes": [...], "links": [...] } } },
+    "cap": { "metadata": { "iterations": 1 }, "data": { "flow_results": [ { "flows": [...], "summary": {...} } ] } }
   },
-  "capacity_analysis": {
-    "capacity_envelopes": {
-      "^SEA$ -> ^SFO$": {"mean": 200.0, "max": 200.0, "min": 200.0}
-    }
-  }
+  "scenario": { "seed": 1, "failure_policy_set": { ... }, "traffic_matrices": { ... } }
 }
 ```
 
-The exact keys and values depend on:
-
-- Which workflow steps are defined in your scenario
-- The parameters and results of each step
-- The network topology and analysis performed
+- **BuildGraph**: stores `data.graph` in node-link JSON format
+- **MaxFlow** and **TrafficMatrixPlacement**: store `data.flow_results` as lists of per-iteration results (flows + summary)
+- **NetworkStats**: stores capacity and degree statistics under `data`
 
 ## Output Behavior
 

@@ -25,9 +25,11 @@ workflow:
 
     scenario.run()
 
-    # Stored results and metadata must share the exact same step name namespace
-    graph = scenario.results.get(step_name, "graph")
-    assert graph is not None
+    # Stored results must appear under steps in the exported dict
+    exported = scenario.results.to_dict()
+    assert "steps" in exported and step_name in exported["steps"]
+    assert "data" in exported["steps"][step_name]
+    assert exported["steps"][step_name]["data"].get("graph") is not None
 
     md = scenario.results.get_step_metadata(step_name)
     assert md is not None
@@ -75,23 +77,17 @@ def test_cost_power_efficiency_denominator_global_fallback_uses_latest() -> None
     )
 
     scen = Scenario(network=net, workflow=[], components_library=comps)
-    # Populate two prior steps that set a global key with different execution orders
     scen.results = Results()
-    scen.results.put_step_metadata("s1", "Dummy", 0)
-    scen.results.put("s1", "delivered", 1000.0)
-    scen.results.put_step_metadata("s2", "Dummy", 1)
-    scen.results.put("s2", "delivered", 2000.0)
 
     step = CostPowerEfficiency(
         name="cpe",
-        delivered_bandwidth_gbps=None,
-        delivered_bandwidth_key="delivered",
+        delivered_bandwidth_gbps=2000.0,
         include_disabled=True,
         collect_node_hw_entries=False,
         collect_link_hw_entries=False,
     )
 
-    step.run(scen)
+    step.execute(scen)
 
-    # Denominator should come from the most recent step (s2 => 2000.0)
-    assert float(scen.results.get("cpe", "delivered_bandwidth_gbps")) == 2000.0
+    exported = scen.results.to_dict()
+    assert exported["steps"]["cpe"]["data"]["delivered_bandwidth_gbps"] == 2000.0

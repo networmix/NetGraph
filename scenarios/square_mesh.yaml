@@ -54,37 +54,58 @@ failure_policy_set:
             count: 1
 
 traffic_matrix_set:
-  default:
+  baseline_traffic_matrix:
     - source_path: "^N([1-4])$"
       sink_path: "^N([1-4])$"
       demand: 12.0
       mode: "pairwise"
+      attrs:
+        euclidean_km: 10
 
 workflow:
-  # Single pairwise analysis generates complete 4x4 node-to-node capacity matrix
-  - step_type: CapacityEnvelopeAnalysis
-    name: "node_to_node_capacity_matrix"
-    source_path: "^(N[1-4])$"        # Capturing group creates separate groups: "1", "2", "3", "4"
-    sink_path: "^(N[1-4])$"          # Capturing group creates separate groups: "1", "2", "3", "4"
-    mode: "pairwise"                 # Generates all source-sink combinations (16 total)
-    failure_policy: "single_link_failure"
-    iterations: 10                   # Monte Carlo iterations per node pair
-    parallelism: 8                   # Number of parallel worker processes
-    shortest_path: false             # Allow all paths for flow analysis
-    flow_placement: "PROPORTIONAL"   # Distribute flow proportionally across paths
-    baseline: true                   # Include baseline (no failure) analysis
-    seed: 42                         # Reproducible results
-    store_failure_patterns: true     # Retain failure patterns for analysis
-    include_flow_summary: true       # Include cost distribution and min-cut analysis
+  # 1) Maximum Supported Demand search
+  - step_type: MaximumSupportedDemand
+    name: "msd_default"
+    matrix_name: "baseline_traffic_matrix"
+    acceptance_rule: "hard"
+    alpha_start: 1.0
+    growth_factor: 2.0
+    alpha_min: 1e-6
+    alpha_max: 1e9
+    resolution: 0.01
+    max_bracket_iters: 16
+    max_bisect_iters: 32
+    seeds_per_alpha: 1
+    placement_rounds: "auto"
 
-  - step_type: TrafficMatrixPlacementAnalysis
+  # 2) Traffic matrix placement using MSD alpha
+  - step_type: TrafficMatrixPlacement
     name: "tm_placement"
-    matrix_name: "default"
+    matrix_name: "baseline_traffic_matrix"
     failure_policy: "single_link_failure"
-    iterations: 10
+    iterations: 3
     parallelism: 8
     placement_rounds: "auto"
     baseline: true
     seed: 42
     store_failure_patterns: true
     include_flow_details: true
+    alpha_from_step: "msd_default"
+    alpha_from_field: "data.alpha_star"
+
+  # 3) MaxFlow capacity matrix between all node pairs
+  - step_type: MaxFlow
+    name: "node_to_node_capacity_matrix"
+    source_path: "^(N[1-4])$"        # Capturing group creates separate groups: "1", "2", "3", "4"
+    sink_path: "^(N[1-4])$"          # Capturing group creates separate groups: "1", "2", "3", "4"
+    mode: "pairwise"                 # Generates all source-sink combinations (16 total)
+    failure_policy: "single_link_failure"
+    iterations: 3                    # Monte Carlo iterations per node pair
+    parallelism: 8                    # Number of parallel worker processes
+    shortest_path: false              # Allow all paths for flow analysis
+    flow_placement: "PROPORTIONAL"    # Distribute flow proportionally across paths
+    baseline: true                    # Include baseline (no failure) analysis
+    seed: 42                          # Reproducible results
+    store_failure_patterns: true      # Retain failure patterns for analysis
+    include_flow_details: true        # Include cost distribution
+    include_min_cut: true             # Include min-cut edges

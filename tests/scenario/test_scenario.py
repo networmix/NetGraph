@@ -28,9 +28,10 @@ class DoSmth(WorkflowStep):
     def run(self, scenario: Scenario) -> None:
         """
         Perform a dummy operation for testing.
-        Store something in scenario.results using the step name as a key.
+        Store something in scenario.results under this step.
         """
-        scenario.results.put(self.name, "ran", True)
+        scenario.results.put("metadata", {})
+        scenario.results.put("data", {"ran": True})
 
 
 @dataclass
@@ -42,7 +43,8 @@ class DoSmthElse(WorkflowStep):
     factor: float = 1.0
 
     def run(self, scenario: Scenario) -> None:
-        scenario.results.put(self.name, "ran", True)
+        scenario.results.put("metadata", {})
+        scenario.results.put("data", {"ran": True})
 
 
 # Register the classes after definition to avoid decorator ordering issues
@@ -290,7 +292,6 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert isinstance(simple_policy, FailurePolicy)
     assert not simple_policy.fail_risk_groups
     assert not simple_policy.fail_risk_group_children
-    # use_cache was removed
 
     assert len(simple_policy.modes) == 1
     assert simple_policy.attrs.get("name") == "multi_rule_example"
@@ -340,8 +341,9 @@ def test_scenario_run(valid_scenario_yaml: str) -> None:
     scenario = Scenario.from_yaml(valid_scenario_yaml)
     scenario.run()
 
-    assert scenario.results.get("Step1", "ran", default=False) is True
-    assert scenario.results.get("Step2", "ran", default=False) is True
+    exp = scenario.results.to_dict()
+    assert exp["steps"]["Step1"]["data"].get("ran") is True
+    assert exp["steps"]["Step2"]["data"].get("ran") is True
 
 
 def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> None:

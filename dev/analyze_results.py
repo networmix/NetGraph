@@ -84,7 +84,8 @@ def summarize_workflow(results: dict[str, Any]) -> None:
 
 
 def summarize_network_stats(results: dict[str, Any], step_name: str) -> None:
-    stats = results.get(step_name)
+    steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+    stats = steps_map.get(step_name, {}).get("data")
     print(f"\nNetworkStats [{step_name}]")
     print("-" * 12)
     if not isinstance(stats, dict):
@@ -123,7 +124,8 @@ def summarize_capacity_envelopes(
 ) -> dict[str, Any]:
     print(f"\nCapacityEnvelopeAnalysis [{step_name}]")
     print("-" * 24)
-    step = results.get(step_name)
+    steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+    step = steps_map.get(step_name)
     if not isinstance(step, dict):
         print(f"❌ step '{step_name}' not found")
         return {}
@@ -300,7 +302,8 @@ def validate_against_scenario(
     # Flow summary validation (if present) for CapacityEnvelopeAnalysis
     flow_summary_present = False
     # Look up the specific step by name
-    step_data = results.get(step_name, {}) if isinstance(step_name, str) else {}
+    steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+    step_data = steps_map.get(step_name, {}) if isinstance(step_name, str) else {}
     envelopes = (
         step_data.get("capacity_envelopes", {}) if isinstance(step_data, dict) else {}
     )
@@ -346,7 +349,7 @@ def validate_all_steps(results: dict[str, Any], scenario: dict[str, Any]) -> boo
     """
 
     expected_steps = _extract_expected_steps(scenario)
-    result_step_roots = _result_step_names(results)
+    result_step_roots = set(results.get("steps", {}).keys())
 
     ok = True
 
@@ -402,7 +405,8 @@ def validate_all_steps(results: dict[str, Any], scenario: dict[str, Any]) -> boo
 def summarize_tm_placement(results: dict[str, Any], step_name: str) -> dict[str, Any]:
     print(f"\nTrafficMatrixPlacementAnalysis [{step_name}]")
     print("-" * 30)
-    step = results.get(step_name)
+    steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+    step = steps_map.get(step_name)
     if not isinstance(step, dict):
         print(f"❌ step '{step_name}' not found")
         return {}
@@ -540,7 +544,8 @@ def validate_tm_placement(
     # Informational: compare number of envelopes to potential cross pairs derived
     # from labels present in placement envelopes themselves
     # (No failure if they differ; TMs may cover subsets.)
-    step_data = results.get(step_name, {}) if isinstance(step_name, str) else {}
+    steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+    step_data = steps_map.get(step_name, {}) if isinstance(step_name, str) else {}
     env = (
         step_data.get("placement_envelopes", {}) if isinstance(step_data, dict) else {}
     )
@@ -781,9 +786,9 @@ def main() -> int:
     # No scenario: summarize all recognized steps based on workflow metadata
     for ns_name in _step_names_by_type(results, "NetworkStats"):
         summarize_network_stats(results, ns_name)
-    for ce_name in _step_names_by_type(results, "CapacityEnvelopeAnalysis"):
+    for ce_name in _step_names_by_type(results, "MaxFlow"):
         summarize_capacity_envelopes(results, ce_name)
-    for tm_name in _step_names_by_type(results, "TrafficMatrixPlacementAnalysis"):
+    for tm_name in _step_names_by_type(results, "TrafficMatrixPlacement"):
         summarize_tm_placement(results, tm_name)
 
     return 0

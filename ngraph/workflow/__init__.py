@@ -2,19 +2,19 @@
 
 from .base import WorkflowStep, register_workflow_step
 from .build_graph import BuildGraph
-from .capacity_envelope_analysis import CapacityEnvelopeAnalysis
 from .cost_power_efficiency import CostPowerEfficiency
-from .maximum_supported_demand import MaximumSupportedDemandAnalysis
+from .max_flow_step import MaxFlow
+from .maximum_supported_demand_step import MaximumSupportedDemand
 from .network_stats import NetworkStats
-from .traffic_matrix_placement_analysis import TrafficMatrixPlacementAnalysis
+from .traffic_matrix_placement_step import TrafficMatrixPlacement
 
 __all__ = [
     "WorkflowStep",
     "register_workflow_step",
     "BuildGraph",
-    "CapacityEnvelopeAnalysis",
+    "MaxFlow",
     "NetworkStats",
-    "TrafficMatrixPlacementAnalysis",
-    "MaximumSupportedDemandAnalysis",
+    "TrafficMatrixPlacement",
+    "MaximumSupportedDemand",
     "CostPowerEfficiency",
 ]

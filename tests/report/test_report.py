@@ -21,13 +21,15 @@ def sample_results():
                 "execution_order": 0,
             },
             "step2": {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "step_name": "step2",
                 "execution_order": 1,
             },
         },
-        "step1": {"node_count": 8, "link_count": 12},
-        "step2": {"capacity_envelopes": {"flow1": {"max": 1000, "min": 500}}},
+        "steps": {
+            "step1": {"data": {"node_count": 8, "link_count": 12}},
+            "step2": {"data": {"flow_results": []}},
+        },
     }
 
 

@@ -109,7 +109,7 @@ workflow:
     name: build_graph
 
   # Forward direction analysis - equivalent to capacity_probe
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: capacity_analysis_forward
     source_path: my_clos1/b.*/t1
     sink_path: my_clos2/b.*/t1
@@ -121,7 +121,7 @@ workflow:
     failure_policy: null
 
   # Reverse direction analysis - equivalent to capacity_probe with probe_reverse
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: capacity_analysis_reverse
     source_path: my_clos2/b.*/t1
     sink_path: my_clos1/b.*/t1
@@ -133,7 +133,7 @@ workflow:
     failure_policy: null
 
   # Forward direction with EQUAL_BALANCED - equivalent to capacity_probe2
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: capacity_analysis_forward_balanced
     source_path: my_clos1/b.*/t1
     sink_path: my_clos2/b.*/t1
@@ -145,7 +145,7 @@ workflow:
     failure_policy: null
 
   # Reverse direction with EQUAL_BALANCED - equivalent to capacity_probe2 with probe_reverse
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: capacity_analysis_reverse_balanced
     source_path: my_clos2/b.*/t1
     sink_path: my_clos1/b.*/t1

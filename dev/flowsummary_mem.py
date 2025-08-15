@@ -7,7 +7,7 @@ from dataclasses import is_dataclass
 from typing import Any
 
 from ngraph.scenario import Scenario
-from ngraph.workflow.capacity_envelope_analysis import CapacityEnvelopeAnalysis
+from ngraph.workflow.max_flow_step import MaxFlow
 
 
 def _deep_size(obj: Any, seen: set[int] | None = None) -> int:
@@ -63,11 +63,11 @@ def _deep_size(obj: Any, seen: set[int] | None = None) -> int:
     return size
 
 
-def pick_capacity_step(scn: Scenario) -> CapacityEnvelopeAnalysis:
+def pick_capacity_step(scn: Scenario) -> MaxFlow:
     for step in scn.workflow:
-        if isinstance(step, CapacityEnvelopeAnalysis):
+        if isinstance(step, MaxFlow):
             return step
-    raise RuntimeError("No CapacityEnvelopeAnalysis step found in scenario")
+    raise RuntimeError("No MaxFlow step found in scenario")
 
 
 def stringify_edge(edge: Any) -> str:

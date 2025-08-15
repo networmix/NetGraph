@@ -1,102 +1,118 @@
-"""Package management for notebook analysis components.
+"""Environment setup for notebook analysis components.
 
-Provides light-weight helpers to ensure plotting/display packages are available
-in interactive environments and to apply sensible defaults.
+This module configures plotting and table-display libraries used by notebook
+analysis. It does not install packages dynamically. All required dependencies
+must be declared in ``pyproject.toml`` and available at runtime.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 import itables.options as itables_opt
 import matplotlib.pyplot as plt
 
 
 class PackageManager:
-    """Manage package installation and imports for notebooks."""
+    """Configure plotting and table-display packages for notebooks.
+
+    The class validates that required packages are importable and applies common
+    styling defaults for plots and data tables.
+    """
 
     REQUIRED_PACKAGES = {
         "itables": "itables",
         "matplotlib": "matplotlib",
+        "seaborn": "seaborn",
+        "pandas": "pandas",
+        "numpy": "numpy",
     }
 
     @classmethod
-    def check_and_install_packages(cls) -> Dict[str, Any]:
-        """Check for required packages and install if missing.
+    def check_packages(cls) -> dict[str, Any]:
+        """Return availability status of required packages.
 
         Returns:
-            Status dictionary with installation results and messages.
+            A dictionary with keys:
+                - ``missing_packages``: list of missing import names.
+                - ``message``: short status message.
         """
         import importlib
-        import subprocess
-        import sys
 
-        missing_packages = []
-
-        for package_name, pip_name in cls.REQUIRED_PACKAGES.items():
+        missing: list[str] = []
+        for pkg in cls.REQUIRED_PACKAGES:
             try:
-                importlib.import_module(package_name)
+                importlib.import_module(pkg)
             except ImportError:
-                missing_packages.append(pip_name)
+                missing.append(pkg)
 
-        result = {
-            "missing_packages": missing_packages,
-            "installation_needed": len(missing_packages) > 0,
+        return {
+            "missing_packages": missing,
+            "message": (
+                "All required packages are available"
+                if not missing
+                else f"Missing packages: {', '.join(missing)}"
+            ),
         }
 
-        if missing_packages:
-            try:
-                subprocess.check_call(
-                    [sys.executable, "-m", "pip", "install"] + missing_packages
-                )
-                result["installation_success"] = True
-                result["message"] = (
-                    f"Successfully installed: {', '.join(missing_packages)}"
-                )
-            except subprocess.CalledProcessError as e:
-                result["installation_success"] = False
-                result["error"] = str(e)
-                result["message"] = f"Installation failed: {e}"
-        else:
-            result["message"] = "All required packages are available"
-
-        return result
-
     @classmethod
-    def setup_environment(cls) -> Dict[str, Any]:
-        """Set up the notebook environment.
+    def setup_environment(cls) -> dict[str, Any]:
+        """Configure plotting and table libraries if present.
 
         Returns:
-            Status dictionary with environment configuration details.
+            A dictionary with keys:
+                - ``status``: ``"success"`` or ``"error"``.
+                - ``message``: short message.
+                - ``missing_packages``: list of missing import names.
         """
-        # Check and install packages
-        install_result = cls.check_and_install_packages()
-
-        if not install_result.get("installation_success", True):
-            return install_result
-
+        check = cls.check_packages()
+        if check["missing_packages"]:
+            return {
+                **check,
+                "status": "error",
+                "message": check["message"],
+            }
         try:
-            # Configure matplotlib
             plt.style.use("seaborn-v0_8")
+            import seaborn as sns
 
-            # Configure itables
+            sns.set_context("talk")
+            sns.set_palette("deep")
+
+            # Global matplotlib tuning for clearer figures
+            plt.rcParams.update(
+                {
+                    # Increase on-screen DPI for crisper inline figures
+                    "figure.dpi": 180,
+                    "savefig.dpi": 300,  # exported images
+                    "figure.autolayout": True,
+                    "axes.grid": True,
+                    "grid.linestyle": ":",
+                    "grid.linewidth": 0.5,
+                    "axes.titlesize": "large",
+                    "axes.labelsize": "medium",
+                    "xtick.labelsize": "small",
+                    "ytick.labelsize": "small",
+                }
+            )
+
             itables_opt.lengthMenu = [10, 25, 50, 100, 500, -1]
-            itables_opt.maxBytes = 10**7  # 10MB limit
-            itables_opt.maxColumns = 200  # Allow more columns
-            itables_opt.showIndex = True  # Always show DataFrame index as a column
+            itables_opt.maxBytes = 10**7
+            itables_opt.maxColumns = 200
+            itables_opt.showIndex = True
 
-            # Configure warnings
             import warnings
 
             warnings.filterwarnings("ignore")
 
             return {
+                **check,
                 "status": "success",
                 "message": "Environment setup complete",
-                **install_result,
             }
-
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - defensive guard in notebooks
             return {
+                **check,
                 "status": "error",
-                "message": f"Environment setup failed: {str(e)}",
-                **install_result,
+                "message": f"Environment setup failed: {e}",
             }

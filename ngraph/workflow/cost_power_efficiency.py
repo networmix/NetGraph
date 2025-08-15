@@ -130,35 +130,9 @@ class CostPowerEfficiency(WorkflowStep):
         # Resolve denominator
         denom = self.delivered_bandwidth_gbps
         if denom is None:
-            # Prefer namespaced lookup under this step's namespace
-            ns = self.name
-            try:
-                val = scenario.results.get(ns, self.delivered_bandwidth_key)
-            except Exception:
-                val = None
-
-            if val is None:
-                # Global lookup across all prior steps: choose value from the most recent step
-                try:
-                    all_vals = scenario.results.get_all(self.delivered_bandwidth_key)
-                    if all_vals:
-                        # Order by execution order descending and pick first available
-                        meta = scenario.results.get_all_step_metadata()
-                        ordered_steps = sorted(
-                            all_vals.keys(),
-                            key=lambda s: meta.get(s).execution_order
-                            if meta.get(s)
-                            else -1,
-                            reverse=True,
-                        )
-                        for step_name in ordered_steps:
-                            val = all_vals.get(step_name)
-                            if val is not None:
-                                break
-                except Exception:
-                    val = None
-
-            denom = float(val) if val is not None else 0.0
+            raise ValueError(
+                "delivered_bandwidth_gbps must be set explicitly for CostPowerEfficiency"
+            )
 
         # Compute normalized metrics; guard zero denominator
         if denom <= 0.0:
@@ -168,20 +142,22 @@ class CostPowerEfficiency(WorkflowStep):
             dollars_per_gbit = total_capex / denom
             watts_per_gbit = total_power_watts / denom
 
-        step_name = self.name
-        scenario.results.put(step_name, "total_capex", total_capex)
-        scenario.results.put(step_name, "total_power_watts", total_power_watts)
-        scenario.results.put(step_name, "delivered_bandwidth_gbps", denom)
-        scenario.results.put(step_name, "dollars_per_gbit", dollars_per_gbit)
-        scenario.results.put(step_name, "watts_per_gbit", watts_per_gbit)
+        # Prepare new schema data payload
+        data_payload: Dict[str, Any] = {
+            "total_capex": float(total_capex),
+            "total_power_watts": float(total_power_watts),
+            "delivered_bandwidth_gbps": float(denom),
+            "dollars_per_gbit": float(dollars_per_gbit),
+            "watts_per_gbit": float(watts_per_gbit),
+        }
 
         # Hardware BOMs (total and per-path), matching include_disabled view
         bom_total = explorer.get_bom(include_disabled=self.include_disabled)
         bom_by_path = explorer.get_bom_map(
             include_disabled=self.include_disabled, include_root=True, root_label=""
         )
-        scenario.results.put(step_name, "hardware_bom_total", bom_total)
-        scenario.results.put(step_name, "hardware_bom_by_path", bom_by_path)
+        data_payload["hardware_bom_total"] = bom_total
+        data_payload["hardware_bom_by_path"] = bom_by_path
 
         # Optional hardware inventory
         node_entries: List[Dict[str, Any]] = []
@@ -191,9 +167,9 @@ class CostPowerEfficiency(WorkflowStep):
                 scenario.components_library, scenario
             )
             if self.collect_node_hw_entries:
-                scenario.results.put(step_name, "node_hw_entries", node_entries)
+                data_payload["node_hw_entries"] = node_entries
             if self.collect_link_hw_entries:
-                scenario.results.put(step_name, "link_hw_entries", link_entries)
+                data_payload["link_hw_entries"] = link_entries
 
         # INFO-level outcome summary for quick visual inspection
         try:
@@ -237,6 +213,10 @@ class CostPowerEfficiency(WorkflowStep):
         except Exception:
             # Logging must not raise
             pass
+
+        # Store under new schema
+        scenario.results.put("metadata", {})
+        scenario.results.put("data", data_payload)
 
         logger.info("Cost/power efficiency analysis completed: %s", self.name)
 

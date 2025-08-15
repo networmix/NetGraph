@@ -8,6 +8,7 @@ from ngraph.monte_carlo.functions import (
     max_flow_analysis,
     sensitivity_analysis,
 )
+from ngraph.results.flow import FlowIterationResult
 
 
 class TestMaxFlowAnalysis:
@@ -40,16 +41,20 @@ class TestMaxFlowAnalysis:
         )
 
         # Verify return format
-        assert result == [
-            {"src": "datacenter", "dst": "edge", "metric": "capacity", "value": 100.0},
-            {"src": "edge", "dst": "datacenter", "metric": "capacity", "value": 80.0},
-        ]
+        assert isinstance(result, FlowIterationResult)
+        pairs = {(e.source, e.destination, e.placed) for e in result.flows}
+        assert ("datacenter", "edge", 100.0) in pairs
+        assert ("edge", "datacenter", 80.0) in pairs
 
     def test_max_flow_analysis_with_summary(self) -> None:
-        """Test include_flow_summary=True path and return shape."""
+        """Test include_flow_details and include_min_cut path and return shape."""
         mock_network_view = MagicMock()
-        summary_obj_1 = {"min_cut_frequencies": {"('A','B')": 3}}
-        summary_obj_2 = {"min_cut_frequencies": {"('B','A')": 1}}
+        summary_obj_1 = MagicMock()
+        summary_obj_1.cost_distribution = {3.0: 10.0}
+        summary_obj_1.min_cut = [("A", "B", "k")]
+        summary_obj_2 = MagicMock()
+        summary_obj_2.cost_distribution = {4.0: 5.0}
+        summary_obj_2.min_cut = [("B", "A", "k")]
         mock_network_view.max_flow_with_summary.return_value = {
             ("X", "Y"): (10.0, summary_obj_1),
             ("Y", "X"): (5.0, summary_obj_2),
@@ -59,7 +64,8 @@ class TestMaxFlowAnalysis:
             network_view=mock_network_view,
             source_regex="X.*",
             sink_regex="Y.*",
-            include_flow_summary=True,
+            include_flow_details=True,
+            include_min_cut=True,
         )
 
         mock_network_view.max_flow_with_summary.assert_called_once_with(
@@ -70,11 +76,10 @@ class TestMaxFlowAnalysis:
             flow_placement=FlowPlacement.PROPORTIONAL,
         )
 
-        fr_xy = next(fr for fr in result if fr["src"] == "X" and fr["dst"] == "Y")
-        assert fr_xy["metric"] == "capacity" and fr_xy["value"] == 10.0
-        assert isinstance(fr_xy.get("stats"), dict)
-        fr_yx = next(fr for fr in result if fr["src"] == "Y" and fr["dst"] == "X")
-        assert fr_yx["metric"] == "capacity" and fr_yx["value"] == 5.0
+        assert isinstance(result, FlowIterationResult)
+        e_xy = next(e for e in result.flows if e.source == "X" and e.destination == "Y")
+        assert e_xy.cost_distribution.get(3.0) == 10.0
+        assert e_xy.data.get("edges_kind") == "min_cut"
 
     def test_max_flow_analysis_with_optional_params(self) -> None:
         """Test max_flow_analysis with optional parameters."""
@@ -99,7 +104,9 @@ class TestMaxFlowAnalysis:
             flow_placement=FlowPlacement.EQUAL_BALANCED,
         )
 
-        assert result == [{"src": "A", "dst": "B", "metric": "capacity", "value": 50.0}]
+        assert isinstance(result, FlowIterationResult)
+        assert len(result.flows) == 1
+        assert result.flows[0].source == "A" and result.flows[0].destination == "B"
 
     def test_max_flow_analysis_empty_result(self) -> None:
         """Test max_flow_analysis with empty result."""
@@ -112,7 +119,11 @@ class TestMaxFlowAnalysis:
             sink_regex="also_nonexistent.*",
         )
 
-        assert result == []
+        assert isinstance(result, FlowIterationResult)
+        assert result.flows == []
+        assert result.summary.total_demand == 0.0
+        assert result.summary.total_placed == 0.0
+        assert result.summary.overall_ratio == 1.0
 
 
 class TestDemandPlacementAnalysis:
@@ -195,20 +206,19 @@ class TestDemandPlacementAnalysis:
             mock_tm.expand_demands.assert_called_once()
             mock_tm.place_all_demands.assert_called_once_with(placement_rounds=25)
 
-            # Verify results structure (dict with per-demand records and summary)
-            assert isinstance(result, dict)
-            assert "demands" in result and "summary" in result
-            demands = result["demands"]
-            assert isinstance(demands, list) and len(demands) == 2
-            dr = sorted(demands, key=lambda x: x["priority"])  # type: ignore[arg-type]
-            assert dr[0]["placement_ratio"] == 0.8 and dr[0]["priority"] == 0
-            assert dr[1]["placement_ratio"] == 1.0 and dr[1]["priority"] == 1
-            summary = result["summary"]
-            assert summary["total_offered_gbps"] == 150.0
-            assert summary["total_placed_gbps"] == 130.0
+            # Verify results structure
+            assert isinstance(result, FlowIterationResult)
+            assert len(result.flows) == 2
+            # Check ordering by priority logic in test
+            dr = sorted(result.flows, key=lambda x: x.priority)
+            assert dr[0].placed == 80.0 and dr[0].priority == 0
+            assert dr[1].placed == 50.0 and dr[1].priority == 1
+            summary = result.summary
+            assert summary.total_demand == 150.0
+            assert summary.total_placed == 130.0
             from pytest import approx
 
-            assert summary["overall_ratio"] == approx(130.0 / 150.0)
+            assert summary.overall_ratio == approx(130.0 / 150.0)
 
     def test_demand_placement_analysis_zero_total_demand(self) -> None:
         """Handles zero total demand without division by zero."""
@@ -248,15 +258,13 @@ class TestDemandPlacementAnalysis:
                 placement_rounds=1,
             )
 
-            assert isinstance(result, dict)
-            assert "demands" in result and "summary" in result
-            demands = result["demands"]
-            assert isinstance(demands, list) and len(demands) == 1
-            assert demands[0]["placement_ratio"] == 0.0
-            summary = result["summary"]
-            assert summary["total_offered_gbps"] == 0.0
-            assert summary["total_placed_gbps"] == 0.0
-            assert summary["overall_ratio"] == 1.0
+            assert isinstance(result, FlowIterationResult)
+            assert len(result.flows) == 1
+            assert result.flows[0].placed == 0.0
+            summary = result.summary
+            assert summary.total_demand == 0.0
+            assert summary.total_placed == 0.0
+            assert summary.overall_ratio == 1.0
 
 
 class TestSensitivityAnalysis:

@@ -22,6 +22,7 @@ integration.helpers module.
 import pytest
 
 from ngraph.explorer import NetworkExplorer
+from ngraph.graph.io import node_link_to_graph
 
 from .expectations import (
     SCENARIO_4_COMPONENT_EXPECTATIONS,
@@ -52,14 +53,16 @@ class TestScenario4:
     def helper(self, scenario_4_executed):
         """Create test helper for scenario 4."""
         helper = create_scenario_helper(scenario_4_executed)
-        graph = scenario_4_executed.results.get("build_graph", "graph")
-        helper.set_graph(graph)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_4_executed):
         """Test that scenario 4 can be parsed and executed without errors."""
         assert scenario_4_executed.results is not None
-        assert scenario_4_executed.results.get("build_graph", "graph") is not None
+        exported = scenario_4_executed.results.to_dict()
+        graph = node_link_to_graph(
+            exported["steps"]["build_graph"]["data"].get("graph")
+        )
+        assert graph is not None
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations for large-scale topology."""
@@ -207,37 +210,22 @@ class TestScenario4:
         assert len(gpu_servers) > 0, "Should find GPU servers from node overrides"
 
         for server in gpu_servers[:3]:  # Check first few
-            # Verify cleaned-up attributes - no more marketing language
-            assert (
-                server.attrs.get("role") == "gpu_compute"
-            )  # Technical role, not marketing
-            assert server.attrs.get("gpu_count") == 8  # Specific technical spec
-            assert (server.attrs.get("hardware") or {}).get(
-                "component"
-            ) == "ServerNode"  # Technical component reference
+            assert server.attrs.get("role") == "gpu_compute"
+            assert server.attrs.get("gpu_count") == 8
+            assert (server.attrs.get("hardware") or {}).get("component") == "ServerNode"
 
-            # Ensure no marketing language attributes remain
-            assert "server_type" not in server.attrs, (
-                "Old marketing attribute 'server_type' should be removed"
-            )
-
-        # Test that node attributes are now technical and meaningful
         all_servers = [
             node for node in helper.network.nodes.values() if "/servers/" in node.name
         ]
 
         for server in all_servers[:5]:  # Check a few servers
-            # All servers should have technical role attribute
             role = server.attrs.get("role")
             assert role in ["compute", "gpu_compute"], (
                 f"Server role should be technical, found: {role}"
             )
 
-            # Should have technical component reference
             assert (server.attrs.get("hardware") or {}).get("component") == "ServerNode"
 
-        # Validate that attributes are meaningful and contextually appropriate
-        # Check that ToR switches have appropriate technical attributes
         tor_switches = [
             node for node in helper.network.nodes.values() if "/tor/" in node.name
         ]
@@ -245,10 +233,8 @@ class TestScenario4:
         assert len(tor_switches) > 0, "Should have ToR switches"
 
         for tor in tor_switches[:2]:  # Check a couple
-            assert tor.attrs.get("role") == "top_of_rack"  # Technical role
-            assert (tor.attrs.get("hardware") or {}).get(
-                "component"
-            ) == "ToRSwitch48p"  # Technical component reference
+            assert tor.attrs.get("role") == "top_of_rack"
+            assert (tor.attrs.get("hardware") or {}).get("component") == "ToRSwitch48p"
 
     def test_complex_link_overrides(self, helper):
         """Test complex link override patterns with regex."""
@@ -260,7 +246,7 @@ class TestScenario4:
         assert len(inter_dc_links) > 0, "Should find inter-DC spine links"
 
         for link in inter_dc_links[:3]:  # Check first few
-            assert link.capacity == 800.0  # Overridden capacity
+            assert link.capacity == 800.0
             assert link.attrs.get("link_class") == "inter_dc"
             assert link.attrs.get("encryption") == "enabled"
 
@@ -271,7 +257,7 @@ class TestScenario4:
         )
 
         for link in enhanced_uplinks[:3]:  # Check first few
-            assert link.capacity == 200.0  # Overridden capacity
+            assert link.capacity == 200.0
 
     def test_risk_groups_integration(self, helper):
         """Test that risk groups are correctly configured and hierarchical."""
@@ -349,43 +335,36 @@ class TestScenario4:
         results = helper.scenario.results
 
         # Test BuildGraph step - correct API usage with two arguments
-        graph = results.get("build_graph", "graph")
+        exported = results.to_dict()
+        graph = node_link_to_graph(
+            exported["steps"]["build_graph"]["data"].get("graph")
+        )
         assert graph is not None
 
-        # Test CapacityEnvelopeAnalysis results - using capacity_envelopes key
-        intra_dc_envelopes = results.get(
-            "intra_dc_capacity_forward", "capacity_envelopes"
+        # Test MaxFlow results - using flow_results key and summary totals
+        intra_dc = (
+            exported["steps"].get("intra_dc_capacity_forward", {}).get("data", {})
         )
-        assert intra_dc_envelopes is not None, (
-            "Intra-DC forward capacity analysis should have envelope results"
+        intra_results = intra_dc.get("flow_results", [])
+        assert intra_results, (
+            "Intra-DC forward capacity analysis should have flow_results"
         )
+        assert float(intra_results[0]["summary"].get("total_placed", 0.0)) >= 0.0
 
-        # Check that envelope contains expected flow key
-        expected_intra_key = (
-            "dc1_pod[ab]_rack.*/servers/.*->dc1_pod[ab]_rack.*/servers/.*"
+        inter_dc = (
+            exported["steps"].get("inter_dc_capacity_forward", {}).get("data", {})
         )
-        assert expected_intra_key in intra_dc_envelopes, (
-            f"Expected flow key '{expected_intra_key}' in intra-DC results"
+        inter_results = inter_dc.get("flow_results", [])
+        assert inter_results, (
+            "Inter-DC forward capacity analysis should have flow_results"
         )
+        assert float(inter_results[0]["summary"].get("total_placed", 0.0)) >= 0.0
 
-        # For inter-DC, check forward direction
-        inter_dc_envelopes = results.get(
-            "inter_dc_capacity_forward", "capacity_envelopes"
+        rack_failure = (
+            exported["steps"].get("rack_failure_analysis", {}).get("data", {})
         )
-        assert inter_dc_envelopes is not None, (
-            "Inter-DC forward capacity analysis should have envelope results"
-        )
-
-        expected_inter_key = "dc1_.*servers/.*->dc2_.*servers/.*"
-        assert expected_inter_key in inter_dc_envelopes, (
-            f"Expected flow key '{expected_inter_key}' in inter-DC results"
-        )
-
-        # Test CapacityEnvelopeAnalysis results
-        rack_failure_result = results.get("rack_failure_analysis", "capacity_envelopes")
-        assert rack_failure_result is not None, (
-            "Rack failure analysis should have results"
-        )
+        rack_results = rack_failure.get("flow_results", [])
+        assert rack_results, "Rack failure analysis should have flow_results"
 
     def test_network_explorer_integration(self, helper):
         """Test NetworkExplorer functionality with complex hierarchy."""

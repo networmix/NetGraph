@@ -360,8 +360,8 @@ workflow:
     scenario.run()
     # Check that build_graph step was executed (default unique name assigned)
     step_name = scenario.workflow[0].name
-    build_graph_result = scenario.results.get(step_name, "graph")
-    assert build_graph_result is not None
+    exp = scenario.results.to_dict()
+    assert exp["steps"][step_name]["data"].get("graph") is not None
 
 
 def test_node_overrides_example():

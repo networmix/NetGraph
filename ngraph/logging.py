@@ -50,8 +50,6 @@ def setup_root_logger(
 
     _ROOT_LOGGER_CONFIGURED = True
 
-    _ROOT_LOGGER_CONFIGURED = True
-
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger with NetGraph's standard configuration.

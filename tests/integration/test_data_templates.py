@@ -476,7 +476,7 @@ class WorkflowTemplates:
         for i, mode in enumerate(modes):
             workflow.append(
                 {
-                    "step_type": "CapacityEnvelopeAnalysis",
+                    "step_type": "MaxFlow",
                     "name": f"capacity_analysis_{i}",
                     "source_path": source_pattern,
                     "sink_path": sink_pattern,
@@ -498,7 +498,7 @@ class WorkflowTemplates:
         return [
             {"step_type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "failure_analysis",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,
@@ -515,7 +515,7 @@ class WorkflowTemplates:
         return [
             {"step_type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "capacity_analysis_combine",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,
@@ -524,7 +524,7 @@ class WorkflowTemplates:
                 "baseline": True,
             },
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "capacity_analysis_pairwise",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,
@@ -534,7 +534,7 @@ class WorkflowTemplates:
                 "baseline": True,
             },
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "envelope_analysis",
                 "source_path": source_pattern,
                 "sink_path": sink_pattern,

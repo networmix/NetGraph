@@ -32,8 +32,9 @@ scenario = Scenario(network=Network(), workflow=[])
 # Execute the scenario
 scenario.run()
 
-# Access results
-print(scenario.results.get("NetworkStats", "node_count"))
+# Access exported results
+exported = scenario.results.to_dict()
+print(exported["steps"]["NetworkStats"]["data"]["node_count"])  # example
 ```
 
 **Key Methods:**
@@ -108,10 +109,10 @@ all_data = results.to_dict()
 
 **Key Methods:**
 
-- `get(step_name, key, default=None)` - Retrieve specific result
-- `put(step_name, key, value)` - Store result (typically used by workflow steps)
-- `get_all(key)` - Get all values for a key across steps
-- `to_dict()` - Export all results with automatic serialization of objects with to_dict() method
+- `enter_step(step_name)` / `exit_step()` - Scope mutations to a step (managed by WorkflowStep)
+- `put(key, value)` - Store under active step; key is `"metadata"` or `"data"`
+- `get_step(step_name)` - Read a step’s raw dict (for explicit cross-step reads)
+- `to_dict()` - Export with shape `{workflow, steps, scenario}` (JSON-safe)
 
 **Integration:** Used by all workflow steps for result storage. Provides consistent access pattern for analysis outputs.
 
@@ -262,26 +263,29 @@ envelope_results = manager.run_max_flow_monte_carlo(
 **When to use:** Analyzing outputs from FailureManager convenience methods - provides pandas integration and statistical summaries.
 
 ```python
-# Work with capacity envelope results
-flow_keys = envelope_results.flow_keys()  # Available flow pairs
-envelope = envelope_results.get_envelope("datacenter->edge")
+# Unified flow results (per-iteration)
+from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 
-# Statistical analysis with pandas
-stats_df = envelope_results.to_dataframe()
-summary = envelope_results.summary_statistics()
-
-# Export for further analysis
-export_data = envelope_results.export_summary()
-
-# For demand placement analysis
-placement_results = manager.run_demand_placement_monte_carlo(demands)
-success_rates = placement_results.success_rate_distribution()
+flows = [
+    FlowEntry(
+        source="A", destination="B", priority=0,
+        demand=10.0, placed=10.0, dropped=0.0,
+        cost_distribution={2.0: 6.0, 4.0: 4.0}, data={}
+    )
+]
+summary = FlowSummary(
+    total_demand=10.0, total_placed=10.0, overall_ratio=1.0,
+    dropped_flows=0, num_flows=len(flows)
+)
+iteration = FlowIterationResult(flows=flows, summary=summary)
+iteration_dict = iteration.to_dict()  # JSON-safe dict
 ```
 
 **Key Result Types:**
 
-- `CapacityEnvelopeResults` - Statistical flow capacity distributions
-- `DemandPlacementResults` - Traffic placement success metrics
+- `FlowIterationResult` - Per-iteration flow results (flows + summary)
+- `FlowEntry` - Per-flow entry (source, destination, volumes, cost distribution)
+- `FlowSummary` - Aggregate totals for an iteration
 - `SensitivityResults` - Component criticality rankings
 
 **Integration:** Returned by FailureManager convenience methods. Provides pandas DataFrames and export capabilities for notebook analysis.
@@ -330,14 +334,13 @@ from ngraph.workflow.base import WorkflowStep
 class CustomAnalysis(WorkflowStep):
     def run(self, scenario):
         # Simple metrics
-        scenario.results.put(self.name, "node_count", len(scenario.network.nodes))
+        scenario.results.put("metadata", {})
+        scenario.results.put("data", {"node_count": len(scenario.network.nodes)})
 
         # Complex objects - convert to dict first
         analysis_result = self.perform_analysis(scenario.network)
-        if hasattr(analysis_result, 'to_dict'):
-            scenario.results.put(self.name, "analysis", analysis_result.to_dict())
-        else:
-            scenario.results.put(self.name, "analysis", analysis_result)
+        payload = analysis_result.to_dict() if hasattr(analysis_result, 'to_dict') else analysis_result
+        scenario.results.put("data", {"analysis": payload})
 ```
 
 **Storage Conventions:**
@@ -359,9 +362,11 @@ Workflow orchestration and reusable network templates.
 
 Available workflow steps:
 
-- `BuildGraph` - Converts Network to NetworkX StrictMultiDiGraph
-- `NetworkStats` - Basic topology statistics (node/link counts, capacities)
-- `CapacityEnvelopeAnalysis` - Monte Carlo failure analysis with FailureManager
+- `BuildGraph` - Exports graph in node-link JSON under `data.graph`
+- `NetworkStats` - Basic topology statistics under `data`
+- `MaxFlow` - Monte Carlo flow capacity analysis under `data.flow_results`
+- `TrafficMatrixPlacement` - Monte Carlo demand placement under `data.flow_results`
+- `MaximumSupportedDemand` - Alpha search results under `data`
 
 **Integration:** Defined in YAML scenarios or created programmatically. Each step stores results using consistent naming patterns in `scenario.results`.
 
@@ -413,8 +418,8 @@ try:
     scenario.run()
 
     # Validate expected results
-    if scenario.results.get("CapacityEnvelopeAnalysis", "capacity_envelopes") is None:
-        print("Warning: Expected flow analysis result not found")
+    exported = scenario.results.to_dict()
+    assert "steps" in exported and exported["steps"], "No steps present in results"
 
 except ValueError as e:
     print(f"YAML validation failed: {e}")
@@ -424,15 +429,4 @@ except Exception as e:
 
 **Common Patterns:**
 
-- Use `results.get()` with `default` parameter for safe result access
-- Validate step execution using `results.get_step_metadata()`
-- Handle YAML parsing errors with specific exception types
-
----
-
-For complete method signatures and detailed parameter documentation, see the [Auto-Generated API Reference](api-full.md) or use Python's built-in help:
-
-```python
-help(Scenario.from_yaml)
-help(Network.max_flow)
-```
+- Use `results.get()` with `default`

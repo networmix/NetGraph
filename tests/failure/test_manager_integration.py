@@ -7,6 +7,7 @@ from ngraph.failure.policy import FailurePolicy, FailureRule
 from ngraph.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network
 from ngraph.monte_carlo.functions import max_flow_analysis
+from ngraph.results.flow import FlowIterationResult
 
 
 class TestFailureManagerCore:
@@ -127,15 +128,14 @@ class TestFailureManagerCore:
         assert "metadata" in results
         assert len(results["results"]) == 5
 
-        # Should have results from all iterations
-        # First result should be higher capacity (no failures)
-        # Later results should show reduced capacity (with failures)
-        # Extract first FlowResult per iteration and read metric value
-        flow_values = [
-            float(result[0]["value"]) for result in results["results"] if result
+        # Each item is a FlowIterationResult; compute placed capacity
+        capacities = [
+            float(iter_res.summary.total_placed)
+            for iter_res in results["results"]
+            if isinstance(iter_res, FlowIterationResult)
         ]
-        assert max(flow_values) == 10.0  # Full capacity without failures
-        assert min(flow_values) == 5.0  # Reduced capacity with failures
+        assert max(capacities) == 10.0  # Full capacity without failures
+        assert min(capacities) == 5.0  # Reduced capacity with failures
 
     def test_analysis_with_parallel_execution(self, simple_network, failure_policy_set):
         """Test parallel execution of Monte Carlo analysis."""
@@ -204,7 +204,7 @@ class TestFailureManagerIntegration:
     """Test FailureManager integration with workflow systems."""
 
     def test_capacity_envelope_analysis_integration(self):
-        """Test integration with capacity envelope analysis workflow."""
+        """Test integration with capacity analysis workflow producing FlowIterationResult."""
         # Create larger network for meaningful analysis
         from ngraph.model.network import Link, Node
 
@@ -239,7 +239,7 @@ class TestFailureManagerIntegration:
 
         manager = FailureManager(network, policy_set, "dual_link_failures")
 
-        # Run capacity envelope analysis
+        # Run capacity analysis
         results = manager.run_monte_carlo_analysis(
             analysis_func=max_flow_analysis,
             iterations=10,
@@ -257,13 +257,11 @@ class TestFailureManagerIntegration:
         # Should have results for each iteration
         assert len(results["results"]) == 10
 
-        # Each result should be a list of FlowResult dicts for capacity
-        for result in results["results"]:
-            assert isinstance(result, list)
-            if result:  # May be empty if no flows possible
-                for flow_tuple in result:
-                    assert isinstance(flow_tuple, dict)
-                    assert flow_tuple.get("metric") == "capacity"
+        # Each result is a FlowIterationResult; ensure flows present
+        for iter_res in results["results"]:
+            assert isinstance(iter_res, FlowIterationResult)
+            assert hasattr(iter_res, "summary")
+            assert isinstance(iter_res.flows, list)
 
     def test_error_handling_in_analysis(self):
         """Test error handling during analysis execution."""

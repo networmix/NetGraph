@@ -10,17 +10,11 @@ from .functions import (
     max_flow_analysis,
     sensitivity_analysis,
 )
-from .results import (
-    CapacityEnvelopeResults,
-    DemandPlacementResults,
-    SensitivityResults,
-)
+from .results import SensitivityResults
 
 __all__ = [
     "max_flow_analysis",
     "demand_placement_analysis",
     "sensitivity_analysis",
-    "CapacityEnvelopeResults",
-    "DemandPlacementResults",
     "SensitivityResults",
 ]

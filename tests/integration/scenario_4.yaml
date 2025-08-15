@@ -327,7 +327,7 @@ workflow:
 
   # Capacity analysis with different traffic patterns
   # Forward intra-DC capacity analysis
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: intra_dc_capacity_forward
     source_path: "dc1_pod[ab]_rack.*/servers/.*"
     sink_path: "dc1_pod[ab]_rack.*/servers/.*"
@@ -339,7 +339,7 @@ workflow:
     failure_policy: null
 
   # Reverse intra-DC capacity analysis
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: intra_dc_capacity_reverse
     source_path: "dc1_pod[ab]_rack.*/servers/.*"
     sink_path: "dc1_pod[ab]_rack.*/servers/.*"
@@ -351,7 +351,7 @@ workflow:
     failure_policy: null
 
   # Forward inter-DC capacity analysis
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: inter_dc_capacity_forward
     source_path: "dc1_.*servers/.*"
     sink_path: "dc2_.*servers/.*"
@@ -363,7 +363,7 @@ workflow:
     failure_policy: null
 
   # Reverse inter-DC capacity analysis
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: inter_dc_capacity_reverse
     source_path: "dc2_.*servers/.*"
     sink_path: "dc1_.*servers/.*"
@@ -375,7 +375,7 @@ workflow:
     failure_policy: null
 
   # Failure analysis with different policies
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: rack_failure_analysis
     source_path: "dc1_pod[ab]_rack.*/servers/.*"
     sink_path: "dc1_pod[ab]_rack.*/servers/.*"
@@ -386,7 +386,7 @@ workflow:
     shortest_path: false
     flow_placement: "PROPORTIONAL"
 
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: spine_failure_analysis
     source_path: "dc1_.*servers/.*"
     sink_path: "dc2_.*servers/.*"

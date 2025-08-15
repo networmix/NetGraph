@@ -4,9 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ngraph.workflow.maximum_supported_demand import (
-    MaximumSupportedDemandAnalysis,
-)
+from ngraph.results.store import Results
+from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 
 
 def _mock_scenario_with_matrix() -> MagicMock:
@@ -23,7 +22,7 @@ def _mock_scenario_with_matrix() -> MagicMock:
 
 
 @patch(
-    "ngraph.workflow.maximum_supported_demand.MaximumSupportedDemandAnalysis._evaluate_alpha"
+    "ngraph.workflow.maximum_supported_demand_step.MaximumSupportedDemand._evaluate_alpha"
 )
 def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
     # Feasible if alpha <= 1.3, infeasible otherwise
@@ -39,7 +38,7 @@ def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
 
     scenario = _mock_scenario_with_matrix()
 
-    step = MaximumSupportedDemandAnalysis(
+    step = MaximumSupportedDemand(
         name="msd_step",
         matrix_name="default",
         alpha_start=1.0,
@@ -49,25 +48,20 @@ def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
         max_bracket_iters=16,
         seeds_per_alpha=1,
     )
-    step.run(scenario)
+    scenario.results = Results()
+    step.execute(scenario)
 
-    # Extract stored results
-    stored = {
-        args[1]: args[2]
-        for args, _ in (call for call in scenario.results.put.call_args_list)
-    }
-    assert "alpha_star" in stored
-    alpha_star = stored["alpha_star"]
+    exported = scenario.results.to_dict()
+    alpha_star = exported["steps"]["msd_step"]["data"]["alpha_star"]
     assert abs(alpha_star - 1.3) <= 0.02
-    assert isinstance(stored.get("probes", []), list)
-    ctx = stored.get("context", {})
+    ctx = exported["steps"]["msd_step"]["data"].get("context", {})
     assert ctx.get("acceptance_rule") == "hard"
-    base = stored.get("base_demands", [])
+    base = exported["steps"]["msd_step"]["data"].get("base_demands", [])
     assert base and base[0]["source_path"] == "A"
 
 
 @patch(
-    "ngraph.workflow.maximum_supported_demand.MaximumSupportedDemandAnalysis._evaluate_alpha"
+    "ngraph.workflow.maximum_supported_demand_step.MaximumSupportedDemand._evaluate_alpha"
 )
 def test_msd_no_feasible_raises(mock_eval: MagicMock) -> None:
     # Always infeasible
@@ -78,7 +72,7 @@ def test_msd_no_feasible_raises(mock_eval: MagicMock) -> None:
 
     scenario = _mock_scenario_with_matrix()
 
-    step = MaximumSupportedDemandAnalysis(
+    step = MaximumSupportedDemand(
         name="msd_step",
         matrix_name="default",
         alpha_start=1.0,
@@ -87,15 +81,16 @@ def test_msd_no_feasible_raises(mock_eval: MagicMock) -> None:
         alpha_min=0.25,
         max_bracket_iters=8,
     )
+    scenario.results = Results()
     with pytest.raises(ValueError):
-        step.run(scenario)
+        step.execute(scenario)
 
 
 def test_msd_end_to_end_single_link() -> None:
     # Build a tiny deterministic scenario: A --(cap=10)--> B, demand base=5
     from ngraph.demand.manager.manager import TrafficManager
-    from ngraph.workflow.maximum_supported_demand import (
-        MaximumSupportedDemandAnalysis as MSD,
+    from ngraph.workflow.maximum_supported_demand_step import (
+        MaximumSupportedDemand as MSD,
     )
     from tests.integration.helpers import ScenarioDataBuilder
 
@@ -107,7 +102,7 @@ def test_msd_end_to_end_single_link() -> None:
         .build_scenario()
     )
 
-    step = MaximumSupportedDemandAnalysis(
+    step = MaximumSupportedDemand(
         name="msd_e2e",
         matrix_name="default",
         alpha_start=1.0,
@@ -115,14 +110,17 @@ def test_msd_end_to_end_single_link() -> None:
         resolution=0.01,
         seeds_per_alpha=1,
     )
-    step.run(scenario)
+    scenario.results = Results()
+    step.execute(scenario)
 
     # Expected alpha* ~ 2.0 (capacity 10 / base 5)
-    alpha_star = scenario.results.get("msd_e2e", "alpha_star")
+    exported = scenario.results.to_dict()
+    data = exported["steps"]["msd_e2e"]["data"]
+    alpha_star = data.get("alpha_star")
     assert alpha_star is not None
     assert abs(float(alpha_star) - 2.0) <= 0.02
 
-    base_demands = scenario.results.get("msd_e2e", "base_demands")
+    base_demands = data.get("base_demands")
     assert isinstance(base_demands, list) and base_demands
 
     # Verify feasibility at alpha*
@@ -159,8 +157,8 @@ def test_msd_end_to_end_single_link() -> None:
 
 def test_msd_auto_vs_one_equivalence_single_link() -> None:
     # Same single-link scenario; compare auto vs 1 rounds
-    from ngraph.workflow.maximum_supported_demand import (
-        MaximumSupportedDemandAnalysis as MSD,
+    from ngraph.workflow.maximum_supported_demand_step import (
+        MaximumSupportedDemand as MSD,
     )
     from tests.integration.helpers import ScenarioDataBuilder
 
@@ -191,9 +189,11 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
         placement_rounds=1,
     )
 
-    step_auto.run(scenario)
-    step_one.run(scenario)
+    scenario.results = Results()
+    step_auto.execute(scenario)
+    step_one.execute(scenario)
 
-    alpha_auto = float(scenario.results.get("msd_auto", "alpha_star"))
-    alpha_one = float(scenario.results.get("msd_one", "alpha_star"))
+    exported = scenario.results.to_dict()
+    alpha_auto = float(exported["steps"]["msd_auto"]["data"]["alpha_star"])
+    alpha_one = float(exported["steps"]["msd_one"]["data"]["alpha_star"])
     assert abs(alpha_auto - alpha_one) <= 0.02

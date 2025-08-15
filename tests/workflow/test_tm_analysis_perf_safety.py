@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ngraph.workflow.traffic_matrix_placement_analysis import (
-    TrafficMatrixPlacementAnalysis,
+from ngraph.workflow.traffic_matrix_placement_step import (
+    TrafficMatrixPlacement,
 )
 
 
@@ -37,13 +37,20 @@ def test_tm_analysis_basic_behavior_unchanged(monkeypatch):
 
     class _ResultsStore:
         def __init__(self) -> None:
-            self._data = {}
+            self._store = {}
+            self._meta = {}
+            self._active = None
 
-        def put(self, step: str, key: str, value: Any) -> None:
-            self._data.setdefault(step, {})[key] = value
+        def enter_step(self, name: str) -> None:
+            self._active = name
+            self._store.setdefault(name, {})
 
-        def get(self, step: str, key: str) -> Any:
-            return self._data.get(step, {}).get(key)
+        def exit_step(self) -> None:
+            self._active = None
+
+        def put(self, key: str, value: Any) -> None:
+            assert self._active is not None
+            self._store[self._active][key] = value
 
         def get_all_step_metadata(self):
             # Return empty mapping; caller code should handle gracefully
@@ -54,7 +61,7 @@ def test_tm_analysis_basic_behavior_unchanged(monkeypatch):
 
     scenario = _ScenarioStub(net, tmset, _ResultsStore(), _FailurePolicySetStub())
 
-    step = TrafficMatrixPlacementAnalysis(
+    step = TrafficMatrixPlacement(
         matrix_name="default",
         iterations=2,
         baseline=True,
@@ -64,9 +71,13 @@ def test_tm_analysis_basic_behavior_unchanged(monkeypatch):
     step.name = "tm_placement"
     # The run signature expects a Scenario; this smoke test uses a light stub
     # compatible enough for runtime execution.
+    scenario.results.enter_step("tm_placement")
     step.run(scenario)  # type: ignore[arg-type]
+    scenario.results.exit_step()
 
-    placed_envs = scenario.results.get("tm_placement", "placed_gbps_envelopes")
-    samples = scenario.results.get("tm_placement", "delivered_gbps_samples")
-    assert isinstance(placed_envs, dict)
-    assert isinstance(samples, list)
+    exported = {
+        "steps": {"tm_placement": scenario.results._store.get("tm_placement", {})}
+    }
+    data = exported["steps"]["tm_placement"].get("data")
+    assert isinstance(data, dict)
+    assert isinstance(data.get("flow_results"), list)

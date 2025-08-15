@@ -94,29 +94,31 @@ class NetworkStats(WorkflowStep):
 
         # Compute node statistics
         node_count = len(nodes)
-        scenario.results.put(self.name, "node_count", node_count)
 
         # Compute link statistics
         link_count = len(links)
-        scenario.results.put(self.name, "link_count", link_count)
 
+        total_capacity_val = mean_capacity_val = median_capacity_val = 0.0
+        min_capacity_val = max_capacity_val = 0.0
+        mean_cost_val = median_cost_val = min_cost_val = max_cost_val = 0.0
         if links:
             capacities = [link.capacity for link in links.values()]
             costs = [link.cost for link in links.values()]
 
-            scenario.results.put(self.name, "total_capacity", sum(capacities))
-            scenario.results.put(self.name, "mean_capacity", mean(capacities))
-            scenario.results.put(self.name, "median_capacity", median(capacities))
-            scenario.results.put(self.name, "min_capacity", min(capacities))
-            scenario.results.put(self.name, "max_capacity", max(capacities))
+            total_capacity_val = sum(capacities)
+            mean_capacity_val = mean(capacities)
+            median_capacity_val = median(capacities)
+            min_capacity_val = min(capacities)
+            max_capacity_val = max(capacities)
 
-            scenario.results.put(self.name, "mean_cost", mean(costs))
-            scenario.results.put(self.name, "median_cost", median(costs))
-            scenario.results.put(self.name, "min_cost", min(costs))
-            scenario.results.put(self.name, "max_cost", max(costs))
+            mean_cost_val = mean(costs)
+            median_cost_val = median(costs)
+            min_cost_val = min(costs)
+            max_cost_val = max(costs)
 
         # Compute degree statistics (only for enabled nodes)
         degree_values: List[int] = []
+        mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
         if nodes:
             degrees: Dict[str, int] = {name: 0 for name in nodes}
 
@@ -127,29 +129,54 @@ class NetworkStats(WorkflowStep):
                     degrees[link.target] += 1
 
             degree_values = list(degrees.values())
-            scenario.results.put(self.name, "mean_degree", mean(degree_values))
-            scenario.results.put(self.name, "median_degree", median(degree_values))
-            scenario.results.put(self.name, "min_degree", min(degree_values))
-            scenario.results.put(self.name, "max_degree", max(degree_values))
+            mean_degree_val = mean(degree_values)
+            median_degree_val = median(degree_values)
+            min_degree_val = min(degree_values)
+            max_degree_val = max(degree_values)
 
-        # INFO summary for workflow users (outcome-focused, not debug noise)
-        try:
-            logger = get_logger(__name__)
-            total_capacity = 0.0
-            if links:
-                total_capacity = float(sum(link.capacity for link in links.values()))
-            mean_deg = float(mean(degree_values)) if degree_values else 0.0
-            logger.info(
-                "NetworkStats summary: name=%s nodes=%d links=%d total_capacity=%.1f mean_degree=%.2f",
-                self.name,
-                node_count,
-                link_count,
-                total_capacity,
-                mean_deg,
-            )
-        except Exception:
-            # Do not fail the workflow on logging errors
-            pass
+        # INFO summary for workflow users (avoid expensive work unless needed)
+        total_capacity = 0.0
+        if links:
+            total_capacity = float(sum(link.capacity for link in links.values()))
+        mean_deg = float(mean(degree_values)) if degree_values else 0.0
+        get_logger(__name__).info(
+            "NetworkStats summary: name=%s nodes=%d links=%d total_capacity=%.1f mean_degree=%.2f",
+            self.name,
+            node_count,
+            link_count,
+            total_capacity,
+            mean_deg,
+        )
+        # Store results in new schema
+        scenario.results.put("metadata", {})
+        # Ensure locals exist even when sets are empty
+        if not links:
+            total_capacity_val = mean_capacity_val = median_capacity_val = 0.0
+            min_capacity_val = max_capacity_val = 0.0
+            mean_cost_val = median_cost_val = min_cost_val = max_cost_val = 0.0
+        if not nodes:
+            mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
+
+        scenario.results.put(
+            "data",
+            {
+                "node_count": int(node_count),
+                "link_count": int(link_count),
+                "total_capacity": float(total_capacity_val) if links else 0.0,
+                "mean_capacity": float(mean_capacity_val) if links else 0.0,
+                "median_capacity": float(median_capacity_val) if links else 0.0,
+                "min_capacity": float(min_capacity_val) if links else 0.0,
+                "max_capacity": float(max_capacity_val) if links else 0.0,
+                "mean_cost": float(mean_cost_val) if links else 0.0,
+                "median_cost": float(median_cost_val) if links else 0.0,
+                "min_cost": float(min_cost_val) if links else 0.0,
+                "max_cost": float(max_cost_val) if links else 0.0,
+                "mean_degree": float(mean_degree_val) if nodes else 0.0,
+                "median_degree": float(median_degree_val) if nodes else 0.0,
+                "min_degree": float(min_degree_val) if nodes else 0.0,
+                "max_degree": float(max_degree_val) if nodes else 0.0,
+            },
+        )
 
 
 # Register the class after definition to avoid decorator ordering issues
