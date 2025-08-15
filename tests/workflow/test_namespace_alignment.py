@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ngraph.results import Results
 from ngraph.scenario import Scenario
-from ngraph.workflow.cost_power_efficiency import CostPowerEfficiency
+from ngraph.workflow.cost_power import CostPower
 
 
 def test_metadata_aligns_with_results_for_empty_name() -> None:
@@ -40,7 +40,7 @@ workflow:
     assert scenario.results.get_steps_by_execution_order() == [step_name]
 
 
-def test_cost_power_efficiency_denominator_global_fallback_uses_latest() -> None:
+def test_cost_power_collects_levels_schema_smoke() -> None:
     # Minimal scenario with components and one link; results is a real store
     from ngraph.components import Component, ComponentsLibrary
     from ngraph.model.network import Link, Network, Node
@@ -79,15 +79,13 @@ def test_cost_power_efficiency_denominator_global_fallback_uses_latest() -> None
     scen = Scenario(network=net, workflow=[], components_library=comps)
     scen.results = Results()
 
-    step = CostPowerEfficiency(
-        name="cpe",
-        delivered_bandwidth_gbps=2000.0,
-        include_disabled=True,
-        collect_node_hw_entries=False,
-        collect_link_hw_entries=False,
-    )
+    step = CostPower(name="cpe", include_disabled=True, aggregation_level=1)
 
     step.execute(scen)
 
     exported = scen.results.to_dict()
-    assert exported["steps"]["cpe"]["data"]["delivered_bandwidth_gbps"] == 2000.0
+    data = exported["steps"]["cpe"]["data"]
+    assert "context" in data and "levels" in data
+    assert data["context"]["aggregation_level"] == 1
+    # Root level present
+    assert isinstance(data["levels"].get(0, []), list)

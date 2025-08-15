@@ -2,7 +2,7 @@
 
 from .base import WorkflowStep, register_workflow_step
 from .build_graph import BuildGraph
-from .cost_power_efficiency import CostPowerEfficiency
+from .cost_power import CostPower
 from .max_flow_step import MaxFlow
 from .maximum_supported_demand_step import MaximumSupportedDemand
 from .network_stats import NetworkStats
@@ -16,5 +16,5 @@ __all__ = [
     "NetworkStats",
     "TrafficMatrixPlacement",
     "MaximumSupportedDemand",
-    "CostPowerEfficiency",
+    "CostPower",
 ]
