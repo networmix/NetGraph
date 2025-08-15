@@ -124,6 +124,8 @@ class ReportGenerator:
 
         # Title
         nb.cells.append(nbformat.v4.new_markdown_cell("# NetGraph Results Analysis"))
+        # Subtitle: show the results file name used to build this notebook
+        nb.cells.append(nbformat.v4.new_markdown_cell(f"### {self.results_path.name}"))
 
         # Setup
         nb.cells.append(self._create_setup_cell())

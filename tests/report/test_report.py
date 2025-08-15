@@ -236,3 +236,36 @@ def test_create_analysis_sections_with_registry(results_file):
         # Verify markdown and code cells were created
         assert mock_nbformat.v4.new_markdown_cell.call_count > 0
         assert mock_nbformat.v4.new_code_cell.call_count > 0
+
+
+def test_notebook_subtitle_matches_results_file(tmp_path: Path) -> None:
+    """Notebook should include a subtitle with the results filename."""
+    # Create a deterministic results file name
+    results_path = tmp_path / "baseline_run.json"
+    results_path.write_text(
+        json.dumps(
+            {
+                "workflow": {
+                    "step1": {
+                        "step_type": "NetworkStats",
+                        "step_name": "step1",
+                        "execution_order": 0,
+                    }
+                },
+                "steps": {"step1": {"data": {}}},
+            }
+        )
+    )
+
+    generator = ReportGenerator(results_path)
+    generator.load_results()
+
+    nb = generator._create_analysis_notebook()
+
+    # First two cells are title and subtitle
+    assert len(nb.cells) >= 2
+    assert nb.cells[0].cell_type == "markdown"
+    assert "# NetGraph Results Analysis" in nb.cells[0]["source"]
+
+    assert nb.cells[1].cell_type == "markdown"
+    assert nb.cells[1]["source"] == f"### {results_path.name}"
