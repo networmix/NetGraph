@@ -175,6 +175,7 @@ Notes:
 - `logic` in the `match` block accepts `"and"` or `"or"` (default `"or"`).
 - Selectors filter node candidates before the adjacency `pattern` is applied.
 - Cross-endpoint predicates (e.g., comparing a source attribute to a target attribute) are not supported.
+- Node overrides are applied before adjacency expansion, so attributes set via `node_overrides` participate in selector match filtering. Link overrides are applied after adjacency and mutate existing links only.
 
 Path semantics inside blueprints:
 
@@ -320,6 +321,7 @@ Notes:
 
 - For `link_overrides`, only the keys `source`, `target`, `link_params`, and optional `any_direction` are allowed at the top level. All parameter changes must be nested under `link_params`.
 - `any_direction` defaults to `true` if omitted.
+- Ordering: `node_overrides` run after node creation (groups and direct nodes) and before any adjacency expansion; `link_overrides` run after adjacency and direct links.
 ```
 
 ## `components` - Hardware Library

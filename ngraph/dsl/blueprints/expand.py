@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import product, zip_longest
 from typing import Any, Dict, List, Set
 
@@ -44,10 +44,13 @@ class DSLExpansionContext:
     Attributes:
         blueprints (Dict[str, Blueprint]): Dictionary of blueprint-name -> Blueprint.
         network (Network): The Network into which expanded nodes/links are inserted.
+        pending_bp_adj (List[tuple[Dict[str, Any], str]]): Deferred blueprint adjacency
+            expansions collected as (adj_def, parent_path) to be processed later.
     """
 
     blueprints: Dict[str, Blueprint]
     network: Network
+    pending_bp_adj: List[tuple[Dict[str, Any], str]] = field(default_factory=list)
 
 
 def expand_network_dsl(data: Dict[str, Any]) -> Network:
@@ -56,15 +59,17 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     Overall flow:
       1) Parse "blueprints" into Blueprint objects.
       2) Build a new Network from "network" metadata (e.g. name, version).
-      3) Expand 'network["groups"]'.
+      3) Expand 'network["groups"]' (collect blueprint adjacencies for later).
          - If a group references a blueprint, incorporate that blueprint's subgroups
            while merging parent's attrs + disabled + risk_groups into subgroups.
+           Blueprint adjacency is deferred and processed after node overrides.
          - Otherwise, directly create nodes (a "direct node group").
       4) Process any direct node definitions (network["nodes"]).
-      5) Expand adjacency definitions in 'network["adjacency"]'.
-      6) Process any direct link definitions (network["links"]).
-      7) Process link overrides (in order if multiple overrides match).
-      8) Process node overrides (in order if multiple overrides match).
+      5) Process node overrides (in order if multiple overrides match).
+      6) Expand deferred blueprint adjacencies.
+      7) Expand adjacency definitions in 'network["adjacency"]'.
+      8) Process any direct link definitions (network["links"]).
+      9) Process link overrides (in order if multiple overrides match).
 
     Under the new rules:
       - Only certain top-level fields are permitted in each structure. Any extra
@@ -140,20 +145,24 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     # 4) Process direct node definitions
     _process_direct_nodes(ctx.network, network_data)
 
-    # 5) Expand adjacency definitions
+    # 5) Process node overrides early so they influence adjacency selection
+    _process_node_overrides(ctx.network, network_data)
+
+    # 6) Expand deferred blueprint adjacencies
+    for _adj_def, _parent in ctx.pending_bp_adj:
+        _expand_blueprint_adjacency(ctx, _adj_def, _parent)
+
+    # 7) Expand top-level adjacency definitions
     for adj_def in network_data.get("adjacency", []):
         if not isinstance(adj_def, dict):
             raise ValueError("Each adjacency entry must be a dictionary.")
         _expand_adjacency(ctx, adj_def)
 
-    # 6) Process direct link definitions
+    # 8) Process direct link definitions
     _process_direct_links(ctx.network, network_data)
 
-    # 7) Process link overrides (in order)
+    # 9) Process link overrides (in order)
     _process_link_overrides(ctx.network, network_data)
-
-    # 8) Process node overrides (in order)
-    _process_node_overrides(ctx.network, network_data)
 
     return net
 
@@ -272,9 +281,9 @@ def _expand_group(
                 inherited_risk_groups=merged_def["risk_groups"],
             )
 
-        # Expand blueprint adjacency under this parent's path
+        # Defer blueprint adjacency under this parent's path to run after node overrides
         for adj_def in bp.adjacency:
-            _expand_blueprint_adjacency(ctx, adj_def, effective_path)
+            ctx.pending_bp_adj.append((adj_def, effective_path))
 
     else:
         # Direct node group => recognized keys

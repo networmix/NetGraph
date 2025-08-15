@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 15, 2025 at 17:27 UTC
+Generated from source code on: August 15, 2025 at 17:38 UTC
 
 Modules auto-discovered: 73
 
@@ -3127,11 +3127,14 @@ to be populated during DSL expansion.
 Attributes:
     blueprints (Dict[str, Blueprint]): Dictionary of blueprint-name -> Blueprint.
     network (Network): The Network into which expanded nodes/links are inserted.
+    pending_bp_adj (List[tuple[Dict[str, Any], str]]): Deferred blueprint adjacency
+        expansions collected as (adj_def, parent_path) to be processed later.
 
 **Attributes:**
 
 - `blueprints` (Dict[str, Blueprint])
 - `network` (Network)
+- `pending_bp_adj` (List[tuple[Dict[str, Any], str]]) = []
 
 ### expand_network_dsl(data: 'Dict[str, Any]') -> 'Network'
 
@@ -3140,19 +3143,21 @@ Expands a combined blueprint + network DSL into a complete Network object.
 Overall flow:
   1) Parse "blueprints" into Blueprint objects.
   2) Build a new Network from "network" metadata (e.g. name, version).
-  3) Expand 'network["groups"]'.
+  3) Expand 'network["groups"]' (collect blueprint adjacencies for later).
 
 - If a group references a blueprint, incorporate that blueprint's subgroups
 
        while merging parent's attrs + disabled + risk_groups into subgroups.
+       Blueprint adjacency is deferred and processed after node overrides.
 
 - Otherwise, directly create nodes (a "direct node group").
 
   4) Process any direct node definitions (network["nodes"]).
-  5) Expand adjacency definitions in 'network["adjacency"]'.
-  6) Process any direct link definitions (network["links"]).
-  7) Process link overrides (in order if multiple overrides match).
-  8) Process node overrides (in order if multiple overrides match).
+  5) Process node overrides (in order if multiple overrides match).
+  6) Expand deferred blueprint adjacencies.
+  7) Expand adjacency definitions in 'network["adjacency"]'.
+  8) Process any direct link definitions (network["links"]).
+  9) Process link overrides (in order if multiple overrides match).
 
 Under the new rules:
 
