@@ -1,0 +1,1622 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://networmix.github.io/NetGraph/reference/api/">
+      
+      
+        <link rel="prev" href="../schemas/">
+      
+      
+        <link rel="next" href="../api-full/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.17">
+    
+    
+      
+        <title>API - NetGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NetGraph" class="md-header__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/basic/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../dsl/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NetGraph" class="md-nav__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetGraph
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Tutorial
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Examples
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Basic Example
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/clos-fabric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Clos Fabric
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    DSL
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workflow
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Schemas
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    API
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    API
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-fundamentals" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Fundamentals
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Fundamentals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-basic-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Basic Analysis
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Basic Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flow-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow Analysis
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networkview" class="md-nav__link">
+    <span class="md-ellipsis">
+      NetworkView
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-advanced-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Advanced Analysis
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Advanced Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failuremanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      FailureManager
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monte-carlo-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Monte Carlo Results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-data-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Data &amp; Results
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Data &amp; Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#result-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result Artifacts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export Patterns
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Automation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Automation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workflow Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blueprint-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      Blueprint System
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Extensions
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Extensions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#utilities-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Utilities &amp; Helpers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-full/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Full
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-fundamentals" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Fundamentals
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Fundamentals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-basic-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Basic Analysis
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Basic Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flow-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow Analysis
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networkview" class="md-nav__link">
+    <span class="md-ellipsis">
+      NetworkView
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-advanced-analysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Advanced Analysis
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Advanced Analysis">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failuremanager" class="md-nav__link">
+    <span class="md-ellipsis">
+      FailureManager
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monte-carlo-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Monte Carlo Results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-data-results" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Data &amp; Results
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Data &amp; Results">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#result-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result Artifacts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#export-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Export Patterns
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Automation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Automation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#workflow-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workflow Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blueprint-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      Blueprint System
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Extensions
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Extensions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#utilities-helpers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Utilities &amp; Helpers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
+<p>Quick links:</p>
+<ul>
+<li><a href="../dsl/">DSL Reference</a> — YAML syntax for scenario definition</li>
+<li><a href="../workflow/">Workflow Reference</a> — analysis workflow configuration and execution</li>
+<li><a href="../cli/">CLI Reference</a> — command-line tools for running scenarios</li>
+<li><a href="../api-full/">Auto-Generated API Reference</a> — complete class and method documentation</li>
+</ul>
+<p>This section provides a curated guide to NetGraph's Python API, organized by typical usage patterns.</p>
+<h2 id="1-fundamentals">1. Fundamentals<a class="headerlink" href="#1-fundamentals" title="Permanent link">&para;</a></h2>
+<p>The core components that form the foundation of most NetGraph programs.</p>
+<h3 id="scenario">Scenario<a class="headerlink" href="#scenario" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> The main orchestrator that coordinates network topology, analysis workflows, and result collection.</p>
+<p><strong>When to use:</strong> Every NetGraph program starts with a Scenario - either loaded from YAML or built programmatically.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.scenario</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scenario</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Load complete scenario from YAML (recommended)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">scenario</span> <span class="o">=</span> <span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">yaml_content</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># Or build programmatically</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.model.network</span><span class="w"> </span><span class="kn">import</span> <span class="n">Network</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">scenario</span> <span class="o">=</span> <span class="n">Scenario</span><span class="p">(</span><span class="n">network</span><span class="o">=</span><span class="n">Network</span><span class="p">(),</span> <span class="n">workflow</span><span class="o">=</span><span class="p">[])</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Execute the scenario</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">scenario</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="c1"># Access exported results</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="n">exported</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="nb">print</span><span class="p">(</span><span class="n">exported</span><span class="p">[</span><span class="s2">&quot;steps&quot;</span><span class="p">][</span><span class="s2">&quot;NetworkStats&quot;</span><span class="p">][</span><span class="s2">&quot;data&quot;</span><span class="p">][</span><span class="s2">&quot;node_count&quot;</span><span class="p">])</span>  <span class="c1"># example</span>
+</span></code></pre></div>
+<p><strong>Key Methods:</strong></p>
+<ul>
+<li><code>from_yaml(yaml_content)</code> - Load scenario from YAML string/file</li>
+<li><code>run()</code> - Execute the complete analysis workflow</li>
+</ul>
+<p><strong>Integration:</strong> Scenario coordinates Network topology, workflow execution, and Results collection. Components can also be used independently for direct programmatic access.</p>
+<h3 id="network">Network<a class="headerlink" href="#network" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Represents network topology and provides fundamental analysis capabilities like maximum flow calculation.</p>
+<p><strong>When to use:</strong> Core component for representing network structure. Used directly for programmatic topology creation or accessed via <code>scenario.network</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.model.network</span><span class="w"> </span><span class="kn">import</span> <span class="n">Network</span><span class="p">,</span> <span class="n">Node</span><span class="p">,</span> <span class="n">Link</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Create network topology</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">network</span> <span class="o">=</span> <span class="n">Network</span><span class="p">()</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="c1"># Add nodes and links</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">node1</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;datacenter1&quot;</span><span class="p">)</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">node2</span> <span class="o">=</span> <span class="n">Node</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;datacenter2&quot;</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">network</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">node1</span><span class="p">)</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">network</span><span class="o">.</span><span class="n">add_node</span><span class="p">(</span><span class="n">node2</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">link</span> <span class="o">=</span> <span class="n">Link</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">&quot;datacenter1&quot;</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span><span class="s2">&quot;datacenter2&quot;</span><span class="p">,</span> <span class="n">capacity</span><span class="o">=</span><span class="mf">100.0</span><span class="p">)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">network</span><span class="o">.</span><span class="n">add_link</span><span class="p">(</span><span class="n">link</span><span class="p">)</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Calculate maximum flow (returns dict)</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="n">max_flow</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">max_flow</span><span class="p">(</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">source_path</span><span class="o">=</span><span class="s2">&quot;datacenter1&quot;</span><span class="p">,</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">sink_path</span><span class="o">=</span><span class="s2">&quot;datacenter2&quot;</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="p">)</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="c1"># Result: {(&#39;datacenter1&#39;, &#39;datacenter2&#39;): 100.0}</span>
+</span></code></pre></div>
+<p><strong>Key Methods:</strong></p>
+<ul>
+<li><code>add_node(node)</code>, <code>add_link(link)</code> - Build topology programmatically</li>
+<li><code>max_flow(source_path, sink_path, **options)</code> - Calculate maximum flow (returns dict)</li>
+<li><code>nodes</code>, <code>links</code> - Access topology as dictionaries</li>
+</ul>
+<p><strong>Key Concepts:</strong></p>
+<ul>
+<li><strong>Node.disabled/Link.disabled:</strong> Scenario-level configuration that persists across analyses</li>
+<li><strong>Node selection:</strong> Use regex patterns like <code>"datacenter.*"</code> or attribute directives like <code>attr:role</code> to group nodes by attribute (see DSL Node Selection)</li>
+</ul>
+<p><strong>Integration:</strong> Foundation for all analysis. Used directly or through NetworkView for filtered analysis.</p>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Centralized container for storing and retrieving analysis results from workflow steps.</p>
+<p><strong>When to use:</strong> Automatically managed by <code>scenario.results</code>. Used for storing custom analysis results and retrieving outputs from workflow steps.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Access results from scenario</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">results</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">results</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Retrieve specific results</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">node_count</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;NetworkStats&quot;</span><span class="p">,</span> <span class="s2">&quot;node_count&quot;</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">capacity_envelopes</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;CapacityEnvelopeAnalysis&quot;</span><span class="p">,</span> <span class="s2">&quot;capacity_envelopes&quot;</span><span class="p">)</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Get all results for a metric across steps</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">all_capacities</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get_all</span><span class="p">(</span><span class="s2">&quot;total_capacity&quot;</span><span class="p">)</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># Export all results for serialization</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="n">all_data</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+</span></code></pre></div>
+<p><strong>Key Methods:</strong></p>
+<ul>
+<li><code>enter_step(step_name)</code> / <code>exit_step()</code> - Scope mutations to a step (managed by WorkflowStep)</li>
+<li><code>put(key, value)</code> - Store under active step; key is <code>"metadata"</code> or <code>"data"</code></li>
+<li><code>get_step(step_name)</code> - Read a step’s raw dict (for explicit cross-step reads)</li>
+<li><code>to_dict()</code> - Export with shape <code>{workflow, steps, scenario}</code> (JSON-safe)</li>
+</ul>
+<p><strong>Integration:</strong> Used by all workflow steps for result storage. Provides consistent access pattern for analysis outputs.</p>
+<h2 id="2-basic-analysis">2. Basic Analysis<a class="headerlink" href="#2-basic-analysis" title="Permanent link">&para;</a></h2>
+<p>Essential analysis capabilities for network evaluation.</p>
+<h3 id="flow-analysis">Flow Analysis<a class="headerlink" href="#flow-analysis" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Calculate network flows between source and sink groups with various policies and constraints.</p>
+<p><strong>When to use:</strong> Fundamental analysis for understanding network capacity, bottlenecks, and traffic engineering scenarios.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.algorithms.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">FlowPlacement</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Basic maximum flow (returns dict)</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">max_flow</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">max_flow</span><span class="p">(</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">source_path</span><span class="o">=</span><span class="s2">&quot;datacenter.*&quot;</span><span class="p">,</span>  <span class="c1"># Regex: all nodes matching pattern</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">sink_path</span><span class="o">=</span><span class="s2">&quot;edge.*&quot;</span><span class="p">,</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;combine&quot;</span>               <span class="c1"># Aggregate all source-&gt;sink flows</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="p">)</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># Advanced flow options</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">max_flow</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">max_flow</span><span class="p">(</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="n">source_path</span><span class="o">=</span><span class="s2">&quot;pod1/servers&quot;</span><span class="p">,</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">sink_path</span><span class="o">=</span><span class="s2">&quot;pod2/servers&quot;</span><span class="p">,</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;pairwise&quot;</span><span class="p">,</span>            <span class="c1"># Individual flows between each pair</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">shortest_path</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>         <span class="c1"># Use only shortest paths</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">flow_placement</span><span class="o">=</span><span class="n">FlowPlacement</span><span class="o">.</span><span class="n">PROPORTIONAL</span>  <span class="c1"># UCMP load balancing</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="p">)</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="c1"># Detailed flow analysis with cost distribution</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="n">result</span> <span class="o">=</span> <span class="n">network</span><span class="o">.</span><span class="n">max_flow_with_summary</span><span class="p">(</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">source_path</span><span class="o">=</span><span class="s2">&quot;datacenter.*&quot;</span><span class="p">,</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="n">sink_path</span><span class="o">=</span><span class="s2">&quot;edge.*&quot;</span><span class="p">,</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;combine&quot;</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="p">)</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="p">(</span><span class="n">src_label</span><span class="p">,</span> <span class="n">sink_label</span><span class="p">),</span> <span class="p">(</span><span class="n">flow_value</span><span class="p">,</span> <span class="n">summary</span><span class="p">)</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="c1"># Cost distribution shows flow volume per path cost (useful for latency analysis)</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cost distribution: </span><span class="si">{</span><span class="n">summary</span><span class="o">.</span><span class="n">cost_distribution</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="c1"># Example: {2.0: 150.0, 4.0: 75.0} means 150 units on cost-2 paths, 75 on cost-4 paths</span>
+</span></code></pre></div>
+<p><strong>Key Options:</strong></p>
+<ul>
+<li><code>mode</code>: <code>"combine"</code> (aggregate flows) or <code>"pairwise"</code> (individual pair flows)</li>
+<li><code>shortest_path</code>: <code>True</code> (shortest only) or <code>False</code> (all available paths)</li>
+<li><code>flow_placement</code>: <code>FlowPlacement.PROPORTIONAL</code> (UCMP) or <code>FlowPlacement.EQUAL_BALANCED</code> (ECMP)</li>
+</ul>
+<p><strong>Advanced Features:</strong></p>
+<ul>
+<li><strong>Cost Distribution</strong>: <code>FlowSummary.cost_distribution</code> provides flow volume breakdown by path cost for latency span analysis and performance characterization</li>
+<li><strong>Analytics</strong>: Edge flows, residual capacities, min-cut analysis, and reachability information</li>
+</ul>
+<p><strong>Integration:</strong> Available on both Network and NetworkView objects. Foundation for FailureManager Monte Carlo analysis.</p>
+<h3 id="networkview">NetworkView<a class="headerlink" href="#networkview" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Provides filtered view of network topology for failure analysis without modifying the base network.</p>
+<p><strong>When to use:</strong> Simulate component failures, analyze degraded network states, or perform parallel analysis with different exclusions.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.model.view</span><span class="w"> </span><span class="kn">import</span> <span class="n">NetworkView</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># Create view with failed components (for failure simulation)</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">failed_view</span> <span class="o">=</span> <span class="n">NetworkView</span><span class="o">.</span><span class="n">from_excluded_sets</span><span class="p">(</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">network</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">excluded_nodes</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;spine1&quot;</span><span class="p">,</span> <span class="s2">&quot;spine2&quot;</span><span class="p">},</span>    <span class="c1"># Failed nodes</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">excluded_links</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;link_123&quot;</span><span class="p">}</span>             <span class="c1"># Failed links</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">)</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Analyze degraded network</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">degraded_flow</span> <span class="o">=</span> <span class="n">failed_view</span><span class="o">.</span><span class="n">max_flow</span><span class="p">(</span><span class="s2">&quot;datacenter.*&quot;</span><span class="p">,</span> <span class="s2">&quot;edge.*&quot;</span><span class="p">)</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="c1"># NetworkView has same analysis API as Network</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">bottlenecks</span> <span class="o">=</span> <span class="n">failed_view</span><span class="o">.</span><span class="n">saturated_edges</span><span class="p">(</span><span class="s2">&quot;source&quot;</span><span class="p">,</span> <span class="s2">&quot;sink&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Read-only overlay:</strong> Combines scenario-disabled and analysis-excluded elements</li>
+<li><strong>Concurrent analysis:</strong> Supports different failure scenarios in parallel</li>
+<li><strong>Identical API:</strong> Same analysis methods as Network</li>
+</ul>
+<p><strong>Integration:</strong> Used internally by FailureManager for Monte Carlo analysis. Enables concurrent failure simulations without network state conflicts.</p>
+<h2 id="3-advanced-analysis">3. Advanced Analysis<a class="headerlink" href="#3-advanced-analysis" title="Permanent link">&para;</a></h2>
+<p>Sophisticated analysis capabilities using Monte Carlo methods and parallel processing.</p>
+<h3 id="failuremanager">FailureManager<a class="headerlink" href="#failuremanager" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Authoritative Monte Carlo failure analysis engine with parallel processing and result aggregation.</p>
+<p><strong>When to use:</strong> Capacity envelope analysis, demand placement studies, component sensitivity analysis, or custom Monte Carlo simulations.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.failure.manager.manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">FailureManager</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.failure.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">FailurePolicy</span><span class="p">,</span> <span class="n">FailureRule</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.results.artifacts</span><span class="w"> </span><span class="kn">import</span> <span class="n">FailurePolicySet</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="c1"># Setup failure policies</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="n">policy_set</span> <span class="o">=</span> <span class="n">FailurePolicySet</span><span class="p">()</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="n">rule</span> <span class="o">=</span> <span class="n">FailureRule</span><span class="p">(</span><span class="n">entity_scope</span><span class="o">=</span><span class="s2">&quot;link&quot;</span><span class="p">,</span> <span class="n">rule_type</span><span class="o">=</span><span class="s2">&quot;choice&quot;</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="n">policy</span> <span class="o">=</span> <span class="n">FailurePolicy</span><span class="p">(</span><span class="n">rules</span><span class="o">=</span><span class="p">[</span><span class="n">rule</span><span class="p">])</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="n">policy_set</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="s2">&quot;random_failures&quot;</span><span class="p">,</span> <span class="n">policy</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="c1"># Create FailureManager</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">manager</span> <span class="o">=</span> <span class="n">FailureManager</span><span class="p">(</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">network</span><span class="o">=</span><span class="n">network</span><span class="p">,</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">failure_policy_set</span><span class="o">=</span><span class="n">policy_set</span><span class="p">,</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">policy_name</span><span class="o">=</span><span class="s2">&quot;random_failures&quot;</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="p">)</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>
+</span><span id="__span-5-18"><a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="c1"># Capacity envelope analysis</span>
+</span><span id="__span-5-19"><a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="n">envelope_results</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">run_max_flow_monte_carlo</span><span class="p">(</span>
+</span><span id="__span-5-20"><a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>    <span class="n">source_path</span><span class="o">=</span><span class="s2">&quot;datacenter.*&quot;</span><span class="p">,</span>
+</span><span id="__span-5-21"><a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a>    <span class="n">sink_path</span><span class="o">=</span><span class="s2">&quot;edge.*&quot;</span><span class="p">,</span>
+</span><span id="__span-5-22"><a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">iterations</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+</span><span id="__span-5-23"><a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">parallelism</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+</span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>    <span class="n">baseline</span><span class="o">=</span><span class="kc">True</span>
+</span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Key Methods:</strong></p>
+<ul>
+<li><code>run_max_flow_monte_carlo()</code> - Capacity envelope analysis under failures</li>
+<li><code>run_demand_placement_monte_carlo()</code> - Traffic demand placement success analysis</li>
+<li><code>run_sensitivity_monte_carlo()</code> - Component criticality and impact analysis</li>
+<li><code>run_monte_carlo_analysis()</code> - Generic Monte Carlo with custom analysis functions</li>
+</ul>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Parallel processing</strong> with worker caching for performance</li>
+<li><strong>Automatic result aggregation</strong> into rich statistical objects</li>
+<li><strong>Reproducible results</strong> with seed support</li>
+<li><strong>Failure policy integration</strong> for realistic failure scenarios</li>
+</ul>
+<p><strong>Integration:</strong> Uses NetworkView for isolated failure simulation. Returns specialized result objects for statistical analysis.</p>
+<h3 id="monte-carlo-results">Monte Carlo Results<a class="headerlink" href="#monte-carlo-results" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Rich result objects with statistical analysis and visualization capabilities.</p>
+<p><strong>When to use:</strong> Analyzing outputs from FailureManager convenience methods - provides pandas integration and statistical summaries.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Unified flow results (per-iteration)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.results.flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">FlowEntry</span><span class="p">,</span> <span class="n">FlowIterationResult</span><span class="p">,</span> <span class="n">FlowSummary</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">flows</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">FlowEntry</span><span class="p">(</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="n">source</span><span class="o">=</span><span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="n">destination</span><span class="o">=</span><span class="s2">&quot;B&quot;</span><span class="p">,</span> <span class="n">priority</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>        <span class="n">demand</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">placed</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">dropped</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="n">cost_distribution</span><span class="o">=</span><span class="p">{</span><span class="mf">2.0</span><span class="p">:</span> <span class="mf">6.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">:</span> <span class="mf">4.0</span><span class="p">},</span> <span class="n">data</span><span class="o">=</span><span class="p">{}</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    <span class="p">)</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="p">]</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">summary</span> <span class="o">=</span> <span class="n">FlowSummary</span><span class="p">(</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">total_demand</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">total_placed</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">overall_ratio</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">dropped_flows</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_flows</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">flows</span><span class="p">)</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="p">)</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="n">iteration</span> <span class="o">=</span> <span class="n">FlowIterationResult</span><span class="p">(</span><span class="n">flows</span><span class="o">=</span><span class="n">flows</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="n">summary</span><span class="p">)</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="n">iteration_dict</span> <span class="o">=</span> <span class="n">iteration</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>  <span class="c1"># JSON-safe dict</span>
+</span></code></pre></div>
+<p><strong>Key Result Types:</strong></p>
+<ul>
+<li><code>FlowIterationResult</code> - Per-iteration flow results (flows + summary)</li>
+<li><code>FlowEntry</code> - Per-flow entry (source, destination, volumes, cost distribution)</li>
+<li><code>FlowSummary</code> - Aggregate totals for an iteration</li>
+<li><code>SensitivityResults</code> - Component criticality rankings</li>
+</ul>
+<p><strong>Integration:</strong> Returned by FailureManager convenience methods. Provides pandas DataFrames and export capabilities for notebook analysis.</p>
+<h2 id="4-data-results">4. Data &amp; Results<a class="headerlink" href="#4-data-results" title="Permanent link">&para;</a></h2>
+<p>Working with analysis outputs and implementing custom result storage.</p>
+<h3 id="result-artifacts">Result Artifacts<a class="headerlink" href="#result-artifacts" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Serializable data structures that store analysis results with consistent interfaces for export and reconstruction.</p>
+<p><strong>When to use:</strong> Working with stored analysis results, implementing custom workflow steps, or exporting data for external analysis.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.results.artifacts</span><span class="w"> </span><span class="kn">import</span> <span class="n">CapacityEnvelope</span><span class="p">,</span> <span class="n">FailurePatternResult</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># Access capacity envelopes from analysis results</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">envelope_dict</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;CapacityEnvelopeAnalysis&quot;</span><span class="p">,</span> <span class="s2">&quot;capacity_envelopes&quot;</span><span class="p">)</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">envelope</span> <span class="o">=</span> <span class="n">CapacityEnvelope</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">envelope_dict</span><span class="p">[</span><span class="s2">&quot;datacenter-&gt;edge&quot;</span><span class="p">])</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="c1"># Statistical access</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Mean capacity: </span><span class="si">{</span><span class="n">envelope</span><span class="o">.</span><span class="n">mean_capacity</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;95th percentile: </span><span class="si">{</span><span class="n">envelope</span><span class="o">.</span><span class="n">get_percentile</span><span class="p">(</span><span class="mi">95</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="c1"># Export and reconstruction</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">serialized</span> <span class="o">=</span> <span class="n">envelope</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>  <span class="c1"># For JSON storage</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="n">values</span> <span class="o">=</span> <span class="n">envelope</span><span class="o">.</span><span class="n">expand_to_values</span><span class="p">()</span>  <span class="c1"># Reconstruct original samples</span>
+</span></code></pre></div>
+<p><strong>Key Classes:</strong></p>
+<ul>
+<li><code>CapacityEnvelope</code> - Frequency-based capacity distributions with percentile analysis</li>
+<li><code>FailurePatternResult</code> - Failure scenario details with capacity impact</li>
+<li><code>FailurePolicySet</code> - Collections of named failure policies</li>
+</ul>
+<p><strong>Integration:</strong> Used by workflow steps and FailureManager. All provide <code>to_dict()</code> and <code>from_dict()</code> for serialization.</p>
+<h3 id="export-patterns">Export Patterns<a class="headerlink" href="#export-patterns" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Best practices for storing results in custom workflow steps and analysis functions.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.workflow.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">WorkflowStep</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">CustomAnalysis</span><span class="p">(</span><span class="n">WorkflowStep</span><span class="p">):</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scenario</span><span class="p">):</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="c1"># Simple metrics</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s2">&quot;metadata&quot;</span><span class="p">,</span> <span class="p">{})</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>        <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;node_count&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">scenario</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">nodes</span><span class="p">)})</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>        <span class="c1"># Complex objects - convert to dict first</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>        <span class="n">analysis_result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">perform_analysis</span><span class="p">(</span><span class="n">scenario</span><span class="o">.</span><span class="n">network</span><span class="p">)</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>        <span class="n">payload</span> <span class="o">=</span> <span class="n">analysis_result</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">analysis_result</span><span class="p">,</span> <span class="s1">&#39;to_dict&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="n">analysis_result</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>        <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="s2">&quot;data&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;analysis&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="p">})</span>
+</span></code></pre></div>
+<p><strong>Storage Conventions:</strong></p>
+<ul>
+<li>Use <code>self.name</code> as step identifier for result storage</li>
+<li>Convert complex objects using <code>to_dict()</code> before storage</li>
+<li>Use descriptive keys like <code>"capacity_envelopes"</code>, <code>"network_statistics"</code></li>
+<li>Results are automatically serialized via <code>results.to_dict()</code></li>
+</ul>
+<h2 id="5-automation">5. Automation<a class="headerlink" href="#5-automation" title="Permanent link">&para;</a></h2>
+<p>Workflow orchestration and reusable network templates.</p>
+<h3 id="workflow-steps">Workflow Steps<a class="headerlink" href="#workflow-steps" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Automated analysis sequences with standardized result storage and execution order.</p>
+<p><strong>When to use:</strong> Complex multi-step analysis, reproducible analysis pipelines, or when you need automatic result collection and metadata tracking.</p>
+<p>Available workflow steps:</p>
+<ul>
+<li><code>BuildGraph</code> - Exports graph in node-link JSON under <code>data.graph</code></li>
+<li><code>NetworkStats</code> - Basic topology statistics under <code>data</code></li>
+<li><code>MaxFlow</code> - Monte Carlo flow capacity analysis under <code>data.flow_results</code></li>
+<li><code>TrafficMatrixPlacement</code> - Monte Carlo demand placement under <code>data.flow_results</code></li>
+<li><code>MaximumSupportedDemand</code> - Alpha search results under <code>data</code></li>
+</ul>
+<p><strong>Integration:</strong> Defined in YAML scenarios or created programmatically. Each step stores results using consistent naming patterns in <code>scenario.results</code>.</p>
+<h3 id="blueprint-system">Blueprint System<a class="headerlink" href="#blueprint-system" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Reusable network topology templates defined in YAML for complex, hierarchical network structures.</p>
+<p><strong>When to use:</strong> Creating standardized network architectures, multi-pod topologies, or when you need parameterized network generation.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Blueprints are typically defined in YAML and used via Scenario</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># For programmatic topology creation, use Network class directly</span>
+</span></code></pre></div>
+<p><strong>Integration:</strong> Blueprints are processed during scenario creation. See <a href="../dsl/">DSL Reference</a> for YAML blueprint syntax and examples.</p>
+<h2 id="6-extensions">6. Extensions<a class="headerlink" href="#6-extensions" title="Permanent link">&para;</a></h2>
+<p>Advanced capabilities for custom analysis and low-level operations.</p>
+<h3 id="utilities-helpers">Utilities &amp; Helpers<a class="headerlink" href="#utilities-helpers" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Graph format conversion and direct access to low-level algorithms.</p>
+<p><strong>When to use:</strong> Custom analysis requiring NetworkX integration, performance-critical algorithms, or when you need direct control over graph operations.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.graph.convert</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_digraph</span><span class="p">,</span> <span class="n">from_digraph</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.algorithms.spf</span><span class="w"> </span><span class="kn">import</span> <span class="n">spf</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ngraph.algorithms.max_flow</span><span class="w"> </span><span class="kn">import</span> <span class="n">calc_max_flow</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># Convert to NetworkX for custom algorithms</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="n">nx_graph</span> <span class="o">=</span> <span class="n">to_digraph</span><span class="p">(</span><span class="n">scenario</span><span class="o">.</span><span class="n">network</span><span class="o">.</span><span class="n">to_strict_multidigraph</span><span class="p">())</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Direct algorithm access</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">costs</span><span class="p">,</span> <span class="n">predecessors</span> <span class="o">=</span> <span class="n">spf</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">source_node</span><span class="p">)</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="n">max_flow_value</span> <span class="o">=</span> <span class="n">calc_max_flow</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">sink</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Integration:</strong> Provides bridge between NetGraph and NetworkX ecosystems. Used when built-in analysis methods are insufficient.</p>
+<h3 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Exception handling patterns and result validation for reliable analysis.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">try</span><span class="p">:</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">scenario</span> <span class="o">=</span> <span class="n">Scenario</span><span class="o">.</span><span class="n">from_yaml</span><span class="p">(</span><span class="n">yaml_content</span><span class="p">)</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>    <span class="n">scenario</span><span class="o">.</span><span class="n">run</span><span class="p">()</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="c1"># Validate expected results</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>    <span class="n">exported</span> <span class="o">=</span> <span class="n">scenario</span><span class="o">.</span><span class="n">results</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="k">assert</span> <span class="s2">&quot;steps&quot;</span> <span class="ow">in</span> <span class="n">exported</span> <span class="ow">and</span> <span class="n">exported</span><span class="p">[</span><span class="s2">&quot;steps&quot;</span><span class="p">],</span> <span class="s2">&quot;No steps present in results&quot;</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;YAML validation failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Analysis error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>Common Patterns:</strong></p>
+<ul>
+<li>Use <code>results.get()</code> with <code>default</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
+      
+    
+  </body>
+</html>
