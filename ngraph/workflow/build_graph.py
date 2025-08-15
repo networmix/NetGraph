@@ -10,8 +10,9 @@ YAML Configuration Example:
         name: "build_network_graph"  # Optional: Custom name for this step
     ```
 
-Results stored in `scenario.results`:
-    - graph: `StrictMultiDiGraph` object with bidirectional links
+Results stored in `scenario.results` under the step name as two keys:
+    - metadata: Step-level execution metadata (empty dict)
+    - data: { graph: node-link JSON dict, context: { add_reverse: bool } }
 """
 
 from __future__ import annotations
@@ -43,7 +44,15 @@ class BuildGraph(WorkflowStep):
             None
         """
         graph = scenario.network.to_strict_multidigraph(add_reverse=True)
-        scenario.results.put(self.name, "graph", graph)
+        scenario.results.put("metadata", {})
+        scenario.results.put(
+            "data",
+            {
+                # Store as JSON-safe node-link dict rather than raw graph object
+                "graph": graph.to_dict(),
+                "context": {"add_reverse": True},
+            },
+        )
 
 
 # Register the class after definition to avoid decorator ordering issues

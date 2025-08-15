@@ -1245,14 +1245,15 @@ def _run_scenario(
         # Export JSON results by default unless disabled
         if not no_results:
             logger.info("Serializing results to JSON")
-            results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
+            results_dict: Dict[str, Any] = scenario.results.to_dict()
 
             if keys:
-                filtered: Dict[str, Dict[str, Any]] = {}
-                for step, data in results_dict.items():
-                    if step in keys:
-                        filtered[step] = data
-                results_dict = filtered
+                # Filter only the steps subsection; keep workflow/scenario intact
+                steps_map = results_dict.get("steps", {})
+                filtered_steps: Dict[str, Any] = {
+                    step: steps_map[step] for step in keys if step in steps_map
+                }
+                results_dict["steps"] = filtered_steps
 
             json_str = json.dumps(results_dict, indent=2, default=str)
 
@@ -1273,13 +1274,13 @@ def _run_scenario(
                 print(json_str)
         elif stdout:
             # Print to stdout even without file export
-            results_dict: Dict[str, Dict[str, Any]] = scenario.results.to_dict()
+            results_dict: Dict[str, Any] = scenario.results.to_dict()
             if keys:
-                filtered: Dict[str, Dict[str, Any]] = {}
-                for step, data in results_dict.items():
-                    if step in keys:
-                        filtered[step] = data
-                results_dict = filtered
+                steps_map = results_dict.get("steps", {})
+                filtered_steps: Dict[str, Any] = {
+                    step: steps_map[step] for step in keys if step in steps_map
+                }
+                results_dict["steps"] = filtered_steps
             json_str = json.dumps(results_dict, indent=2, default=str)
             print(json_str)
 

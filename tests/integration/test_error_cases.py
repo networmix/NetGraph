@@ -212,7 +212,10 @@ class TestEdgeCases:
         scenario.run()
 
         # Should succeed but produce empty graph
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert len(graph.nodes) == 0
         assert len(graph.edges) == 0
 
@@ -225,7 +228,10 @@ class TestEdgeCases:
         scenario = builder.build_scenario()
         scenario.run()
 
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert len(graph.nodes) == 1
         assert len(graph.edges) == 0
 
@@ -239,7 +245,10 @@ class TestEdgeCases:
         scenario = builder.build_scenario()
         scenario.run()
 
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert len(graph.nodes) == 3
         assert len(graph.edges) == 0
 
@@ -287,7 +296,10 @@ class TestEdgeCases:
         scenario.run()
 
         # Should handle parallel links correctly
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert len(graph.nodes) == 2
         # Should have multiple edges between the same nodes
         assert graph.number_of_edges("NodeA", "NodeB") >= 2
@@ -309,7 +321,10 @@ class TestEdgeCases:
         scenario.run()
 
         # Should handle zero capacity links appropriately
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert len(graph.nodes) == 2
 
     def test_very_large_network_parameters(self):
@@ -332,7 +347,10 @@ class TestEdgeCases:
         scenario.run()
 
         # Should handle large numbers without overflow issues
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         assert graph is not None, "BuildGraph should produce a graph"
         assert len(graph.nodes) == 2
 

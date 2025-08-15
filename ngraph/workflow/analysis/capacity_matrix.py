@@ -8,15 +8,12 @@ Works with both CapacityEnvelopeResults objects and workflow step data.
 from __future__ import annotations
 
 import importlib
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 from .base import NotebookAnalyzer
-
-if TYPE_CHECKING:
-    from ngraph.monte_carlo.results import CapacityEnvelopeResults
 
 __all__ = ["CapacityMatrixAnalyzer"]
 
@@ -34,9 +31,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     2. Direct mode: analyze_results() with CapacityEnvelopeResults object
     """
 
-    def analyze_results(
-        self, results: "CapacityEnvelopeResults", **kwargs
-    ) -> Dict[str, Any]:
+    def analyze_results(self, results: Any, **kwargs) -> Dict[str, Any]:
         """Analyze a `CapacityEnvelopeResults` object directly.
 
         Args:
@@ -79,7 +74,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
     def display_capacity_distributions(
         self,
-        results: "CapacityEnvelopeResults",
+        results: Any,
         flow_key: Optional[str] = None,
         bins: int = 30,
     ) -> None:
@@ -150,7 +145,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         except Exception as exc:
             print(f"⚠️  Visualization error: {exc}")
 
-    def display_percentile_comparison(self, results: "CapacityEnvelopeResults") -> None:
+    def display_percentile_comparison(self, results: Any) -> None:
         """Display percentile comparison plots for `CapacityEnvelopeResults`.
 
         Args:
@@ -190,9 +185,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         except Exception as exc:
             print(f"⚠️  Visualization error: {exc}")
 
-    def analyze_and_display_envelope_results(
-        self, results: "CapacityEnvelopeResults", **kwargs
-    ) -> None:
+    def analyze_and_display_envelope_results(self, results: Any, **kwargs) -> None:
         """Complete analysis and display for CapacityEnvelopeResults object.
 
         Args:
@@ -248,13 +241,43 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         if not step_name:
             raise ValueError("step_name required for capacity matrix analysis")
 
-        step_data = results.get(step_name, {})
-        envelopes = step_data.get("capacity_envelopes", {})
+        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+        step_data = steps_map.get(step_name, {})
+        # New schema: expect flow_results and compute samples on-demand
+        flow_data = step_data.get("data", {}) if isinstance(step_data, dict) else {}
+        flow_results = (
+            flow_data.get("flow_results", []) if isinstance(flow_data, dict) else []
+        )
+        if not flow_results:
+            raise ValueError(f"No flow_results data found for step: {step_name}")
+        # Build a simple samples mapping (src,dst) -> list[placed]
+        from collections import defaultdict
 
-        if not envelopes:
-            raise ValueError(f"No capacity envelope data found for step: {step_name}")
+        samples = defaultdict(list)
+        for iteration in flow_results:
+            try:
+                flows = iteration.get("flows", [])
+            except AttributeError:
+                flows = []
+            for rec in flows:
+                try:
+                    src = str(rec.get("source", rec.get("src", "")))
+                    dst = str(rec.get("destination", rec.get("dst", "")))
+                    placed = float(rec.get("placed", rec.get("value", 0.0)))
+                except Exception:
+                    continue
+                samples[(src, dst)].append(placed)
+
+        if not samples:
+            raise ValueError(f"No flow_results data found for step: {step_name}")
 
         try:
+            # Convert samples to a pseudo-envelope dict for matrix construction
+            # using max value per pair as the capacity representative
+            envelopes = {
+                f"{src}->{dst}": {"max": max(vals) if vals else 0.0}
+                for (src, dst), vals in samples.items()
+            }
             matrix_data = self._extract_matrix_data(envelopes)
             if not matrix_data:
                 raise ValueError(
@@ -523,13 +546,15 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
     def analyze_and_display_all_steps(self, results: Dict[str, Any]) -> None:  # noqa: D401
         """Run analyze/display on every step containing capacity_envelopes."""
         found_data = False
-        for step_name, step_data in results.items():
-            if isinstance(step_data, dict) and "capacity_envelopes" in step_data:
+        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+        for step_name, step_data in steps_map.items():
+            data_obj = step_data.get("data", {}) if isinstance(step_data, dict) else {}
+            if isinstance(data_obj, dict) and "flow_results" in data_obj:
                 found_data = True
                 self.display_analysis(self.analyze(results, step_name=step_name))
                 print()  # spacing between steps
         if not found_data:
-            print("No capacity envelope data found in results")
+            print("No steps with flow_results found in results")
 
     def analyze_and_display_step(self, results: Dict[str, Any], **kwargs) -> None:
         """Analyze and display results for a specific step.
@@ -567,7 +592,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             raise ValueError("No step name provided for flow availability analysis")
 
         # Check if the step has capacity_envelopes data for flow availability analysis
-        step_data = results.get(step_name, {})
+        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+        step_data = steps_map.get(step_name, {})
         if "capacity_envelopes" not in step_data:
             raise ValueError(
                 f"❌ No capacity envelope data found for step: {step_name}. "

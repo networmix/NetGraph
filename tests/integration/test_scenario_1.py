@@ -40,7 +40,10 @@ class TestScenario1:
     def helper(self, scenario_1_executed):
         """Create test helper for scenario 1."""
         helper = create_scenario_helper(scenario_1_executed)
-        graph = scenario_1_executed.results.get("build_graph", "graph")
+        exported = scenario_1_executed.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
         helper.set_graph(graph)
         return helper
 
@@ -48,7 +51,8 @@ class TestScenario1:
         """Test that scenario 1 can be parsed and executed without errors."""
         # Basic sanity check - scenario should have run successfully
         assert scenario_1_executed.results is not None
-        assert scenario_1_executed.results.get("build_graph", "graph") is not None
+        exported = scenario_1_executed.results.to_dict()
+        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations."""

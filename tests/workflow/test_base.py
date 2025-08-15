@@ -60,7 +60,7 @@ def test_execute_records_metadata_including_seed_fields() -> None:
 
     class Dummy(WorkflowStep):
         def run(self, scenario) -> None:
-            scenario.results.put(self.name, "ok", True)
+            scenario.results.put("metadata", {"ok": True})
 
     scen = MagicMock(spec=Scenario)
     scen.results = Results()

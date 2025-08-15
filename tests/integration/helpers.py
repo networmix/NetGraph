@@ -381,7 +381,17 @@ class ScenarioTestHelper:
         Raises:
             AssertionError: If flow results don't match expectations within tolerance
         """
-        actual_flow = self.scenario.results.get(step_name, flow_label)
+        exported = self.scenario.results.to_dict()
+        step_data = exported.get("steps", {}).get(step_name, {}).get("data", {})
+        # Prefer direct key
+        actual_flow = step_data.get(flow_label)
+        # Fallback: if flow_results list present, try summary.total_placed
+        if actual_flow is None and flow_label == "total_placed":
+            flow_results = step_data.get("flow_results", [])
+            if flow_results:
+                actual_flow = float(
+                    flow_results[0].get("summary", {}).get("total_placed", 0.0)
+                )
         assert actual_flow is not None, (
             f"Flow result '{flow_label}' not found for step '{step_name}'"
         )
@@ -726,7 +736,18 @@ def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
     Returns:
         Configured ScenarioTestHelper instance
     """
-    return ScenarioTestHelper(scenario)
+    helper = ScenarioTestHelper(scenario)
+    exported = scenario.results.to_dict()
+    from ngraph.graph.io import node_link_to_graph
+
+    graph_dict = (
+        exported.get("steps", {}).get("build_graph", {}).get("data", {}).get("graph")
+    )
+    graph = (
+        node_link_to_graph(graph_dict) if isinstance(graph_dict, dict) else graph_dict
+    )
+    helper.set_graph(graph)
+    return helper
 
 
 # Pytest fixtures for common test data and patterns

@@ -58,10 +58,11 @@ class ReportGenerator:
         self._results = data
         self._workflow_metadata = data.get("workflow", {})
 
-        # Check if we have any actual results (beyond just workflow metadata)
-        if not any(k != "workflow" for k in data.keys()):
+        # Require steps section with at least one step
+        steps = data.get("steps", {})
+        if not isinstance(steps, dict) or not steps:
             raise ValueError(
-                "No analysis results found in file (only workflow metadata)"
+                "No analysis results found in file (missing or empty 'steps')"
             )
 
         logger.info(
@@ -207,12 +208,14 @@ load_result = loader.load_results('{self.results_path.name}')
 if load_result['success']:
     results = load_result['results']
     workflow_metadata = results.get('workflow', {{}})
-    print(f"✅ Loaded {{len(results)-1}} analysis steps from {self.results_path.name}")
+    steps = results.get('steps', {{}})
+    print(f"✅ Loaded {{len(steps)}} analysis steps from {self.results_path.name}")
     print(f"Workflow contains {{len(workflow_metadata)}} steps")
 else:
     print("❌ Load failed:", load_result['message'])
     results = {{}}
-    workflow_metadata = {{}}"""
+    workflow_metadata = {{}}
+    steps = {{}}"""
 
         return nbformat.v4.new_code_cell(data_loading_code)
 
@@ -245,7 +248,7 @@ if 'workflow' in results and workflow_metadata:
             print("    -> No analysis modules configured")
 
         # Check if data exists
-        if step_name not in results:
+        if 'steps' not in results or step_name not in results['steps']:
             print("    ⚠️ No data found for this step")
 
         print()
@@ -322,7 +325,8 @@ else:
         kwargs_str = ", ".join(kwargs_parts)
 
         analysis_code = f"""# {section_title}
-if '{step_name}' in results:
+steps = results.get('steps', {{}})
+if '{step_name}' in steps:
     analyzer = {analyzer_class_name}()
     try:
         analyzer.{method_name}(results, {kwargs_str})

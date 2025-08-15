@@ -187,32 +187,4 @@ failure_policy_set:
 ###############################################################################
 # Workflow
 ###############################################################################
-workflow:
-  - step_type: BuildGraph
-    name: build_graph
-  - step_type: CapacityEnvelopeAnalysis
-    name: ce_1
-    source_path: "^(.+)"
-    sink_path: "^(.+)"
-    mode: pairwise
-    parallelism: 8
-    shortest_path: false
-    flow_placement: PROPORTIONAL
-    iterations: 1000
-    baseline: true
-    failure_policy: single_random_link_failure
-    store_failure_patterns: true
-    include_flow_summary: true
-  - step_type: CapacityEnvelopeAnalysis
-    name: ce_2
-    source_path: "^(.+)"
-    sink_path: "^(.+)"
-    mode: pairwise
-    parallelism: 8
-    shortest_path: false
-    flow_placement: PROPORTIONAL
-    iterations: 10000
-    baseline: true
-    failure_policy: availability_1992
-    store_failure_patterns: true
-    include_flow_summary: true
+workflow: []

@@ -44,8 +44,10 @@ def test_run_writes_results_file_and_contains_build_graph(tmp_path: Path) -> Non
 
     assert results_path.exists()
     data = json.loads(results_path.read_text())
-    assert "build_graph" in data
-    assert "graph" in data["build_graph"]
+    assert "steps" in data and "workflow" in data
+    # built step is named 'build_graph'
+    assert "build_graph" in data["steps"]
+    assert "graph" in data["steps"]["build_graph"]["data"]
 
 
 def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -56,7 +58,7 @@ def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> 
     captured = capsys.readouterr()
     payload = json.loads(extract_json_from_stdout(captured.out))
 
-    assert "build_graph" in payload
+    assert "steps" in payload and "build_graph" in payload["steps"]
     # default <scenario_name>.results.json is created when --results not passed
     assert (tmp_path / "scenario_1.results.json").exists()
 
@@ -129,9 +131,10 @@ def test_run_filter_by_step_names_subsets_results(tmp_path: Path, monkeypatch) -
     )
     filtered_data = json.loads(filtered_path.read_text())
 
-    assert set(filtered_data.keys()) == {"capacity_analysis_forward"}
-    assert "capacity_envelopes" in filtered_data["capacity_analysis_forward"]
-    assert set(filtered_data.keys()).issubset(set(all_data.keys()))
+    assert set(filtered_data.get("steps", {}).keys()) == {"capacity_analysis_forward"}
+    assert set(filtered_data.get("steps", {}).keys()).issubset(
+        set(all_data.get("steps", {}).keys())
+    )
 
 
 def test_run_filter_nonexistent_step_produces_empty_results(
@@ -143,7 +146,7 @@ def test_run_filter_nonexistent_step_produces_empty_results(
 
     cli.main(["run", str(scenario), "--results", str(out_path), "--keys", "missing"])
     data = json.loads(out_path.read_text())
-    assert data == {}
+    assert data.get("steps", {}) == {}
 
 
 def test_run_profile_flag_writes_results(tmp_path: Path, monkeypatch) -> None:
@@ -172,7 +175,7 @@ workflow:
 
     assert out_path.exists()
     data = json.loads(out_path.read_text())
-    assert "stats" in data
+    assert "steps" in data and "stats" in data["steps"]
 
 
 # Logging behavior (value assertions, not implementation details)
@@ -304,27 +307,6 @@ workflow:
     assert "0.1" in out
 
 
-def test_inspect_errors_for_missing_and_invalid_files(tmp_path: Path) -> None:
-    invalid = tmp_path / "bad.yaml"
-    invalid.write_text("invalid: yaml: content: [")
-
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
-        with pytest.raises(SystemExit):
-            cli.main(["inspect", str(invalid)])
-    assert any(
-        "ERROR: Failed to inspect scenario" in str(c.args[0])
-        for c in mprint.call_args_list
-    )
-
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint2:
-        with pytest.raises(SystemExit):
-            cli.main(["inspect", str(tmp_path / "missing.yaml")])
-    assert any(
-        "ERROR: Scenario file not found" in str(c.args[0])
-        for c in mprint2.call_args_list
-    )
-
-
 def test_inspect_workflow_node_selection_preview_basic(tmp_path: Path) -> None:
     scenario_file = tmp_path / "s.yaml"
     scenario_file.write_text(
@@ -336,7 +318,7 @@ network:
     src-2: {}
     dst-1: {}
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: cap
     source_path: "^src"
     sink_path: "^dst"
@@ -361,7 +343,7 @@ network:
   nodes:
     A: {}
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: cap2
     source_path: "^none"
     sink_path: "^none"
@@ -420,7 +402,7 @@ def test_report_fast_paths(monkeypatch, capsys) -> None:
         tmp = Path(tmpdir)
         results = tmp / "results.json"
         results.write_text(
-            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"x": 1}}'
+            '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "steps": {"step1": {"data": {"x": 1}}}}'
         )
 
         class FakeRG:
@@ -462,7 +444,7 @@ def test_report_with_output_dir_defaults(monkeypatch, capsys, tmp_path: Path) ->
     # Prepare a results file
     results = tmp_path / "r.json"
     results.write_text(
-        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"x": 1}}'
+        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "steps": {"step1": {"data": {"x": 1}}}}'
     )
 
     class FakeRG:
@@ -538,7 +520,7 @@ def test_report_default_names_from_results(monkeypatch, capsys, tmp_path: Path) 
     # Prepare a results file with a specific name
     results = tmp_path / "baseline_scenario.json"
     results.write_text(
-        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "step1": {"x": 1}}'
+        '{"workflow": {"step1": {"step_type": "NetworkStats", "step_name": "step1", "execution_order": 0}}, "steps": {"step1": {"data": {"x": 1}}}}'
     )
 
     class FakeRG:

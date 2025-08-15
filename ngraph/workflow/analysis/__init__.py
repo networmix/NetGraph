@@ -26,7 +26,7 @@ Convenience functions:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import itables.options as itables_opt
 import matplotlib.pyplot as plt
@@ -41,16 +41,16 @@ from .registry import AnalysisConfig, AnalysisRegistry, get_default_registry
 from .summary import SummaryAnalyzer
 
 if TYPE_CHECKING:
-    from ngraph.monte_carlo.results import CapacityEnvelopeResults
+    pass
 
 
 def analyze_capacity_envelopes(
-    results: CapacityEnvelopeResults,
+    results: Any,
 ) -> CapacityMatrixAnalyzer:
     """Return a `CapacityMatrixAnalyzer` for direct results analysis.
 
     Args:
-        results: CapacityEnvelopeResults object from convenience methods.
+        results: Deprecated; retained for signature compatibility during transition.
 
     Returns:
         Configured analyzer ready for analysis and visualization.

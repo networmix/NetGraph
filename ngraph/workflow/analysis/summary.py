@@ -28,22 +28,19 @@ class SummaryAnalyzer(NotebookAnalyzer):
         Returns:
             Summary statistics including total steps and category counts.
         """
-        total_steps = len(results)
+        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+        total_steps = len(steps_map)
         capacity_steps = len(
             [
                 s
-                for s, data in results.items()
-                if isinstance(data, dict) and "capacity_envelopes" in data
-            ]
-        )
-        flow_steps = len(
-            [
-                s
-                for s, data in results.items()
+                for s, data in steps_map.items()
                 if isinstance(data, dict)
-                and any(k.startswith("max_flow:") for k in data.keys())
+                and isinstance(data.get("data"), dict)
+                and isinstance(data["data"].get("flow_results"), list)
             ]
         )
+        # Placeholder for future categories; keep reporting with new schema
+        flow_steps = 0
         other_steps = total_steps - capacity_steps - flow_steps
 
         return {
@@ -69,8 +66,7 @@ class SummaryAnalyzer(NotebookAnalyzer):
 
         stats = analysis
         print(f"Total Analysis Steps: {stats['total_steps']:,}")
-        print(f"Capacity Envelope Steps: {stats['capacity_steps']:,}")
-        print(f"Flow Analysis Steps: {stats['flow_steps']:,}")
+        print(f"Steps with flow_results: {stats['capacity_steps']:,}")
         print(f"Other Data Steps: {stats['other_steps']:,}")
 
         if stats["total_steps"] > 0:
@@ -94,7 +90,8 @@ class SummaryAnalyzer(NotebookAnalyzer):
         if not step_name:
             raise ValueError("No step name provided for network stats analysis")
 
-        step_data = results.get(step_name, {})
+        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
+        step_data = steps_map.get(step_name, {})
         if not step_data:
             raise ValueError(f"No data found for step: {step_name}")
 

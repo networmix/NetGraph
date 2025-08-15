@@ -581,7 +581,10 @@ class FailureManager:
             )
             key_to_result[dedup_key] = value
 
-        # Build full results list in original order
+        # Build full results list in original order. Clone value per member to avoid aliasing
+        # when the same unique task maps to multiple iterations.
+        from copy import deepcopy
+
         results: list[Any] = [None] * mc_iters  # type: ignore[var-annotated]
         for key, members in key_to_members.items():
             if key not in key_to_result:
@@ -589,7 +592,11 @@ class FailureManager:
                 continue
             value = key_to_result[key]
             for idx in members:
-                results[idx] = value
+                try:
+                    results[idx] = deepcopy(value)
+                except Exception:
+                    # Fallback to shared reference if deepcopy fails
+                    results[idx] = value
 
         # Reconstruct failure patterns per original iteration if requested
         failure_patterns: list[dict[str, Any]] = []
@@ -610,6 +617,66 @@ class FailureManager:
                     )
 
         elapsed_time = time.time() - start_time
+
+        # Attach failure identifiers/state into each iteration result when possible.
+        # analysis_func is expected to return an iteration object or a structure
+        # that we keep unchanged if it isn't a flow-iteration container.
+        try:
+            # Build map iteration_index -> failure state
+            index_to_state: dict[int, dict[str, list[str]]] = {}
+            for pat in failure_patterns:
+                idx = int(pat.get("iteration_index", -1))
+                if idx < 0:
+                    continue
+                index_to_state[idx] = {
+                    "excluded_nodes": list(pat.get("excluded_nodes", [])),
+                    "excluded_links": list(pat.get("excluded_links", [])),
+                }
+
+            # Stable failure_id: "baseline" or blake2s hash of exclusions
+            import hashlib
+
+            def _failure_id(
+                state: dict[str, list[str]] | None, is_baseline_iter: bool
+            ) -> str:
+                if is_baseline_iter:
+                    return "baseline"
+                if not state:
+                    return ""
+                payload = (
+                    ",".join(sorted(state.get("excluded_nodes", [])))
+                    + "|"
+                    + ",".join(sorted(state.get("excluded_links", [])))
+                )
+                return hashlib.blake2s(
+                    payload.encode("utf-8"), digest_size=8
+                ).hexdigest()
+
+            # Mutate dict-like results that expose to_dict to embed failure info
+            enriched: list[Any] = []
+            for i, iter_res in enumerate(results):
+                state = index_to_state.get(i)
+                is_baseline_iter = bool(baseline and i == 0)
+                fid = _failure_id(state, is_baseline_iter)
+
+                # Known flow iteration result shape: object with to_dict() or dataclass
+                try:
+                    # ngraph.results.flow.FlowIterationResult
+                    if hasattr(iter_res, "failure_id") and hasattr(iter_res, "summary"):
+                        iter_res.failure_id = fid
+                        iter_res.failure_state = state
+                        enriched.append(iter_res)
+                        continue
+                except Exception:
+                    pass
+
+                # Unknown type: keep as-is
+                enriched.append(iter_res)
+
+            results = enriched
+        except Exception:
+            # Failure-state enrichment is best-effort; leave results unchanged on error
+            pass
 
         return {
             "results": results,
@@ -871,7 +938,7 @@ class FailureManager:
         store_failure_patterns: bool = False,
         include_flow_summary: bool = False,
         **kwargs,
-    ) -> Any:  # Will be CapacityEnvelopeResults when imports are enabled
+    ) -> Any:
         """Analyze maximum flow capacity envelopes between node groups under failures.
 
         Computes statistical distributions (envelopes) of maximum flow capacity between
@@ -895,7 +962,6 @@ class FailureManager:
             CapacityEnvelopeResults object with envelope statistics and analysis methods.
         """
         from ngraph.monte_carlo.functions import max_flow_analysis
-        from ngraph.monte_carlo.results import CapacityEnvelopeResults
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
@@ -921,332 +987,11 @@ class FailureManager:
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,
-            include_flow_summary=include_flow_summary,
+            include_flow_details=include_flow_summary,
             **kwargs,
         )
-
-        # Process results (unified FlowResult list)
-        if include_flow_summary:
-            samples, flow_summaries = self._process_results_with_summaries(
-                raw_results["results"]
-            )
-            envelopes = self._build_capacity_envelopes_with_summaries(
-                samples, flow_summaries, source_path, sink_path, mode
-            )
-        else:
-            samples = self._process_results_to_samples(raw_results["results"])
-            envelopes = self._build_capacity_envelopes(
-                samples, source_path, sink_path, mode
-            )
-
-        # Process failure patterns if requested
-        failure_patterns = {}
-        if store_failure_patterns and raw_results["failure_patterns"]:
-            failure_patterns = self._build_failure_pattern_results(
-                raw_results["failure_patterns"], samples
-            )
-
-        return CapacityEnvelopeResults(
-            envelopes=envelopes,
-            failure_patterns=failure_patterns,
-            source_pattern=source_path,
-            sink_pattern=sink_path,
-            mode=mode,
-            iterations=iterations,
-            metadata=raw_results["metadata"],
-        )
-
-    def _process_results_to_samples(
-        self, results: list[list[Any]]
-    ) -> dict[tuple[str, str], list[float]]:
-        """Convert raw results from FailureManager to samples dictionary.
-
-        Args:
-            results: List of results from each iteration, where each result
-                    is a list of (source, sink, capacity) tuples.
-
-        Returns:
-            Dictionary mapping (source, sink) to list of capacity values.
-        """
-        from collections import defaultdict
-
-        samples = defaultdict(list)
-
-        for flow_results in results:
-            # Expect unified FlowResult dicts per iteration
-            for fr in flow_results:
-                try:
-                    src = str(fr["src"])  # type: ignore[index]
-                    dst = str(fr["dst"])  # type: ignore[index]
-                    metric = fr.get("metric")  # type: ignore[union-attr]
-                    if metric != "capacity":
-                        continue
-                    value = float(fr.get("value", 0.0))  # type: ignore[union-attr]
-                    samples[(src, dst)].append(value)
-                except Exception:
-                    # Skip malformed entries
-                    continue
-
-        logger.debug(f"Processed samples for {len(samples)} flow pairs")
-        return samples
-
-    def _build_capacity_envelopes(
-        self,
-        samples: dict[tuple[str, str], list[float]],
-        source_pattern: str,
-        sink_pattern: str,
-        mode: str,
-    ) -> dict[str, Any]:
-        """Build CapacityEnvelope objects from collected samples.
-
-        Args:
-            samples: Dictionary mapping (src_label, dst_label) to capacity values.
-            source_pattern: Source node regex pattern
-            sink_pattern: Sink node regex pattern
-            mode: Flow analysis mode
-
-        Returns:
-            Dictionary mapping flow keys to CapacityEnvelope objects.
-        """
-        from ngraph.results.artifacts import CapacityEnvelope
-
-        envelopes = {}
-
-        for (src_label, dst_label), capacity_values in samples.items():
-            if not capacity_values:
-                logger.warning(
-                    f"No capacity values found for flow {src_label}->{dst_label}"
-                )
-                continue
-
-            # Use flow key as the result key
-            flow_key = f"{src_label}->{dst_label}"
-
-            # Create frequency-based envelope
-            envelope = CapacityEnvelope.from_values(
-                source_pattern=source_pattern,
-                sink_pattern=sink_pattern,
-                mode=mode,
-                values=capacity_values,
-            )
-            envelopes[flow_key] = envelope
-
-            logger.debug(
-                f"Created envelope for {flow_key}: {envelope.total_samples} samples, "
-                f"min={envelope.min_capacity:.2f}, max={envelope.max_capacity:.2f}, "
-                f"mean={envelope.mean_capacity:.2f}"
-            )
-
-        return envelopes
-
-    def _process_results_with_summaries(
-        self, results: list[list[Any]]
-    ) -> tuple[dict[tuple[str, str], list[float]], dict[tuple[str, str], list[Any]]]:
-        """Convert raw results with FlowSummary data to samples and summaries dictionaries.
-
-        Args:
-            results: List of results from each iteration, where each result
-                    is a list of (source, sink, capacity, flow_summary) tuples.
-
-        Returns:
-            Tuple of:
-            - Dictionary mapping (source, sink) to list of capacity values
-            - Dictionary mapping (source, sink) to list of FlowSummary objects
-        """
-        from collections import defaultdict
-
-        samples = defaultdict(list)
-        flow_summaries = defaultdict(list)
-
-        for flow_results in results:
-            for fr in flow_results:
-                try:
-                    src = str(fr["src"])  # type: ignore[index]
-                    dst = str(fr["dst"])  # type: ignore[index]
-                    metric = fr.get("metric")  # type: ignore[union-attr]
-                    if metric != "capacity":
-                        continue
-                    value = float(fr.get("value", 0.0))  # type: ignore[union-attr]
-                    samples[(src, dst)].append(value)
-                    stats = fr.get("stats")  # type: ignore[union-attr]
-                    if isinstance(stats, dict):
-                        # Normalize to keys expected by CapacityEnvelope aggregator
-                        norm: dict[str, Any] = {}
-                        cd = stats.get("cost_distribution")
-                        if isinstance(cd, dict):
-                            norm["cost_distribution"] = cd
-                        edges = stats.get("edges")
-                        kind = stats.get("edges_kind")
-                        if isinstance(edges, list) and kind == "min_cut":
-                            norm["min_cut"] = edges
-                        flow_summaries[(src, dst)].append(norm)
-                    else:
-                        flow_summaries[(src, dst)].append(None)
-                except Exception:
-                    continue
-
-        logger.debug(f"Processed samples and summaries for {len(samples)} flow pairs")
-        return samples, flow_summaries
-
-    def _build_capacity_envelopes_with_summaries(
-        self,
-        samples: dict[tuple[str, str], list[float]],
-        flow_summaries: dict[tuple[str, str], list[Any]],
-        source_pattern: str,
-        sink_pattern: str,
-        mode: str,
-    ) -> dict[str, Any]:
-        """Build CapacityEnvelope objects from collected samples and flow summaries.
-
-        Args:
-            samples: Dictionary mapping (src_label, dst_label) to capacity values.
-            flow_summaries: Dictionary mapping (src_label, dst_label) to FlowSummary objects.
-            source_pattern: Source node regex pattern
-            sink_pattern: Sink node regex pattern
-            mode: Flow analysis mode
-
-        Returns:
-            Dictionary mapping flow keys to CapacityEnvelope objects with flow summary data.
-        """
-        from ngraph.results.artifacts import CapacityEnvelope
-
-        envelopes = {}
-
-        for (src_label, dst_label), capacity_values in samples.items():
-            if not capacity_values:
-                logger.warning(
-                    f"No capacity values found for flow {src_label}->{dst_label}"
-                )
-                continue
-
-            # Use flow key as the result key
-            flow_key = f"{src_label}->{dst_label}"
-
-            # Get corresponding flow summaries
-            summaries = flow_summaries.get((src_label, dst_label), [])
-
-            # Extract cost distribution data from summaries
-            cost_distributions = []
-            for summary in summaries:
-                if summary is not None and hasattr(summary, "cost_distribution"):
-                    cost_distributions.append(summary.cost_distribution)
-
-            # Create frequency-based envelope with flow summary statistics
-            envelope = CapacityEnvelope.from_values(
-                source_pattern=source_pattern,
-                sink_pattern=sink_pattern,
-                mode=mode,
-                values=capacity_values,
-                flow_summaries=summaries,
-            )
-
-            envelopes[flow_key] = envelope
-
-            logger.debug(
-                f"Created envelope for {flow_key}: {envelope.total_samples} samples, "
-                f"min={envelope.min_capacity:.2f}, max={envelope.max_capacity:.2f}, "
-                f"mean={envelope.mean_capacity:.2f}, flow_summaries={len(summaries)}, "
-                f"cost_levels={len(envelope.flow_summary_stats.get('cost_distribution_stats', {}))}"
-            )
-
-        return envelopes
-
-    def _build_failure_pattern_results(
-        self,
-        failure_patterns: list[dict[str, Any]],
-        samples: dict[tuple[str, str], list[float]],
-    ) -> dict[str, Any]:
-        """Build failure pattern results from collected patterns and samples.
-
-        Args:
-            failure_patterns: List of failure pattern details from FailureManager.
-            samples: Sample data for building capacity matrices.
-
-        Returns:
-            Dictionary mapping pattern keys to FailurePatternResult objects.
-        """
-        import json
-
-        from ngraph.results.artifacts import FailurePatternResult
-
-        pattern_map = {}
-
-        for pattern in failure_patterns:
-            # Create pattern key from exclusions
-            key = json.dumps(
-                {
-                    "excluded_nodes": pattern["excluded_nodes"],
-                    "excluded_links": pattern["excluded_links"],
-                },
-                sort_keys=True,
-            )
-
-            if key not in pattern_map:
-                # Get capacity matrix for this pattern
-                capacity_matrix = {}
-                pattern_iter = pattern["iteration_index"]
-
-                for (src, dst), values in samples.items():
-                    if pattern_iter < len(values):
-                        flow_key = f"{src}->{dst}"
-                        capacity_matrix[flow_key] = values[pattern_iter]
-
-                pattern_map[key] = FailurePatternResult(
-                    excluded_nodes=pattern["excluded_nodes"],
-                    excluded_links=pattern["excluded_links"],
-                    capacity_matrix=capacity_matrix,
-                    count=0,
-                    is_baseline=pattern["is_baseline"],
-                )
-
-            pattern_map[key].count += 1
-
-        # Return FailurePatternResult objects directly
-        return {result.pattern_key: result for result in pattern_map.values()}
-
-    def _build_demand_placement_failure_patterns(
-        self,
-        failure_patterns: list[dict[str, Any]],
-        results: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        """Build failure pattern results for demand placement analysis.
-
-        Args:
-            failure_patterns: List of failure pattern details from FailureManager.
-            results: List of placement results for building pattern analysis.
-
-        Returns:
-            Dictionary mapping pattern keys to demand placement pattern results.
-        """
-        import json
-
-        pattern_map = {}
-
-        for i, pattern in enumerate(failure_patterns):
-            # Create pattern key from exclusions
-            key = json.dumps(
-                {
-                    "excluded_nodes": pattern["excluded_nodes"],
-                    "excluded_links": pattern["excluded_links"],
-                },
-                sort_keys=True,
-            )
-
-            if key not in pattern_map:
-                # Get placement result for this pattern
-                placement_result = results[i] if i < len(results) else {}
-
-                pattern_map[key] = {
-                    "excluded_nodes": pattern["excluded_nodes"],
-                    "excluded_links": pattern["excluded_links"],
-                    "placement_result": placement_result,
-                    "count": 0,
-                    "is_baseline": pattern["is_baseline"],
-                }
-
-            pattern_map[key]["count"] += 1
-
-        return pattern_map
+        # New contract: return the raw dict with list[FlowIterationResult]
+        return raw_results
 
     def _process_sensitivity_results(
         self, results: list[dict[str, dict[str, float]]]
@@ -1344,7 +1089,7 @@ class FailureManager:
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
         **kwargs,
-    ) -> Any:  # Will be DemandPlacementResults when imports are enabled
+    ) -> Any:
         """Analyze traffic demand placement success under failures.
 
         Attempts to place traffic demands on the network across
@@ -1363,7 +1108,6 @@ class FailureManager:
             DemandPlacementResults object with SLA and placement metrics.
         """
         from ngraph.monte_carlo.functions import demand_placement_analysis
-        from ngraph.monte_carlo.results import DemandPlacementResults
 
         # If caller passed a sequence of TrafficDemand objects, convert to dicts
         if not isinstance(demands_config, list):
@@ -1403,27 +1147,8 @@ class FailureManager:
             include_flow_details=include_flow_details,
             **kwargs,
         )
-
-        # Process failure patterns if requested
-        failure_patterns = {}
-        if store_failure_patterns and raw_results["failure_patterns"]:
-            failure_patterns = self._build_demand_placement_failure_patterns(
-                raw_results["failure_patterns"], raw_results["results"]
-            )
-
-        # Extract baseline if present
-        baseline_result = None
-        if baseline and raw_results["results"]:
-            # Baseline is the first result when baseline=True
-            baseline_result = raw_results["results"][0]
-
-        return DemandPlacementResults(
-            raw_results=raw_results,
-            iterations=iterations,
-            baseline=baseline_result,
-            failure_patterns=failure_patterns,
-            metadata=raw_results["metadata"],
-        )
+        # New contract: return the raw dict with list[FlowIterationResult]
+        return raw_results
 
     def run_sensitivity_monte_carlo(
         self,

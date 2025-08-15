@@ -42,13 +42,14 @@ class DataLoader:
                 result["message"] = "Invalid results format - expected dictionary"
                 return result
 
+            steps = results.get("steps", {}) if isinstance(results, dict) else {}
             result.update(
                 {
                     "success": True,
                     "results": results,
-                    "message": f"Loaded {len(results):,} analysis steps from {json_path.name}",
-                    "step_count": len(results),
-                    "step_names": list(results.keys()),
+                    "message": f"Loaded {len(steps):,} analysis steps from {json_path.name}",
+                    "step_count": len(steps),
+                    "step_names": list(steps.keys()),
                 }
             )
 

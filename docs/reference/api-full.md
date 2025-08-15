@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 14, 2025 at 01:51 UTC
+Generated from source code on: August 15, 2025 at 02:00 UTC
 
-Modules auto-discovered: 68
+Modules auto-discovered: 69
 
 ---
 
@@ -436,7 +436,7 @@ Typical usage example:
 - `workflow` (List[WorkflowStep])
 - `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
-- `results` (Results) = Results(_store={}, _metadata={})
+- `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
 
@@ -2440,14 +2440,14 @@ Can be used in two modes:
 - `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze capacity envelopes and create matrix visualization.
 - `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
 - `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'` - Run analyze/display on every step containing capacity_envelopes.
-- `analyze_and_display_envelope_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'None'` - Complete analysis and display for CapacityEnvelopeResults object.
+- `analyze_and_display_envelope_results(self, results: 'Any', **kwargs) -> 'None'` - Complete analysis and display for CapacityEnvelopeResults object.
 - `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display flow availability for a specific step.
 - `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display results for a specific step.
 - `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Create CDF/availability distribution from capacity envelope frequencies.
-- `analyze_results(self, results: "'CapacityEnvelopeResults'", **kwargs) -> 'Dict[str, Any]'` - Analyze a `CapacityEnvelopeResults` object directly.
+- `analyze_results(self, results: 'Any', **kwargs) -> 'Dict[str, Any]'` - Analyze a `CapacityEnvelopeResults` object directly.
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Pretty-print analysis results to the notebook/stdout.
-- `display_capacity_distributions(self, results: "'CapacityEnvelopeResults'", flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'` - Display capacity distribution plots for `CapacityEnvelopeResults`.
-- `display_percentile_comparison(self, results: "'CapacityEnvelopeResults'") -> 'None'` - Display percentile comparison plots for `CapacityEnvelopeResults`.
+- `display_capacity_distributions(self, results: 'Any', flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'` - Display capacity distribution plots for `CapacityEnvelopeResults`.
+- `display_percentile_comparison(self, results: 'Any') -> 'None'` - Display percentile comparison plots for `CapacityEnvelopeResults`.
 - `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
@@ -2488,16 +2488,11 @@ Manage package installation and imports for notebooks.
 
 ## ngraph.workflow.analysis.placement_matrix
 
-Placement analysis utilities for placed Gbps envelopes (current design).
+Placement analysis utilities for flow_results (unified design).
 
-Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with keys:
-
-- placed_gbps_envelopes: {"src->dst|prio=K": envelope}
-- offered_gbps_by_pair: {"src->dst|prio=K": float}
-- delivered_gbps_stats: {mean/min/max/stdev/samples/percentiles}
-
-and builds matrices of mean placed Gbps by pair (overall and per priority),
-with basic statistics.
+Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with the new
+schema under step["data"]["flow_results"]. Builds matrices of mean placed
+volume by pair (overall and per priority), with basic statistics.
 
 ### PlacementMatrixAnalyzer
 
@@ -2505,7 +2500,7 @@ Analyze placed Gbps envelopes and display matrices/statistics.
 
 **Methods:**
 
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze placed Gbps envelopes for a given step.
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze unified flow_results for a given step.
 - `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
 - `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Display analysis results in notebook format.
@@ -2630,6 +2625,7 @@ Attributes:
 
 - `name` (str)
 - `seed` (Optional[int])
+- `_seed_source` (str)
 
 **Methods:**
 
@@ -2663,9 +2659,10 @@ YAML Configuration Example:
         name: "build_network_graph"  # Optional: Custom name for this step
     ```
 
-Results stored in `scenario.results`:
+Results stored in `scenario.results` under the step name as two keys:
 
-- graph: `StrictMultiDiGraph` object with bidirectional links
+- metadata: Step-level execution metadata (empty dict)
+- data: { graph: node-link JSON dict, context: { add_reverse: bool } }
 
 ### BuildGraph
 
@@ -2678,93 +2675,12 @@ suitable for analysis algorithms. No additional parameters are required.
 
 - `name` (str)
 - `seed` (Optional[int])
+- `_seed_source` (str)
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
 - `run(self, scenario: 'Scenario') -> 'None'` - Build the network graph and store it in results.
-
----
-
-## ngraph.workflow.capacity_envelope_analysis
-
-Capacity envelope analysis workflow component.
-
-Monte Carlo analysis of network capacity under random failures using FailureManager.
-Generates statistical distributions (envelopes) of maximum flow capacity between
-node groups across failure scenarios. Supports parallel processing, baseline analysis,
-and configurable failure policies.
-
-This component uses the `FailureManager` convenience method to perform the analysis,
-ensuring consistency with the programmatic API while providing workflow integration.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - step_type: CapacityEnvelopeAnalysis
-
-        name: "capacity_envelope_monte_carlo"  # Optional: Custom name for this step
-        source_path: "^datacenter/.*"          # Regex pattern for source node groups
-        sink_path: "^edge/.*"                  # Regex pattern for sink node groups
-        mode: "combine"                        # "combine" or "pairwise" flow analysis
-        failure_policy: "random_failures"      # Optional: Named failure policy to use
-        iterations: 1000                       # Number of Monte-Carlo trials
-        parallelism: auto                      # Number of parallel worker processes (int or "auto")
-        shortest_path: false                   # Use shortest paths only
-        flow_placement: "PROPORTIONAL"         # Flow placement strategy
-        baseline: true                         # Optional: Run first iteration without failures
-        seed: 42                               # Optional: Seed for reproducible results
-        store_failure_patterns: false          # Optional: Store failure patterns in results
-        include_flow_summary: false            # Optional: Collect detailed flow summary statistics
-    ```
-
-Results stored in `scenario.results`:
-
-- capacity_envelopes: Mapping of flow keys to capacity envelope data (serializable)
-- failure_pattern_results: Frequency map of failure patterns (if `store_failure_patterns=True`)
-
-### CapacityEnvelopeAnalysis
-
-Capacity envelope analysis workflow step using FailureManager convenience method.
-
-This workflow step uses the FailureManager.run_max_flow_monte_carlo() convenience method
-to perform analysis, ensuring consistency with the programmatic API while providing
-workflow integration and result storage.
-
-Attributes:
-    source_path: Regex pattern for source node groups.
-    sink_path: Regex pattern for sink node groups.
-    mode: Flow analysis mode ("combine" or "pairwise").
-    failure_policy: Name of failure policy in scenario.failure_policy_set.
-    iterations: Number of Monte-Carlo trials.
-    parallelism: Number of parallel worker processes.
-    shortest_path: Whether to use shortest paths only.
-    flow_placement: Flow placement strategy.
-    baseline: Whether to run first iteration without failures as baseline.
-    seed: Optional seed for reproducible results.
-    store_failure_patterns: Whether to store failure patterns in results.
-    include_flow_summary: Whether to collect detailed flow summary statistics (cost distribution, min-cut edges).
-
-**Attributes:**
-
-- `name` (str)
-- `seed` (int | None)
-- `source_path` (str)
-- `sink_path` (str)
-- `mode` (str) = combine
-- `failure_policy` (str | None)
-- `iterations` (int) = 1
-- `parallelism` (int | str) = auto
-- `shortest_path` (bool) = False
-- `flow_placement` (FlowPlacement | str) = 1
-- `baseline` (bool) = False
-- `store_failure_patterns` (bool) = False
-- `include_flow_summary` (bool) = False
-
-**Methods:**
-
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute capacity envelope analysis using `FailureManager`.
 
 ---
 
@@ -2841,6 +2757,7 @@ Attributes:
 
 - `name` (str)
 - `seed` (Optional[int])
+- `_seed_source` (str)
 - `delivered_bandwidth_gbps` (Optional[float])
 - `delivered_bandwidth_key` (str) = delivered_bandwidth_gbps
 - `include_disabled` (bool) = True
@@ -2854,66 +2771,99 @@ Attributes:
 
 ---
 
-## ngraph.workflow.maximum_supported_demand
+## ngraph.workflow.max_flow_step
 
-Maximum Supported Demand (MSD) search workflow step.
+MaxFlow workflow step.
 
-Search for the largest scaling factor ``alpha`` such that the selected traffic
-matrix is feasible under the demand placement procedure. The search brackets a
-feasible/infeasible interval, then performs bisection on feasibility.
-
-This implementation provides the hard-feasibility rule only: every OD must be
-fully placed. The step records search parameters, the decision rule, and the
-original (unscaled) demands so the result is interpretable without the scenario.
+Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
+Produces unified `flow_results` per iteration under `data.flow_results`.
 
 YAML Configuration Example:
-    ```yaml
+
     workflow:
-      - step_type: MaximumSupportedDemandAnalysis
 
-        name: msd_baseline_tm          # Optional step name
-        matrix_name: baseline_traffic_matrix
-        acceptance_rule: hard          # currently only 'hard' supported
-        alpha_start: 1.0
-        growth_factor: 2.0
-        alpha_min: 1e-6
-        alpha_max: 1e9
-        resolution: 0.01
-        max_bracket_iters: 16
-        max_bisect_iters: 32
-        seeds_per_alpha: 3
-        placement_rounds: auto
-    ```
+- step_type: MaxFlow
 
-Results stored in `scenario.results` under the step name:
+        name: "maxflow_dc_to_edge"
+        source_path: "^datacenter/.*"
+        sink_path: "^edge/.*"
+        mode: "combine"
+        failure_policy: "random_failures"
+        iterations: 100
+        parallelism: auto
+        shortest_path: false
+        flow_placement: "PROPORTIONAL"
+        baseline: false
+        seed: 42
+        include_failure_patterns: false  # same as store_failure_patterns
+        include_flow_details: false      # cost_distribution
+        include_min_cut: false           # min-cut edges list
 
-- alpha_star: Final feasible alpha (float)
-- context: Search parameters and decision rule (dict)
-- base_demands: Unscaled base demands for the matrix (list[dict])
-- probes: Per-alpha probe summaries with feasibility and placement ratio (list)
+### MaxFlow
 
-### MaximumSupportedDemandAnalysis
+Maximum flow Monte Carlo workflow step.
 
-Search for Maximum Supported Demand (MSD) by scaling and bisection.
+Attributes:
+    source_path: Regex pattern for source node groups.
+    sink_path: Regex pattern for sink node groups.
+    mode: Flow analysis mode ("combine" or "pairwise").
+    failure_policy: Name of failure policy in scenario.failure_policy_set.
+    iterations: Number of Monte Carlo trials.
+    parallelism: Number of parallel worker processes.
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+    baseline: Whether to run first iteration without failures as baseline.
+    seed: Optional seed for reproducible results.
+    store_failure_patterns: Whether to store failure patterns in results.
+    include_flow_details: Whether to collect cost distribution per flow.
+    include_min_cut: Whether to include min-cut edges per flow.
 
-Args:
-    matrix_name: Name of the traffic matrix to scale and test.
-    acceptance_rule: Only "hard" is implemented: all OD pairs must be fully placed.
-    alpha_start: Initial guess for alpha.
-    growth_factor: Factor g>1 to expand/shrink during bracketing.
-    alpha_min: Minimum alpha allowed during bracketing.
-    alpha_max: Maximum alpha allowed during bracketing.
-    resolution: Stop when upper-lower <= resolution.
-    max_bracket_iters: Limit on growth/shrink iterations during bracketing.
-    max_bisect_iters: Limit on iterations during bisection.
-    seeds_per_alpha: Number of repeated runs per alpha; alpha is feasible if
-        majority of seeds satisfy the rule. Deterministic policies will yield identical results.
-    placement_rounds: Rounds passed to TrafficManager.place_all_demands().
+**Attributes:**
+
+- `name` (str)
+- `seed` (int | None)
+- `_seed_source` (str)
+- `source_path` (str)
+- `sink_path` (str)
+- `mode` (str) = combine
+- `failure_policy` (str | None)
+- `iterations` (int) = 1
+- `parallelism` (int | str) = auto
+- `shortest_path` (bool) = False
+- `flow_placement` (FlowPlacement | str) = 1
+- `baseline` (bool) = False
+- `store_failure_patterns` (bool) = False
+- `include_flow_details` (bool) = False
+- `include_min_cut` (bool) = False
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
+
+---
+
+## ngraph.workflow.maximum_supported_demand_step
+
+Maximum Supported Demand (MSD) workflow step.
+
+Searches for the maximum uniform traffic multiplier `alpha_star` that is fully
+placeable for a given matrix. Stores results under `data` as:
+
+- `alpha_star`: float
+- `context`: parameters used for the search
+- `base_demands`: serialized base demand specs
+- `probes`: bracket/bisect evaluations with feasibility
+
+### MaximumSupportedDemand
+
+MaximumSupportedDemand(name: 'str' = '', seed: 'Optional[int]' = None, _seed_source: 'str' = '', matrix_name: 'str' = 'default', acceptance_rule: 'str' = 'hard', alpha_start: 'float' = 1.0, growth_factor: 'float' = 2.0, alpha_min: 'float' = 1e-06, alpha_max: 'float' = 1000000000.0, resolution: 'float' = 0.01, max_bracket_iters: 'int' = 32, max_bisect_iters: 'int' = 32, seeds_per_alpha: 'int' = 1, placement_rounds: 'int | str' = 'auto')
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (Optional[int])
+- `_seed_source` (str)
 - `matrix_name` (str) = default
 - `acceptance_rule` (str) = hard
 - `alpha_start` (float) = 1.0
@@ -2929,7 +2879,7 @@ Args:
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
-- `run(self, scenario: "'Any'") -> 'None'` - Execute MSD search and store results.
+- `run(self, scenario: "'Any'") -> 'None'` - Execute the workflow step logic.
 
 ---
 
@@ -2977,6 +2927,7 @@ Attributes:
 
 - `name` (str)
 - `seed` (Optional[int])
+- `_seed_source` (str)
 - `include_disabled` (bool) = False
 - `excluded_nodes` (Iterable[str]) = ()
 - `excluded_links` (Iterable[str]) = ()
@@ -2988,49 +2939,16 @@ Attributes:
 
 ---
 
-## ngraph.workflow.traffic_matrix_placement_analysis
+## ngraph.workflow.traffic_matrix_placement_step
 
-Traffic matrix demand placement workflow component.
+TrafficMatrixPlacement workflow step.
 
-Monte Carlo analysis of traffic demand placement under failures using
-FailureManager. Produces per-iteration delivered bandwidth samples and
-per-demand placed-bandwidth envelopes, enabling direct computation of
-delivered bandwidth at availability percentiles.
+Runs Monte Carlo demand placement using a named traffic matrix and produces
+unified `flow_results` per iteration under `data.flow_results`.
 
-YAML Configuration Example:
+### TrafficMatrixPlacement
 
-    workflow:
-
-- step_type: TrafficMatrixPlacementAnalysis
-
-        name: "tm_placement"
-        matrix_name: "default"            # Required
-        failure_policy: "random_failures"  # Optional
-        iterations: 100                    # Monte Carlo trials
-        parallelism: auto                  # Workers (int or "auto")
-        placement_rounds: "auto"           # Optimization rounds per priority
-        baseline: false                    # Include baseline iteration first
-        seed: 42                           # Optional seed
-        store_failure_patterns: false
-        include_flow_details: false
-        alpha: 1.0                         # Float or "auto" to use MSD alpha_star
-        availability_percentiles: [50, 90, 95, 99, 99.9, 99.99]
-
-Results stored in `scenario.results` under the step name:
-
-- offered_gbps_by_pair: {"src->dst|prio=K": float}
-- placed_gbps_envelopes: {pair_key: {frequencies, min, max, mean, stdev, total_samples, src, dst, priority}}
-- delivered_gbps_samples: [float, ...]  # total placed per iteration
-- delivered_gbps_stats: {mean, min, max, stdev, samples, percentiles: {"p50": v, ...}}
-
-      Also flattened keys per percentile, e.g., delivered_gbps_p99_99.
-
-- failure_pattern_results: Failure pattern mapping (if requested)
-- metadata: Execution metadata (iterations, parallelism, baseline, alpha, etc.)
-
-### TrafficMatrixPlacementAnalysis
-
-Monte Carlo demand placement analysis using a named traffic matrix.
+Monte Carlo demand placement using a named traffic matrix.
 
 Attributes:
     matrix_name: Name of the traffic matrix to analyze.
@@ -3042,13 +2960,15 @@ Attributes:
     seed: Optional seed for reproducibility.
     store_failure_patterns: Whether to store failure pattern results.
     include_flow_details: If True, include edges used per demand.
-    alpha: Float scale or "auto" to use MSD alpha_star.
-    availability_percentiles: Percentiles to compute for delivered Gbps.
+    alpha: Numeric scale for demands in the matrix.
+    alpha_from_step: Optional producer step name to read alpha from.
+    alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (int | None)
+- `_seed_source` (str)
 - `matrix_name` (str)
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
@@ -3057,13 +2977,14 @@ Attributes:
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
-- `alpha` (float | str) = 1.0
-- `availability_percentiles` (list[float]) = (50.0, 90.0, 95.0, 99.0, 99.9, 99.99)
+- `alpha` (float) = 1.0
+- `alpha_from_step` (str | None)
+- `alpha_from_field` (str) = data.alpha_star
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute demand placement Monte Carlo analysis and store results.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
 
 ---
 
@@ -3338,43 +3259,143 @@ Attributes:
 
 ---
 
+## ngraph.results.flow
+
+Unified flow result containers for failure-analysis iterations.
+
+Defines small, serializable dataclasses that capture per-iteration outcomes
+for capacity and demand-placement style analyses in a unit-agnostic form.
+
+Objects expose `to_dict()` that returns JSON-safe primitives. Float-keyed
+distributions are normalized to string keys, and arbitrary `data` payloads are
+sanitized. These dicts are written under `data.flow_results` by steps.
+
+### FlowEntry
+
+Represents a single source→destination flow outcome within an iteration.
+
+Fields are unit-agnostic. Callers can interpret numbers as needed for
+presentation (e.g., Gbit/s).
+
+Args:
+    source: Source identifier.
+    destination: Destination identifier.
+    priority: Priority/class for traffic placement scenarios. Zero when not applicable.
+    demand: Requested volume for this flow.
+    placed: Delivered volume for this flow.
+    dropped: Unmet volume (``demand - placed``).
+    cost_distribution: Optional distribution of placed volume by path cost.
+    data: Optional per-flow details (e.g., min-cut edges, used edges).
+
+**Attributes:**
+
+- `source` (str)
+- `destination` (str)
+- `priority` (int)
+- `demand` (float)
+- `placed` (float)
+- `dropped` (float)
+- `cost_distribution` (Dict[float, float]) = {}
+- `data` (Dict[str, Any]) = {}
+
+**Methods:**
+
+- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
+
+### FlowIterationResult
+
+Container for per-iteration analysis results.
+
+Args:
+    failure_id: Stable identifier for the failure scenario (e.g., "baseline" or a hash).
+    failure_state: Optional excluded components for the iteration.
+    flows: List of flow entries for this iteration.
+    summary: Aggregated summary across ``flows``.
+    data: Optional per-iteration extras.
+
+**Attributes:**
+
+- `failure_id` (str)
+- `failure_state` (Optional[Dict[str, List[str]]])
+- `flows` (List[FlowEntry]) = []
+- `summary` (FlowSummary) = FlowSummary(total_demand=0.0, total_placed=0.0, overall_ratio=1.0, dropped_flows=0, num_flows=0)
+- `data` (Dict[str, Any]) = {}
+
+**Methods:**
+
+- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
+
+### FlowSummary
+
+Aggregated metrics across all flows in one iteration.
+
+Args:
+    total_demand: Sum of all demands in this iteration.
+    total_placed: Sum of all delivered volumes in this iteration.
+    overall_ratio: ``total_placed / total_demand`` when demand > 0, else 1.0.
+    dropped_flows: Number of flow entries with non-zero drop.
+    num_flows: Total number of flows considered.
+
+**Attributes:**
+
+- `total_demand` (float)
+- `total_placed` (float)
+- `overall_ratio` (float)
+- `dropped_flows` (int)
+- `num_flows` (int)
+
+**Methods:**
+
+- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
+
+---
+
 ## ngraph.results.store
 
 Generic results store for workflow steps and their metadata.
 
-`Results` organizes arbitrary key-value outputs by workflow step name and
-records lightweight `WorkflowStepMetadata` to preserve execution context.
-All stored values are kept as-is; objects that implement ``to_dict()`` are
-converted when exporting with `Results.to_dict()` for JSON serialization.
+`Results` organizes outputs by workflow step name and records
+`WorkflowStepMetadata` for execution context. Storage is strictly
+step-scoped: steps must write two keys under their namespace:
+
+- ``metadata``: step-level metadata (dict)
+- ``data``: step-specific payload (dict)
+
+Export with :meth:`Results.to_dict`, which returns a JSON-safe structure
+with shape ``{workflow, steps, scenario}``. During export, objects with a
+``to_dict()`` method are converted, dictionary keys are coerced to strings,
+tuples are emitted as lists, and only JSON primitives are produced.
 
 ### Results
 
-A container for storing arbitrary key-value data that arises during workflow steps.
+Step-scoped results container with deterministic export shape.
 
-The data is organized by step name, then by key. Each step also has associated
-metadata that describes the workflow step type and execution context.
+Structure:
 
-Example usage:
-  results.put("Step1", "total_capacity", 123.45)
-  cap = results.get("Step1", "total_capacity")  # returns 123.45
-  all_caps = results.get_all("total_capacity")  # might return {"Step1": 123.45, "Step2": 98.76}
-  metadata = results.get_step_metadata("Step1")  # returns WorkflowStepMetadata
+- workflow: step metadata registry
+- steps: per-step results with enforced keys {"metadata", "data"}
+- scenario: optional scenario snapshot set once at load time
 
 **Attributes:**
 
 - `_store` (Dict) = {}
 - `_metadata` (Dict) = {}
+- `_active_step` (Optional)
+- `_scenario` (Dict) = {}
 
 **Methods:**
 
-- `get(self, step_name: str, key: str, default: Any = None) -> Any` - Retrieve the value from (step_name, key). If the key is missing, return `default`.
-- `get_all(self, key: str) -> Dict[str, Any]` - Retrieve a dictionary of {step_name: value} for all step_names that contain the specified key.
+- `enter_step(self, step_name: str) -> None` - Enter step scope. Subsequent put/get are scoped to this step.
+- `exit_step(self) -> None` - Exit step scope.
+- `get(self, key: str, default: Any = None) -> Any` - Get a value from the active step scope.
 - `get_all_step_metadata(self) -> Dict[str, ngraph.results.store.WorkflowStepMetadata]` - Get metadata for all workflow steps.
+- `get_step(self, step_name: str) -> Dict[str, Any]` - Return the raw dict for a given step name (for cross-step reads).
 - `get_step_metadata(self, step_name: str) -> Optional[ngraph.results.store.WorkflowStepMetadata]` - Get metadata for a workflow step.
 - `get_steps_by_execution_order(self) -> list[str]` - Get step names ordered by their execution order.
-- `put(self, step_name: str, key: str, value: Any) -> None` - Store a value under (step_name, key).
-- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int) -> None` - Store metadata for a workflow step.
-- `to_dict(self) -> Dict[str, Any]` - Return a dictionary representation of all stored results.
+- `put(self, key: str, value: Any) -> None` - Store a value in the active step under an allowed key.
+- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int, *, scenario_seed: Optional[int] = None, step_seed: Optional[int] = None, seed_source: str = 'none', active_seed: Optional[int] = None) -> None` - Store metadata for a workflow step.
+- `set_scenario_snapshot(self, snapshot: Dict[str, Any]) -> None` - Attach a normalized scenario snapshot for export.
+- `to_dict(self) -> Dict[str, Any]` - Return exported results with shape: {workflow, steps, scenario}.
 
 ### WorkflowStepMetadata
 
@@ -3384,12 +3405,27 @@ Attributes:
     step_type: The workflow step class name (e.g., 'CapacityEnvelopeAnalysis').
     step_name: The instance name of the step.
     execution_order: Order in which this step was executed (0-based).
+    scenario_seed: Scenario-level seed provided in the YAML (if any).
+    step_seed: Seed assigned to this step (explicit or scenario-derived).
+    seed_source: Source for the step seed. One of:
+
+- "scenario-derived": seed was derived from scenario.seed
+- "explicit-step": seed was explicitly provided for the step
+- "none": no seed provided/active for this step
+
+    active_seed: The effective base seed used by the step, if any. For steps
+        that use Monte Carlo execution, per-iteration seeds are derived from
+        active_seed (e.g., active_seed + iteration_index).
 
 **Attributes:**
 
 - `step_type` (str)
 - `step_name` (str)
 - `execution_order` (int)
+- `scenario_seed` (Optional)
+- `step_seed` (Optional)
+- `seed_source` (str) = none
+- `active_seed` (Optional)
 
 ---
 
@@ -3407,7 +3443,7 @@ failure analysis scenarios.
 Note: This module is distinct from ngraph.workflow.analysis, which provides
 notebook visualization components for workflow results.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'dict[str, Any]'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'FlowIterationResult'
 
 Analyze traffic demand placement success rates.
 
@@ -3424,15 +3460,9 @@ Args:
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    Dict with keys:
+    FlowIterationResult describing this iteration.
 
-- "demands": list of per-demand dicts with fields
-
-          {src,dst,priority,offered_gbps,placed_gbps,placement_ratio,edges?}
-
-- "summary": {total_offered_gbps,total_placed_gbps,overall_ratio}
-
-### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_summary: 'bool' = False, **kwargs) -> 'list[FlowResult]'
+### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, **kwargs) -> 'FlowIterationResult'
 
 Analyze maximum flow capacity between node groups.
 
@@ -3443,13 +3473,12 @@ Args:
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: Whether to use shortest paths only.
     flow_placement: Flow placement strategy.
-    include_flow_summary: Whether to collect detailed flow summary data.
+    include_flow_details: Whether to collect cost distribution and similar details.
+    include_min_cut: Whether to include min-cut edge list in entry data.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    List of FlowResult dicts with metric="capacity". When include_flow_summary
-    is True, each entry includes compact stats with cost_distribution and
-    min-cut edges (as strings).
+    FlowIterationResult describing this iteration.
 
 ### sensitivity_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, **kwargs) -> 'dict[str, dict[str, float]]'
 
@@ -3480,19 +3509,7 @@ specialized analyzer classes in the workflow.analysis module.
 
 ### CapacityEnvelopeResults
 
-Results from capacity envelope Monte Carlo analysis.
-
-This class provides data access for capacity envelope analysis results.
-For visualization, use CapacityMatrixAnalyzer from ngraph.workflow.analysis.
-
-Attributes:
-    envelopes: Dictionary mapping flow keys to CapacityEnvelope objects.
-    failure_patterns: Dictionary mapping pattern keys to FailurePatternResult objects.
-    source_pattern: Source node regex pattern used in analysis.
-    sink_pattern: Sink node regex pattern used in analysis.
-    mode: Flow analysis mode ("combine" or "pairwise").
-    iterations: Number of Monte Carlo iterations performed.
-    metadata: Additional analysis metadata from FailureManager.
+CapacityEnvelopeResults(envelopes: 'Dict[str, CapacityEnvelope]', failure_patterns: 'Dict[str, FailurePatternResult]', source_pattern: 'str', sink_pattern: 'str', mode: 'str', iterations: 'int', metadata: 'Dict[str, Any]')
 
 **Attributes:**
 
@@ -3506,26 +3523,11 @@ Attributes:
 
 **Methods:**
 
-- `cost_distribution_summary(self) -> 'pd.DataFrame'` - Get cost distribution summary across all flows.
-- `export_summary(self) -> 'Dict[str, Any]'` - Export summary for serialization.
-- `flow_keys(self) -> 'List[str]'` - Get list of all flow keys in results.
-- `get_cost_distribution(self, flow_key: 'str') -> 'Dict[float, Dict[str, float]]'` - Get cost distribution statistics for a specific flow.
-- `get_envelope(self, flow_key: 'str') -> 'CapacityEnvelope'` - Get CapacityEnvelope for a specific flow.
-- `get_failure_pattern_summary(self) -> 'pd.DataFrame'` - Get summary of failure patterns if available.
-- `get_min_cut_frequencies(self, flow_key: 'str') -> 'Dict[str, int]'` - Get min-cut edge frequencies for a specific flow.
-- `summary_statistics(self) -> 'Dict[str, Dict[str, float]]'` - Get summary statistics for all flow pairs.
-- `to_dataframe(self) -> 'pd.DataFrame'` - Convert capacity envelopes to DataFrame for analysis.
+- `export_summary(self) -> 'Dict[str, Any]'`
 
 ### DemandPlacementResults
 
-Results from demand placement Monte Carlo analysis.
-
-Attributes:
-    raw_results: Raw results from FailureManager
-    iterations: Number of Monte Carlo iterations
-    baseline: Optional baseline result (no failures)
-    failure_patterns: Dictionary mapping pattern keys to failure pattern results
-    metadata: Additional analysis metadata from FailureManager
+DemandPlacementResults(raw_results: 'dict[str, Any]', iterations: 'int', baseline: 'Optional[dict[str, Any]]' = None, failure_patterns: 'Optional[Dict[str, Any]]' = None, metadata: 'Optional[Dict[str, Any]]' = None)
 
 **Attributes:**
 
@@ -3534,11 +3536,6 @@ Attributes:
 - `baseline` (Optional[dict[str, Any]])
 - `failure_patterns` (Optional[Dict[str, Any]])
 - `metadata` (Optional[Dict[str, Any]])
-
-**Methods:**
-
-- `success_rate_distribution(self) -> 'pd.DataFrame'` - Get demand placement success rate distribution as DataFrame.
-- `summary_statistics(self) -> 'dict[str, float]'` - Get summary statistics for success rates.
 
 ### SensitivityResults
 

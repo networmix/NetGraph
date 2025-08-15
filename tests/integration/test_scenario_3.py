@@ -42,14 +42,18 @@ class TestScenario3:
     def helper(self, scenario_3_executed):
         """Create test helper for scenario 3."""
         helper = create_scenario_helper(scenario_3_executed)
-        graph = scenario_3_executed.results.get("build_graph", "graph")
+        exported = scenario_3_executed.results.to_dict()
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])  # type: ignore[arg-type]
         helper.set_graph(graph)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_3_executed):
         """Test that scenario 3 can be parsed and executed without errors."""
         assert scenario_3_executed.results is not None
-        assert scenario_3_executed.results.get("build_graph", "graph") is not None
+        exported = scenario_3_executed.results.to_dict()
+        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations for complex 3-tier Clos."""
@@ -216,136 +220,88 @@ class TestScenario3:
 
     def test_capacity_envelope_proportional_flow_results(self, helper):
         """Test capacity envelope results with PROPORTIONAL flow placement."""
-        # CapacityEnvelopeAnalysis with baseline=True, iterations=1 stores results under "capacity_envelopes"
-        # and each envelope contains statistics including the baseline value
-
-        # Test forward direction
-        envelopes_fwd = helper.scenario.results.get(
-            "capacity_analysis_forward", "capacity_envelopes"
-        )
-        assert envelopes_fwd is not None, (
-            "Forward capacity analysis should have envelope results"
-        )
-
-        flow_key_fwd = "my_clos1/b.*/t1->my_clos2/b.*/t1"
-        assert flow_key_fwd in envelopes_fwd, (
-            f"Expected flow key '{flow_key_fwd}' in forward results"
-        )
-
-        # For baseline analysis, check the mean/baseline value
-        envelope_fwd = envelopes_fwd[flow_key_fwd]
-        assert abs(envelope_fwd["mean"] - 3200.0) < 0.1, (
-            f"Expected forward flow ~3200.0, got {envelope_fwd['mean']}"
+        # Test forward direction (MaxFlow now returns flow_results with summary)
+        exported = helper.scenario.results.to_dict()
+        fwd = exported["steps"].get("capacity_analysis_forward", {}).get("data", {})
+        fwd_results = fwd.get("flow_results", [])
+        assert fwd_results, "Forward capacity analysis should have flow_results"
+        fwd_total = float(fwd_results[0].get("summary", {}).get("total_placed", 0.0))
+        assert abs(fwd_total - 3200.0) < 0.1, (
+            f"Expected forward flow ~3200.0, got {fwd_total}"
         )
 
         # Test reverse direction
-        envelopes_rev = helper.scenario.results.get(
-            "capacity_analysis_reverse", "capacity_envelopes"
-        )
-        assert envelopes_rev is not None, (
-            "Reverse capacity analysis should have envelope results"
-        )
-
-        flow_key_rev = "my_clos2/b.*/t1->my_clos1/b.*/t1"
-        assert flow_key_rev in envelopes_rev, (
-            f"Expected flow key '{flow_key_rev}' in reverse results"
-        )
-
-        envelope_rev = envelopes_rev[flow_key_rev]
-        assert abs(envelope_rev["mean"] - 3200.0) < 0.1, (
-            f"Expected reverse flow ~3200.0, got {envelope_rev['mean']}"
+        rev = exported["steps"].get("capacity_analysis_reverse", {}).get("data", {})
+        rev_results = rev.get("flow_results", [])
+        assert rev_results, "Reverse capacity analysis should have flow_results"
+        rev_total = float(rev_results[0].get("summary", {}).get("total_placed", 0.0))
+        assert abs(rev_total - 3200.0) < 0.1, (
+            f"Expected reverse flow ~3200.0, got {rev_total}"
         )
 
     def test_capacity_envelope_equal_balanced_flow_results(self, helper):
         """Test capacity envelope results with EQUAL_BALANCED flow placement."""
-        # Test forward direction with EQUAL_BALANCED
-        envelopes_fwd = helper.scenario.results.get(
-            "capacity_analysis_forward_balanced", "capacity_envelopes"
+        exported = helper.scenario.results.to_dict()
+        fwd = (
+            exported["steps"]
+            .get("capacity_analysis_forward_balanced", {})
+            .get("data", {})
         )
-        assert envelopes_fwd is not None, (
-            "Forward balanced capacity analysis should have envelope results"
+        fwd_results = fwd.get("flow_results", [])
+        assert fwd_results, (
+            "Forward balanced capacity analysis should have flow_results"
         )
+        fwd_total = float(fwd_results[0].get("summary", {}).get("total_placed", 0.0))
+        assert abs(fwd_total - 3200.0) < 0.1
 
-        flow_key_fwd = "my_clos1/b.*/t1->my_clos2/b.*/t1"
-        assert flow_key_fwd in envelopes_fwd, (
-            f"Expected flow key '{flow_key_fwd}' in forward balanced results"
+        rev = (
+            exported["steps"]
+            .get("capacity_analysis_reverse_balanced", {})
+            .get("data", {})
         )
-
-        envelope_fwd = envelopes_fwd[flow_key_fwd]
-        assert abs(envelope_fwd["mean"] - 3200.0) < 0.1, (
-            f"Expected forward balanced flow ~3200.0, got {envelope_fwd['mean']}"
+        rev_results = rev.get("flow_results", [])
+        assert rev_results, (
+            "Reverse balanced capacity analysis should have flow_results"
         )
-
-        # Test reverse direction with EQUAL_BALANCED
-        envelopes_rev = helper.scenario.results.get(
-            "capacity_analysis_reverse_balanced", "capacity_envelopes"
-        )
-        assert envelopes_rev is not None, (
-            "Reverse balanced capacity analysis should have envelope results"
-        )
-
-        flow_key_rev = "my_clos2/b.*/t1->my_clos1/b.*/t1"
-        assert flow_key_rev in envelopes_rev, (
-            f"Expected flow key '{flow_key_rev}' in reverse balanced results"
-        )
-
-        envelope_rev = envelopes_rev[flow_key_rev]
-        assert abs(envelope_rev["mean"] - 3200.0) < 0.1, (
-            f"Expected reverse balanced flow ~3200.0, got {envelope_rev['mean']}"
-        )
+        rev_total = float(rev_results[0].get("summary", {}).get("total_placed", 0.0))
+        assert abs(rev_total - 3200.0) < 0.1
 
     def test_flow_conservation_properties(self, helper):
         """Test that flow results satisfy conservation principles."""
-        # Get all flow results from the capacity envelope analysis steps
-        all_flows = {}
+        all_flows: dict[str, float] = {}
 
-        # Add results from forward capacity analysis step
-        envelopes_fwd = helper.scenario.results.get(
-            "capacity_analysis_forward", "capacity_envelopes"
-        )
-        if envelopes_fwd:
-            flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
-            if flow_key in envelopes_fwd:
-                all_flows["forward_proportional"] = envelopes_fwd[flow_key]["mean"]
+        exported = helper.scenario.results.to_dict()
 
-        # Add results from reverse capacity analysis step
-        envelopes_rev = helper.scenario.results.get(
-            "capacity_analysis_reverse", "capacity_envelopes"
-        )
-        if envelopes_rev:
-            flow_key = "my_clos2/b.*/t1 -> my_clos1/b.*/t1"
-            if flow_key in envelopes_rev:
-                all_flows["reverse_proportional"] = envelopes_rev[flow_key]["mean"]
+        def total_placed(step: str) -> float | None:
+            data = exported["steps"].get(step, {}).get("data", {})
+            res = data.get("flow_results", [])
+            if not res:
+                return None
+            return float(res[0].get("summary", {}).get("total_placed", 0.0))
 
-        # Add results from forward balanced capacity analysis step
-        envelopes_fwd_bal = helper.scenario.results.get(
-            "capacity_analysis_forward_balanced", "capacity_envelopes"
-        )
-        if envelopes_fwd_bal:
-            flow_key = "my_clos1/b.*/t1->my_clos2/b.*/t1"
-            if flow_key in envelopes_fwd_bal:
-                all_flows["forward_balanced"] = envelopes_fwd_bal[flow_key]["mean"]
+        fp = total_placed("capacity_analysis_forward")
+        if fp is not None:
+            all_flows["forward_proportional"] = fp
 
-        # Add results from reverse balanced capacity analysis step
-        envelopes_rev_bal = helper.scenario.results.get(
-            "capacity_analysis_reverse_balanced", "capacity_envelopes"
-        )
-        if envelopes_rev_bal:
-            flow_key = "my_clos2/b.*/t1 -> my_clos1/b.*/t1"
-            if flow_key in envelopes_rev_bal:
-                all_flows["reverse_balanced"] = envelopes_rev_bal[flow_key]["mean"]
+        rp = total_placed("capacity_analysis_reverse")
+        if rp is not None:
+            all_flows["reverse_proportional"] = rp
 
-        # Validate flow conservation - should have at least some flow results
+        fb = total_placed("capacity_analysis_forward_balanced")
+        if fb is not None:
+            all_flows["forward_balanced"] = fb
+
+        rb = total_placed("capacity_analysis_reverse_balanced")
+        if rb is not None:
+            all_flows["reverse_balanced"] = rb
+
         assert len(all_flows) > 0, "Should have at least some capacity analysis results"
 
-        # All flows should be the same value since topology is symmetric
-        flow_values = list(all_flows.values())
-        if flow_values:
-            expected_flow = 3200.0
-            for flow_name, flow_value in all_flows.items():
-                assert abs(flow_value - expected_flow) < 0.1, (
-                    f"Flow {flow_name} = {flow_value}, expected ~{expected_flow}"
-                )
+        expected_flow = 3200.0
+        for name, value in all_flows.items():
+            assert abs(value - expected_flow) < 0.1, (
+                f"Flow {name} = {value}, expected ~{expected_flow}"
+            )
 
     def test_topology_semantic_correctness(self, helper):
         """Test that the complex nested topology is semantically correct."""
@@ -386,22 +342,20 @@ class TestScenario3:
     def test_workflow_step_execution_order(self, scenario_3_executed):
         """Test that workflow steps executed in correct order."""
         # Should have results from BuildGraph step
-        graph_result = scenario_3_executed.results.get("build_graph", "graph")
+        exported2 = scenario_3_executed.results.to_dict()
+        graph_result = exported2["steps"]["build_graph"]["data"].get("graph")
         assert graph_result is not None, "BuildGraph step should have executed"
 
-        # Should have results from capacity envelope analysis steps
-        envelope1_result = scenario_3_executed.results.get(
-            "capacity_analysis_forward", "capacity_envelopes"
+        # Should have results from MaxFlow analysis steps (flow_results present)
+        assert (
+            exported2["steps"]["capacity_analysis_forward"]["data"].get("flow_results")
+            is not None
         )
-        assert envelope1_result is not None, (
-            "Forward capacity envelope analysis should have executed"
-        )
-
-        envelope2_result = scenario_3_executed.results.get(
-            "capacity_analysis_forward_balanced", "capacity_envelopes"
-        )
-        assert envelope2_result is not None, (
-            "Forward balanced capacity envelope analysis should have executed"
+        assert (
+            exported2["steps"]["capacity_analysis_forward_balanced"]["data"].get(
+                "flow_results"
+            )
+            is not None
         )
 
 

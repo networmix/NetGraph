@@ -7,7 +7,7 @@ Quick links:
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-This document describes NetGraph workflows - analysis execution pipelines that perform capacity analysis, failure simulation, and network statistics computation.
+This document describes NetGraph workflows – analysis execution pipelines that perform capacity analysis, failure simulation, and network statistics computation.
 
 ## Overview
 
@@ -15,7 +15,8 @@ Workflows are lists of analysis steps executed sequentially on network scenarios
 
 ```yaml
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
+    name: "cap"
     source_path: "^datacenter/.*"
     sink_path: "^edge/.*"
     iterations: 1000
@@ -34,35 +35,74 @@ workflow:
 
 ### BuildGraph
 
-Exports the network graph to a JSON file for external analysis. Not required for workflow analysis steps, which build graphs internally as needed.
+Exports the network graph to JSON (node-link format) for external analysis. Not required for other steps, which construct internal views.
 
 ```yaml
 - step_type: BuildGraph
+  name: build_graph
 ```
 
 ### NetworkStats
 
-Computes network statistics (capacity, degree metrics, connectivity).
+Computes network statistics (capacity, degree metrics).
 
 ```yaml
 - step_type: NetworkStats
-  name: "baseline_stats"  # Optional name
+  name: baseline_stats
 ```
 
-### CapacityEnvelopeAnalysis
+### MaxFlow
 
-Monte Carlo capacity analysis with failure simulation. The primary analysis step for capacity planning and resilience testing.
+Monte Carlo flow capacity analysis with optional failure simulation.
 
 ```yaml
-- step_type: CapacityEnvelopeAnalysis
-  name: "capacity_analysis"
+- step_type: MaxFlow
+  name: capacity_analysis
   source_path: "^servers/.*"
   sink_path: "^storage/.*"
-  mode: "combine"
-  failure_policy: "random_failures"
+  mode: "combine"              # combine | pairwise
+  failure_policy: random_failures
   iterations: 1000
-  parallelism: 4
+  parallelism: auto             # or an integer
   baseline: true
+  include_flow_details: false   # cost_distribution
+  include_min_cut: false        # min-cut edges list
+```
+
+### TrafficMatrixPlacement
+
+Monte Carlo placement of a named traffic matrix with optional alpha scaling.
+
+```yaml
+- step_type: TrafficMatrixPlacement
+  name: tm_placement
+  matrix_name: default
+  iterations: 100
+  parallelism: auto
+  baseline: false
+  include_flow_details: true
+  # Alpha scaling – explicit or from another step
+  alpha: 1.0
+  # alpha_from_step: msd_default
+  # alpha_from_field: data.alpha_star
+```
+
+### MaximumSupportedDemand
+
+Search for the maximum uniform traffic multiplier `alpha_star` that is fully placeable.
+
+```yaml
+- step_type: MaximumSupportedDemand
+  name: msd_default
+  matrix_name: default
+  acceptance_rule: hard
+  alpha_start: 1.0
+  growth_factor: 2.0
+  resolution: 0.01
+  max_bracket_iters: 32
+  max_bisect_iters: 32
+  seeds_per_alpha: 1
+  placement_rounds: auto
 ```
 
 ## Node Selection Mechanism
@@ -112,7 +152,7 @@ source_path: "(dc[1-3])/(spine|leaf)/switch-(\d+)"
 
 **`pairwise` Mode**: Computes flow between each source group and sink group pair. Produces flow matrix keyed by `(source_group, sink_group)`.
 
-## CapacityEnvelopeAnalysis Parameters
+## MaxFlow Parameters
 
 ### Required Parameters
 
@@ -122,10 +162,15 @@ source_path: "(dc[1-3])/(spine|leaf)/switch-(\d+)"
 ### Analysis Configuration
 
 ```yaml
-mode: "combine"                    # "combine" or "pairwise" (default: "combine")
-iterations: 1000                   # Monte Carlo trials (default: 1)
-failure_policy: "policy_name"      # From failure_policy_set (default: null - no failures)
-baseline: true                     # Include no-failure baseline (default: false)
+mode: combine                    # combine | pairwise (default: combine)
+iterations: 1000                 # Monte Carlo trials (default: 1)
+failure_policy: policy_name      # From failure_policy_set (default: null)
+baseline: true                   # Include baseline (default: false)
+parallelism: auto                # Worker processes (default: auto)
+shortest_path: false             # Limit to shortest paths (default: false)
+flow_placement: PROPORTIONAL     # PROPORTIONAL | EQUAL_BALANCED
+include_flow_details: false      # Emit cost_distribution per flow
+include_min_cut: false           # Emit min-cut edge list per flow
 ```
 
 ### Performance Tuning
@@ -137,11 +182,48 @@ shortest_path: false              # Shortest paths only (default: false)
 flow_placement: "PROPORTIONAL"    # "PROPORTIONAL" or "EQUAL_BALANCED"
 ```
 
-### Output Control
+## Results Export Shape
 
-```yaml
-store_failure_patterns: false     # Retain failure pattern data
-include_flow_summary: false       # Detailed flow analytics
+Exported results have a fixed top-level structure:
+
+```json
+{
+  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, ... } },
+  "steps": {
+    "<step_name>": {
+      "metadata": { ... },
+      "data": { ... }
+    }
+  },
+  "scenario": { "seed": 1, "failure_policy_set": { ... }, "traffic_matrices": { ... } }
+}
+```
+
+- `MaxFlow` and `TrafficMatrixPlacement` store `data.flow_results` as a list of per-iteration results:
+
+```json
+{
+  "flow_results": [
+    {
+      "failure_id": "",
+      "failure_state": null,
+      "flows": [
+        {
+          "source": "A", "destination": "B", "priority": 0,
+          "demand": 10.0, "placed": 10.0, "dropped": 0.0,
+          "cost_distribution": { "2": 6.0, "4": 4.0 },
+          "data": { "edges": ["(u,v,k)"] }
+        }
+      ],
+      "summary": {
+        "total_demand": 10.0, "total_placed": 10.0,
+        "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 1
+      },
+      "data": { }
+    }
+  ],
+  "context": { ... }
+}
 ```
 
 ## Common Workflow Patterns
@@ -150,7 +232,7 @@ include_flow_summary: false       # Detailed flow analytics
 
 ```yaml
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     source_path: "^servers/.*"
     sink_path: "^storage/.*"
 ```
@@ -159,10 +241,10 @@ workflow:
 
 ```yaml
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     source_path: "^pod1/.*"
     sink_path: "^pod2/.*"
-    failure_policy: "random_link_failures"
+    failure_policy: random_link_failures
     iterations: 10000
     parallelism: 8
     baseline: true
@@ -174,18 +256,18 @@ workflow:
 ```yaml
 workflow:
   # Baseline capacity
-  - step_type: CapacityEnvelopeAnalysis
-    name: "baseline"
+  - step_type: MaxFlow
+    name: baseline
     source_path: "^dc1/.*"
     sink_path: "^dc2/.*"
     iterations: 1
 
   # Single failure impact
-  - step_type: CapacityEnvelopeAnalysis
-    name: "single_failure"
+  - step_type: MaxFlow
+    name: single_failure
     source_path: "^dc1/.*"
     sink_path: "^dc2/.*"
-    failure_policy: "single_link_failure"
+    failure_policy: single_link_failure
     iterations: 1000
     baseline: true
 ```
@@ -228,6 +310,6 @@ See [CLI Reference](cli.md#report) for complete options.
 
 ### Integration
 
-- Reference failure policies from `failure_policy_set` section
+- Reference failure policies from `failure_policy_set`
 - Ensure failure policies exist before workflow execution
 - Include `BuildGraph` only when graph export to JSON is needed for external analysis

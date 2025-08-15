@@ -4,76 +4,104 @@ from ngraph.results.artifacts import FailurePatternResult
 
 def test_put_and_get():
     """
-    Test that putting a value in the store and then getting it works as expected.
+    Validate step-scoped put/get via exported dict structure.
     """
     results = Results()
-    results.put("Step1", "total_capacity", 123.45)
-    assert results.get("Step1", "total_capacity") == 123.45
+    results.put_step_metadata("Step1", "Dummy", 0)
+    results.enter_step("Step1")
+    results.put("metadata", {})
+    results.put("data", {"total_capacity": 123.45})
+    results.exit_step()
+
+    exported = results.to_dict()
+    assert exported["steps"]["Step1"]["data"]["total_capacity"] == 123.45
 
 
 def test_get_with_default_missing_key():
     """
-    Test retrieving a non-existent key with a default value.
+    Validate exported dict absence.
     """
     results = Results()
-    default_value = "not found"
-    assert results.get("StepX", "unknown_key", default_value) == default_value
+    results.put_step_metadata("StepX", "Dummy", 0)
+    exported = results.to_dict()
+    assert "StepX" not in exported.get("steps", {})
 
 
 def test_get_with_default_missing_step():
     """
-    Test retrieving from a non-existent step with a default value.
+    Validate absence of a non-existent step in exported dict.
     """
     results = Results()
-    results.put("Step1", "some_key", 42)
-    default_value = "missing step"
-    assert results.get("Step2", "some_key", default_value) == default_value
+    results.put_step_metadata("Step1", "Dummy", 0)
+    results.enter_step("Step1")
+    results.put("metadata", {})
+    results.put("data", {"some_key": 42})
+    results.exit_step()
+
+    exported = results.to_dict()
+    assert "Step2" not in exported.get("steps", {})
 
 
 def test_get_all_single_key_multiple_steps():
     """
-    Test retrieving all values for a single key across multiple steps.
+    Ensure both steps present under steps map.
     """
     results = Results()
-    results.put("Step1", "duration", 5.5)
-    results.put("Step2", "duration", 3.2)
-    results.put("Step2", "other_key", "unused")
-    results.put("Step3", "different_key", 99)
+    results.put_step_metadata("Step1", "Dummy", 0)
+    results.enter_step("Step1")
+    results.put("metadata", {})
+    results.put("data", {"duration": 5.5})
+    results.exit_step()
 
-    durations = results.get_all("duration")
-    assert durations == {"Step1": 5.5, "Step2": 3.2}
+    results.put_step_metadata("Step2", "Dummy", 1)
+    results.enter_step("Step2")
+    results.put("metadata", {})
+    results.put("data", {"duration": 3.2, "other_key": "unused"})
+    results.exit_step()
 
-    # No 'duration' key in Step3, so it won't appear in durations
-    assert "Step3" not in durations
+    results.put_step_metadata("Step3", "Dummy", 2)
+    results.enter_step("Step3")
+    results.put("metadata", {})
+    results.put("data", {"different_key": 99})
+    results.exit_step()
+
+    exported = results.to_dict()
+    assert exported["steps"]["Step1"]["data"]["duration"] == 5.5
+    assert exported["steps"]["Step2"]["data"]["duration"] == 3.2
+    assert "duration" not in exported["steps"]["Step3"]["data"]
 
 
 def test_overwriting_value():
     """
-    Test that storing a new value under an existing step/key pair overwrites the old value.
+    Validate that subsequent puts overwrite previous entries within the step.
     """
     results = Results()
-    results.put("Step1", "cost", 10)
-    assert results.get("Step1", "cost") == 10
+    results.put_step_metadata("Step1", "Dummy", 0)
+    results.enter_step("Step1")
+    results.put("metadata", {})
+    results.put("data", {"cost": 10})
+    results.put("data", {"cost": 20})
+    results.exit_step()
 
-    # Overwrite
-    results.put("Step1", "cost", 20)
-    assert results.get("Step1", "cost") == 20
+    exported = results.to_dict()
+    assert exported["steps"]["Step1"]["data"]["cost"] == 20
 
 
 def test_empty_results():
     """
-    Test that a newly instantiated Results object does not have any stored data.
+    Newly instantiated Results has empty steps/workflow maps.
     """
     results = Results()
-    assert results.get("StepX", "keyX") is None
-    assert results.get_all("keyX") == {}
+    exported = results.to_dict()
+    assert exported.get("steps", {}) == {}
 
 
 def test_results_to_dict_includes_workflow_and_step_data():
     results = Results()
     # Simulate metadata
     results.put_step_metadata("stepA", "DummyStep", 0)
-    results.put("stepA", "value", 1)
+    results.enter_step("stepA")
+    results.put("metadata", {})
     # Include an artifact object to confirm to_dict conversion
     fpr = FailurePatternResult(
         excluded_nodes=["n1"],
@@ -81,10 +109,11 @@ def test_results_to_dict_includes_workflow_and_step_data():
         capacity_matrix={"A->B": 10.0},
         count=2,
     )
-    results.put("stepA", "pattern", fpr)
+    results.put("data", {"pattern": fpr, "value": 1})
+    results.exit_step()
 
     d = results.to_dict()
     assert "workflow" in d
     assert "stepA" in d["workflow"]
-    assert d["stepA"]["value"] == 1
-    assert isinstance(d["stepA"]["pattern"], dict)
+    assert d["steps"]["stepA"]["data"]["value"] == 1
+    assert isinstance(d["steps"]["stepA"]["data"]["pattern"], dict)

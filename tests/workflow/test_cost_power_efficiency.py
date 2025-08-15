@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 from ngraph.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
+from ngraph.results.store import Results
 from ngraph.workflow.cost_power_efficiency import CostPowerEfficiency
 
 
@@ -34,9 +35,7 @@ def _basic_components() -> ComponentsLibrary:
 def _scenario_stub() -> MagicMock:
     scenario = MagicMock()
     scenario.network = Network()
-    scenario.results = MagicMock()
-    scenario.results.put = MagicMock()
-    scenario.results.get = MagicMock(side_effect=KeyError("missing"))
+    scenario.results = Results()
     scenario.components_library = _basic_components()
 
     # Nodes with hardware
@@ -69,13 +68,12 @@ def test_collect_node_hw_entries_basic() -> None:
         collect_link_hw_entries=False,
     )
 
-    step.run(scenario)
+    step.execute(scenario)
 
-    # Gather stored values
-    calls = {c.args[1]: c.args[2] for c in scenario.results.put.call_args_list}
-
-    assert "node_hw_entries" in calls
-    entries = calls["node_hw_entries"]
+    exported = scenario.results.to_dict()
+    data = exported["steps"]["cpe"]["data"]
+    assert "node_hw_entries" in data
+    entries = data["node_hw_entries"]
     assert isinstance(entries, list) and len(entries) == 2
 
     by_node = {e["node"]: e for e in entries}
@@ -84,8 +82,7 @@ def test_collect_node_hw_entries_basic() -> None:
     assert by_node["A"]["hw_capacity"] == 100.0
     assert by_node["B"]["hw_capacity"] == 100.0
 
-    # Allocated capacity is sum of incident link capacities (bidirectional model
-    # is represented as single directed link in Network object)
+    # Allocated capacity is sum of incident link capacities
     assert by_node["A"]["allocated_capacity"] == 30.0
     assert by_node["B"]["allocated_capacity"] == 30.0
 
@@ -105,12 +102,13 @@ def test_collect_link_hw_entries_basic() -> None:
         collect_link_hw_entries=True,
     )
 
-    step.run(scenario)
+    step.execute(scenario)
 
-    calls = {c.args[1]: c.args[2] for c in scenario.results.put.call_args_list}
+    exported = scenario.results.to_dict()
+    data = exported["steps"]["cpe"]["data"]
 
-    assert "link_hw_entries" in calls
-    entries = calls["link_hw_entries"]
+    assert "link_hw_entries" in data
+    entries = data["link_hw_entries"]
     assert isinstance(entries, list) and len(entries) == 1
 
     entry = entries[0]

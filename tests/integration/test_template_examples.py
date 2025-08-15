@@ -133,7 +133,11 @@ class TestScenarioTemplateBuilder:
         )
         scenario = Scenario.from_yaml(yaml_content)
         scenario.run()
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
         assert len(graph.nodes) == 4
 
 
@@ -143,7 +147,11 @@ class TestCommonScenarios:
         yaml_content = CommonScenarios.minimal_test_scenario()
         scenario = Scenario.from_yaml(yaml_content)
         scenario.run()
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
         assert len(graph.nodes) == 3
 
 
@@ -186,7 +194,11 @@ class TestTemplateComposition:
 
         # Validate the complex scenario works
         helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
         helper.set_graph(graph)
 
         assert len(graph.nodes) >= 3  # At least backbone nodes
@@ -218,7 +230,11 @@ class TestTemplateComposition:
             scenario = Scenario.from_yaml(yaml_content)
             scenario.run()
 
-            graph = scenario.results.get("build_graph", "graph")
+            exported = scenario.results.to_dict()
+            graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+            from ngraph.graph.io import node_link_to_graph
+
+            graph = node_link_to_graph(graph_dict)
             assert graph is not None, (
                 f"BuildGraph should produce a graph for scale {scale['nodes']}"
             )
@@ -353,7 +369,11 @@ class TestMainScenarioVariants:
         scenario.run()
 
         helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
         helper.set_graph(graph)
 
         # Validate it matches scenario 1 expectations
@@ -498,8 +518,11 @@ class TestMainScenarioVariants:
         scenario.run()
 
         helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
-        helper.set_graph(graph)
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
 
         # Validate basic structure (exact match would require complex blueprint logic)
         assert len(graph.nodes) > 15  # Should have many nodes from blueprint expansion
@@ -573,7 +596,7 @@ class TestMainScenarioVariants:
         workflow = [
             {"step_type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "capacity_analysis",
                 "source_path": "my_clos1/b.*/t1",
                 "sink_path": "my_clos2/b.*/t1",
@@ -585,7 +608,7 @@ class TestMainScenarioVariants:
                 "failure_policy": None,
             },
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "step_type": "MaxFlow",
                 "name": "capacity_analysis2",
                 "source_path": "my_clos1/b.*/t1",
                 "sink_path": "my_clos2/b.*/t1",
@@ -604,7 +627,11 @@ class TestMainScenarioVariants:
         scenario.run()
 
         helper = create_scenario_helper(scenario)
-        graph = scenario.results.get("build_graph", "graph")
+        exported = scenario.results.to_dict()
+        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+        from ngraph.graph.io import node_link_to_graph
+
+        graph = node_link_to_graph(graph_dict)
         helper.set_graph(graph)
 
         # Validate basic structure matches scenario 3
@@ -640,7 +667,11 @@ class TestMainScenarioVariants:
 
             # Validate each configuration
             helper = create_scenario_helper(scenario)
-            graph = scenario.results.get("build_graph", "graph")
+            exported = scenario.results.to_dict()
+            graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
+            from ngraph.graph.io import node_link_to_graph
+
+            graph = node_link_to_graph(graph_dict)
 
             # Check for None graph and provide better error message
             assert graph is not None, (

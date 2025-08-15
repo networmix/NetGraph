@@ -125,17 +125,17 @@ def get_default_registry() -> AnalysisRegistry:
         section_title="Network Statistics",
     )
 
-    # Capacity envelope analysis - capacity matrix
+    # MaxFlow analysis - capacity matrix
     registry.register(
-        "CapacityEnvelopeAnalysis",
+        "MaxFlow",
         CapacityMatrixAnalyzer,
         method_name="analyze_and_display_step",
         section_title="Capacity Matrix Analysis",
     )
 
-    # Capacity envelope analysis - flow availability curves
+    # MaxFlow analysis - flow availability curves
     registry.register(
-        "CapacityEnvelopeAnalysis",
+        "MaxFlow",
         CapacityMatrixAnalyzer,
         method_name="analyze_and_display_flow_availability",
         section_title="Flow Availability Analysis",
@@ -153,7 +153,7 @@ def get_default_registry() -> AnalysisRegistry:
     from .placement_matrix import PlacementMatrixAnalyzer
 
     registry.register(
-        "TrafficMatrixPlacementAnalysis",
+        "TrafficMatrixPlacement",
         PlacementMatrixAnalyzer,
         method_name="analyze_and_display_step",
         section_title="Traffic Matrix Placement Analysis",

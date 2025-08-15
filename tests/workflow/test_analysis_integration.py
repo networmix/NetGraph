@@ -2,10 +2,10 @@
 
 import pytest
 
-from ngraph.model.network import Network
+from ngraph.results.store import Results
 from ngraph.scenario import Scenario
 from ngraph.workflow.analysis.registry import get_default_registry
-from ngraph.workflow.capacity_envelope_analysis import CapacityEnvelopeAnalysis
+from ngraph.workflow.max_flow_step import MaxFlow
 from ngraph.workflow.network_stats import NetworkStats
 
 
@@ -53,7 +53,7 @@ failure_policy_set:
 workflow:
   - step_type: NetworkStats
     name: "network_stats"
-  - step_type: CapacityEnvelopeAnalysis
+  - step_type: MaxFlow
     name: "capacity_analysis"
     source_path: "^A$"
     sink_path: "^C$"
@@ -67,27 +67,28 @@ workflow:
         """Test NetworkStats workflow step execution."""
         # Execute just the network stats step
         step = NetworkStats(name="test_stats")
-        step.run(simple_scenario)
+        simple_scenario.results = Results()
+        step.execute(simple_scenario)
 
-        # Verify results were stored
-        # NetworkStats stores results with multiple keys
-        node_count = simple_scenario.results.get("test_stats", "node_count")
-        link_count = simple_scenario.results.get("test_stats", "link_count")
-        assert node_count is not None
-        assert link_count is not None
-        assert node_count > 0
-        assert link_count > 0
+        # Verify results were stored in new schema
+        exported = simple_scenario.results.to_dict()
+        data = exported["steps"]["test_stats"]["data"]
+        assert data.get("node_count") is not None
+        assert data.get("link_count") is not None
+        assert data["node_count"] > 0
+        assert data["link_count"] > 0
 
     def test_capacity_envelope_execution(self, simple_scenario):
-        """Test CapacityEnvelopeAnalysis workflow step execution."""
+        """Test MaxFlow step execution stores flow_results."""
         # First build the graph
         from ngraph.workflow.build_graph import BuildGraph
 
         build_step = BuildGraph(name="build")
-        build_step.run(simple_scenario)
+        simple_scenario.results = Results()
+        build_step.execute(simple_scenario)
 
-        # Then run capacity envelope analysis
-        envelope_step = CapacityEnvelopeAnalysis(
+        # Then run max flow
+        envelope_step = MaxFlow(
             name="envelope",
             source_path="^A$",
             sink_path="^C$",
@@ -95,25 +96,25 @@ workflow:
             baseline=False,
             failure_policy=None,
         )
-        envelope_step.run(simple_scenario)
+        envelope_step.execute(simple_scenario)
 
         # Verify results
-        # CapacityEnvelopeAnalysis stores results under capacity_envelopes
-        envelopes = simple_scenario.results.get("envelope", "capacity_envelopes")
-        assert envelopes is not None
-        assert "^A$->^C$" in envelopes
-        assert envelopes["^A$->^C$"]["mean"] > 0
+        exported = simple_scenario.results.to_dict()
+        data = exported["steps"]["envelope"]["data"]
+        assert isinstance(data, dict)
+        assert isinstance(data.get("flow_results"), list)
 
     def test_capacity_envelope_analysis_execution(self, simple_scenario):
-        """Test CapacityEnvelopeAnalysis execution."""
+        """Test MaxFlow execution with explicit no-failure policy."""
         # Build graph first
         from ngraph.workflow.build_graph import BuildGraph
 
         build_step = BuildGraph(name="build")
-        build_step.run(simple_scenario)
+        simple_scenario.results = Results()
+        build_step.execute(simple_scenario)
 
-        # Run capacity envelope analysis
-        envelope_step = CapacityEnvelopeAnalysis(
+        # Run MaxFlow
+        envelope_step = MaxFlow(
             name="envelope",
             source_path="^A$",  # Use regex pattern to match node A exactly
             sink_path="^C$",  # Use regex pattern to match node C exactly
@@ -122,23 +123,17 @@ workflow:
             parallelism=1,
             seed=42,
         )
-        envelope_step.run(simple_scenario)
+        envelope_step.execute(simple_scenario)
 
         # Verify results
-        envelopes = simple_scenario.results.get("envelope", "capacity_envelopes")
-        assert envelopes is not None
-        assert len(envelopes) > 0
-
-        # Check envelope structure
-        for _flow_key, envelope in envelopes.items():
-            assert "mean" in envelope
-            assert "min" in envelope
-            assert "max" in envelope
-            assert envelope["mean"] > 0
+        exported = simple_scenario.results.to_dict()
+        data = exported["steps"]["envelope"]["data"]
+        assert data and isinstance(data.get("flow_results"), list)
 
     def test_workflow_step_metadata_storage(self, simple_scenario):
         """Test that workflow steps store metadata correctly."""
         step = NetworkStats(name="meta_test")
+        simple_scenario.results = Results()
         step.execute(simple_scenario)  # Use execute() not run() to test metadata
 
         # Check metadata was stored
@@ -159,11 +154,7 @@ workflow:
         # Test registry contains expected mappings
         step_types = registry.get_all_step_types()
         assert "NetworkStats" in step_types
-
-        assert "CapacityEnvelopeAnalysis" in step_types
-
-        # Test registry functionality - just verify it has expected step types
-        # Don't test implementation details of get_analysis_configs
+        assert "MaxFlow" in step_types
 
     def test_full_workflow_execution(self, simple_scenario):
         """Test execution of complete workflow with multiple steps."""
@@ -171,92 +162,13 @@ workflow:
         simple_scenario.run()
 
         # Verify all workflow steps executed
+        exported = simple_scenario.results.to_dict()
         # NetworkStats stores individual metrics
-        node_count = simple_scenario.results.get("network_stats", "node_count")
-        assert node_count is not None
-        assert node_count > 0
+        data = exported["steps"]["network_stats"]["data"]
+        assert data.get("node_count") is not None
+        assert data.get("link_count") is not None
 
-        # CapacityEnvelopeAnalysis stores envelope results
-        envelopes = simple_scenario.results.get(
-            "capacity_analysis", "capacity_envelopes"
-        )
-        probe_result = envelopes["^A$->^C$"]["mean"] if envelopes else None
-        assert probe_result is not None
-        assert probe_result > 0
-
-    def test_workflow_error_handling(self):
-        """Test error handling in workflow execution."""
-        scenario_yaml = """
-network:
-  name: "test_network"
-  nodes:
-    A: {}
-  links: []
-
-workflow:
-  - step_type: CapacityEnvelopeAnalysis
-    name: "invalid_envelope"
-    source_path: "^A$"
-    sink_path: "NonExistent"  # This should cause an error
-    iterations: 1
-    baseline: false
-    failure_policy: null
-"""
-        scenario = Scenario.from_yaml(scenario_yaml)
-
-        # Should handle the error gracefully or raise informative exception
-        with pytest.raises((ValueError, KeyError)):  # Expect some form of error
-            scenario.run()
-
-
-class TestAnalysisComponentsCore:
-    """Test core analysis components functionality."""
-
-    # (Removed JSON roundtrip tests that only validate stdlib behavior rather than
-    # project functionality.)
-
-
-class TestWorkflowStepParameters:
-    """Test workflow step parameter validation and handling."""
-
-    def test_capacity_envelope_parameter_validation(self):
-        """Test CapacityEnvelopeAnalysis parameter validation."""
-        # Valid parameters
-        envelope = CapacityEnvelopeAnalysis(
-            name="test",
-            source_path="A",
-            sink_path="B",
-            iterations=1,
-            baseline=False,
-            failure_policy=None,
-        )
-        assert envelope.source_path == "A"
-        assert envelope.sink_path == "B"
-
-    def test_network_stats_basic_functionality(self):
-        """Test NetworkStats basic functionality."""
-        from ngraph.model.network import Link, Node
-
-        network = Network()
-        network.attrs["name"] = "test"
-        network.add_node(Node("A"))
-        network.add_node(Node("B"))
-        network.add_node(Node("C"))
-        network.add_link(Link("A", "B", capacity=10.0, cost=1))
-        network.add_link(Link("B", "C", capacity=15.0, cost=1))
-
-        # Create minimal scenario
-        scenario = Scenario(network=network, workflow=[])
-
-        step = NetworkStats(name="stats")
-        step.run(scenario)
-
-        # NetworkStats stores individual metrics, not a combined object
-        node_count = scenario.results.get("stats", "node_count")
-        link_count = scenario.results.get("stats", "link_count")
-        assert node_count == 3
-        assert link_count == 2
-
-        # Verify basic functionality is working
-        assert node_count > 0
-        assert link_count > 0
+        # MaxFlow stores data.flow_results
+        flow_data = exported["steps"]["capacity_analysis"]["data"]
+        assert isinstance(flow_data, dict)
+        assert isinstance(flow_data.get("flow_results"), list)

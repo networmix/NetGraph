@@ -92,9 +92,9 @@ class WorkflowStep(ABC):
         global _execution_counter
 
         step_type = self.__class__.__name__
-        # Use the raw name for results/metadata namespacing to avoid mismatches
-        step_name = self.name
-        display_name = step_name or step_type
+        # Guarantee a stable results namespace even when name is not provided
+        step_name = self.name or step_type
+        display_name = step_name
 
         # Determine seed provenance and effective seed for this step
         scenario_seed = getattr(scenario, "seed", None)
@@ -117,7 +117,8 @@ class WorkflowStep(ABC):
             seed_source = "none"
             active_seed = None
 
-        # Store workflow metadata before execution using the exact step namespace key
+        # Enter step scope and store workflow metadata
+        scenario.results.enter_step(step_name)
         scenario.results.put_step_metadata(
             step_name=step_name,
             step_type=step_type,
@@ -166,6 +167,12 @@ class WorkflowStep(ABC):
                 f"after {duration:.3f} seconds - {type(e).__name__}: {e}"
             )
             raise
+        finally:
+            # Always exit step scope
+            try:
+                scenario.results.exit_step()
+            except Exception:
+                pass
 
     @abstractmethod
     def run(self, scenario: "Scenario") -> None:
