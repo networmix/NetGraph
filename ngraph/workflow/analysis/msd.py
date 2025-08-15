@@ -60,25 +60,31 @@ class MSDAnalyzer(NotebookAnalyzer):
             print("  No probe trace available.")
             return
 
-        plt.figure(figsize=(8, 5))
+        plt.figure(figsize=(8, 5))  # pragma: no cover - display-only
         sns.lineplot(
             data=trace,
             x="alpha",
             y="min_placement_ratio",
             marker="o",
             label="min placement ratio",
-        )
+        )  # pragma: no cover - display-only
         sns.scatterplot(
             data=trace,
             x="alpha",
             y="min_placement_ratio",
             hue=trace["feasible"].map({True: "feasible", False: "infeasible"}),
             legend=True,
-        )
-        plt.axvline(alpha_star, linestyle="--", linewidth=1.0, label="alpha*")
-        plt.xlabel("Alpha")
-        plt.ylabel("Min placement ratio across pairs")
-        plt.title(f"MSD bracketing/bisection trace — {name}")
-        plt.grid(True, linestyle=":", linewidth=0.5)
-        plt.tight_layout()
-        plt.show()
+        )  # pragma: no cover - display-only
+        plt.axvline(
+            alpha_star, linestyle="--", linewidth=1.0, label="alpha*"
+        )  # pragma: no cover - display-only
+        plt.xlabel("Alpha")  # pragma: no cover - display-only
+        plt.ylabel(
+            "Min placement ratio across pairs"
+        )  # pragma: no cover - display-only
+        plt.title(
+            f"MSD bracketing/bisection trace — {name}"
+        )  # pragma: no cover - display-only
+        plt.grid(True, linestyle=":", linewidth=0.5)  # pragma: no cover - display-only
+        plt.tight_layout()  # pragma: no cover - display-only
+        plt.show()  # pragma: no cover - display-only

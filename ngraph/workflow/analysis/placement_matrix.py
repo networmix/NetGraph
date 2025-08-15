@@ -180,7 +180,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             print("No placement data available")
             return
 
-        for prio in sorted(matrices.keys()):
+        for prio in sorted(matrices.keys()):  # pragma: no cover - display-only
             print(f"\nPriority {prio}")
             stats = stats_by_prio.get(prio, {"has_data": False})
             if not stats.get("has_data"):
@@ -195,7 +195,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             matrix_display = matrices[prio].copy()
             matrix_display.index.name = "Source"
             matrix_display.columns.name = "Destination"
-            if not matrix_display.empty:
+            if not matrix_display.empty:  # pragma: no cover - display-only
                 md = matrix_display.applymap(fmt)
                 show(
                     md,

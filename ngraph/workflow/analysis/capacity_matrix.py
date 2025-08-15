@@ -118,13 +118,13 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
         # Heatmap
         # Scale figure size with matrix dimensions; bias toward readability
-        plt.figure(
+        plt.figure(  # pragma: no cover - display-only
             figsize=(
                 min(16, 2 + 0.35 * max(3, matrix.shape[1])),
                 min(12, 2 + 0.35 * max(3, matrix.shape[0])),
             )
         )
-        sns.heatmap(
+        sns.heatmap(  # pragma: no cover - display-only
             matrix.replace(0.0, np.nan),
             annot=False,
             fmt=".0f",
@@ -135,8 +135,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         plt.title(f"Node→Node Capacity (Max over iterations) — {step}")
         plt.xlabel("Destination")
         plt.ylabel("Source")
-        plt.tight_layout()
-        plt.show()
+        plt.tight_layout()  # pragma: no cover - display-only
+        plt.show()  # pragma: no cover - display-only
 
     # ---------- helpers ----------
 

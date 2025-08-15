@@ -123,14 +123,16 @@ class LatencyAnalyzer(NotebookAnalyzer):
 
         print(f"✅ Latency/Stretch for {name} — iterations={len(df)}")
 
-        fig, ax = plt.subplots(figsize=(9, 5.5))
-        sns.scatterplot(data=df, x="mean_km_per_gbps", y="stretch", s=60)
+        fig, ax = plt.subplots(figsize=(9, 5.5))  # pragma: no cover - display-only
+        sns.scatterplot(
+            data=df, x="mean_km_per_gbps", y="stretch", s=60
+        )  # pragma: no cover - display-only
         ax.set_xlabel("Mean distance per Gbps (km/Gbps)")
         ax.set_ylabel("Latency stretch (≈avg path cost / baseline LB)")
         ax.set_title(f"Distance & Stretch by Failure Iteration - {name}")
         ax.grid(True, linestyle=":", linewidth=0.5)
-        plt.tight_layout()
-        plt.show()
+        plt.tight_layout()  # pragma: no cover - display-only
+        plt.show()  # pragma: no cover - display-only
 
         print("  Summary:")
         print(

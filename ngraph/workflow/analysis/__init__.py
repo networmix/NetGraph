@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import itables.options as itables_opt
 import matplotlib.pyplot as plt
-from itables import show
+from itables import show  # pragma: no cover - display-only binding
 
 from .bac import BACAnalyzer
 from .base import AnalysisContext, NotebookAnalyzer

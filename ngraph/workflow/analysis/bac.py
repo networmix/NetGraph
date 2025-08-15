@@ -122,20 +122,22 @@ class BACAnalyzer(NotebookAnalyzer):
             return xs, avail
 
         x, a = availability_curve(s)
-        plt.figure(figsize=(9, 5.5))
-        sns.lineplot(x=x, y=a, drawstyle="steps-post", label=mode.capitalize())
+        plt.figure(figsize=(9, 5.5))  # pragma: no cover - display-only
+        sns.lineplot(
+            x=x, y=a, drawstyle="steps-post", label=mode.capitalize()
+        )  # pragma: no cover - display-only
         if overlay is not None and len(overlay) == len(s):
             xo, ao = availability_curve(overlay)
             sns.lineplot(
                 x=xo, y=ao, drawstyle="steps-post", label=overlay_label or "overlay"
-            )
+            )  # pragma: no cover - display-only
 
         plt.xlabel("Delivered bandwidth (Gbps)")
         plt.ylabel("Availability (≥x)")
         plt.title(f"Bandwidth-Availability Curve - {name}")
-        plt.grid(True, linestyle=":", linewidth=0.5)
-        plt.tight_layout()
-        plt.show()
+        plt.grid(True, linestyle=":", linewidth=0.5)  # pragma: no cover - display-only
+        plt.tight_layout()  # pragma: no cover - display-only
+        plt.show()  # pragma: no cover - display-only
 
     # ---------- helpers ----------
 

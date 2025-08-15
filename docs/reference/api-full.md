@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 15, 2025 at 04:00 UTC
+Generated from source code on: August 15, 2025 at 11:31 UTC
 
 Modules auto-discovered: 72
 
@@ -2451,22 +2451,22 @@ convenience to run both.
 
 ## ngraph.workflow.analysis.capacity_matrix
 
-Capacity matrix analysis for MaxFlow results.
+Capacity matrix analysis.
 
-Consumes ``flow_results`` from a MaxFlow step and builds a node->node capacity
-matrix using the maximum placed value observed per pair across iterations
-(capacity ceiling under the tested failure set). Provides statistics and a
-heatmap for quick visual inspection.
+Consumes `flow_results` (from MaxFlow step). Builds node→node capacity matrix
+using the *maximum placed value observed* per pair across iterations (i.e., the
+capacity ceiling under the tested failure set). Provides stats and a heatmap.
 
 ### CapacityMatrixAnalyzer
 
-Analyze max-flow capacities into matrices, statistics, and plots.
+Analyze max-flow capacities into matrices/statistics/plots.
 
 **Methods:**
 
-- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Compute capacity matrix for a MaxFlow step.
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Return analysis outputs for a given results document.
 - `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render capacity matrix statistics and heatmap.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and render capacity matrix for a single workflow step.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
 - `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
@@ -2628,8 +2628,8 @@ Includes bindings for ``NetworkStats``, ``MaximumSupportedDemand``,
 High-level summary analyzer for results documents.
 
 Provides quick counts of steps and basic categorisation by presence of
-``flow_results`` in the new schema. Also contains convenience helpers for
-``NetworkStats`` sections.
+``flow_results`` in the new schema. Also contains a small helper for
+``NetworkStats`` sections aimed at notebook usage.
 
 ### SummaryAnalyzer
 

@@ -20,9 +20,9 @@ from ngraph.flows.policy import FlowPolicyConfig
 from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 from ngraph.model.network import Network
 
-if TYPE_CHECKING:
-    from ngraph.demand.matrix import TrafficMatrixSet
-    from ngraph.model.view import NetworkView
+if TYPE_CHECKING:  # pragma: no cover - typing-only imports
+    from ngraph.demand.matrix import TrafficMatrixSet  # pragma: no cover
+    from ngraph.model.view import NetworkView  # pragma: no cover
 
 
 def _new_td_map() -> Dict[str, List[Demand]]:
