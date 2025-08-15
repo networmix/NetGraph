@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 15, 2025 at 11:31 UTC
+Generated from source code on: August 15, 2025 at 17:27 UTC
 
-Modules auto-discovered: 72
+Modules auto-discovered: 73
 
 ---
 
@@ -2388,9 +2388,13 @@ Attributes:
 Bandwidth-Availability Curve (BAC) from ``flow_results``.
 
 Supports both MaxFlow and TrafficMatrixPlacement steps. For each failure
-iteration, aggregate delivered bandwidth (sum of `placed` over all DC-DC pairs).
-Compute the empirical availability curve and summary quantiles. Optionally,
-overlay Placement vs MaxFlow when a sibling step with the same failure_id set is found.
+iteration, aggregate delivered bandwidth (sum of ``placed`` over all DC-DC
+pairs). Compute the empirical availability curve and summary quantiles.
+
+This enhanced version optionally normalizes the x-axis by the offered demand
+volume (when available via per-flow ``demand`` fields) to improve comparison
+across scenarios of different scale. It preserves existing outputs and overlay
+behavior for compatibility.
 
 ### BACAnalyzer
 
@@ -2453,9 +2457,14 @@ convenience to run both.
 
 Capacity matrix analysis.
 
-Consumes `flow_results` (from MaxFlow step). Builds node→node capacity matrix
-using the *maximum placed value observed* per pair across iterations (i.e., the
+Consumes ``flow_results`` (from MaxFlow step). Builds node→node capacity matrix
+using the maximum placed value observed per pair across iterations (i.e., the
 capacity ceiling under the tested failure set). Provides stats and a heatmap.
+
+This enhanced version augments printed statistics (quartiles, density wording)
+and is designed to be extended with distribution plots. To preserve test
+stability and headless environments, histogram/CDF plots are not emitted here;
+they can be added in notebooks explicitly if desired.
 
 ### CapacityMatrixAnalyzer
 
@@ -2467,6 +2476,47 @@ Analyze max-flow capacities into matrices/statistics/plots.
 - `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
 - `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and render capacity matrix for a single workflow step.
 - `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
+- `get_description(self) -> 'str'` - Return the analyzer description.
+
+---
+
+## ngraph.workflow.analysis.cost_power_analysis
+
+Power/Cost analyzer for CostPower workflow step.
+
+Computes absolute and unit-normalised metrics per aggregation level path
+(typically level 2 "sites").
+
+Inputs:
+
+- CostPower step data under ``steps[step_name]["data"]`` with ``levels`` and
+
+  ``context.aggregation_level``.
+
+- Delivered traffic from a ``TrafficMatrixPlacement`` step (auto-detected or
+
+  provided via ``traffic_step``), using baseline iteration if available.
+
+Outputs:
+
+- site_metrics: mapping path -> {power_total_watts, capex_total, delivered_gbps}
+- normalized_metrics: mapping path -> {power_per_unit, cost_per_unit}
+
+Display renders tables (itables.show) and simple bar charts (seaborn).
+
+### CostPowerAnalysis
+
+Analyze power and capex per site and normalise by delivered traffic.
+
+The analyzer aggregates absolute metrics from the CostPower step and
+attributes delivered traffic to sites based on the baseline iteration of a
+TrafficMatrixPlacement step. Ratios are computed as W/{unit} and $/{unit}.
+
+**Methods:**
+
+- `analyze(self, results: 'Dict[str, Any]', **kwargs: 'Any') -> 'Dict[str, Any]'` - Compute absolute and normalised metrics per site.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs: 'Any') -> 'None'` - Render absolute and normalised metrics tables and bar charts.
 - `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
@@ -2495,8 +2545,12 @@ Latency (distance) and stretch from ``cost_distribution``.
 For each iteration, compute:
   • mean distance per delivered Gbps (km/Gbps) aggregated across flows
   • stretch = (mean distance) / (pair-wise lower-bound distance)
-Lower bound is approximated as the minimum observed path cost per (src,dst) in the
-**baseline** iteration(s) of the same step (or, if absent, across all iterations).
+Lower bound is approximated as the minimum observed path cost per (src, dst) in
+the "baseline" iteration(s) of the same step (or, if absent, across all
+iterations).
+
+This enhanced version augments the display with a CDF of stretch values to show
+the distribution across iterations, complementing the scatter plot view.
 
 ### LatencyAnalyzer
 
@@ -2560,11 +2614,16 @@ styling defaults for plots and data tables.
 
 ## ngraph.workflow.analysis.placement_matrix
 
-Placement analysis utilities for flow_results (unified design).
+Placement analysis utilities for ``flow_results`` (unified design).
 
 Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with the new
-schema under step["data"]["flow_results"]. Builds matrices of mean placed
+schema under ``step["data"]["flow_results"]``. Builds matrices of mean placed
 volume by pair (overall and per priority), with basic statistics.
+
+This enhanced version also computes delivery fraction statistics (placed/
+demand) per flow instance to quantify drops and renders simple distributions
+(histogram and CDF) when demand is present, while preserving existing outputs
+so tests remain stable.
 
 ### PlacementMatrixAnalyzer
 
@@ -2740,90 +2799,79 @@ suitable for analysis algorithms. No additional parameters are required.
 
 ---
 
-## ngraph.workflow.cost_power_efficiency
+## ngraph.workflow.cost_power
 
-Workflow step to compute cost/power efficiency metrics and optional HW inventory.
+CostPower workflow step: collect capex and power by hierarchy level.
 
-Computes total capex and power for the selected network inventory (all or only
-active), and normalizes by a provided delivered-bandwidth figure (e.g., BAC at
-availability target).
+This step aggregates capex and power from the network hardware inventory without
+performing any normalization or reporting. It separates contributions into two
+categories:
 
-Optionally collects node and/or link hardware entries to provide an inventory
-view of hardware usage. Each entry includes hardware capacity, allocated
-capacity, typical and maximum power, and a normalized hardware mapping.
+- platform_*: node hardware (e.g., chassis, linecards) resolved from node attrs
+- optics_*: per-end link hardware (e.g., optics) resolved from link attrs
 
-This step does not compute BAC itself; it expects callers to pass the delivered
-bandwidth value explicitly or to point to a prior step result.
+Aggregation is computed at hierarchy levels 0..N where level 0 is the global
+root (path ""), and higher levels correspond to prefixes of node names split by
+"/". For example, for node "dc1/plane1/leaf/leaf-1":
+
+- level 1 path is "dc1"
+- level 2 path is "dc1/plane1"
+- etc.
+
+Disabled handling:
+
+- When include_disabled is False, only enabled nodes and links are considered.
+- Optics are counted only when the endpoint node has platform hardware.
 
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: CostPowerEfficiency
+      - step_type: CostPower
 
-        name: "cost_power_efficiency"   # Optional custom name
-        delivered_bandwidth_gbps: 10000  # Optional explicit denominator (float)
-        delivered_bandwidth_key: "delivered_bandwidth_gbps"  # Lookup key in results
-        include_disabled: true           # Whether to include disabled nodes/links
-        collect_node_hw_entries: true    # Optional: collect per-node HW entries
-        collect_link_hw_entries: false   # Optional: collect per-link HW entries
+        name: "cost_power"           # Optional custom name
+        include_disabled: false       # Default: only enabled nodes/links
+        aggregation_level: 2          # Produce levels: 0, 1, 2
     ```
 
-Results stored in `scenario.results`:
+Results stored in `scenario.results` under this step namespace:
+    data:
+      context:
+        include_disabled: bool
+        aggregation_level: int
+      levels:
+        "0":
 
-- total_capex: Sum of component capex (float)
-- total_power_watts: Sum of component power (float)
-- delivered_bandwidth_gbps: Denominator used for normalization (float)
-- dollars_per_gbit: Normalized capex (float, inf if denominator <= 0)
-- watts_per_gbit: Normalized power (float, inf if denominator <= 0)
-- node_hw_entries: Optional list of node-level hardware dicts with keys:
+- path: ""
 
-        node, hardware {component, count}, hw_capacity, allocated_capacity,
-        power_watts, power_watts_max
+            platform_capex: float
+            platform_power_watts: float
+            optics_capex: float
+            optics_power_watts: float
+            capex_total: float
+            power_total_watts: float
+        "1": [ ... ]
+        "2": [ ... ]
 
-- link_hw_entries: Optional list of link-level hardware dicts with keys:
+### CostPower
 
-        link_id, source, target, capacity,
-        hardware {source {component, count, exclusive}, target {component, count, exclusive}},
-        hw_capacity, power_watts, power_watts_max
-
-- hardware_bom_total: Aggregated hardware BOM for the whole network (Dict[str, float])
-- hardware_bom_by_path: Mapping of hierarchy path -> BOM dict for each subtree
-
-      (root is stored under the empty string key "")
-
-### CostPowerEfficiency
-
-Compute $/Gbit and W/Gbit given delivered bandwidth.
+Collect platform and optics capex/power by aggregation level.
 
 Attributes:
-    delivered_bandwidth_gbps: Delivered bandwidth in Gbit/s used as denominator.
-        If not provided, the step will attempt to read a value from
-        ``scenario.results`` using ``delivered_bandwidth_key``.
-    delivered_bandwidth_key: Results key to read if ``delivered_bandwidth_gbps``
-        is None. The key is looked up under this step's own namespace first; if
-        not present, the key is treated as a global results key.
-    include_disabled: If False, only enabled nodes/links are counted for totals.
-        Default ``True`` aggregates regardless of disabled flags.
-    collect_node_hw_entries: If True, store per-node hardware entries with
-        hardware mapping, capacity, allocated capacity, and power metrics.
-    collect_link_hw_entries: If True, store per-link hardware entries with
-        per-end hardware mapping, capacity, and power metrics.
+    include_disabled: If True, include disabled nodes and links.
+    aggregation_level: Inclusive depth for aggregation. 0=root only.
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (Optional[int])
 - `_seed_source` (str)
-- `delivered_bandwidth_gbps` (Optional[float])
-- `delivered_bandwidth_key` (str) = delivered_bandwidth_gbps
-- `include_disabled` (bool) = True
-- `collect_node_hw_entries` (bool) = False
-- `collect_link_hw_entries` (bool) = False
+- `include_disabled` (bool) = False
+- `aggregation_level` (int) = 2
 
 **Methods:**
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
-- `run(self, scenario: 'Any') -> 'None'` - Compute totals and normalized efficiency metrics.
+- `run(self, scenario: 'Any') -> 'None'` - Aggregate capex and power by hierarchy levels 0..N.
 
 ---
 

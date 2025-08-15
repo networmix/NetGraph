@@ -62,6 +62,7 @@ def get_default_registry() -> AnalysisRegistry:
 
     from .bac import BACAnalyzer
     from .capacity_matrix import CapacityMatrixAnalyzer
+    from .cost_power_analysis import CostPowerAnalysis
     from .latency import LatencyAnalyzer
     from .msd import MSDAnalyzer
     from .placement_matrix import PlacementMatrixAnalyzer
@@ -124,6 +125,14 @@ def get_default_registry() -> AnalysisRegistry:
         LatencyAnalyzer,
         method_name="analyze_and_display",
         section_title="Latency & Stretch (MaxFlow)",
+    )
+
+    # Cost/Power step analysis
+    reg.register(
+        "CostPower",
+        CostPowerAnalysis,
+        method_name="analyze_and_display",
+        section_title="Power & Cost Analysis",
     )
 
     return reg

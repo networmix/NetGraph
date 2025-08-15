@@ -148,7 +148,7 @@ class ReportGenerator:
 from ngraph.workflow.analysis import (
     PackageManager, DataLoader, get_default_registry,
     SummaryAnalyzer, CapacityMatrixAnalyzer, PlacementMatrixAnalyzer,
-    BACAnalyzer, LatencyAnalyzer, MSDAnalyzer
+    BACAnalyzer, LatencyAnalyzer, MSDAnalyzer, CostPowerAnalysis
 )
 
 # Prefer high-resolution inline images in executed notebooks (HTML export)
@@ -208,8 +208,17 @@ div.output_subarea svg,
 
     def _create_data_loading_cell(self) -> nbformat.NotebookNode:
         code = f"""# Load analysis results
+from pathlib import Path
 loader = DataLoader()
-load = loader.load_results('{self.results_path.name}')
+results_name = '{self.results_path.name}'
+candidate = Path(results_name)
+if not candidate.exists():
+    # Fallback: search for the results file under current working directory
+    try:
+        candidate = next(Path.cwd().rglob(results_name))
+    except StopIteration:
+        pass
+load = loader.load_results(str(candidate))
 if load['success']:
     results = load['results']
     workflow_metadata = results.get('workflow', {{}})

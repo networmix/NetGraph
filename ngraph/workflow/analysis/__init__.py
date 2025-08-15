@@ -16,6 +16,7 @@ from itables import show  # pragma: no cover - display-only binding
 from .bac import BACAnalyzer
 from .base import AnalysisContext, NotebookAnalyzer
 from .capacity_matrix import CapacityMatrixAnalyzer
+from .cost_power_analysis import CostPowerAnalysis
 from .data_loader import DataLoader
 from .latency import LatencyAnalyzer
 from .msd import MSDAnalyzer
@@ -34,6 +35,7 @@ __all__ = [
     "AnalysisRegistry",
     "get_default_registry",
     "CapacityMatrixAnalyzer",
+    "CostPowerAnalysis",
     "PlacementMatrixAnalyzer",
     "BACAnalyzer",
     "LatencyAnalyzer",
