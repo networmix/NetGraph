@@ -68,6 +68,7 @@ class FlowEntry:
             )
             raise TypeError("FlowEntry.priority must be a non-negative int")
 
+        # Basic numeric validation
         for name, value in (
             ("demand", self.demand),
             ("placed", self.placed),
@@ -79,9 +80,25 @@ class FlowEntry:
             if not math.isfinite(float(value)):
                 logger.error("FlowEntry.%s must be finite: %r", name, value)
                 raise ValueError(f"FlowEntry.{name} must be finite")
-            if float(value) < 0.0:
-                logger.error("FlowEntry.%s must be non-negative: %r", name, value)
-                raise ValueError(f"FlowEntry.{name} must be non-negative")
+
+        # Non-negativity with tolerance for floating-point artifacts on 'dropped'
+        if float(self.demand) < 0.0:
+            logger.error("FlowEntry.demand must be non-negative: %r", self.demand)
+            raise ValueError("FlowEntry.demand must be non-negative")
+        if float(self.placed) < 0.0:
+            logger.error("FlowEntry.placed must be non-negative: %r", self.placed)
+            raise ValueError("FlowEntry.placed must be non-negative")
+        if float(self.dropped) < 0.0:
+            # Clamp tiny negative values caused by rounding noise
+            if abs(float(self.dropped)) <= 1e-9:
+                logger.debug(
+                    "Normalizing tiny negative FlowEntry.dropped %.12g to 0.0",
+                    float(self.dropped),
+                )
+                self.dropped = 0.0
+            else:
+                logger.error("FlowEntry.dropped must be non-negative: %r", self.dropped)
+                raise ValueError("FlowEntry.dropped must be non-negative")
 
         # Consistency: dropped ≈ demand - placed
         expected_drop = float(self.demand) - float(self.placed)

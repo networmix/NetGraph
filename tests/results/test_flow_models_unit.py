@@ -152,6 +152,19 @@ def test_flow_iteration_result_validation_and_to_dict() -> None:
         FlowIterationResult(flows=[e1, e1], summary=s)
 
 
+def test_flowentry_negative_dropped_due_to_rounding_is_clamped() -> None:
+    # Introduce a tiny negative dropped within tolerance due to rounding
+    e = FlowEntry(
+        source="S",
+        destination="D",
+        priority=0,
+        demand=100.0,
+        placed=100.0 + 5e-12,  # implies dropped ~ -5e-12
+        dropped=-5e-12,
+    )
+    assert e.dropped == 0.0
+
+
 def test_ensure_json_safe_errors() -> None:
     with pytest.raises(TypeError):
         _ensure_json_safe({"k": {1, 2, 3}})
