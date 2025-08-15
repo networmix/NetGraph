@@ -76,20 +76,32 @@ class PackageManager:
             plt.style.use("seaborn-v0_8")
             import seaborn as sns
 
-            sns.set_context("talk")
-            sns.set_palette("deep")
+            # Consistent, high-quality defaults across all analyses
+            sns.set_theme(
+                style="whitegrid", context="notebook", palette="deep", font_scale=1.0
+            )
 
             # Global matplotlib tuning for clearer figures
             plt.rcParams.update(
                 {
-                    # Increase on-screen DPI for crisper inline figures
-                    "figure.dpi": 180,
-                    "savefig.dpi": 300,  # exported images
-                    "figure.autolayout": True,
+                    # High-DPI inline and export
+                    "figure.dpi": 300,
+                    "savefig.dpi": 300,
+                    # Default physical size for all figures (inches)
+                    "figure.figsize": (8.0, 5.0),
+                    # Use tight bounding box on export to avoid extra padding
+                    "savefig.bbox": "tight",
+                    # Layout and grid tuning
+                    "figure.autolayout": False,
+                    # Constrained layout and colorbar compatibility:
+                    # Disable constrained layout globally to avoid colorbar engine issues;
+                    # analyses should rely on tight layout or explicit fig sizes.
+                    "figure.constrained_layout.use": False,
                     "axes.grid": True,
                     "grid.linestyle": ":",
                     "grid.linewidth": 0.5,
-                    "axes.titlesize": "large",
+                    # Typography: make titles less dominant and readable
+                    "axes.titlesize": "medium",
                     "axes.labelsize": "medium",
                     "xtick.labelsize": "small",
                     "ytick.labelsize": "small",

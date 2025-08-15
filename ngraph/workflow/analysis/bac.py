@@ -219,7 +219,7 @@ class BACAnalyzer(NotebookAnalyzer):
             return xs, avail
 
         x, a = availability_curve(s)
-        plt.figure(figsize=(9, 5.5))  # pragma: no cover - display-only
+        plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
         # Normalize x-axis to percent of offered demand when available
         if offered > 0.0:
             x_plot = (x / offered) * 100.0
@@ -240,9 +240,8 @@ class BACAnalyzer(NotebookAnalyzer):
 
         plt.xlabel(x_label)
         plt.ylabel("Availability (≥x)")
-        plt.title(f"Bandwidth-Availability Curve - {name}")
+        plt.title(f"Bandwidth-Availability Curve — {name}")
         plt.grid(True, linestyle=":", linewidth=0.5)  # pragma: no cover - display-only
-        plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only
 
     # ---------- helpers ----------

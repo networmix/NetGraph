@@ -128,8 +128,8 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
         # Scale figure size with matrix dimensions; bias toward readability
         plt.figure(  # pragma: no cover - display-only
             figsize=(
-                min(16, 2 + 0.35 * max(3, matrix.shape[1])),
-                min(12, 2 + 0.35 * max(3, matrix.shape[0])),
+                min(12, 2.0 + 0.35 * max(3, matrix.shape[1])),
+                min(9, 2.0 + 0.35 * max(3, matrix.shape[0])),
             )
         )
         sns.heatmap(  # pragma: no cover - display-only
@@ -140,17 +140,16 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
             linewidths=0.0,
             square=False,
         )
-        plt.title(f"Node→Node Capacity (Max over iterations) — {step}")
+        plt.title(f"Node→Node Capacity — max over iterations — {step}")
         plt.xlabel("Destination")
         plt.ylabel("Source")
-        plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only
 
         # Distribution plots of non-zero capacities (histogram and CDF)
         vals = matrix.values.astype(float).ravel()
         nonzero = vals[vals > 0.0]
         if nonzero.size > 0:
-            plt.figure(figsize=(7.0, 4.8))  # pragma: no cover - display-only
+            plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
             sns.histplot(nonzero, bins=20, color="steelblue")
             plt.xlabel("Max capacity per flow (Gbps)")
             plt.ylabel("Number of flow pairs")
@@ -160,7 +159,7 @@ class CapacityMatrixAnalyzer(NotebookAnalyzer):
 
             nz_sorted = np.sort(nonzero)
             cum = np.arange(1, nz_sorted.size + 1, dtype=float) / nz_sorted.size
-            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
             sns.lineplot(x=nz_sorted, y=cum, drawstyle="steps-pre")
             plt.xlabel("Capacity (Gbps)")
             plt.ylabel("Fraction of flows ≤ x")

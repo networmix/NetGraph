@@ -128,6 +128,9 @@ class ReportGenerator:
         # Setup
         nb.cells.append(self._create_setup_cell())
 
+        # CSS for consistent inline image sizing in HTML export (retina-safe)
+        nb.cells.append(self._create_css_cell())
+
         # Data loading
         nb.cells.append(self._create_data_loading_cell())
 
@@ -146,6 +149,13 @@ from ngraph.workflow.analysis import (
     BACAnalyzer, LatencyAnalyzer, MSDAnalyzer
 )
 
+# Prefer high-resolution inline images in executed notebooks (HTML export)
+try:
+    from matplotlib_inline.backend_inline import set_matplotlib_formats
+    set_matplotlib_formats("retina")
+except Exception:
+    pass
+
 pm = PackageManager()
 _setup = pm.setup_environment()
 if _setup.get('status') != 'success':
@@ -153,9 +163,46 @@ if _setup.get('status') != 'success':
 else:
     print("✅ Environment setup complete")
 
+# Hard guarantee final DPI/size even if other extensions alter rcParams later
+import matplotlib.pyplot as plt
+plt.rcParams["figure.dpi"] = 300
+plt.rcParams["savefig.dpi"] = 300
+plt.rcParams["figure.figsize"] = (8.0, 5.0)
+plt.rcParams["savefig.bbox"] = "tight"
+
 registry = get_default_registry()
 print(f"Analysis registry loaded with {len(registry.get_all_step_types())} step types")"""
         return nbformat.v4.new_code_cell(code)
+
+    def _create_css_cell(self) -> nbformat.NotebookNode:
+        css = """
+<style>
+:root {
+  /* Approximate A4 content width at typical CSS pixel density */
+  --figure-max-width: 820px; /* ~8.5 in at ~96 css px/in */
+}
+/* Constrain inline images responsively for nbconvert HTML and JupyterLab */
+div.output_subarea img,
+.output_png img,
+.jp-OutputArea-output img {
+  display: block;
+  margin: 0.25rem auto;
+  width: 100% !important;
+  max-width: min(100%, var(--figure-max-width)) !important;
+  height: auto !important;
+}
+/* Ensure SVGs follow the same sizing */
+div.output_subarea svg,
+.jp-OutputArea-output svg {
+  display: block;
+  margin: 0.25rem auto;
+  width: 100% !important;
+  max-width: min(100%, var(--figure-max-width)) !important;
+  height: auto !important;
+}
+</style>
+"""
+        return nbformat.v4.new_markdown_cell(css)
 
     def _create_data_loading_cell(self) -> nbformat.NotebookNode:
         code = f"""# Load analysis results

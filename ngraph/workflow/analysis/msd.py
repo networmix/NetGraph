@@ -60,7 +60,7 @@ class MSDAnalyzer(NotebookAnalyzer):
             print("  No probe trace available.")
             return
 
-        plt.figure(figsize=(8, 5))  # pragma: no cover - display-only
+        plt.figure(figsize=(4.8, 3.0))  # pragma: no cover - display-only
         sns.lineplot(
             data=trace,
             x="alpha",
@@ -86,5 +86,4 @@ class MSDAnalyzer(NotebookAnalyzer):
             f"MSD bracketing/bisection trace — {name}"
         )  # pragma: no cover - display-only
         plt.grid(True, linestyle=":", linewidth=0.5)  # pragma: no cover - display-only
-        plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only

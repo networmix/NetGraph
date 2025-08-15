@@ -142,13 +142,13 @@ class LatencyAnalyzer(NotebookAnalyzer):
         p95 = float(tail.quantile(0.95)) if not tail.empty else float("nan")
         p99 = float(tail.quantile(0.99)) if not tail.empty else float("nan")
 
-        fig, ax = plt.subplots(figsize=(9, 5.5))  # pragma: no cover - display-only
+        fig, ax = plt.subplots(figsize=(8.0, 5.0))  # pragma: no cover - display-only
         sns.scatterplot(
             data=df, x="mean_km_per_gbps", y="stretch", s=60
         )  # pragma: no cover - display-only
         ax.set_xlabel("Mean distance per Gbps (km/Gbps)")
         ax.set_ylabel("Latency stretch (avg path cost / baseline LB)")
-        ax.set_title(f"Distance & Stretch by Failure Iteration - {name}")
+        ax.set_title(f"Distance & Stretch — by failure iteration — {name}")
         ax.grid(True, linestyle=":", linewidth=0.5)
         plt.tight_layout()  # pragma: no cover - display-only
         plt.show()  # pragma: no cover - display-only
@@ -175,7 +175,7 @@ class LatencyAnalyzer(NotebookAnalyzer):
         if stretch_vals:
             n = len(stretch_vals)
             cum = np.linspace(1.0 / n, 1.0, n)
-            plt.figure(figsize=(8.5, 5.0))  # pragma: no cover - display-only
+            plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
             sns.lineplot(x=stretch_vals, y=cum, drawstyle="steps-pre")
             plt.xlabel("Latency stretch")
             plt.ylabel("Fraction of iterations ≤ x")

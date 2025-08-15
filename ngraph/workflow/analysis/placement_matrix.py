@@ -294,7 +294,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
                 f"  Flow instances completely dropped: {zero}/{total} ({zero / total * 100:.1f}%)"
             )
 
-            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
             if "priority" in df_frac.columns and df_frac["priority"].nunique() > 1:
                 sns.histplot(
                     data=df_frac,
@@ -317,7 +317,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
 
             vals = np.sort(df_frac["fraction"].to_numpy())
             cum = np.linspace(1.0 / len(vals), 1.0, len(vals))
-            plt.figure(figsize=(7.0, 4.6))  # pragma: no cover - display-only
+            plt.figure(figsize=(8.0, 5.0))  # pragma: no cover - display-only
             sns.lineplot(x=vals, y=cum, drawstyle="steps-pre")
             plt.xlabel("Fraction of demand delivered")
             plt.ylabel("Fraction of flow instances ≤ x")
