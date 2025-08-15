@@ -695,10 +695,12 @@ class TestFlowPolicy:
             3,
         )
 
-        assert abs(2 - placed_flow) <= MIN_FLOW  # TODO: why is this not strictly less?
+        assert (
+            abs(2 - placed_flow) <= MIN_FLOW
+        )  # inclusive: values < MIN_FLOW zeroed; == MIN_FLOW retained
         assert (
             abs(1 - remaining_flow) <= MIN_FLOW
-        )  # TODO: why is this not strictly less?
+        )  # inclusive: values < MIN_FLOW zeroed; == MIN_FLOW retained
         assert (
             flow_policy.flows[
                 FlowIndex(src_node="A", dst_node="C", flow_class="test_flow", flow_id=1)
@@ -714,7 +716,7 @@ class TestFlowPolicy:
                 ].placed_flow
                 - 1
             )
-            <= MIN_FLOW  # TODO: why is this not strictly less?
+            <= MIN_FLOW  # inclusive: values < MIN_FLOW zeroed; == MIN_FLOW retained
         )
 
     # Constructor Validation: EQUAL_BALANCED requires max_flow_count

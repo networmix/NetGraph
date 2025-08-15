@@ -50,24 +50,18 @@ class TestPackageManager:
         assert "matplotlib" in PackageManager.REQUIRED_PACKAGES
 
     @patch("importlib.import_module")
-    def test_check_and_install_packages_all_available(
-        self, mock_import: MagicMock
-    ) -> None:
+    def test_check_packages_all_available(self, mock_import: MagicMock) -> None:
         """Test when all packages are available."""
         mock_import.return_value = MagicMock()
 
-        result = PackageManager.check_and_install_packages()
+        result = PackageManager.check_packages()
 
         assert result["missing_packages"] == []
-        assert result["installation_needed"] is False
         assert result["message"] == "All required packages are available"
 
-    @patch("subprocess.check_call")
     @patch("importlib.import_module")
-    def test_check_and_install_packages_missing(
-        self, mock_import: MagicMock, mock_subprocess: MagicMock
-    ) -> None:
-        """Test when packages are missing and need installation."""
+    def test_check_packages_missing(self, mock_import: MagicMock) -> None:
+        """Test when packages are missing."""
 
         # Mock import to raise ImportError for one package
         def side_effect(package_name: str) -> MagicMock:
@@ -76,22 +70,15 @@ class TestPackageManager:
             return MagicMock()
 
         mock_import.side_effect = side_effect
-        mock_subprocess.return_value = None
-
-        result = PackageManager.check_and_install_packages()
+        result = PackageManager.check_packages()
 
         assert "itables" in result["missing_packages"]
-        assert result["installation_needed"] is True
-        assert result["installation_success"] is True
-        # The mocked subprocess call should work without errors
+        assert "Missing packages:" in result["message"]
 
     @patch("importlib.import_module")
-    def test_check_and_install_packages_installation_failure(
-        self, mock_import: MagicMock
-    ) -> None:
-        """Test when package installation fails."""
+    def test_check_packages_error_message(self, mock_import: MagicMock) -> None:
+        """Test message contents when a package is missing."""
 
-        # Mock import to raise ImportError for one package
         def side_effect(package_name: str) -> MagicMock:
             if package_name == "itables":
                 raise ImportError("Package not found")
@@ -99,22 +86,10 @@ class TestPackageManager:
 
         mock_import.side_effect = side_effect
 
-        # Mock the entire check_and_install_packages with a failure scenario
-        with patch.object(PackageManager, "check_and_install_packages") as mock_method:
-            mock_method.return_value = {
-                "missing_packages": ["itables"],
-                "installation_needed": True,
-                "installation_success": False,
-                "error": "Mock installation failure",
-                "message": "Installation failed: Mock installation failure",
-            }
+        result = PackageManager.check_packages()
 
-            result = PackageManager.check_and_install_packages()
-
-            assert "itables" in result["missing_packages"]
-            assert result["installation_needed"] is True
-            assert result["installation_success"] is False
-            assert "error" in result
+        assert "itables" in result["missing_packages"]
+        assert "Missing packages:" in result["message"]
 
     @patch("warnings.filterwarnings")
     @patch("ngraph.workflow.analysis.plt.style.use")
@@ -126,8 +101,11 @@ class TestPackageManager:
         mock_warnings: MagicMock,
     ) -> None:
         """Test successful environment setup."""
-        with patch.object(PackageManager, "check_and_install_packages") as mock_check:
-            mock_check.return_value = {"installation_success": True}
+        with patch.object(PackageManager, "check_packages") as mock_check:
+            mock_check.return_value = {
+                "missing_packages": [],
+                "message": "All required packages are available",
+            }
 
             result = PackageManager.setup_environment()
 
@@ -137,16 +115,16 @@ class TestPackageManager:
 
     def test_setup_environment_installation_failure(self) -> None:
         """Test environment setup when installation fails."""
-        with patch.object(PackageManager, "check_and_install_packages") as mock_check:
+        with patch.object(PackageManager, "check_packages") as mock_check:
             mock_check.return_value = {
-                "installation_success": False,
-                "message": "Installation failed",
+                "missing_packages": ["itables"],
+                "message": "Missing packages: itables",
             }
 
             result = PackageManager.setup_environment()
 
-            assert result["installation_success"] is False
-            assert result["message"] == "Installation failed"
+            assert result["status"] == "error"
+            assert result["message"] == "Missing packages: itables"
 
     @patch("warnings.filterwarnings")
     @patch("ngraph.workflow.analysis.plt.style.use")
@@ -156,13 +134,15 @@ class TestPackageManager:
         """Test environment setup when configuration fails."""
         mock_plt_style.side_effect = Exception("Style error")
 
-        with patch.object(PackageManager, "check_and_install_packages") as mock_check:
-            mock_check.return_value = {"installation_success": True}
+        with patch.object(PackageManager, "check_packages") as mock_check:
+            mock_check.return_value = {
+                "missing_packages": [],
+                "message": "All required packages are available",
+            }
 
             result = PackageManager.setup_environment()
 
             assert result["status"] == "error"
-            assert "Environment setup failed" in result["message"]
 
 
 class TestDataLoader:
@@ -276,8 +256,7 @@ class TestSummaryAnalyzer:
 
         assert analysis["status"] == "success"
         assert analysis["total_steps"] == 0
-        assert analysis["capacity_steps"] == 0
-        assert analysis["flow_steps"] == 0
+        assert analysis["steps_with_flow_results"] == 0
         assert analysis["other_steps"] == 0
 
     def test_analyze_mixed_results(self) -> None:
@@ -295,8 +274,7 @@ class TestSummaryAnalyzer:
 
         assert analysis["status"] == "success"
         assert analysis["total_steps"] == 4
-        assert analysis["capacity_steps"] == 2
-        assert analysis["flow_steps"] == 0
+        assert analysis["steps_with_flow_results"] == 2
         assert analysis["other_steps"] == 2
 
     def test_analyze_non_dict_step(self) -> None:
@@ -313,8 +291,7 @@ class TestSummaryAnalyzer:
 
         assert analysis["status"] == "success"
         assert analysis["total_steps"] == 3
-        assert analysis["capacity_steps"] == 1
-        assert analysis["flow_steps"] == 0
+        assert analysis["steps_with_flow_results"] == 1
         assert analysis["other_steps"] == 2
 
     @patch("builtins.print")
@@ -322,8 +299,7 @@ class TestSummaryAnalyzer:
         """Test display_analysis method."""
         analysis = {
             "total_steps": 5,
-            "capacity_steps": 2,
-            "flow_steps": 0,
+            "steps_with_flow_results": 2,
             "other_steps": 3,
         }
 
@@ -341,8 +317,7 @@ class TestSummaryAnalyzer:
         """Test display_analysis with no results."""
         analysis = {
             "total_steps": 0,
-            "capacity_steps": 0,
-            "flow_steps": 0,
+            "steps_with_flow_results": 0,
             "other_steps": 0,
         }
 
@@ -389,13 +364,7 @@ class TestSummaryAnalyzer:
         self.analyzer.analyze_network_stats(results, step_name="network_step")
 
         calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("📊 Network Statistics: network_step" in call for call in calls)
-        assert any("Nodes: 50" in call for call in calls)
-        assert any("Links: 100" in call for call in calls)
-        assert any("Total Capacity: 1,000.00" in call for call in calls)
-        assert any("Mean Capacity: 10.00" in call for call in calls)
-        assert any("Mean Cost: 25.50" in call for call in calls)
-        assert any("Mean Degree: 4.2" in call for call in calls)
+        assert any("ℹ️ NetworkStats (network_step)" in call for call in calls)
 
     @patch("builtins.print")
     def test_analyze_network_stats_partial_data(self, mock_print: MagicMock) -> None:
@@ -414,13 +383,7 @@ class TestSummaryAnalyzer:
         self.analyzer.analyze_network_stats(results, step_name="partial_step")
 
         calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("📊 Network Statistics: partial_step" in call for call in calls)
-        assert any("Nodes: 25" in call for call in calls)
-        assert any("Mean Capacity: 15.00" in call for call in calls)
-        assert any("Max Degree: 6.0" in call for call in calls)
-        # Should not display missing fields
-        assert not any("Links:" in call for call in calls)
-        assert not any("Cost Statistics:" in call for call in calls)
+        assert any("ℹ️ NetworkStats (partial_step)" in call for call in calls)
 
     def test_analyze_network_stats_missing_step_name(self) -> None:
         """Test analyze_network_stats without step_name."""
@@ -433,71 +396,13 @@ class TestSummaryAnalyzer:
         """Test analyze_network_stats with non-existent step."""
         results = {"steps": {"other_step": {"data": "value"}}}
 
-        with pytest.raises(ValueError, match="No data found for step: missing_step"):
-            self.analyzer.analyze_network_stats(results, step_name="missing_step")
+        self.analyzer.analyze_network_stats(results, step_name="missing_step")
 
     def test_analyze_network_stats_empty_step_data(self) -> None:
         """Test analyze_network_stats with empty step data."""
         results = {"steps": {"empty_step": {}}}
 
-        with pytest.raises(ValueError, match="No data found for step: empty_step"):
-            self.analyzer.analyze_network_stats(results, step_name="empty_step")
-
-    @patch("builtins.print")
-    def test_analyze_build_graph_success(self, mock_print: MagicMock) -> None:
-        """Test analyze_build_graph with graph data."""
-        results = {
-            "graph_step": {
-                "graph": {"nodes": ["A", "B"], "edges": [("A", "B")]},
-                "metadata": "some_data",
-            }
-        }
-
-        self.analyzer.analyze_build_graph(results, step_name="graph_step")
-
-        calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("🔗 Graph Construction: graph_step" in call for call in calls)
-        assert any("✅ Graph successfully constructed" in call for call in calls)
-
-    @patch("builtins.print")
-    def test_analyze_build_graph_no_graph(self, mock_print: MagicMock) -> None:
-        """Test analyze_build_graph without graph data."""
-        results = {
-            "no_graph_step": {
-                "other_data": "value",
-                # No graph field
-            }
-        }
-
-        self.analyzer.analyze_build_graph(results, step_name="no_graph_step")
-
-        calls = [call.args[0] for call in mock_print.call_args_list]
-        assert any("🔗 Graph Construction: no_graph_step" in call for call in calls)
-        assert any("❌ No graph data found" in call for call in calls)
-
-    def test_analyze_build_graph_missing_step_name(self) -> None:
-        """Test analyze_build_graph without step_name."""
-        results = {"step": {"graph": {}}}
-
-        with pytest.raises(ValueError, match="No step name provided"):
-            self.analyzer.analyze_build_graph(results)
-
-    def test_analyze_build_graph_step_not_found(self) -> None:
-        """Test analyze_build_graph with non-existent step."""
-        results = {"other_step": {"graph": {}}}
-
-        with pytest.raises(ValueError, match="No data found for step: missing_step"):
-            self.analyzer.analyze_build_graph(results, step_name="missing_step")
-
-    def test_analyze_build_graph_empty_step_data(self) -> None:
-        """Test analyze_build_graph with empty step data."""
-        results = {"empty_step": {}}
-
-        with pytest.raises(ValueError, match="No data found for step: empty_step"):
-            self.analyzer.analyze_build_graph(results, step_name="empty_step")
-
-
-# Add additional tests to improve coverage
+        self.analyzer.analyze_network_stats(results, step_name="empty_step")
 
 
 class TestNotebookAnalyzer:

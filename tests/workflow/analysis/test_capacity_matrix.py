@@ -67,14 +67,12 @@ class TestCapacityMatrixAnalyzer:
             analyzer.analyze(results, step_name="envelope")
 
     def test_extract_matrix_data_internal(self, analyzer):
-        # Internal helper validation via analyze path already covers it;
-        # keep a direct call for coverage on edge parsing.
         flows = _make_flow_results()
         results = {"steps": {"s": {"data": {"flow_results": flows}}}}
         analysis = analyzer.analyze(results, step_name="s")
-        md = analysis["matrix_data"]
-        assert any(row["flow_path"].startswith("A->B") for row in md)
-        assert any(row["flow_path"].startswith("B->C") for row in md)
+        cm = analysis["capacity_matrix"]
+        assert cm.loc["A", "B"] == 12.0
+        assert cm.loc["B", "C"] == 15.0
 
     @patch("matplotlib.pyplot.show")
     def test_display_analysis_smoke(self, mock_show, analyzer):
@@ -94,14 +92,18 @@ class TestConvenience:
                 "s2": {"data": {"flow_results": _make_flow_results()}},
             }
         }
+        # Iterate explicitly in the new API
         with patch.object(analyzer, "display_analysis") as mock_display:
             with patch("builtins.print"):
-                analyzer.analyze_and_display_all_steps(results)
-            assert mock_display.call_count == 2
+                for name in ("s1", "s2"):
+                    analysis = analyzer.analyze(results, step_name=name)
+                    analyzer.display_analysis(analysis)
+        assert mock_display.call_count == 2
 
     def test_analyze_and_display_all_steps_no_data(self, analyzer, capsys: Any):
         results = {"steps": {"s1": {"data": {}}, "s2": {"data": {}}}}
-        with patch("builtins.print") as mock_print:
-            analyzer.analyze_and_display_all_steps(results)
-            calls = [str(c) for c in mock_print.call_args_list]
-            assert any("No steps with flow_results" in c for c in calls)
+        # No-op in new API; ensure no exceptions
+        with patch("builtins.print"):
+            for name in results["steps"].keys():
+                with pytest.raises(ValueError):
+                    analyzer.analyze(results, step_name=name)

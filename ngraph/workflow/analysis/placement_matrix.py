@@ -17,11 +17,23 @@ from .base import NotebookAnalyzer
 class PlacementMatrixAnalyzer(NotebookAnalyzer):
     """Analyze placed Gbps envelopes and display matrices/statistics."""
 
-    def get_description(self) -> str:  # noqa: D401 - simple return
+    def get_description(self) -> str:
+        """Return a short description of the analyzer purpose."""
         return "Processes placement envelope data into matrices and summaries"
 
     def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Analyze unified flow_results for a given step."""
+        """Analyze ``flow_results`` for a given step.
+
+        Args:
+            results: Results document containing a ``steps`` mapping.
+            **kwargs: Must include ``step_name`` identifying the step.
+
+        Returns:
+            A dictionary with combined and per-priority matrices and statistics.
+
+        Raises:
+            ValueError: If ``step_name`` is missing or data is not available.
+        """
         step_name: Optional[str] = kwargs.get("step_name")
         if not step_name:
             raise ValueError("step_name required for placement matrix analysis")
@@ -65,6 +77,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
         }
 
     def analyze_and_display_step(self, results: Dict[str, Any], **kwargs) -> None:
+        """Convenience wrapper that analyzes and renders one step."""
         step_name = kwargs.get("step_name")
         if not step_name:
             print("❌ No step name provided for placement matrix analysis")
@@ -84,6 +97,15 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
     def _extract_matrix_data_from_flow_results(
         self, flow_results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
+        """Return rows of mean placed volume per (src, dst, priority).
+
+        Args:
+            flow_results: List of iteration dictionaries, each with ``flows``.
+
+        Returns:
+            List of row dictionaries with keys: ``source``, ``destination``,
+            ``value`` (mean placed), and ``priority``.
+        """
         # Collect placed values by (src,dst,prio)
         from collections import defaultdict
 
@@ -117,6 +139,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _create_matrix(df_matrix: pd.DataFrame) -> pd.DataFrame:
+        """Pivot rows into a source×destination matrix of mean placed values."""
         return df_matrix.pivot_table(
             index="source",
             columns="destination",
@@ -127,6 +150,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
 
     @staticmethod
     def _calculate_statistics(placement_matrix: pd.DataFrame) -> Dict[str, Any]:
+        """Compute basic statistics for a placement matrix."""
         values = placement_matrix.values
         non_zero = values[values > 0]
         if len(non_zero) == 0:
@@ -140,7 +164,8 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             "num_destinations": len(placement_matrix.columns),
         }
 
-    def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:  # noqa: D401
+    def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:
+        """Render per-priority placement matrices with summary statistics."""
         step_name = analysis.get("step_name", "Unknown")
         print(f"✅ Analyzing placement matrix for {step_name}")
         from . import show  # lazy import to avoid circular
@@ -164,7 +189,7 @@ class PlacementMatrixAnalyzer(NotebookAnalyzer):
             print(f"  Sources: {stats['num_sources']:,} nodes")
             print(f"  Destinations: {stats['num_destinations']:,} columns")
             print(
-                f"  Placed Gbps range: {stats['gbps_min']:.2f} - {stats['gbps_max']:.2f} (mean {stats['gbps_mean']:.2f})"
+                f"  Placed Gbps range: {stats['value_min']:.2f} - {stats['value_max']:.2f} (mean {stats['value_mean']:.2f})"
             )
 
             matrix_display = matrices[prio].copy()

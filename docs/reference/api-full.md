@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 15, 2025 at 02:00 UTC
+Generated from source code on: August 15, 2025 at 04:00 UTC
 
-Modules auto-discovered: 69
+Modules auto-discovered: 72
 
 ---
 
@@ -388,21 +388,22 @@ Args:
 
 Standalone report generation for NetGraph analysis results.
 
-Generates Jupyter notebooks and HTML reports from results.json files.
-Separate from workflow execution to allow independent report generation.
+Generates Jupyter notebooks and optional HTML reports from ``results.json``.
+This module is separate from workflow execution to allow independent analysis
+in notebooks.
 
 ### ReportGenerator
 
-Generate analysis reports from NetGraph results files.
+Generate notebooks and HTML reports from a results document.
 
-Creates Jupyter notebooks with analysis code and can optionally export to HTML.
-Uses the analysis registry to determine which analysis modules to run for each workflow step.
+The notebook includes environment setup, results loading, overview, and
+per-step analysis sections chosen via the analysis registry.
 
 **Methods:**
 
-- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'` - Generate HTML report from notebook.
-- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'` - Generate Jupyter notebook with analysis code.
-- `load_results(self) -> 'None'` - Load results from JSON file.
+- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'` - Render the notebook to HTML using nbconvert.
+- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'` - Create a Jupyter notebook with analysis scaffold.
+- `load_results(self) -> 'None'` - Load and validate the JSON results file into memory.
 
 ---
 
@@ -2382,107 +2383,178 @@ Attributes:
 
 ---
 
+## ngraph.workflow.analysis.bac
+
+Bandwidth-Availability Curve (BAC) from ``flow_results``.
+
+Supports both MaxFlow and TrafficMatrixPlacement steps. For each failure
+iteration, aggregate delivered bandwidth (sum of `placed` over all DC-DC pairs).
+Compute the empirical availability curve and summary quantiles. Optionally,
+overlay Placement vs MaxFlow when a sibling step with the same failure_id set is found.
+
+### BACAnalyzer
+
+Base class for notebook analysis components.
+
+Subclasses should provide a pure computation method (``analyze``) and a
+rendering method (``display_analysis``). Use ``analyze_and_display`` as a
+convenience to run both.
+
+**Methods:**
+
+- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Analyze delivered bandwidth to build an availability curve.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render the BAC with optional overlay comparison.
+- `get_description(self) -> 'str'` - Return a short description of the BAC analyzer.
+
+---
+
 ## ngraph.workflow.analysis.base
 
 Base classes for notebook analysis components.
 
-Defines a simple interface for notebook-oriented analyzers that both compute
-results and render them. Concrete analyzers implement `analyze()`,
-`display_analysis()`, and `get_description()`.
+Defines a minimal interface for notebook-oriented analyzers that compute
+results and render them inline. Concrete analyzers implement ``analyze()``,
+``display_analysis()``, and ``get_description()``.
 
 ### AnalysisContext
 
-Context information for analysis execution.
+Carry context information for analysis execution.
+
+Attributes:
+    step_name: Name of the workflow step being analyzed.
+    results: The full results document.
+    config: Analyzer configuration or parameters for the step.
 
 **Attributes:**
 
 - `step_name` (str)
-- `results` (Dict)
-- `config` (Dict)
+- `results` (dict[str, Any])
+- `config` (dict[str, Any])
 
 ### NotebookAnalyzer
 
 Base class for notebook analysis components.
 
+Subclasses should provide a pure computation method (``analyze``) and a
+rendering method (``display_analysis``). Use ``analyze_and_display`` as a
+convenience to run both.
+
 **Methods:**
 
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]` - Perform the analysis and return results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None` - Display analysis results in notebook format.
-- `get_description(self) -> str` - Return a concise description of the analyzer purpose.
+- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Return analysis outputs for a given results document.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
+- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
 
 ## ngraph.workflow.analysis.capacity_matrix
 
-Capacity envelope analysis utilities.
+Capacity matrix analysis for MaxFlow results.
 
-This module contains `CapacityMatrixAnalyzer`, responsible for processing capacity
-envelope results, computing statistics, and generating notebook visualizations.
-Works with both CapacityEnvelopeResults objects and workflow step data.
+Consumes ``flow_results`` from a MaxFlow step and builds a node->node capacity
+matrix using the maximum placed value observed per pair across iterations
+(capacity ceiling under the tested failure set). Provides statistics and a
+heatmap for quick visual inspection.
 
 ### CapacityMatrixAnalyzer
 
-Processes capacity envelope data into matrices and flow availability analysis.
-
-Transforms capacity envelope results from CapacityEnvelopeAnalysis workflow steps
-or CapacityEnvelopeResults objects into matrices, statistical summaries, and
-flow availability distributions. Provides visualization methods for notebook output
-including capacity matrices, flow CDFs, and reliability curves.
-
-Can be used in two modes:
-
-1. Workflow mode: analyze() with workflow step results dictionary
-2. Direct mode: analyze_results() with CapacityEnvelopeResults object
+Analyze max-flow capacities into matrices, statistics, and plots.
 
 **Methods:**
 
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze capacity envelopes and create matrix visualization.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
-- `analyze_and_display_all_steps(self, results: 'Dict[str, Any]') -> 'None'` - Run analyze/display on every step containing capacity_envelopes.
-- `analyze_and_display_envelope_results(self, results: 'Any', **kwargs) -> 'None'` - Complete analysis and display for CapacityEnvelopeResults object.
-- `analyze_and_display_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display flow availability for a specific step.
-- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and display results for a specific step.
-- `analyze_flow_availability(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Create CDF/availability distribution from capacity envelope frequencies.
-- `analyze_results(self, results: 'Any', **kwargs) -> 'Dict[str, Any]'` - Analyze a `CapacityEnvelopeResults` object directly.
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Pretty-print analysis results to the notebook/stdout.
-- `display_capacity_distributions(self, results: 'Any', flow_key: 'Optional[str]' = None, bins: 'int' = 30) -> 'None'` - Display capacity distribution plots for `CapacityEnvelopeResults`.
-- `display_percentile_comparison(self, results: 'Any') -> 'None'` - Display percentile comparison plots for `CapacityEnvelopeResults`.
+- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Compute capacity matrix for a MaxFlow step.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render capacity matrix statistics and heatmap.
 - `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
 
 ## ngraph.workflow.analysis.data_loader
 
-Data loading utilities for notebook analysis.
+Load JSON results for notebook analysis with a status wrapper.
 
-Provides simple JSON loading with basic validation and structured status output.
+The loader returns a small dictionary that includes success status and basic
+metadata about the results file. It keeps errors non-fatal for notebook usage.
 
 ### DataLoader
 
-Handles loading and validation of analysis results.
+Load and validate analysis results from a JSON file.
 
 **Methods:**
 
-- `load_results(json_path: Union[str, pathlib._local.Path]) -> Dict[str, Any]` - Load results from a JSON file with error handling.
+- `load_results(json_path: Union[str, pathlib._local.Path]) -> dict[str, typing.Any]`
+
+---
+
+## ngraph.workflow.analysis.latency
+
+Latency (distance) and stretch from ``cost_distribution``.
+
+For each iteration, compute:
+  • mean distance per delivered Gbps (km/Gbps) aggregated across flows
+  • stretch = (mean distance) / (pair-wise lower-bound distance)
+Lower bound is approximated as the minimum observed path cost per (src,dst) in the
+**baseline** iteration(s) of the same step (or, if absent, across all iterations).
+
+### LatencyAnalyzer
+
+Base class for notebook analysis components.
+
+Subclasses should provide a pure computation method (``analyze``) and a
+rendering method (``display_analysis``). Use ``analyze_and_display`` as a
+convenience to run both.
+
+**Methods:**
+
+- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Compute latency and stretch metrics for each failure iteration.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render the latency and stretch scatter plot with summary lines.
+- `get_description(self) -> 'str'` - Return a short description of the latency analyzer.
+
+---
+
+## ngraph.workflow.analysis.msd
+
+Analyzer for Maximum Supported Demand (MSD) step.
+
+### MSDAnalyzer
+
+Base class for notebook analysis components.
+
+Subclasses should provide a pure computation method (``analyze``) and a
+rendering method (``display_analysis``). Use ``analyze_and_display`` as a
+convenience to run both.
+
+**Methods:**
+
+- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Return analysis outputs for a given results document.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
+- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
 
 ---
 
 ## ngraph.workflow.analysis.package_manager
 
-Package management for notebook analysis components.
+Environment setup for notebook analysis components.
 
-Provides light-weight helpers to ensure plotting/display packages are available
-in interactive environments and to apply sensible defaults.
+This module configures plotting and table-display libraries used by notebook
+analysis. It does not install packages dynamically. All required dependencies
+must be declared in ``pyproject.toml`` and available at runtime.
 
 ### PackageManager
 
-Manage package installation and imports for notebooks.
+Configure plotting and table-display packages for notebooks.
+
+The class validates that required packages are importable and applies common
+styling defaults for plots and data tables.
 
 **Methods:**
 
-- `check_and_install_packages() -> Dict[str, Any]` - Check for required packages and install if missing.
-- `setup_environment() -> Dict[str, Any]` - Set up the notebook environment.
+- `check_packages() -> 'dict[str, Any]'` - Return availability status of required packages.
+- `setup_environment() -> 'dict[str, Any]'` - Configure plotting and table libraries if present.
 
 ---
 
@@ -2500,91 +2572,75 @@ Analyze placed Gbps envelopes and display matrices/statistics.
 
 **Methods:**
 
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze unified flow_results for a given step.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
-- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'`
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Display analysis results in notebook format.
-- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
+- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze ``flow_results`` for a given step.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Convenience wrapper that analyzes and renders one step.
+- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Render per-priority placement matrices with summary statistics.
+- `get_description(self) -> 'str'` - Return a short description of the analyzer purpose.
 
 ---
 
 ## ngraph.workflow.analysis.registry
 
-Analysis registry for mapping workflow steps to analysis modules.
+Registry mapping workflow step types to notebook analyzers.
 
-This module provides the central registry that defines which analysis modules
-should be executed for each workflow step type, eliminating fragile data-based
-parsing and creating a clear, maintainable mapping system.
+Provides a simple mapping from workflow ``step_type`` identifiers to analyzer
+configurations. The default registry wires common NetGraph analysis steps to
+their notebook components.
 
 ### AnalysisConfig
 
-Configuration for a single analysis module execution.
-
-Attributes:
-    analyzer_class: The analyzer class to instantiate.
-    method_name: The method to call on the analyzer (default: 'analyze_and_display').
-    kwargs: Additional keyword arguments to pass to the method.
-    section_title: Title for the notebook section (auto-generated if None).
-    enabled: Whether this analysis is enabled (default: True).
+Configuration for a single analyzer binding.
 
 **Attributes:**
 
 - `analyzer_class` (Type[NotebookAnalyzer])
 - `method_name` (str) = analyze_and_display
-- `kwargs` (Dict[str, Any]) = {}
+- `kwargs` (dict[str, Any]) = {}
 - `section_title` (Optional[str])
 - `enabled` (bool) = True
 
 ### AnalysisRegistry
 
-Registry mapping workflow step types to their analysis configurations.
-
-The registry defines which analysis modules should run for each workflow step,
-providing a clear and maintainable mapping that replaces fragile data parsing.
+Collection of analyzer bindings keyed by workflow step type.
 
 **Attributes:**
 
-- `_mappings` (Dict[str, List[AnalysisConfig]]) = {}
+- `_mappings` (dict[str, list[AnalysisConfig]]) = {}
 
 **Methods:**
 
-- `get_all_step_types(self) -> 'List[str]'` - Return all registered workflow step types.
-- `get_analyses(self, step_type: 'str') -> 'List[AnalysisConfig]'` - Get all analysis configurations for a workflow step type.
-- `has_analyses(self, step_type: 'str') -> 'bool'` - Return True if any analyses are registered for a workflow step type.
-- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'` - Register an analysis module for a workflow step type.
+- `get_all_step_types(self) -> 'list[str]'`
+- `get_analyses(self, step_type: 'str') -> 'list[AnalysisConfig]'`
+- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'`
 
 ### get_default_registry() -> 'AnalysisRegistry'
 
-Create and return the default analysis registry with standard mappings.
+Return standard analyzer mapping for common workflow steps.
 
-Returns:
-    Configured registry with standard workflow step -> analysis mappings.
+Includes bindings for ``NetworkStats``, ``MaximumSupportedDemand``,
+``TrafficMatrixPlacement``, and ``MaxFlow``.
 
 ---
 
 ## ngraph.workflow.analysis.summary
 
-Summary analysis for workflow results.
+High-level summary analyzer for results documents.
 
-This module contains `SummaryAnalyzer`, which processes workflow step results
-to generate high-level summaries, counts step types, and provides overview
-statistics for network construction and analysis results.
+Provides quick counts of steps and basic categorisation by presence of
+``flow_results`` in the new schema. Also contains convenience helpers for
+``NetworkStats`` sections.
 
 ### SummaryAnalyzer
 
-Generates summary statistics and overviews of workflow results.
-
-Counts and categorizes workflow steps by type (capacity, flow, other),
-displays network statistics for graph construction steps, and provides
-high-level summaries for analysis overview.
+Compute simple counts and high-level summary statistics.
 
 **Methods:**
 
-- `analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]` - Analyze and summarize all results.
-- `analyze_and_display(self, results: Dict[str, Any], **kwargs) -> None` - Analyze results and display them in notebook format.
-- `analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None` - Analyze and display graph construction results.
-- `analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None` - Analyze and display network statistics for a specific step.
-- `display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None` - Display summary analysis.
+- `analyze(self, results: dict[str, typing.Any], **kwargs) -> dict[str, typing.Any]` - Return analysis outputs for a given results document.
+- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
+- `analyze_network_stats(self, results: dict[str, typing.Any], **kwargs) -> None` - Display a small info line for ``NetworkStats`` steps.
+- `display_analysis(self, analysis: dict[str, typing.Any], **kwargs) -> None` - Render analysis outputs in notebook format.
 - `get_description(self) -> str` - Return a concise description of the analyzer purpose.
 
 ---

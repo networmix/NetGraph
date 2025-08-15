@@ -164,26 +164,6 @@ class TestBlueprintErrors:
 
 
 @pytest.mark.slow
-class TestFailurePolicyErrors:
-    """Tests for failure policy validation errors."""
-
-    # Removed non-deterministic failure policy tests that allowed both pass/fail paths.
-    # These were not asserting a stable contract and created flaky outcomes.
-    def test_placeholder(self):
-        assert True
-
-
-@pytest.mark.slow
-class TestTrafficDemandErrors:
-    """Tests for traffic demand validation errors."""
-
-    # Removed non-deterministic demand error tests. Contracts for negative/nonexistent endpoints
-    # are validated at different layers and produced flaky behavior.
-    def test_placeholder(self):
-        assert True
-
-
-@pytest.mark.slow
 class TestWorkflowErrors:
     """Tests for workflow step errors."""
 
@@ -367,12 +347,3 @@ class TestEdgeCases:
         except (ValueError, KeyError):
             # Some special characters might not be allowed
             pass
-
-
-@pytest.mark.slow
-class TestResourceLimits:
-    """Tests for resource limitations and performance edge cases."""
-
-    # Removed heavy performance cases to keep integration suite focused and fast.
-    def test_placeholder(self):
-        assert True

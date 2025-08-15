@@ -1,184 +1,54 @@
-"""Summary analysis for workflow results.
+"""High-level summary analyzer for results documents.
 
-This module contains `SummaryAnalyzer`, which processes workflow step results
-to generate high-level summaries, counts step types, and provides overview
-statistics for network construction and analysis results.
+Provides quick counts of steps and basic categorisation by presence of
+``flow_results`` in the new schema. Also contains a small helper for
+``NetworkStats`` sections aimed at notebook usage.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from .base import NotebookAnalyzer
 
 
 class SummaryAnalyzer(NotebookAnalyzer):
-    """Generates summary statistics and overviews of workflow results.
+    """Compute simple counts and high-level summary statistics."""
 
-    Counts and categorizes workflow steps by type (capacity, flow, other),
-    displays network statistics for graph construction steps, and provides
-    high-level summaries for analysis overview.
-    """
-
-    def analyze(self, results: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Analyze and summarize all results.
-
-        Args:
-            results: Dictionary containing all workflow step results.
-            **kwargs: Unused.
-
-        Returns:
-            Summary statistics including total steps and category counts.
-        """
-        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
-        total_steps = len(steps_map)
-        capacity_steps = len(
-            [
-                s
-                for s, data in steps_map.items()
-                if isinstance(data, dict)
-                and isinstance(data.get("data"), dict)
-                and isinstance(data["data"].get("flow_results"), list)
-            ]
+    def analyze(self, results: dict[str, Any], **kwargs) -> dict[str, Any]:
+        steps = results.get("steps", {}) if isinstance(results, dict) else {}
+        total = len(steps)
+        with_flow_results = sum(
+            1
+            for _, d in steps.items()
+            if isinstance(d, dict)
+            and isinstance(d.get("data"), dict)
+            and isinstance(d["data"].get("flow_results"), list)
         )
-        # Placeholder for future categories; keep reporting with new schema
-        flow_steps = 0
-        other_steps = total_steps - capacity_steps - flow_steps
-
         return {
             "status": "success",
-            "total_steps": total_steps,
-            "capacity_steps": capacity_steps,
-            "flow_steps": flow_steps,
-            "other_steps": other_steps,
+            "total_steps": total,
+            "steps_with_flow_results": with_flow_results,
+            "other_steps": total - with_flow_results,
         }
 
     def get_description(self) -> str:
         return "Generates summary statistics and overviews of workflow results"
 
-    def display_analysis(self, analysis: Dict[str, Any], **kwargs) -> None:
-        """Display summary analysis.
-
-        Args:
-            analysis: Summary statistics returned by `analyze()`.
-            **kwargs: Unused.
-        """
+    def display_analysis(self, analysis: dict[str, Any], **kwargs) -> None:
         print("📊 NetGraph Analysis Summary")
         print("=" * 40)
+        print(f"Total Analysis Steps: {analysis['total_steps']:,}")
+        print(f"Steps with flow_results: {analysis['steps_with_flow_results']:,}")
+        print(f"Other Data Steps: {analysis['other_steps']:,}")
+        if analysis["total_steps"] == 0:
+            print("❌ No analysis results found")
 
-        stats = analysis
-        print(f"Total Analysis Steps: {stats['total_steps']:,}")
-        print(f"Steps with flow_results: {stats['capacity_steps']:,}")
-        print(f"Other Data Steps: {stats['other_steps']:,}")
-
-        if stats["total_steps"] > 0:
-            print(
-                f"\n✅ Analysis complete. Processed {stats['total_steps']:,} workflow steps."
-            )
-        else:
-            print("\n❌ No analysis results found.")
-
-    def analyze_network_stats(self, results: Dict[str, Any], **kwargs) -> None:
-        """Analyze and display network statistics for a specific step.
-
-        Args:
-            results: Dictionary containing all workflow step results.
-            **kwargs: Additional arguments including step_name.
-
-        Raises:
-            ValueError: If step_name is missing or no data found for the step.
-        """
-        step_name = kwargs.get("step_name", "")
-        if not step_name:
-            raise ValueError("No step name provided for network stats analysis")
-
-        steps_map = results.get("steps", {}) if isinstance(results, dict) else {}
-        step_data = steps_map.get(step_name, {})
-        if not step_data:
-            raise ValueError(f"No data found for step: {step_name}")
-
-        print(f"📊 Network Statistics: {step_name}")
-        print("=" * 50)
-
-        # Display node and link counts
-        node_count = step_data.get("node_count")
-        link_count = step_data.get("link_count")
-
-        if node_count is not None:
-            print(f"Nodes: {node_count:,}")
-        if link_count is not None:
-            print(f"Links: {link_count:,}")
-
-        # Display capacity statistics
-        capacity_stats = [
-            "total_capacity",
-            "mean_capacity",
-            "median_capacity",
-            "min_capacity",
-            "max_capacity",
-        ]
-        capacity_data = {
-            stat: step_data.get(stat)
-            for stat in capacity_stats
-            if step_data.get(stat) is not None
-        }
-
-        if capacity_data:
-            print("\nCapacity Statistics:")
-            for stat, value in capacity_data.items():
-                label = stat.replace("_", " ").title()
-                print(f"  {label}: {value:,.2f}")
-
-        # Display cost statistics
-        cost_stats = ["mean_cost", "median_cost", "min_cost", "max_cost"]
-        cost_data = {
-            stat: step_data.get(stat)
-            for stat in cost_stats
-            if step_data.get(stat) is not None
-        }
-
-        if cost_data:
-            print("\nCost Statistics:")
-            for stat, value in cost_data.items():
-                label = stat.replace("_", " ").title()
-                print(f"  {label}: {value:,.2f}")
-
-        # Display degree statistics
-        degree_stats = ["mean_degree", "median_degree", "min_degree", "max_degree"]
-        degree_data = {
-            stat: step_data.get(stat)
-            for stat in degree_stats
-            if step_data.get(stat) is not None
-        }
-
-        if degree_data:
-            print("\nNode Degree Statistics:")
-            for stat, value in degree_data.items():
-                label = stat.replace("_", " ").title()
-                print(f"  {label}: {value:.1f}")
-
-    def analyze_build_graph(self, results: Dict[str, Any], **kwargs) -> None:
-        """Analyze and display graph construction results.
-
-        Args:
-            results: Dictionary containing all workflow step results.
-            **kwargs: Additional arguments including step_name.
-
-        Raises:
-            ValueError: If step_name is missing or no data found for the step.
-        """
-        step_name = kwargs.get("step_name", "")
-        if not step_name:
-            raise ValueError("No step name provided for graph analysis")
-
-        step_data = results.get(step_name, {})
-        if not step_data:
-            raise ValueError(f"No data found for step: {step_name}")
-
-        print(f"🔗 Graph Construction: {step_name}")
-        print("=" * 50)
-
-        graph = step_data.get("graph")
-        if graph:
-            print("✅ Graph successfully constructed")
-            # Could add more details about the graph if needed
-        else:
-            print("❌ No graph data found")
+    # Optional: a tiny helper for BuildGraph/NetworkStats sections
+    def analyze_network_stats(self, results: dict[str, Any], **kwargs) -> None:
+        """Display a small info line for ``NetworkStats`` steps."""
+        step = kwargs.get("step_name")
+        if not step:
+            raise ValueError("No step name provided")
+        steps = results.get("steps", {})
+        s = steps.get(step, {})
+        meta = s.get("data", {}) if isinstance(s, dict) else {}
+        print(f"ℹ️ NetworkStats ({step}): keys={list(meta.keys())[:10]}")
