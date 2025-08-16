@@ -60,6 +60,7 @@ def test_demand_placement_analysis_includes_flow_details_costs_and_edges() -> No
             demands_config=demands_config,
             placement_rounds=1,
             include_flow_details=True,
+            include_used_edges=True,
         )
 
         # Validate cost_distribution aggregated per demand path_bundle cost

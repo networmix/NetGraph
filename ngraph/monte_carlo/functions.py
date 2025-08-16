@@ -128,6 +128,7 @@ def demand_placement_analysis(
     demands_config: list[dict[str, Any]],
     placement_rounds: int | str = "auto",
     include_flow_details: bool = False,
+    include_used_edges: bool = False,
     **kwargs,
 ) -> FlowIterationResult:
     """Analyze traffic demand placement success rates.
@@ -141,7 +142,8 @@ def demand_placement_analysis(
         network_view: NetworkView with potential exclusions applied.
         demands_config: List of demand configurations (serializable dicts).
         placement_rounds: Number of placement optimization rounds.
-        include_flow_details: If True, include edges used per demand.
+        include_flow_details: When True, include cost_distribution per flow.
+        include_used_edges: When True, include set of used edges per demand in entry data.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
@@ -184,12 +186,18 @@ def demand_placement_analysis(
         dropped = offered - placed
         extra: dict[str, Any] = {}
         cost_distribution: dict[float, float] = {}
-        if include_flow_details and getattr(dmd, "flow_policy", None) is not None:
+        if (include_flow_details or include_used_edges) and getattr(
+            dmd, "flow_policy", None
+        ) is not None:
             edge_strings: set[str] = set()
             for flow in dmd.flow_policy.flows.values():  # type: ignore[union-attr]
                 # Accumulate placed volume by path cost
                 bundle = getattr(flow, "path_bundle", None)
-                if bundle is not None and hasattr(bundle, "cost"):
+                if (
+                    include_flow_details
+                    and bundle is not None
+                    and hasattr(bundle, "cost")
+                ):
                     cost_val = float(bundle.cost)
                     vol_val = float(getattr(flow, "placed_flow", 0.0))
                     if vol_val > 0.0:
@@ -197,9 +205,10 @@ def demand_placement_analysis(
                             cost_distribution.get(cost_val, 0.0) + vol_val
                         )
                 # Collect used edges for reference
-                for eid in getattr(flow.path_bundle, "edges", set()):
-                    edge_strings.add(str(eid))
-            if edge_strings:
+                if include_used_edges:
+                    for eid in getattr(flow.path_bundle, "edges", set()):
+                        edge_strings.add(str(eid))
+            if include_used_edges and edge_strings:
                 extra["edges"] = sorted(edge_strings)
                 extra["edges_kind"] = "used"
 

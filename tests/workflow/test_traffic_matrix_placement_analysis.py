@@ -167,6 +167,7 @@ def test_traffic_matrix_placement_analysis_flow_details_edges(
         iterations=2,
         baseline=False,
         include_flow_details=True,
+        include_used_edges=True,
     )
     mock_scenario.results = Results()
     step.execute(mock_scenario)

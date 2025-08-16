@@ -35,7 +35,8 @@ class TrafficMatrixPlacement(WorkflowStep):
         baseline: Include baseline iteration without failures first.
         seed: Optional seed for reproducibility.
         store_failure_patterns: Whether to store failure pattern results.
-        include_flow_details: If True, include edges used per demand.
+        include_flow_details: When True, include cost_distribution per flow.
+        include_used_edges: When True, include set of used edges per demand in entry data.
         alpha: Numeric scale for demands in the matrix.
         alpha_from_step: Optional producer step name to read alpha from.
         alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
@@ -50,6 +51,7 @@ class TrafficMatrixPlacement(WorkflowStep):
     seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
+    include_used_edges: bool = False
     alpha: float = 1.0
     alpha_from_step: str | None = None
     alpha_from_field: str = "data.alpha_star"
@@ -81,13 +83,14 @@ class TrafficMatrixPlacement(WorkflowStep):
             f"Starting traffic-matrix placement: {self.name or self.__class__.__name__}"
         )
         logger.debug(
-            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, failure_policy=%s, alpha=%s",
+            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, include_used_edges=%s, failure_policy=%s, alpha=%s",
             self.matrix_name,
             self.iterations,
             str(self.parallelism),
             str(self.placement_rounds),
             str(self.baseline),
             str(self.include_flow_details),
+            str(self.include_used_edges),
             str(self.failure_policy),
             str(self.alpha),
         )
@@ -170,6 +173,7 @@ class TrafficMatrixPlacement(WorkflowStep):
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
             include_flow_details=self.include_flow_details,
+            include_used_edges=self.include_used_edges,
         )
 
         logger.debug(
@@ -202,6 +206,7 @@ class TrafficMatrixPlacement(WorkflowStep):
                     "matrix_name": self.matrix_name,
                     "placement_rounds": self.placement_rounds,
                     "include_flow_details": self.include_flow_details,
+                    "include_used_edges": self.include_used_edges,
                     "base_demands": base_demands,
                     "alpha": alpha_value,
                     "alpha_source": alpha_source_value,

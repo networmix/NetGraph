@@ -45,6 +45,18 @@ from ngraph.failure.policy import FailurePolicy
 logger = get_logger(__name__)
 
 
+def _is_hashable(obj: Any) -> bool:
+    """Return True if obj is hashable, False otherwise.
+
+    This avoids try/except TypeError patterns when checking hashability.
+    """
+    try:
+        hash(obj)
+        return True
+    except TypeError:
+        return False
+
+
 def _create_cache_key(
     excluded_nodes: Set[str],
     excluded_links: Set[str],
@@ -72,11 +84,10 @@ def _create_cache_key(
     # Normalize analysis_kwargs for hashing
     hashable_kwargs = []
     for key, value in sorted(analysis_kwargs.items()):
-        try:
-            # Try to hash the (key, value) pair directly
-            _ = hash((key, value))
+        # Try to hash the (key, value) pair directly
+        if _is_hashable((key, value)):
             hashable_kwargs.append((key, value))
-        except TypeError:
+        else:
             # For non-hashable values, use type name and a digest of a stable string
             value_hash = hashlib.md5(str(value).encode()).hexdigest()[:8]
             hashable_kwargs.append((key, f"{type(value).__name__}_{value_hash}"))
@@ -142,15 +153,12 @@ def _worker_init(network_pickle: bytes) -> None:
     _shared_network = pickle.loads(network_pickle)
 
     # Respect parent-requested log level if provided
-    try:
-        env_level = os.getenv("NGRAPH_LOG_LEVEL")
-        if env_level:
-            level_value = getattr(logging, env_level.upper(), logging.INFO)
-            from ngraph.logging import set_global_log_level
+    env_level = os.getenv("NGRAPH_LOG_LEVEL")
+    if env_level:
+        level_value = getattr(logging, env_level.upper(), logging.INFO)
+        from ngraph.logging import set_global_log_level
 
-            set_global_log_level(level_value)
-    except Exception:
-        pass
+        set_global_log_level(level_value)
 
     worker_logger = get_logger(f"{__name__}.worker")
     worker_logger.debug(f"Worker {os.getpid()} initialized with network")
@@ -194,22 +202,11 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 
     profiler: "cProfile.Profile | None" = None
     if collect_profile:
-        # Guard against nested profilers in the main process when the parent
-        # already enabled a profiler (e.g., CLI --profile wrapping the step).
-        # Some profilers (and cProfile in certain environments) do not allow
-        # installing a second profile function concurrently.
-        try:
-            import cProfile
+        # Install per-worker profiler when requested
+        import cProfile
 
-            profiler = cProfile.Profile()
-            profiler.enable()
-        except (RuntimeError, ValueError) as exc:
-            worker_logger.warning(
-                "Worker profiling disabled due to active profiler: %s: %s",
-                type(exc).__name__,
-                exc,
-            )
-            profiler = None
+        profiler = cProfile.Profile()
+        profiler.enable()
 
     worker_pid = os.getpid()
     worker_logger.debug(
@@ -234,25 +231,19 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
     # Dump profile if enabled (for performance analysis)
     if profiler is not None:
         profiler.disable()
-        try:
-            import pstats
-            import uuid
-            from pathlib import Path
+        import pstats
+        import uuid
+        from pathlib import Path
 
-            profile_dir = Path(profile_dir_env) if profile_dir_env else None
-            if profile_dir is not None:
-                profile_dir.mkdir(parents=True, exist_ok=True)
-                unique_id = uuid.uuid4().hex[:8]
-                profile_path = (
-                    profile_dir
-                    / f"{analysis_name}_worker_{worker_pid}_{unique_id}.pstats"
-                )
-                pstats.Stats(profiler).dump_stats(profile_path)
-                worker_logger.debug("Saved worker profile to %s", profile_path.name)
-        except Exception as exc:  # pragma: no cover
-            worker_logger.warning(
-                "Failed to save worker profile: %s: %s", type(exc).__name__, exc
+        profile_dir = Path(profile_dir_env) if profile_dir_env else None
+        if profile_dir is not None:
+            profile_dir.mkdir(parents=True, exist_ok=True)
+            unique_id = uuid.uuid4().hex[:8]
+            profile_path = (
+                profile_dir / f"{analysis_name}_worker_{worker_pid}_{unique_id}.pstats"
             )
+            pstats.Stats(profiler).dump_stats(profile_path)
+            worker_logger.debug("Saved worker profile to %s", profile_path.name)
 
     return (result, iteration_index, is_baseline, excluded_nodes, excluded_links)
 
@@ -303,10 +294,10 @@ class FailureManager:
         if self.policy_name is not None:
             try:
                 return self.failure_policy_set.get_policy(self.policy_name)
-            except KeyError:
+            except KeyError as exc:
                 raise ValueError(
                     f"Failure policy '{self.policy_name}' not found in scenario"
-                ) from None
+                ) from exc
         else:
             return None
 
@@ -572,13 +563,11 @@ class FailureManager:
         else:
             unique_result_values, _ = self._run_serial(unique_worker_args, False)
 
-        # Map unique task results back to their groups by zipping args with results
+        # Map unique task results back to their groups preserving insertion order
         key_to_result: dict[tuple, Any] = {}
-        for arg, value in zip(unique_worker_args, unique_result_values, strict=False):
-            exc_nodes, exc_links = arg[0], arg[1]
-            dedup_key = _create_cache_key(
-                exc_nodes, exc_links, func_name, analysis_kwargs
-            )
+        for (dedup_key, _arg), value in zip(
+            key_to_first_arg.items(), unique_result_values, strict=False
+        ):
             key_to_result[dedup_key] = value
 
         # Build full results list in original order. Clone value per member to avoid aliasing
@@ -592,11 +581,7 @@ class FailureManager:
                 continue
             value = key_to_result[key]
             for idx in members:
-                try:
-                    results[idx] = deepcopy(value)
-                except Exception:
-                    # Fallback to shared reference if deepcopy fails
-                    results[idx] = value
+                results[idx] = deepcopy(value)
 
         # Reconstruct failure patterns per original iteration if requested
         failure_patterns: list[dict[str, Any]] = []
@@ -618,65 +603,57 @@ class FailureManager:
 
         elapsed_time = time.time() - start_time
 
-        # Attach failure identifiers/state into each iteration result when possible.
-        # analysis_func is expected to return an iteration object or a structure
-        # that we keep unchanged if it isn't a flow-iteration container.
-        try:
-            # Build map iteration_index -> failure state
-            index_to_state: dict[int, dict[str, list[str]]] = {}
-            for pat in failure_patterns:
-                idx = int(pat.get("iteration_index", -1))
-                if idx < 0:
-                    continue
-                index_to_state[idx] = {
-                    "excluded_nodes": list(pat.get("excluded_nodes", [])),
-                    "excluded_links": list(pat.get("excluded_links", [])),
+        # Precompute failure_id per unique pattern key (not including baseline override)
+        pattern_key_to_failure_id: dict[tuple, str] = {}
+        for key, rep_arg in key_to_first_arg.items():
+            exc_nodes: set[str] = rep_arg[0]
+            exc_links: set[str] = rep_arg[1]
+            if not exc_nodes and not exc_links:
+                pattern_key_to_failure_id[key] = ""
+                continue
+            payload = ",".join(sorted(exc_nodes)) + "|" + ",".join(sorted(exc_links))
+            pattern_key_to_failure_id[key] = hashlib.blake2s(
+                payload.encode("utf-8"), digest_size=8
+            ).hexdigest()
+
+        # Optionally precompute failure_state per unique pattern when storing patterns
+        dedup_key_to_state: dict[tuple, dict[str, list[str]]] = {}
+        if store_failure_patterns:
+            for key, rep_arg in key_to_first_arg.items():
+                exc_nodes: set[str] = rep_arg[0]
+                exc_links: set[str] = rep_arg[1]
+                dedup_key_to_state[key] = {
+                    "excluded_nodes": list(exc_nodes),
+                    "excluded_links": list(exc_links),
                 }
 
-            # Stable failure_id: "baseline" or blake2s hash of exclusions
-            import hashlib
+        # Mutate dict-like results that expose to_dict to embed failure info
+        enriched: list[Any] = []
+        for i, iter_res in enumerate(results):
+            dedup_key = iteration_index_to_key[i]
+            is_baseline_iter = bool(baseline and i == 0)
+            # baseline takes precedence regardless of pattern content
+            fid = (
+                "baseline"
+                if is_baseline_iter
+                else pattern_key_to_failure_id.get(dedup_key, "")
+            )
 
-            def _failure_id(
-                state: dict[str, list[str]] | None, is_baseline_iter: bool
-            ) -> str:
-                if is_baseline_iter:
-                    return "baseline"
-                if not state:
-                    return ""
-                payload = (
-                    ",".join(sorted(state.get("excluded_nodes", [])))
-                    + "|"
-                    + ",".join(sorted(state.get("excluded_links", [])))
-                )
-                return hashlib.blake2s(
-                    payload.encode("utf-8"), digest_size=8
-                ).hexdigest()
-
-            # Mutate dict-like results that expose to_dict to embed failure info
-            enriched: list[Any] = []
-            for i, iter_res in enumerate(results):
-                state = index_to_state.get(i)
-                is_baseline_iter = bool(baseline and i == 0)
-                fid = _failure_id(state, is_baseline_iter)
-
-                # Known flow iteration result shape: object with to_dict() or dataclass
-                try:
-                    # ngraph.results.flow.FlowIterationResult
-                    if hasattr(iter_res, "failure_id") and hasattr(iter_res, "summary"):
-                        iter_res.failure_id = fid
-                        iter_res.failure_state = state
-                        enriched.append(iter_res)
-                        continue
-                except Exception:
-                    pass
-
-                # Unknown type: keep as-is
+            # ngraph.results.flow.FlowIterationResult like object
+            if hasattr(iter_res, "failure_id") and hasattr(iter_res, "summary"):
+                iter_res.failure_id = fid
+                # Only populate failure_state when storing patterns; otherwise keep None
+                if store_failure_patterns:
+                    iter_res.failure_state = dedup_key_to_state.get(dedup_key)
+                else:
+                    iter_res.failure_state = None
                 enriched.append(iter_res)
+                continue
 
-            results = enriched
-        except Exception:
-            # Failure-state enrichment is best-effort; leave results unchanged on error
-            pass
+            # Unknown type: keep as-is
+            enriched.append(iter_res)
+
+        results = enriched
 
         return {
             "results": results,
@@ -734,11 +711,8 @@ class FailureManager:
         failure_patterns = []
 
         # Propagate logging level to workers via environment
-        try:
-            parent_level = logging.getLogger("ngraph").getEffectiveLevel()
-            os.environ["NGRAPH_LOG_LEVEL"] = logging.getLevelName(parent_level)
-        except Exception:
-            pass
+        parent_level = logging.getLogger("ngraph").getEffectiveLevel()
+        os.environ["NGRAPH_LOG_LEVEL"] = logging.getLevelName(parent_level)
 
         with ProcessPoolExecutor(
             max_workers=workers,
@@ -750,45 +724,37 @@ class FailureManager:
             )
             logger.info(f"Starting parallel execution of {total_tasks} iterations")
 
-            try:
-                for (
-                    result,
-                    iteration_index,
-                    is_baseline,
-                    excluded_nodes,
-                    excluded_links,
-                ) in pool.map(_generic_worker, worker_args, chunksize=chunksize):
-                    completed_tasks += 1
+            for (
+                result,
+                iteration_index,
+                is_baseline,
+                excluded_nodes,
+                excluded_links,
+            ) in pool.map(_generic_worker, worker_args, chunksize=chunksize):
+                completed_tasks += 1
 
-                    # Collect results
-                    results.append(result)
+                # Collect results
+                results.append(result)
 
-                    # Add failure pattern if requested
-                    if store_failure_patterns:
-                        failure_patterns.append(
-                            {
-                                "iteration_index": iteration_index,
-                                "is_baseline": is_baseline,
-                                "excluded_nodes": list(excluded_nodes),
-                                "excluded_links": list(excluded_links),
-                            }
+                # Add failure pattern if requested
+                if store_failure_patterns:
+                    failure_patterns.append(
+                        {
+                            "iteration_index": iteration_index,
+                            "is_baseline": is_baseline,
+                            "excluded_nodes": list(excluded_nodes),
+                            "excluded_links": list(excluded_links),
+                        }
+                    )
+
+                # Progress logging (throttle for small N at INFO)
+                if total_tasks >= 20:
+                    # Show approx 10% increments
+                    step = max(1, total_tasks // 10)
+                    if completed_tasks % step == 0:
+                        logger.info(
+                            f"Parallel analysis progress: {completed_tasks}/{total_tasks} tasks completed"
                         )
-
-                    # Progress logging (throttle for small N at INFO)
-                    if total_tasks >= 20:
-                        # Show approx 10% increments
-                        step = max(1, total_tasks // 10)
-                        if completed_tasks % step == 0:
-                            logger.info(
-                                f"Parallel analysis progress: {completed_tasks}/{total_tasks} tasks completed"
-                            )
-
-            except Exception as e:
-                logger.error(
-                    f"Error during parallel execution: {type(e).__name__}: {e}"
-                )
-                logger.debug(f"Failed after {completed_tasks} completed tasks")
-                raise
 
         elapsed_time = time.time() - start_time
         logger.info(f"Parallel analysis completed in {elapsed_time:.2f} seconds")
@@ -840,57 +806,51 @@ class FailureManager:
                 "Temporarily disabled NGRAPH_PROFILE_DIR for serial execution to avoid nested profilers"
             )
 
-        try:
-            for i, args in enumerate(worker_args):
-                iter_start = time.time()
+        for i, args in enumerate(worker_args):
+            iter_start = time.time()
 
-                is_baseline = len(args) > 5 and args[5]  # is_baseline flag
-                baseline_msg = " (baseline)" if is_baseline else ""
-                logger.debug(
-                    f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}"
+            is_baseline = len(args) > 5 and args[5]  # is_baseline flag
+            baseline_msg = " (baseline)" if is_baseline else ""
+            logger.debug(f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}")
+
+            (
+                result,
+                iteration_index,
+                is_baseline,
+                excluded_nodes,
+                excluded_links,
+            ) = _generic_worker(args)
+
+            # Collect results
+            results.append(result)
+
+            # Add failure pattern if requested
+            if store_failure_patterns:
+                failure_patterns.append(
+                    {
+                        "iteration_index": iteration_index,
+                        "is_baseline": is_baseline,
+                        "excluded_nodes": list(excluded_nodes),
+                        "excluded_links": list(excluded_links),
+                    }
                 )
 
-                (
-                    result,
-                    iteration_index,
-                    is_baseline,
-                    excluded_nodes,
-                    excluded_links,
-                ) = _generic_worker(args)
+            iter_time = time.time() - iter_start
+            if len(worker_args) <= 10:
+                logger.debug(
+                    f"Serial iteration {i + 1} completed in {iter_time:.3f} seconds"
+                )
 
-                # Collect results
-                results.append(result)
+            if len(worker_args) > 1 and (i + 1) % max(1, len(worker_args) // 10) == 0:
+                logger.info(
+                    f"Serial analysis progress: {i + 1}/{len(worker_args)} iterations completed"
+                )
 
-                # Add failure pattern if requested
-                if store_failure_patterns:
-                    failure_patterns.append(
-                        {
-                            "iteration_index": iteration_index,
-                            "is_baseline": is_baseline,
-                            "excluded_nodes": list(excluded_nodes),
-                            "excluded_links": list(excluded_links),
-                        }
-                    )
-
-                iter_time = time.time() - iter_start
-                if len(worker_args) <= 10:
-                    logger.debug(
-                        f"Serial iteration {i + 1} completed in {iter_time:.3f} seconds"
-                    )
-
-                if (
-                    len(worker_args) > 1
-                    and (i + 1) % max(1, len(worker_args) // 10) == 0
-                ):
-                    logger.info(
-                        f"Serial analysis progress: {i + 1}/{len(worker_args)} iterations completed"
-                    )
-        finally:
-            # Clean up global network reference
-            _shared_network = None
-            # Restore worker profiling env var if we changed it
-            if _restore_profile_env:
-                os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir or ""
+        # Clean up global network reference
+        _shared_network = None
+        # Restore worker profiling env var if we changed it
+        if _restore_profile_env:
+            os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir or ""
 
         elapsed_time = time.time() - start_time
         logger.info(f"Serial analysis completed in {elapsed_time:.2f} seconds")
@@ -967,12 +927,12 @@ class FailureManager:
         if isinstance(flow_placement, str):
             try:
                 flow_placement = FlowPlacement[flow_placement.upper()]
-            except KeyError:
+            except KeyError as exc:
                 valid_values = ", ".join([e.name for e in FlowPlacement])
                 raise ValueError(
                     f"Invalid flow_placement '{flow_placement}'. "
                     f"Valid values are: {valid_values}"
-                ) from None
+                ) from exc
 
         # Run Monte Carlo analysis
         raw_results = self.run_monte_carlo_analysis(
@@ -1088,6 +1048,7 @@ class FailureManager:
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
+        include_used_edges: bool = False,
         **kwargs,
     ) -> Any:
         """Analyze traffic demand placement success under failures.
@@ -1145,6 +1106,7 @@ class FailureManager:
             demands_config=demands_config,
             placement_rounds=placement_rounds,
             include_flow_details=include_flow_details,
+            include_used_edges=include_used_edges,
             **kwargs,
         )
         # New contract: return the raw dict with list[FlowIterationResult]
@@ -1191,12 +1153,12 @@ class FailureManager:
         if isinstance(flow_placement, str):
             try:
                 flow_placement = FlowPlacement[flow_placement.upper()]
-            except KeyError:
+            except KeyError as exc:
                 valid_values = ", ".join([e.name for e in FlowPlacement])
                 raise ValueError(
                     f"Invalid flow_placement '{flow_placement}'. "
                     f"Valid values are: {valid_values}"
-                ) from None
+                ) from exc
 
         raw_results = self.run_monte_carlo_analysis(
             analysis_func=sensitivity_analysis,

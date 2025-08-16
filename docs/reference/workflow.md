@@ -80,7 +80,8 @@ Monte Carlo placement of a named traffic matrix with optional alpha scaling.
   iterations: 100
   parallelism: auto
   baseline: false
-  include_flow_details: true
+  include_flow_details: true      # cost_distribution per flow
+  include_used_edges: false       # include per-demand used edge lists
   # Alpha scaling – explicit or from another step
   alpha: 1.0
   # alpha_from_step: msd_default
@@ -205,7 +206,7 @@ Exported results have a fixed top-level structure:
 {
   "flow_results": [
     {
-      "failure_id": "",
+      "failure_id": "baseline",
       "failure_state": null,
       "flows": [
         {
@@ -218,6 +219,16 @@ Exported results have a fixed top-level structure:
       "summary": {
         "total_demand": 10.0, "total_placed": 10.0,
         "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 1
+      },
+      "data": { }
+    },
+    {
+      "failure_id": "d0eea3f4d06413a2",
+      "failure_state": null,
+      "flows": [],
+      "summary": {
+        "total_demand": 0.0, "total_placed": 0.0,
+        "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 0
       },
       "data": { }
     }
