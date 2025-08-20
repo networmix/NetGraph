@@ -226,20 +226,17 @@ class CostPower(WorkflowStep):
         )
 
         # Log root summary
-        try:
-            root_items = levels_payload.get(0, [])
-            root = root_items[0] if root_items else {}
-            logger.info(
-                "CostPower complete: name=%s capex=%.3f power=%.3f platform_capex=%.3f optics_capex=%.3f duration=%.3fs",
-                self.name or self.__class__.__name__,
-                float(root.get("capex_total", 0.0)),
-                float(root.get("power_total_watts", 0.0)),
-                float(root.get("platform_capex", 0.0)),
-                float(root.get("optics_capex", 0.0)),
-                time.perf_counter() - t0,
-            )
-        except Exception:
-            pass
+        root_items = levels_payload.get(0, [])
+        root = root_items[0] if root_items else {}
+        logger.info(
+            "CostPower complete: name=%s capex=%.3f power=%.3f platform_capex=%.3f optics_capex=%.3f duration=%.3fs",
+            self.name or self.__class__.__name__,
+            float(root.get("capex_total", 0.0)),
+            float(root.get("power_total_watts", 0.0)),
+            float(root.get("platform_capex", 0.0)),
+            float(root.get("optics_capex", 0.0)),
+            time.perf_counter() - t0,
+        )
 
 
 register_workflow_step("CostPower")(CostPower)
