@@ -13,8 +13,6 @@ from typing import Any, Dict, Hashable, List, Optional, Tuple
 
 import networkx as nx
 
-from ngraph.utils.ids import new_base64_uuid
-
 NodeID = Hashable
 EdgeID = Hashable
 AttrDict = Dict[str, Any]
@@ -50,6 +48,26 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
         """
         super().__init__(*args, **kwargs)
         self._edges: Dict[EdgeID, EdgeTuple] = {}
+        # Monotonically increasing integer for auto-assigned edge IDs.
+        # This counter only advances; removed edges do not reuse IDs.
+        self._next_edge_id: int = 0
+
+    def new_edge_key(self, u: NodeID, v: NodeID, key: Optional[int] = None) -> int:  # type: ignore[override]
+        """Return a new unique integer edge ID.
+
+        Signature matches NetworkX's ``new_edge_key(self, u, v, key=None)``.
+
+        Args:
+            u: Source node identifier (unused here).
+            v: Destination node identifier (unused here).
+            key: Optional suggestion (ignored); maintained for API compatibility.
+
+        Returns:
+            int: A new unique integer edge id.
+        """
+        next_edge_id = self._next_edge_id
+        self._next_edge_id += 1
+        return int(next_edge_id)
 
     def copy(self, as_view: bool = False, pickle: bool = True) -> StrictMultiDiGraph:
         """Create a copy of this graph.
@@ -141,10 +159,13 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
             raise ValueError(f"Target node '{v_for_edge}' does not exist.")
 
         if key is None:
-            key = new_base64_uuid()
+            key = self.new_edge_key(u_for_edge, v_for_edge)
         else:
             if key in self._edges:
                 raise ValueError(f"Edge with id '{key}' already exists.")
+            # Keep the auto counter ahead of any explicit integer keys to avoid collisions
+            if isinstance(key, int) and key >= self._next_edge_id:
+                self._next_edge_id = key + 1
 
         super().add_edge(u_for_edge, v_for_edge, key=key, **attr)
         # At this point, key is guaranteed to be non-None (either provided or generated)

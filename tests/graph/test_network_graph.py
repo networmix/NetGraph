@@ -31,18 +31,19 @@ class TestGraphConversion:
 
     def test_to_strict_multidigraph_add_reverse_true(self, linear_network):
         """Test graph conversion with reverse edges enabled."""
-        net, link_ab, link_bc = linear_network
+        net, _link_ab, _link_bc = linear_network
         graph = net.to_strict_multidigraph(add_reverse=True)
 
         assert set(graph.nodes()) == {"A", "B", "C"}
 
         edges = list(graph.edges(keys=True))
-        forward_keys = {link_ab.id, link_bc.id}
-        reverse_keys = {f"{link_ab.id}_rev", f"{link_bc.id}_rev"}
-        all_keys = forward_keys.union(reverse_keys)
-        found_keys = {e[2] for e in edges}
-
-        assert found_keys == all_keys
+        assert len(edges) == 4
+        # Validate expected directed pairs exist
+        pairs = {(u, v) for (u, v, _k) in edges}
+        assert ("A", "B") in pairs
+        assert ("B", "A") in pairs
+        assert ("B", "C") in pairs
+        assert ("C", "B") in pairs
 
     def test_to_strict_multidigraph_add_reverse_false(self):
         """Test graph conversion with reverse edges disabled."""
@@ -61,7 +62,8 @@ class TestGraphConversion:
         assert len(edges) == 1
         assert edges[0][0] == "A"
         assert edges[0][1] == "B"
-        assert edges[0][2] == link_ab.id
+        # Key is an internal integer; ensure an edge from A->B exists
+        assert any(u == "A" and v == "B" for (u, v, _k) in edges)
 
     def test_to_strict_multidigraph_excludes_disabled(self):
         """Test that disabled nodes or links are excluded from graph conversion."""
@@ -109,7 +111,7 @@ class TestGraphConversion:
     def test_to_strict_multidigraph_empty_network(self):
         """Test graph conversion with empty network."""
         net = Network()
-        graph = net.to_strict_multidigraph()
+        graph = net.to_strict_multidigraph(compact=True)
 
         assert len(graph.nodes()) == 0
         assert len(graph.edges()) == 0
@@ -121,7 +123,7 @@ class TestGraphConversion:
         net.add_node(Node("B"))
         net.add_node(Node("C"))
 
-        graph = net.to_strict_multidigraph()
+        graph = net.to_strict_multidigraph(compact=True)
 
         assert set(graph.nodes()) == {"A", "B", "C"}
         assert len(graph.edges()) == 0

@@ -184,8 +184,8 @@ class TestNetworkViewCaching:
         graph = self.view.to_strict_multidigraph()
 
         assert hasattr(self.view, "_graph_cache")
-        assert True in self.view._graph_cache  # type: ignore
-        assert self.view._graph_cache[True] is graph  # type: ignore
+        assert (True, False) in self.view._graph_cache  # type: ignore
+        assert self.view._graph_cache[(True, False)] is graph  # type: ignore
 
     def test_cache_hit(self):
         """Test that subsequent calls return cached graph."""
@@ -201,8 +201,8 @@ class TestNetworkViewCaching:
 
         assert graph_with_reverse is not graph_without_reverse
         assert hasattr(self.view, "_graph_cache")
-        assert True in self.view._graph_cache  # type: ignore
-        assert False in self.view._graph_cache  # type: ignore
+        assert (True, False) in self.view._graph_cache  # type: ignore
+        assert (False, False) in self.view._graph_cache  # type: ignore
 
         # Subsequent calls should hit cache
         assert self.view.to_strict_multidigraph(add_reverse=True) is graph_with_reverse

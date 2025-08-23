@@ -28,7 +28,9 @@ class _Ctx:
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[_Node]]:
         return self._select_map.get(path, {})
 
-    def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
+    def to_strict_multidigraph(
+        self, add_reverse: bool = True, *, compact: bool = False
+    ) -> StrictMultiDiGraph:
         g = StrictMultiDiGraph()
         for n in self._nodes:
             if n not in g:

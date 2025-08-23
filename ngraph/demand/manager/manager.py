@@ -130,7 +130,9 @@ class TrafficManager:
             add_reverse: If True, for every link A->B, add a mirrored link B->A
                 with the same capacity and cost.
         """
-        self.graph = self.network.to_strict_multidigraph(add_reverse=add_reverse)
+        self.graph = self.network.to_strict_multidigraph(
+            add_reverse=add_reverse, compact=True
+        )
         init_flow_graph(self.graph)  # Initialize flow-related attributes
 
     def expand_demands(self) -> None:

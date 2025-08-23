@@ -165,25 +165,39 @@ class Network:
 
         self.links[link.id] = link
 
-    def to_strict_multidigraph(self, add_reverse: bool = True) -> StrictMultiDiGraph:
+    def to_strict_multidigraph(
+        self,
+        add_reverse: bool = True,
+        *,
+        compact: bool = False,
+    ) -> StrictMultiDiGraph:
         """Create a StrictMultiDiGraph representation of this Network.
 
         Only includes nodes and links that are not disabled in the scenario.
         Adds reverse edges by default so links behave bidirectionally in analysis.
 
+        When ``compact=True``, edges receive monotonically increasing integer keys and
+        only essential attributes (``capacity`` and ``cost``) are set. When
+        ``compact=False``, original network link IDs are used as edge keys and also
+        stored on edges as ``link_id`` for traceability, along with any custom
+        link attrs.
+
         Args:
-            add_reverse (bool): If True, add a reverse edge for each link.
+            add_reverse: If True, add a reverse edge for each link.
+            compact: If True, omit non-essential attributes and use integer keys.
 
         Returns:
             StrictMultiDiGraph: Directed multigraph representation of the network.
         """
-        return self._build_graph(add_reverse=add_reverse)
+        return self._build_graph(add_reverse=add_reverse, compact=compact)
 
     def _build_graph(
         self,
         add_reverse: bool = True,
         excluded_nodes: Optional[AbstractSet[str]] = None,
         excluded_links: Optional[AbstractSet[str]] = None,
+        *,
+        compact: bool = False,
     ) -> StrictMultiDiGraph:
         """Create a StrictMultiDiGraph with optional exclusions.
 
@@ -210,7 +224,10 @@ class Network:
         # Add enabled nodes
         for node_name, node in self.nodes.items():
             if node_name not in all_excluded_nodes:
-                graph.add_node(node_name, **node.attrs)
+                if compact:
+                    graph.add_node(node_name)
+                else:
+                    graph.add_node(node_name, **node.attrs)
 
         # Add enabled links
         for link_id, link in self.links.items():
@@ -220,27 +237,40 @@ class Network:
                 and link.source not in all_excluded_nodes
                 and link.target not in all_excluded_nodes
             ):
-                # Add forward edge
-                graph.add_edge(
-                    link.source,
-                    link.target,
-                    key=link_id,
-                    capacity=link.capacity,
-                    cost=link.cost,
-                    **link.attrs,
-                )
-
-                # Optionally add reverse edge
-                if add_reverse:
-                    reverse_id = f"{link_id}_rev"
+                if compact:
+                    # Forward edge with minimal attributes
                     graph.add_edge(
-                        link.target,
                         link.source,
-                        key=reverse_id,
+                        link.target,
                         capacity=link.capacity,
                         cost=link.cost,
+                    )
+                    if add_reverse:
+                        graph.add_edge(
+                            link.target,
+                            link.source,
+                            capacity=link.capacity,
+                            cost=link.cost,
+                        )
+                else:
+                    # Preserve original link id as attribute; edge key is assigned by graph
+                    graph.add_edge(
+                        link.source,
+                        link.target,
+                        capacity=link.capacity,
+                        cost=link.cost,
+                        link_id=link_id,
                         **link.attrs,
                     )
+                    if add_reverse:
+                        graph.add_edge(
+                            link.target,
+                            link.source,
+                            capacity=link.capacity,
+                            cost=link.cost,
+                            link_id=link_id,
+                            **link.attrs,
+                        )
 
         return graph
 

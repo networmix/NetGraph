@@ -76,7 +76,7 @@ def max_flow(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    base_graph = context.to_strict_multidigraph().copy()
+    base_graph = context.to_strict_multidigraph(compact=True).copy()
 
     if mode == "combine":
         combined_src_nodes: list = []
@@ -262,10 +262,10 @@ def max_flow_with_graph(
         for group_nodes in snk_groups.values():
             combined_snk_nodes.extend(group_nodes)
         if not combined_src_nodes or not combined_snk_nodes:
-            base_graph = context.to_strict_multidigraph().copy()
+            base_graph = context.to_strict_multidigraph(compact=True).copy()
             return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
         if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            base_graph = context.to_strict_multidigraph().copy()
+            base_graph = context.to_strict_multidigraph(compact=True).copy()
             return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
         flow_val, flow_graph = _compute_flow_with_graph_single_group(
             context,
@@ -282,7 +282,7 @@ def max_flow_with_graph(
             for snk_label, snk_nodes in snk_groups.items():
                 if src_nodes and snk_nodes:
                     if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        base_graph = context.to_strict_multidigraph().copy()
+                        base_graph = context.to_strict_multidigraph(compact=True).copy()
                         results[(src_label, snk_label)] = (0.0, base_graph)
                     else:
                         results[(src_label, snk_label)] = (
@@ -295,7 +295,7 @@ def max_flow_with_graph(
                             )
                         )
                 else:
-                    base_graph = context.to_strict_multidigraph().copy()
+                    base_graph = context.to_strict_multidigraph(compact=True).copy()
                     results[(src_label, snk_label)] = (0.0, base_graph)
         return results
 
@@ -635,7 +635,7 @@ def _compute_flow_with_summary_single_group(
     active_sinks = [s for s in sinks if not s.disabled]
     if not active_sources or not active_sinks:
         return 0.0, _empty_summary()
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
     graph.add_node("source")
     graph.add_node("sink")
     for s_node in active_sources:
@@ -664,9 +664,9 @@ def _compute_flow_with_graph_single_group(
     active_sources = [s for s in sources if not s.disabled]
     active_sinks = [s for s in sinks if not s.disabled]
     if not active_sources or not active_sinks:
-        base_graph = context.to_strict_multidigraph().copy()
+        base_graph = context.to_strict_multidigraph(compact=True).copy()
         return 0.0, base_graph
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
     graph.add_node("source")
     graph.add_node("sink")
     for s_node in active_sources:
@@ -695,9 +695,9 @@ def _compute_flow_detailed_single_group(
     active_sources = [s for s in sources if not s.disabled]
     active_sinks = [s for s in sinks if not s.disabled]
     if not active_sources or not active_sinks:
-        base_graph = context.to_strict_multidigraph().copy()
+        base_graph = context.to_strict_multidigraph(compact=True).copy()
         return 0.0, _empty_summary(), base_graph
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
     graph.add_node("source")
     graph.add_node("sink")
     for s_node in active_sources:
@@ -729,7 +729,7 @@ def _compute_saturated_edges_single_group(
     active_sinks = [s for s in sinks if not s.disabled]
     if not active_sources or not active_sinks:
         return []
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
     graph.add_node("source")
     graph.add_node("sink")
     for s_node in active_sources:
@@ -759,7 +759,7 @@ def _compute_sensitivity_single_group(
     active_sinks = [s for s in sinks if not s.disabled]
     if not active_sources or not active_sinks:
         return {}
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
     graph.add_node("source")
     graph.add_node("sink")
     for s_node in active_sources:

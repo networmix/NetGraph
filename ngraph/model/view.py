@@ -160,7 +160,9 @@ class NetworkView:
         """
         return self._base.attrs
 
-    def to_strict_multidigraph(self, add_reverse: bool = True) -> "StrictMultiDiGraph":
+    def to_strict_multidigraph(
+        self, add_reverse: bool = True, *, compact: bool = False
+    ) -> "StrictMultiDiGraph":
         """Create a StrictMultiDiGraph representation of this view.
 
         Creates a filtered graph excluding disabled nodes/links and analysis exclusions.
@@ -179,14 +181,16 @@ class NetworkView:
             cache = {}
             object.__setattr__(self, "_graph_cache", cache)
 
-        # Use simple cache based on add_reverse parameter
-        if add_reverse not in cache:
-            cache[add_reverse] = self._base._build_graph(
+        # Use simple cache based on (add_reverse, compact)
+        cache_key = (bool(add_reverse), bool(compact))
+        if cache_key not in cache:
+            cache[cache_key] = self._base._build_graph(
                 add_reverse=add_reverse,
                 excluded_nodes=self._excluded_nodes,
                 excluded_links=self._excluded_links,
+                compact=compact,
             )
-        return cache[add_reverse]
+        return cache[cache_key]
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List["Node"]]:
         """Select and group visible nodes by regex or attribute directive.

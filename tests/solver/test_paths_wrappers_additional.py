@@ -13,7 +13,7 @@ class _Ctx:
         return self._map.get(path, {})
 
     def to_strict_multidigraph(
-        self, add_reverse: bool = True
+        self, add_reverse: bool = True, *, compact: bool = False
     ):  # pragma: no cover - type shape only
         from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 

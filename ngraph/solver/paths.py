@@ -59,7 +59,7 @@ def shortest_path_costs(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
 
     def _active(nodes: Iterable[Any]) -> List[Any]:
         return [n for n in nodes if not getattr(n, "disabled", False)]
@@ -154,7 +154,7 @@ def shortest_paths(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
 
     def _active(nodes: Iterable[Any]) -> List[Any]:
         return [n for n in nodes if not getattr(n, "disabled", False)]
@@ -267,7 +267,7 @@ def k_shortest_paths(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    graph = context.to_strict_multidigraph().copy()
+    graph = context.to_strict_multidigraph(compact=True).copy()
 
     def _active(nodes: Iterable[Any]) -> List[Any]:
         return [n for n in nodes if not getattr(n, "disabled", False)]

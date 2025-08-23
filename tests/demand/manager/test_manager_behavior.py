@@ -24,7 +24,7 @@ class _Network:
         return self._groups.get(pattern, {})
 
     def to_strict_multidigraph(
-        self, add_reverse: bool = True
+        self, add_reverse: bool = True, *, compact: bool = False
     ):  # pragma: no cover - light stub
         from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 

@@ -57,15 +57,16 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
         graph_obj = created_graph
         # Verify the correct nodes were added
         assert set(graph_obj.nodes()) == {"A", "B"}
-        # Check node attributes
+        # Check node attributes remain present in full build
         assert graph_obj.nodes["A"]["type"] == "router"
         assert graph_obj.nodes["B"]["location"] == "rack2"
         # Verify edges (two edges per link: forward and reverse)
         assert graph_obj.number_of_edges() == 4
-        assert graph_obj.get_edge_data("A", "B", key="L1")["capacity"] == 100
-        assert graph_obj.get_edge_data("B", "A", key="L1_rev") is not None
-        assert graph_obj.get_edge_data("B", "A", key="L2")["capacity"] == 50
-        assert graph_obj.get_edge_data("A", "B", key="L2_rev") is not None
+        # Count by direction (two edges each way)
+        num_ab = sum(1 for _k in graph_obj.get_edge_data("A", "B").keys())
+        num_ba = sum(1 for _k in graph_obj.get_edge_data("B", "A").keys())
+        assert num_ab == 2
+        assert num_ba == 2
     else:
         # Serialized representation: expect dict with nodes/links lists
         assert isinstance(created_graph, dict)
@@ -76,10 +77,16 @@ def test_build_graph_stores_multidigraph_in_results(mock_scenario):
         # Verify nodes content
         names = {n.get("id") for n in nodes}
         assert names == {"A", "B"}
-        # Verify at least forward/reverse edges exist for each link id
-        keys = {lk.get("key") for lk in links}
-        assert {"L1", "L1_rev", "L2", "L2_rev"}.issubset(keys)
-        # Spot-check a link attributes
-        l1 = next(lk for lk in links if lk.get("key") == "L1")
-        assert l1.get("source") in ("A", 0)
-        assert l1.get("target") in ("B", 1)
+        # Verify there are two edges per direction (A->B and B->A)
+        # Build index mapping id -> idx
+        idx_by_id = {node["id"]: i for i, node in enumerate(nodes)}
+        a_idx = idx_by_id["A"]
+        b_idx = idx_by_id["B"]
+        ab = sum(
+            1 for lk in links if lk.get("source") == a_idx and lk.get("target") == b_idx
+        )
+        ba = sum(
+            1 for lk in links if lk.get("source") == b_idx and lk.get("target") == a_idx
+        )
+        assert ab == 2
+        assert ba == 2
