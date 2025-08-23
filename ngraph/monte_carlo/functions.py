@@ -133,21 +133,29 @@ def demand_placement_analysis(
 ) -> FlowIterationResult:
     """Analyze traffic demand placement success rates.
 
-    Returns a structured dictionary per iteration containing per-demand offered
-    and placed volumes (in Gbit/s) and an iteration-level summary. This shape
-    is designed for downstream computation of delivered bandwidth percentiles
-    without having to reconstruct per-iteration joint distributions.
+    Produces per-demand FlowEntry records and an iteration-level summary suitable
+    for downstream statistics (e.g., delivered percentiles) without reconstructing
+    joint distributions.
+
+    Additionally exposes placement engine counters to aid performance analysis:
+    - Per-demand: ``FlowEntry.data.policy_metrics`` (dict) with totals collected by
+      the active FlowPolicy (e.g., ``spf_calls_total``, ``flows_created_total``,
+      ``reopt_calls_total``, ``place_iterations_total``, ``placed_total``).
+    - Per-iteration: ``FlowIterationResult.data.iteration_metrics`` aggregating the
+      same counters across all demands in the iteration.
 
     Args:
         network_view: NetworkView with potential exclusions applied.
         demands_config: List of demand configurations (serializable dicts).
         placement_rounds: Number of placement optimization rounds.
         include_flow_details: When True, include cost_distribution per flow.
-        include_used_edges: When True, include set of used edges per demand in entry data.
+        include_used_edges: When True, include set of used edges per demand in entry data
+            as ``FlowEntry.data.edges`` with ``edges_kind='used'``.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        FlowIterationResult describing this iteration.
+        FlowIterationResult describing this iteration. The ``data`` field contains
+        ``{"iteration_metrics": { ... }}``.
     """
     # Reconstruct demands from config to avoid passing complex objects
     demands = []
@@ -178,6 +186,15 @@ def demand_placement_analysis(
     flow_entries: list[FlowEntry] = []
     total_demand = 0.0
     total_placed = 0.0
+
+    # Aggregate iteration-level engine metrics across all demands
+    iteration_metrics: dict[str, float] = {
+        "spf_calls_total": 0.0,
+        "flows_created_total": 0.0,
+        "reopt_calls_total": 0.0,
+        "place_iterations_total": 0.0,
+        "placed_total": 0.0,
+    }
 
     for dmd in tm.demands:
         offered = float(getattr(dmd, "volume", 0.0))
@@ -212,6 +229,24 @@ def demand_placement_analysis(
                 extra["edges"] = sorted(edge_strings)
                 extra["edges_kind"] = "used"
 
+        # Always expose per-demand FlowPolicy metrics when available
+        fp = getattr(dmd, "flow_policy", None)
+        if fp is not None:
+            try:
+                # Cumulative totals over the policy's lifetime within this iteration
+                totals: dict[str, float] = fp.get_metrics()  # type: ignore[assignment]
+            except Exception:
+                totals = {}
+            if totals:
+                extra["policy_metrics"] = {k: float(v) for k, v in totals.items()}
+                # Accumulate iteration-level totals across demands on known keys
+                for key in iteration_metrics.keys():
+                    if key in totals:
+                        try:
+                            iteration_metrics[key] += float(totals[key])
+                        except Exception:
+                            pass
+
         entry = FlowEntry(
             source=str(getattr(dmd, "src_node", "")),
             destination=str(getattr(dmd, "dst_node", "")),
@@ -235,7 +270,11 @@ def demand_placement_analysis(
         dropped_flows=dropped_flows,
         num_flows=len(flow_entries),
     )
-    return FlowIterationResult(flows=flow_entries, summary=summary)
+    return FlowIterationResult(
+        flows=flow_entries,
+        summary=summary,
+        data={"iteration_metrics": iteration_metrics},
+    )
 
 
 def sensitivity_analysis(

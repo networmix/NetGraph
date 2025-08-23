@@ -144,6 +144,13 @@ class WorkflowStep(ABC):
             self.run(scenario)
             end_time = time.time()
             duration = end_time - start_time
+            # Persist step duration into step-scoped metadata for downstream analysis
+            existing_md = scenario.results.get("metadata", {})
+            if not isinstance(existing_md, dict):
+                raise TypeError("Results metadata must be a dict")
+            updated_md = dict(existing_md)
+            updated_md["duration_sec"] = float(duration)
+            scenario.results.put("metadata", updated_md)
             logger.info(
                 f"Completed workflow step: {display_name} ({step_type}) "
                 f"in {duration:.3f} seconds"
@@ -151,7 +158,10 @@ class WorkflowStep(ABC):
             try:
                 store = getattr(scenario.results, "_store", {})
                 keys = ", ".join(sorted(list(store.get(step_name, {}).keys())))
-            except Exception:
+            except Exception as exc:
+                logger.debug(
+                    "Failed to read results keys for step %s: %s", display_name, exc
+                )
                 keys = "-"
             logger.debug(
                 "Step %s finished: duration=%.3fs, results_keys=%s",
@@ -171,8 +181,10 @@ class WorkflowStep(ABC):
             # Always exit step scope
             try:
                 scenario.results.exit_step()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(
+                    "Failed to exit step scope cleanly for %s: %s", display_name, exc
+                )
 
     @abstractmethod
     def run(self, scenario: "Scenario") -> None:

@@ -23,15 +23,29 @@ if [ ! -f .git/hooks/pre-commit ]; then
     echo ""
 fi
 
-# Run pre-commit checks
-echo "🏃 Running pre-commit on all files..."
+# Run pre-commit with fixers (first pass), do not fail if files were modified
+echo "🏃 Running pre-commit (first pass: apply auto-fixes if needed)..."
+set +e
 pre-commit run --all-files
+first_pass_status=$?
+set -e
 
-if [ $? -ne 0 ]; then
+if [ $first_pass_status -ne 0 ]; then
+    echo "ℹ️  Some hooks modified files or reported issues. Re-running checks..."
+fi
+
+# Re-run to verify all checks pass after fixes; fail on any remaining issues
+echo "🏃 Running pre-commit (second pass: verify all checks)..."
+if ! pre-commit run --all-files; then
     echo ""
-    echo "❌ Pre-commit checks failed. Please fix the issues above before running tests."
-    echo "💡 Tip: Most formatting issues can be auto-fixed by running the checks again."
+    echo "❌ Pre-commit checks failed after applying fixes. Please address the issues above."
     exit 1
+fi
+
+# Track whether auto-fixes were applied and resolved issues
+autofixed=0
+if [ $first_pass_status -ne 0 ]; then
+    autofixed=1
 fi
 
 echo ""
@@ -66,9 +80,17 @@ pytest
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo "🎉 All checks and tests passed! Your code is ready for commit."
+    if [ $autofixed -eq 1 ]; then
+        echo "🎉 All checks and tests passed. Auto-fixes were applied by pre-commit."
+    else
+        echo "🎉 All checks and tests passed."
+    fi
 else
     echo ""
-    echo "❌ Some tests failed. Please fix the issues above and try again."
+    if [ $autofixed -eq 1 ]; then
+        echo "❌ Some tests failed. Note: auto-fixes were applied earlier by pre-commit."
+    else
+        echo "❌ Some tests failed."
+    fi
     exit 1
 fi

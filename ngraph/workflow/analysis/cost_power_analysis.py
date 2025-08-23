@@ -69,12 +69,7 @@ class CostPowerAnalysis(NotebookAnalyzer):
         data_obj = step_data.get("data", {}) if isinstance(step_data, dict) else {}
 
         ctx = data_obj.get("context", {}) if isinstance(data_obj, dict) else {}
-        try:
-            agg_level = int(ctx.get("aggregation_level", 2))
-        except Exception as exc:  # pragma: no cover - defensive
-            raise ValueError(
-                f"Invalid aggregation_level in CostPower data: {exc}"
-            ) from exc
+        agg_level = int(ctx.get("aggregation_level", 2))
 
         levels = data_obj.get("levels", {}) if isinstance(data_obj, dict) else {}
         level_key = str(agg_level)
@@ -99,12 +94,9 @@ class CostPowerAnalysis(NotebookAnalyzer):
             if isinstance(workflow_meta, dict) and workflow_meta:
                 candidates: list[tuple[int, str]] = []
                 for name, meta in workflow_meta.items():
-                    try:
-                        if str(meta.get("step_type")) == "TrafficMatrixPlacement":
-                            order = int(meta.get("execution_order", 1_000_000))
-                            candidates.append((order, name))
-                    except Exception:
-                        continue
+                    if str(meta.get("step_type")) == "TrafficMatrixPlacement":
+                        order = int(meta.get("execution_order", 1_000_000))
+                        candidates.append((order, name))
                 if candidates:
                     traffic_step_name = sorted(candidates)[0][1]
 
@@ -153,12 +145,9 @@ class CostPowerAnalysis(NotebookAnalyzer):
 
         # Attribute delivered volumes to both endpoints' sites (count once if same)
         for rec in base_flows:
-            try:
-                src = str(rec.get("source", ""))
-                dst = str(rec.get("destination", ""))
-                placed = float(rec.get("placed", 0.0))
-            except Exception:
-                continue
+            src = str(rec.get("source", ""))
+            dst = str(rec.get("destination", ""))
+            placed = float(rec.get("placed", 0.0))
             if not src or not dst or placed <= 0.0:
                 continue
 

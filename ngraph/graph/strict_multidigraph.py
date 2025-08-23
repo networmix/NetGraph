@@ -109,7 +109,7 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     #
     # Edge management
     #
-    def add_edge(
+    def add_edge(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         u_for_edge: NodeID,
         v_for_edge: NodeID,

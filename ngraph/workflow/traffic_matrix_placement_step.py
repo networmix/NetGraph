@@ -104,17 +104,17 @@ class TrafficMatrixPlacement(WorkflowStep):
             ) from exc
 
         def _serialize_policy(cfg: Any) -> Any:
-            try:
-                from ngraph.flows.policy import FlowPolicyConfig  # local import
-            except Exception:  # pragma: no cover - defensive
-                return str(cfg) if cfg is not None else None
+            from ngraph.flows.policy import FlowPolicyConfig  # local import
+
             if cfg is None:
                 return None
             if isinstance(cfg, FlowPolicyConfig):
                 return cfg.name
+            # Fall back to string when it cannot be coerced to enum
             try:
                 return FlowPolicyConfig(int(cfg)).name
-            except Exception:
+            except Exception as exc:
+                logger.debug("Unrecognized flow_policy_config value: %r (%s)", cfg, exc)
                 return str(cfg)
 
         base_demands: list[dict[str, Any]] = [
@@ -133,15 +133,12 @@ class TrafficMatrixPlacement(WorkflowStep):
 
         # Resolve alpha
         effective_alpha = self._resolve_alpha(scenario)
-        try:
-            alpha_src = getattr(self, "_alpha_source", None) or "explicit"
-            logger.info(
-                "Using alpha: value=%.6g source=%s",
-                float(effective_alpha),
-                str(alpha_src),
-            )
-        except Exception:
-            pass
+        alpha_src = getattr(self, "_alpha_source", None) or "explicit"
+        logger.info(
+            "Using alpha: value=%.6g source=%s",
+            float(effective_alpha),
+            str(alpha_src),
+        )
 
         demands_config: list[dict[str, Any]] = []
         for td in td_list:

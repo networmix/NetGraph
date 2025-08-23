@@ -827,7 +827,7 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
             edge_select=base.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
-            multipath=False,
+            multipath=True,
         )
     elif flow_policy_config == FlowPolicyConfig.TE_ECMP_UP_TO_256_LSP:
         # TE with up to 256 LSPs using ECMP flow placement.

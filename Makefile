@@ -15,7 +15,8 @@ help:
 	@echo ""
 	@echo "Code Quality & Testing:"
 	@echo "  make check         - Run all pre-commit checks and tests (includes slow and benchmark)"
-	@echo "  make lint          - Run only linting (ruff + pyright)"
+	@echo "  make check-ci      - Run non-mutating checks and tests (CI entrypoint)"
+	@echo "  make lint          - Run only linting (non-mutating: ruff + pyright)"
 	@echo "  make format        - Auto-format code with ruff"
 	@echo "  make test          - Run tests with coverage (includes slow and benchmark)"
 	@echo "  make qt            - Run quick tests only (excludes slow and benchmark)"
@@ -56,10 +57,17 @@ check:
 	@echo "🔍 Running complete code quality checks and tests..."
 	@bash dev/run-checks.sh
 
+check-ci:
+	@echo "🔍 Running CI checks (non-mutating lint + schema validation + tests)..."
+	@$(MAKE) lint
+	@$(MAKE) validate
+	@$(MAKE) test
+
 lint:
-	@echo "🧹 Running linting checks..."
-	@pre-commit run ruff --all-files
-	@pre-commit run pyright --all-files
+	@echo "🧹 Running linting checks (non-mutating)..."
+	@ruff format --check .
+	@ruff check .
+	@pyright
 
 format:
 	@echo "✨ Auto-formatting code..."
