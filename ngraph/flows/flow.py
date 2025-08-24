@@ -35,7 +35,7 @@ class Flow:
 
     In traffic-engineering scenarios, a `Flow` object can model:
       - MPLS LSPs/tunnels with explicit paths,
-      - IP forwarding behavior (with ECMP or UCMP),
+      - IP forwarding behavior (with ECMP or WCMP),
       - Or anything that follows a specific set of paths.
     """
 

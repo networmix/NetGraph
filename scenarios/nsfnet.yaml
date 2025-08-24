@@ -174,7 +174,7 @@ failure_policy_set:
               rule_type: random
               probability: 0.0005     # 0.05 % chance a given node is down
 
-  single_random_link_failure:
+  single_link_failure:
     attrs:
       description: Fails exactly one random link to test network resilience
     modes:
@@ -187,4 +187,36 @@ failure_policy_set:
 ###############################################################################
 # Workflow
 ###############################################################################
-workflow: []
+workflow:
+  # MaxFlow capacity matrix between all node pairs
+  - step_type: MaxFlow
+    name: node_to_node_capacity_matrix_1
+    source_path: "^(.+)$"
+    sink_path: "^(.+)$"
+    mode: pairwise
+    failure_policy: single_link_failure
+    iterations: 1000
+    parallelism: 8
+    shortest_path: false
+    flow_placement: PROPORTIONAL
+    baseline: true
+    seed: 42
+    store_failure_patterns: true
+    include_flow_details: true
+    include_min_cut: true
+
+  - step_type: MaxFlow
+    name: node_to_node_capacity_matrix_2
+    source_path: "^(.+)$"
+    sink_path: "^(.+)$"
+    mode: pairwise
+    failure_policy: availability_1992
+    iterations: 1000
+    parallelism: 8
+    shortest_path: false
+    flow_placement: PROPORTIONAL
+    baseline: true
+    seed: 42
+    store_failure_patterns: true
+    include_flow_details: true
+    include_min_cut: true

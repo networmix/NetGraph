@@ -17,7 +17,7 @@ network:
         cost: 10
 
 failure_policy_set:
-  mc_baseline_v1:
+  weighted_modes_v1:
     modes:
       - weight: 0.6
         rules:
@@ -37,7 +37,7 @@ workflow:
 """
 
     scenario = Scenario.from_yaml(scenario_yaml)
-    policy = scenario.failure_policy_set.get_policy("mc_baseline_v1")
+    policy = scenario.failure_policy_set.get_policy("weighted_modes_v1")
     # Ensure modes parsed and stored
     assert policy.modes and len(policy.modes) == 2
     # Ensure weight_by propagated into rule

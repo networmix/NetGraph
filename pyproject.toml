@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ngraph"
 version = "0.9.0"
-description = "A tool and a library for network modeling and capacity analysis."
+description = "A tool and a library for network modeling and analysis."
 readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
 license = "MIT"
@@ -23,15 +23,9 @@ classifiers = [
 
 # Runtime deps
 dependencies = [
-    "networkx",
-    "pyyaml",
-    "pandas",
-    "matplotlib",
-    "seaborn",
-    "nbformat",
-    "nbconvert",
-    "ipykernel",
-    "itables",
+    "networkx>=3.0",
+    "pyyaml>=6.0",
+    "pandas>=2.0",
 ]
 
 # Dev / CI extras
@@ -43,6 +37,10 @@ dev = [
     "pytest-benchmark",
     "pytest-mock",
     "pytest-timeout",
+    # perf/visualization
+    "numpy",
+    "matplotlib",
+    "seaborn",
     # docs
     "mkdocs-material",
     "pdoc",
@@ -123,6 +121,7 @@ typeCheckingMode = "standard"     # balanced level
 pythonVersion = "3.11"
 exclude = [
     "tests/**",                   # tests often use dynamic patterns
+    "dev/**",                     # development utilities (not shipped)
     "**/venv/**",                # virtual environments (generic)
     "**/*venv/**",               # virtual environments (various naming)
     "build/**",                  # build artifacts

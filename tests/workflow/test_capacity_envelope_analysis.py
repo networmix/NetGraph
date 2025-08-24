@@ -260,8 +260,8 @@ class TestMaxFlowStep:
         assert kwargs["store_failure_patterns"] is True
         assert kwargs["include_flow_summary"] is False
 
-    def test_capacity_envelope_analysis_with_failures_mocked(self):
-        """Test capacity envelope analysis with mocked FailureManager."""
+    def test_capacity_envelope_with_failures_mocked(self):
+        """Test capacity envelope step with mocked FailureManager."""
         step = MaxFlow(
             source_path="^A",
             sink_path="^C",

@@ -109,12 +109,12 @@ def test_tm_policy_correctness_ecmp_equal_split() -> None:
     assert _approx_equal(_sum_flow_between(g, "Y", "T"), right)
 
 
-def test_tm_policy_correctness_ucmp_proportional_unbalanced() -> None:
+def test_tm_policy_correctness_wcmp_proportional_unbalanced() -> None:
     # Left branch capacity 2, right branch capacity 8; request 8 -> expect 2 and 6
     net = _build_diamond_network(cap_left=2.0, cap_right=8.0)
-    tmset = _tmset_single(8.0, policy=FlowPolicyConfig.SHORTEST_PATHS_UCMP)
+    tmset = _tmset_single(8.0, policy=FlowPolicyConfig.SHORTEST_PATHS_WCMP)
     tm = _place_and_get_tm(
-        net, tmset, default_policy=FlowPolicyConfig.SHORTEST_PATHS_UCMP
+        net, tmset, default_policy=FlowPolicyConfig.SHORTEST_PATHS_WCMP
     )
 
     results = tm.get_traffic_results()
@@ -123,7 +123,7 @@ def test_tm_policy_correctness_ucmp_proportional_unbalanced() -> None:
     g = tm.graph
     left = _sum_flow_between(g, "S", "X")
     right = _sum_flow_between(g, "S", "Y")
-    # UCMP distributes proportionally within the min-cost DAG; with total DAG cap=10,
+    # WCMP distributes proportionally within the min-cost DAG; with total DAG cap=10,
     # request=8 -> 0.2*8=1.6 on left, 0.8*8=6.4 on right.
     assert _approx_equal(left, 1.6)
     assert _approx_equal(right, 6.4)
@@ -131,15 +131,15 @@ def test_tm_policy_correctness_ucmp_proportional_unbalanced() -> None:
     assert _approx_equal(_sum_flow_between(g, "Y", "T"), right)
 
 
-def test_tm_policy_correctness_te_ucmp_unlim_uses_only_min_cost() -> None:
+def test_tm_policy_correctness_TE_WCMP_UNLIM_uses_only_min_cost() -> None:
     # Two equal-cost min-cost branches totaling 6, plus a higher-cost alternative with large capacity
     # Policy must not use the higher-cost path; expect total placed capped at 6
     net = _build_diamond_network(cap_left=3.0, cap_right=3.0, add_alt_high_cost=True)
-    tmset = _tmset_single(10.0, policy=FlowPolicyConfig.TE_UCMP_UNLIM)
-    tm = _place_and_get_tm(net, tmset, default_policy=FlowPolicyConfig.TE_UCMP_UNLIM)
+    tmset = _tmset_single(10.0, policy=FlowPolicyConfig.TE_WCMP_UNLIM)
+    tm = _place_and_get_tm(net, tmset, default_policy=FlowPolicyConfig.TE_WCMP_UNLIM)
 
     results = tm.get_traffic_results()
-    # Capacity-aware UCMP will use higher-cost alternatives after saturating min-cost paths
+    # Capacity-aware WCMP will use higher-cost alternatives after saturating min-cost paths
     assert _approx_equal(results[0].placed_volume, 10.0)
 
     g = tm.graph
@@ -198,7 +198,7 @@ def test_tm_multiple_demands_same_priority_share_capacity() -> None:
         ],
     )
     tm = _place_and_get_tm(
-        net, tmset, default_policy=FlowPolicyConfig.SHORTEST_PATHS_UCMP
+        net, tmset, default_policy=FlowPolicyConfig.SHORTEST_PATHS_WCMP
     )
 
     # Check placed amounts per top-level demand via TrafficManager results

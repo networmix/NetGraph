@@ -2,6 +2,7 @@
 
 Quick links:
 
+- [Design](design.md) — architecture, model, algorithms, workflow
 - [DSL Reference](dsl.md) — YAML syntax for scenario definition
 - [Workflow Reference](workflow.md) — analysis workflow configuration and execution
 - [CLI Reference](cli.md) — command-line tools for running scenarios
@@ -23,31 +24,9 @@ The schema validates:
 - Top-level section organization
 - Basic constraint checking
 
-Limitations: runtime validation in `ngraph/scenario.py` is authoritative. Some YAML may pass schema validation but fail at runtime due to business logic constraints.
+Limitations: runtime validation in `ngraph/scenario.py` and `ngraph/dsl/blueprints/expand.py` is authoritative. Some YAML may pass schema validation but fail at runtime due to business logic constraints (e.g., unrecognized keys, invalid adjacency patterns, or group parameter shapes).
 
-## Schema Validation Rules
-
-### Group Properties
-
-- Groups with `use_blueprint`: Allow only `{use_blueprint, parameters, attrs, disabled, risk_groups}`
-- Groups without `use_blueprint`: Allow only `{node_count, name_template, attrs, disabled, risk_groups}`
-
-### Network Links
-
-- Direct links: `source`, `target`, `link_params`, optional `link_count`
-- Link overrides: Support `any_direction` for bidirectional matching
-- Invalid: `any_direction` in direct links
-
-### Required Fields
-
-- Risk groups: `name` field
-- Links: `source` and `target` fields
-- Workflow steps: `step_type` field
-- Traffic demands: `source_path`, `sink_path`, `demand` fields
-
-## IDE Integration
-
-### VS Code Setup
+## IDE Integration (VS Code)
 
 Automatic configuration via `.vscode/settings.json`:
 
@@ -79,8 +58,8 @@ make check
 ### Integration Points
 
 - Pre-commit hooks: Validates modified `scenarios/*.yaml` files
-- CI/CD pipeline: Validates scenarios on push/PR
-- Test suite: `tests/test_schema_validation.py`
+- CI pipeline: Validates scenarios on push/PR
+- Test suite: Validation exercised in integration tests
 
 ### Python API
 
@@ -93,7 +72,7 @@ import jsonschema
 with open('schemas/scenario.json') as f:
     schema = json.load(f)
 
-with open('scenarios/example.yaml') as f:
+with open('scenarios/square_mesh.yaml') as f:
     data = yaml.safe_load(f)
 
 jsonschema.validate(data, schema)
@@ -127,4 +106,4 @@ jsonschema.validate(data, schema)
 4. Run `make test` to verify schema tests
 5. Update documentation
 
-Authority: code implementation in `ngraph/scenario.py` and `ngraph/blueprints.py` is authoritative, not the schema.
+Authority: code implementation in `ngraph/scenario.py` and `ngraph/dsl/blueprints/expand.py` is authoritative, not the schema.

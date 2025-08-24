@@ -31,7 +31,7 @@ def test_expand_combine_twice_preserves_existing_flows_and_is_idempotent() -> No
         sink_path="B",
         demand=5.0,
         mode="combine",
-        flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_UCMP,
+        flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_WCMP,
     )
     tmset.add("default", [td1])
 

@@ -9,18 +9,16 @@ import os
 import sys
 from pathlib import Path
 from statistics import median
+from time import perf_counter
 from typing import Any, Dict, List, Optional
 
 from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger, set_global_log_level
 from ngraph.profiling import PerformanceProfiler, PerformanceReporter
-from ngraph.report import ReportGenerator
 from ngraph.scenario import Scenario
 from ngraph.utils.output_paths import (
-    build_artifact_path,
     ensure_parent_dir,
     profiles_dir_for_run,
-    resolve_override_path,
     results_path_for_run,
 )
 
@@ -99,6 +97,23 @@ def _format_cost(value: Any) -> str:
     if "." in s:
         s = s.rstrip("0").rstrip(".")
     return s
+
+
+def _format_duration(seconds: float) -> str:
+    """Return a concise human-readable duration string.
+
+    Uses ASCII units and keeps output short for logs.
+
+    Examples:
+        0.123 -> "123.0 ms"; 1.234 -> "1.23 s"; 75.2 -> "1m 15.2s".
+    """
+    if seconds < 1.0:
+        return f"{seconds * 1000.0:.1f} ms"
+    if seconds < 60.0:
+        return f"{seconds:.2f} s"
+    minutes = int(seconds // 60)
+    rem = seconds - minutes * 60
+    return f"{minutes}m {rem:.1f}s"
 
 
 def _plural(n: int, singular: str, plural: Optional[str] = None) -> str:
@@ -451,6 +466,12 @@ def _print_network_structure(
 
 
 def _print_risk_groups(network: Any, detail: bool) -> None:
+    """Print a concise summary of defined risk groups.
+
+    Args:
+        network: Network instance containing optional ``risk_groups`` mapping.
+        detail: When True, list individual group names; otherwise show a preview.
+    """
     print("\n3. RISK GROUPS")
     print("-" * 30)
     if network.risk_groups:
@@ -472,6 +493,12 @@ def _print_risk_groups(network: Any, detail: bool) -> None:
 
 
 def _print_components_library(components_library: Any, detail: bool) -> None:
+    """Print a summary of available components in the library.
+
+    Args:
+        components_library: Components library with ``components`` mapping.
+        detail: When True, list all component names; otherwise show a preview.
+    """
     print("\n4. COMPONENTS LIBRARY")
     print("-" * 30)
     comp_count = len(components_library.components)
@@ -490,6 +517,12 @@ def _print_components_library(components_library: Any, detail: bool) -> None:
 
 
 def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
+    """Print failure policy set overview and optional per-mode details.
+
+    Args:
+        failure_policy_set: Collection of failure policies under ``policies``.
+        detail: When True, show modes and rule previews; else, a brief count.
+    """
     print("\n5. FAILURE POLICIES")
     print("-" * 30)
     policy_count = len(failure_policy_set.policies)
@@ -562,14 +595,8 @@ def _print_traffic_matrices(
         if total_enabled_link_capacity > 0.0 and grand_total_demand > 0.0:
             cap_per_demand = total_enabled_link_capacity / grand_total_demand
             demand_util = grand_total_demand / total_enabled_link_capacity
-            headroom = total_enabled_link_capacity - grand_total_demand
-            status = "✅ under capacity" if headroom >= 0 else "❌ over capacity"
             print(f"     capacity/demand: {cap_per_demand:,.2f}x")
             print(f"     demand/capacity: {demand_util:,.2%}")
-            if headroom >= 0:
-                print(f"     status: {status} (headroom {headroom:,.1f})")
-            else:
-                print(f"     status: {status} by {abs(headroom):,.1f}")
         else:
             print("     ratio: N/A (zero capacity or zero demand)")
     except Exception as exc:  # pragma: no cover (defensive)
@@ -707,6 +734,13 @@ def _print_traffic_matrices(
 
 
 def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
+    """Print workflow steps with optional parameter and match details.
+
+    Args:
+        scenario: Scenario object providing the ``workflow`` sequence.
+        detail: When True, include step parameters and node match tables.
+        network: Network used to summarize node selection field matches.
+    """
     print("\n7. WORKFLOW STEPS")
     print("-" * 30)
     step_count = len(scenario.workflow)
@@ -820,6 +854,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         detail: Whether to show detailed information including sample node names.
     """
     logger.info(f"Inspecting scenario from: {path}")
+    _start_time = perf_counter()
 
     try:
         # Load and validate scenario
@@ -874,8 +909,6 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 if total_enabled_capacity > 0
                 else 0.0
             )
-            headroom = total_enabled_capacity - total_demand_volume
-            status = "✅ under capacity" if headroom >= 0 else "❌ over capacity"
 
             # Risk groups quick count
             rg_total = (
@@ -905,18 +938,11 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                     f"{total_demand_volume:,.1f} ({total_demands:,} demands across {matrix_count} matrices)",
                 ],
                 ["Utilization", f"{util:,.2%}"],
-                ["Headroom", f"{headroom:,.1f} ({status})"],
                 ["Risk groups", f"{rg_total} total; {rg_disabled} disabled"],
                 ["Workflow steps", f"{wf_steps}"],
             ]
             overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
             print(overview_table)
-
-            # Simple ASCII utilization bar (width 20)
-            bar_width = 20
-            fill = int(max(0.0, min(1.0, util)) * bar_width)
-            bar = "#" * fill + "." * (bar_width - fill)
-            print(f"   utilization: [{bar}] {util:,.2%}")
         except Exception:
             # Non-fatal; proceed with normal sections
             pass
@@ -1136,7 +1162,10 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 "This scenario can be used for network analysis but has no automated workflow"
             )
 
-        logger.info("Scenario inspection completed successfully")
+        _elapsed = perf_counter() - _start_time
+        logger.info(
+            f"Scenario inspection completed successfully in {_format_duration(_elapsed)}"
+        )
 
     except FileNotFoundError:
         print(f"❌ ERROR: Scenario file not found: {path}")
@@ -1172,6 +1201,7 @@ def _run_scenario(
         profile: Whether to enable performance profiling with CPU analysis.
     """
     logger.info(f"Loading scenario from: {path}")
+    _start_time = perf_counter()
 
     try:
         yaml_text = path.read_text()
@@ -1284,6 +1314,12 @@ def _run_scenario(
             json_str = json.dumps(results_dict, indent=2, default=str)
             print(json_str)
 
+        # Final success duration log
+        _elapsed = perf_counter() - _start_time
+        logger.info(
+            f"Scenario run completed successfully in {_format_duration(_elapsed)}"
+        )
+
     except FileNotFoundError:
         logger.error(f"Scenario file not found: {path}")
         print(f"❌ ERROR: Scenario file not found: {path}")
@@ -1318,7 +1354,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         dest="command",
         required=True,
         title="Available commands",
-        metavar="{run,inspect,report}",
+        metavar="{run,inspect}",
         help="Available commands",
     )
 
@@ -1373,45 +1409,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         action="store_true",
         help="Show detailed information including complete node/link tables and step parameters",
     )
-
-    # Report command
-    report_parser = subparsers.add_parser(
-        "report", help="Generate analysis reports from results file"
-    )
-    report_parser.add_argument(
-        "results",
-        type=Path,
-        nargs="?",
-        default=Path("results.json"),
-        help="Path to results JSON file (default: results.json)",
-    )
-    report_parser.add_argument(
-        "--notebook",
-        "-n",
-        type=Path,
-        help=(
-            "Output path for Jupyter notebook (default: <results_name>.ipynb;"
-            " placed under --output when provided)"
-        ),
-    )
-    report_parser.add_argument(
-        "--html",
-        type=Path,
-        nargs="?",
-        const=Path("analysis.html"),
-        help=(
-            "Generate HTML report (default: <results_name>.html if no path specified;"
-            " placed under --output when provided)"
-        ),
-    )
-    report_parser.add_argument(
-        "--include-code",
-        action="store_true",
-        help="Include code cells in HTML output (default: report without code)",
-    )
-
     # Global output directory for all commands
-    for p in (run_parser, inspect_parser, report_parser):
+    for p in (run_parser, inspect_parser):
         p.add_argument(
             "--output",
             "-o",
@@ -1456,80 +1455,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
     elif args.command == "inspect":
         _inspect_scenario(args.scenario, args.detail)
-    elif args.command == "report":
-        _generate_report(
-            results_path=args.results,
-            notebook_path=args.notebook,
-            html_path=args.html,
-            include_code=args.include_code,
-            output_dir=args.output,
-        )
-
-
-def _generate_report(
-    results_path: Path,
-    notebook_path: Optional[Path],
-    html_path: Optional[Path],
-    include_code: bool,
-    output_dir: Optional[Path] = None,
-) -> None:
-    """Generate analysis reports from results file.
-
-    Args:
-        results_path: Path to results.json file.
-        notebook_path: Output path for notebook (default: analysis.ipynb).
-        html_path: Output path for HTML report (None = no HTML).
-        include_code: Whether to include code cells in HTML output.
-    """
-    logger.info(f"Generating report from: {results_path}")
-
-    try:
-        # Initialize report generator
-        generator = ReportGenerator(results_path)
-        generator.load_results()
-
-        # Determine notebook output path
-        nb_out = resolve_override_path(notebook_path, output_dir)
-        if nb_out is None:
-            nb_out = build_artifact_path(output_dir, results_path.stem, ".ipynb")
-
-        ensure_parent_dir(nb_out)
-        generated_notebook = generator.generate_notebook(nb_out)
-        print(f"✅ Notebook generated: {generated_notebook}")
-
-        # Generate HTML if requested
-        html_out: Optional[Path] = None
-        if html_path is not None:
-            if html_path == Path("analysis.html"):
-                html_out = build_artifact_path(output_dir, results_path.stem, ".html")
-            else:
-                html_out = resolve_override_path(html_path, output_dir)
-
-        if html_out is not None:
-            ensure_parent_dir(html_out)
-            generated_html = generator.generate_html_report(
-                notebook_path=generated_notebook,
-                html_path=html_out,
-                include_code=include_code,
-            )
-            print(f"✅ HTML report generated: {generated_html}")
-
-    except FileNotFoundError as e:
-        logger.error(f"Results file not found: {e}")
-        print(f"❌ ERROR: Results file not found: {e}")
-        sys.exit(1)
-    except ValueError as e:
-        logger.error(f"Invalid results data: {e}")
-        print(f"❌ ERROR: Invalid results data: {e}")
-        sys.exit(1)
-    except RuntimeError as e:
-        logger.error(f"Report generation failed: {e}")
-        print(f"❌ ERROR: Report generation failed: {e}")
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        print(f"❌ ERROR: Unexpected error: {e}")
-        sys.exit(1)
 
 
 if __name__ == "__main__":

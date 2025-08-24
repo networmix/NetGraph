@@ -2,6 +2,7 @@
 
 Quick links:
 
+- [Design](design.md) — architecture, model, algorithms, workflow
 - [DSL Reference](dsl.md) — YAML syntax for scenario definition
 - [Workflow Reference](workflow.md) — analysis workflow configuration and execution
 - [CLI Reference](cli.md) — command-line tools for running scenarios
@@ -20,21 +21,19 @@ The core components that form the foundation of most NetGraph programs.
 **When to use:** Every NetGraph program starts with a Scenario - either loaded from YAML or built programmatically.
 
 ```python
+from pathlib import Path
 from ngraph.scenario import Scenario
 
-# Load complete scenario from YAML (recommended)
-scenario = Scenario.from_yaml(yaml_content)
-
-# Or build programmatically
-from ngraph.model.network import Network
-scenario = Scenario(network=Network(), workflow=[])
+# Load complete scenario from YAML text
+yaml_text = Path("scenarios/square_mesh.yaml").read_text()
+scenario = Scenario.from_yaml(yaml_text)
 
 # Execute the scenario
 scenario.run()
 
-# Access exported results
+# Export results
 exported = scenario.results.to_dict()
-print(exported["steps"]["NetworkStats"]["data"]["node_count"])  # example
+print(exported["workflow"].keys())
 ```
 
 **Key Methods:**
@@ -53,24 +52,18 @@ print(exported["steps"]["NetworkStats"]["data"]["node_count"])  # example
 ```python
 from ngraph.model.network import Network, Node, Link
 
-# Create network topology
+# Create a tiny network
 network = Network()
-
-# Add nodes and links
-node1 = Node(name="datacenter1")
-node2 = Node(name="datacenter2")
-network.add_node(node1)
-network.add_node(node2)
-
-link = Link(source="datacenter1", target="datacenter2", capacity=100.0)
-network.add_link(link)
+network.add_node(Node(name="n1"))
+network.add_node(Node(name="n2"))
+network.add_link(Link(source="n1", target="n2", capacity=100.0))
 
 # Calculate maximum flow (returns dict)
 max_flow = network.max_flow(
-    source_path="datacenter1",
-    sink_path="datacenter2"
+    source_path="n1",
+    sink_path="n2"
 )
-# Result: {('datacenter1', 'datacenter2'): 100.0}
+print(max_flow)
 ```
 
 **Key Methods:**
@@ -96,15 +89,9 @@ max_flow = network.max_flow(
 # Access results from scenario
 results = scenario.results
 
-# Retrieve specific results
-node_count = results.get("NetworkStats", "node_count")
-capacity_envelopes = results.get("CapacityEnvelopeAnalysis", "capacity_envelopes")
-
-# Get all results for a metric across steps
-all_capacities = results.get_all("total_capacity")
-
 # Export all results for serialization
 all_data = results.to_dict()
+print(list(all_data["steps"].keys()))
 ```
 
 **Key Methods:**
@@ -129,40 +116,28 @@ Essential analysis capabilities for network evaluation.
 ```python
 from ngraph.algorithms.base import FlowPlacement
 
-# Basic maximum flow (returns dict)
+# Maximum flow between group patterns (combine all sources/sinks)
 max_flow = network.max_flow(
-    source_path="datacenter.*",  # Regex: all nodes matching pattern
-    sink_path="edge.*",
-    mode="combine"               # Aggregate all source->sink flows
-)
-
-# Advanced flow options
-max_flow = network.max_flow(
-    source_path="pod1/servers",
-    sink_path="pod2/servers",
-    mode="pairwise",            # Individual flows between each pair
-    shortest_path=True,         # Use only shortest paths
-    flow_placement=FlowPlacement.PROPORTIONAL  # UCMP load balancing
+    source_path="^metro1/.*",
+    sink_path="^metro5/.*",
+    mode="combine"
 )
 
 # Detailed flow analysis with cost distribution
 result = network.max_flow_with_summary(
-    source_path="datacenter.*",
-    sink_path="edge.*",
+    source_path="^metro1/.*",
+    sink_path="^metro5/.*",
     mode="combine"
 )
 (src_label, sink_label), (flow_value, summary) = next(iter(result.items()))
-
-# Cost distribution shows flow volume per path cost (useful for latency analysis)
-print(f"Cost distribution: {summary.cost_distribution}")
-# Example: {2.0: 150.0, 4.0: 75.0} means 150 units on cost-2 paths, 75 on cost-4 paths
+print(summary.cost_distribution)
 ```
 
 **Key Options:**
 
 - `mode`: `"combine"` (aggregate flows) or `"pairwise"` (individual pair flows)
 - `shortest_path`: `True` (shortest only) or `False` (all available paths)
-- `flow_placement`: `FlowPlacement.PROPORTIONAL` (UCMP) or `FlowPlacement.EQUAL_BALANCED` (ECMP)
+- `flow_placement`: `FlowPlacement.PROPORTIONAL` (WCMP) or `FlowPlacement.EQUAL_BALANCED` (ECMP)
 
 **Advanced Features:**
 
@@ -183,15 +158,13 @@ from ngraph.model.view import NetworkView
 # Create view with failed components (for failure simulation)
 failed_view = NetworkView.from_excluded_sets(
     network,
-    excluded_nodes={"spine1", "spine2"},    # Failed nodes
-    excluded_links={"link_123"}             # Failed links
+    excluded_nodes={"n2"},
+    excluded_links=set()
 )
 
 # Analyze degraded network
-degraded_flow = failed_view.max_flow("datacenter.*", "edge.*")
-
-# NetworkView has same analysis API as Network
-bottlenecks = failed_view.saturated_edges("source", "sink")
+degraded_flow = failed_view.max_flow("n1", "n2")
+print(degraded_flow)
 ```
 
 **Key Features:**
@@ -215,27 +188,29 @@ Sophisticated analysis capabilities using Monte Carlo methods and parallel proce
 ```python
 from ngraph.failure.manager.manager import FailureManager
 from ngraph.failure.policy import FailurePolicy, FailureRule
-from ngraph.results.artifacts import FailurePolicySet
+from ngraph.failure.policy_set import FailurePolicySet
 
-# Setup failure policies
 policy_set = FailurePolicySet()
-rule = FailureRule(entity_scope="link", rule_type="choice", count=2)
-policy = FailurePolicy(rules=[rule])
-policy_set.add("random_failures", policy)
+policy = FailurePolicy(modes=[
+    # One mode with a single random link failure
+    {
+        "weight": 1.0,
+        "rules": [FailureRule(entity_scope="link", rule_type="choice", count=1)]
+    }
+])
+policy_set.add("one_link", policy)
 
-# Create FailureManager
 manager = FailureManager(
     network=network,
     failure_policy_set=policy_set,
-    policy_name="random_failures"
+    policy_name="one_link"
 )
 
-# Capacity envelope analysis
-envelope_results = manager.run_max_flow_monte_carlo(
-    source_path="datacenter.*",
-    sink_path="edge.*",
-    iterations=1000,
-    parallelism=4,
+results = manager.run_max_flow_monte_carlo(
+    source_path="n1",
+    sink_path="n2",
+    iterations=10,
+    parallelism=1,
     baseline=True
 )
 ```
@@ -263,12 +238,11 @@ envelope_results = manager.run_max_flow_monte_carlo(
 **When to use:** Analyzing outputs from FailureManager convenience methods - provides pandas integration and statistical summaries.
 
 ```python
-# Unified flow results (per-iteration)
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 
 flows = [
     FlowEntry(
-        source="A", destination="B", priority=0,
+        source="n1", destination="n2", priority=0,
         demand=10.0, placed=10.0, dropped=0.0,
         cost_distribution={2.0: 6.0, 4.0: 4.0}, data={}
     )
@@ -278,7 +252,7 @@ summary = FlowSummary(
     dropped_flows=0, num_flows=len(flows)
 )
 iteration = FlowIterationResult(flows=flows, summary=summary)
-iteration_dict = iteration.to_dict()  # JSON-safe dict
+iteration_dict = iteration.to_dict()
 ```
 
 **Key Result Types:**
@@ -288,7 +262,7 @@ iteration_dict = iteration.to_dict()  # JSON-safe dict
 - `FlowSummary` - Aggregate totals for an iteration
 - `SensitivityResults` - Component criticality rankings
 
-**Integration:** Returned by FailureManager convenience methods. Provides pandas DataFrames and export capabilities for notebook analysis.
+**Integration:** Returned by FailureManager convenience methods. Analyze exported JSON results using external scripts.
 
 ## 4. Data & Results
 
@@ -301,19 +275,11 @@ Working with analysis outputs and implementing custom result storage.
 **When to use:** Working with stored analysis results, implementing custom workflow steps, or exporting data for external analysis.
 
 ```python
-from ngraph.results.artifacts import CapacityEnvelope, FailurePatternResult
+from ngraph.results.store import Results
 
-# Access capacity envelopes from analysis results
-envelope_dict = scenario.results.get("CapacityEnvelopeAnalysis", "capacity_envelopes")
-envelope = CapacityEnvelope.from_dict(envelope_dict["datacenter->edge"])
-
-# Statistical access
-print(f"Mean capacity: {envelope.mean_capacity}")
-print(f"95th percentile: {envelope.get_percentile(95)}")
-
-# Export and reconstruction
-serialized = envelope.to_dict()  # For JSON storage
-values = envelope.expand_to_values()  # Reconstruct original samples
+# Access exported results
+exported = scenario.results.to_dict()
+print(exported["steps"].keys())
 ```
 
 **Key Classes:**

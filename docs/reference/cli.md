@@ -2,28 +2,20 @@
 
 Quick links:
 
+- [Design](design.md) — architecture, model, algorithms, workflow
 - [DSL Reference](dsl.md) — YAML syntax for scenario definition
 - [Workflow Reference](workflow.md) — analysis workflow configuration and execution
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios directly from the terminal.
-
-## Installation
-
-The CLI is available when NetGraph is installed via pip:
-
-```bash
-pip install ngraph
-```
+NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios from the terminal.
 
 ## Basic Usage
 
-The CLI provides three primary commands:
+The CLI provides two primary commands:
 
 - `inspect`: Analyze and validate scenario files without running them
 - `run`: Execute scenario files and generate results
-- `report`: Generate analysis reports from results files
 
 **Global options** (must be placed before the command):
 
@@ -33,14 +25,12 @@ The CLI provides three primary commands:
 ### Quick Start
 
 ```bash
-# Inspect a scenario to understand its structure
-python -m ngraph inspect my_scenario.yaml
+# Inspect a provided scenario
+ngraph inspect scenarios/square_mesh.yaml
 
-# Run a scenario (generates my_scenario.results.json by default)
-python -m ngraph run my_scenario.yaml
+# Run a scenario (creates square_mesh.results.json by default)
+ngraph run scenarios/square_mesh.yaml
 
-# Generate analysis report from results
-python -m ngraph report results.json --notebook analysis.ipynb
 ```
 
 ## Command Reference
@@ -52,7 +42,7 @@ Analyze and validate a NetGraph scenario file without executing it.
 **Syntax:**
 
 ```bash
-python -m ngraph [--verbose|--quiet] inspect <scenario_file> [options]
+ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 ```
 
 **Arguments:**
@@ -62,7 +52,7 @@ python -m ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 **Options:**
 
 - `--detail`, `-d`: Show detailed information including complete node/link tables and step parameters
-- `--help`, `-h`: Show help message
+- `--output`, `-o`: Output directory for generated artifacts (e.g., profiles)
 
 **What it does:**
 
@@ -83,13 +73,13 @@ In detail mode (`--detail`), shows complete tables for all nodes and links with 
 
 ```bash
 # Basic inspection
-python -m ngraph inspect my_scenario.yaml
+ngraph inspect scenarios/backbone_clos.yml
 
 # Detailed inspection with complete node/link tables and step parameters
-python -m ngraph inspect my_scenario.yaml --detail
+ngraph inspect scenarios/nsfnet.yaml --detail
 
 # Inspect with verbose logging (note: global option placement)
-python -m ngraph --verbose inspect my_scenario.yaml
+ngraph --verbose inspect scenarios/square_mesh.yaml
 ```
 
 **Use cases:**
@@ -106,7 +96,7 @@ Execute a NetGraph scenario file.
 **Syntax:**
 
 ```bash
-python -m ngraph [--verbose|--quiet] run <scenario_file> [options]
+ngraph [--verbose|--quiet] run <scenario_file> [options]
 ```
 
 **Arguments:**
@@ -116,104 +106,46 @@ python -m ngraph [--verbose|--quiet] run <scenario_file> [options]
 **Options:**
 
 - `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.results.json`)
-- `--no-results`: Disable results file generation (for edge cases)
+- `--no-results`: Disable results file generation
 - `--stdout`: Print results to stdout in addition to saving file
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
 - `--profile`: Enable performance profiling with CPU analysis and bottleneck detection
-- `--help`, `-h`: Show help message
-
-### `report`
-
-Generate analysis reports from NetGraph results files.
-
-**Syntax:**
-
-```bash
-python -m ngraph [--verbose|--quiet] report [results_file] [options]
-```
-
-**Arguments:**
-
-- `results_file`: Path to the JSON results file (default: `results.json`)
-
-**Options:**
-
-- `--notebook`, `-n`: Output path for Jupyter notebook (default: `<results_name>.ipynb`)
-- `--html`: Generate HTML report (default: `<results_name>.html` if no path specified)
-- `--include-code`: Include code cells in HTML output (default: report without code)
-- `--help`, `-h`: Show help message
-
-**What it does:**
-
-The `report` command generates analysis reports from results files created by the `run` command. It creates:
-
-- **Jupyter notebook**: Interactive analysis notebook with code cells, visualizations, and explanations (default: `<results_name>.ipynb`)
-- **HTML report** (optional): Static report for viewing without Jupyter, optionally including code (default: `<results_name>.html` when `--html` is used)
-
-The report detects and analyzes the workflow steps present in the results file, creating appropriate sections and visualizations for each analysis type.
-
-**Examples:**
-
-```bash
-# Generate notebook from default results.json
-python -m ngraph report
-
-# Generate notebook with custom paths
-python -m ngraph report my_results.json --notebook my_analysis.ipynb
-
-# Generate both notebook and HTML report (defaults derived from results filename)
-python -m ngraph report baseline_scenario.json --html
-
-# Generate HTML report with custom filename
-python -m ngraph report results.json --html custom_report.html
-
-# Generate HTML report without code cells
-python -m ngraph report baseline_scenario.json --html
-
-# Generate HTML report with code cells included
-python -m ngraph report results.json --html --include-code
-```
-
-**Use cases:**
-
-- **Analysis documentation**: Create shareable notebooks documenting network analysis results
-- **Report generation**: Generate HTML reports for stakeholders who don't use Jupyter
-- **Iterative analysis**: Create notebooks for further data exploration and visualization
-- **Presentation**: Generate HTML reports for presentations and documentation
+- `--profile-memory`: Also track peak memory per step
+- `--output`, `-o`: Output directory for generated artifacts
 
 ## Examples
 
 ### Basic Execution
 
 ```bash
-# Run a scenario (creates my_network.results.json by default)
-python -m ngraph run my_network.yaml
+# Run a scenario (creates square_mesh.results.json by default)
+ngraph run scenarios/square_mesh.yaml
 
 # Run a scenario and save results to custom file
-python -m ngraph run my_network.yaml --results analysis.json
+ngraph run scenarios/backbone_clos.yml --results clos_analysis.json
 
-# Run a scenario without creating any files (edge cases)
-python -m ngraph run my_network.yaml --no-results
+# Run a scenario without creating any files
+ngraph run scenarios/nsfnet.yaml --no-results
 ```
 
 ### Save Results to File
 
 ```bash
 # Save results to a custom JSON file
-python -m ngraph run my_network.yaml --results analysis.json
+ngraph run scenarios/backbone_clos.yml --results analysis.json
 
 # Save to file AND print to stdout
-python -m ngraph run my_network.yaml --results analysis.json --stdout
+ngraph run scenarios/backbone_clos.yml --results analysis.json --stdout
 
 # Use default filename and also print to stdout
-python -m ngraph run my_network.yaml --stdout
+ngraph run scenarios/square_mesh.yaml --stdout
 ```
 
 ### Running Test Scenarios
 
 ```bash
-# Run one of the included scenarios with results export
-python -m ngraph run scenarios/square_mesh.yaml --results results.json
+# Run one of the provided scenarios with results export
+ngraph run scenarios/backbone_clos.yml --results results.json
 ```
 
 ### Filtering Results by Step Names
@@ -221,25 +153,24 @@ python -m ngraph run scenarios/square_mesh.yaml --results results.json
 You can filter the output to include only specific workflow steps using the `--keys` option:
 
 ```bash
-# Only include results from the capacity_analysis step
-python -m ngraph run scenario.yaml --keys capacity_analysis --stdout
+# Only include results from the MSD step
+ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
 
 # Include multiple specific steps and save to custom file
-python -m ngraph run scenario.yaml --keys build_graph capacity_analysis --results filtered.json
+ngraph run scenarios/backbone_clos.yml --keys network_statistics tm_placement --results filtered.json
 
 # Filter and print to stdout while using default file
-python -m ngraph run scenario.yaml --keys capacity_analysis --stdout
+ngraph run scenarios/backbone_clos.yml --keys network_statistics --stdout
 ```
 
 The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
 
 ```yaml
 workflow:
-  - step_type: BuildGraph
-    name: build_graph
-  - step_type: MaxFlow
-    name: capacity_analysis
-    # ... other parameters
+  - step_type: NetworkStats
+    name: network_statistics
+  - step_type: MaximumSupportedDemand
+    name: msd_baseline
 ```
 
 Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_analysis` will include only the MaxFlow results.
@@ -250,13 +181,13 @@ Enable performance profiling to identify bottlenecks and analyze execution time:
 
 ```bash
 # Run scenario with profiling
-python -m ngraph run scenario.yaml --profile
+ngraph run scenarios/backbone_clos.yml --profile
 
 # Combine profiling with results export
-python -m ngraph run scenario.yaml --profile --results analysis.json
+ngraph run scenarios/backbone_clos.yml --profile --results analysis.json
 
-# Profile specific workflow steps
-python -m ngraph run scenario.yaml --profile --keys capacity_analysis
+# Profile specific workflow steps and track memory
+ngraph run scenarios/backbone_clos.yml --profile --profile-memory --keys tm_placement
 ```
 
 The profiling output includes:
@@ -279,12 +210,13 @@ The CLI outputs results as JSON with a fixed top-level shape:
 
 ```json
 {
-  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, ... } },
+  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, "step_name": "..." } },
   "steps": {
-    "build_graph": { "metadata": {}, "data": { "graph": { "graph": {}, "nodes": [...], "links": [...] } } },
-    "cap": { "metadata": { "iterations": 1 }, "data": { "flow_results": [ { "flows": [...], "summary": {...} } ] } }
+    "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
+    "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "matrix_name": "baseline_traffic_matrix" } } },
+    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "flow_results": [ { "flows": [], "summary": {} } ], "context": { "matrix_name": "baseline_traffic_matrix" } } }
   },
-  "scenario": { "seed": 1, "failure_policy_set": { ... }, "traffic_matrices": { ... } }
+  "scenario": { "seed": 42, "failure_policy_set": { }, "traffic_matrices": { } }
 }
 ```
 
@@ -299,19 +231,19 @@ NetGraph CLI generates results by default for analysis workflows:
 ### Default Behavior (Results Generated)
 
 ```bash
-python -m ngraph run scenario.yaml
+ngraph run scenarios/square_mesh.yaml
 ```
 
 - Executes the scenario
 - Logs execution progress to the terminal
-- **Creates results.json by default**
+- **Creates `<scenario_name>.results.json` by default**
 - Shows success message with file location
 
 ### Custom Results File
 
 ```bash
 # Save to custom file
-python -m ngraph run scenario.yaml --results my_analysis.json
+ngraph run scenarios/square_mesh.yaml --results my_analysis.json
 ```
 
 - Creates specified JSON file instead of results.json
@@ -320,7 +252,7 @@ python -m ngraph run scenario.yaml --results my_analysis.json
 ### Print to Terminal
 
 ```bash
-python -m ngraph run scenario.yaml --stdout
+ngraph run scenarios/square_mesh.yaml --stdout
 ```
 
 - Creates results.json AND prints JSON to stdout
@@ -329,7 +261,7 @@ python -m ngraph run scenario.yaml --stdout
 ### Combined Output
 
 ```bash
-python -m ngraph run scenario.yaml --results analysis.json --stdout
+ngraph run scenarios/square_mesh.yaml --results analysis.json --stdout
 ```
 
 - Creates custom JSON file AND prints to stdout
@@ -338,14 +270,12 @@ python -m ngraph run scenario.yaml --results analysis.json --stdout
 ### Disable File Generation (Edge Cases)
 
 ```bash
-python -m ngraph run scenario.yaml --no-results
+ngraph run scenarios/square_mesh.yaml --no-results
 ```
 
 - Executes scenario without creating any output files
 - Only shows execution logs and completion status
 - Useful for testing, CI/CD validation, or when only logs are needed
-
-Results default to preserving the scenario or results name, which makes downstream `report` outputs consistent and easy to track.
 
 ## Integration with Workflows
 
@@ -360,9 +290,8 @@ The CLI executes the complete workflow defined in your scenario file, running al
 
 ```bash
 # Development workflow
-python -m ngraph inspect my_scenario.yaml --detail  # Validate and debug
-python -m ngraph run my_scenario.yaml              # Execute (creates my_scenario.results.json)
-python -m ngraph report my_scenario.results.json --html    # Generate my_scenario.ipynb/html
+ngraph inspect scenarios/backbone_clos.yml --detail
+ngraph run scenarios/backbone_clos.yml
 ```
 
 ### Debugging Scenarios
@@ -371,13 +300,13 @@ When developing complex scenarios with blueprints and hierarchical structures:
 
 ```bash
 # Check if scenario loads correctly
-python -m ngraph inspect scenario.yaml
+ngraph inspect scenarios/square_mesh.yaml
 
 # Debug network expansion issues (note: global option placement)
-python -m ngraph --verbose inspect scenario.yaml --detail
+ngraph --verbose inspect scenarios/backbone_clos.yml --detail
 
 # Verify workflow steps are configured correctly
-python -m ngraph inspect scenario.yaml --detail | grep -A 5 "Workflow Steps"
+ngraph inspect scenarios/backbone_clos.yml --detail | grep -A 5 "WORKFLOW STEPS"
 ```
 
 The `inspect` command will catch common issues like:

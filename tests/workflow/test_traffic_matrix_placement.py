@@ -11,7 +11,7 @@ from ngraph.workflow.traffic_matrix_placement_step import (
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_stores_core_outputs(
+def test_traffic_matrix_placement_stores_core_outputs(
     mock_failure_manager_class,
 ) -> None:
     # Prepare mock scenario with traffic matrix and results store
@@ -89,7 +89,7 @@ def test_traffic_matrix_placement_analysis_stores_core_outputs(
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_flow_details_edges(
+def test_traffic_matrix_placement_flow_details_edges(
     mock_failure_manager_class,
 ) -> None:
     # Prepare mock scenario with traffic matrix and results store
@@ -181,7 +181,7 @@ def test_traffic_matrix_placement_analysis_flow_details_edges(
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_alpha_scales_demands(
+def test_traffic_matrix_placement_alpha_scales_demands(
     mock_failure_manager_class,
 ) -> None:
     # Prepare mock scenario with a single traffic demand
@@ -235,7 +235,7 @@ def test_traffic_matrix_placement_analysis_alpha_scales_demands(
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_metadata_includes_alpha(
+def test_traffic_matrix_placement_metadata_includes_alpha(
     mock_failure_manager_class,
 ) -> None:
     mock_scenario = MagicMock()
@@ -282,7 +282,7 @@ def test_traffic_matrix_placement_analysis_metadata_includes_alpha(
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_alpha_auto_uses_msd(
+def test_traffic_matrix_placement_alpha_auto_uses_msd(
     mock_failure_manager_class,
 ) -> None:
     # Scenario with one TD
@@ -357,7 +357,7 @@ def test_traffic_matrix_placement_analysis_alpha_auto_uses_msd(
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_analysis_alpha_auto_missing_msd_raises(
+def test_traffic_matrix_placement_alpha_auto_missing_msd_raises(
     mock_failure_manager_class,
 ) -> None:
     mock_scenario = MagicMock()

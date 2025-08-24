@@ -577,7 +577,15 @@
               "priority": {"type": "integer", "description": "Priority class"},
               "demand_placed": {"type": "number", "description": "Pre-placed demand amount"},
               "mode": {"type": "string", "description": "Expansion mode for sub-demands"},
-              "flow_policy_config": {"type": "object", "description": "Routing policy config"},
+              "flow_policy_config": {
+                "description": "Routing policy config. Accepts enum name (string), enum value (integer), object, or null.",
+                "oneOf": [
+                  {"type": "string"},
+                  {"type": "integer"},
+                  {"type": "object"},
+                  {"type": "null"}
+                ]
+              },
               "flow_policy": {"type": "object", "description": "Inline FlowPolicy definition"},
               "attrs": {"type": "object", "description": "Additional demand attributes"}
             },

@@ -17,7 +17,6 @@ class SeedManager:
     Usage:
         seed_mgr = SeedManager(42)
         failure_seed = seed_mgr.derive_seed("failure_policy", "default")
-        analysis_seed = seed_mgr.derive_seed("workflow", "capacity_analysis", 0)
     """
 
     def __init__(self, master_seed: Optional[int] = None) -> None:

@@ -136,9 +136,11 @@ class StrictMultiDiGraph(nx.MultiDiGraph):
     ) -> EdgeID:
         """Add a directed edge from u_for_edge to v_for_edge.
 
-        If no key is provided, a unique Base64-UUID is generated. This method
-        does not create nodes automatically; both u_for_edge and v_for_edge
-        must already exist in the graph.
+        If no key is provided, a unique monotonically increasing integer key is
+        assigned via ``new_edge_key``. This method does not create nodes
+        automatically; both u_for_edge and v_for_edge must already exist in the
+        graph. When an explicit integer key is provided, the internal counter is
+        advanced to avoid collisions with future auto-assigned keys.
 
         Args:
             u_for_edge: The source node. Must exist in the graph.

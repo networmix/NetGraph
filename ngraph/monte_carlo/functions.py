@@ -7,8 +7,8 @@ All functions accept only simple, hashable parameters to ensure compatibility
 with FailureManager's caching and multiprocessing systems for Monte Carlo
 failure analysis scenarios.
 
-Note: This module is distinct from ngraph.workflow.analysis, which provides
-notebook visualization components for workflow results.
+This module provides only computation functions. Visualization and notebook
+analysis live in external packages.
 """
 
 from __future__ import annotations
@@ -140,9 +140,10 @@ def demand_placement_analysis(
     Additionally exposes placement engine counters to aid performance analysis:
     - Per-demand: ``FlowEntry.data.policy_metrics`` (dict) with totals collected by
       the active FlowPolicy (e.g., ``spf_calls_total``, ``flows_created_total``,
-      ``reopt_calls_total``, ``place_iterations_total``, ``placed_total``).
+      ``reopt_calls_total``, ``place_iterations_total``).
     - Per-iteration: ``FlowIterationResult.data.iteration_metrics`` aggregating the
-      same counters across all demands in the iteration.
+      same counters across all demands in the iteration. Use
+      ``FlowIterationResult.summary.total_placed`` for placed volume totals.
 
     Args:
         network_view: NetworkView with potential exclusions applied.
@@ -193,7 +194,6 @@ def demand_placement_analysis(
         "flows_created_total": 0.0,
         "reopt_calls_total": 0.0,
         "place_iterations_total": 0.0,
-        "placed_total": 0.0,
     }
 
     for dmd in tm.demands:

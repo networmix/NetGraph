@@ -4,29 +4,32 @@
 
 set -e  # Exit on any error
 
+# Determine python interpreter (prefer venv if active)
+PYTHON=${PYTHON:-python3}
+
 # Check if pre-commit is installed
-if ! command -v pre-commit &> /dev/null; then
-    echo "❌ pre-commit is not installed. Please run 'pip install pre-commit' first."
+if ! "$PYTHON" -m pre_commit --version &> /dev/null; then
+    echo "❌ pre-commit is not installed. Please run 'make dev' first."
     exit 1
 fi
 
 # Check if pytest is installed
-if ! command -v pytest &> /dev/null; then
-    echo "❌ pytest is not installed. Please run 'pip install -e .[dev]' first."
+if ! "$PYTHON" -m pytest --version &> /dev/null; then
+    echo "❌ pytest is not installed. Please run 'make dev' first."
     exit 1
 fi
 
 # Check if pre-commit hooks are installed
 if [ ! -f .git/hooks/pre-commit ]; then
     echo "⚠️  Pre-commit hooks not installed. Installing now..."
-    pre-commit install
+    "$PYTHON" -m pre_commit install
     echo ""
 fi
 
 # Run pre-commit with fixers (first pass), do not fail if files were modified
 echo "🏃 Running pre-commit (first pass: apply auto-fixes if needed)..."
 set +e
-pre-commit run --all-files
+"$PYTHON" -m pre_commit run --all-files
 first_pass_status=$?
 set -e
 
@@ -36,7 +39,7 @@ fi
 
 # Re-run to verify all checks pass after fixes; fail on any remaining issues
 echo "🏃 Running pre-commit (second pass: verify all checks)..."
-if ! pre-commit run --all-files; then
+if ! "$PYTHON" -m pre_commit run --all-files; then
     echo ""
     echo "❌ Pre-commit checks failed after applying fixes. Please address the issues above."
     exit 1
@@ -54,8 +57,8 @@ echo ""
 
 # Run schema validation
 echo "📋 Validating YAML schemas..."
-if python -c "import jsonschema" >/dev/null 2>&1; then
-    python -c "import json, yaml, jsonschema, pathlib; \
+if "$PYTHON" -c "import jsonschema" >/dev/null 2>&1; then
+    "$PYTHON" -c "import json, yaml, jsonschema, pathlib; \
     schema = json.load(open('schemas/scenario.json')); \
     scenario_files = list(pathlib.Path('scenarios').rglob('*.yaml')); \
     integration_files = list(pathlib.Path('tests/integration').glob('*.yaml')); \
@@ -76,7 +79,7 @@ echo ""
 
 # Run tests with coverage (includes slow and benchmark tests for regression detection)
 echo "🧪 Running tests with coverage..."
-pytest
+"$PYTHON" -m pytest
 
 if [ $? -eq 0 ]; then
     echo ""

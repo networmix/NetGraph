@@ -2,12 +2,13 @@
 
 Quick links:
 
+- [Design](design.md) — architecture, model, algorithms, workflow
 - [DSL Reference](dsl.md) — YAML syntax for scenario definition
 - [CLI Reference](cli.md) — command-line tools for running scenarios
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-This document describes NetGraph workflows – analysis execution pipelines that perform capacity analysis, failure simulation, and network statistics computation.
+This document describes NetGraph workflows – analysis execution pipelines that perform capacity analysis, demand placement, and statistics computation.
 
 ## Overview
 
@@ -15,11 +16,17 @@ Workflows are lists of analysis steps executed sequentially on network scenarios
 
 ```yaml
 workflow:
-  - step_type: MaxFlow
-    name: "cap"
-    source_path: "^datacenter/.*"
-    sink_path: "^edge/.*"
+  - step_type: NetworkStats
+    name: network_statistics
+  - step_type: MaximumSupportedDemand
+    name: msd_baseline
+    matrix_name: baseline_traffic_matrix
+  - step_type: TrafficMatrixPlacement
+    name: tm_placement
+    matrix_name: baseline_traffic_matrix
+    failure_policy: weighted_modes
     iterations: 1000
+    baseline: true
 ```
 
 ## Execution Model
@@ -35,7 +42,7 @@ workflow:
 
 ### BuildGraph
 
-Exports the network graph to JSON (node-link format) for external analysis. Not required for other steps, which construct internal views.
+Exports the network graph to JSON (node-link format) for external analysis. Not required for other steps.
 
 ```yaml
 - step_type: BuildGraph
@@ -174,29 +181,19 @@ include_flow_details: false      # Emit cost_distribution per flow
 include_min_cut: false           # Emit min-cut edge list per flow
 ```
 
-### Performance Tuning
-
-```yaml
-parallelism: 8                     # Worker processes (default: 1)
-seed: 42                          # Reproducible results
-shortest_path: false              # Shortest paths only (default: false)
-flow_placement: "PROPORTIONAL"    # "PROPORTIONAL" or "EQUAL_BALANCED"
-```
-
 ## Results Export Shape
 
 Exported results have a fixed top-level structure:
 
 ```json
 {
-  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, ... } },
+  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, "step_name": "..." } },
   "steps": {
-    "<step_name>": {
-      "metadata": { ... },
-      "data": { ... }
-    }
+    "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
+    "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.37, "context": {"matrix_name": "baseline_traffic_matrix"} } },
+    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "flow_results": [ { "flows": [], "summary": {} } ], "context": {"matrix_name": "baseline_traffic_matrix"} } }
   },
-  "scenario": { "seed": 1, "failure_policy_set": { ... }, "traffic_matrices": { ... } }
+  "scenario": { "seed": 42, "failure_policy_set": { }, "traffic_matrices": { } }
 }
 ```
 
@@ -236,91 +233,3 @@ Exported results have a fixed top-level structure:
   "context": { ... }
 }
 ```
-
-## Common Workflow Patterns
-
-### Single Deterministic Analysis
-
-```yaml
-workflow:
-  - step_type: MaxFlow
-    source_path: "^servers/.*"
-    sink_path: "^storage/.*"
-```
-
-### Monte Carlo Failure Analysis
-
-```yaml
-workflow:
-  - step_type: MaxFlow
-    source_path: "^pod1/.*"
-    sink_path: "^pod2/.*"
-    failure_policy: random_link_failures
-    iterations: 10000
-    parallelism: 8
-    baseline: true
-    seed: 42
-```
-
-### Comparative Analysis
-
-```yaml
-workflow:
-  # Baseline capacity
-  - step_type: MaxFlow
-    name: baseline
-    source_path: "^dc1/.*"
-    sink_path: "^dc2/.*"
-    iterations: 1
-
-  # Single failure impact
-  - step_type: MaxFlow
-    name: single_failure
-    source_path: "^dc1/.*"
-    sink_path: "^dc2/.*"
-    failure_policy: single_link_failure
-    iterations: 1000
-    baseline: true
-```
-
-## Report Generation
-
-Generate analysis reports using the CLI:
-
-```bash
-# Jupyter notebook (defaults to <results_name>.ipynb)
-python -m ngraph report baseline_scenario.json
-
-# HTML report (defaults to <results_name>.html when --html is used)
-python -m ngraph report baseline_scenario.json --html
-```
-
-See [CLI Reference](cli.md#report) for complete options.
-
-## Best Practices
-
-### Performance
-
-- Use `parallelism` for Monte Carlo analysis (typically CPU core count)
-- Set `store_failure_patterns: false` for large-scale analysis
-- Start with fewer iterations for initial validation
-
-### Analysis Strategy
-
-- Begin with single deterministic analysis before Monte Carlo
-- Use `combine` mode for aggregate analysis, `pairwise` for detailed flows
-- Include `baseline: true` for failure scenario comparison
-- Use descriptive `name` parameters for each step
-
-### Node Selection
-
-- Test regex patterns against actual node names before large runs
-- Use capturing groups to analyze multiple node groups simultaneously
-- Anchor patterns with `^` and `$` for precise matching
-- Leverage hierarchical naming conventions for effective grouping
-
-### Integration
-
-- Reference failure policies from `failure_policy_set`
-- Ensure failure policies exist before workflow execution
-- Include `BuildGraph` only when graph export to JSON is needed for external analysis

@@ -24,8 +24,8 @@ class FlowPolicyConfig(IntEnum):
     """Enumerates supported flow policy configurations."""
 
     SHORTEST_PATHS_ECMP = 1
-    SHORTEST_PATHS_UCMP = 2
-    TE_UCMP_UNLIM = 3
+    SHORTEST_PATHS_WCMP = 2
+    TE_WCMP_UNLIM = 3
     TE_ECMP_UP_TO_256_LSP = 4
     TE_ECMP_16_LSP = 5
 
@@ -135,7 +135,6 @@ class FlowPolicy:
             "flows_created_total": 0.0,
             "reopt_calls_total": 0.0,
             "place_iterations_total": 0.0,
-            "placed_total": 0.0,
         }
         # Snapshot of last place_demand call
         self.last_metrics: Dict[str, float] = {}
@@ -718,8 +717,7 @@ class FlowPolicy:
             for flow in self.flows.values():
                 self._reoptimize_flow(flow_graph, flow.flow_index)
 
-        # Update totals and last_metrics
-        self._metrics_totals["placed_total"] += float(total_placed_flow)
+        # Update last_metrics snapshot
 
         totals_after = self._metrics_totals
         self.last_metrics = {
@@ -747,7 +745,7 @@ class FlowPolicy:
 
         Returns:
             dict[str, float]: Totals including 'spf_calls_total', 'flows_created_total',
-                'reopt_calls_total', 'place_iterations_total', 'placed_total'.
+                'reopt_calls_total', and 'place_iterations_total'.
         """
         return dict(self._metrics_totals)
 
@@ -812,8 +810,8 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             max_flow_count=1,  # Single flow from the perspective of the flow object,
             # but multipath can create parallel SPF paths.
         )
-    elif flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_UCMP:
-        # Hop-by-hop with proportional flow placement (e.g., per-hop UCMP).
+    elif flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_WCMP:
+        # Hop-by-hop weighted ECMP (WCMP) over equal-cost paths (proportional split).
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,
@@ -821,8 +819,8 @@ def get_flow_policy(flow_policy_config: FlowPolicyConfig) -> FlowPolicy:
             multipath=True,
             max_flow_count=1,
         )
-    elif flow_policy_config == FlowPolicyConfig.TE_UCMP_UNLIM:
-        # "Ideal" TE with multiple MPLS LSPs and UCMP flow placement.
+    elif flow_policy_config == FlowPolicyConfig.TE_WCMP_UNLIM:
+        # Traffic engineering with WCMP (proportional split) and capacity-aware selection.
         return FlowPolicy(
             path_alg=base.PathAlg.SPF,
             flow_placement=FlowPlacement.PROPORTIONAL,

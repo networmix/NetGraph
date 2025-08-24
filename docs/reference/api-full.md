@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 15, 2025 at 17:38 UTC
+Generated from source code on: August 24, 2025 at 04:38 UTC
 
-Modules auto-discovered: 73
+Modules auto-discovered: 61
 
 ---
 
@@ -384,29 +384,6 @@ Args:
 
 ---
 
-## ngraph.report
-
-Standalone report generation for NetGraph analysis results.
-
-Generates Jupyter notebooks and optional HTML reports from ``results.json``.
-This module is separate from workflow execution to allow independent analysis
-in notebooks.
-
-### ReportGenerator
-
-Generate notebooks and HTML reports from a results document.
-
-The notebook includes environment setup, results loading, overview, and
-per-step analysis sections chosen via the analysis registry.
-
-**Methods:**
-
-- `generate_html_report(self, notebook_path: 'Path' = PosixPath('analysis.ipynb'), html_path: 'Path' = PosixPath('analysis_report.html'), include_code: 'bool' = False) -> 'Path'` - Render the notebook to HTML using nbconvert.
-- `generate_notebook(self, output_path: 'Path' = PosixPath('analysis.ipynb')) -> 'Path'` - Create a Jupyter notebook with analysis scaffold.
-- `load_results(self) -> 'None'` - Load and validate the JSON results file into memory.
-
----
-
 ## ngraph.scenario
 
 Scenario class for defining network analysis workflows from YAML.
@@ -463,7 +440,6 @@ ensuring reproducible results regardless of execution order or parallelism.
 Usage:
     seed_mgr = SeedManager(42)
     failure_seed = seed_mgr.derive_seed("failure_policy", "default")
-    analysis_seed = seed_mgr.derive_seed("workflow", "capacity_analysis", 0)
 
 **Methods:**
 
@@ -736,7 +712,7 @@ Inherits from:
 - `is_multigraph(self)` - Returns True if graph is a multigraph, False otherwise.
 - `nbunch_iter(self, nbunch=None)` - Returns an iterator over nodes contained in nbunch that are
 - `neighbors(self, n)` - Returns an iterator over successor nodes of n.
-- `new_edge_key(self, u, v)` - Returns an unused key for edges between nodes `u` and `v`.
+- `new_edge_key(self, u: 'NodeID', v: 'NodeID', key: 'Optional[int]' = None) -> 'int'` - Return a new unique integer edge ID.
 - `number_of_edges(self, u=None, v=None)` - Returns the number of edges between two nodes.
 - `number_of_nodes(self)` - Returns the number of nodes in the graph.
 - `order(self)` - Returns the number of nodes in the graph.
@@ -840,7 +816,7 @@ Attributes:
 - `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'` - Perform sensitivity analysis for capacity changes.
 - `shortest_path_costs(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine') -> 'Dict[Tuple[str, str], float]'` - Return minimal path costs between node groups in this network.
 - `shortest_paths(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', *, split_parallel_edges: 'bool' = False) -> 'Dict[Tuple[str, str], List[_NGPath]]'` - Return concrete shortest path(s) between selected node groups.
-- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> 'StrictMultiDiGraph'` - Create a StrictMultiDiGraph representation of this Network.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True, *, compact: 'bool' = False) -> 'StrictMultiDiGraph'` - Create a StrictMultiDiGraph representation of this Network.
 
 ### Node
 
@@ -940,7 +916,7 @@ Attributes:
 - `sensitivity_analysis(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', change_amount: 'float' = 1.0, shortest_path: 'bool' = False, flow_placement: "Optional['FlowPlacement']" = None) -> 'Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]'` - Perform sensitivity analysis on capacity changes.
 - `shortest_path_costs(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine') -> 'Dict[Tuple[str, str], float]'` - Return minimal path costs between node groups in this view.
 - `shortest_paths(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', *, split_parallel_edges: 'bool' = False) -> 'Dict[Tuple[str, str], List[_NGPath]]'` - Return concrete shortest path(s) between selected node groups.
-- `to_strict_multidigraph(self, add_reverse: 'bool' = True) -> "'StrictMultiDiGraph'"` - Create a StrictMultiDiGraph representation of this view.
+- `to_strict_multidigraph(self, add_reverse: 'bool' = True, *, compact: 'bool' = False) -> "'StrictMultiDiGraph'"` - Create a StrictMultiDiGraph representation of this view.
 
 ---
 
@@ -1495,7 +1471,7 @@ Represents a fraction of demand routed along a given PathBundle.
 In traffic-engineering scenarios, a `Flow` object can model:
 
 - MPLS LSPs/tunnels with explicit paths,
-- IP forwarding behavior (with ECMP or UCMP),
+- IP forwarding behavior (with ECMP or WCMP),
 - Or anything that follows a specific set of paths.
 
 **Methods:**
@@ -2175,7 +2151,7 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `create_network_view(self, excluded_nodes: 'set[str] | None' = None, excluded_links: 'set[str] | None' = None) -> 'NetworkView'` - Create NetworkView with specified exclusions.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
 - `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
 - `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'Any'` - Analyze component criticality for flow capacity under failures.
@@ -2380,327 +2356,6 @@ Attributes:
 - `get_all_policies(self) -> 'list[FailurePolicy]'` - Get all failure policies from the collection.
 - `get_policy(self, name: 'str') -> 'FailurePolicy'` - Get a specific failure policy by name.
 - `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
----
-
-## ngraph.workflow.analysis.bac
-
-Bandwidth-Availability Curve (BAC) from ``flow_results``.
-
-Supports both MaxFlow and TrafficMatrixPlacement steps. For each failure
-iteration, aggregate delivered bandwidth (sum of ``placed`` over all DC-DC
-pairs). Compute the empirical availability curve and summary quantiles.
-
-This enhanced version optionally normalizes the x-axis by the offered demand
-volume (when available via per-flow ``demand`` fields) to improve comparison
-across scenarios of different scale. It preserves existing outputs and overlay
-behavior for compatibility.
-
-### BACAnalyzer
-
-Base class for notebook analysis components.
-
-Subclasses should provide a pure computation method (``analyze``) and a
-rendering method (``display_analysis``). Use ``analyze_and_display`` as a
-convenience to run both.
-
-**Methods:**
-
-- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Analyze delivered bandwidth to build an availability curve.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render the BAC with optional overlay comparison.
-- `get_description(self) -> 'str'` - Return a short description of the BAC analyzer.
-
----
-
-## ngraph.workflow.analysis.base
-
-Base classes for notebook analysis components.
-
-Defines a minimal interface for notebook-oriented analyzers that compute
-results and render them inline. Concrete analyzers implement ``analyze()``,
-``display_analysis()``, and ``get_description()``.
-
-### AnalysisContext
-
-Carry context information for analysis execution.
-
-Attributes:
-    step_name: Name of the workflow step being analyzed.
-    results: The full results document.
-    config: Analyzer configuration or parameters for the step.
-
-**Attributes:**
-
-- `step_name` (str)
-- `results` (dict[str, Any])
-- `config` (dict[str, Any])
-
-### NotebookAnalyzer
-
-Base class for notebook analysis components.
-
-Subclasses should provide a pure computation method (``analyze``) and a
-rendering method (``display_analysis``). Use ``analyze_and_display`` as a
-convenience to run both.
-
-**Methods:**
-
-- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Return analysis outputs for a given results document.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
-- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
-
----
-
-## ngraph.workflow.analysis.capacity_matrix
-
-Capacity matrix analysis.
-
-Consumes ``flow_results`` (from MaxFlow step). Builds node→node capacity matrix
-using the maximum placed value observed per pair across iterations (i.e., the
-capacity ceiling under the tested failure set). Provides stats and a heatmap.
-
-This enhanced version augments printed statistics (quartiles, density wording)
-and is designed to be extended with distribution plots. To preserve test
-stability and headless environments, histogram/CDF plots are not emitted here;
-they can be added in notebooks explicitly if desired.
-
-### CapacityMatrixAnalyzer
-
-Analyze max-flow capacities into matrices/statistics/plots.
-
-**Methods:**
-
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Return analysis outputs for a given results document.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Analyze and render capacity matrix for a single workflow step.
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
-- `get_description(self) -> 'str'` - Return the analyzer description.
-
----
-
-## ngraph.workflow.analysis.cost_power_analysis
-
-Power/Cost analyzer for CostPower workflow step.
-
-Computes absolute and unit-normalised metrics per aggregation level path
-(typically level 2 "sites").
-
-Inputs:
-
-- CostPower step data under ``steps[step_name]["data"]`` with ``levels`` and
-
-  ``context.aggregation_level``.
-
-- Delivered traffic from a ``TrafficMatrixPlacement`` step (auto-detected or
-
-  provided via ``traffic_step``), using baseline iteration if available.
-
-Outputs:
-
-- site_metrics: mapping path -> {power_total_watts, capex_total, delivered_gbps}
-- normalized_metrics: mapping path -> {power_per_unit, cost_per_unit}
-
-Display renders tables (itables.show) and simple bar charts (seaborn).
-
-### CostPowerAnalysis
-
-Analyze power and capex per site and normalise by delivered traffic.
-
-The analyzer aggregates absolute metrics from the CostPower step and
-attributes delivered traffic to sites based on the baseline iteration of a
-TrafficMatrixPlacement step. Ratios are computed as W/{unit} and $/{unit}.
-
-**Methods:**
-
-- `analyze(self, results: 'Dict[str, Any]', **kwargs: 'Any') -> 'Dict[str, Any]'` - Compute absolute and normalised metrics per site.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs: 'Any') -> 'None'` - Render absolute and normalised metrics tables and bar charts.
-- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
-
----
-
-## ngraph.workflow.analysis.data_loader
-
-Load JSON results for notebook analysis with a status wrapper.
-
-The loader returns a small dictionary that includes success status and basic
-metadata about the results file. It keeps errors non-fatal for notebook usage.
-
-### DataLoader
-
-Load and validate analysis results from a JSON file.
-
-**Methods:**
-
-- `load_results(json_path: Union[str, pathlib._local.Path]) -> dict[str, typing.Any]`
-
----
-
-## ngraph.workflow.analysis.latency
-
-Latency (distance) and stretch from ``cost_distribution``.
-
-For each iteration, compute:
-  • mean distance per delivered Gbps (km/Gbps) aggregated across flows
-  • stretch = (mean distance) / (pair-wise lower-bound distance)
-Lower bound is approximated as the minimum observed path cost per (src, dst) in
-the "baseline" iteration(s) of the same step (or, if absent, across all
-iterations).
-
-This enhanced version augments the display with a CDF of stretch values to show
-the distribution across iterations, complementing the scatter plot view.
-
-### LatencyAnalyzer
-
-Base class for notebook analysis components.
-
-Subclasses should provide a pure computation method (``analyze``) and a
-rendering method (``display_analysis``). Use ``analyze_and_display`` as a
-convenience to run both.
-
-**Methods:**
-
-- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Compute latency and stretch metrics for each failure iteration.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render the latency and stretch scatter plot with summary lines.
-- `get_description(self) -> 'str'` - Return a short description of the latency analyzer.
-
----
-
-## ngraph.workflow.analysis.msd
-
-Analyzer for Maximum Supported Demand (MSD) step.
-
-### MSDAnalyzer
-
-Base class for notebook analysis components.
-
-Subclasses should provide a pure computation method (``analyze``) and a
-rendering method (``display_analysis``). Use ``analyze_and_display`` as a
-convenience to run both.
-
-**Methods:**
-
-- `analyze(self, results: 'dict[str, Any]', **kwargs) -> 'dict[str, Any]'` - Return analysis outputs for a given results document.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `display_analysis(self, analysis: 'dict[str, Any]', **kwargs) -> 'None'` - Render analysis outputs in notebook format.
-- `get_description(self) -> 'str'` - Return a concise description of the analyzer purpose.
-
----
-
-## ngraph.workflow.analysis.package_manager
-
-Environment setup for notebook analysis components.
-
-This module configures plotting and table-display libraries used by notebook
-analysis. It does not install packages dynamically. All required dependencies
-must be declared in ``pyproject.toml`` and available at runtime.
-
-### PackageManager
-
-Configure plotting and table-display packages for notebooks.
-
-The class validates that required packages are importable and applies common
-styling defaults for plots and data tables.
-
-**Methods:**
-
-- `check_packages() -> 'dict[str, Any]'` - Return availability status of required packages.
-- `setup_environment() -> 'dict[str, Any]'` - Configure plotting and table libraries if present.
-
----
-
-## ngraph.workflow.analysis.placement_matrix
-
-Placement analysis utilities for ``flow_results`` (unified design).
-
-Consumes results produced by ``TrafficMatrixPlacementAnalysis`` with the new
-schema under ``step["data"]["flow_results"]``. Builds matrices of mean placed
-volume by pair (overall and per priority), with basic statistics.
-
-This enhanced version also computes delivery fraction statistics (placed/
-demand) per flow instance to quantify drops and renders simple distributions
-(histogram and CDF) when demand is present, while preserving existing outputs
-so tests remain stable.
-
-### PlacementMatrixAnalyzer
-
-Analyze placed Gbps envelopes and display matrices/statistics.
-
-**Methods:**
-
-- `analyze(self, results: 'Dict[str, Any]', **kwargs) -> 'Dict[str, Any]'` - Analyze ``flow_results`` for a given step.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `analyze_and_display_step(self, results: 'Dict[str, Any]', **kwargs) -> 'None'` - Convenience wrapper that analyzes and renders one step.
-- `display_analysis(self, analysis: 'Dict[str, Any]', **kwargs) -> 'None'` - Render per-priority placement matrices with summary statistics.
-- `get_description(self) -> 'str'` - Return a short description of the analyzer purpose.
-
----
-
-## ngraph.workflow.analysis.registry
-
-Registry mapping workflow step types to notebook analyzers.
-
-Provides a simple mapping from workflow ``step_type`` identifiers to analyzer
-configurations. The default registry wires common NetGraph analysis steps to
-their notebook components.
-
-### AnalysisConfig
-
-Configuration for a single analyzer binding.
-
-**Attributes:**
-
-- `analyzer_class` (Type[NotebookAnalyzer])
-- `method_name` (str) = analyze_and_display
-- `kwargs` (dict[str, Any]) = {}
-- `section_title` (Optional[str])
-- `enabled` (bool) = True
-
-### AnalysisRegistry
-
-Collection of analyzer bindings keyed by workflow step type.
-
-**Attributes:**
-
-- `_mappings` (dict[str, list[AnalysisConfig]]) = {}
-
-**Methods:**
-
-- `get_all_step_types(self) -> 'list[str]'`
-- `get_analyses(self, step_type: 'str') -> 'list[AnalysisConfig]'`
-- `register(self, step_type: 'str', analyzer_class: 'Type[NotebookAnalyzer]', method_name: 'str' = 'analyze_and_display', section_title: 'Optional[str]' = None, **kwargs: 'Any') -> 'None'`
-
-### get_default_registry() -> 'AnalysisRegistry'
-
-Return standard analyzer mapping for common workflow steps.
-
-Includes bindings for ``NetworkStats``, ``MaximumSupportedDemand``,
-``TrafficMatrixPlacement``, and ``MaxFlow``.
-
----
-
-## ngraph.workflow.analysis.summary
-
-High-level summary analyzer for results documents.
-
-Provides quick counts of steps and basic categorisation by presence of
-``flow_results`` in the new schema. Also contains a small helper for
-``NetworkStats`` sections aimed at notebook usage.
-
-### SummaryAnalyzer
-
-Compute simple counts and high-level summary statistics.
-
-**Methods:**
-
-- `analyze(self, results: dict[str, typing.Any], **kwargs) -> dict[str, typing.Any]` - Return analysis outputs for a given results document.
-- `analyze_and_display(self, results: 'dict[str, Any]', **kwargs) -> 'None'` - Analyze results and render them in notebook format.
-- `analyze_network_stats(self, results: dict[str, typing.Any], **kwargs) -> None` - Display a small info line for ``NetworkStats`` steps.
-- `display_analysis(self, analysis: dict[str, typing.Any], **kwargs) -> None` - Render analysis outputs in notebook format.
-- `get_description(self) -> str` - Return a concise description of the analyzer purpose.
 
 ---
 
@@ -3063,7 +2718,8 @@ Attributes:
     baseline: Include baseline iteration without failures first.
     seed: Optional seed for reproducibility.
     store_failure_patterns: Whether to store failure pattern results.
-    include_flow_details: If True, include edges used per demand.
+    include_flow_details: When True, include cost_distribution per flow.
+    include_used_edges: When True, include set of used edges per demand in entry data.
     alpha: Numeric scale for demands in the matrix.
     alpha_from_step: Optional producer step name to read alpha from.
     alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
@@ -3081,6 +2737,7 @@ Attributes:
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
+- `include_used_edges` (bool) = False
 - `alpha` (float) = 1.0
 - `alpha_from_step` (str | None)
 - `alpha_from_field` (str) = data.alpha_star
@@ -3549,27 +3206,41 @@ All functions accept only simple, hashable parameters to ensure compatibility
 with FailureManager's caching and multiprocessing systems for Monte Carlo
 failure analysis scenarios.
 
-Note: This module is distinct from ngraph.workflow.analysis, which provides
-notebook visualization components for workflow results.
+This module provides only computation functions. Visualization and notebook
+analysis live in external packages.
 
-### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, **kwargs) -> 'FlowIterationResult'
+### demand_placement_analysis(network_view: "'NetworkView'", demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'FlowIterationResult'
 
 Analyze traffic demand placement success rates.
 
-Returns a structured dictionary per iteration containing per-demand offered
-and placed volumes (in Gbit/s) and an iteration-level summary. This shape
-is designed for downstream computation of delivered bandwidth percentiles
-without having to reconstruct per-iteration joint distributions.
+Produces per-demand FlowEntry records and an iteration-level summary suitable
+for downstream statistics (e.g., delivered percentiles) without reconstructing
+joint distributions.
+
+Additionally exposes placement engine counters to aid performance analysis:
+
+- Per-demand: ``FlowEntry.data.policy_metrics`` (dict) with totals collected by
+
+  the active FlowPolicy (e.g., ``spf_calls_total``, ``flows_created_total``,
+  ``reopt_calls_total``, ``place_iterations_total``).
+
+- Per-iteration: ``FlowIterationResult.data.iteration_metrics`` aggregating the
+
+  same counters across all demands in the iteration. Use
+  ``FlowIterationResult.summary.total_placed`` for placed volume totals.
 
 Args:
     network_view: NetworkView with potential exclusions applied.
     demands_config: List of demand configurations (serializable dicts).
     placement_rounds: Number of placement optimization rounds.
-    include_flow_details: If True, include edges used per demand.
+    include_flow_details: When True, include cost_distribution per flow.
+    include_used_edges: When True, include set of used edges per demand in entry data
+        as ``FlowEntry.data.edges`` with ``edges_kind='used'``.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    FlowIterationResult describing this iteration.
+    FlowIterationResult describing this iteration. The ``data`` field contains
+    ``{"iteration_metrics": { ... }}``.
 
 ### max_flow_analysis(network_view: "'NetworkView'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, **kwargs) -> 'FlowIterationResult'
 

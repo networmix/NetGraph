@@ -2,6 +2,7 @@
 
 Quick links:
 
+- [Design](design.md) — architecture, model, algorithms, workflow
 - [Workflow Reference](workflow.md) — analysis workflow configuration and execution
 - [CLI Reference](cli.md) — command-line tools for running scenarios
 - [API Reference](api.md) — Python API for programmatic scenario creation
@@ -36,14 +37,6 @@ workflow:                # Analysis execution steps
 
 The only required section. Defines network topology through nodes and links.
 
-**Basic Properties:**
-
-```yaml
-network:
-  name: "NetworkName"     # Optional network identifier
-  version: "1.0"          # Optional version
-```
-
 ### Direct Node and Link Definitions
 
 **Individual Nodes:**
@@ -52,13 +45,19 @@ network:
 network:
   nodes:
     SEA:
+      disabled: true
+      risk_groups: ["RiskGroup1", "RiskGroup2"]
       attrs:
         coords: [47.6062, -122.3321]
-        hw_type: "router_model_A"
+        hardware:
+          component: "LeafRouter"
+          count: 1
     SFO:
       attrs:
         coords: [37.7749, -122.4194]
-        hw_type: "router_model_B"
+        hardware:
+          component: "SpineRouter"
+          count: 1
 ```
 
 Recognized keys for each node entry:
@@ -77,6 +76,7 @@ network:
        link_params:
          capacity: 200
          cost: 6846
+         risk_groups: ["RiskGroup1", "RiskGroup2"]
          attrs:
            distance_km: 1369.13
            media_type: "fiber"
@@ -98,16 +98,18 @@ Recognized keys for each link entry:
 ```yaml
 network:
   groups:
-    servers:
+    leaf:
       node_count: 4
-      name_template: "server-{node_num}"
+      name_template: "leaf-{node_num}"
+      risk_groups: ["RG-Leaf"]
       attrs:
-        role: "compute"
-    switches:
+        role: "leaf"
+    spine:
       node_count: 2
-      name_template: "sw-{node_num}"
+      name_template: "spine-{node_num}"
+      risk_groups: ["RG-Spine"]
       attrs:
-        role: "network"
+        role: "spine"
 ```
 
 **Adjacency Rules:**
@@ -115,25 +117,26 @@ network:
 ```yaml
 network:
   adjacency:
-    - source: /servers
-      target: /switches
-      pattern: "mesh"           # Connect every server to every switch
+    - source: /leaf
+      target: /spine
+      pattern: "mesh"           # Connect every leaf to every spine
       link_params:
-        capacity: 10
+        capacity: 3200
         cost: 1
         # Only the following keys are allowed inside link_params:
         # capacity, cost, disabled, risk_groups, attrs
-    - source: /switches
-      target: /switches
-      pattern: "one_to_one"     # Connect switches pairwise
+    - source: /spine
+      target: /spine
+      pattern: "one_to_one"     # Connect spines pairwise
       link_count: 2              # Create 2 parallel links per adjacency (optional)
-       link_params:
-         capacity: 40
-         cost: 1
-         attrs:
-           hardware:
-             source: {component: "800G-DR4", count: 2}
-             target: {component: "800G-DR4", count: 2}
+      link_params:
+        capacity: 1600
+        cost: 1
+        attrs:
+          hardware:
+            source: {component: "800G-DR4", count: 2}
+            target: {component: "800G-DR4", count: 2}
+    # Tip: In selector objects, 'path' also supports 'attr:<name>' (see Node Selection)
 ```
 
 ### Attribute-filtered Adjacency (selector objects)
@@ -144,21 +147,18 @@ You can filter the source or target node sets by attributes using the same condi
 network:
   adjacency:
     - source:
-        path: "/servers"
+        path: "/leaf"
         match:
           logic: "and"         # default: "or"
           conditions:
             - attr: "role"
               operator: "=="
-              value: "compute"
-            - attr: "rack"
-              operator: "!="
-              value: "rack-9"
+              value: "leaf"
       target:
-        path: "/switches"
+        path: "/spine"
         match:
           conditions:
-            - attr: "tier"
+            - attr: "role"
               operator: "=="
               value: "spine"
       pattern: "mesh"
@@ -169,13 +169,13 @@ network:
 
 Notes:
 
-- `path` uses the same semantics as before: regex on node name or `attr:<name>` directive grouping.
-- `match.conditions` uses the failure-policy language (same operators as below): `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
+- `path` uses the same semantics as runtime: regex on node name or `attr:<name>` directive grouping (see Node Selection).
+- `match.conditions` uses the shared condition operators implemented in code: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
 - Conditions evaluate over a flat view of node attributes combining top-level fields (`name`, `disabled`, `risk_groups`) and `node.attrs`.
-- `logic` in the `match` block accepts `"and"` or `"or"` (default `"or"`).
+- `logic` in the `match` block accepts "and" or "or" (default "or").
 - Selectors filter node candidates before the adjacency `pattern` is applied.
 - Cross-endpoint predicates (e.g., comparing a source attribute to a target attribute) are not supported.
-- Node overrides are applied before adjacency expansion, so attributes set via `node_overrides` participate in selector match filtering. Link overrides are applied after adjacency and mutate existing links only.
+- Node overrides run before adjacency expansion; link overrides run after adjacency expansion.
 
 Path semantics inside blueprints:
 
@@ -203,14 +203,14 @@ network:
               value: "leaf"
             - attr: "role"
               operator: "=="
-              value: "spine"
+              value: "core"
       pattern: "mesh"
 ```
 
 **Connectivity Patterns:**
 
 - `mesh`: Full connectivity between all source and target nodes
-- `one_to_one`: Pairwise connections (requires compatible group sizes)
+- `one_to_one`: Pairwise connections. Compatible sizes means max(|S|,|T|) must be an integer multiple of min(|S|,|T|); mapping wraps modulo the smaller set (e.g., 4×2 and 6×3 valid; 3×2 invalid).
 
 ### Bracket Expansion
 
@@ -378,7 +378,7 @@ network:
             target: {component: "Optic400G", count: 4}
 ```
 
-## `risk_groups` - Hardware Risk Modeling
+## `risk_groups` - Risk Modeling
 
 Define hierarchical failure correlation groups:
 
@@ -472,9 +472,11 @@ traffic_matrix_set:
 
 **Flow Policies:**
 
-- `SHORTEST_PATHS_ECMP`: Equal-cost multi-path routing
-- `SHORTEST_PATHS_UCMP`: Unequal-cost multi-path routing
-- `TE_ECMP_16_LSP`: Traffic engineering with 16 ECMP LSPs
+- `SHORTEST_PATHS_ECMP`: Equal-cost multi-path (ECMP) over shortest paths; equal split across paths.
+- `SHORTEST_PATHS_WCMP`: Weighted ECMP (WCMP) over equal-cost shortest paths; weighted split (proportional).
+- `TE_WCMP_UNLIM`: Traffic engineering weighted multipath (WCMP) with capacity-aware selection; unlimited LSPs.
+- `TE_ECMP_16_LSP`: Traffic engineering with 16 ECMP LSPs; equal split across LSPs.
+- `TE_ECMP_UP_TO_256_LSP`: Traffic engineering with up to 256 ECMP LSPs; equal split across LSPs.
 
 ## `failure_policy_set` - Failure Simulation
 
@@ -489,29 +491,55 @@ failure_policy_set:
           - entity_scope: "link"
             rule_type: "choice"
             count: 1
-
-  random_failures:
-    fail_risk_groups: true       # Optional expansion by shared-risk groups
+  weighted_modes:                # Example of weighted multi-mode policy
     modes:
-      - weight: 1.0
+      - weight: 0.30
         rules:
-          - entity_scope: "node"
-            rule_type: "random"
-            probability: 0.001
+          - entity_scope: "risk_group"
+            rule_type: "choice"
+            count: 1
+            weight_by: distance_km
+      - weight: 0.35
+        rules:
           - entity_scope: "link"
-            rule_type: "random"
-            probability: 0.002
-
-  maintenance_scenario:
-    modes:
-      - weight: 1.0
+            rule_type: "choice"
+            count: 3
+            conditions:
+              - attr: link_type
+                operator: "=="
+                value: dc_to_pop
+            logic: and
+            weight_by: target_capacity
+      - weight: 0.25
         rules:
           - entity_scope: "node"
+            rule_type: "choice"
+            count: 1
             conditions:
-              - attr: "maintenance_mode"
+              - attr: node_type
+                operator: "!="
+                value: dc_region
+            logic: and
+            weight_by: attached_capacity_gbps
+      - weight: 0.10
+        rules:
+          - entity_scope: "link"
+            rule_type: "choice"
+            count: 4
+            conditions:
+              - attr: link_type
                 operator: "=="
-                value: "scheduled"
-            rule_type: "all"
+                value: leaf_spine
+              - attr: link_type
+                operator: "=="
+                value: intra_group
+              - attr: link_type
+                operator: "=="
+                value: inter_group
+              - attr: link_type
+                operator: "=="
+                value: internal_mesh
+            logic: or
 ```
 
 **Rule Types:**
@@ -526,34 +554,34 @@ Notes:
 - Each rule has `entity_scope` ("node" | "link" | "risk_group"), optional `logic` ("and" | "or"; defaults to "or"), optional `conditions`, and one of `rule_type` parameters (`count` for choice, `probability` for random). `weight_by` can be provided for weighted sampling in `choice` rules.
 - Condition language is the same as used in adjacency `match` selectors (see below) and supports: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`. Conditions evaluate on a flat attribute mapping that includes top-level fields and `attrs`.
 
-**Conditions:**
-
-- Target entities based on attributes
-- Support operators: `==`, `!=`, `>`, `<`, `>=`, `<=`, `contains`, `not_contains`
-
 ## `workflow` - Execution Steps
 
 Define analysis workflow steps:
 
 ```yaml
 workflow:
-  - step_type: BuildGraph
-  - step_type: CapacityEnvelopeAnalysis
-    name: "capacity_analysis"
-    source_path: "^servers/.*"
-    sink_path: "^storage/.*"
-    mode: "combine"
-    failure_policy: "single_link_failure"
+  - step_type: NetworkStats
+    name: network_statistics
+  - step_type: MaximumSupportedDemand
+    name: msd_baseline
+    matrix_name: baseline_traffic_matrix
+  - step_type: TrafficMatrixPlacement
+    name: tm_placement
+    matrix_name: baseline_traffic_matrix
+    failure_policy: weighted_modes
     iterations: 1000
-    parallelism: 4
     baseline: true
 ```
 
+Note: Workflow `source_path` and `sink_path` accept either regex on node names or `attr:<name>` directive to group by node attributes (see Node Selection).
+
 **Common Steps:**
 
-- `BuildGraph`: Build network graph for analysis
-- `NetworkStats`: Compute network statistics
-- `CapacityEnvelopeAnalysis`: Monte Carlo capacity analysis
+- `BuildGraph`: Export graph to JSON (node-link) for external analysis
+- `NetworkStats`: Compute basic statistics
+- `MaxFlow`: Monte Carlo capacity analysis between node groups
+- `TrafficMatrixPlacement`: Monte Carlo demand placement for a named matrix
+- `MaximumSupportedDemand`: Search for `alpha_star` for a named matrix
 
 See [Workflow Reference](workflow.md) for detailed configuration.
 
@@ -563,6 +591,13 @@ NetGraph supports two ways to select and group nodes:
 
 1. Regex on node name (anchored at the start using `re.match()`)
 2. Attribute directive `attr:<name>` to group by a node attribute
+
+Note: The attribute directive is node-only. It applies only in contexts that select nodes:
+
+- Workflow paths: `source_path` and `sink_path`
+- Adjacency selectors: the `path` field in `source`/`target` selector objects
+
+For links, risk groups, and failure policies, use `conditions` with an `attr` field in rules (see Failure Simulation) rather than `attr:<name>`.
 
 **Regex Examples:**
 
@@ -601,9 +636,22 @@ Regex capturing groups create node groupings for analysis:
 - Multiple capturing groups: Join with `|` separator
 - No capturing groups: Group by original pattern string
 
-### Attribute Directive
+### Attribute Directive For Node Selection
 
 Write `attr:<name>` to group nodes by the value of `node.attrs[<name>]`.
+Supported contexts in the DSL:
+
+- Workflow: `source_path` and `sink_path`
+- Adjacency selectors: the `path` in `source`/`target` selector objects
+
+Notes:
+
+- Blueprint scoping: In blueprints, `attr:` paths are global and are not
+  prefixed by the parent blueprint path.
+- Attribute name: `name` must be a simple identifier (`[A-Za-z_]\w*`), and it
+  refers to a key in `node.attrs`. Nested keys are not supported here.
+- Non-node entities: For links and risk groups (e.g., in failure policies), use
+  rule `conditions` with an `attr` field instead of `attr:<name>`.
 
 - Strict detection: Only a full match of `attr:<name>` (where `<name>` matches `[A-Za-z_]\w*`) triggers attribute grouping. Everything else is treated as a normal regex.
 - Missing attributes: Nodes without the attribute are omitted.
@@ -613,18 +661,18 @@ Examples:
 
 ```yaml
 workflow:
-  - step_type: CapacityEnvelopeAnalysis
-    source_path: "attr:dc_site_id"  # groups by integer dc_site_id attribute
-    sink_path:   "attr:role"        # groups by role attribute
+  - step_type: MaxFlow
+    source_path: "attr:metro"  # groups by metro attribute
+    sink_path:   "^metro2/.*"
     mode: "pairwise"
 ```
 
-Mixing modes works:
+Adjacency example using `attr:`:
 
 ```yaml
-workflow:
-  - step_type: MaxFlow
-    source_path: "attr:metro"
-    sink_path:   "SFO/servers/.*"   # regex
-    mode: "combine"
+network:
+  adjacency:
+    - source: { path: "attr:role" }
+      target: { path: "^dc2/leaf/.*" }
+      pattern: mesh
 ```

@@ -17,7 +17,7 @@ class _ScenarioStub:
         self.failure_policy_set = failure_policy_set
 
 
-def test_tm_analysis_basic_behavior_unchanged(monkeypatch):
+def test_tm_basic_behavior_unchanged(monkeypatch):
     # Small sanity test that the step runs end-to-end and stores new outputs
     from ngraph.demand.matrix import TrafficMatrixSet
     from ngraph.demand.spec import TrafficDemand

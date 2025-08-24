@@ -11,6 +11,7 @@ theme:
     - content.code.copy
 markdown_extensions:
   - admonition
+  - sane_lists
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -22,11 +23,13 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: getting-started/installation.md
-      - Tutorial: getting-started/tutorial.md
+      - Quickstart: getting-started/tutorial.md
   - Examples:
+      - Bundled Scenarios: examples/bundled-scenarios.md
       - Basic Example: examples/basic.md
       - Clos Fabric: examples/clos-fabric.md
   - Reference:
+      - Design: reference/design.md
       - DSL: reference/dsl.md
       - Workflow: reference/workflow.md
       - CLI: reference/cli.md

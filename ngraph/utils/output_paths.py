@@ -105,10 +105,6 @@ def results_path_for_run(
     return Path(f"{prefix}.results.json")
 
 
-# Note: report paths are resolved directly in the CLI using the same building blocks
-# from this module to avoid indirect defaults.
-
-
 def profiles_dir_for_run(scenario_path: Path, output_dir: Optional[Path]) -> Path:
     """Return the directory for child worker profiles for ``run --profile``.
 

@@ -6,12 +6,14 @@ Defines immutable summary containers and aliases for algorithm outputs.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Hashable, List, Set, Tuple
 
 from ngraph.algorithms.base import Cost
 
 # Edge identifier tuple: (source_node, destination_node, edge_key)
-Edge = Tuple[str, str, str]
+# The edge key type aligns with StrictMultiDiGraph, which uses hashable keys
+# (monotonically increasing integers by default, or explicit keys when provided).
+Edge = Tuple[str, str, Hashable]
 
 
 @dataclass(frozen=True)

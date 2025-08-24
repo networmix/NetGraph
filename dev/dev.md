@@ -10,8 +10,6 @@ make docs          # Generate API documentation
 make docs-serve    # Serve docs locally
 ```
 
-**For all available commands**: `make help`
-
 ## Publishing
 
 **Manual**: `make clean && make build && make publish-test && make publish`

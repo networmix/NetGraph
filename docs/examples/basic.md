@@ -1,6 +1,8 @@
 # Basic Example
 
-In this toy example, we'll create a simple graph with parallel edges and alternative paths, then run max flow analysis with different flow placement policies.
+This example builds a tiny topology inline to show APIs. For real analysis, prefer running a provided scenario and generating metrics via the CLI.
+
+See Quickstart for CLI usage and bundled scenarios.
 
 ## Creating a Simple Network
 
@@ -121,9 +123,9 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
-## Cost Distribution Analysis
+## Cost Distribution (concise)
 
-The cost distribution feature analyzes how flow is distributed across paths of different costs for latency span analysis and network performance characterization.
+Cost distribution shows how flow splits across path costs for latency/span analysis.
 
 ```python
 # Get flow analysis with cost distribution
@@ -148,9 +150,9 @@ print(f"Cost distribution: {summary.cost_distribution}")
 # - 3.0 units of flow use paths with total cost 4.0 (A→D→C path)
 ```
 
-### Latency Span Analysis
+### Latency Span (optional)
 
-When link costs represent latency (e.g., distance-based), the cost distribution provides insight into traffic latency characteristics:
+If link costs approximate latency, you can derive a quick span summary:
 
 ```python
 def analyze_latency_span(cost_distribution):
@@ -178,11 +180,7 @@ def analyze_latency_span(cost_distribution):
 analyze_latency_span(summary.cost_distribution)
 ```
 
-This analysis helps identify:
-
-- **Traffic concentration**: How much traffic uses low vs. high latency paths
-- **Latency span**: The range of latencies experienced by traffic
-- **Performance bottlenecks**: When high-latency paths carry traffic due to capacity constraints
+This helps identify traffic concentration, latency span, and potential bottlenecks.
 
 ## Advanced Analysis: Sensitivity Analysis
 
@@ -215,8 +213,8 @@ This analysis helps identify:
 
 ## Next Steps
 
-- **[Tutorial](../getting-started/tutorial.md)** - Build network scenarios
+- **[Bundled Scenarios](bundled-scenarios.md)** - Ready-to-run examples
 - **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
+- **[Workflow Reference](../reference/workflow.md)** - Analysis workflows and Monte Carlo simulation
 - **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
-- **[Workflow Reference](../reference/workflow.md)** - Learn about analysis workflows and Monte Carlo simulation
 - **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage

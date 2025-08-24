@@ -2,19 +2,72 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-NetGraph is a scenario-based network modeling and analysis framework written in Python. Design, simulate, and evaluate complex network topologies from small test cases to large-scale Data Center fabrics and WAN networks.
+NetGraph is a scenario-driven network modeling and analysis framework in Python.
+Define topology, traffic, failures, and workflows in YAML; run analyses from the
+CLI or Python API. It scales from small graphs to DC fabrics and WAN backbones.
 
-## Features
+## Highlights
 
-- Scenario-based modeling (DSL for topology, failures, traffic, workflow)
-- Hierarchical blueprints for reusable topologies
-- Max-flow and demand placement analysis with configurable policies
-- CLI: inspect, run, report
-- Reporting to notebook and HTML
+- Declarative DSL with schema validation (topology, failures, traffic, workflow)
+- Blueprints and adjacency rules for concise, reusable topologies
+- Strict multidigraph with unique and stable edge IDs; subclass of NetworkX's MultiDiGraph preserving NetworkX APIs
+- Read-only NetworkView overlays with node and link masking for failure simulation
+- Failure policies with weighted failure modes and multiple policy rules per mode
+- Max-flow and demand placement with configurable flow placement strategies to simulate ECMP/WCMP and TE behavior in IP/MPLS networks
+- Export of results to structured JSON for downstream analysis
+- CLI and complete Python API
+- High test coverage
+
+See [Design](https://networmix.github.io/NetGraph/reference/design/) for more details on the internal design of NetGraph.
+
+## Example Scenario (Excerpt)
+
+```yaml
+seed: 42
+blueprints:
+  Clos_L16_S4:
+    groups:
+      spine: {node_count: 4,  name_template: spine{node_num}}
+      leaf:  {node_count: 16, name_template: leaf{node_num}}
+    adjacency:
+    - source: /leaf
+      target: /spine
+      pattern: mesh
+      link_params: {capacity: 3200, cost: 1}
+  DCRegion:
+    groups:
+      dc: {node_count: 1, name_template: dc, attrs: {role: dc}}
+network:
+  groups:
+    metro1/pop[1-2]: {use_blueprint: Clos_L16_S4}
+    metro1/dc[1-1]:  {use_blueprint: DCRegion}
+  adjacency:
+  - source: {path: metro1/pop1}
+    target: {path: metro1/dc1}
+    pattern: one_to_one
+    link_params: {capacity: 2000.0, cost: 1}
+workflow:
+- step_type: NetworkStats
+  name: network_statistics
+- step_type: MaximumSupportedDemand
+  name: msd_baseline
+  matrix_name: baseline_traffic_matrix
+- step_type: TrafficMatrixPlacement
+  name: tm_placement
+  matrix_name: baseline_traffic_matrix
+```
+
+See the full scenario at [scenarios/backbone_clos.yml](scenarios/backbone_clos.yml).
 
 ## Quick Start
 
-### Local Installation
+### Install (PyPI package)
+
+```bash
+pip install ngraph
+```
+
+### Install (from source on GitHub)
 
 ```bash
 git clone https://github.com/networmix/NetGraph
@@ -24,25 +77,46 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -e '.[dev]'
 ```
 
-### Docker with JupyterLab
+### CLI
 
 ```bash
-git clone https://github.com/networmix/NetGraph
-cd NetGraph
-./run.sh build
-./run.sh run  # Opens JupyterLab at http://127.0.0.1:8788/
+# Inspect a scenario (validate and preview)
+ngraph inspect scenarios/backbone_clos.yml --detail
+
+# Run a scenario and save results
+ngraph run scenarios/backbone_clos.yml --results clos.results.json
+```
+
+### Python API (minimal)
+
+```python
+from ngraph.scenario import Scenario
+
+scenario_yaml = """
+seed: 1
+network:
+  nodes: {A: {}, B: {}}
+  links:
+    - {source: A, target: B, link_params: {capacity: 10.0, cost: 1.0}}
+workflow:
+  - {step_type: NetworkStats, name: baseline_stats}
+"""
+
+scenario = Scenario.from_yaml(scenario_yaml)
+scenario.run()
+print(list(scenario.results.to_dict()["steps"].keys()))
 ```
 
 ## Documentation
 
-Docs: [https://networmix.github.io/NetGraph/](https://networmix.github.io/NetGraph/)
-
-- Installation: <https://networmix.github.io/NetGraph/getting-started/installation/>
-- Tutorial: <https://networmix.github.io/NetGraph/getting-started/tutorial/>
-- Examples: <https://networmix.github.io/NetGraph/examples/basic/>
-- DSL: <https://networmix.github.io/NetGraph/reference/dsl/>
-- API: <https://networmix.github.io/NetGraph/reference/api/>
-- CLI: <https://networmix.github.io/NetGraph/reference/cli/>
+- **Documentation site**: [networmix.github.io/NetGraph](https://networmix.github.io/NetGraph/)
+- **Installation**: [Getting started — Installation](https://networmix.github.io/NetGraph/getting-started/installation/)
+- **Tutorial**: [Getting started — Tutorial](https://networmix.github.io/NetGraph/getting-started/tutorial/)
+- **Basic example**: [Examples — Basic](https://networmix.github.io/NetGraph/examples/basic/)
+- **DSL reference**: [Reference — DSL](https://networmix.github.io/NetGraph/reference/dsl/)
+- **Workflow reference**: [Reference — Workflow](https://networmix.github.io/NetGraph/reference/workflow/)
+- **CLI reference**: [Reference — CLI](https://networmix.github.io/NetGraph/reference/cli/)
+- **API reference**: [Reference — API](https://networmix.github.io/NetGraph/reference/api/)
 
 ## License
 
