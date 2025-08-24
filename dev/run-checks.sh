@@ -58,8 +58,9 @@ echo ""
 # Run schema validation
 echo "📋 Validating YAML schemas..."
 if "$PYTHON" -c "import jsonschema" >/dev/null 2>&1; then
-    "$PYTHON" -c "import json, yaml, jsonschema, pathlib; \
-    schema = json.load(open('schemas/scenario.json')); \
+    "$PYTHON" -c "import json, yaml, jsonschema, pathlib, importlib.resources as res; \
+    f = res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); \
+    schema = json.load(f); f.close(); \
     scenario_files = list(pathlib.Path('scenarios').rglob('*.yaml')); \
     integration_files = list(pathlib.Path('tests/integration').glob('*.yaml')); \
     all_files = scenario_files + integration_files; \

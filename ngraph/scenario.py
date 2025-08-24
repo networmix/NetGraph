@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from importlib import resources
 from typing import Any, Dict, List, Optional
 
 import yaml
@@ -120,6 +122,79 @@ class Scenario:
             data = {}
         if not isinstance(data, dict):
             raise ValueError("The provided YAML must map to a dictionary at top-level.")
+
+        # Normalize YAML parsing quirks and perform early shape checks to preserve
+        # error messages expected by callers/tests before schema validation.
+        # 1) Normalize boolean-like keys under traffic_matrix_set
+        if isinstance(data.get("traffic_matrix_set"), dict):
+            data["traffic_matrix_set"] = normalize_yaml_dict_keys(
+                data["traffic_matrix_set"]  # type: ignore[arg-type]
+            )
+
+        # 2) Early network structure checks
+        network_section = data.get("network")
+        if isinstance(network_section, dict):
+            if "nodes" in network_section and not isinstance(
+                network_section["nodes"], dict
+            ):
+                raise ValueError("'nodes' must be a mapping")
+            if "links" in network_section and not isinstance(
+                network_section["links"], list
+            ):
+                raise ValueError("'links' must be a list")
+            # Validate direct link entries have required keys
+            if isinstance(network_section.get("links"), list):
+                for entry in network_section["links"]:
+                    if not isinstance(entry, dict):
+                        raise ValueError(
+                            "Each link definition must be a mapping with 'source' and 'target'"
+                        )
+                    if "source" not in entry or "target" not in entry:
+                        raise ValueError(
+                            "Each link definition must include 'source' and 'target'"
+                        )
+            # Validate node entries for unrecognized keys (preserve message)
+            if isinstance(network_section.get("nodes"), dict):
+                for _node_name, node_def in network_section["nodes"].items():
+                    if isinstance(node_def, dict):
+                        allowed = {"attrs", "disabled", "risk_groups"}
+                        for k in node_def.keys():
+                            if k not in allowed:
+                                raise ValueError("Unrecognized key")
+
+        # 3) Risk groups must have 'name'
+        if isinstance(data.get("risk_groups"), list):
+            for rg in data["risk_groups"]:
+                if not isinstance(rg, dict) or "name" not in rg:
+                    raise ValueError("RiskGroup entry missing 'name' field")
+
+        # Unconditional JSON Schema validation
+        try:
+            import jsonschema  # type: ignore
+        except Exception as exc:  # pragma: no cover - import error path
+            raise RuntimeError(
+                "jsonschema is required for scenario validation. Install dev extras or add 'jsonschema' to dependencies."
+            ) from exc
+
+        # Load schema from packaged resource
+        schema_data: dict[str, Any]
+        try:
+            with (
+                resources.files("ngraph.schemas")
+                .joinpath("scenario.json")
+                .open("r", encoding="utf-8")
+            ) as f:  # type: ignore[attr-defined]
+                schema_data = json.load(f)
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to locate packaged NetGraph scenario schema 'ngraph/schemas/scenario.json'."
+            ) from exc
+
+        try:
+            jsonschema.validate(data, schema_data)  # type: ignore[arg-type]
+        except Exception as exc:
+            # Provide actionable error
+            raise ValueError(f"Scenario JSON Schema validation failed: {exc}") from exc
 
         # Ensure only recognized top-level keys are present.
         recognized_keys = {

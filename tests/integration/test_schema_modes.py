@@ -2,14 +2,17 @@ import yaml
 
 
 def test_schema_allows_modes_and_weight_by() -> None:
-    from pathlib import Path
+    import json as _json
+    from importlib import resources as res
 
     import jsonschema
 
-    schema_path = Path(__file__).parents[2] / "schemas" / "scenario.json"
-    import json as _json
-
-    schema = _json.loads(schema_path.read_text())
+    with (
+        res.files("ngraph.schemas")
+        .joinpath("scenario.json")
+        .open("r", encoding="utf-8") as _f
+    ):
+        schema = _json.load(_f)
 
     yaml_doc = """
 network:

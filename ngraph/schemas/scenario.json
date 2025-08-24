@@ -266,8 +266,7 @@
                 ]
               },
               "pattern": {
-                "type": "string",
-                "enum": ["mesh", "one_to_one"]
+                "type": "string"
               },
               "link_count": {"type": "integer", "minimum": 1},
               "link_params": {
@@ -382,8 +381,100 @@
               "items": {
                 "type": "object",
                 "properties": {
-                  "source": {"type": "string"},
-                  "target": {"type": "string"},
+                  "source": {
+                    "oneOf": [
+                      {"type": "string"},
+                      {
+                        "type": "object",
+                        "properties": {
+                          "path": {"type": "string"},
+                          "match": {
+                            "type": "object",
+                            "properties": {
+                              "logic": {"type": "string", "enum": ["and", "or"]},
+                              "conditions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "attr": {"type": "string"},
+                                    "operator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "==",
+                                        "!=",
+                                        ">",
+                                        "<",
+                                        ">=",
+                                        "<=",
+                                        "contains",
+                                        "not_contains",
+                                        "any_value",
+                                        "no_value"
+                                      ]
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": ["attr", "operator"],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "target": {
+                    "oneOf": [
+                      {"type": "string"},
+                      {
+                        "type": "object",
+                        "properties": {
+                          "path": {"type": "string"},
+                          "match": {
+                            "type": "object",
+                            "properties": {
+                              "logic": {"type": "string", "enum": ["and", "or"]},
+                              "conditions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "attr": {"type": "string"},
+                                    "operator": {
+                                      "type": "string",
+                                      "enum": [
+                                        "==",
+                                        "!=",
+                                        ">",
+                                        "<",
+                                        ">=",
+                                        "<=",
+                                        "contains",
+                                        "not_contains",
+                                        "any_value",
+                                        "no_value"
+                                      ]
+                                    },
+                                    "value": {}
+                                  },
+                                  "required": ["attr", "operator"],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": ["path"],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
                   "pattern": {
                     "type": "string",
                     "enum": ["mesh", "one_to_one"]
@@ -476,76 +567,75 @@
               "type": "boolean",
               "description": "Whether to recursively fail risk group children"
             },
-
-                "modes": {
-                  "type": "array",
-                  "description": "Weighted mode list; exactly one mode is chosen per iteration.",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "weight": {"type": "number", "minimum": 0},
-                      "attrs": {"type": "object"},
-                      "rules": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "entity_scope": {
-                              "type": "string",
-                              "enum": ["node", "link", "risk_group"],
-                              "description": "What entities this rule applies to"
+            "modes": {
+              "type": "array",
+              "description": "Weighted mode list; exactly one mode is chosen per iteration.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "weight": {"type": "number", "minimum": 0},
+                  "attrs": {"type": "object"},
+                  "rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "entity_scope": {
+                          "type": "string",
+                          "enum": ["node", "link", "risk_group"],
+                          "description": "What entities this rule applies to"
+                        },
+                        "conditions": {
+                          "type": "array",
+                          "description": "Conditions that must be met",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "attr": {"type": "string"},
+                              "operator": {
+                                "type": "string",
+                                "enum": ["==", "!=", ">", "<", ">=", "<=", "in", "not_in"]
+                              },
+                              "value": {}
                             },
-                            "conditions": {
-                              "type": "array",
-                              "description": "Conditions that must be met",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "attr": {"type": "string"},
-                                  "operator": {
-                                    "type": "string",
-                                    "enum": ["==", "!=", ">", "<", ">=", "<=", "in", "not_in"]
-                                  },
-                                  "value": {}
-                                },
-                                "required": ["attr", "operator", "value"],
-                                "additionalProperties": false
-                              }
-                            },
-                            "logic": {
-                              "type": "string",
-                              "enum": ["and", "or"],
-                              "description": "Logic for combining conditions"
-                            },
-                            "rule_type": {
-                              "type": "string",
-                              "enum": ["all", "choice", "random"],
-                              "description": "How to apply the rule"
-                            },
-                            "probability": {
-                              "type": "number",
-                              "minimum": 0,
-                              "maximum": 1,
-                              "description": "Probability for random rule type"
-                            },
-                            "count": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "description": "Number of entities to affect for choice rule type"
-                            },
-                            "weight_by": {
-                              "type": "string",
-                              "description": "Attribute name used for weighted sampling in choice mode"
-                            }
-                          },
-                          "additionalProperties": false
+                            "required": ["attr", "operator", "value"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "logic": {
+                          "type": "string",
+                          "enum": ["and", "or"],
+                          "description": "Logic for combining conditions"
+                        },
+                        "rule_type": {
+                          "type": "string",
+                          "enum": ["all", "choice", "random"],
+                          "description": "How to apply the rule"
+                        },
+                        "probability": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Probability for random rule type"
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Number of entities to affect for choice rule type"
+                        },
+                        "weight_by": {
+                          "type": "string",
+                          "description": "Attribute name used for weighted sampling in choice mode"
                         }
-                      }
-                    },
-                    "required": ["weight", "rules"],
-                    "additionalProperties": false
+                      },
+                      "additionalProperties": false
+                    }
                   }
-                }
+                },
+                "required": ["weight", "rules"],
+                "additionalProperties": false
+              }
+            }
           },
           "additionalProperties": false
         }
@@ -577,15 +667,7 @@
               "priority": {"type": "integer", "description": "Priority class"},
               "demand_placed": {"type": "number", "description": "Pre-placed demand amount"},
               "mode": {"type": "string", "description": "Expansion mode for sub-demands"},
-              "flow_policy_config": {
-                "description": "Routing policy config. Accepts enum name (string), enum value (integer), object, or null.",
-                "oneOf": [
-                  {"type": "string"},
-                  {"type": "integer"},
-                  {"type": "object"},
-                  {"type": "null"}
-                ]
-              },
+              "flow_policy_config": {"description": "Routing policy config. Accepts enum name (string), enum value (integer), object, or null.", "oneOf": [{"type": "string"}, {"type": "integer"}, {"type": "object"}, {"type": "null"}]},
               "flow_policy": {"type": "object", "description": "Inline FlowPolicy definition"},
               "attrs": {"type": "object", "description": "Additional demand attributes"}
             },
@@ -602,25 +684,17 @@
       "patternProperties": {
         "^[a-zA-Z0-9_\\-\\+]+$": {
           "type": "object",
-            "properties": {
+          "properties": {
             "component_type": {"type": "string"},
             "description": {"type": "string"},
-              "capex": {"type": "number"},
+            "capex": {"type": "number"},
             "power_watts": {"type": "number"},
             "power_watts_max": {"type": "number"},
             "capacity": {"type": "number"},
             "ports": {"type": "integer"},
             "count": {"type": "integer"},
             "attrs": {"type": "object"},
-            "children": {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_\\-\\+]+$": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
+            "children": {"type": "object", "patternProperties": {"^[a-zA-Z0-9_\\-\\+]+$": {"type": "object", "additionalProperties": true}}}
           },
           "additionalProperties": false
         }
@@ -633,14 +707,8 @@
       "items": {
         "type": "object",
         "properties": {
-          "step_type": {
-            "type": "string",
-            "description": "Type of workflow step"
-          },
-          "name": {
-            "type": "string",
-            "description": "Step name"
-          }
+          "step_type": {"type": "string", "description": "Type of workflow step"},
+          "name": {"type": "string", "description": "Step name"}
         },
         "required": ["step_type"],
         "additionalProperties": true

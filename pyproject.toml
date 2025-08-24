@@ -26,6 +26,7 @@ dependencies = [
     "networkx>=3.0",
     "pyyaml>=6.0",
     "pandas>=2.0",
+    "jsonschema>=4.0",
 ]
 
 # Dev / CI extras
@@ -95,6 +96,10 @@ exclude_lines = [
 [tool.setuptools.packages.find]
 include = ["ngraph*"]
 exclude = ["tests*", "notebooks*", "examples*", "dev*"]
+
+# Include schema files in the package for runtime validation
+[tool.setuptools.package-data]
+"ngraph.schemas" = ["scenario.json"]
 
 # ---------------------------------------------------------------------
 # Ruff

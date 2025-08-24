@@ -17,8 +17,13 @@ class TestSchemaValidation:
     @pytest.fixture
     def schema(self):
         """Load the NetGraph scenario JSON schema."""
-        schema_path = Path(__file__).parents[2] / "schemas" / "scenario.json"
-        with open(schema_path) as f:
+        from importlib import resources as res
+
+        with (
+            res.files("ngraph.schemas")
+            .joinpath("scenario.json")
+            .open("r", encoding="utf-8") as f
+        ):
             return json.load(f)
 
     def test_schema_validates_simple_scenario(self, schema):

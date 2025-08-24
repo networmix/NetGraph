@@ -13,7 +13,9 @@ NetGraph includes JSON Schema definitions for YAML scenario files, providing IDE
 
 ## Schema Location
 
-**`schemas/scenario.json`**: Main schema file validating NetGraph scenario YAML structure including network topology, blueprints, risk groups, failure policies, traffic matrices, workflows, and components.
+The schema is packaged with the library at: **`ngraph/schemas/scenario.json`**.
+
+This file validates NetGraph scenario YAML structure including network topology, blueprints, risk groups, failure policies, traffic matrices, workflows, and components.
 
 ## Validation Scope
 
@@ -24,7 +26,7 @@ The schema validates:
 - Top-level section organization
 - Basic constraint checking
 
-Limitations: runtime validation in `ngraph/scenario.py` and `ngraph/dsl/blueprints/expand.py` is authoritative. Some YAML may pass schema validation but fail at runtime due to business logic constraints (e.g., unrecognized keys, invalid adjacency patterns, or group parameter shapes).
+Runtime: The schema is applied unconditionally during load in `ngraph.scenario.Scenario.from_yaml`. Additional business rules are enforced in code (e.g., blueprint expansion) and may still raise errors for semantically invalid inputs.
 
 ## IDE Integration (VS Code)
 
@@ -33,7 +35,7 @@ Automatic configuration via `.vscode/settings.json`:
 ```json
 {
   "yaml.schemas": {
-    "./schemas/scenario.json": [
+    "./ngraph/schemas/scenario.json": [
       "scenarios/**/*.yaml",
       "scenarios/**/*.yml"
     ]
@@ -69,7 +71,9 @@ import yaml
 import jsonschema
 
 # Load and validate
-with open('schemas/scenario.json') as f:
+from importlib import resources as res
+
+with res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8') as f:
     schema = json.load(f)
 
 with open('scenarios/square_mesh.yaml') as f:
