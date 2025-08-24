@@ -6,10 +6,13 @@
 # Default target - show help
 .DEFAULT_GOAL := help
 
-# Toolchain
-PYTHON ?= python3
-PIP ?= $(PYTHON) -m pip
-PYTEST ?= pytest
+# Toolchain (prefer project venv if present)
+VENV_BIN := $(PWD)/ngraph-venv/bin
+PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,python3)
+PIP := $(PYTHON) -m pip
+PYTEST := $(PYTHON) -m pytest
+RUFF := $(PYTHON) -m ruff
+PRECOMMIT := $(PYTHON) -m pre_commit
 
 help:
 	@echo "🔧 NetGraph Development Commands"
@@ -57,7 +60,7 @@ install:
 check:
 	@echo "🔍 Running complete code quality checks and tests..."
 	@$(MAKE) lint
-	@bash dev/run-checks.sh
+	@PYTHON=$(PYTHON) bash dev/run-checks.sh
 
 check-ci:
 	@echo "🔍 Running CI checks (non-mutating lint + schema validation + tests)..."
@@ -67,13 +70,13 @@ check-ci:
 
 lint:
 	@echo "🧹 Running linting checks (non-mutating)..."
-	@ruff format --check .
-	@ruff check .
+	@$(RUFF) format --check .
+	@$(RUFF) check .
 	@$(PYTHON) -m pyright
 
 format:
 	@echo "✨ Auto-formatting code..."
-	@ruff format .
+	@$(RUFF) format .
 
 test:
 	@echo "🧪 Running tests with coverage (includes slow and benchmark)..."
@@ -117,8 +120,8 @@ docs-diagrams:
 
 docs-serve:
 	@echo "🌐 Serving documentation locally..."
-	@if command -v mkdocs >/dev/null 2>&1; then \
-		mkdocs serve; \
+	@if $(PYTHON) -c "import mkdocs" >/dev/null 2>&1; then \
+		$(PYTHON) -m mkdocs serve; \
 	else \
 		echo "❌ mkdocs not installed. Install dev dependencies with: make dev"; \
 		exit 1; \
@@ -186,11 +189,11 @@ info:
 	@echo "  Virtual environment: $$(echo $$VIRTUAL_ENV | sed 's|.*/||' || echo 'None active')"
 	@echo ""
 	@echo "🔧 Development Tools:"
-	@echo "  Pre-commit: $$(pre-commit --version 2>/dev/null || echo 'Not installed')"
+	@echo "  Pre-commit: $$($(PRECOMMIT) --version 2>/dev/null || echo 'Not installed')"
 	@echo "  Pytest: $$($(PYTEST) --version 2>/dev/null || echo 'Not installed')"
-	@echo "  Ruff: $$(ruff --version 2>/dev/null || echo 'Not installed')"
-	@echo "  Pyright: $$(pyright --version 2>/dev/null | head -1 || echo 'Not installed')"
-	@echo "  MkDocs: $$(mkdocs --version 2>/dev/null | sed 's/mkdocs, version //' | sed 's/ from.*//' || echo 'Not installed')"
+	@echo "  Ruff: $$($(RUFF) --version 2>/dev/null || echo 'Not installed')"
+	@echo "  Pyright: $$($(PYTHON) -m pyright --version 2>/dev/null | head -1 || echo 'Not installed')"
+	@echo "  MkDocs: $$($(PYTHON) -m mkdocs --version 2>/dev/null | sed 's/mkdocs, version //' | sed 's/ from.*//' || echo 'Not installed')"
 	@echo "  Build: $$($(PYTHON) -m build --version 2>/dev/null | sed 's/build //' | sed 's/ (.*//' || echo 'Not installed')"
 	@echo "  Twine: $$($(PYTHON) -m twine --version 2>/dev/null | grep -o 'twine version [0-9.]*' | cut -d' ' -f3 || echo 'Not installed')"
 	@echo "  JsonSchema: $$($(PYTHON) -c 'import importlib.metadata; print(importlib.metadata.version("jsonschema"))' 2>/dev/null || echo 'Not installed')"
