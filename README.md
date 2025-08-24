@@ -72,9 +72,8 @@ pip install ngraph
 ```bash
 git clone https://github.com/networmix/NetGraph
 cd NetGraph
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -e '.[dev]'
+make dev  # install in editable mode
+make check  # run all checks
 ```
 
 ### CLI
@@ -87,24 +86,41 @@ ngraph inspect scenarios/backbone_clos.yml --detail
 ngraph run scenarios/backbone_clos.yml --results clos.results.json
 ```
 
-### Python API (minimal)
+### Python API (MaxFlow quick demo)
 
 ```python
 from ngraph.scenario import Scenario
+from ngraph.algorithms.base import FlowPlacement
 
 scenario_yaml = """
-seed: 1
+seed: 1234
 network:
-  nodes: {A: {}, B: {}}
+  nodes: {A: {}, B: {}, C: {}, D: {}}
   links:
-    - {source: A, target: B, link_params: {capacity: 10.0, cost: 1.0}}
-workflow:
-  - {step_type: NetworkStats, name: baseline_stats}
+    - {source: A, target: B, link_params: {capacity: 1, cost: 1}}
+    - {source: A, target: B, link_params: {capacity: 2, cost: 1}}
+    - {source: B, target: C, link_params: {capacity: 1, cost: 1}}
+    - {source: B, target: C, link_params: {capacity: 2, cost: 1}}
+    - {source: A, target: D, link_params: {capacity: 3, cost: 2}}
+    - {source: D, target: C, link_params: {capacity: 3, cost: 2}}
 """
-
 scenario = Scenario.from_yaml(scenario_yaml)
-scenario.run()
-print(list(scenario.results.to_dict()["steps"].keys()))
+network = scenario.network
+
+print(network.max_flow("A", "C"))                          # {('A', 'C'): 6.0}
+print(network.max_flow("A", "C", shortest_path=True))      # {('A', 'C'): 3.0}
+print(
+    network.max_flow(
+        "A",
+        "C",
+        shortest_path=True,
+        flow_placement=FlowPlacement.EQUAL_BALANCED,
+    )
+)  # {('A', 'C'): 2.0}
+
+res = network.max_flow_with_summary("A", "C")
+print({k: (v[0], v[1].cost_distribution) for k, v in res.items()})
+# {('A', 'C'): (6.0, {2.0: 3.0, 4.0: 3.0})}
 ```
 
 ## Documentation
