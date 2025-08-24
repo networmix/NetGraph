@@ -1,0 +1,62 @@
+digraph SystemPipeline {
+  rankdir=TB;
+  graph [compound=true, newrank=true, splines=ortho, ranksep="0.5", nodesep=0.35, pad=0.04, labelloc="t"];
+  node  [shape=box, fontsize=10, margin="0.06,0.04"];
+  edge  [fontsize=9, arrowsize=0.65];
+
+  // Input
+  subgraph cluster_input {
+    label="Input"; labelloc="t"; labeljust="l"; style="rounded,dashed";
+    a  [label="Scenario YAML"];
+    b  [label="Parse + Validate\n(JSON Schema)"];
+    a -> b;
+    ia [label="", shape=point, width=0, height=0, style=invis];
+    { rank=min; ia; }
+  }
+
+  // Model
+  subgraph cluster_model {
+    label="Model"; labelloc="t"; labeljust="l"; style="rounded,dashed";
+    c  [label="Network"];
+    fp [label="FailurePolicySet"];
+    tm [label="TrafficMatrixSet"];
+    wf [label="Workflow Steps"];
+    // vertical tighten: invisible ordering
+    c  -> wf [style=invis];
+    wf -> fp [style=invis];
+    fp -> tm [style=invis];
+    ma [label="", shape=point, width=0, height=0, style=invis];
+  }
+
+  // Orchestration
+  subgraph cluster_orchestration {
+    label="Orchestration"; labelloc="t"; labeljust="l"; style="rounded,dashed";
+    fm [label="Failure Manager"];
+    af [label="Analysis Function\n(TrafficManager)"];
+    fm -> af;
+    oa [label="", shape=point, width=0, height=0, style=invis];
+  }
+
+  // Results
+  subgraph cluster_results {
+    label="Results"; labelloc="t"; labeljust="l"; style="rounded,dashed";
+    i  [label="Results Store + Artifacts"];
+    ra [label="", shape=point, width=0, height=0, style=invis];
+  }
+
+  // Layering (top→bottom)
+  { rank=same; ma; }
+  ia -> ma [style=invis, weight=100, minlen=3];
+  ma -> oa [style=invis, weight=100, minlen=3];
+  oa -> ra [style=invis, weight=100, minlen=3];
+  { rank=max; ra; }
+
+  // Input → Model
+  b  -> c  [ltail=cluster_input, lhead=cluster_model, minlen=3];
+
+  // Model → Orchestration
+  wf -> fm [ltail=cluster_model, lhead=cluster_orchestration, minlen=3];
+
+  // Orchestration → Results
+  fm -> i [ltail=cluster_orchestration, lhead=cluster_results, minlen=3];
+}
