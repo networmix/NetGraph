@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # ---------------------------------------------------------------------
 [project]
 name = "ngraph"
-version = "0.9.0"
+version = "0.9.1"
 description = "A tool and a library for network modeling and analysis."
 readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
@@ -19,6 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 
 # Runtime deps
@@ -100,6 +101,7 @@ exclude = ["tests*", "notebooks*", "examples*", "dev*"]
 # Include schema files in the package for runtime validation
 [tool.setuptools.package-data]
 "ngraph.schemas" = ["scenario.json"]
+"ngraph" = ["py.typed"]
 
 # ---------------------------------------------------------------------
 # Ruff
