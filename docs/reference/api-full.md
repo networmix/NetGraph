@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 24, 2025 at 04:38 UTC
+Generated from source code on: August 24, 2025 at 05:06 UTC
 
 Modules auto-discovered: 61
 
@@ -2554,7 +2554,7 @@ YAML Configuration Example:
         flow_placement: "PROPORTIONAL"
         baseline: false
         seed: 42
-        include_failure_patterns: false  # same as store_failure_patterns
+        store_failure_patterns: false
         include_flow_details: false      # cost_distribution
         include_min_cut: false           # min-cut edges list
 
