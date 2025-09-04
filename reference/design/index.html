@@ -1,0 +1,1827 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://networmix.github.io/NetGraph/reference/design/">
+      
+      
+        <link rel="prev" href="../../examples/clos-fabric/">
+      
+      
+        <link rel="next" href="../dsl/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
+    
+    
+      
+        <title>Design - NetGraph</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#netgraph-design-and-implementation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="NetGraph" class="md-header__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            NetGraph
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/installation/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/bundled-scenarios/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="NetGraph" class="md-nav__button md-logo" aria-label="NetGraph" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    NetGraph
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/networmix/NetGraph" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Getting Started
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Getting Started
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Quickstart
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Examples
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Examples
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/bundled-scenarios/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Bundled Scenarios
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/basic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Basic Example
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/clos-fabric/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Clos Fabric
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Design
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Design
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Execution Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-dsl-and-input-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario DSL and Input Expansion
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scenario DSL and Input Expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dsl-expansion-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      DSL Expansion Process
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Model
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#link" class="md-nav__link">
+    <span class="md-ellipsis">
+      Link
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#riskgroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      RiskGroup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-and-link-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node and Link Selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disabled-elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disabled Elements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networkview" class="md-nav__link">
+    <span class="md-ellipsis">
+      NetworkView
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#graph-construction-strictmultidigraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graph Construction (StrictMultiDiGraph)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Analysis Algorithms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shortest-path-first-spf-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shortest-Path First (SPF) Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pseudocode-for-edgeselectall_min_cost-no-exclusions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pseudocode (for EdgeSelect.ALL_MIN_COST, no exclusions)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maximum-flow-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maximum Flow Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flow-placement-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow Placement Strategies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pseudocode-simplified-max-flow-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pseudocode (simplified max-flow loop)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managers-and-workflow-orchestration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managers and Workflow Orchestration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workflow-engine-and-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workflow Engine and Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results storage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-elements-and-comparisons" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design Elements and Comparisons
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Considerations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cross-references
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    DSL
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workflow
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../schemas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Schemas
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api-full/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API Full
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#execution-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Execution Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scenario-dsl-and-input-expansion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scenario DSL and Input Expansion
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scenario DSL and Input Expansion">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dsl-expansion-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      DSL Expansion Process
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Model
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#node" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#link" class="md-nav__link">
+    <span class="md-ellipsis">
+      Link
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#riskgroup" class="md-nav__link">
+    <span class="md-ellipsis">
+      RiskGroup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      Network
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-and-link-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Node and Link Selection
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#disabled-elements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Disabled Elements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#networkview" class="md-nav__link">
+    <span class="md-ellipsis">
+      NetworkView
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#graph-construction-strictmultidigraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graph Construction (StrictMultiDiGraph)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysis-algorithms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Analysis Algorithms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shortest-path-first-spf-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shortest-Path First (SPF) Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pseudocode-for-edgeselectall_min_cost-no-exclusions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pseudocode (for EdgeSelect.ALL_MIN_COST, no exclusions)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maximum-flow-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maximum Flow Algorithm
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flow-placement-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow Placement Strategies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pseudocode-simplified-max-flow-loop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pseudocode (simplified max-flow loop)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managers-and-workflow-orchestration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managers and Workflow Orchestration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workflow-engine-and-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Workflow Engine and Steps
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results storage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#design-elements-and-comparisons" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design Elements and Comparisons
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Performance Considerations
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cross-references
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="netgraph-design-and-implementation">NetGraph Design and Implementation<a class="headerlink" href="#netgraph-design-and-implementation" title="Permanent link">&para;</a></h1>
+<p>This document describes NetGraph's internal design: scenario DSL, data models, execution flow, algorithms, manager components, and result handling. It focuses on architecture and key implementation details.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>NetGraph is a network scenario analysis engine. It takes a scenario (defined in a YAML DSL) as input, builds a directed multigraph model of the network, and runs a configurable workflow of analysis steps (like traffic placement or max-flow capacity) to produce structured results. Key components include:</p>
+<ul>
+<li>
+<p>CLI and API: Entry points to load scenarios and invoke analyses.</p>
+</li>
+<li>
+<p>Scenario DSL Parser: Validates and expands the YAML scenario into an internal model.</p>
+</li>
+<li>
+<p>Domain Model: In-memory representation of nodes, links, risk groups, etc., with selection and grouping utilities.</p>
+</li>
+<li>
+<p>NetworkView: A read-only overlay on the model to simulate failures or what-if scenarios without altering the base network.</p>
+</li>
+<li>
+<p>Graph construction: Builds a <code>StrictMultiDiGraph</code> (a <code>networkx.MultiDiGraph</code> subclass) from the <code>Network</code> or <code>NetworkView</code> for consumption by SPF/KSP/MaxFlow (compact or full, optional reverse edges).</p>
+</li>
+<li>
+<p>Algorithms: Core graph algorithms: shortest paths (SPF and KSP, k-shortest paths) and max-flow, with configurable edge selection and flow splitting strategies.</p>
+</li>
+<li>
+<p>Managers: Orchestrators for higher-level behaviors, e.g., expanding demands over time or enumerating failure cases.</p>
+</li>
+<li>
+<p>Workflow Engine: Composes steps (graph build, demand placement, max flow, etc.) into end-to-end analyses, storing outputs in a results store.</p>
+</li>
+<li>
+<p>Results Store: Collects outputs and metadata from each step, enabling structured JSON export for post-analysis.</p>
+</li>
+</ul>
+<h3 id="execution-flow">Execution Flow<a class="headerlink" href="#execution-flow" title="Permanent link">&para;</a></h3>
+<p>The diagram below shows simplified end-to-end execution flow from scenario input to results.</p>
+<p><img alt="NetGraph execution flow" src="../../assets/diagrams/system_pipeline.dot.svg" /></p>
+<h2 id="scenario-dsl-and-input-expansion">Scenario DSL and Input Expansion<a class="headerlink" href="#scenario-dsl-and-input-expansion" title="Permanent link">&para;</a></h2>
+<p>NetGraph scenarios are defined in YAML using a declarative DSL (see <a href="../dsl/">DSL Reference</a>). The DSL allows concise specification of network topologies, traffic demands, failure policies, and analysis workflows. Before execution, scenario files are validated against a JSON Schema to catch errors early (unknown keys, type mismatches), enforcing strict definitions.</p>
+<p>Key elements of the DSL include:</p>
+<ul>
+<li>
+<p><strong>Seed</strong>: A master random seed for the scenario to ensure deterministic behavior across runs.</p>
+</li>
+<li>
+<p><strong>Blueprints</strong>: Reusable templates for subsets of the topology. A blueprint defines internal node types, roles, and optional internal links. Blueprints enable defining a complex multi-node topology once and instantiating it multiple times with different parameters.</p>
+</li>
+<li>
+<p><strong>Groups</strong>: Definitions of groups of nodes in the topology, either explicitly or via patterns. Groups can use a blueprint (use_blueprint) with parameters, or define a number of nodes (node_count) with a naming template.</p>
+</li>
+<li>
+<p><strong>Adjacency</strong>: Rules to generate links between groups of nodes. Instead of enumerating every link, an adjacency rule specifies source and target selectors (by path pattern), a wiring pattern (e.g. mesh for full mesh or one_to_one for paired links), number of parallel links (link_count), and link parameters (capacity, cost, attributes like distance, hardware, risk group tags, etc.). Advanced matching allows filtering nodes by attributes with logical conditions (AND/OR) to apply adjacency rules to selected nodes only. A single rule can thus expand into many concrete links.</p>
+</li>
+<li>
+<p><strong>Overrides</strong>: Optional modifications applied after the initial expansion. node_overrides or link_overrides can match specific nodes or links (by path or endpoints) and change their attributes or disable them. This allows fine-tuning or simulating removals without changing the base definitions.</p>
+</li>
+<li>
+<p><strong>Risk Groups</strong>: Named shared-risk groups (potentially nested) that nodes or links can belong to. These are used in failure scenarios to correlate failures (e.g. all links in a risk group fail together).</p>
+</li>
+<li>
+<p><strong>Traffic Matrices</strong>: Demand definitions specifying source node sets, sink node sets (by regex or attribute path selectors), and demand volume. Each demand can also include priority or custom flow placement policy.</p>
+</li>
+<li>
+<p><strong>Failure Policies</strong>: Definitions of failure scenarios or modes, possibly with weights (probabilities). For example, a policy might say "with 5% chance, fail any single core node" or "fail all links in risk_group X". The failure manager uses these policies to generate specific failure combinations for simulation.</p>
+</li>
+<li>
+<p><strong>Workflow</strong>: An ordered list of analysis steps to execute. Each step has a step_type (the analysis to perform, such as "MaxFlow" or "TrafficMatrixPlacement"), a unique name, and parameters (like number of iterations, etc.). The workflow definition orchestrates the analysis pipeline.</p>
+</li>
+</ul>
+<h3 id="dsl-expansion-process">DSL Expansion Process<a class="headerlink" href="#dsl-expansion-process" title="Permanent link">&para;</a></h3>
+<p>The loader validates and expands DSL definitions into concrete nodes and links. Unknown fields or schema violations cause an immediate error before any expansion. After schema validation, blueprints are resolved (each blueprint group becomes actual Node objects), group name patterns are expanded into individual names, and adjacency rules are iterated over matching source-target node sets to create Link objects. All nodes and links are then validated in runtime to ensure they are valid (e.g., no duplicate node names, all link endpoints exist).</p>
+<h2 id="data-model">Data Model<a class="headerlink" href="#data-model" title="Permanent link">&para;</a></h2>
+<p>Once the scenario is parsed and expanded, NetGraph represents the network with a set of core model classes. These define the authoritative in-memory representation of the scenario and enforce invariants (like unique names).</p>
+<h3 id="node">Node<a class="headerlink" href="#node" title="Permanent link">&para;</a></h3>
+<p>A Node represents a network node (vertex). Each node has:</p>
+<ul>
+<li>
+<p>a unique name (string identifier),</p>
+</li>
+<li>
+<p>a disabled flag (if the node is turned off in the scenario),</p>
+</li>
+<li>
+<p>a set of risk_groups (associating the node with any failure domains), and</p>
+</li>
+<li>
+<p>an attrs dictionary for arbitrary metadata (e.g., region, device type, hardware info)</p>
+</li>
+</ul>
+<h3 id="link">Link<a class="headerlink" href="#link" title="Permanent link">&para;</a></h3>
+<p>A Link represents a directed link between a source and target node. Each link has:</p>
+<ul>
+<li>
+<p>source and target node names,</p>
+</li>
+<li>
+<p>capacity (float, e.g. in some bandwidth unit),</p>
+</li>
+<li>
+<p>cost (float, e.g. distance or latency metric),</p>
+</li>
+<li>
+<p>disabled flag,</p>
+</li>
+<li>
+<p>risk_groups set,</p>
+</li>
+<li>
+<p>attrs dict for metadata (e.g. distance_km, fiber type), and</p>
+</li>
+<li>
+<p>an auto-generated unique id</p>
+</li>
+</ul>
+<p>The id is constructed as "source|target|<random_base64>", ensuring each link has a distinct identifier. The model stores each link as directed (source -&gt; target). When the analysis graph is built, a reverse edge is added by default so algorithms see bidirectional connectivity.</p>
+<h3 id="riskgroup">RiskGroup<a class="headerlink" href="#riskgroup" title="Permanent link">&para;</a></h3>
+<p>A RiskGroup represents a named failure domain or shared-risk link group (SRLG). Risk groups can be hierarchical (a risk group may have children risk groups). Each RiskGroup has:</p>
+<ul>
+<li>
+<p>a name,</p>
+</li>
+<li>
+<p>list of children RiskGroups (which inherit the failure domain property),</p>
+</li>
+<li>
+<p>disabled flag (if the entire group is considered initially failed in the scenario), and</p>
+</li>
+<li>
+<p>an attrs dict for any metadata</p>
+</li>
+</ul>
+<p>Hierarchical risk groups allow, for example, defining a large domain composed of smaller sub-domains. A failure event could disable an entire group, implicitly affecting all its descendants.</p>
+<h3 id="network">Network<a class="headerlink" href="#network" title="Permanent link">&para;</a></h3>
+<p>A Network is the container class that holds all nodes, links, and top-level risk groups for the scenario. The Network class maintains:</p>
+<ul>
+<li>
+<p>nodes: Dict[name, Node],</p>
+</li>
+<li>
+<p>links: Dict[id, Link],</p>
+</li>
+<li>
+<p>risk_groups: Dict[name, RiskGroup],</p>
+</li>
+</ul>
+<p>The Network is the authoritative source of truth for the topology. It provides methods to add nodes and links, enforcing invariants. For example, adding a link checks that the source and target nodes exist in the network, and prevents duplicate node additions. The Network also never removes nodes or links; instead, disabled flags are used to mark elements inactive.</p>
+<h3 id="node-and-link-selection">Node and Link Selection<a class="headerlink" href="#node-and-link-selection" title="Permanent link">&para;</a></h3>
+<p>A powerful feature of the model is the ability to select groups of nodes by pattern, which is used by algorithms to choose source/sink sets matching on their structured names or attributes. Network.select_node_groups_by_path(pattern) accepts either a regex or an attribute query:</p>
+<p>If the pattern is of the form <code>attr:&lt;name&gt;</code>, it groups nodes by the value of the given attribute name. For example, <code>attr:role</code> might group nodes by their role attribute (like "core", "leaf", etc.), returning a dict mapping each distinct value to the list of nodes with that value. Nodes missing the attribute are excluded.</p>
+<p>Otherwise, the pattern is treated as an anchored regular expression on the node's name. If the regex contains capturing groups, the concatenated capture groups form the group label; otherwise, the entire pattern string is used as the label. For instance, the pattern <code>r"(\w+)-(\d+)"</code> on node names could produce group labels like "metroA-1" etc. If no nodes match, an empty mapping is returned (with a debug log) instead of an error, so higher-level logic can handle it.</p>
+<p>This selection mechanism allows workflow steps and API calls to refer to nodes flexibly (using human-readable patterns instead of explicit lists), which is particularly useful in large topologies.</p>
+<h3 id="disabled-elements">Disabled Elements<a class="headerlink" href="#disabled-elements" title="Permanent link">&para;</a></h3>
+<p>Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but they will be ignored when building the analysis graph or when creating views (the disabled flag is always checked and such elements filtered out). This design preserves topology information (e.g., you know a link exists but is just turned off) and allows easily enabling it later if needed.</p>
+<h3 id="networkview">NetworkView<a class="headerlink" href="#networkview" title="Permanent link">&para;</a></h3>
+<p>To simulate failures or other what-if scenarios without modifying the base network, NetGraph uses the NetworkView class. A NetworkView is essentially a read-only filtered view of a Network.</p>
+<p>You create a NetworkView by specifying a base Network and sets of nodes and links to exclude. For example:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">view</span> <span class="o">=</span> <span class="n">NetworkView</span><span class="o">.</span><span class="n">from_excluded_sets</span><span class="p">(</span><span class="n">base_network</span><span class="p">,</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                                     <span class="n">excluded_nodes</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;Node5&quot;</span><span class="p">},</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                                     <span class="n">excluded_links</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;A|B|xyz123&quot;</span><span class="p">})</span>
+</span></code></pre></div>
+<p>This will behave like the original network except that Node5 and the link with id "A|B|xyz123" are considered "hidden".</p>
+<p>The view is read-only: it does not allow adding or removing nodes or links. It delegates attribute access to the base network but filters out anything in the excluded sets or disabled in the scenario. For example, view.nodes returns a dict of Node objects excluding any hidden node.</p>
+<p>Similarly, view.links provides only links not hidden. This means algorithms run on a view automatically ignore the failed components.</p>
+<p>Multiple concurrent views can be created on the same base network. This is important for performing parallel simulations (e.g., analyzing many failure combinations in a Monte Carlo) without copying the entire network each time. Each view carries its own exclusion sets.</p>
+<p>Importantly, a NetworkView can be converted into a graph just like a full Network. NetworkView.to_strict_multidigraph(add_reverse=True, compact=True) will build the directed graph of the visible portion of the network. Internally, the view uses the base network's graph-building function with the exclusion sets applied. The first time this is called for a given parameter combination, the result is cached inside the view. Subsequent calls with the same flags retrieve the cached graph instead of rebuilding. This caching avoids redundant work when running multiple algorithms on the same view (e.g., running many flow computations on the same failed topology) and is crucial for performance.</p>
+<p>The NetworkView overlay avoids mutating the base graph when simulating failures (e.g., deleting nodes or toggling flags). It separates the static scenario (base network) from dynamic conditions (the view), enabling thread-safe parallel analyses and eliminating deep copies for each failure scenario. This improves performance and keeps semantics clear.</p>
+<h3 id="graph-construction-strictmultidigraph">Graph Construction (StrictMultiDiGraph)<a class="headerlink" href="#graph-construction-strictmultidigraph" title="Permanent link">&para;</a></h3>
+<p>NetGraph uses a custom graph implementation, StrictMultiDiGraph, to represent the network topology for analysis algorithms. This class is a subclass of networkx.MultiDiGraph with stricter semantics and performance tweaks.</p>
+<ul>
+<li>
+<p>Explicit node management: The graph does not auto-create nodes. If you try to add an edge with a non-existent node, it raises an error instead of silently adding the node. This ensures that any edge references a valid node from the model (catching bugs where a node might be misspelled or not added).</p>
+</li>
+<li>
+<p>No duplicate nodes; unique edge keys: Adding an existing node raises a ValueError. Parallel edges are allowed, but each edge key must be unique. If an explicit key is provided to <code>add_edge</code> and it's already in use, an error is raised; if no key is provided, the graph generates a new unique key.</p>
+</li>
+<li>
+<p>Stable edge identifiers: The edge keys (IDs) are monotonically increasing integers assigned in insertion order and never reused. This provides globally unique, stable keys, simplifying flow analysis and result mapping.</p>
+</li>
+<li>
+<p>Fast deep copy: Copying large graphs in Python can be expensive. StrictMultiDiGraph.copy() by default uses a pickle-based deep copy (serializing and deserializing the graph), which in many cases outperforms the iterative copy provided by NetworkX. This is especially beneficial when duplicating graphs for separate computations.</p>
+</li>
+<li>
+<p>Compatibility with NetworkX: StrictMultiDiGraph is compatible with NetworkX's MultiDiGraph API. It can be used as a drop-in replacement for MultiDiGraph in NetworkX code. All NetworkX algorithms and utilities supporting MultiDiGraph can be used with StrictMultiDiGraph.</p>
+</li>
+</ul>
+<p>The Network (or NetworkView) produces a StrictMultiDiGraph via to_strict_multidigraph(add_reverse=True, compact=...).</p>
+<p>If compact=True, the graph is built with minimal attributes: only each edge's capacity and cost are set, and edge keys are auto-assigned integers. Node attributes are omitted in this mode. The original link ID and any custom attributes are not carried to reduce overhead. If compact=False, the graph includes full fidelity: nodes carry their attrs, and each edge is added with the original link's id (link_id) and all its attrs from the model. In full mode, the edge key in the StrictMultiDiGraph is still a unique integer, but the original link id is stored as an attribute on the edge for traceability.</p>
+<p>If add_reverse=True (the default), for every Link in the network, a reverse edge is also added. This effectively makes the analysis graph bidirectional even though the model stores directed links. In other words, the algorithms will consider traffic flowing in both directions on each physical link unless add_reverse is turned off. The reverse edge uses the same link attributes; however, it is a distinct edge object in the graph with its own unique key.</p>
+<p>The rationale for compact=True by default in analyses is performance: stripping down to just capacity and cost (which are floats) yields a lighter-weight graph, which improves algorithm speed by reducing Python overhead (fewer attributes to copy or inspect).</p>
+<h3 id="analysis-algorithms">Analysis Algorithms<a class="headerlink" href="#analysis-algorithms" title="Permanent link">&para;</a></h3>
+<p>NetGraph's core algorithms revolve around path-finding and flow computation on the graph. These algorithms are designed to handle the multi-graph nature (parallel edges), cost metrics, and varying selection policies. Performance is critical, so certain specialized code paths and heuristics are used.</p>
+<h3 id="shortest-path-first-spf-algorithm">Shortest-Path First (SPF) Algorithm<a class="headerlink" href="#shortest-path-first-spf-algorithm" title="Permanent link">&para;</a></h3>
+<p>NetGraph uses a Dijkstra-like algorithm with pluggable edge selection and optional multipath predecessor recording. Key features of <code>ngraph.algorithms.spf.spf</code> include:</p>
+<p>Edge Selection Policies: Rather than always choosing a single smallest-weight edge per step, the algorithm evaluates edges per neighbor. The behavior is governed by an EdgeSelect policy. For example:</p>
+<ul>
+<li>
+<p>EdgeSelect.ALL_MIN_COST (default): for each neighbor v, include all parallel edges u-&gt;v that achieve the minimal edge cost among u-&gt;v edges.</p>
+</li>
+<li>
+<p>EdgeSelect.SINGLE_MIN_COST: for each neighbor v, choose a single u-&gt;v edge with minimal edge cost (ties broken deterministically).</p>
+</li>
+<li>
+<p>EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING: for each neighbor v, consider only u-&gt;v edges with residual capacity and include all with minimal edge cost among those.</p>
+</li>
+</ul>
+<p>Other policies include capacity-aware single-edge, load-factored single-edge, and <code>USER_DEFINED</code> via a callback.</p>
+<p>Capturing equal-cost predecessors: With multipath=True, SPF stores all minimal-cost predecessors: <code>pred[node][predecessor] = [edge_id, ...]</code>. New equal-cost routes extend the predecessor set rather than overwrite.</p>
+<p>This predecessor DAG is essential for later flow splitting: it retains all equal-cost paths in a compact form.</p>
+<p>Early destination stop: If <code>dst</code> is provided, once <code>dst</code> is popped at minimal distance, SPF does not expand from <code>dst</code> and continues only while the heap front cost equals that minimal distance. This preserves equal-cost predecessors and terminates early.</p>
+<p>This optimization saves time when only a specific target's distance is needed.</p>
+<p>Specialized fast path: With no exclusions and <code>ALL_MIN_COST</code> or <code>ALL_MIN_COST_WITH_CAP_REMAINING</code>, SPF uses optimized loops (<code>_spf_fast_*</code>) that inline per-neighbor scanning and skip callbacks.</p>
+<p>Complexity: Using a binary heap, time is (O((V+E) \log V)); memory is (O(V+E)) for costs and predecessors.</p>
+<h3 id="pseudocode-for-edgeselectall_min_cost-no-exclusions">Pseudocode (for EdgeSelect.ALL_MIN_COST, no exclusions)<a class="headerlink" href="#pseudocode-for-edgeselectall_min_cost-no-exclusions" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>function SPF_AllMinCost(graph, src, dst=None, multipath=True):
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    costs = { src: 0 }
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    pred  = { src: {} }            # no predecessor for source
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    pq = [(0, src)]               # min-heap of (cost, node)
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    best_dst_cost = None
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    while pq:
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        (c, u) = heappop(pq)
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        if c &gt; costs[u]:
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>            continue               # stale entry in pq
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        if dst is not None and u == dst and best_dst_cost is None:
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>            best_dst_cost = c      # found shortest path to dst
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        if dst is None or u != dst:
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>            # Relax edges from u
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>            for v, edges_map in graph._adj[u].items():
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>                # find minimal cost among edges u-&gt;v
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>                min_cost = inf
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>                min_edges = []
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>                for e_id, e_attr in edges_map.items():
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>                    ec = e_attr[&quot;cost&quot;]
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>                    if ec &lt; min_cost:
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>                        min_cost = ec
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>                        min_edges = [e_id]
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>                    elif multipath and ec == min_cost:
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>                        min_edges.append(e_id)
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>                if min_cost == inf:
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>                    continue  # no edges
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>                new_cost = c + min_cost
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>                if v not in costs or new_cost &lt; costs[v]:
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>                    costs[v] = new_cost
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>                    pred[v] = { u: min_edges }
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>                    heappush(pq, (new_cost, v))
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>                elif multipath and new_cost == costs[v]:
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>                    pred[v][u] = min_edges
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        if best_dst_cost is not None:
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>            # If next closest node is farther than dst, done
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>            if not pq or pq[0][0] &gt; best_dst_cost:
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>                break
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>    return costs, pred
+</span></code></pre></div>
+<p>This pseudocode corresponds to the implementation. With EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING, edges with no residual capacity are skipped when computing min_edges. When multipath=False, only a single predecessor is stored per node.</p>
+<h3 id="maximum-flow-algorithm">Maximum Flow Algorithm<a class="headerlink" href="#maximum-flow-algorithm" title="Permanent link">&para;</a></h3>
+<p>NetGraph's max-flow uses iterative shortest-path augmentation, blending Edmonds-Karp (augment along shortest paths) and Dinic (push blocking flows on a level graph) with cost awareness and configurable flow splitting across equal-cost parallels. It is implemented in <code>ngraph.algorithms.max_flow.calc_max_flow</code>. The goal is to compute the maximum feasible flow between a provided source and sink under edge capacity constraints.</p>
+<p>Multi-source/multi-sink is handled by callers when needed (e.g., Demand Manager in <code>combine</code> mode) by introducing pseudo-source and pseudo-sink nodes with infinite-capacity, zero-cost edges to/from the real endpoints. <code>calc_max_flow</code> itself operates on a single source and single sink and does not create pseudo nodes.</p>
+<p>The residual network is implicit on the flow-aware graph. For a physical edge u-&gt;v:</p>
+<ul>
+<li>Forward residual arc u-&gt;v has capacity <code>capacity(u,v) - flow(u,v)</code>.</li>
+<li>Reverse residual arc v-&gt;u (implicit, not stored) has capacity <code>flow(u,v)</code>.
+No physical reverse edge is required for residual traversal. SPF traverses only forward residual arcs u-&gt;v. Reverse residual arcs v-&gt;u are used when computing reachability for the min-cut and within blocking-flow computations; they are not considered by SPF. This is distinct from <code>add_reverse=True</code> during graph construction, which adds an actual reverse physical edge with its own capacity and cost.</li>
+</ul>
+<p>Reverse residual arcs are not stored as edges in the <code>StrictMultiDiGraph</code>. They are derived on the fly from edge attributes:</p>
+<ul>
+<li>For reachability/min-cut, we traverse incoming edges and treat v-&gt;u as available when <code>flow(u,v) &gt; eps</code>.</li>
+<li>For blocking-flow, <code>calc_graph_capacity</code> builds a reversed adjacency from the SPF predecessor DAG and computes residual capacities from <code>capacity - flow</code> (forward) and <code>flow</code> (reverse) without mutating the graph.</li>
+</ul>
+<p>The core loop finds augmenting paths using the cost-aware SPF described above:</p>
+<p>Run SPF from the source to the sink with edge selection ALL_MIN_COST_WITH_CAP_REMAINING. This computes shortest-path distances and a predecessor DAG to the sink over forward residual edges with residual capacity &gt; 0 (no reverse arcs). The edge cost can represent distance or preference; SPF selects minimum cumulative cost.</p>
+<p>If the pseudo-sink is not reached (i.e., no augmenting path exists), stop: the max flow is achieved.</p>
+<p>Otherwise, determine how much flow can be sent along the found paths:</p>
+<p>Using the pred DAG from SPF, compute a blocking flow with consideration of parallel edges and the chosen splitting policy. This is done by <code>calc_graph_capacity</code> (Dinic-like): it builds a reversed residual view from the sink, assigns BFS levels, and uses DFS to push blocking flow. With parallel equal-cost edges, flow is split proportionally to residual capacity (PROPORTIONAL) or equally (EQUAL_BALANCED) until a bottleneck is reached.</p>
+<p>This yields a value f (flow amount) and a per-edge flow assignment on the predecessor DAG (fractions that sum to 1 along outgoing splits).</p>
+<p>We then augment the flow: for each edge on those shortest paths, increase its flow attribute by the assigned portion of f. The algorithm updates both per-edge flow and aggregate node flow for bookkeeping, and marks which edges carried flow.</p>
+<p>Add f to the total flow counter.</p>
+<p>If f is below a small tolerance eps (meaning no meaningful flow could be added, perhaps due to rounding or all residual capacity being negligible), break out and treat it as saturated.</p>
+<p>Repeat to find the next augmenting path (back to step 1).</p>
+<p>If <code>shortest_path=True</code>, the algorithm performs only one augmentation pass and returns (useful when the goal is a single cheapest augmentation rather than maximum flow).</p>
+<p>After the loop, if detailed results are requested, the algorithm computes a FlowSummary which includes:</p>
+<ul>
+<li>
+<p>total_flow: the sum of flow from source to sink achieved</p>
+</li>
+<li>
+<p>edge_flow: a dictionary of each edge (u,v,key) to the flow on that edge</p>
+</li>
+<li>
+<p>residual_cap: remaining capacity on each edge = capacity - flow</p>
+</li>
+<li>
+<p>reachable: the set of nodes reachable from the source in the final residual network (this identifies the source side of the min-cut)</p>
+</li>
+<li>
+<p>min_cut: the list of edges that are saturated and go from reachable to non-reachable (these form the minimum cut)</p>
+</li>
+<li>
+<p>cost_distribution: how much flow was sent in each augmentation step cost (e.g., X flow units were sent along paths of cost Y)</p>
+</li>
+</ul>
+<p>This is returned along with the total flow value. If a flow-assigned graph copy is requested, that is also returned.</p>
+<h3 id="flow-placement-strategies">Flow Placement Strategies<a class="headerlink" href="#flow-placement-strategies" title="Permanent link">&para;</a></h3>
+<p>NetGraph's max-flow differs from classical augmenting-path implementations by controlling how flow is split across equal-cost parallel edges in each augmentation. Governed by <code>FlowPlacement</code>:</p>
+<ul>
+<li>
+<p>PROPORTIONAL (default): If multiple parallel edges have equal cost on a path segment, distribute flow among them in proportion to their remaining capacities. This mimics how weighted equal-cost multi-path (W-ECMP or WCMP) routing splits flow based on link bandwidth.</p>
+</li>
+<li>
+<p>EQUAL_BALANCED: Split flow equally across all equal-cost parallel edges, regardless of capacity differences (up to capacity limits). This may under-utilize a higher-capacity link if paired with a lower-capacity one, but it maintains an even load balance until one link saturates. This matches IP forwarding with equal-cost multi-path (ECMP), which splits flow based on the number of parallel paths.</p>
+</li>
+</ul>
+<p><code>calc_graph_capacity</code> implements these strategies:</p>
+<ul>
+<li>
+<p>PROPORTIONAL: Build a reversed residual view from the sink. Assign BFS levels and push blocking flows with DFS, summing capacities across parallel equal-cost edges in each segment. Convert reversed flows back to forward orientation.</p>
+</li>
+<li>
+<p>EQUAL_BALANCED: Build reversed adjacency from the sink. Push a nominal unit flow from the source equally across outgoing reversed arcs, then scale by the minimum capacity-to-assignment ratio to respect capacities; normalize back to forward orientation.</p>
+</li>
+</ul>
+<p>Support for these placement strategies together with control over the path selection and edge selection policies enables realistic modeling of different forwarding and traffic engineering scenarios.</p>
+<h3 id="pseudocode-simplified-max-flow-loop">Pseudocode (simplified max-flow loop)<a class="headerlink" href="#pseudocode-simplified-max-flow-loop" title="Permanent link">&para;</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>function MAX_FLOW(graph, S, T, placement=PROPORTIONAL):
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    initialize flow_graph with 0 flow on all edges
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    total_flow = 0
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    do:
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        costs, pred = SPF(graph, src=S, dst=T, edge_select=ALL_MIN_COST_WITH_CAP_REMAINING)
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        if T not reachable in pred:
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>            break
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        f, flow_dict = calc_graph_capacity(flow_graph, S, T, pred, placement)
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        if f &lt;= eps:
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>            break
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>        for each edge in flow_dict:
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>            add flow on that edge as per flow_dict
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        total_flow += f
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    while True
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    return total_flow, (and optionally summary, flow_graph)
+</span></code></pre></div>
+<p>Here <code>eps</code> denotes a small tolerance (default 1e-10; configurable via parameter).</p>
+<p>In practice, each augmentation performs one SPF (O((V+E) \log V)) and one blocking-flow computation over the pred DAG and residual view (typically (O(V+E))). If we pushed one path at a time the worst case would be (O(E)) augmentations, giving (O(E^2 \log V)). Because we push blocking flows, the number of augmentations is usually far smaller than (E). A practical upper bound is (O(\min\{E, F\} \cdot (E \log V))), where (F) is the max-flow value.</p>
+<h3 id="managers-and-workflow-orchestration">Managers and Workflow Orchestration<a class="headerlink" href="#managers-and-workflow-orchestration" title="Permanent link">&para;</a></h3>
+<p>Managers handle scenario dynamics and prepare inputs for algorithmic steps.</p>
+<p>Demand Manager (<code>ngraph.demand.manager</code>): Expands <code>TrafficDemand</code> entries into concrete <code>Demand</code> objects and places them on a <code>StrictMultiDiGraph</code> derived from the <code>Network</code> (or a <code>NetworkView</code>).</p>
+<ul>
+<li>Expansion is deterministic: source/sink node lists are sorted; no randomization is used.</li>
+<li>Modes: <code>combine</code> (one aggregate demand via pseudo source/sink nodes) and <code>pairwise</code> (one demand per (src, dst) pair, excluding self-pairs, with even volume split).</li>
+<li>Expanded demands are sorted by ascending priority before placement.</li>
+<li>Placement uses a priority-aware round-robin scheduler. <code>placement_rounds="auto"</code> performs up to 3 passes with early stop based on progress and fairness.</li>
+<li>Provides summaries (per-demand placement, link usage) and does not mutate the base <code>Network</code> (operates on the built flow graph).</li>
+</ul>
+<p>Failure Manager (<code>ngraph.failure.manager</code>): Applies a <code>FailurePolicy</code> to compute exclusion sets and runs analyses on <code>NetworkView</code> instances.</p>
+<ul>
+<li>Supports baseline (no failures), serial or process-parallel execution, and per-worker network caching (the network is serialized once per worker).</li>
+<li>Deterministic when a seed is supplied (each iteration receives <code>seed + iteration_index</code>).</li>
+<li>Deduplication: iterations are grouped by a key built from sorted excluded node IDs, sorted excluded link IDs, analysis function name, and analysis parameters. Only one representative per group is executed; results are replicated to all members.</li>
+<li>This reduces effective executions from I to U, where U is the number of unique failure patterns for the chosen policy and parameters (e.g., 10,000 samples over 250 unique single-link failures execute as 250 tasks, not 10,000).</li>
+<li>Parameter validation: with no effective failure rules, <code>iterations &gt; 1</code> without <code>baseline=True</code> is rejected; <code>baseline=True</code> requires <code>iterations &gt;= 2</code>.</li>
+<li>Parallelism auto-adjusts to 1 if the analysis function cannot be pickled (e.g., defined in <code>__main__</code>).</li>
+</ul>
+<p>Both managers separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or <code>NetworkView</code>s) for each workflow iteration.</p>
+<h3 id="workflow-engine-and-steps">Workflow Engine and Steps<a class="headerlink" href="#workflow-engine-and-steps" title="Permanent link">&para;</a></h3>
+<p>NetGraph workflows (see Workflow Reference) are essentially recipes of analysis steps to run in sequence. Each step is typically a pure function: it takes the current model (or view) and possibly prior results, performs an analysis, and stores its outputs. The workflow engine coordinates these steps, using a Results store to record data.</p>
+<p>Common built-in steps:</p>
+<ul>
+<li>
+<p>BuildGraph: builds a <code>StrictMultiDiGraph</code> from the Network (or view) and stores node-link JSON plus <code>{context: {add_reverse}}</code>. Often an initial step.</p>
+</li>
+<li>
+<p>NetworkStats: computes node/link counts, capacity statistics, cost statistics, and degree statistics. Supports optional <code>excluded_nodes</code>/<code>excluded_links</code> and <code>include_disabled</code>.</p>
+</li>
+<li>
+<p>TrafficMatrixPlacement: runs Monte Carlo placement using a named traffic matrix and the Failure Manager. Supports <code>baseline</code>, <code>iterations</code>, <code>parallelism</code>, <code>placement_rounds</code>, <code>store_failure_patterns</code>, <code>include_flow_details</code>, <code>include_used_edges</code>, and <code>alpha</code> or <code>alpha_from_step</code> (default <code>data.alpha_star</code>). Produces <code>data.flow_results</code> per iteration.</p>
+</li>
+<li>
+<p>MaxFlow: runs Monte Carlo maximum-flow analysis between node groups using the Failure Manager. Supports <code>mode</code> (combine/pairwise), <code>baseline</code>, <code>iterations</code>, <code>parallelism</code>, <code>shortest_path</code>, <code>flow_placement</code>, and optional <code>include_flow_details</code>/<code>include_min_cut</code>. Produces <code>data.flow_results</code> per iteration.</p>
+</li>
+<li>
+<p>MaximumSupportedDemand (MSD): uses bracketing and bisection on alpha to find the maximum multiplier such that alpha * demand is feasible. Stores <code>data.alpha_star</code>, <code>data.context</code>, <code>data.base_demands</code>, and <code>data.probes</code>.</p>
+</li>
+<li>
+<p>CostPower: aggregates platform and per-end optics capex/power by hierarchy level (0..N). Respects <code>include_disabled</code> and <code>aggregation_level</code>. Stores <code>data.levels</code> and <code>data.context</code>.</p>
+</li>
+</ul>
+<p>Each step is implemented in the code (in ngraph.workflow module) and has a corresponding step_type name. Steps are generally pure in that they don't modify the Network (except perhaps to disable something if that's the nature of the step, but usually they operate on views and copies). They take inputs, often including references to prior steps' results (the workflow engine allows one step to use another step's output). For instance, a placement step might need the value of alpha* from an MSD step; the workflow definition can specify that link.</p>
+<h3 id="results-storage">Results storage<a class="headerlink" href="#results-storage" title="Permanent link">&para;</a></h3>
+<p>The Results object is a container that the workflow passes through steps. When a step runs, it "enters" a scope in the Results (by step name) and writes any outputs to either metadata or data within that scope.</p>
+<p>For example, the MaxFlow step named "maxflow_between_metros" will put the total flow and details under <code>results.steps["maxflow_between_metros"]["data"]</code> and perhaps record parameters in metadata. The Results store also captures each step's execution metadata (like step order, type, seeds) in a workflow registry. At the end of the workflow, a single nested dictionary can be exported via Results.to_dict() containing all step outputs in a structured way.</p>
+<p>This design ensures consistency (every step has metadata and data keys) and JSON serialization (handles custom objects via to_dict() when available, converts keys to strings). The results often include artifacts like tables or lists of flows for reporting.</p>
+<h3 id="design-elements-and-comparisons">Design Elements and Comparisons<a class="headerlink" href="#design-elements-and-comparisons" title="Permanent link">&para;</a></h3>
+<p>NetGraph's design includes several features that differentiate it from traditional network analysis tools:</p>
+<ul>
+<li>
+<p>Declarative Scenario DSL: A YAML DSL with blueprints and programmatic expansion allows abstract definitions (e.g., a fully meshed Clos) to be expanded into concrete nodes and links. Strict schema validation ensures that scenarios are well-formed and rejects unknown or invalid fields.</p>
+</li>
+<li>
+<p>NetworkView overlays vs graph copying: Read-only overlays avoid copying large structures for each scenario. The view is designed for availability toggles and caches built graphs for algorithms.</p>
+</li>
+<li>
+<p>Strict graph with stable edge IDs: Extends <code>MultiDiGraph</code> with explicit node management and monotonic edge keys, simplifying correlation of results to original links.</p>
+</li>
+<li>
+<p>Flow placement strategies (proportional and equal): During augmentation, split flow across equal-cost paths and parallel links, modeling ECMP/WCMP behavior without linear programming.</p>
+</li>
+<li>
+<p>Cost-aware augmentation: Prefer cheapest capacity first. It does not re-route previously placed flow.</p>
+</li>
+<li>
+<p>User-defined edge selection: Custom edge selection logic is supported (EdgeSelect.USER_DEFINED with a callback), enabling custom routing heuristics.</p>
+</li>
+<li>
+<p>Deterministic simulation with seeding: Random aspects (e.g., failure sampling) are controlled by explicit seeds that propagate through steps. Runs are reproducible given the same scenario and seed.</p>
+</li>
+<li>
+<p>Structured results store: Collects results with metadata in a consistent format for JSON export and downstream analysis.</p>
+</li>
+</ul>
+<h3 id="performance-considerations">Performance Considerations<a class="headerlink" href="#performance-considerations" title="Permanent link">&para;</a></h3>
+<p>Throughout the design, performance has been considered:</p>
+<p>SPF uses Python heapq and optimized loops. Internal profiling shows expected scaling for typical network sizes.</p>
+<p>Caching graphs in views avoids O(N+E) rebuild costs repeatedly when analyzing many failures.</p>
+<p>Monte Carlo deduplication collapses identical failure patterns (plus analysis parameters) into single executions. Runtime scales with the number of unique patterns U rather than requested iterations I; in many policies U &lt;&lt; I.</p>
+<p>Pickle-based deep copy for StrictMultiDiGraph was faster than the default iterative copy for large graphs in local measurements. This reduces the cost of creating multiple independent graph instances.</p>
+<p>The complexity of algorithms has been kept polynomial and usually near-linear. For instance, typical network max flows (with unit capacities) can be O(VE^2), but by using shortest path (cost) and splitting, NetGraph's algorithm often uses far fewer augmentations than worst-case. Benchmarks on Clos topologies and grid graphs confirm the algorithms perform within expected growth rates and can handle networks of thousands of nodes and edges efficiently.</p>
+<p>Summary: The design combines a declarative scenario model, reproducible views, a strict graph with stable IDs, cost-aware SPF and augmentation, and a structured results store. It adapts standard algorithms to network engineering use cases (flow splitting, failure simulation, traceable outputs).</p>
+<h2 id="cross-references">Cross-references<a class="headerlink" href="#cross-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../dsl/">DSL Reference</a></li>
+<li><a href="../workflow/">Workflow Reference</a></li>
+<li><a href="../cli/">CLI Reference</a></li>
+<li><a href="../api/">API Reference</a></li>
+<li><a href="../api-full/">Auto-Generated API Reference</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.sections", "navigation.tabs", "navigation.top", "content.code.copy"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
+      
+    
+  </body>
+</html>
