@@ -136,4 +136,4 @@ print({k: (v[0], v[1].cost_distribution) for k, v in res.items()})
 
 ## License
 
-[MIT License](LICENSE)
+[GNU Affero General Public License v3.0 or later](LICENSE)

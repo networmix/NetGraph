@@ -22,14 +22,14 @@ help:
 	@echo "  make dev           - Full development environment (package + dev deps + hooks)"
 	@echo ""
 	@echo "Code Quality & Testing:"
-	@echo "  make check         - Run lint + pre-commit + schema + tests (includes slow and benchmark)"
+	@echo "  make check         - Run pre-commit (auto-fix) + schema + tests, then lint"
 	@echo "  make check-ci      - Run non-mutating checks and tests (CI entrypoint)"
 	@echo "  make lint          - Run only linting (non-mutating: ruff + pyright)"
 	@echo "  make format        - Auto-format code with ruff"
 	@echo "  make test          - Run tests with coverage (includes slow and benchmark)"
 	@echo "  make qt            - Run quick tests only (excludes slow and benchmark)"
 	@echo "  make perf          - Run performance analysis with comprehensive reports and plots"
-	@echo "  make validate      - Validate YAML files against JSON schema"
+	@echo "  make validate      - Validate YAML schemas"
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs          - Generate API documentation"
@@ -59,8 +59,8 @@ install:
 # Code Quality and Testing
 check:
 	@echo "🔍 Running complete code quality checks and tests..."
-	@$(MAKE) lint
 	@PYTHON=$(PYTHON) bash dev/run-checks.sh
+	@$(MAKE) lint
 
 check-ci:
 	@echo "🔍 Running CI checks (non-mutating lint + schema validation + tests)..."
