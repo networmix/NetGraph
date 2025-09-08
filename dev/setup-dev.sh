@@ -5,10 +5,24 @@ set -euo pipefail
 
 echo "🔧 Setting up development environment..."
 
-# Choose Python interpreter
-PYTHON="python3"
-if ! command -v "$PYTHON" >/dev/null 2>&1; then
-    echo "❌ python3 not found. Please install Python 3.11+ and re-run."
+# Choose Python interpreter (prefer python3.13 if available, fallback to python3)
+PYTHON_FROM_ENV="${PYTHON:-}"
+if [ -n "$PYTHON_FROM_ENV" ]; then
+    PYTHON="$PYTHON_FROM_ENV"
+else
+    if command -v python3.13 >/dev/null 2>&1; then
+        PYTHON="python3.13"
+    elif command -v python3 >/dev/null 2>&1; then
+        PYTHON="python3"
+    else
+        echo "❌ python3.13 or python3 not found. Please install Python 3.12+ and re-run."
+        exit 1
+    fi
+fi
+
+# Enforce minimal version >= 3.12
+if ! "$PYTHON" -c 'import sys; assert sys.version_info >= (3,12)' 2>/dev/null; then
+    echo "❌ Python >= 3.12 required. Found: $($PYTHON --version 2>&1). Install python3.13 and re-run."
     exit 1
 fi
 

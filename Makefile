@@ -6,9 +6,10 @@
 # Default target - show help
 .DEFAULT_GOAL := help
 
-# Toolchain (prefer project venv if present)
+# Toolchain (prefer project venv if present). Prefer a modern interpreter when creating venvs.
 VENV_BIN := $(PWD)/ngraph-venv/bin
-PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,python3)
+PY_FIND := $(shell command -v python3.13 2>/dev/null || command -v python3 2>/dev/null)
+PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(PY_FIND))
 PIP := $(PYTHON) -m pip
 PYTEST := $(PYTHON) -m pytest
 RUFF := $(PYTHON) -m ruff
@@ -50,7 +51,7 @@ help:
 # Setup and Installation
 dev:
 	@echo "🚀 Setting up development environment..."
-	@bash dev/setup-dev.sh
+	@PYTHON=$(PY_FIND) bash dev/setup-dev.sh
 
 install:
 	@echo "📦 Installing package for usage (no dev dependencies)..."

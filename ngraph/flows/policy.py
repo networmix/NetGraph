@@ -156,6 +156,26 @@ class FlowPolicy:
         ):
             raise ValueError("max_flow_count must be set for EQUAL_BALANCED placement.")
 
+        # Enforce ECMP semantics: When using shortest-path ECMP (equal-balanced with multipath
+        # over equal-cost edges), the number of flow objects must not be used to control
+        # distribution. Disallow max_flow_count != 1 in this mode; multiple flows are reserved
+        # for TE profiles only.
+        ecmp_selects = {
+            base.EdgeSelect.ALL_MIN_COST,
+            base.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+        }
+        if (
+            self.flow_placement == FlowPlacement.EQUAL_BALANCED
+            and self.multipath is True
+            and self.edge_select in ecmp_selects
+            and self.max_flow_count is not None
+            and self.max_flow_count != 1
+            and not self.static_paths
+        ):
+            raise ValueError(
+                "For SHORTEST_PATHS_ECMP, max_flow_count must be 1. Non-1 is reserved for TE profiles."
+            )
+
     def deep_copy(self) -> FlowPolicy:
         """Return a deep copy of this policy including flows."""
         return copy.deepcopy(self)
@@ -545,6 +565,106 @@ class FlowPolicy:
                 # Remove from internal registry; nothing to remove from graph for stale ids
                 self.flows.pop(flow_index, None)
 
+        # Fast path for SP-ECMP only when shortest-path restriction is active (max_path_cost_factor==1.0)
+        # and when using ECMP selection (all-min with capacity awareness allowed) and multipath.
+        if (
+            self.multipath
+            and self.flow_placement == FlowPlacement.EQUAL_BALANCED
+            and self.edge_select
+            in {
+                base.EdgeSelect.ALL_MIN_COST,
+                base.EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING,
+            }
+            and target_flow_volume is None
+            and not self.static_paths
+        ):
+            # Build a multipath SPF predecessor mapping covering all equal-cost shortest hops
+            # Count SPF call in metrics
+            self._metrics_totals["spf_calls_total"] += 1.0
+            cost, pred = spf.spf(
+                flow_graph,
+                src_node=src_node,
+                edge_select=self.edge_select,
+                edge_select_func=None,
+                multipath=True,
+                excluded_edges=None,
+                excluded_nodes=None,
+                dst_node=dst_node,
+            )
+            # If destination is unreachable under current constraints, do nothing.
+            if dst_node not in pred:
+                self.last_metrics = {
+                    "placed": 0.0,
+                    "remaining": float(volume),
+                    "iterations": 1.0,
+                    "flows_created": 0.0,
+                    "spf_calls": 1.0,
+                    "reopt_calls": 0.0,
+                    "cutoff_triggered": 0.0,
+                    "initial_request": float(volume),
+                }
+                return 0.0, float(volume)
+
+            # Enforce maximum path cost constraints, if specified.
+            dst_cost = cost[dst_node]
+            if self.best_path_cost is None or dst_cost < self.best_path_cost:
+                self.best_path_cost = dst_cost
+            if self.max_path_cost is not None or self.max_path_cost_factor is not None:
+                max_path_cost_factor = self.max_path_cost_factor or 1.0
+                max_path_cost = self.max_path_cost or float("inf")
+                if dst_cost > min(
+                    max_path_cost, self.best_path_cost * max_path_cost_factor
+                ):
+                    self.last_metrics = {
+                        "placed": 0.0,
+                        "remaining": float(volume),
+                        "iterations": 1.0,
+                        "flows_created": 0.0,
+                        "spf_calls": 1.0,
+                        "reopt_calls": 0.0,
+                        "cutoff_triggered": 0.0,
+                        "initial_request": float(volume),
+                    }
+                    return 0.0, float(volume)
+
+            # Clear any existing flows for deterministic single-shot placement
+            self.remove_demand(flow_graph)
+            self.flows.clear()
+            # Place once across the DAG using equal-balanced strategy
+            from ngraph.algorithms.placement import (
+                place_flow_on_graph,  # local import to avoid cycles
+            )
+
+            fi = self._build_flow_index(
+                src_node, dst_node, flow_class, self._get_next_flow_id()
+            )
+            meta = place_flow_on_graph(
+                flow_graph=flow_graph,
+                src_node=src_node,
+                dst_node=dst_node,
+                pred=pred,
+                flow=volume,
+                flow_index=fi,
+                flow_placement=FlowPlacement.EQUAL_BALANCED,
+            )
+            # Track this as a single flow for API consistency
+            path_bundle = PathBundle(src_node, dst_node, pred, dst_cost)
+            self.flows[fi] = Flow(path_bundle, fi)
+            self.flows[fi].placed_flow = meta.placed_flow
+
+            # Metrics snapshot
+            self.last_metrics = {
+                "placed": float(meta.placed_flow),
+                "remaining": float(meta.remaining_flow),
+                "iterations": 1.0,
+                "flows_created": 1.0,
+                "spf_calls": 1.0,
+                "reopt_calls": 0.0,
+                "cutoff_triggered": 0.0,
+                "initial_request": float(volume),
+            }
+            return float(meta.placed_flow), float(meta.remaining_flow)
+
         if not self.flows:
             self._create_flows(flow_graph, src_node, dst_node, flow_class, min_flow)
 
@@ -690,7 +810,12 @@ class FlowPolicy:
                         )
 
         # For EQUAL_BALANCED placement, rebalance flows to maintain equal volumes.
-        if self.flow_placement == FlowPlacement.EQUAL_BALANCED and len(self.flows) > 0:
+        # Avoid recursion: do not trigger rebalance within a rebalance call (when target_per_flow is set).
+        if (
+            target_flow_volume is None
+            and self.flow_placement == FlowPlacement.EQUAL_BALANCED
+            and len(self.flows) > 0
+        ):
             target_flow_volume_eq = self.placed_demand / float(len(self.flows))
             # If flows are not already near balanced, rebalance them.
             if any(
