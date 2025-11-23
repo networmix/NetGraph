@@ -13,13 +13,13 @@ if ! command -v "$PYTHON" >/dev/null 2>&1; then
 fi
 
 # Create virtual environment if missing
-if [ ! -x "ngraph-venv/bin/python" ]; then
-    echo "🧰 Creating virtual environment at ./ngraph-venv ..."
-    "$PYTHON" -m venv ngraph-venv
+if [ ! -x "venv/bin/python" ]; then
+    echo "🧰 Creating virtual environment at ./venv ..."
+    "$PYTHON" -m venv venv
 fi
 
 # Activate venv for this script and upgrade pip
-source ngraph-venv/bin/activate
+source venv/bin/activate
 PYTHON_VENV="$(command -v python)"
 
 echo "⬆️  Upgrading pip/setuptools/wheel in venv..."
@@ -40,7 +40,7 @@ echo "✅ Running pre-commit checks..."
 echo "🎉 Development environment setup complete!"
 echo ""
 echo "👉 To use the environment in your shell, run:"
-echo "   source ngraph-venv/bin/activate  # ✅ activates venv"
+echo "   source venv/bin/activate  # ✅ activates venv"
 echo ""
 echo "💡 Useful commands:"
 echo "   make check      # ✅ ruff + pyright + schema + tests"

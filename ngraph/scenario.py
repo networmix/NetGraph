@@ -2,30 +2,23 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from importlib import resources
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-import yaml
-
-from ngraph.components import ComponentsLibrary
-from ngraph.demand.manager.builder import build_traffic_matrix_set
-from ngraph.demand.matrix import TrafficMatrixSet
 from ngraph.dsl.blueprints.expand import expand_network_dsl
-from ngraph.failure.policy import (
-    FailureCondition,
-    FailureMode,
-    FailurePolicy,
-    FailureRule,
-)
-from ngraph.failure.policy_set import FailurePolicySet
+from ngraph.dsl.loader import load_scenario_yaml
+from ngraph.exec.demand.builder import build_traffic_matrix_set
 from ngraph.logging import get_logger
-from ngraph.model.network import Network, RiskGroup
+from ngraph.model.components import ComponentsLibrary
+from ngraph.model.demand.matrix import TrafficMatrixSet
+from ngraph.model.failure.parser import build_failure_policy_set, build_risk_groups
+from ngraph.model.failure.policy_set import FailurePolicySet
+from ngraph.model.network import Network
 from ngraph.results import Results
-from ngraph.seed_manager import SeedManager
-from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
-from ngraph.yaml_utils import normalize_yaml_dict_keys
+from ngraph.results.snapshot import build_scenario_snapshot
+from ngraph.utils.seed_manager import SeedManager
+from ngraph.workflow.base import WorkflowStep
+from ngraph.workflow.parse import build_workflow_steps
 
 
 @dataclass
@@ -117,103 +110,7 @@ class Scenario:
                 or if there are any unrecognized top-level keys.
             TypeError: If a workflow step's arguments are invalid for the step class.
         """
-        data = yaml.safe_load(yaml_str)
-        if data is None:
-            data = {}
-        if not isinstance(data, dict):
-            raise ValueError("The provided YAML must map to a dictionary at top-level.")
-
-        # Normalize YAML parsing quirks and perform early shape checks to preserve
-        # error messages expected by callers/tests before schema validation.
-        # 1) Normalize boolean-like keys under traffic_matrix_set
-        if isinstance(data.get("traffic_matrix_set"), dict):
-            data["traffic_matrix_set"] = normalize_yaml_dict_keys(
-                data["traffic_matrix_set"]  # type: ignore[arg-type]
-            )
-
-        # 2) Early network structure checks
-        network_section = data.get("network")
-        if isinstance(network_section, dict):
-            if "nodes" in network_section and not isinstance(
-                network_section["nodes"], dict
-            ):
-                raise ValueError("'nodes' must be a mapping")
-            if "links" in network_section and not isinstance(
-                network_section["links"], list
-            ):
-                raise ValueError("'links' must be a list")
-            # Validate direct link entries have required keys
-            if isinstance(network_section.get("links"), list):
-                for entry in network_section["links"]:
-                    if not isinstance(entry, dict):
-                        raise ValueError(
-                            "Each link definition must be a mapping with 'source' and 'target'"
-                        )
-                    if "source" not in entry or "target" not in entry:
-                        raise ValueError(
-                            "Each link definition must include 'source' and 'target'"
-                        )
-            # Validate node entries for unrecognized keys (preserve message)
-            if isinstance(network_section.get("nodes"), dict):
-                for _node_name, node_def in network_section["nodes"].items():
-                    if isinstance(node_def, dict):
-                        allowed = {"attrs", "disabled", "risk_groups"}
-                        for k in node_def.keys():
-                            if k not in allowed:
-                                raise ValueError("Unrecognized key")
-
-        # 3) Risk groups must have 'name'
-        if isinstance(data.get("risk_groups"), list):
-            for rg in data["risk_groups"]:
-                if not isinstance(rg, dict) or "name" not in rg:
-                    raise ValueError("RiskGroup entry missing 'name' field")
-
-        # Unconditional JSON Schema validation
-        try:
-            import jsonschema  # type: ignore
-        except Exception as exc:  # pragma: no cover - import error path
-            raise RuntimeError(
-                "jsonschema is required for scenario validation. Install dev extras or add 'jsonschema' to dependencies."
-            ) from exc
-
-        # Load schema from packaged resource
-        schema_data: dict[str, Any]
-        try:
-            with (
-                resources.files("ngraph.schemas")
-                .joinpath("scenario.json")
-                .open("r", encoding="utf-8")
-            ) as f:  # type: ignore[attr-defined]
-                schema_data = json.load(f)
-        except Exception as exc:
-            raise RuntimeError(
-                "Failed to locate packaged NetGraph scenario schema 'ngraph/schemas/scenario.json'."
-            ) from exc
-
-        try:
-            jsonschema.validate(data, schema_data)  # type: ignore[arg-type]
-        except Exception as exc:
-            # Provide actionable error
-            raise ValueError(f"Scenario JSON Schema validation failed: {exc}") from exc
-
-        # Ensure only recognized top-level keys are present.
-        recognized_keys = {
-            "vars",
-            "blueprints",
-            "network",
-            "failure_policy_set",
-            "traffic_matrix_set",
-            "workflow",
-            "components",
-            "risk_groups",
-            "seed",
-        }
-        extra_keys = set(data.keys()) - recognized_keys
-        if extra_keys:
-            raise ValueError(
-                f"Unrecognized top-level key(s) in scenario: {', '.join(sorted(extra_keys))}. "
-                f"Allowed keys are {sorted(recognized_keys)}"
-            )
+        data = load_scenario_yaml(yaml_str)
 
         # Extract seed first as it may be used by other components
         seed = data.get("seed")
@@ -236,23 +133,11 @@ class Scenario:
                 pass
 
         # 2) Build the failure policy set
-        fps_data = data.get("failure_policy_set", {})
-        if not isinstance(fps_data, dict):
-            raise ValueError(
-                "'failure_policy_set' must be a mapping of name -> FailurePolicy definition"
-            )
-
-        # Normalize dictionary keys to handle YAML boolean keys
-        normalized_fps = normalize_yaml_dict_keys(fps_data)
-        failure_policy_set = FailurePolicySet()
         seed_manager = SeedManager(seed)
-        for name, fp_data in normalized_fps.items():
-            if not isinstance(fp_data, dict):
-                raise ValueError(
-                    f"Failure policy '{name}' must map to a FailurePolicy definition dict"
-                )
-            failure_policy = cls._build_failure_policy(fp_data, seed_manager, name)
-            failure_policy_set.add(name, failure_policy)
+        failure_policy_set = build_failure_policy_set(
+            data.get("failure_policy_set", {}),
+            derive_seed=lambda n: seed_manager.derive_seed("failure_policy", n),
+        )
 
         if failure_policy_set.policies:
             try:
@@ -289,7 +174,10 @@ class Scenario:
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
-        workflow_steps = cls._build_workflow_steps(workflow_data, seed_manager)
+        workflow_steps = build_workflow_steps(
+            workflow_data,
+            derive_seed=lambda name: seed_manager.derive_seed("workflow_step", name),
+        )
         try:
             labels: list[str] = []
             for idx, step in enumerate(workflow_steps):
@@ -323,7 +211,7 @@ class Scenario:
         # 6) Parse optional risk_groups, then attach them to the network
         rg_data = data.get("risk_groups", [])
         if rg_data:
-            risk_groups = cls._build_risk_groups(rg_data)
+            risk_groups = build_risk_groups(rg_data)
             for rg in risk_groups:
                 network_obj.risk_groups[rg.name] = rg
                 if rg.disabled:
@@ -347,63 +235,12 @@ class Scenario:
 
         # Attach minimal scenario snapshot to results for export
         try:
-            snapshot_failure_policies: Dict[str, Any] = {}
-            for name, policy in failure_policy_set.policies.items():
-                modes_list: list[dict[str, Any]] = []
-                for mode in getattr(policy, "modes", []) or []:
-                    mode_dict = {
-                        "weight": float(getattr(mode, "weight", 0.0)),
-                        "rules": [],
-                        "attrs": dict(getattr(mode, "attrs", {}) or {}),
-                    }
-                    for rule in getattr(mode, "rules", []) or []:
-                        rule_dict = {
-                            "entity_scope": getattr(rule, "entity_scope", "node"),
-                            "logic": getattr(rule, "logic", "or"),
-                            "rule_type": getattr(rule, "rule_type", "all"),
-                            "probability": float(getattr(rule, "probability", 1.0)),
-                            "count": int(getattr(rule, "count", 1)),
-                            "conditions": [
-                                {
-                                    "attr": c.attr,
-                                    "operator": c.operator,
-                                    "value": c.value,
-                                }
-                                for c in getattr(rule, "conditions", []) or []
-                            ],
-                        }
-                        mode_dict["rules"].append(rule_dict)
-                    modes_list.append(mode_dict)
-                snapshot_failure_policies[name] = {
-                    "attrs": dict(getattr(policy, "attrs", {}) or {}),
-                    "modes": modes_list,
-                }
-
-            snapshot_tms: Dict[str, list[dict[str, Any]]] = {}
-            for mname, demands in tms.matrices.items():
-                entries: list[dict[str, Any]] = []
-                for d in demands:
-                    entries.append(
-                        {
-                            "source_path": getattr(d, "source_path", ""),
-                            "sink_path": getattr(d, "sink_path", ""),
-                            "demand": float(getattr(d, "demand", 0.0)),
-                            "priority": int(getattr(d, "priority", 0)),
-                            "mode": getattr(d, "mode", "pairwise"),
-                            "flow_policy_config": getattr(
-                                d, "flow_policy_config", None
-                            ),
-                            "attrs": dict(getattr(d, "attrs", {}) or {}),
-                        }
-                    )
-                snapshot_tms[mname] = entries
-
             scenario_obj.results.set_scenario_snapshot(
-                {
-                    "seed": seed,
-                    "failure_policy_set": snapshot_failure_policies,
-                    "traffic_matrices": snapshot_tms,
-                }
+                build_scenario_snapshot(
+                    seed=seed,
+                    failure_policy_set=failure_policy_set,
+                    traffic_matrix_set=tms,
+                )
             )
         except Exception:
             # Snapshot should never block scenario construction
@@ -422,228 +259,3 @@ class Scenario:
             pass
 
         return scenario_obj
-
-    @staticmethod
-    def _build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
-        """Recursively builds a list of RiskGroup objects from YAML data.
-
-        Each entry may have keys: "name", "children", "disabled", and "attrs" (dict).
-
-        Args:
-            rg_data (List[Dict[str, Any]]): The list of risk-group definitions.
-
-        Returns:
-            List[RiskGroup]: Possibly nested risk groups.
-
-        Raises:
-            ValueError: If any group is missing 'name'.
-        """
-
-        def build_one(d: Dict[str, Any]) -> RiskGroup:
-            name = d.get("name")
-            if not name:
-                raise ValueError("RiskGroup entry missing 'name' field.")
-            disabled = d.get("disabled", False)
-            children_list = d.get("children", [])
-            child_objs = [build_one(cd) for cd in children_list]
-            attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
-            return RiskGroup(
-                name=name, disabled=disabled, children=child_objs, attrs=attrs
-            )
-
-        return [build_one(entry) for entry in rg_data]
-
-    @staticmethod
-    def _build_failure_policy(
-        fp_data: Dict[str, Any], seed_manager: SeedManager, policy_name: str
-    ) -> FailurePolicy:
-        """Constructs a FailurePolicy from data that may specify multiple rules plus
-        optional top-level fields like fail_risk_groups, fail_risk_group_children,
-        and attrs.
-
-        Example:
-            failure_policy_set:
-              default:
-                fail_risk_groups: true
-                fail_risk_group_children: false
-                attrs:
-                  custom_key: custom_val
-                rules:
-                  - entity_scope: "node"
-                    conditions:
-                      - attr: "capacity"
-                        operator: ">"
-                        value: 100
-                  logic: "and"
-                  rule_type: "choice"
-                  count: 2
-
-        Args:
-            fp_data (Dict[str, Any]): Dictionary from the 'failure_policy' section of the YAML.
-            seed_manager (SeedManager): Seed manager for reproducible operations.
-            policy_name (str): Name of the policy for seed derivation.
-
-        Returns:
-            FailurePolicy: The constructed policy. If no rules exist, it's an empty policy.
-
-        Raises:
-            ValueError: If 'rules' is present but not a list, or if conditions are not lists.
-        """
-        fail_srg = fp_data.get("fail_risk_groups", False)
-        fail_rg_children = fp_data.get("fail_risk_group_children", False)
-        attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
-
-        def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
-            rules_local: List[FailureRule] = []
-            for rule_dict in rule_dicts:
-                entity_scope = rule_dict.get("entity_scope", "node")
-                conditions_data = rule_dict.get("conditions", [])
-                if not isinstance(conditions_data, list):
-                    raise ValueError(
-                        "Each rule's 'conditions' must be a list if present."
-                    )
-                conditions: List[FailureCondition] = []
-                for cond_dict in conditions_data:
-                    conditions.append(
-                        FailureCondition(
-                            attr=cond_dict["attr"],
-                            operator=cond_dict["operator"],
-                            value=cond_dict["value"],
-                        )
-                    )
-
-                rule = FailureRule(
-                    entity_scope=entity_scope,
-                    conditions=conditions,
-                    logic=rule_dict.get("logic", "or"),
-                    rule_type=rule_dict.get("rule_type", "all"),
-                    probability=rule_dict.get("probability", 1.0),
-                    count=rule_dict.get("count", 1),
-                    weight_by=rule_dict.get("weight_by"),
-                )
-                rules_local.append(rule)
-            return rules_local
-
-        # Extract weighted modes (required)
-        modes: List[FailureMode] = []
-        modes_data = fp_data.get("modes", [])
-        if not isinstance(modes_data, list) or not modes_data:
-            raise ValueError("failure_policy requires non-empty 'modes' list.")
-        for _m_idx, m in enumerate(modes_data):
-            if not isinstance(m, dict):
-                raise ValueError("Each mode must be a mapping.")
-            try:
-                weight = float(m.get("weight", 0.0))
-            except (TypeError, ValueError) as exc:
-                raise ValueError("Each mode 'weight' must be a number.") from exc
-            mode_rules_data = m.get("rules", [])
-            if not isinstance(mode_rules_data, list):
-                raise ValueError("Each mode 'rules' must be a list.")
-            mode_rules = build_rules(mode_rules_data)
-            mode_attrs = normalize_yaml_dict_keys(m.get("attrs", {}))
-            modes.append(FailureMode(weight=weight, rules=mode_rules, attrs=mode_attrs))
-
-        # Derive seed for this failure policy
-        policy_seed = seed_manager.derive_seed("failure_policy", policy_name)
-
-        return FailurePolicy(
-            attrs=attrs,
-            fail_risk_groups=fail_srg,
-            fail_risk_group_children=fail_rg_children,
-            seed=policy_seed,
-            modes=modes,
-        )
-
-    @staticmethod
-    def _build_workflow_steps(
-        workflow_data: List[Dict[str, Any]],
-        seed_manager: SeedManager,
-    ) -> List[WorkflowStep]:
-        """Converts workflow step dictionaries into WorkflowStep objects.
-
-        Each step dict must have a "step_type" referencing a registered workflow
-        step in WORKFLOW_STEP_REGISTRY. All other keys in the dict are passed
-        to that step's constructor as keyword arguments.
-
-        Args:
-            workflow_data (List[Dict[str, Any]]): A list of dictionaries describing
-                each workflow step, for example:
-                [
-                  {
-                    "step_type": "MyStep",
-                    "arg1": "value1",
-                    "arg2": "value2",
-                  },
-                  ...
-                ]
-            seed_manager (SeedManager): Seed manager for reproducible operations.
-
-        Returns:
-            List[WorkflowStep]: A list of instantiated WorkflowStep objects.
-
-        Raises:
-            ValueError: If any step lacks "step_type" or references an unknown type.
-            TypeError: If step initialization fails due to invalid arguments.
-        """
-        if not isinstance(workflow_data, list):
-            raise ValueError("'workflow' must be a list if present.")
-
-        steps: List[WorkflowStep] = []
-        # Track assigned names to enforce uniqueness and avoid result/metadata collisions
-        assigned_names: set[str] = set()
-        for step_index, step_info in enumerate(workflow_data):
-            step_type = step_info.get("step_type")
-            if not step_type:
-                raise ValueError(
-                    "Each workflow entry must have a 'step_type' field "
-                    "indicating the WorkflowStep subclass to use."
-                )
-
-            step_cls = WORKFLOW_STEP_REGISTRY.get(step_type)
-            if not step_cls:
-                raise ValueError(f"Unrecognized 'step_type': {step_type}")
-
-            ctor_args = {k: v for k, v in step_info.items() if k != "step_type"}
-            # Normalize constructor argument keys to handle YAML boolean keys
-            normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
-
-            # Resolve a concrete step name to prevent collisions in results/metadata
-            raw_name = normalized_ctor_args.get("name")
-            # Treat blank/whitespace names as missing
-            if isinstance(raw_name, str) and raw_name.strip() == "":
-                raw_name = None
-            step_name = raw_name or f"{step_type}_{step_index}"
-
-            # Enforce uniqueness across the workflow
-            if step_name in assigned_names:
-                raise ValueError(
-                    f"Duplicate workflow step name '{step_name}'. "
-                    "Each step must have a unique name."
-                )
-            assigned_names.add(step_name)
-
-            # Ensure the constructed WorkflowStep receives the resolved unique name
-            normalized_ctor_args["name"] = step_name
-
-            # Determine seed provenance and possibly derive a step seed
-            seed_source: str = "none"
-            if (
-                "seed" in normalized_ctor_args
-                and normalized_ctor_args["seed"] is not None
-            ):
-                seed_source = "explicit-step"
-            else:
-                derived_seed = seed_manager.derive_seed("workflow_step", step_name)
-                if derived_seed is not None:
-                    normalized_ctor_args["seed"] = derived_seed
-                    seed_source = "scenario-derived"
-
-            step_obj = step_cls(**normalized_ctor_args)
-            # Attach internal provenance for metadata collection
-            try:
-                step_obj._seed_source = seed_source
-            except Exception:
-                pass
-            steps.append(step_obj)
-
-        return steps

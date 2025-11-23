@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pytest
 
-from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 from ngraph.scenario import Scenario
 
 # Validation constants for test consistency
@@ -123,9 +122,9 @@ class ScenarioTestHelper:
         """
         self.scenario = scenario
         self.network = scenario.network
-        self.graph: Optional[StrictMultiDiGraph] = None
+        self.graph: Optional[Any] = None
 
-    def set_graph(self, graph: StrictMultiDiGraph) -> None:
+    def set_graph(self, graph: Any) -> None:
         """
         Set the built graph for validation operations.
 
@@ -736,16 +735,20 @@ def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
     Returns:
         Configured ScenarioTestHelper instance
     """
+    import networkx as nx
+
     helper = ScenarioTestHelper(scenario)
     exported = scenario.results.to_dict()
-    from ngraph.graph.io import node_link_to_graph
 
     graph_dict = (
         exported.get("steps", {}).get("build_graph", {}).get("data", {}).get("graph")
     )
-    graph = (
-        node_link_to_graph(graph_dict) if isinstance(graph_dict, dict) else graph_dict
-    )
+    if isinstance(graph_dict, dict):
+        # Use NetworkX's built-in function to convert node-link data back to graph
+        # This replaces the removed node_link_to_graph function
+        graph = nx.node_link_graph(graph_dict, edges="edges")
+    else:
+        graph = graph_dict
     helper.set_graph(graph)
     return helper
 

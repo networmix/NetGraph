@@ -7,15 +7,13 @@ root for convenience.
 
 from __future__ import annotations
 
-from . import cli, config, logging
-from .demand.matrix import TrafficMatrixSet
-from .results.artifacts import CapacityEnvelope, PlacementResultSet
+from . import cli, logging
+from .model.demand.matrix import TrafficMatrixSet
+from .results.artifacts import CapacityEnvelope
 
 __all__ = [
     "cli",
-    "config",
     "logging",
     "CapacityEnvelope",
-    "PlacementResultSet",
     "TrafficMatrixSet",
 ]

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger, set_global_log_level
-from ngraph.profiling import PerformanceProfiler, PerformanceReporter
+from ngraph.profiling.profiler import PerformanceProfiler, PerformanceReporter
 from ngraph.scenario import Scenario
 from ngraph.utils.output_paths import (
     ensure_parent_dir,

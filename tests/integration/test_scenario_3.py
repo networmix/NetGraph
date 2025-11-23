@@ -41,12 +41,8 @@ class TestScenario3:
     @pytest.fixture
     def helper(self, scenario_3_executed):
         """Create test helper for scenario 3."""
+        # create_scenario_helper now handles graph conversion using nx.node_link_graph
         helper = create_scenario_helper(scenario_3_executed)
-        exported = scenario_3_executed.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])  # type: ignore[arg-type]
-        helper.set_graph(graph)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_3_executed):

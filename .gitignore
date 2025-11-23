@@ -141,3 +141,4 @@ analysis*.html
 # Performance analysis results
 dev/perf_results/
 dev/perf_plots/
+.benchmarks/

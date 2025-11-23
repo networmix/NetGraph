@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ngraph.failure.manager.manager import FailureManager
+from ngraph.exec.failure.manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.results.flow import FlowIterationResult
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
@@ -104,17 +104,17 @@ class TrafficMatrixPlacement(WorkflowStep):
             ) from exc
 
         def _serialize_policy(cfg: Any) -> Any:
-            from ngraph.flows.policy import FlowPolicyConfig  # local import
+            from ngraph.model.flow.policy_config import FlowPolicyPreset  # local import
 
             if cfg is None:
                 return None
-            if isinstance(cfg, FlowPolicyConfig):
+            if isinstance(cfg, FlowPolicyPreset):
                 return cfg.name
             # Fall back to string when it cannot be coerced to enum
             try:
-                return FlowPolicyConfig(int(cfg)).name
+                return FlowPolicyPreset(int(cfg)).name
             except Exception as exc:
-                logger.debug("Unrecognized flow_policy_config value: %r (%s)", cfg, exc)
+                logger.debug("Unrecognized flow_policy_preset value: %r (%s)", cfg, exc)
                 return str(cfg)
 
         base_demands: list[dict[str, Any]] = [

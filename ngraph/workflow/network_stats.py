@@ -28,7 +28,6 @@ from statistics import mean, median
 from typing import TYPE_CHECKING, Dict, Iterable, List
 
 from ngraph.logging import get_logger
-from ngraph.model.view import NetworkView
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -39,7 +38,7 @@ if TYPE_CHECKING:
 class NetworkStats(WorkflowStep):
     """Compute basic node and link statistics for the network.
 
-    Supports optional exclusion simulation using NetworkView without modifying the base network.
+    Supports optional exclusion simulation without modifying the base network.
 
     Attributes:
         include_disabled: If True, include disabled nodes and links in statistics.
@@ -55,8 +54,8 @@ class NetworkStats(WorkflowStep):
     def run(self, scenario: Scenario) -> None:
         """Compute and store network statistics.
 
-        If `excluded_nodes` or `excluded_links` are specified, uses `NetworkView` to
-        simulate exclusions without modifying the base network.
+        If `excluded_nodes` or `excluded_links` are specified, filters them out
+        without modifying the base network.
 
         Args:
             scenario: The scenario containing the network to analyze.
@@ -64,33 +63,42 @@ class NetworkStats(WorkflowStep):
         Returns:
             None
         """
-        # Create view if we have exclusions, otherwise use base network
-        if self.excluded_nodes or self.excluded_links:
-            network_or_view = NetworkView.from_excluded_sets(
-                scenario.network,
-                excluded_nodes=self.excluded_nodes,
-                excluded_links=self.excluded_links,
-            )
-            nodes = network_or_view.nodes
-            links = network_or_view.links
+        # Convert exclusion iterables to sets for efficient lookup
+        excluded_nodes_set = set(self.excluded_nodes) if self.excluded_nodes else set()
+        excluded_links_set = set(self.excluded_links) if self.excluded_links else set()
+
+        # Filter nodes based on disabled status and exclusions
+        if self.include_disabled:
+            nodes = {
+                name: node
+                for name, node in scenario.network.nodes.items()
+                if name not in excluded_nodes_set
+            }
         else:
-            # Use base network, optionally filtering disabled
-            if self.include_disabled:
-                nodes = scenario.network.nodes
-                links = scenario.network.links
-            else:
-                nodes = {
-                    name: node
-                    for name, node in scenario.network.nodes.items()
-                    if not node.disabled
-                }
-                links = {
-                    link_id: link
-                    for link_id, link in scenario.network.links.items()
-                    if not link.disabled
-                    and link.source in nodes  # Source node must be enabled
-                    and link.target in nodes  # Target node must be enabled
-                }
+            nodes = {
+                name: node
+                for name, node in scenario.network.nodes.items()
+                if not node.disabled and name not in excluded_nodes_set
+            }
+
+        # Filter links based on disabled status, exclusions, and node availability
+        if self.include_disabled:
+            links = {
+                link_id: link
+                for link_id, link in scenario.network.links.items()
+                if link_id not in excluded_links_set
+                and link.source in nodes
+                and link.target in nodes
+            }
+        else:
+            links = {
+                link_id: link
+                for link_id, link in scenario.network.links.items()
+                if not link.disabled
+                and link_id not in excluded_links_set
+                and link.source in nodes
+                and link.target in nodes
+            }
 
         # Compute node statistics
         node_count = len(nodes)

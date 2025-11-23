@@ -19,8 +19,8 @@ class _ScenarioStub:
 
 def test_tm_basic_behavior_unchanged(monkeypatch):
     # Small sanity test that the step runs end-to-end and stores new outputs
-    from ngraph.demand.matrix import TrafficMatrixSet
-    from ngraph.demand.spec import TrafficDemand
+    from ngraph.model.demand.matrix import TrafficMatrixSet
+    from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.network import Link, Network, Node
 
     net = Network()

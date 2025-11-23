@@ -3,10 +3,10 @@
 This module defines dataclasses that capture outputs from analyses and
 simulations in a JSON-serializable form:
 
-- `PlacementResultSet`: aggregated placement results and statistics
 - `CapacityEnvelope`: frequency-based capacity distributions and optional
   aggregated flow statistics
 - `FailurePatternResult`: capacity results for specific failure patterns
+- `PlacementEnvelope`: per-demand placement envelopes
 """
 
 from __future__ import annotations
@@ -14,55 +14,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-
-from ngraph.demand.manager.manager import TrafficResult
-
-
-@dataclass(frozen=True)
-class PlacementResultSet:
-    """Aggregated traffic placement results from one or many runs.
-
-    This immutable dataclass stores traffic placement results organized by case,
-    with overall statistics and per-demand statistics.
-
-    Attributes:
-        results_by_case: Dictionary mapping case names to TrafficResult lists.
-        overall_stats: Dictionary of overall statistics.
-        demand_stats: Dictionary mapping demand keys to per-demand statistics.
-    """
-
-    results_by_case: dict[str, list[TrafficResult]] = field(default_factory=dict)
-    overall_stats: dict[str, float] = field(default_factory=dict)
-    demand_stats: dict[tuple[str, str, int], dict[str, float]] = field(
-        default_factory=dict
-    )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization.
-
-        Converts TrafficResult objects to dictionaries and formats demand
-        statistics keys as strings for JSON compatibility.
-
-        Returns:
-            Dictionary representation with all fields as JSON-serializable primitives.
-        """
-        # Convert TrafficResult objects to dictionaries
-        cases = {
-            case: [result._asdict() for result in results]
-            for case, results in self.results_by_case.items()
-        }
-
-        # Format demand statistics keys as strings
-        demand_stats = {
-            f"{src}->{dst}|prio={priority}": stats
-            for (src, dst, priority), stats in self.demand_stats.items()
-        }
-
-        return {
-            "overall_stats": self.overall_stats,
-            "cases": cases,
-            "demand_stats": demand_stats,
-        }
 
 
 @dataclass

@@ -15,10 +15,12 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ngraph.demand.manager.manager import TrafficManager, TrafficResult
-from ngraph.demand.matrix import TrafficMatrixSet
-from ngraph.demand.spec import TrafficDemand
+import netgraph_core
+
+from ngraph.exec.demand.expand import expand_demands
 from ngraph.logging import get_logger
+from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 logger = get_logger(__name__)
@@ -74,17 +76,17 @@ class MaximumSupportedDemand(WorkflowStep):
 
         def _serialize_policy(cfg: Any) -> Any:
             try:
-                from ngraph.flows.policy import (
-                    FlowPolicyConfig,  # local import to avoid heavy deps
+                from ngraph.model.flow.policy_config import (
+                    FlowPolicyPreset,  # local import to avoid heavy deps
                 )
             except Exception:  # pragma: no cover - defensive
                 return str(cfg) if cfg is not None else None
             if cfg is None:
                 return None
-            if isinstance(cfg, FlowPolicyConfig):
+            if isinstance(cfg, FlowPolicyPreset):
                 return cfg.name
             try:
-                return FlowPolicyConfig(int(cfg)).name
+                return FlowPolicyPreset(int(cfg)).name
             except Exception:
                 return str(cfg)
 
@@ -101,6 +103,13 @@ class MaximumSupportedDemand(WorkflowStep):
             }
             for td in base_tds
         ]
+
+        # Validation: Ensure traffic matrix contains demands
+        if not base_demands:
+            raise ValueError(
+                f"Traffic matrix '{self.matrix_name}' contains no demands. "
+                "Cannot compute maximum supported demand without traffic specifications."
+            )
 
         start_alpha = float(self.alpha_start)
         g = float(self.growth_factor)
@@ -202,10 +211,10 @@ class MaximumSupportedDemand(WorkflowStep):
         )
 
     @staticmethod
-    def _build_scaled_matrix(
+    def _build_scaled_demands(
         base_demands: list[dict[str, Any]], alpha: float
-    ) -> TrafficMatrixSet:
-        tmset = TrafficMatrixSet()
+    ) -> list[TrafficDemand]:
+        """Build scaled traffic demands for alpha probe."""
         demands: list[TrafficDemand] = []
         for d in base_demands:
             demands.append(
@@ -218,8 +227,7 @@ class MaximumSupportedDemand(WorkflowStep):
                     mode=str(d.get("mode", "pairwise")),
                 )
             )
-        tmset.add("temp", demands)
-        return tmset
+        return demands
 
     @classmethod
     def _evaluate_alpha(
@@ -231,6 +239,18 @@ class MaximumSupportedDemand(WorkflowStep):
         placement_rounds: int | str,
         seeds: int,
     ) -> tuple[bool, dict[str, Any]]:
+        """Evaluate if alpha is feasible using Core-based placement.
+
+        Args:
+            alpha: Scale factor to test.
+            scenario: Scenario containing network and traffic matrix.
+            matrix_name: Name of traffic matrix to use.
+            placement_rounds: Placement rounds (unused - Core handles internally).
+            seeds: Number of seeds to test.
+
+        Returns:
+            Tuple of (feasible, details_dict).
+        """
         base_tds = scenario.traffic_matrix_set.get_matrix(matrix_name)
         base_demands: list[dict[str, Any]] = [
             {
@@ -243,30 +263,81 @@ class MaximumSupportedDemand(WorkflowStep):
             }
             for td in base_tds
         ]
+
+        # Build scaled demands
+        scaled_demands = cls._build_scaled_demands(base_demands, alpha)
+
+        # Phase 1: Expand demands (get names + augmentations)
+        expansion = expand_demands(
+            scenario.network,
+            scaled_demands,
+            default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
+        )
+
+        # Phase 2: Build Core infrastructure with augmentations
+        from ngraph.adapters.core import build_graph
+
+        graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
+            scenario.network,
+            augmentations=expansion.augmentations,
+        )
+        # Note: No exclusions in MSD evaluation (excluded_nodes/links are empty sets)
+        # Augmentations include pseudo nodes for combine mode
+
+        backend = netgraph_core.Backend.cpu()
+        algorithms = netgraph_core.Algorithms(backend)
+
         decisions: list[bool] = []
         min_ratios: list[float] = []
-        tmset = cls._build_scaled_matrix(base_demands, alpha)
-        tm = TrafficManager(
-            network=scenario.network, traffic_matrix_set=tmset, matrix_name="temp"
-        )
-        tm.build_graph(add_reverse=True)
+
         for _ in range(max(1, int(seeds))):
-            tm.reset_all_flow_usages()
-            tm.expand_demands()
-            tm.place_all_demands(placement_rounds=placement_rounds)
-            results: list[TrafficResult] = tm.get_traffic_results(detailed=False)
-            ratios: list[float] = []
-            for r in results:
-                total = float(r.total_volume)
-                placed = float(r.placed_volume)
-                ratio = 1.0 if total == 0.0 else (placed / total)
-                ratios.append(ratio)
-            is_feasible = all(r >= 1.0 - 1e-12 for r in ratios)
+            # Create fresh FlowGraph for each seed
+            flow_graph = netgraph_core.FlowGraph(multidigraph)
+
+            # Phase 3: Place demands using Core
+            total_demand = 0.0
+            total_placed = 0.0
+
+            for demand in expansion.demands:
+                # Resolve node names to IDs (includes pseudo nodes)
+                src_id = node_mapper.to_id(demand.src_name)
+                dst_id = node_mapper.to_id(demand.dst_name)
+
+                policy = create_flow_policy(
+                    algorithms,
+                    graph_handle,
+                    demand.policy_preset,
+                )
+
+                placed, _ = policy.place_demand(
+                    flow_graph,
+                    src_id,
+                    dst_id,
+                    demand.priority,
+                    demand.volume,
+                )
+
+                total_demand += demand.volume
+                total_placed += placed
+
+            # Validation: Ensure we have non-zero demand to evaluate
+            if total_demand == 0.0:
+                raise ValueError(
+                    f"Cannot evaluate feasibility for alpha={alpha:.6g}: total demand is zero. "
+                    "This indicates that no demands were successfully expanded or all demand volumes are zero."
+                )
+
+            # Check feasibility
+            ratio = total_placed / total_demand
+            is_feasible = ratio >= 1.0 - 1e-12
             decisions.append(is_feasible)
-            min_ratios.append(min(ratios) if ratios else 1.0)
+            min_ratios.append(ratio)
+
+        # Majority vote across seeds
         yes = sum(1 for d in decisions if d)
         required = (len(decisions) // 2) + 1
         feasible = yes >= required
+
         details = {
             "seeds": len(decisions),
             "feasible_seeds": yes,

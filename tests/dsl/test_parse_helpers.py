@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from ngraph.dsl.blueprints.parse import (
+from ngraph.dsl.blueprints.parser import (
     check_adjacency_keys,
     check_link_params,
     check_no_extra_keys,

@@ -1,788 +1,565 @@
-"""Problem-level max-flow API bound to the model layer.
+"""Max-flow computation between node groups with NetGraph-Core integration.
 
-Functions here operate on a model context that provides:
+This module provides max-flow analysis for Network models by transforming
+multi-source/multi-sink problems into single-source/single-sink problems
+using pseudo nodes. The implementation uses the unified build_graph() with
+augmentations to add pseudo-source and pseudo-sink nodes.
 
-- to_strict_multidigraph(add_reverse: bool = True) -> StrictMultiDiGraph
-- select_node_groups_by_path(path: str) -> dict[str, list[Node]]
-
-They accept either a `Network` or a `NetworkView`. The input context is not
-mutated. Pseudo source and sink nodes are attached on a working graph when
-computing flows between groups.
+The input Network is never mutated; all graph construction and computation
+happens in temporary Core data structures.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
-from ngraph.algorithms.base import FlowPlacement
-from ngraph.algorithms.max_flow import (
-    calc_max_flow,
-    run_sensitivity,
-)
-from ngraph.algorithms.max_flow import (
-    saturated_edges as _algo_saturated_edges,
-)
-from ngraph.algorithms.types import FlowSummary
+import netgraph_core
 
-try:
-    from typing import TYPE_CHECKING
+from ngraph.adapters.core import AugmentationEdge, build_graph
+from ngraph.model.network import Network
+from ngraph.types.base import FlowPlacement
+from ngraph.types.dto import FlowSummary
 
-    if TYPE_CHECKING:  # pragma: no cover - typing only
-        from ngraph.graph.strict_multidigraph import StrictMultiDiGraph  # noqa: F401
-        from ngraph.model.network import Network, Node  # noqa: F401
-except Exception:  # pragma: no cover - safety in unusual environments
-    pass
+# Large capacity for pseudo edges (avoid float('inf') due to Core limitation)
+LARGE_CAPACITY = 1e15
 
 
 def max_flow(
-    context: Any,
+    network: Network,
     source_path: str,
     sink_path: str,
     *,
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
+    excluded_nodes: Optional[Set[str]] = None,
+    excluded_links: Optional[Set[str]] = None,
 ) -> Dict[Tuple[str, str], float]:
-    """Compute max flow between groups selected from the context.
+    """Compute max flow between node groups in a network.
 
-    Creates a working graph from the context, adds a pseudo source attached to
-    the selected source nodes and a pseudo sink attached to the selected sink
-    nodes, then runs the max-flow routine.
+    This function calculates the maximum flow from a set of source nodes
+    to a set of sink nodes within the provided network. It supports
+    "combine" mode (all sources to all sinks) and "pairwise" mode (each
+    source_group to each sink_group).
+
+    The implementation constructs an augmented graph with pseudo-source and
+    pseudo-sink nodes, then delegates the computation to NetGraph-Core's
+    max-flow algorithm.
 
     Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
-        source_path: Selection expression for source groups.
-        sink_path: Selection expression for sink groups.
-        mode: Aggregation strategy. "combine" considers all sources as one
-            group and all sinks as one group. "pairwise" evaluates each
-            source-label and sink-label pair separately.
-        shortest_path: If True, perform a single augmentation along the first
-            shortest path instead of the full max-flow.
-        flow_placement: Strategy for splitting flow among equal-cost parallel
-            edges.
+        network: Network instance containing topology and node/link data.
+        source_path: Selection expression (regex or attribute) for source node groups.
+        sink_path: Selection expression (regex or attribute) for sink node groups.
+        mode: Aggregation strategy:
+            - "combine": Treats all selected sources as a single super-source
+                         and all selected sinks as a single super-sink.
+            - "pairwise": Computes max flow for each (source_group, sink_group) pair separately.
+        shortest_path: If True, restricts flow to shortest paths only.
+        flow_placement: Strategy for distributing flow among equal-cost parallel edges.
+        excluded_nodes: Optional set of node names to exclude from the graph.
+        excluded_links: Optional set of link IDs to exclude from the graph.
 
     Returns:
-        Dict[Tuple[str, str], float]: Total flow per (source_label, sink_label).
+        Dict[Tuple[str, str], float]: Total flow per (source_label, sink_label) pair.
 
     Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is not one of {"combine", "pairwise"}.
+        ValueError: If no matching sources or sinks are found, or if `mode`
+                    is not one of {"combine", "pairwise"}.
     """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
+    src_groups = network.select_node_groups_by_path(source_path)
+    snk_groups = network.select_node_groups_by_path(sink_path)
 
     if not src_groups:
         raise ValueError(f"No source nodes found matching '{source_path}'.")
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    base_graph = context.to_strict_multidigraph(compact=True).copy()
+    # Map flow_placement to Core's FlowPlacement enum
+    core_flow_placement = _map_flow_placement(flow_placement)
+
+    # Create Core algorithms instance (used for all computations)
+    backend = netgraph_core.Backend.cpu()
+    algs = netgraph_core.Algorithms(backend)
+
+    def _filter_active_nodes(nodes: List) -> List[str]:
+        """Filter nodes to active (not disabled or excluded) and return their names."""
+        return [
+            n.name
+            for n in nodes
+            if not n.disabled
+            and (excluded_nodes is None or n.name not in excluded_nodes)
+        ]
 
     if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
         combined_src_label = "|".join(sorted(src_groups.keys()))
         combined_snk_label = "|".join(sorted(snk_groups.keys()))
 
+        # Collect all active source and sink node names
+        combined_src_names = []
         for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
+            combined_src_names.extend(_filter_active_nodes(group_nodes))
+        combined_snk_names = []
         for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
+            combined_snk_names.extend(_filter_active_nodes(group_nodes))
 
-        if not combined_src_nodes or not combined_snk_nodes:
+        if not combined_src_names or not combined_snk_names:
+            return {(combined_src_label, combined_snk_label): 0.0}
+        if set(combined_src_names) & set(combined_snk_names):
             return {(combined_src_label, combined_snk_label): 0.0}
 
-        # Overlap -> zero flow
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            flow_val = 0.0
-        else:
-            flow_val = _compute_flow_single_group(
-                context,
-                combined_src_nodes,
-                combined_snk_nodes,
-                shortest_path,
-                flow_placement,
-                prebuilt_graph=base_graph,
+        # Prepare augmentation edges for pseudo nodes
+        augmentations = []
+        pseudo_src = "__PSEUDO_SRC__"
+        pseudo_snk = "__PSEUDO_SNK__"
+
+        for src_name in combined_src_names:
+            augmentations.append(
+                AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
             )
-        return {(combined_src_label, combined_snk_label): flow_val}
+        for snk_name in combined_snk_names:
+            augmentations.append(
+                AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+            )
+
+        # Build augmented graph with pseudo nodes
+        graph_handle, _, _, node_mapper = build_graph(
+            network,
+            augmentations=augmentations,
+            excluded_nodes=excluded_nodes,
+            excluded_links=excluded_links,
+        )
+
+        # Get pseudo node IDs
+        pseudo_src_id = node_mapper.to_id(pseudo_src)
+        pseudo_snk_id = node_mapper.to_id(pseudo_snk)
+
+        # Run max-flow from pseudo-source to pseudo-sink
+        flow_value, _ = algs.max_flow(
+            graph_handle,
+            pseudo_src_id,
+            pseudo_snk_id,
+            flow_placement=core_flow_placement,
+            shortest_path=shortest_path,
+        )
+        return {(combined_src_label, combined_snk_label): flow_value}
 
     if mode == "pairwise":
         results: Dict[Tuple[str, str], float] = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        flow_val = 0.0
-                    else:
-                        flow_val = _compute_flow_single_group(
-                            context,
-                            src_nodes,
-                            snk_nodes,
-                            shortest_path,
-                            flow_placement,
-                            prebuilt_graph=base_graph,
-                        )
-                else:
-                    flow_val = 0.0
-                results[(src_label, snk_label)] = flow_val
-        return results
+                active_src_names = _filter_active_nodes(src_nodes)
+                active_snk_names = _filter_active_nodes(snk_nodes)
 
-    raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
+                if not active_src_names or not active_snk_names:
+                    results[(src_label, snk_label)] = 0.0
+                    continue
+                if set(active_src_names) & set(active_snk_names):
+                    results[(src_label, snk_label)] = 0.0
+                    continue
 
+                # Prepare augmentation edges for this pair
+                augmentations = []
+                pseudo_src = f"__PSEUDO_SRC_{src_label}__"
+                pseudo_snk = f"__PSEUDO_SNK_{snk_label}__"
 
-def max_flow_with_summary(
-    context: Any,
-    source_path: str,
-    sink_path: str,
-    *,
-    mode: str = "combine",
-    shortest_path: bool = False,
-    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-) -> Dict[Tuple[str, str], Tuple[float, FlowSummary]]:
-    """Compute max flow and return a summary for each group pair.
+                for src_name in active_src_names:
+                    augmentations.append(
+                        AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
+                    )
+                for snk_name in active_snk_names:
+                    augmentations.append(
+                        AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+                    )
 
-    The summary includes total flow, per-edge flow, residual capacity,
-    reachable set from the source in the residual graph, min-cut edges, and a
-    cost distribution over augmentation steps.
-
-    Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
-        source_path: Selection expression for source groups.
-        sink_path: Selection expression for sink groups.
-        mode: "combine" or "pairwise". See ``max_flow``.
-        shortest_path: If True, perform only one augmentation step.
-        flow_placement: Strategy for splitting among equal-cost parallel edges.
-
-    Returns:
-        Dict[Tuple[str, str], Tuple[float, FlowSummary]]: For each
-        (source_label, sink_label), the total flow and the associated summary.
-
-    Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is invalid.
-    """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
-
-    if not src_groups:
-        raise ValueError(f"No source nodes found matching '{source_path}'.")
-    if not snk_groups:
-        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
-
-    if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
-        combined_src_label = "|".join(sorted(src_groups.keys()))
-        combined_snk_label = "|".join(sorted(snk_groups.keys()))
-        for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
-        for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
-        if not combined_src_nodes or not combined_snk_nodes:
-            empty = _empty_summary()
-            return {(combined_src_label, combined_snk_label): (0.0, empty)}
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            empty = _empty_summary()
-            return {(combined_src_label, combined_snk_label): (0.0, empty)}
-        flow_val, summary = _compute_flow_with_summary_single_group(
-            context,
-            combined_src_nodes,
-            combined_snk_nodes,
-            shortest_path,
-            flow_placement,
-        )
-        return {(combined_src_label, combined_snk_label): (flow_val, summary)}
-
-    if mode == "pairwise":
-        results: Dict[Tuple[str, str], Tuple[float, FlowSummary]] = {}
-        for src_label, src_nodes in src_groups.items():
-            for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        results[(src_label, snk_label)] = (0.0, _empty_summary())
-                    else:
-                        results[(src_label, snk_label)] = (
-                            _compute_flow_with_summary_single_group(
-                                context,
-                                src_nodes,
-                                snk_nodes,
-                                shortest_path,
-                                flow_placement,
-                            )
-                        )
-                else:
-                    results[(src_label, snk_label)] = (0.0, _empty_summary())
-        return results
-
-    raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
-
-
-def max_flow_with_graph(
-    context: Any,
-    source_path: str,
-    sink_path: str,
-    *,
-    mode: str = "combine",
-    shortest_path: bool = False,
-    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-) -> Dict[Tuple[str, str], Tuple[float, "StrictMultiDiGraph"]]:
-    """Compute max flow and return the mutated flow graph for each pair.
-
-    Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
-        source_path: Selection expression for source groups.
-        sink_path: Selection expression for sink groups.
-        mode: "combine" or "pairwise". See ``max_flow``.
-        shortest_path: If True, perform only one augmentation step.
-        flow_placement: Strategy for splitting among equal-cost parallel edges.
-
-    Returns:
-        Dict[Tuple[str, str], Tuple[float, StrictMultiDiGraph]]: For each
-        (source_label, sink_label), the total flow and the flow-assigned graph.
-
-    Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is invalid.
-    """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
-
-    if not src_groups:
-        raise ValueError(f"No source nodes found matching '{source_path}'.")
-    if not snk_groups:
-        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
-
-    if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
-        combined_src_label = "|".join(sorted(src_groups.keys()))
-        combined_snk_label = "|".join(sorted(snk_groups.keys()))
-        for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
-        for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
-        if not combined_src_nodes or not combined_snk_nodes:
-            base_graph = context.to_strict_multidigraph(compact=True).copy()
-            return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            base_graph = context.to_strict_multidigraph(compact=True).copy()
-            return {(combined_src_label, combined_snk_label): (0.0, base_graph)}
-        flow_val, flow_graph = _compute_flow_with_graph_single_group(
-            context,
-            combined_src_nodes,
-            combined_snk_nodes,
-            shortest_path,
-            flow_placement,
-        )
-        return {(combined_src_label, combined_snk_label): (flow_val, flow_graph)}
-
-    if mode == "pairwise":
-        results: Dict[Tuple[str, str], Tuple[float, "StrictMultiDiGraph"]] = {}
-        for src_label, src_nodes in src_groups.items():
-            for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        base_graph = context.to_strict_multidigraph(compact=True).copy()
-                        results[(src_label, snk_label)] = (0.0, base_graph)
-                    else:
-                        results[(src_label, snk_label)] = (
-                            _compute_flow_with_graph_single_group(
-                                context,
-                                src_nodes,
-                                snk_nodes,
-                                shortest_path,
-                                flow_placement,
-                            )
-                        )
-                else:
-                    base_graph = context.to_strict_multidigraph(compact=True).copy()
-                    results[(src_label, snk_label)] = (0.0, base_graph)
-        return results
-
-    raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
-
-
-def max_flow_detailed(
-    context: Any,
-    source_path: str,
-    sink_path: str,
-    *,
-    mode: str = "combine",
-    shortest_path: bool = False,
-    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-) -> Dict[Tuple[str, str], Tuple[float, FlowSummary, "StrictMultiDiGraph"]]:
-    """Compute max flow, return summary and flow graph for each pair.
-
-    Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
-        source_path: Selection expression for source groups.
-        sink_path: Selection expression for sink groups.
-        mode: "combine" or "pairwise". See ``max_flow``.
-        shortest_path: If True, perform only one augmentation step.
-        flow_placement: Strategy for splitting among equal-cost parallel edges.
-
-    Returns:
-        Dict[Tuple[str, str], Tuple[float, FlowSummary, StrictMultiDiGraph]]:
-        For each (source_label, sink_label), the total flow, a summary, and the
-        flow-assigned graph.
-
-    Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is invalid.
-    """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
-
-    if not src_groups:
-        raise ValueError(f"No source nodes found matching '{source_path}'.")
-    if not snk_groups:
-        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
-
-    if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
-        combined_src_label = "|".join(sorted(src_groups.keys()))
-        combined_snk_label = "|".join(sorted(snk_groups.keys()))
-        for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
-        for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
-        if not combined_src_nodes or not combined_snk_nodes:
-            base_graph = context.to_strict_multidigraph().copy()
-            return {
-                (combined_src_label, combined_snk_label): (
-                    0.0,
-                    _empty_summary(),
-                    base_graph,
+                # Build augmented graph
+                graph_handle, _, _, node_mapper = build_graph(
+                    network,
+                    augmentations=augmentations,
+                    excluded_nodes=excluded_nodes,
+                    excluded_links=excluded_links,
                 )
-            }
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            base_graph = context.to_strict_multidigraph().copy()
-            return {
-                (combined_src_label, combined_snk_label): (
-                    0.0,
-                    _empty_summary(),
-                    base_graph,
+
+                # Get pseudo node IDs
+                pseudo_src_id = node_mapper.to_id(pseudo_src)
+                pseudo_snk_id = node_mapper.to_id(pseudo_snk)
+
+                # Run max-flow
+                flow_value, _ = algs.max_flow(
+                    graph_handle,
+                    pseudo_src_id,
+                    pseudo_snk_id,
+                    flow_placement=core_flow_placement,
+                    shortest_path=shortest_path,
                 )
+                results[(src_label, snk_label)] = flow_value
+        return results
+
+    raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
+
+
+def max_flow_with_details(
+    network: Network,
+    source_path: str,
+    sink_path: str,
+    *,
+    mode: str = "combine",
+    shortest_path: bool = False,
+    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
+    excluded_nodes: Optional[Set[str]] = None,
+    excluded_links: Optional[Set[str]] = None,
+) -> Dict[Tuple[str, str], FlowSummary]:
+    """Compute max flow with detailed results.
+
+    This function provides the same max-flow computation as `max_flow` but
+    returns a `FlowSummary` object for each result, which can include
+    additional details like cost distribution and min-cut information.
+
+    Note:
+        The `FlowSummary` currently provides a simplified view. Full details
+        (e.g., saturated edges, explicit flow paths) would require further
+        enhancements in the Core API and its integration.
+
+    Args:
+        network: Network instance.
+        source_path: Selection expression for source groups.
+        sink_path: Selection expression for sink groups.
+        mode: "combine" or "pairwise".
+        shortest_path: If True, perform single augmentation.
+        flow_placement: Flow placement strategy.
+        excluded_nodes: Optional set of node names to exclude.
+        excluded_links: Optional set of link IDs to exclude.
+
+    Returns:
+        Dict mapping (source_label, sink_label) to FlowSummary.
+
+    Raises:
+        ValueError: If no matching sources or sinks are found, or if `mode`
+                    is not one of {"combine", "pairwise"}.
+    """
+    src_groups = network.select_node_groups_by_path(source_path)
+    snk_groups = network.select_node_groups_by_path(sink_path)
+
+    if not src_groups:
+        raise ValueError(f"No source nodes found matching '{source_path}'.")
+    if not snk_groups:
+        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
+
+    # Map flow_placement to Core's FlowPlacement enum
+    core_flow_placement = _map_flow_placement(flow_placement)
+
+    # Create Core algorithms instance
+    backend = netgraph_core.Backend.cpu()
+    algs = netgraph_core.Algorithms(backend)
+
+    def _filter_active_nodes(nodes: List) -> List[str]:
+        """Filter nodes to active and return their names."""
+        return [
+            n.name
+            for n in nodes
+            if not n.disabled
+            and (excluded_nodes is None or n.name not in excluded_nodes)
+        ]
+
+    def _construct_flow_summary(flow_value: float, core_summary=None) -> FlowSummary:
+        """Construct FlowSummary from flow value and optional Core summary."""
+        cost_dist = {}
+        if core_summary is not None and len(core_summary.costs) > 0:
+            cost_dist = {
+                float(c): float(f)
+                for c, f in zip(core_summary.costs, core_summary.flows, strict=False)
             }
-        flow_val, summary, flow_graph = _compute_flow_detailed_single_group(
-            context,
-            combined_src_nodes,
-            combined_snk_nodes,
-            shortest_path,
-            flow_placement,
+        return FlowSummary(
+            total_flow=flow_value,
+            cost_distribution=cost_dist,
+            min_cut=(),
         )
+
+    if mode == "combine":
+        combined_src_label = "|".join(sorted(src_groups.keys()))
+        combined_snk_label = "|".join(sorted(snk_groups.keys()))
+
+        combined_src_names = []
+        for group_nodes in src_groups.values():
+            combined_src_names.extend(_filter_active_nodes(group_nodes))
+        combined_snk_names = []
+        for group_nodes in snk_groups.values():
+            combined_snk_names.extend(_filter_active_nodes(group_nodes))
+
+        if not combined_src_names or not combined_snk_names:
+            return {
+                (combined_src_label, combined_snk_label): _construct_flow_summary(0.0)
+            }
+        if set(combined_src_names) & set(combined_snk_names):
+            return {
+                (combined_src_label, combined_snk_label): _construct_flow_summary(0.0)
+            }
+
+        # Prepare augmentations
+        augmentations = []
+        pseudo_src = "__PSEUDO_SRC__"
+        pseudo_snk = "__PSEUDO_SNK__"
+
+        for src_name in combined_src_names:
+            augmentations.append(
+                AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
+            )
+        for snk_name in combined_snk_names:
+            augmentations.append(
+                AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+            )
+
+        # Build augmented graph
+        graph_handle, _, _, node_mapper = build_graph(
+            network,
+            augmentations=augmentations,
+            excluded_nodes=excluded_nodes,
+            excluded_links=excluded_links,
+        )
+
+        pseudo_src_id = node_mapper.to_id(pseudo_src)
+        pseudo_snk_id = node_mapper.to_id(pseudo_snk)
+
+        # Run max-flow
+        flow_value, core_summary = algs.max_flow(
+            graph_handle,
+            pseudo_src_id,
+            pseudo_snk_id,
+            flow_placement=core_flow_placement,
+            shortest_path=shortest_path,
+        )
+
         return {
-            (combined_src_label, combined_snk_label): (flow_val, summary, flow_graph)
+            (combined_src_label, combined_snk_label): _construct_flow_summary(
+                flow_value, core_summary
+            )
         }
 
     if mode == "pairwise":
-        results: Dict[
-            Tuple[str, str], Tuple[float, FlowSummary, "StrictMultiDiGraph"]
-        ] = {}
+        results: Dict[Tuple[str, str], FlowSummary] = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        base_graph = context.to_strict_multidigraph().copy()
-                        results[(src_label, snk_label)] = (
-                            0.0,
-                            _empty_summary(),
-                            base_graph,
-                        )
-                    else:
-                        results[(src_label, snk_label)] = (
-                            _compute_flow_detailed_single_group(
-                                context,
-                                src_nodes,
-                                snk_nodes,
-                                shortest_path,
-                                flow_placement,
-                            )
-                        )
-                else:
-                    base_graph = context.to_strict_multidigraph().copy()
-                    results[(src_label, snk_label)] = (
-                        0.0,
-                        _empty_summary(),
-                        base_graph,
+                active_src_names = _filter_active_nodes(src_nodes)
+                active_snk_names = _filter_active_nodes(snk_nodes)
+
+                if not active_src_names or not active_snk_names:
+                    results[(src_label, snk_label)] = _construct_flow_summary(0.0)
+                    continue
+                if set(active_src_names) & set(active_snk_names):
+                    results[(src_label, snk_label)] = _construct_flow_summary(0.0)
+                    continue
+
+                # Prepare augmentations
+                augmentations = []
+                pseudo_src = f"__PSEUDO_SRC_{src_label}__"
+                pseudo_snk = f"__PSEUDO_SNK_{snk_label}__"
+
+                for src_name in active_src_names:
+                    augmentations.append(
+                        AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
                     )
-        return results
+                for snk_name in active_snk_names:
+                    augmentations.append(
+                        AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+                    )
 
-    raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
+                # Build augmented graph
+                graph_handle, _, _, node_mapper = build_graph(
+                    network,
+                    augmentations=augmentations,
+                    excluded_nodes=excluded_nodes,
+                    excluded_links=excluded_links,
+                )
 
+                pseudo_src_id = node_mapper.to_id(pseudo_src)
+                pseudo_snk_id = node_mapper.to_id(pseudo_snk)
 
-def saturated_edges(
-    context: Any,
-    source_path: str,
-    sink_path: str,
-    *,
-    mode: str = "combine",
-    tolerance: float = 1e-10,
-    shortest_path: bool = False,
-    flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-) -> Dict[Tuple[str, str], List[Tuple[str, str, str]]]:
-    """Identify saturated edges for each selected group pair.
+                # Run max-flow
+                flow_value, core_summary = algs.max_flow(
+                    graph_handle,
+                    pseudo_src_id,
+                    pseudo_snk_id,
+                    flow_placement=core_flow_placement,
+                    shortest_path=shortest_path,
+                )
 
-    Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
-        source_path: Selection expression for source groups.
-        sink_path: Selection expression for sink groups.
-        mode: "combine" or "pairwise". See ``max_flow``.
-        tolerance: Residual capacity threshold to consider an edge saturated.
-        shortest_path: If True, perform only one augmentation step.
-        flow_placement: Strategy for splitting among equal-cost parallel edges.
-
-    Returns:
-        Dict[Tuple[str, str], list[tuple[str, str, str]]]: For each
-        (source_label, sink_label), a list of saturated edges ``(u, v, k)``.
-
-    Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is invalid.
-    """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
-
-    if not src_groups:
-        raise ValueError(f"No source nodes found matching '{source_path}'.")
-    if not snk_groups:
-        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
-
-    if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
-        combined_src_label = "|".join(sorted(src_groups.keys()))
-        combined_snk_label = "|".join(sorted(snk_groups.keys()))
-        for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
-        for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
-        if not combined_src_nodes or not combined_snk_nodes:
-            return {(combined_src_label, combined_snk_label): []}
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            saturated_list: List[Tuple[str, str, str]] = []
-        else:
-            saturated_list = _compute_saturated_edges_single_group(
-                context,
-                combined_src_nodes,
-                combined_snk_nodes,
-                tolerance,
-                shortest_path,
-                flow_placement,
-            )
-        return {(combined_src_label, combined_snk_label): saturated_list}
-
-    if mode == "pairwise":
-        results: Dict[Tuple[str, str], List[Tuple[str, str, str]]] = {}
-        for src_label, src_nodes in src_groups.items():
-            for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        saturated_list = []
-                    else:
-                        saturated_list = _compute_saturated_edges_single_group(
-                            context,
-                            src_nodes,
-                            snk_nodes,
-                            tolerance,
-                            shortest_path,
-                            flow_placement,
-                        )
-                else:
-                    saturated_list = []
-                results[(src_label, snk_label)] = saturated_list
+                results[(src_label, snk_label)] = _construct_flow_summary(
+                    flow_value, core_summary
+                )
         return results
 
     raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
 
 
 def sensitivity_analysis(
-    context: Any,
+    network: Network,
     source_path: str,
     sink_path: str,
     *,
     mode: str = "combine",
-    change_amount: float = 1.0,
-    shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-) -> Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]:
-    """Perform a simple sensitivity analysis per saturated edge.
+    excluded_nodes: Optional[Set[str]] = None,
+    excluded_links: Optional[Set[str]] = None,
+) -> Dict[Tuple[str, str], Dict[str, float]]:
+    """Analyze sensitivity of max flow to edge failures.
 
-    For each saturated edge, test a capacity change of ``change_amount`` and
-    report the change in total flow. Positive amounts increase capacity; negative
-    amounts decrease capacity (with lower bound at zero).
+    Identifies critical edges (saturated edges) and computes the flow reduction
+    caused by removing each one.
 
     Args:
-        context: `Network` or `NetworkView` providing selection and graph APIs.
+        network: Network instance.
         source_path: Selection expression for source groups.
         sink_path: Selection expression for sink groups.
-        mode: "combine" or "pairwise". See ``max_flow``.
-        change_amount: Capacity delta to apply when testing each saturated edge.
-        shortest_path: If True, perform only one augmentation step.
-        flow_placement: Strategy for splitting among equal-cost parallel edges.
+        mode: "combine" or "pairwise".
+        flow_placement: Flow placement strategy.
+        excluded_nodes: Optional set of node names to exclude.
+        excluded_links: Optional set of link IDs to exclude.
 
     Returns:
-        Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]: For each
-        (source_label, sink_label), a mapping from saturated edge ``(u, v, k)``
-        to the change in total flow after applying the capacity delta.
-
-    Raises:
-        ValueError: If no matching sources or sinks are found, or if ``mode``
-            is invalid.
+        Dict mapping (source_label, sink_label) to a dictionary of
+        {link_id: flow_reduction}.
     """
-    src_groups = context.select_node_groups_by_path(source_path)
-    snk_groups = context.select_node_groups_by_path(sink_path)
+    src_groups = network.select_node_groups_by_path(source_path)
+    snk_groups = network.select_node_groups_by_path(sink_path)
 
     if not src_groups:
         raise ValueError(f"No source nodes found matching '{source_path}'.")
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
+    core_flow_placement = _map_flow_placement(flow_placement)
+    backend = netgraph_core.Backend.cpu()
+    algs = netgraph_core.Algorithms(backend)
+
+    def _filter_active_nodes(nodes: List) -> List[str]:
+        return [
+            n.name
+            for n in nodes
+            if not n.disabled
+            and (excluded_nodes is None or n.name not in excluded_nodes)
+        ]
+
     if mode == "combine":
-        combined_src_nodes: list = []
-        combined_snk_nodes: list = []
         combined_src_label = "|".join(sorted(src_groups.keys()))
         combined_snk_label = "|".join(sorted(snk_groups.keys()))
+
+        combined_src_names = []
         for group_nodes in src_groups.values():
-            combined_src_nodes.extend(group_nodes)
+            combined_src_names.extend(_filter_active_nodes(group_nodes))
+        combined_snk_names = []
         for group_nodes in snk_groups.values():
-            combined_snk_nodes.extend(group_nodes)
-        if not combined_src_nodes or not combined_snk_nodes:
+            combined_snk_names.extend(_filter_active_nodes(group_nodes))
+
+        if not combined_src_names or not combined_snk_names:
             return {(combined_src_label, combined_snk_label): {}}
-        if {n.name for n in combined_src_nodes} & {n.name for n in combined_snk_nodes}:
-            sensitivity_dict: Dict[Tuple[str, str, str], float] = {}
-        else:
-            sensitivity_dict = _compute_sensitivity_single_group(
-                context,
-                combined_src_nodes,
-                combined_snk_nodes,
-                change_amount,
-                shortest_path,
-                flow_placement,
+        if set(combined_src_names) & set(combined_snk_names):
+            return {(combined_src_label, combined_snk_label): {}}
+
+        augmentations = []
+        pseudo_src = "__PSEUDO_SRC__"
+        pseudo_snk = "__PSEUDO_SNK__"
+
+        for src_name in combined_src_names:
+            augmentations.append(
+                AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
             )
-        return {(combined_src_label, combined_snk_label): sensitivity_dict}
+        for snk_name in combined_snk_names:
+            augmentations.append(
+                AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+            )
+
+        graph_handle, multidigraph, link_mapper, node_mapper = build_graph(
+            network,
+            augmentations=augmentations,
+            excluded_nodes=excluded_nodes,
+            excluded_links=excluded_links,
+        )
+
+        pseudo_src_id = node_mapper.to_id(pseudo_src)
+        pseudo_snk_id = node_mapper.to_id(pseudo_snk)
+
+        results = algs.sensitivity_analysis(
+            graph_handle,
+            pseudo_src_id,
+            pseudo_snk_id,
+            flow_placement=core_flow_placement,
+        )
+
+        sensitivity_map = {}
+        ext_edge_ids = multidigraph.ext_edge_ids_view()
+        for edge_id, delta in results:
+            ext_id = ext_edge_ids[edge_id]
+            link_id = link_mapper.to_name(ext_id)
+            # Ignore sensitivity of augmentation edges (which don't have mapped names)
+            if link_id is not None:
+                sensitivity_map[link_id] = delta
+
+        return {(combined_src_label, combined_snk_label): sensitivity_map}
 
     if mode == "pairwise":
-        results: Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]] = {}
+        out: Dict[Tuple[str, str], Dict[str, float]] = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
-                if src_nodes and snk_nodes:
-                    if {n.name for n in src_nodes} & {n.name for n in snk_nodes}:
-                        sensitivity_dict = {}
-                    else:
-                        sensitivity_dict = _compute_sensitivity_single_group(
-                            context,
-                            src_nodes,
-                            snk_nodes,
-                            change_amount,
-                            shortest_path,
-                            flow_placement,
-                        )
-                else:
-                    sensitivity_dict = {}
-                results[(src_label, snk_label)] = sensitivity_dict
-        return results
+                active_src_names = _filter_active_nodes(src_nodes)
+                active_snk_names = _filter_active_nodes(snk_nodes)
+
+                if not active_src_names or not active_snk_names:
+                    out[(src_label, snk_label)] = {}
+                    continue
+                if set(active_src_names) & set(active_snk_names):
+                    out[(src_label, snk_label)] = {}
+                    continue
+
+                augmentations = []
+                pseudo_src = f"__PSEUDO_SRC_{src_label}__"
+                pseudo_snk = f"__PSEUDO_SNK_{snk_label}__"
+
+                for src_name in active_src_names:
+                    augmentations.append(
+                        AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0)
+                    )
+                for snk_name in active_snk_names:
+                    augmentations.append(
+                        AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
+                    )
+
+                graph_handle, multidigraph, link_mapper, node_mapper = build_graph(
+                    network,
+                    augmentations=augmentations,
+                    excluded_nodes=excluded_nodes,
+                    excluded_links=excluded_links,
+                )
+
+                pseudo_src_id = node_mapper.to_id(pseudo_src)
+                pseudo_snk_id = node_mapper.to_id(pseudo_snk)
+
+                results = algs.sensitivity_analysis(
+                    graph_handle,
+                    pseudo_src_id,
+                    pseudo_snk_id,
+                    flow_placement=core_flow_placement,
+                )
+
+                sensitivity_map = {}
+                ext_edge_ids = multidigraph.ext_edge_ids_view()
+                for edge_id, delta in results:
+                    ext_id = ext_edge_ids[edge_id]
+                    link_id = link_mapper.to_name(ext_id)
+                    if link_id is not None:
+                        sensitivity_map[link_id] = delta
+
+                out[(src_label, snk_label)] = sensitivity_map
+        return out
 
     raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
 
 
-# --- Single-group helpers ---------------------------------------------------
+# Helper functions
 
 
-def _compute_flow_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-    *,
-    prebuilt_graph: Optional["StrictMultiDiGraph"] = None,
-) -> float:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        return 0.0
-    graph = (
-        prebuilt_graph.copy()
-        if prebuilt_graph is not None
-        else context.to_strict_multidigraph()
-    )
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    return calc_max_flow(
-        graph,
-        "source",
-        "sink",
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-
-
-def _compute_flow_with_summary_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-) -> Tuple[float, FlowSummary]:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        return 0.0, _empty_summary()
-    graph = context.to_strict_multidigraph(compact=True).copy()
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    flow_val, summary = calc_max_flow(
-        graph,
-        "source",
-        "sink",
-        return_summary=True,
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-    return flow_val, summary
-
-
-def _compute_flow_with_graph_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-) -> Tuple[float, "StrictMultiDiGraph"]:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        base_graph = context.to_strict_multidigraph(compact=True).copy()
-        return 0.0, base_graph
-    graph = context.to_strict_multidigraph(compact=True).copy()
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    flow_val, flow_graph = calc_max_flow(
-        graph,
-        "source",
-        "sink",
-        return_graph=True,
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-    return flow_val, flow_graph
-
-
-def _compute_flow_detailed_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-) -> Tuple[float, FlowSummary, "StrictMultiDiGraph"]:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        base_graph = context.to_strict_multidigraph(compact=True).copy()
-        return 0.0, _empty_summary(), base_graph
-    graph = context.to_strict_multidigraph(compact=True).copy()
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    flow_val, summary, flow_graph = calc_max_flow(
-        graph,
-        "source",
-        "sink",
-        return_summary=True,
-        return_graph=True,
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-    return flow_val, summary, flow_graph
-
-
-def _compute_saturated_edges_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    tolerance: float,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-) -> List[Tuple[str, str, str]]:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        return []
-    graph = context.to_strict_multidigraph(compact=True).copy()
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    return _algo_saturated_edges(
-        graph,
-        "source",
-        "sink",
-        tolerance=tolerance,
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-
-
-def _compute_sensitivity_single_group(
-    context: Any,
-    sources: list,
-    sinks: list,
-    change_amount: float,
-    shortest_path: bool,
-    flow_placement: FlowPlacement,
-) -> Dict[Tuple[str, str, str], float]:
-    active_sources = [s for s in sources if not s.disabled]
-    active_sinks = [s for s in sinks if not s.disabled]
-    if not active_sources or not active_sinks:
-        return {}
-    graph = context.to_strict_multidigraph(compact=True).copy()
-    graph.add_node("source")
-    graph.add_node("sink")
-    for s_node in active_sources:
-        graph.add_edge("source", s_node.name, capacity=float("inf"), cost=0)
-    for t_node in active_sinks:
-        graph.add_edge(t_node.name, "sink", capacity=float("inf"), cost=0)
-    return run_sensitivity(
-        graph,
-        "source",
-        "sink",
-        change_amount=change_amount,
-        flow_placement=flow_placement,
-        shortest_path=shortest_path,
-        copy_graph=False,
-    )
-
-
-def _empty_summary() -> FlowSummary:
-    return FlowSummary(
-        total_flow=0.0,
-        edge_flow={},
-        residual_cap={},
-        reachable=set(),
-        min_cut=[],
-        cost_distribution={},
-    )
+def _map_flow_placement(flow_placement: FlowPlacement) -> netgraph_core.FlowPlacement:
+    """Map NetGraph FlowPlacement to Core FlowPlacement."""
+    if flow_placement == FlowPlacement.PROPORTIONAL:
+        return netgraph_core.FlowPlacement.PROPORTIONAL
+    if flow_placement == FlowPlacement.EQUAL_BALANCED:
+        return netgraph_core.FlowPlacement.EQUAL_BALANCED
+    raise ValueError(f"Unsupported FlowPlacement: {flow_placement}")
