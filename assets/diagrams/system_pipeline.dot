@@ -1,0 +1,76 @@
+digraph SystemPipeline {
+  rankdir=LR;
+  graph [compound=true, splines=ortho, ranksep="1.0", nodesep="0.5"];
+  node  [shape=box, fontsize=10, margin="0.08,0.05"];
+  edge  [fontsize=9, arrowsize=0.7];
+
+  // Input Layer
+  subgraph cluster_input {
+    label="Input"; labeljust="l"; style="rounded,dashed";
+    yaml  [label="Scenario YAML"];
+    parse [label="Parse & Validate"];
+    expand [label="DSL Expansion"];
+    yaml -> parse -> expand;
+  }
+
+  // Python Layer - Model
+  subgraph cluster_python {
+    label="Python Layer"; labeljust="l"; style="rounded,dashed";
+
+    subgraph cluster_model {
+      label=""; style=invis;
+      scenario [label="Scenario\n·Network\n·FailurePolicySet\n·TrafficMatrixSet\n·Workflow", shape=box];
+    }
+
+    subgraph cluster_exec {
+      label=""; style=invis;
+      engine [label="Scenario.run()"];
+      steps [label="WorkflowSteps"];
+      exec [label="Execution\n·FailureManager\n·DemandBuilder\n·Flow Solvers"];
+      engine -> steps -> exec;
+    }
+
+    adapter [label="Core Adapter\n(build_graph, mappers)"];
+
+    scenario -> engine;
+    exec -> adapter;
+  }
+
+  // C++ Core Layer
+  subgraph cluster_core {
+    label="NetGraph-Core (C++)"; labeljust="l"; style="rounded,filled"; fillcolor="#f0f0f0";
+
+    subgraph cluster_graph {
+      label=""; style=invis;
+      core_backend [label="Backend"];
+      core_graph [label="StrictMultiDiGraph"];
+      { rank=same; core_backend; core_graph; }
+    }
+
+    subgraph cluster_algs {
+      label=""; style=invis;
+      core_algs [label="Algorithms"];
+      core_spf [label="SPF"];
+      core_ksp [label="K-SP"];
+      core_maxf [label="Max-Flow"];
+      core_algs -> core_spf;
+      core_algs -> core_ksp;
+      core_algs -> core_maxf;
+      { rank=same; core_spf; core_ksp; core_maxf; }
+    }
+
+    core_backend -> core_algs;
+    core_graph -> core_algs [style=invis];
+  }
+
+  // Results Layer
+  subgraph cluster_results {
+    label="Results"; labeljust="l"; style="rounded,dashed";
+    results [label="Results Store"];
+  }
+
+  // Main flow
+  expand -> scenario [lhead=cluster_python, ltail=cluster_input];
+  adapter -> core_backend [lhead=cluster_core, ltail=cluster_python, xlabel="GIL released"];
+  core_maxf -> results [ltail=cluster_core, lhead=cluster_results];
+}
