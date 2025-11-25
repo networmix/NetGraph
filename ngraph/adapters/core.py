@@ -2,11 +2,15 @@
 
 Provides graph building, node/edge ID mapping, and result translation between
 NetGraph's scenario-level types and NetGraph-Core's internal representations.
+
+Graph caching enables efficient repeated analysis with different exclusion sets
+by building the graph once and using lightweight masks for exclusions.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, NamedTuple, Optional, Set
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Dict, List, NamedTuple, Optional, Set
 
 import netgraph_core
 import numpy as np
@@ -139,8 +143,113 @@ class EdgeMapper:
         return edge_ref.link_id
 
 
+@dataclass
+class GraphCache:
+    """Pre-built graph components for efficient repeated analysis.
+
+    Holds all components needed for running analysis with different exclusion
+    sets without rebuilding the graph. Use build_graph_cache() to create.
+
+    Attributes:
+        graph_handle: Core Graph handle for algorithm execution.
+        multidigraph: Core StrictMultiDiGraph with topology data.
+        edge_mapper: Mapper for link_id <-> edge_id translation.
+        node_mapper: Mapper for node_name <-> node_id translation.
+        algorithms: Core Algorithms instance for running computations.
+        disabled_node_ids: Pre-computed set of disabled node IDs.
+        disabled_link_ids: Pre-computed set of disabled link IDs.
+        link_id_to_edge_indices: Mapping from link_id to edge array indices.
+    """
+
+    graph_handle: netgraph_core.Graph
+    multidigraph: netgraph_core.StrictMultiDiGraph
+    edge_mapper: EdgeMapper
+    node_mapper: NodeMapper
+    algorithms: netgraph_core.Algorithms
+    disabled_node_ids: Set[int] = field(default_factory=set)
+    disabled_link_ids: Set[str] = field(default_factory=set)
+    link_id_to_edge_indices: Dict[str, List[int]] = field(default_factory=dict)
+
+
+def build_graph_cache(
+    network: "Network",
+    *,
+    add_reverse: bool = True,
+    augmentations: Optional[List[AugmentationEdge]] = None,
+) -> GraphCache:
+    """Build cached graph components for efficient repeated analysis.
+
+    Constructs the graph once and pre-computes mappings needed for fast
+    mask building. Use with build_node_mask() and build_edge_mask() for
+    O(|excluded|) exclusion handling instead of O(V+E).
+
+    Args:
+        network: NetGraph Network instance.
+        add_reverse: If True, add reverse edges for network links.
+        augmentations: Optional list of edges to add (for pseudo nodes, etc.).
+
+    Returns:
+        GraphCache with all pre-built components.
+
+    Example:
+        >>> cache = build_graph_cache(network)
+        >>> for excluded_nodes, excluded_links in failure_patterns:
+        ...     node_mask = build_node_mask(cache, excluded_nodes)
+        ...     edge_mask = build_edge_mask(cache, excluded_links)
+        ...     result = cache.algorithms.max_flow(
+        ...         cache.graph_handle, src, dst,
+        ...         node_mask=node_mask, edge_mask=edge_mask
+        ...     )
+    """
+    # Build graph without exclusions (exclusions handled via masks)
+    graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
+        network,
+        add_reverse=add_reverse,
+        augmentations=augmentations,
+        excluded_nodes=None,
+        excluded_links=None,
+    )
+
+    # Create algorithms instance
+    backend = netgraph_core.Backend.cpu()
+    algorithms = netgraph_core.Algorithms(backend)
+
+    # Pre-compute disabled node IDs
+    disabled_node_ids: Set[int] = set()
+    for node_name, node in network.nodes.items():
+        if node.disabled and node_name in node_mapper.node_id_of:
+            disabled_node_ids.add(node_mapper.node_id_of[node_name])
+
+    # Pre-compute disabled link IDs
+    disabled_link_ids: Set[str] = {
+        link_id for link_id, link in network.links.items() if link.disabled
+    }
+
+    # Pre-compute link_id -> edge indices mapping for O(|excluded|) mask building
+    ext_edge_ids = multidigraph.ext_edge_ids_view()
+    link_id_to_edge_indices: Dict[str, List[int]] = {}
+    for edge_idx in range(len(ext_edge_ids)):
+        ext_id = int(ext_edge_ids[edge_idx])
+        if ext_id == -1:  # Skip augmentation edges
+            continue
+        edge_ref = edge_mapper.decode_ext_id(ext_id)
+        if edge_ref:
+            link_id_to_edge_indices.setdefault(edge_ref.link_id, []).append(edge_idx)
+
+    return GraphCache(
+        graph_handle=graph_handle,
+        multidigraph=multidigraph,
+        edge_mapper=edge_mapper,
+        node_mapper=node_mapper,
+        algorithms=algorithms,
+        disabled_node_ids=disabled_node_ids,
+        disabled_link_ids=disabled_link_ids,
+        link_id_to_edge_indices=link_id_to_edge_indices,
+    )
+
+
 def build_graph(
-    network: Network,
+    network: "Network",
     *,
     add_reverse: bool = True,
     augmentations: Optional[List[AugmentationEdge]] = None,
@@ -156,15 +265,18 @@ def build_graph(
     - Pseudo/virtual nodes (via augmentations)
     - Filtered topology (via exclusions)
 
+    For repeated analysis with different exclusions, use build_graph_cache()
+    with build_node_mask()/build_edge_mask() for better performance.
+
     Args:
-        network: NetGraph Network instance
-        add_reverse: If True, add reverse edges for network links
-        augmentations: Optional list of edges to add (for pseudo nodes, etc.)
-        excluded_nodes: Optional set of node names to exclude
-        excluded_links: Optional set of link IDs to exclude
+        network: NetGraph Network instance.
+        add_reverse: If True, add reverse edges for network links.
+        augmentations: Optional list of edges to add (for pseudo nodes, etc.).
+        excluded_nodes: Optional set of node names to exclude.
+        excluded_links: Optional set of link IDs to exclude.
 
     Returns:
-        Tuple of (graph_handle, multidigraph, edge_mapper, node_mapper)
+        Tuple of (graph_handle, multidigraph, edge_mapper, node_mapper).
 
     Pseudo Nodes:
         Any node name in augmentations that doesn't exist in network.nodes
@@ -175,25 +287,9 @@ def build_graph(
         - Assigned ext_edge_id of -1 (sentinel for non-network edges)
         - Not included in edge_mapper translation
 
-    Exclusions:
-        Applied during construction by filtering. For algorithms that support
-        runtime masking (e.g., max_flow), consider using build_node_mask() and
-        build_edge_mask() for more efficient repeated analysis.
-
     Node ID Assignment:
         Real nodes (sorted): IDs 0..(num_real-1)
         Pseudo nodes (sorted): IDs num_real..(num_real+num_pseudo-1)
-
-    Example:
-        >>> # Build graph with pseudo source/sink
-        >>> augmentations = [
-        ...     AugmentationEdge("PSEUDO_SRC", "A", 1e15, 0),
-        ...     AugmentationEdge("PSEUDO_SRC", "B", 1e15, 0),
-        ...     AugmentationEdge("C", "PSEUDO_SNK", 1e15, 0),
-        ... ]
-        >>> graph, _, _, mapper = build_graph(network, augmentations=augmentations)
-        >>> pseudo_src_id = mapper.to_id("PSEUDO_SRC")
-        >>> pseudo_snk_id = mapper.to_id("PSEUDO_SNK")
     """
     # Validate exclusions
     if excluded_nodes:
@@ -212,7 +308,7 @@ def build_graph(
         real_node_names -= excluded_nodes
 
     # Step 2: Infer pseudo nodes from augmentation edges
-    pseudo_node_names = set()
+    pseudo_node_names: Set[str] = set()
     if augmentations:
         for aug_edge in augmentations:
             if aug_edge.source not in real_node_names:
@@ -229,11 +325,11 @@ def build_graph(
     edge_mapper = EdgeMapper(link_ids)
 
     # Step 5: Build edge arrays
-    src_list = []
-    dst_list = []
-    capacity_list = []
-    cost_list = []
-    ext_edge_id_list = []
+    src_list: List[int] = []
+    dst_list: List[int] = []
+    capacity_list: List[float] = []
+    cost_list: List[float] = []
+    ext_edge_id_list: List[int] = []
 
     # Add real network edges (bidirectional)
     for link_id in link_ids:
@@ -304,77 +400,71 @@ def build_graph(
 
 
 def build_node_mask(
-    network: Network,
-    node_mapper: NodeMapper,
+    cache: GraphCache,
     excluded_nodes: Optional[Set[str]] = None,
 ) -> np.ndarray:
     """Build a node mask array for Core algorithms.
 
+    Uses O(|excluded| + |disabled|) time complexity by only setting
+    excluded/disabled nodes to False, rather than iterating all nodes.
+
     Core semantics: True = include, False = exclude.
-    A node is included (True) if it is NOT disabled and NOT in the excluded set.
 
     Args:
-        network: NetGraph Network instance.
-        node_mapper: NodeMapper for name <-> ID translation.
-        excluded_nodes: Optional set of additional node names to exclude.
+        cache: GraphCache with pre-computed disabled node IDs.
+        excluded_nodes: Optional set of node names to exclude.
 
     Returns:
-        Boolean numpy array of shape (num_nodes,) where True means included/enabled.
+        Boolean numpy array of shape (num_nodes,) where True means included.
     """
-    num_nodes = len(node_mapper.node_names)
-    mask = np.ones(num_nodes, dtype=bool)  # Start with all included
+    num_nodes = len(cache.node_mapper.node_names)
+    mask = np.ones(num_nodes, dtype=bool)
 
-    for idx, node_name in enumerate(node_mapper.node_names):
-        # Pseudo nodes (augmentations) are not in network.nodes; assume enabled
-        if node_name in network.nodes:
-            node = network.nodes[node_name]
-            is_disabled = node.disabled
-        else:
-            is_disabled = False
+    # Exclude disabled nodes (pre-computed)
+    for node_id in cache.disabled_node_ids:
+        mask[node_id] = False
 
-        is_excluded = excluded_nodes is not None and node_name in excluded_nodes
-        mask[idx] = not (is_disabled or is_excluded)  # Invert: True = include
+    # Exclude requested nodes
+    if excluded_nodes:
+        for node_name in excluded_nodes:
+            if node_name in cache.node_mapper.node_id_of:
+                mask[cache.node_mapper.node_id_of[node_name]] = False
 
     return mask
 
 
 def build_edge_mask(
-    network: Network,
-    multidigraph: netgraph_core.StrictMultiDiGraph,
-    edge_mapper: EdgeMapper,
+    cache: GraphCache,
     excluded_links: Optional[Set[str]] = None,
 ) -> np.ndarray:
     """Build an edge mask array for Core algorithms.
 
+    Uses O(|excluded| + |disabled|) time complexity by using the pre-computed
+    link_id -> edge_indices mapping, rather than iterating all edges.
+
     Core semantics: True = include, False = exclude.
-    An edge is included (True) if its link is NOT disabled and NOT in the excluded set.
 
     Args:
-        network: NetGraph Network instance.
-        multidigraph: Core StrictMultiDiGraph instance.
-        edge_mapper: EdgeMapper for link_id <-> ext_edge_id translation.
-        excluded_links: Optional set of additional link IDs to exclude.
+        cache: GraphCache with pre-computed edge index mapping.
+        excluded_links: Optional set of link IDs to exclude.
 
     Returns:
-        Boolean numpy array of shape (num_edges,) where True means included/enabled.
+        Boolean numpy array of shape (num_edges,) where True means included.
     """
-    ext_edge_ids = multidigraph.ext_edge_ids_view()
-    num_edges = len(ext_edge_ids)
-    mask = np.ones(num_edges, dtype=bool)  # Start with all included
+    num_edges = cache.multidigraph.num_edges()
+    mask = np.ones(num_edges, dtype=bool)
 
-    for edge_idx in range(num_edges):
-        ext_id = int(ext_edge_ids[edge_idx])
-        # Sentinel -1 means augmentation edge; always included unless we add augmentation masking logic
-        if ext_id == -1:
-            continue
+    # Exclude disabled links (pre-computed)
+    for link_id in cache.disabled_link_ids:
+        if link_id in cache.link_id_to_edge_indices:
+            for edge_idx in cache.link_id_to_edge_indices[link_id]:
+                mask[edge_idx] = False
 
-        edge_ref = edge_mapper.decode_ext_id(ext_id)
-        if edge_ref is None:  # Should not happen if ext_id != -1
-            continue
-
-        link = network.links[edge_ref.link_id]
-        is_disabled = link.disabled
-        is_excluded = excluded_links is not None and edge_ref.link_id in excluded_links
-        mask[edge_idx] = not (is_disabled or is_excluded)  # Invert: True = include
+    # Exclude requested links
+    if excluded_links:
+        for link_id in excluded_links:
+            if link_id in cache.link_id_to_edge_indices:
+                for edge_idx in cache.link_id_to_edge_indices[link_id]:
+                    mask[edge_idx] = False
 
     return mask

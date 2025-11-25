@@ -1,23 +1,23 @@
 """FailureManager for Monte Carlo failure analysis.
 
 Provides the failure analysis engine for NetGraph. Supports parallel
-processing, per-worker caching, and failure policy handling for workflow steps
+processing, graph caching, and failure policy handling for workflow steps
 and direct programmatic use.
 
 Performance characteristics:
-Time complexity: O(I × A / P), where I is iteration count, A is analysis cost,
-and P is parallelism. Worker-local caching reduces repeated work when exclusion
-sets repeat across iterations. Network is shared by reference (zero-copy)
-across threads, with the C++ Core backend releasing the GIL for true parallelism.
+Time complexity: O(S + I × A / P), where S is one-time graph setup cost,
+I is iteration count, A is per-iteration analysis cost, and P is parallelism.
+Graph caching amortizes expensive graph construction across all iterations,
+and O(|excluded|) mask building replaces O(V+E) iteration.
 
-Space complexity: O(V + E + I × R + C), where V and E are node and link counts,
-R is result size per iteration, and C is cache size. The per-worker cache is
-bounded and evicts in FIFO order after 1000 unique patterns.
+Space complexity: O(V + E + I × R), where V and E are node and link counts,
+and R is result size per iteration. The pre-built graph is shared across
+all iterations.
 
-Parallelism: For small iteration counts, serial execution avoids threading overhead.
-For larger workloads, parallel execution benefits from worker caching and CPU
-utilization. Optimal parallelism is the number of CPU cores for analysis-bound
-workloads.
+Parallelism: The C++ Core backend releases the GIL during computation,
+enabling true parallelism with Python threads. With graph caching, most
+per-iteration work happens in GIL-free C++ code, achieving near-linear
+scaling with thread count.
 """
 
 from __future__ import annotations
@@ -90,6 +90,46 @@ def _create_cache_key(
             hashable_kwargs.append((key, f"{type(value).__name__}_{value_hash}"))
 
     return base_key + (tuple(hashable_kwargs),)
+
+
+def _shallow_copy_result(value: Any) -> Any:
+    """Create a shallow copy of a result object for deduplication expansion.
+
+    For FlowIterationResult-like objects, creates a new instance that shares
+    the expensive flows list and summary but has its own identity fields
+    (failure_id, failure_state) that can be set independently.
+
+    This avoids the overhead of deepcopy while preventing aliasing issues
+    when we later mutate failure_id and failure_state per iteration.
+
+    Args:
+        value: Result object to copy (typically FlowIterationResult).
+
+    Returns:
+        A shallow copy suitable for independent mutation of identity fields.
+    """
+    # Import here to avoid circular imports
+    from ngraph.results.flow import FlowIterationResult
+
+    if isinstance(value, FlowIterationResult):
+        # Create new instance sharing flows and summary (read-only after creation)
+        # but with fresh identity fields for per-iteration mutation
+        return FlowIterationResult(
+            failure_id=value.failure_id,
+            failure_state=value.failure_state,
+            flows=value.flows,  # Share reference - never mutated after creation
+            summary=value.summary,  # Share reference - never mutated after creation
+            data=dict(value.data) if value.data else {},  # Shallow copy of data dict
+        )
+
+    # For dict-like objects with known structure, shallow copy
+    if isinstance(value, dict):
+        return dict(value)
+
+    # Fallback: use copy.copy for shallow copy (faster than deepcopy)
+    from copy import copy
+
+    return copy(value)
 
 
 def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
@@ -467,6 +507,35 @@ class FailureManager:
 
         logger.info(f"Running {mc_iters} Monte-Carlo iterations")
 
+        # Pre-build graph cache for analysis functions
+        # This amortizes expensive graph construction across all iterations
+        if "_graph_cache" not in analysis_kwargs:
+            analysis_kwargs = dict(analysis_kwargs)  # Don't mutate caller's dict
+            cache_start = time.time()
+
+            if "demands_config" in analysis_kwargs:
+                # Demand placement analysis
+                from ngraph.exec.analysis.flow import build_demand_graph_cache
+
+                logger.debug("Pre-building graph cache for demand placement analysis")
+                analysis_kwargs["_graph_cache"] = build_demand_graph_cache(
+                    self.network, analysis_kwargs["demands_config"]
+                )
+                logger.debug(f"Graph cache built in {time.time() - cache_start:.3f}s")
+
+            elif "source_regex" in analysis_kwargs and "sink_regex" in analysis_kwargs:
+                # Max-flow analysis or sensitivity analysis
+                from ngraph.exec.analysis.flow import build_maxflow_graph_cache
+
+                logger.debug("Pre-building graph cache for max-flow analysis")
+                analysis_kwargs["_graph_cache"] = build_maxflow_graph_cache(
+                    self.network,
+                    analysis_kwargs["source_regex"],
+                    analysis_kwargs["sink_regex"],
+                    mode=analysis_kwargs.get("mode", "combine"),
+                )
+                logger.debug(f"Graph cache built in {time.time() - cache_start:.3f}s")
+
         # Get function name safely (Protocol doesn't guarantee __name__)
         func_name = getattr(analysis_func, "__name__", "analysis_function")
         logger.debug(
@@ -552,10 +621,10 @@ class FailureManager:
         ):
             key_to_result[dedup_key] = value
 
-        # Build full results list in original order. Clone value per member to avoid aliasing
-        # when the same unique task maps to multiple iterations.
-        from copy import deepcopy
-
+        # Build full results list in original order. Create shallow copies that share
+        # the expensive flows/summary data but have their own mutable identity fields.
+        # This avoids deepcopy overhead while preventing aliasing issues when we later
+        # set failure_id and failure_state per iteration.
         results: list[Any] = [None] * mc_iters  # type: ignore[var-annotated]
         for key, members in key_to_members.items():
             if key not in key_to_result:
@@ -563,7 +632,7 @@ class FailureManager:
                 continue
             value = key_to_result[key]
             for idx in members:
-                results[idx] = deepcopy(value)
+                results[idx] = _shallow_copy_result(value)
 
         # Reconstruct failure patterns per original iteration if requested
         failure_patterns: list[dict[str, Any]] = []

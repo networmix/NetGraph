@@ -7,21 +7,29 @@ excluded_links: Set[str], **kwargs) -> Any.
 All functions accept only simple, hashable parameters to ensure compatibility
 with FailureManager's caching and multiprocessing systems.
 
-This module provides only computation functions. Visualization and notebook
-analysis live in external packages.
+Graph caching enables efficient repeated analysis with different exclusion
+sets by building the graph once and using O(|excluded|) masks for exclusions.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Set
+from typing import TYPE_CHECKING, Any, Optional, Set
 
 import netgraph_core
 
+from ngraph.adapters.core import (
+    GraphCache,
+    build_edge_mask,
+    build_graph_cache,
+    build_node_mask,
+)
 from ngraph.exec.demand.expand import expand_demands
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.solver.maxflow import (
+    MaxFlowGraphCache,
+    build_maxflow_cache,
     max_flow,
     max_flow_with_details,
 )
@@ -45,9 +53,13 @@ def max_flow_analysis(
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     include_flow_details: bool = False,
     include_min_cut: bool = False,
+    _graph_cache: Optional[MaxFlowGraphCache] = None,
     **kwargs,
 ) -> FlowIterationResult:
     """Analyze maximum flow capacity between node groups.
+
+    When `_graph_cache` is provided, uses O(|excluded|) mask building instead
+    of O(V+E) graph reconstruction for efficient repeated analysis.
 
     Args:
         network: Network instance.
@@ -60,6 +72,7 @@ def max_flow_analysis(
         flow_placement: Flow placement strategy.
         include_flow_details: Whether to collect cost distribution and similar details.
         include_min_cut: Whether to include min-cut edge list in entry data.
+        _graph_cache: Pre-built cache for efficient repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
@@ -79,6 +92,7 @@ def max_flow_analysis(
             flow_placement=flow_placement,
             excluded_nodes=excluded_nodes,
             excluded_links=excluded_links,
+            _cache=_graph_cache,
         )
         for (src, dst), summary in flows.items():
             value = float(summary.total_flow)
@@ -115,6 +129,7 @@ def max_flow_analysis(
             flow_placement=flow_placement,
             excluded_nodes=excluded_nodes,
             excluded_links=excluded_links,
+            _cache=_graph_cache,
         )
         for (src, dst), val in flows.items():
             value = float(val)
@@ -150,20 +165,15 @@ def demand_placement_analysis(
     placement_rounds: int | str = "auto",
     include_flow_details: bool = False,
     include_used_edges: bool = False,
-    # Optional pre-built graph components for performance
-    _graph_handle: Any = None,
-    _multidigraph: Any = None,
-    _edge_mapper: Any = None,
-    _node_mapper: Any = None,
-    _algorithms: Any = None,
+    _graph_cache: Optional[GraphCache] = None,
     **kwargs,
 ) -> FlowIterationResult:
     """Analyze traffic demand placement success rates using Core directly.
 
     This function:
-    1. Builds Core infrastructure (graph, algorithms, flow_graph) OR uses pre-built components
+    1. Builds Core infrastructure (graph, algorithms, flow_graph) or uses cached
     2. Expands demands into concrete (src, dst, volume) tuples
-    3. Places each demand using Core's FlowPolicy
+    3. Places each demand using Core's FlowPolicy with exclusion masks
     4. Aggregates results into FlowIterationResult
 
     Args:
@@ -174,11 +184,7 @@ def demand_placement_analysis(
         placement_rounds: Number of placement optimization rounds (unused - Core handles internally).
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
-        _graph_handle: Optional pre-built graph handle (for performance in repeated calls).
-        _multidigraph: Optional pre-built multidigraph (for performance in repeated calls).
-        _edge_mapper: Optional pre-built edge mapper (for performance in repeated calls).
-        _node_mapper: Optional pre-built node mapper (for performance in repeated calls).
-        _algorithms: Optional pre-built algorithms instance (for performance in repeated calls).
+        _graph_cache: Pre-built graph cache for fast repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
@@ -204,35 +210,25 @@ def demand_placement_analysis(
         default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
     )
 
-    # Phase 2: Build or reuse graph infrastructure
-    if _graph_handle is None or _multidigraph is None:
-        # Build graph with augmentations (pseudo nodes, etc.)
-        from ngraph.adapters.core import build_graph
-
-        graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
-            network,
-            augmentations=expansion.augmentations,
-            excluded_nodes=set(),  # Don't filter during build - use masks instead
-            excluded_links=set(),
-        )
-        backend = netgraph_core.Backend.cpu()
-        algorithms = netgraph_core.Algorithms(backend)
+    # Phase 2: Use cached graph infrastructure or build fresh
+    if _graph_cache is not None:
+        cache = _graph_cache
     else:
-        # Reuse pre-built components
-        graph_handle = _graph_handle
-        multidigraph = _multidigraph
-        edge_mapper = _edge_mapper
-        node_mapper = _node_mapper
-        algorithms = _algorithms
+        # Build fresh cache (slower path for direct calls without pre-built cache)
+        cache = build_graph_cache(network, augmentations=expansion.augmentations)
 
-    # Build masks for exclusions (if any)
-    from ngraph.adapters.core import build_edge_mask, build_node_mask
+    graph_handle = cache.graph_handle
+    multidigraph = cache.multidigraph
+    edge_mapper = cache.edge_mapper
+    node_mapper = cache.node_mapper
+    algorithms = cache.algorithms
 
+    # Build masks for exclusions (consistent behavior for both paths)
     node_mask = None
     edge_mask = None
     if excluded_nodes or excluded_links:
-        node_mask = build_node_mask(network, node_mapper, excluded_nodes)
-        edge_mask = build_edge_mask(network, multidigraph, edge_mapper, excluded_links)
+        node_mask = build_node_mask(cache, excluded_nodes)
+        edge_mask = build_edge_mask(cache, excluded_links)
 
     flow_graph = netgraph_core.FlowGraph(multidigraph)
 
@@ -242,7 +238,7 @@ def demand_placement_analysis(
     total_placed = 0.0
 
     for demand in expansion.demands:
-        # Resolve node names to IDs (now includes pseudo nodes from augmentations)
+        # Resolve node names to IDs (includes pseudo nodes from augmentations)
         src_id = node_mapper.to_id(demand.src_name)
         dst_id = node_mapper.to_id(demand.dst_name)
 
@@ -328,7 +324,7 @@ def demand_placement_analysis(
     return FlowIterationResult(
         flows=flow_entries,
         summary=summary,
-        data={},  # No iteration metrics for now
+        data={},
     )
 
 
@@ -341,12 +337,16 @@ def sensitivity_analysis(
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
+    _graph_cache: Optional[MaxFlowGraphCache] = None,
     **kwargs,
 ) -> dict[str, dict[str, float]]:
     """Analyze component sensitivity to failures.
 
     Identifies critical edges (saturated edges) and computes the flow reduction
     caused by removing each one.
+
+    When `_graph_cache` is provided, uses O(|excluded|) mask building instead
+    of O(V+E) graph reconstruction for efficient repeated analysis.
 
     Args:
         network: Network instance.
@@ -355,8 +355,11 @@ def sensitivity_analysis(
         source_regex: Regex pattern for source node groups.
         sink_regex: Regex pattern for sink node groups.
         mode: Flow analysis mode ("combine" or "pairwise").
-        shortest_path: Whether to use shortest paths only (ignored by sensitivity).
+        shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
+            Reports only edges used under ECMP routing. If False (default), use
+            full iterative max-flow (SDN/TE mode) and report all saturated edges.
         flow_placement: Flow placement strategy.
+        _graph_cache: Pre-built cache for efficient repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
@@ -368,9 +371,11 @@ def sensitivity_analysis(
         source_regex,
         sink_regex,
         mode=mode,
+        shortest_path=shortest_path,
         flow_placement=flow_placement,
         excluded_nodes=excluded_nodes,
         excluded_links=excluded_links,
+        _cache=_graph_cache,
     )
 
     # Remap keys from tuple (src, dst) to string "src->dst"
@@ -380,3 +385,66 @@ def sensitivity_analysis(
         out[key] = components
 
     return out
+
+
+def build_demand_graph_cache(
+    network: "Network",
+    demands_config: list[dict[str, Any]],
+) -> GraphCache:
+    """Build a graph cache for repeated demand placement analysis.
+
+    Pre-computes the graph with augmentations (pseudo source/sink nodes) for
+    efficient repeated analysis with different exclusion sets.
+
+    Args:
+        network: Network instance.
+        demands_config: List of demand configurations (same format as demand_placement_analysis).
+
+    Returns:
+        GraphCache ready for use with demand_placement_analysis.
+    """
+    # Reconstruct TrafficDemand objects
+    traffic_demands = []
+    for config in demands_config:
+        demand = TrafficDemand(
+            source_path=config["source_path"],
+            sink_path=config["sink_path"],
+            demand=config["demand"],
+            mode=config.get("mode", "pairwise"),
+            flow_policy_config=config.get("flow_policy_config"),
+            priority=config.get("priority", 0),
+        )
+        traffic_demands.append(demand)
+
+    # Expand demands to get augmentations
+    expansion = expand_demands(
+        network,
+        traffic_demands,
+        default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
+    )
+
+    # Build cache with augmentations
+    return build_graph_cache(network, augmentations=expansion.augmentations)
+
+
+def build_maxflow_graph_cache(
+    network: "Network",
+    source_regex: str,
+    sink_regex: str,
+    mode: str = "combine",
+) -> MaxFlowGraphCache:
+    """Build a graph cache for repeated max-flow analysis.
+
+    Pre-computes the graph with pseudo source/sink nodes for all source/sink
+    pairs, enabling O(|excluded|) mask building per iteration.
+
+    Args:
+        network: Network instance.
+        source_regex: Regex pattern for source node groups.
+        sink_regex: Regex pattern for sink node groups.
+        mode: Flow analysis mode ("combine" or "pairwise").
+
+    Returns:
+        MaxFlowGraphCache ready for use with max_flow_analysis or sensitivity_analysis.
+    """
+    return build_maxflow_cache(network, source_regex, sink_regex, mode=mode)

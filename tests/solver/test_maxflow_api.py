@@ -12,7 +12,7 @@ from typing import Dict, Tuple
 import pytest
 
 from ngraph.model.network import Link, Network, Node
-from ngraph.solver.maxflow import max_flow, max_flow_with_details
+from ngraph.solver.maxflow import max_flow, max_flow_with_details, sensitivity_analysis
 
 
 def _simple_network() -> Network:
@@ -156,3 +156,56 @@ def test_network_dc_to_dc_reverse_edge_first_hop() -> None:
     res = max_flow(net, r"^A/dc$", r"^B/dc$", mode="combine")
     assert (r"^A/dc$", r"^B/dc$") in res
     assert res[(r"^A/dc$", r"^B/dc$")] == 10.0
+
+
+def _two_cost_tier_network() -> Network:
+    """Build a network with two cost tiers for shortest_path testing.
+
+    Topology: S -> A -> T (cap 10, cost 1+1=2)
+              S -> B -> T (cap 5, cost 2+2=4)
+
+    With shortest_path=False: uses both paths, total flow = 15
+    With shortest_path=True: uses only S->A->T path, total flow = 10
+    """
+    net = Network()
+    for name in ["S", "A", "B", "T"]:
+        net.add_node(Node(name))
+
+    net.add_link(Link("S", "A", capacity=10.0, cost=1.0))
+    net.add_link(Link("A", "T", capacity=10.0, cost=1.0))
+    net.add_link(Link("S", "B", capacity=5.0, cost=2.0))
+    net.add_link(Link("B", "T", capacity=5.0, cost=2.0))
+    return net
+
+
+def test_sensitivity_shortest_path_vs_full_max_flow() -> None:
+    """Test that shortest_path parameter is forwarded to sensitivity analysis.
+
+    This verifies the fix for an issue where shortest_path was accepted but
+    never forwarded to the C++ backend.
+
+    With full max-flow, all 4 edges are critical.
+    With shortest_path=True, only S->A->T path edges are critical because
+    the S->B->T path is unused under ECMP routing.
+    """
+    net = _two_cost_tier_network()
+
+    # Full max-flow mode: all 4 edges should be critical
+    res_full = sensitivity_analysis(
+        net, "^S$", "^T$", mode="combine", shortest_path=False
+    )
+    assert ("^S$", "^T$") in res_full
+    assert len(res_full[("^S$", "^T$")]) == 4, "Full max-flow should report all 4 edges"
+
+    # Shortest-path mode: only 2 edges (S->A, A->T) should be critical
+    res_sp = sensitivity_analysis(net, "^S$", "^T$", mode="combine", shortest_path=True)
+    assert ("^S$", "^T$") in res_sp
+    assert len(res_sp[("^S$", "^T$")]) == 2, (
+        "Shortest-path mode should only report 2 edges"
+    )
+
+    # Verify the delta values (removing S->A or A->T forces traffic to S->B->T)
+    for link_id, delta in res_sp[("^S$", "^T$")].items():
+        assert pytest.approx(delta, rel=0, abs=1e-9) == 5.0, (
+            f"Edge {link_id} should have delta 5.0 (baseline 10 -> 5 via alternate path)"
+        )

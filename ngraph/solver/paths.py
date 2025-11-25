@@ -8,6 +8,10 @@ Functions return minimal costs or concrete ``Path`` objects built from SPF
 predecessor maps. Parallel equal-cost edges can be expanded into distinct
 paths.
 
+Graph caching is used internally for efficient mask-based exclusions. For
+repeated queries with different exclusions, consider using the lower-level
+adapters/core.py functions with explicit cache management.
+
 All functions fail fast on invalid selection inputs and do not mutate the
 input context.
 
@@ -22,7 +26,11 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import netgraph_core
 
-from ngraph.adapters.core import build_edge_mask, build_graph, build_node_mask
+from ngraph.adapters.core import (
+    build_edge_mask,
+    build_graph_cache,
+    build_node_mask,
+)
 from ngraph.model.network import Network
 from ngraph.model.path import Path
 from ngraph.types.base import EdgeSelect
@@ -67,14 +75,10 @@ def shortest_path_costs(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    # Build Core graph and masks
-    graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(network)
-    node_mask = build_node_mask(network, node_mapper, excluded_nodes)
-    edge_mask = build_edge_mask(network, multidigraph, edge_mapper, excluded_links)
-
-    # Create Core backend and algorithms
-    backend = netgraph_core.Backend.cpu()
-    algs = netgraph_core.Algorithms(backend)
+    # Build graph cache and masks
+    cache = build_graph_cache(network)
+    node_mask = build_node_mask(cache, excluded_nodes)
+    edge_mask = build_edge_mask(cache, excluded_links)
 
     # Map edge_select to Core's EdgeSelection
     core_edge_select = _map_edge_select(edge_select)
@@ -107,16 +111,16 @@ def shortest_path_costs(
         # Run SPF from each source, find min cost to any sink
         best_cost = float("inf")
         for src_name in combined_src_names:
-            src_id = node_mapper.to_id(src_name)
-            dists, pred_dag = algs.spf(
-                graph_handle,
+            src_id = cache.node_mapper.to_id(src_name)
+            dists, pred_dag = cache.algorithms.spf(
+                cache.graph_handle,
                 src=src_id,
                 selection=core_edge_select,
                 node_mask=node_mask,
                 edge_mask=edge_mask,
             )
             for snk_name in combined_snk_names:
-                snk_id = node_mapper.to_id(snk_name)
+                snk_id = cache.node_mapper.to_id(snk_name)
                 cost = dists[snk_id]
                 if cost < best_cost:
                     best_cost = cost
@@ -137,16 +141,16 @@ def shortest_path_costs(
 
                 best_cost = float("inf")
                 for src_name in active_src_names:
-                    src_id = node_mapper.to_id(src_name)
-                    dists, pred_dag = algs.spf(
-                        graph_handle,
+                    src_id = cache.node_mapper.to_id(src_name)
+                    dists, pred_dag = cache.algorithms.spf(
+                        cache.graph_handle,
                         src=src_id,
                         selection=core_edge_select,
                         node_mask=node_mask,
                         edge_mask=edge_mask,
                     )
                     for snk_name in active_snk_names:
-                        snk_id = node_mapper.to_id(snk_name)
+                        snk_id = cache.node_mapper.to_id(snk_name)
                         cost = dists[snk_id]
                         if cost < best_cost:
                             best_cost = cost
@@ -196,14 +200,10 @@ def shortest_paths(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    # Build Core graph and masks
-    graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(network)
-    node_mask = build_node_mask(network, node_mapper, excluded_nodes)
-    edge_mask = build_edge_mask(network, multidigraph, edge_mapper, excluded_links)
-
-    # Create Core backend and algorithms
-    backend = netgraph_core.Backend.cpu()
-    algs = netgraph_core.Algorithms(backend)
+    # Build graph cache and masks
+    cache = build_graph_cache(network)
+    node_mask = build_node_mask(cache, excluded_nodes)
+    edge_mask = build_edge_mask(cache, excluded_links)
 
     # Map edge_select to Core's EdgeSelection
     core_edge_select = _map_edge_select(edge_select)
@@ -230,16 +230,16 @@ def shortest_paths(
         best_paths: List[Path] = []
 
         for src_name in src_names:
-            src_id = node_mapper.to_id(src_name)
-            dists, pred_dag = algs.spf(
-                graph_handle,
+            src_id = cache.node_mapper.to_id(src_name)
+            dists, pred_dag = cache.algorithms.spf(
+                cache.graph_handle,
                 src=src_id,
                 selection=core_edge_select,
                 node_mask=node_mask,
                 edge_mask=edge_mask,
             )
             for snk_name in snk_names:
-                snk_id = node_mapper.to_id(snk_name)
+                snk_id = cache.node_mapper.to_id(snk_name)
                 cost = dists[snk_id]
                 if cost == float("inf"):
                     continue
@@ -250,9 +250,9 @@ def shortest_paths(
                         src_name,
                         snk_name,
                         cost,
-                        node_mapper,
-                        edge_mapper,
-                        multidigraph,
+                        cache.node_mapper,
+                        cache.edge_mapper,
+                        cache.multidigraph,
                         split_parallel_edges,
                     )
                 elif cost == best_cost:
@@ -262,9 +262,9 @@ def shortest_paths(
                             src_name,
                             snk_name,
                             cost,
-                            node_mapper,
-                            edge_mapper,
-                            multidigraph,
+                            cache.node_mapper,
+                            cache.edge_mapper,
+                            cache.multidigraph,
                             split_parallel_edges,
                         )
                     )
@@ -346,14 +346,10 @@ def k_shortest_paths(
     if not snk_groups:
         raise ValueError(f"No sink nodes found matching '{sink_path}'.")
 
-    # Build Core graph and masks
-    graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(network)
-    node_mask = build_node_mask(network, node_mapper, excluded_nodes)
-    edge_mask = build_edge_mask(network, multidigraph, edge_mapper, excluded_links)
-
-    # Create Core backend and algorithms
-    backend = netgraph_core.Backend.cpu()
-    algs = netgraph_core.Algorithms(backend)
+    # Build graph cache and masks
+    cache = build_graph_cache(network)
+    node_mask = build_node_mask(cache, excluded_nodes)
+    edge_mask = build_edge_mask(cache, excluded_links)
 
     # Map edge_select to Core's EdgeSelection
     core_edge_select = _map_edge_select(edge_select)
@@ -378,16 +374,16 @@ def k_shortest_paths(
         best_pair: Optional[Tuple[str, str]] = None
         best_cost = float("inf")
         for src_name in src_names:
-            src_id = node_mapper.to_id(src_name)
-            dists, pred_dag = algs.spf(
-                graph_handle,
+            src_id = cache.node_mapper.to_id(src_name)
+            dists, pred_dag = cache.algorithms.spf(
+                cache.graph_handle,
                 src=src_id,
                 selection=core_edge_select,
                 node_mask=node_mask,
                 edge_mask=edge_mask,
             )
             for snk_name in snk_names:
-                snk_id = node_mapper.to_id(snk_name)
+                snk_id = cache.node_mapper.to_id(snk_name)
                 cost = dists[snk_id]
                 if cost < best_cost:
                     best_cost = cost
@@ -398,14 +394,14 @@ def k_shortest_paths(
 
         # Run KSP on the best pair
         src_name, snk_name = best_pair
-        src_id = node_mapper.to_id(src_name)
-        snk_id = node_mapper.to_id(snk_name)
+        src_id = cache.node_mapper.to_id(src_name)
+        snk_id = cache.node_mapper.to_id(snk_name)
 
         results: List[Path] = []
         count = 0
 
-        for dists, pred_dag in algs.ksp(
-            graph_handle,
+        for dists, pred_dag in cache.algorithms.ksp(
+            cache.graph_handle,
             src=src_id,
             dst=snk_id,
             k=max_k,
@@ -416,16 +412,16 @@ def k_shortest_paths(
             edge_mask=edge_mask,
         ):
             cost = dists[snk_id]
-            if cost == float("inf"):
+            if cost == float("inf") or cost > max_path_cost:
                 continue
             for path in _extract_paths_from_pred_dag(
                 pred_dag,
                 src_name,
                 snk_name,
                 cost,
-                node_mapper,
-                edge_mapper,
-                multidigraph,
+                cache.node_mapper,
+                cache.edge_mapper,
+                cache.multidigraph,
                 split_parallel_edges,
             ):
                 results.append(path)

@@ -128,10 +128,10 @@ network:
 # Define traffic matrix
 traffic_matrix_set:
   global_traffic:
-    - source_path: ^site1/leaf/leaf1$
-      sink_path: ^site2/leaf/leaf1$
-      demand: 10.0
-      mode: pairwise
+    - source_path: ^site1/leaf/
+      sink_path: ^site2/leaf/
+      demand: 100.0
+      mode: combine
       flow_policy_config: SHORTEST_PATHS_ECMP
 
 # Define analysis workflow

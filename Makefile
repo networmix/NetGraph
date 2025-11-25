@@ -1,7 +1,7 @@
 # NetGraph Development Makefile
 # This Makefile provides convenient shortcuts for common development tasks
 
-.PHONY: help venv clean-venv dev install check check-ci lint format test qt clean docs docs-serve docs-diagrams build check-dist publish-test publish validate perf info check-python
+.PHONY: help venv clean-venv dev install check check-ci lint format test qt clean docs docs-serve docs-diagrams build check-dist publish-test publish validate perf info check-python hooks
 
 # Default target - show help
 .DEFAULT_GOAL := help
@@ -51,14 +51,23 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make info          - Show project information"
+	@echo "  make hooks         - Run pre-commit on all files"
 	@echo "  make check-python  - Check if venv Python matches system Python"
 
 # Setup and Installation
 dev:
 	@echo "🚀 Setting up development environment..."
 	@if [ ! -x "$(VENV_BIN)/python" ]; then \
+		if [ -z "$(PY_FIND)" ]; then \
+			echo "❌ Error: No Python interpreter found (python3 or python)"; \
+			exit 1; \
+		fi; \
 		echo "🐍 Creating virtual environment with $(PY_FIND) ..."; \
-		$(PY_FIND) -m venv venv; \
+		$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }; \
+		if [ ! -x "$(VENV_BIN)/python" ]; then \
+			echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
+			exit 1; \
+		fi; \
 		$(VENV_BIN)/python -m pip install -U pip wheel; \
 	fi
 	@echo "📦 Installing dev dependencies..."
@@ -70,7 +79,15 @@ dev:
 
 venv:
 	@echo "🐍 Creating virtual environment in ./venv ..."
-	@$(PY_FIND) -m venv venv
+	@if [ -z "$(PY_FIND)" ]; then \
+		echo "❌ Error: No Python interpreter found (python3 or python)"; \
+		exit 1; \
+	fi
+	@$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }
+	@if [ ! -x "$(VENV_BIN)/python" ]; then \
+		echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
+		exit 1; \
+	fi
 	@$(VENV_BIN)/python -m pip install -U pip wheel
 	@echo "✅ venv ready. Activate with: source venv/bin/activate"
 
@@ -235,6 +252,10 @@ info:
 			echo "    ... and $$(( $$(git status --porcelain | wc -l | tr -d ' ') - 5 )) more"; \
 		fi; \
 	fi
+
+hooks:
+	@echo "🔗 Running pre-commit on all files..."
+	@$(PRECOMMIT) run --all-files || (echo "Some pre-commit hooks failed. Fix and re-run." && exit 1)
 
 check-python:
 	@if [ -x "$(VENV_BIN)/python" ]; then \

@@ -24,7 +24,6 @@ make docs-serve    # Serve docs locally
 pyproject.toml              # Package config, dependencies, tool settings
 Makefile                    # Development commands
 .pre-commit-config.yaml     # Code quality hooks
-dev/setup-dev.sh           # Development environment setup script
 dev/run-checks.sh           # Manual code quality checks
 ```
 

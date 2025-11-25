@@ -11,13 +11,34 @@ sanitized. These dicts are written under `data.flow_results` by steps.
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field
-from decimal import ROUND_HALF_EVEN, Decimal
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ngraph.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _fmt_float_key(x: float, places: int = 9) -> str:
+    """Format a float as a canonical string key for JSON serialization.
+
+    Uses fixed-point notation (never exponential) with trailing zeros stripped.
+    This ensures stable, human-readable keys for cost distributions.
+
+    Args:
+        x: Float value to format.
+        places: Decimal places for precision (default 9).
+
+    Returns:
+        Canonical string representation of the float in fixed-point notation.
+    """
+    rounded = round(float(x), places)
+    # Use 'f' format for fixed-point (never exponential), then strip trailing zeros
+    formatted = f"{rounded:.{places}f}"
+    # Strip trailing zeros after decimal point, then trailing decimal point if any
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted
 
 
 @dataclass(slots=True)
@@ -137,20 +158,13 @@ class FlowEntry:
                 raise ValueError("FlowEntry.cost_distribution contains invalid entries")
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return a JSON-serializable dictionary representation."""
+        """Return a JSON-serializable dictionary representation.
 
+        Builds dict directly from known fields instead of using asdict() to avoid
+        the overhead of recursive _asdict_inner calls (significant for large result sets).
+        """
         # Canonicalize cost_distribution keys as strings to avoid float artifacts
         # and ensure stable JSON. Use decimal quantization for determinism.
-        def _fmt_float_key(x: float, places: int = 9) -> str:
-            q = Decimal(10) ** -places
-            try:
-                d = Decimal(str(float(x))).quantize(q, rounding=ROUND_HALF_EVEN)
-                # Normalize to remove trailing zeros and exponent when possible
-                d = d.normalize()
-                return format(d, "f") if d == d.to_integral() else format(d, "f")
-            except Exception:  # pragma: no cover - defensive
-                return str(x)
-
         normalized_costs: Dict[str, float] = {}
         for k, v in self.cost_distribution.items():
             try:
@@ -158,11 +172,18 @@ class FlowEntry:
                 normalized_costs[key_str] = float(v)
             except Exception:  # pragma: no cover - defensive
                 normalized_costs[str(k)] = float(v)
-        d = asdict(self)
-        d["cost_distribution"] = normalized_costs
-        # Ensure per-flow data payload is JSON-safe to avoid late failures
-        d["data"] = _ensure_json_safe(self.data)
-        return d
+
+        # Build dict directly from known fields (avoids asdict() overhead)
+        return {
+            "source": self.source,
+            "destination": self.destination,
+            "priority": self.priority,
+            "demand": self.demand,
+            "placed": self.placed,
+            "dropped": self.dropped,
+            "cost_distribution": normalized_costs,
+            "data": _ensure_json_safe(self.data),
+        }
 
 
 @dataclass(slots=True)
@@ -233,8 +254,17 @@ class FlowSummary:
             raise ValueError("FlowSummary.overall_ratio inconsistent with totals")
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return a JSON-serializable dictionary representation."""
-        return asdict(self)
+        """Return a JSON-serializable dictionary representation.
+
+        Builds dict directly from known fields instead of using asdict().
+        """
+        return {
+            "total_demand": self.total_demand,
+            "total_placed": self.total_placed,
+            "overall_ratio": self.overall_ratio,
+            "dropped_flows": self.dropped_flows,
+            "num_flows": self.num_flows,
+        }
 
 
 @dataclass(slots=True)

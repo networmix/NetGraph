@@ -164,20 +164,39 @@ results = max_flow(
 
 This approach avoids mutating the base graph when simulating failures (e.g., deleting nodes or toggling flags). It separates the static scenario (base network) from dynamic conditions (exclusions), enabling thread-safe parallel analyses and eliminating deep copies for each failure scenario.
 
+**Implementation:** For repeated analysis (Monte Carlo, FailureManager), exclusions are applied via boolean masks passed to Core algorithms. The graph is built once without exclusions, and masks disable specific elements at algorithm execution time. This enables O(|excluded|) mask updates rather than O(V+E) graph rebuilding. For one-off solver calls, exclusions may be applied during graph construction for simplicity.
+
 Multiple concurrent analyses can run on the same base network with different exclusion sets. This is important for performing parallel simulations (e.g., analyzing many failure combinations in a Monte Carlo) efficiently.
 
 ### Graph Construction
 
 NetGraph builds graphs through an adapter layer that translates from the Python domain model to NetGraph-Core's C++ representation.
 
-**Python Side (`ngraph.adapters.core.build_graph`):**
+**Python Side (`ngraph.adapters.core`):**
+
+Two construction patterns are provided:
+
+- `build_graph()`: Constructs a Core graph with optional exclusions applied during build. Used for one-off solver calls where caching overhead isn't justified.
+- `build_graph_cache()`: Returns a `GraphCache` with pre-built components and mappings for efficient repeated analysis. Graph is built without exclusions; per-iteration exclusions are applied via masks at algorithm call time.
+
+**Graph Construction Steps:**
 
 - Collects nodes from Network (real + optional pseudo nodes for augmentation)
 - Assigns stable node IDs (sorted by name for determinism)
 - Encodes link_id + direction as ext_edge_id (packed int64)
 - Constructs NumPy arrays (src, dst, capacity, cost, ext_edge_ids)
-- Handles exclusions and disabled elements at build time
 - Supports augmentation edges (e.g., pseudo-source/sink for multi-source max-flow)
+
+**GraphCache for Repeated Analysis:**
+
+The `GraphCache` dataclass holds pre-built graph components:
+
+- `graph_handle`, `multidigraph`: Core graph structures
+- `node_mapper`, `edge_mapper`: Name ↔ ID translation
+- `algorithms`: Core Algorithms instance
+- `link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
+
+When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
 
 **C++ Side (`netgraph_core.StrictMultiDiGraph`):**
 
@@ -504,6 +523,55 @@ max_flow(network, src, dst,
 
 These configurations enable realistic modeling of diverse forwarding behaviors: from traditional IP networks with best-effort delivery to modern SDN deployments with capacity-aware traffic engineering.
 
+### Flow Policy Presets
+
+For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that bundle the routing semantics described above into convenient configurations. These presets map to real-world network behaviors:
+
+| Preset | Behavior | Use Case |
+|--------|----------|----------|
+| `SHORTEST_PATHS_ECMP` | IP/IGP with hash-based ECMP | Traditional routers (OSPF/IS-IS), equal splits across equal-cost paths |
+| `SHORTEST_PATHS_WCMP` | IP/IGP with weighted ECMP | Routers with WCMP support, proportional splits based on link capacity |
+| `TE_WCMP_UNLIM` | MPLS-TE / SDN with WCMP | Capacity-aware TE with unlimited tunnels, iterative placement |
+| `TE_ECMP_16_LSP` | MPLS-TE with 16 LSPs | Fixed 16 ECMP tunnels per demand, models RSVP-TE with LSP limits |
+| `TE_ECMP_UP_TO_256_LSP` | MPLS-TE with up to 256 LSPs | Scalable TE with tunnel limit, models SR-TE or large-scale RSVP |
+
+**Detailed Configuration Mapping:**
+
+| Preset | `require_capacity` | `max_flows` | `multi_edge` | `flow_placement` |
+|--------|--------------------|--------------|--------------|--------------------|
+| `SHORTEST_PATHS_ECMP` | `false` | 1 | `true` | `EQUAL_BALANCED` |
+| `SHORTEST_PATHS_WCMP` | `false` | 1 | `true` | `PROPORTIONAL` |
+| `TE_WCMP_UNLIM` | `true` | unlimited | `true` | `PROPORTIONAL` |
+| `TE_ECMP_16_LSP` | `true` | 16 | `false` | `EQUAL_BALANCED` |
+| `TE_ECMP_UP_TO_256_LSP` | `true` | 256 | `false` | `EQUAL_BALANCED` |
+
+**Key parameters:**
+
+- `require_capacity`: When `false`, paths are selected based on link costs alone (models IP/IGP routing). When `true`, paths adapt to residual capacity during placement (models SDN/TE). See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) for details.
+- `max_flows`: With `1`, demand is placed in a single pass over fixed paths, equivalent to `shortest_path=true` in the max-flow solver. With `> 1`, paths are recomputed as capacity is consumed (iterative placement), equivalent to `shortest_path=false`.
+- `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics)
+- `flow_placement`: `EQUAL_BALANCED` splits equally across paths; `PROPORTIONAL` splits by residual capacity
+
+**Example: Modeling IP vs MPLS Networks**
+
+```yaml
+# IP network with traditional ECMP (e.g., data center leaf-spine)
+traffic_matrix_set:
+  dc_traffic:
+    - source_path: ^rack1/
+      sink_path: ^rack2/
+      demand: 1000.0
+      flow_policy_config: SHORTEST_PATHS_ECMP
+
+# MPLS-TE network with capacity-aware tunnel placement
+traffic_matrix_set:
+  backbone_traffic:
+    - source_path: ^metro1/
+      sink_path: ^metro2/
+      demand: 5000.0
+      flow_policy_config: TE_WCMP_UNLIM
+```
+
 ### Pseudocode (simplified max-flow loop)
 
 ```text
@@ -567,8 +635,8 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 
 - Deterministic expansion: source/sink node lists sorted alphabetically; no randomization
 - Supports `combine` mode (aggregate via pseudo nodes) and `pairwise` mode (individual (src,dst) pairs with volume split)
-- Demands sorted by ascending priority before placement
-- Priority-aware round-robin scheduler with configurable rounds (`"auto"` performs up to 3 passes)
+- Demands sorted by ascending priority before placement (lower value = higher priority)
+- Placement handled by Core's FlowPolicy with configurable presets (ECMP, WCMP, TE modes)
 - Non-mutating: operates on Core flow graphs with exclusions; Network remains unmodified
 
 **Failure Manager** (`ngraph.exec.failure.manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
@@ -578,6 +646,7 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Optional baseline execution (no failures) for comparing degraded vs. intact capacity
 - Automatic parallelism adjustment: Forces serial execution when analysis function defined in `__main__` (notebook context) to avoid pickling failures
 - Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
+- Automatic graph cache pre-building: Before parallel iterations, builds `GraphCache` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
 
 Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
 
@@ -639,9 +708,16 @@ NetGraph's design includes several features that differentiate it from tradition
 - Deterministic edge ordering for reproducible results
 - Cache-friendly CSR representation for efficient neighbor traversal
 
-**Graph Construction:**
+**Graph Caching:**
 
-Efficient construction of Core graphs from Python Network objects ensures low overhead even when re-building for different failure scenarios.
+For Monte Carlo analysis with many failure iterations, graph construction is amortized via `GraphCache`:
+
+- Graph built once before iterations begin (includes all nodes and augmentation edges)
+- Per-iteration exclusions applied via boolean masks rather than graph rebuilding
+- Mask building is O(|excluded|) using pre-computed `link_id_to_edge_indices` mapping
+- FailureManager automatically pre-builds caches before parallel execution
+
+This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Caching eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
 
 **Monte Carlo Deduplication:**
 
