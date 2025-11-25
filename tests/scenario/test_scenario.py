@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from ngraph.failure.policy import FailurePolicy
+from ngraph.model.failure.policy import FailurePolicy
 from ngraph.model.network import Network
 from ngraph.results import Results
 from ngraph.scenario import Scenario
@@ -348,10 +348,14 @@ def test_scenario_run(valid_scenario_yaml: str) -> None:
 
 def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> None:
     """
-    Tests that Scenario.from_yaml raises a ValueError if a workflow step
+    Tests that Scenario.from_yaml raises an error if a workflow step
     is missing the 'step_type' field.
+
+    Schema validation catches this and raises ValidationError.
     """
-    with pytest.raises(ValueError):
+    import jsonschema.exceptions
+
+    with pytest.raises(jsonschema.exceptions.ValidationError):
         Scenario.from_yaml(missing_step_type_yaml)
 
 

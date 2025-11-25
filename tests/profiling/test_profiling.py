@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ngraph.profiling import (
+from ngraph.profiling.profiler import (
     PerformanceProfiler,
     PerformanceReporter,
     ProfileResults,

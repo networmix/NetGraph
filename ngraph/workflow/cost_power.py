@@ -51,14 +51,14 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from ngraph.components import (
+from ngraph.explorer import NetworkExplorer
+from ngraph.logging import get_logger
+from ngraph.model.components import (
     ComponentsLibrary,
     resolve_link_end_components,
     resolve_node_hardware,
     totals_with_multiplier,
 )
-from ngraph.explorer import NetworkExplorer
-from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 logger = get_logger(__name__)
@@ -103,16 +103,12 @@ class CostPower(WorkflowStep):
 
         explorer = NetworkExplorer.explore_network(network, components_library=library)
 
-        # Helper: enabled checks honor both flags and attrs for consistency
+        # Helper: enabled checks
         def node_enabled(nd: Any) -> bool:
-            return not (
-                bool(getattr(nd, "disabled", False)) or bool(nd.attrs.get("disabled"))
-            )
+            return not bool(nd.disabled)
 
         def link_enabled(lk: Any) -> bool:
-            return not (
-                bool(getattr(lk, "disabled", False)) or bool(lk.attrs.get("disabled"))
-            )
+            return not bool(lk.disabled)
 
         # Precompute endpoint eligibility for optics (node must have platform HW)
         node_has_hw: Dict[str, bool] = {}

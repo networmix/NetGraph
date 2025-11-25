@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from itertools import product, zip_longest
 from typing import Any, Dict, List, Set
 
-from ngraph.dsl.blueprints import parse as _bp_parse
-from ngraph.failure.conditions import FailureCondition as _Cond
-from ngraph.failure.conditions import evaluate_conditions as _eval_conditions
+from ngraph.dsl.blueprints import parser as _bp_parse
+from ngraph.model.failure.conditions import FailureCondition as _Cond
+from ngraph.model.failure.conditions import evaluate_conditions as _eval_conditions
 from ngraph.model.network import Link, Network, Node
 
 

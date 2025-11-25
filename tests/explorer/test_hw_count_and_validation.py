@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from ngraph.components import Component, ComponentsLibrary
 from ngraph.explorer import NetworkExplorer
+from ngraph.model.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 
 

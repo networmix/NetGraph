@@ -4,29 +4,42 @@ This document describes NetGraph's internal design: scenario DSL, data models, e
 
 ## Overview
 
-NetGraph is a network scenario analysis engine. It takes a scenario (defined in a YAML DSL) as input, builds a directed multigraph model of the network, and runs a configurable workflow of analysis steps (like traffic placement or max-flow capacity) to produce structured results. Key components include:
+NetGraph is a network scenario analysis engine using a **hybrid Python+C++ architecture**. It takes a scenario (defined in a YAML DSL) as input, builds a directed multigraph model of the network, and runs a configurable workflow of analysis steps (like traffic placement or max-flow capacity) to produce structured results.
 
-- CLI and API: Entry points to load scenarios and invoke analyses.
+### Architecture Layers
 
-- Scenario DSL Parser: Validates and expands the YAML scenario into an internal model.
+**Python Layer (NetGraph):**
 
-- Domain Model: In-memory representation of nodes, links, risk groups, etc., with selection and grouping utilities.
+- CLI and API: Entry points to load scenarios and invoke analyses
+- Scenario DSL Parser: Validates and expands the YAML scenario into an internal model
+- Domain Model: In-memory representation of nodes, links, risk groups, etc., with selection and grouping utilities
+- Managers: Orchestrators for higher-level behaviors (demand expansion, failure enumeration)
+- Workflow Engine: Composes steps into end-to-end analyses, storing outputs in a results store
+- Results Store: Collects outputs and metadata from each step, enabling structured JSON export
+- Adapter Layer: Translates between Python domain objects and C++ graph representations
 
-- NetworkView: A read-only overlay on the model to simulate failures or what-if scenarios without altering the base network.
+**C++ Layer (NetGraph-Core):**
 
-- Graph construction: Builds a `StrictMultiDiGraph` (a `networkx.MultiDiGraph` subclass) from the `Network` or `NetworkView` for consumption by SPF/KSP/MaxFlow (compact or full, optional reverse edges).
+- StrictMultiDiGraph: Immutable directed multigraph with CSR adjacency representation
+- Shortest Paths (SPF): Dijkstra's algorithm with multipath support and configurable edge selection
+- K-Shortest Paths: Yen's algorithm for finding k-shortest simple paths
+- Max-Flow: Successive shortest paths with blocking flow augmentation and configurable flow placement policies
+- Backend Interface: Abstraction for algorithm execution (CPU backend provided)
 
-- Algorithms: Core graph algorithms: shortest paths (SPF and KSP, k-shortest paths) and max-flow, with configurable edge selection and flow splitting strategies.
+### Integration Points
 
-- Managers: Orchestrators for higher-level behaviors, e.g., expanding demands over time or enumerating failure cases.
+The Python layer uses an adapter (`ngraph.adapters.core`) to:
 
-- Workflow Engine: Composes steps (graph build, demand placement, max flow, etc.) into end-to-end analyses, storing outputs in a results store.
+1. Build Core graphs from Network instances with optional exclusions
+2. Map node names (str) ↔ NodeId (int32)
+3. Map link IDs (str) ↔ EdgeId/ext_edge_id (int64)
+4. Translate results (costs, flows, paths) back to scenario-level objects
 
-- Results Store: Collects outputs and metadata from each step, enabling structured JSON export for post-analysis.
+Core algorithms release the GIL during execution, enabling concurrent Python threads to execute analysis in parallel with minimal Python-level overhead.
 
 ### Execution Flow
 
-The diagram below shows simplified end-to-end execution flow from scenario input to results.
+The diagram below shows the architecture and end-to-end execution flow from scenario input through both Python and C++ layers to final results. The Python layer handles scenario loading, workflow orchestration, and result aggregation, while compute-intensive graph algorithms execute in C++ with the GIL released for parallel execution.
 
 ![NetGraph execution flow](../assets/diagrams/system_pipeline.dot.svg)
 
@@ -60,7 +73,7 @@ The loader validates and expands DSL definitions into concrete nodes and links. 
 
 ## Data Model
 
-Once the scenario is parsed and expanded, NetGraph represents the network with a set of core model classes. These define the authoritative in-memory representation of the scenario and enforce invariants (like unique names).
+Once the scenario is parsed and expanded, NetGraph represents the network with a set of core model classes. These define the in-memory representation of the scenario topology and enforce structural invariants (unique node names, valid link endpoints).
 
 ### Node
 
@@ -118,7 +131,7 @@ A Network is the container class that holds all nodes, links, and top-level risk
 
 - risk_groups: Dict[name, RiskGroup],
 
-The Network is the authoritative source of truth for the topology. It provides methods to add nodes and links, enforcing invariants. For example, adding a link checks that the source and target nodes exist in the network, and prevents duplicate node additions. The Network also never removes nodes or links; instead, disabled flags are used to mark elements inactive.
+Network is the container for scenario topology. It enforces invariants during construction: adding a link validates that source and target nodes exist; adding a node rejects duplicates by name. Components are never removed from the Network; the `disabled` flag marks them inactive. The Network also maintains a selection cache for `select_node_groups_by_path` to avoid repeated regex/attribute queries.
 
 ### Node and Link Selection
 
@@ -132,258 +145,523 @@ This selection mechanism allows workflow steps and API calls to refer to nodes f
 
 ### Disabled Elements
 
-Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but they will be ignored when building the analysis graph or when creating views (the disabled flag is always checked and such elements filtered out). This design preserves topology information (e.g., you know a link exists but is just turned off) and allows easily enabling it later if needed.
+Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but solver functions filter them out when selecting active nodes. This design preserves topology information (e.g., you know a link exists but is just turned off) and allows easily enabling it later if needed.
 
-### NetworkView
+### Filtered Analysis (Exclusions)
 
-To simulate failures or other what-if scenarios without modifying the base network, NetGraph uses the NetworkView class. A NetworkView is essentially a read-only filtered view of a Network.
-
-You create a NetworkView by specifying a base Network and sets of nodes and links to exclude. For example:
+To simulate failures or other what-if scenarios without modifying the base network, NetGraph uses analysis-time exclusions. Instead of creating a stateful view object, you pass sets of excluded nodes and links directly to analysis functions.
 
 ```python
-view = NetworkView.from_excluded_sets(base_network,
-                                     excluded_nodes={"Node5"},
-                                     excluded_links={"A|B|xyz123"})
+# Analyze with specific exclusions
+results = max_flow(
+    network,
+    source_path="A",
+    sink_path="B",
+    excluded_nodes={"Node5"},
+    excluded_links={"A|B|xyz123"}
+)
 ```
 
-This will behave like the original network except that Node5 and the link with id "A|B|xyz123" are considered "hidden".
+This approach avoids mutating the base graph when simulating failures (e.g., deleting nodes or toggling flags). It separates the static scenario (base network) from dynamic conditions (exclusions), enabling thread-safe parallel analyses and eliminating deep copies for each failure scenario.
 
-The view is read-only: it does not allow adding or removing nodes or links. It delegates attribute access to the base network but filters out anything in the excluded sets or disabled in the scenario. For example, view.nodes returns a dict of Node objects excluding any hidden node.
+**Implementation:** For repeated analysis (Monte Carlo, FailureManager), exclusions are applied via boolean masks passed to Core algorithms. The graph is built once without exclusions, and masks disable specific elements at algorithm execution time. This enables O(|excluded|) mask updates rather than O(V+E) graph rebuilding. For one-off solver calls, exclusions may be applied during graph construction for simplicity.
 
-Similarly, view.links provides only links not hidden. This means algorithms run on a view automatically ignore the failed components.
+Multiple concurrent analyses can run on the same base network with different exclusion sets. This is important for performing parallel simulations (e.g., analyzing many failure combinations in a Monte Carlo) efficiently.
 
-Multiple concurrent views can be created on the same base network. This is important for performing parallel simulations (e.g., analyzing many failure combinations in a Monte Carlo) without copying the entire network each time. Each view carries its own exclusion sets.
+### Graph Construction
 
-Importantly, a NetworkView can be converted into a graph just like a full Network. NetworkView.to_strict_multidigraph(add_reverse=True, compact=True) will build the directed graph of the visible portion of the network. Internally, the view uses the base network's graph-building function with the exclusion sets applied. The first time this is called for a given parameter combination, the result is cached inside the view. Subsequent calls with the same flags retrieve the cached graph instead of rebuilding. This caching avoids redundant work when running multiple algorithms on the same view (e.g., running many flow computations on the same failed topology) and is crucial for performance.
+NetGraph builds graphs through an adapter layer that translates from the Python domain model to NetGraph-Core's C++ representation.
 
-The NetworkView overlay avoids mutating the base graph when simulating failures (e.g., deleting nodes or toggling flags). It separates the static scenario (base network) from dynamic conditions (the view), enabling thread-safe parallel analyses and eliminating deep copies for each failure scenario. This improves performance and keeps semantics clear.
+**Python Side (`ngraph.adapters.core`):**
 
-### Graph Construction (StrictMultiDiGraph)
+Two construction patterns are provided:
 
-NetGraph uses a custom graph implementation, StrictMultiDiGraph, to represent the network topology for analysis algorithms. This class is a subclass of networkx.MultiDiGraph with stricter semantics and performance tweaks.
+- `build_graph()`: Constructs a Core graph with optional exclusions applied during build. Used for one-off solver calls where caching overhead isn't justified.
+- `build_graph_cache()`: Returns a `GraphCache` with pre-built components and mappings for efficient repeated analysis. Graph is built without exclusions; per-iteration exclusions are applied via masks at algorithm call time.
 
-- Explicit node management: The graph does not auto-create nodes. If you try to add an edge with a non-existent node, it raises an error instead of silently adding the node. This ensures that any edge references a valid node from the model (catching bugs where a node might be misspelled or not added).
+**Graph Construction Steps:**
 
-- No duplicate nodes; unique edge keys: Adding an existing node raises a ValueError. Parallel edges are allowed, but each edge key must be unique. If an explicit key is provided to `add_edge` and it's already in use, an error is raised; if no key is provided, the graph generates a new unique key.
+- Collects nodes from Network (real + optional pseudo nodes for augmentation)
+- Assigns stable node IDs (sorted by name for determinism)
+- Encodes link_id + direction as ext_edge_id (packed int64)
+- Constructs NumPy arrays (src, dst, capacity, cost, ext_edge_ids)
+- Supports augmentation edges (e.g., pseudo-source/sink for multi-source max-flow)
 
-- Stable edge identifiers: The edge keys (IDs) are monotonically increasing integers assigned in insertion order and never reused. This provides globally unique, stable keys, simplifying flow analysis and result mapping.
+**GraphCache for Repeated Analysis:**
 
-- Fast deep copy: Copying large graphs in Python can be expensive. StrictMultiDiGraph.copy() by default uses a pickle-based deep copy (serializing and deserializing the graph), which in many cases outperforms the iterative copy provided by NetworkX. This is especially beneficial when duplicating graphs for separate computations.
+The `GraphCache` dataclass holds pre-built graph components:
 
-- Compatibility with NetworkX: StrictMultiDiGraph is compatible with NetworkX's MultiDiGraph API. It can be used as a drop-in replacement for MultiDiGraph in NetworkX code. All NetworkX algorithms and utilities supporting MultiDiGraph can be used with StrictMultiDiGraph.
+- `graph_handle`, `multidigraph`: Core graph structures
+- `node_mapper`, `edge_mapper`: Name ↔ ID translation
+- `algorithms`: Core Algorithms instance
+- `disabled_node_ids`, `disabled_link_ids`: Pre-computed disabled topology
+- `link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
 
-The Network (or NetworkView) produces a StrictMultiDiGraph via to_strict_multidigraph(add_reverse=True, compact=...).
+When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks using `build_node_mask()` and `build_edge_mask()`. These mask builders automatically include disabled nodes/links from the cache, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
 
-If compact=True, the graph is built with minimal attributes: only each edge's capacity and cost are set, and edge keys are auto-assigned integers. Node attributes are omitted in this mode. The original link ID and any custom attributes are not carried to reduce overhead. If compact=False, the graph includes full fidelity: nodes carry their attrs, and each edge is added with the original link's id (link_id) and all its attrs from the model. In full mode, the edge key in the StrictMultiDiGraph is still a unique integer, but the original link id is stored as an attribute on the edge for traceability.
+**Disabled Topology Handling:**
 
-If add_reverse=True (the default), for every Link in the network, a reverse edge is also added. This effectively makes the analysis graph bidirectional even though the model stores directed links. In other words, the algorithms will consider traffic flowing in both directions on each physical link unless add_reverse is turned off. The reverse edge uses the same link attributes; however, it is a distinct edge object in the graph with its own unique key.
+The `get_disabled_exclusions()` helper collects disabled nodes/links from a Network and merges them with user-provided exclusions. This is used when calling `build_graph()` directly (non-cached path). For the cached path, disabled topology is pre-computed in `GraphCache` and automatically applied by the mask builders.
 
-The rationale for compact=True by default in analyses is performance: stripping down to just capacity and cost (which are floats) yields a lighter-weight graph, which improves algorithm speed by reducing Python overhead (fewer attributes to copy or inspect).
+**C++ Side (`netgraph_core.StrictMultiDiGraph`):**
+
+- Immutable directed multigraph using Compressed Sparse Row (CSR) adjacency
+- Nodes identified by NodeId (int32), edges by EdgeId (int32)
+- Each edge stores capacity (float64), cost (int64), and ext_edge_id (int64)
+- Edges sorted by (cost, src, dst) for deterministic algorithm behavior
+- Zero-copy NumPy views for array access (capacities, costs, ext_edge_ids)
+- Efficient neighbor iteration via CSR structure
+
+**Edge Direction Handling:**
+
+If `add_reverse=True` (default), the adapter creates bidirectional edges for each network link:
+
+- Forward edge: original link direction with ext_edge_id encoding (link_id, 'fwd')
+- Reverse edge: opposite direction with ext_edge_id encoding (link_id, 'rev')
+
+This allows algorithms to consider traffic flowing in both directions on physical links.
+The Core graph itself is always directed; bidirectionality is achieved by explicit reverse edges.
+
+**Augmentation Support:**
+
+For algorithms requiring virtual source/sink nodes (e.g., multi-source max-flow), the adapter
+adds augmentation edges with ext_edge_id = -1 (sentinel for non-network edges). These edges
+are not mapped back to scenario links in results.
 
 ### Analysis Algorithms
 
-NetGraph's core algorithms revolve around path-finding and flow computation on the graph. These algorithms are designed to handle the multi-graph nature (parallel edges), cost metrics, and varying selection policies. Performance is critical, so certain specialized code paths and heuristics are used.
+NetGraph's core algorithms execute in C++ via NetGraph-Core. Algorithms operate on the immutable StrictMultiDiGraph and support masking (runtime exclusions via boolean arrays) for efficient repeated analysis under different failure scenarios without graph reconstruction.
+
+All Core algorithms release the Python GIL during execution, enabling concurrent execution across multiple Python threads without GIL contention.
 
 ### Shortest-Path First (SPF) Algorithm
 
-NetGraph uses a Dijkstra-like algorithm with pluggable edge selection and optional multipath predecessor recording. Key features of `ngraph.algorithms.spf.spf` include:
+Implemented in C++ (`netgraph::core::shortest_paths`), using Dijkstra's algorithm
+with configurable edge selection and optional multipath predecessor recording.
 
-Edge Selection Policies: Rather than always choosing a single smallest-weight edge per step, the algorithm evaluates edges per neighbor. The behavior is governed by an EdgeSelect policy. For example:
+**Core Features:**
 
-- EdgeSelect.ALL_MIN_COST (default): for each neighbor v, include all parallel edges u->v that achieve the minimal edge cost among u->v edges.
+**Edge Selection Policies:**
 
-- EdgeSelect.SINGLE_MIN_COST: for each neighbor v, choose a single u->v edge with minimal edge cost (ties broken deterministically).
+The algorithm evaluates parallel edges per neighbor using `EdgeSelection` configuration:
 
-- EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING: for each neighbor v, consider only u->v edges with residual capacity and include all with minimal edge cost among those.
+- `multi_edge=true` (default): Include all parallel edges u→v with minimal cost among (u,v) pairs
+- `multi_edge=false`: Select single edge per (u,v) pair using tie-breaking:
+  - `PreferHigherResidual`: Choose edge with highest residual capacity (secondary: lowest edge ID)
+  - `Deterministic`: Choose edge with lowest edge ID for reproducibility
+- `require_capacity=true`: Only consider edges with residual capacity > kMinCap (used in max-flow)
+- `require_capacity=false` (default): Consider all edges regardless of residual capacity
 
-Other policies include capacity-aware single-edge, load-factored single-edge, and `USER_DEFINED` via a callback.
+**Capacity-Aware Tie-Breaking:**
 
-Capturing equal-cost predecessors: With multipath=True, SPF stores all minimal-cost predecessors: `pred[node][predecessor] = [edge_id, ...]`. New equal-cost routes extend the predecessor set rather than overwrite.
+When multiple nodes or edges have equal cost, SPF uses residual capacity for tie-breaking to improve flow distribution:
 
-This predecessor DAG is essential for later flow splitting: it retains all equal-cost paths in a compact form.
+- **Node-level**: Priority queue ordered by (cost, -residual, node). Among equal-cost nodes, prefers paths with higher bottleneck capacity. This naturally guides flow toward higher-capacity routes.
+- **Edge-level**: When `multi_edge=false` and `tie_break=PreferHigherResidual`, selects the parallel edge with most available capacity among equal-cost options.
 
-Early destination stop: If `dst` is provided, once `dst` is popped at minimal distance, SPF does not expand from `dst` and continues only while the heap front cost equals that minimal distance. This preserves equal-cost predecessors and terminates early.
+This tie-breaking is applied even in IP/IGP mode (`require_capacity=false`) using static capacities, improving flow distribution without altering routing topology.
 
-This optimization saves time when only a specific target's distance is needed.
+**Multipath Support:**
 
-Specialized fast path: With no exclusions and `ALL_MIN_COST` or `ALL_MIN_COST_WITH_CAP_REMAINING`, SPF uses optimized loops (`_spf_fast_*`) that inline per-neighbor scanning and skip callbacks.
+With `multipath=True`, SPF stores all minimal-cost predecessors forming a DAG:
+`pred[node] = {predecessor: [edge_ids...]}`. This DAG captures all equal-cost paths
+in a compact form, used by max-flow for flow splitting.
 
-Complexity: Using a binary heap, time is \(O((V+E) \\log V)\); memory is \(O(V+E)\) for costs and predecessors.
+**Early Termination:**
 
-### Pseudocode (for EdgeSelect.ALL_MIN_COST, no exclusions)
+If `dst` is provided, SPF stops expanding after popping `dst` from the priority queue
+(continuing only while heap front cost equals dst cost to capture equal-cost predecessors).
+This optimization reduces work when only source-to-sink distances are needed.
+
+**Masking:**
+
+Optional `node_mask` and `edge_mask` boolean arrays enable runtime exclusions without
+rebuilding the graph. Used by FailureManager for efficient Monte Carlo analysis.
+
+**Complexity:**
+
+Using binary heap with capacity-aware tie-breaking: \(O((V+E) \log V)\) time, \(O(V+E)\) space for costs, predecessors, and residual tracking.
+
+### Pseudocode (simplified, see implementation for complete details)
 
 ```text
-function SPF_AllMinCost(graph, src, dst=None, multipath=True):
+function SPF(graph, src, dst=None, multipath=True, edge_selection):
     costs = { src: 0 }
-    pred  = { src: {} }            # no predecessor for source
-    pq = [(0, src)]               # min-heap of (cost, node)
+    pred  = { src: {} }
+    min_residual_to_node = { src: infinity }  # Track bottleneck capacity for tie-breaking
+
+    # Priority queue with node-level tie-breaking by residual capacity
+    # QItem: (cost, -residual, node) - negated residual for max-heap behavior
+    pq = [(0, -infinity, src)]
     best_dst_cost = None
 
     while pq:
-        (c, u) = heappop(pq)
+        (c, neg_res, u) = heappop(pq)
         if c > costs[u]:
-            continue               # stale entry in pq
+            continue  # stale entry
+
         if dst is not None and u == dst and best_dst_cost is None:
-            best_dst_cost = c      # found shortest path to dst
-
-        if dst is None or u != dst:
-            # Relax edges from u
-            for v, edges_map in graph._adj[u].items():
-                # find minimal cost among edges u->v
-                min_cost = inf
-                min_edges = []
-                for e_id, e_attr in edges_map.items():
-                    ec = e_attr["cost"]
-                    if ec < min_cost:
-                        min_cost = ec
-                        min_edges = [e_id]
-                    elif multipath and ec == min_cost:
-                        min_edges.append(e_id)
-                if min_cost == inf:
-                    continue  # no edges
-                new_cost = c + min_cost
-                if v not in costs or new_cost < costs[v]:
-                    costs[v] = new_cost
-                    pred[v] = { u: min_edges }
-                    heappush(pq, (new_cost, v))
-                elif multipath and new_cost == costs[v]:
-                    pred[v][u] = min_edges
-
-        if best_dst_cost is not None:
-            # If next closest node is farther than dst, done
+            best_dst_cost = c
+        if dst is not None and u == dst:
             if not pq or pq[0][0] > best_dst_cost:
                 break
+            continue
+
+        # Relax edges from u
+        for v in neighbors(u):
+            # Edge selection among parallel edges u->v
+            min_cost = inf
+            selected_edges = []
+
+            for e_id in edges_between(u, v):
+                residual_cap = residual[e_id] if has_residual else capacity[e_id]
+
+                # Skip if capacity filtering enabled and edge has no residual
+                if edge_selection.require_capacity and residual_cap < kMinCap:
+                    continue
+
+                edge_cost = cost[e_id]
+
+                if edge_cost < min_cost:
+                    min_cost = edge_cost
+                    selected_edges = select_edge_by_policy(e_id, edge_selection, residual_cap)
+
+                elif edge_cost == min_cost:
+                    if edge_selection.multi_edge:
+                        selected_edges.append(e_id)  # Keep all equal-cost edges
+                    else:
+                        # Edge-level tie-breaking for single-edge selection
+                        selected_edges = tiebreak_edge(selected_edges, e_id,
+                                                      edge_selection.tie_break, residual_cap)
+
+            if not selected_edges:
+                continue  # no admissible edges to v
+
+            new_cost = c + min_cost
+
+            # Compute bottleneck capacity: min of path residual and max edge residual
+            max_edge_res = max(residual[e] for e in selected_edges)
+            path_residual = min(min_residual_to_node[u], max_edge_res)
+
+            # Relaxation: found shorter path
+            if new_cost < costs[v]:
+                costs[v] = new_cost
+                min_residual_to_node[v] = path_residual
+                pred[v] = { u: selected_edges }
+                pq.push((new_cost, -path_residual, v))  # Node-level tie-breaking by capacity
+
+            # Multipath: found equal-cost alternative
+            elif multipath and new_cost == costs[v]:
+                pred[v][u] = selected_edges
+                # Don't update min_residual_to_node in multipath (collecting all paths)
+
+        if best_dst_cost is not None and (not pq or pq[0][0] > best_dst_cost):
+            break
 
     return costs, pred
+
+
+# Tie-breaking policies for edge selection when multi_edge=false:
+function tiebreak_edge(current_edges, new_edge, tie_break, new_residual):
+    if tie_break == PreferHigherResidual:
+        # Select edge with highest residual capacity
+        if new_residual > current_best_residual + epsilon:
+            return [new_edge]
+        elif abs(new_residual - current_best_residual) <= epsilon:
+            # Secondary tie-break: deterministic by edge ID
+            return [min(new_edge, current_edges[0])]
+    else:  # Deterministic
+        # Select edge with smallest ID for reproducibility
+        return [min(new_edge, current_edges[0])]
 ```
 
-This pseudocode corresponds to the implementation. With EdgeSelect.ALL_MIN_COST_WITH_CAP_REMAINING, edges with no residual capacity are skipped when computing min_edges. When multipath=False, only a single predecessor is stored per node.
+**Key Tie-Breaking Mechanisms:**
+
+1. **Node-level tie-breaking**: When multiple nodes have equal cost in the priority queue, prefer nodes reachable via paths with higher bottleneck (residual) capacity. This naturally distributes flows across equal-cost paths based on available capacity.
+
+2. **Edge-level tie-breaking** (when `multi_edge=false`):
+   - `PreferHigherResidual`: Among parallel equal-cost edges (u,v), select the one with highest residual capacity
+   - `Deterministic`: Select edge with smallest ID for reproducible results
+
+3. **Multipath behavior**: When `multipath=true`, all equal-cost predecessors are retained without capacity-based filtering, enabling flow splitting across all equal-cost paths.
 
 ### Maximum Flow Algorithm
 
-NetGraph's max-flow uses iterative shortest-path augmentation, blending Edmonds-Karp (augment along shortest paths) and Dinic (push blocking flows on a level graph) with cost awareness and configurable flow splitting across equal-cost parallels. It is implemented in `ngraph.algorithms.max_flow.calc_max_flow`. The goal is to compute the maximum feasible flow between a provided source and sink under edge capacity constraints.
+Implemented in C++ (`netgraph::core::max_flow`), using successive shortest paths with
+blocking flow augmentation. The algorithm blends Edmonds-Karp (augment along shortest
+paths) and Dinic (push blocking flows on a level graph) with cost awareness and
+configurable flow splitting across equal-cost parallel edges.
 
-Multi-source/multi-sink is handled by callers when needed (e.g., Demand Manager in `combine` mode) by introducing pseudo-source and pseudo-sink nodes with infinite-capacity, zero-cost edges to/from the real endpoints. `calc_max_flow` itself operates on a single source and single sink and does not create pseudo nodes.
+**Goal:** Compute maximum feasible flow between source and sink under edge capacity constraints.
 
-The residual network is implicit on the flow-aware graph. For a physical edge u->v:
+**Multi-source/multi-sink:** Handled by the Python adapter layer (`ngraph.solver.maxflow`)
+which creates pseudo-source and pseudo-sink nodes with large-capacity, zero-cost edges
+to/from real endpoints. The C++ algorithm operates on single source and single sink.
 
-- Forward residual arc u->v has capacity `capacity(u,v) - flow(u,v)`.
-- Reverse residual arc v->u (implicit, not stored) has capacity `flow(u,v)`.
-No physical reverse edge is required for residual traversal. SPF traverses only forward residual arcs u->v. Reverse residual arcs v->u are used when computing reachability for the min-cut and within blocking-flow computations; they are not considered by SPF. This is distinct from `add_reverse=True` during graph construction, which adds an actual reverse physical edge with its own capacity and cost.
+**Routing Semantics:** The algorithm's behavior is controlled by `require_capacity` and `shortest_path`:
 
-Reverse residual arcs are not stored as edges in the `StrictMultiDiGraph`. They are derived on the fly from edge attributes:
+- `require_capacity=true` + `shortest_path=false` (SDN/TE): SPF filters to edges with residual capacity, routes adapt iteratively during placement
+- `require_capacity=false` + `shortest_path=true` (IP/IGP): SPF uses all edges based on cost, single-pass flow placement over fixed equal-cost paths
 
-- For reachability/min-cut, we traverse incoming edges and treat v->u as available when `flow(u,v) > eps`.
-- For blocking-flow, `calc_graph_capacity` builds a reversed adjacency from the SPF predecessor DAG and computes residual capacities from `capacity - flow` (forward) and `flow` (reverse) without mutating the graph.
+See "Routing Semantics: IP/IGP vs SDN/TE" section for detailed explanation.
+
+The residual network is maintained via `FlowState`, which tracks per-edge flow and computes residual capacities on demand. For each edge u→v:
+
+- Forward residual capacity: `capacity(u,v) - flow(u,v)`
+- Reverse residual capacity (for flow cancellation): `flow(u,v)`
+
+SPF operates over the residual graph by requesting edges with `require_capacity=true`, which filters to edges with positive residual capacity. The `FlowState` provides a residual capacity view without graph mutation.
+
+Note: Reverse residual arcs for flow cancellation are distinct from physical reverse edges added via `add_reverse=True` during graph construction. Physical reverse edges model bidirectional links with independent capacity; residual reverse arcs enable flow augmentation/cancellation.
 
 The core loop finds augmenting paths using the cost-aware SPF described above:
 
-Run SPF from the source to the sink with edge selection ALL_MIN_COST_WITH_CAP_REMAINING. This computes shortest-path distances and a predecessor DAG to the sink over forward residual edges with residual capacity > 0 (no reverse arcs). The edge cost can represent distance or preference; SPF selects minimum cumulative cost.
+Run SPF from source to sink with `multi_edge=true` and `require_capacity=true` (filters to edges with positive residual capacity). This computes shortest-path distances and a predecessor DAG over forward residual edges. The edge cost can represent distance, latency, or preference; SPF selects paths minimizing cumulative cost.
 
 If the pseudo-sink is not reached (i.e., no augmenting path exists), stop: the max flow is achieved.
 
 Otherwise, determine how much flow can be sent along the found paths:
 
-Using the pred DAG from SPF, compute a blocking flow with consideration of parallel edges and the chosen splitting policy. This is done by `calc_graph_capacity` (Dinic-like): it builds a reversed residual view from the sink, assigns BFS levels, and uses DFS to push blocking flow. With parallel equal-cost edges, flow is split proportionally to residual capacity (PROPORTIONAL) or equally (EQUAL_BALANCED) until a bottleneck is reached.
+Using the predecessor DAG from SPF, `FlowState.place_on_dag` computes blocking flow considering parallel edges and the splitting policy. For PROPORTIONAL: builds reversed residual graph, assigns BFS levels, uses DFS to push flow with capacity-proportional splits. For EQUAL_BALANCED: performs topological traversal with equal splits, computes global scale factor to prevent oversubscription.
 
-This yields a value f (flow amount) and a per-edge flow assignment on the predecessor DAG (fractions that sum to 1 along outgoing splits).
+This yields flow amount `f` and per-edge flow assignments tracking which edges carry flow and their utilization.
 
-We then augment the flow: for each edge on those shortest paths, increase its flow attribute by the assigned portion of f. The algorithm updates both per-edge flow and aggregate node flow for bookkeeping, and marks which edges carried flow.
+The algorithm then augments the flow: `FlowState` increases each edge's flow by its assigned portion. Per-edge flows and residual capacities are updated for the next iteration.
 
 Add f to the total flow counter.
 
-If f is below a small tolerance eps (meaning no meaningful flow could be added, perhaps due to rounding or all residual capacity being negligible), break out and treat it as saturated.
+If `f` is below tolerance `kMinFlow` (negligible flow placed due to numerical limits or exhausted capacity), terminate iteration.
 
 Repeat to find the next augmenting path (back to step 1).
 
 If `shortest_path=True`, the algorithm performs only one augmentation pass and returns (useful when the goal is a single cheapest augmentation rather than maximum flow).
 
-After the loop, if detailed results are requested, the algorithm computes a FlowSummary which includes:
+After the loop, the C++ algorithm computes a FlowSummary which includes:
 
 - total_flow: the sum of flow from source to sink achieved
 
-- edge_flow: a dictionary of each edge (u,v,key) to the flow on that edge
+- edge_flows: per-edge flow assignments (optional, populated when requested)
 
-- residual_cap: remaining capacity on each edge = capacity - flow
+- residual_capacity: remaining capacity on each edge = capacity - flow (optional, populated when requested)
 
-- reachable: the set of nodes reachable from the source in the final residual network (this identifies the source side of the min-cut)
+- reachable_nodes: the set of nodes reachable from the source in the final residual network (optional, identifies the source side of the min-cut)
 
 - min_cut: the list of edges that are saturated and go from reachable to non-reachable (these form the minimum cut)
 
-- cost_distribution: how much flow was sent in each augmentation step cost (e.g., X flow units were sent along paths of cost Y)
+- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); Python wrapper converts to `Dict[Cost, Flow]` mapping in `FlowSummary.cost_distribution`.
 
-This is returned along with the total flow value. If a flow-assigned graph copy is requested, that is also returned.
+This is returned along with the total flow value.
+
+### Routing Semantics: IP/IGP vs SDN/TE
+
+NetGraph models two fundamentally different routing paradigms through the `require_capacity` and `shortest_path` parameters:
+
+**IP/IGP Semantics (`require_capacity=false` + `shortest_path=true`):**
+
+Traditional IP routing with Interior Gateway Protocols (OSPF, IS-IS):
+
+- Routes computed based on link costs/metrics only, ignoring available capacity
+- Single SPF computation determines equal-cost paths; forwarding is fixed until topology/cost change
+- Traffic follows predetermined paths even as links saturate
+- Models best-effort forwarding with potential packet loss when demand exceeds capacity
+- No iterative augmentation: flow placed in single pass over fixed equal-cost DAG
+- Use case: Simulating production IP networks, validating IGP designs
+
+**SDN/TE Semantics (`require_capacity=true` + `shortest_path=false`, default):**
+
+Software-Defined Networking and Traffic Engineering:
+
+- Routes adapt dynamically to residual link capacities during flow placement
+- SPF recomputed after each flow placement iteration, excluding saturated links
+- Iterative augmentation continues until max-flow achieved or capacity exhausted
+- Flow placement respects capacity constraints, never oversubscribing links
+- Models centralized traffic engineering with real-time capacity awareness
+- Use case: Optimal demand placement, capacity planning, failure impact analysis
+
+This distinction is fundamental: IP networks route on cost alone with fixed forwarding tables (congestion managed via queuing/drops), while TE systems route dynamically on both cost and available capacity (congestion avoided via admission control). The `require_capacity` parameter controls whether SPF filters to available capacity; `shortest_path` controls whether routes are recomputed iteratively or fixed after initial SPF.
 
 ### Flow Placement Strategies
 
-NetGraph's max-flow differs from classical augmenting-path implementations by controlling how flow is split across equal-cost parallel edges in each augmentation. Governed by `FlowPlacement`:
+Beyond routing semantics, NetGraph controls how flow splits across equal-cost parallel edges through `FlowPlacement`:
 
-- PROPORTIONAL (default): If multiple parallel edges have equal cost on a path segment, distribute flow among them in proportion to their remaining capacities. This mimics how weighted equal-cost multi-path (W-ECMP or WCMP) routing splits flow based on link bandwidth.
+- **PROPORTIONAL** (default, models WCMP/Weighted ECMP):
+  - Splits flow across parallel equal-cost edges proportional to residual capacity
+  - Example: Two 100G links get 50/50 split; one 100G + one 10G get 91/9 split
+  - Maximizes utilization by preferring higher-capacity paths
+  - Used in networks with heterogeneous link speeds (common in fabrics with multi-generation hardware)
+  - Can be used iteratively (e.g., successive max-flow augmentations)
 
-- EQUAL_BALANCED: Split flow equally across all equal-cost parallel edges, regardless of capacity differences (up to capacity limits). This may under-utilize a higher-capacity link if paired with a lower-capacity one, but it maintains an even load balance until one link saturates. This matches IP forwarding with equal-cost multi-path (ECMP), which splits flow based on the number of parallel paths.
+- **EQUAL_BALANCED** (models traditional ECMP):
+  - Splits flow equally across all parallel equal-cost edges regardless of capacity
+  - Example: Two 100G links get 50/50; one 100G + one 10G still attempt 50/50 (10G saturates first)
+  - Models IP hash-based load balancing (5-tuple hashing distributes flows uniformly)
+  - Single-pass admission: computes one global scale factor to avoid oversubscription
+  - For IP ECMP simulation: use with `require_capacity=false` + `shortest_path=true`
 
-`calc_graph_capacity` implements these strategies:
+`FlowState.place_on_dag` implements single-pass placement over a fixed SPF DAG:
 
-- PROPORTIONAL: Build a reversed residual view from the sink. Assign BFS levels and push blocking flows with DFS, summing capacities across parallel equal-cost edges in each segment. Convert reversed flows back to forward orientation.
+- **PROPORTIONAL**: Constructs reversed residual graph from predecessor DAG. Uses Dinic-style BFS leveling and DFS push from sink to source. Within each edge group (parallel edges between node pair), splits flow proportionally to residual capacity. Distributes pushed flow back to underlying edges maintaining proportional ratios. Can be called iteratively on updated residuals.
 
-- EQUAL_BALANCED: Build reversed adjacency from the sink. Push a nominal unit flow from the source equally across outgoing reversed arcs, then scale by the minimum capacity-to-assignment ratio to respect capacities; normalize back to forward orientation.
+- **EQUAL_BALANCED**: Performs topological traversal (Kahn's algorithm) from source to sink over forward DAG. Assigns equal splits across all outgoing parallel edges from each node. Computes global scale factor as `min(edge_capacity / edge_assignment)` across all edges to prevent oversubscription. Applies scale uniformly and stops. This models single-pass ECMP admission where the forwarding DAG doesn't change mid-flow.
 
-Support for these placement strategies together with control over the path selection and edge selection policies enables realistic modeling of different forwarding and traffic engineering scenarios.
+**Configuration Examples:**
+
+```python
+# IP/ECMP: Traditional router behavior (cost-based routing, equal splits)
+max_flow(network, src, dst,
+         flow_placement=FlowPlacement.EQUAL_BALANCED,
+         shortest_path=True,  # Single SPF tier
+         require_capacity=False)  # Ignore capacity when routing
+
+# SDN/TE with WCMP: Capacity-aware routing with proportional splits
+max_flow(network, src, dst,
+         flow_placement=FlowPlacement.PROPORTIONAL,
+         shortest_path=False,  # Iterative augmentation
+         require_capacity=True)  # Adapt routes to capacity
+
+# WCMP: Fixed equal-cost paths with bandwidth-weighted splits
+max_flow(network, src, dst,
+         flow_placement=FlowPlacement.PROPORTIONAL,
+         shortest_path=True,  # Single tier of equal-cost paths
+         require_capacity=False)  # Fixed paths regardless of utilization
+```
+
+These configurations enable realistic modeling of diverse forwarding behaviors: from traditional IP networks with best-effort delivery to modern SDN deployments with capacity-aware traffic engineering.
+
+### Flow Policy Presets
+
+For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that bundle the routing semantics described above into convenient configurations. These presets map to real-world network behaviors:
+
+| Preset | Behavior | Use Case |
+|--------|----------|----------|
+| `SHORTEST_PATHS_ECMP` | IP/IGP with hash-based ECMP | Traditional routers (OSPF/IS-IS), equal splits across equal-cost paths |
+| `SHORTEST_PATHS_WCMP` | IP/IGP with weighted ECMP | Routers with WCMP support, proportional splits based on link capacity |
+| `TE_WCMP_UNLIM` | MPLS-TE / SDN with WCMP | Capacity-aware TE with unlimited tunnels, iterative placement |
+| `TE_ECMP_16_LSP` | MPLS-TE with 16 LSPs | Fixed 16 ECMP tunnels per demand, models RSVP-TE with LSP limits |
+| `TE_ECMP_UP_TO_256_LSP` | MPLS-TE with up to 256 LSPs | Scalable TE with tunnel limit, models SR-TE or large-scale RSVP |
+
+**Detailed Configuration Mapping:**
+
+| Preset | `require_capacity` | `max_flows` | `multi_edge` | `flow_placement` |
+|--------|--------------------|--------------|--------------|--------------------|
+| `SHORTEST_PATHS_ECMP` | `false` | 1 | `true` | `EQUAL_BALANCED` |
+| `SHORTEST_PATHS_WCMP` | `false` | 1 | `true` | `PROPORTIONAL` |
+| `TE_WCMP_UNLIM` | `true` | unlimited | `true` | `PROPORTIONAL` |
+| `TE_ECMP_16_LSP` | `true` | 16 | `false` | `EQUAL_BALANCED` |
+| `TE_ECMP_UP_TO_256_LSP` | `true` | 256 | `false` | `EQUAL_BALANCED` |
+
+**Key parameters:**
+
+- `require_capacity`: When `false`, paths are selected based on link costs alone (models IP/IGP routing). When `true`, paths adapt to residual capacity during placement (models SDN/TE). See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) for details.
+- `max_flows`: With `1`, demand is placed in a single pass over fixed paths, equivalent to `shortest_path=true` in the max-flow solver. With `> 1`, paths are recomputed as capacity is consumed (iterative placement), equivalent to `shortest_path=false`.
+- `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics)
+- `flow_placement`: `EQUAL_BALANCED` splits equally across paths; `PROPORTIONAL` splits by residual capacity
+
+**Example: Modeling IP vs MPLS Networks**
+
+```yaml
+# IP network with traditional ECMP (e.g., data center leaf-spine)
+traffic_matrix_set:
+  dc_traffic:
+    - source_path: ^rack1/
+      sink_path: ^rack2/
+      demand: 1000.0
+      flow_policy_config: SHORTEST_PATHS_ECMP
+
+# MPLS-TE network with capacity-aware tunnel placement
+traffic_matrix_set:
+  backbone_traffic:
+    - source_path: ^metro1/
+      sink_path: ^metro2/
+      demand: 5000.0
+      flow_policy_config: TE_WCMP_UNLIM
+```
 
 ### Pseudocode (simplified max-flow loop)
 
 ```text
-function MAX_FLOW(graph, S, T, placement=PROPORTIONAL):
-    initialize flow_graph with 0 flow on all edges
+function MAX_FLOW(graph, S, T, placement=PROPORTIONAL, require_capacity=True):
+    flow_state = FlowState(graph)  # Tracks per-edge flow and residuals
     total_flow = 0
-    do:
-        costs, pred = SPF(graph, src=S, dst=T, edge_select=ALL_MIN_COST_WITH_CAP_REMAINING)
-        if T not reachable in pred:
+    cost_distribution = []
+
+    while True:
+        # Configure edge selection for SPF
+        edge_selection = EdgeSelection(
+            multi_edge=True,
+            require_capacity=require_capacity,
+            tie_break=Deterministic
+        )
+
+        # Find shortest augmenting paths in residual graph
+        residuals = flow_state.residual_view() if require_capacity else None
+        costs, dag = SPF(graph, S, T,
+                        multipath=True,
+                        edge_selection=edge_selection,
+                        residual=residuals)
+
+        if T not in dag:  # No augmenting path exists
             break
-        f, flow_dict = calc_graph_capacity(flow_graph, S, T, pred, placement)
-        if f <= eps:
+
+        # Push blocking flow through predecessor DAG
+        path_cost = costs[T]
+        placed = flow_state.place_on_dag(S, T, dag, infinity, placement)
+
+        if placed < kMinFlow:  # Negligible flow placed
             break
-        for each edge in flow_dict:
-            add flow on that edge as per flow_dict
-        total_flow += f
-    while True
-    return total_flow, (and optionally summary, flow_graph)
+
+        total_flow += placed
+        cost_distribution.append((path_cost, placed))
+
+    # Compute min-cut, reachability, cost distribution
+    min_cut = flow_state.compute_min_cut(S, node_mask, edge_mask)
+
+    return FlowSummary(
+        total_flow=total_flow,
+        cost_distribution=cost_distribution,
+        min_cut=min_cut,
+        edge_flows=...,  # optional
+        residual_capacity=...,  # optional
+        reachable_nodes=...  # optional
+    )
 ```
 
-Here `eps` denotes a small tolerance (default 1e-10; configurable via parameter).
+The flow tolerance constant `kMinFlow` (default 1/4096 ≈ 2.4e-4) determines when flow placement is considered negligible and iteration terminates.
 
-In practice, each augmentation performs one SPF \(O((V+E) \\log V)\) and one blocking-flow computation over the pred DAG and residual view (typically \(O(V+E)\)). If we pushed one path at a time the worst case would be \(O(E)\) augmentations, giving \(O(E^2 \\log V)\). Because we push blocking flows, the number of augmentations is usually far smaller than \(E\). A practical upper bound is \(O(\\min\\{E, F\\} \\cdot (E \\log V))\), where \(F\) is the max-flow value.
+Each augmentation phase performs one SPF \(O((V+E) \\log V)\) and one blocking-flow computation \(O(V+E)\) over the predecessor DAG. With blocking flow augmentation, the shortest path distance (in hops) increases with each phase, bounding the number of phases by \(O(V)\). This yields an overall complexity of \(O(V \\cdot (V+E) \\log V)\) = \(O(V^2 E \\log V)\) for sparse graphs where \(E = O(V)\).
+
+Practical performance is significantly better than worst-case bounds due to early termination when residual capacity exhausts. For integer capacities, the bound becomes \(O(F \\cdot (V+E) \\log V)\) where \(F\) is the max-flow value, which dominates when \(F \ll V\).
 
 ### Managers and Workflow Orchestration
 
 Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 
-Demand Manager (`ngraph.demand.manager`): Expands `TrafficDemand` entries into concrete `Demand` objects and places them on a `StrictMultiDiGraph` derived from the `Network` (or a `NetworkView`).
+**Demand Expansion** (`ngraph.exec.demand.builder`): Builds traffic matrix sets from DSL definitions, expanding source/sink patterns into concrete node groups.
 
-- Expansion is deterministic: source/sink node lists are sorted; no randomization is used.
-- Modes: `combine` (one aggregate demand via pseudo source/sink nodes) and `pairwise` (one demand per (src, dst) pair, excluding self-pairs, with even volume split).
-- Expanded demands are sorted by ascending priority before placement.
-- Placement uses a priority-aware round-robin scheduler. `placement_rounds="auto"` performs up to 3 passes with early stop based on progress and fairness.
-- Provides summaries (per-demand placement, link usage) and does not mutate the base `Network` (operates on the built flow graph).
+- Deterministic expansion: source/sink node lists sorted alphabetically; no randomization
+- Supports `combine` mode (aggregate via pseudo nodes) and `pairwise` mode (individual (src,dst) pairs with volume split)
+- Demands sorted by ascending priority before placement (lower value = higher priority)
+- Placement handled by Core's FlowPolicy with configurable presets (ECMP, WCMP, TE modes)
+- Non-mutating: operates on Core flow graphs with exclusions; Network remains unmodified
 
-Failure Manager (`ngraph.failure.manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses on `NetworkView` instances.
+**Failure Manager** (`ngraph.exec.failure.manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
 
-- Supports baseline (no failures), serial or process-parallel execution, and per-worker network caching (the network is serialized once per worker).
-- Deterministic when a seed is supplied (each iteration receives `seed + iteration_index`).
-- Deduplication: iterations are grouped by a key built from sorted excluded node IDs, sorted excluded link IDs, analysis function name, and analysis parameters. Only one representative per group is executed; results are replicated to all members.
-  - This reduces effective executions from I to U, where U is the number of unique failure patterns for the chosen policy and parameters (e.g., 10,000 samples over 250 unique single-link failures execute as 250 tasks, not 10,000).
-- Parameter validation: with no effective failure rules, `iterations > 1` without `baseline=True` is rejected; `baseline=True` requires `iterations >= 2`.
-- Parallelism auto-adjusts to 1 if the analysis function cannot be pickled (e.g., defined in `__main__`).
+- Parallel execution via `ThreadPoolExecutor` with zero-copy network sharing across worker threads
+- Deterministic results when seed is provided (each iteration derives `seed + iteration_index`)
+- Optional baseline execution (no failures) for comparing degraded vs. intact capacity
+- Automatic parallelism adjustment: Forces serial execution when analysis function defined in `__main__` (notebook context) to avoid pickling failures
+- Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
+- Automatic graph cache pre-building: Before parallel iterations, builds `GraphCache` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
 
-Both managers separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or `NetworkView`s) for each workflow iteration.
+Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
 
 ### Workflow Engine and Steps
 
-NetGraph workflows (see Workflow Reference) are essentially recipes of analysis steps to run in sequence. Each step is typically a pure function: it takes the current model (or view) and possibly prior results, performs an analysis, and stores its outputs. The workflow engine coordinates these steps, using a Results store to record data.
+NetGraph workflows (see Workflow Reference) are essentially recipes of analysis steps to run in sequence. Each step is typically a pure function: it takes the current model and possibly prior results, performs an analysis, and stores its outputs. The workflow engine coordinates these steps, using a Results store to record data.
 
 Common built-in steps:
 
-- BuildGraph: builds a `StrictMultiDiGraph` from the Network (or view) and stores node-link JSON plus `{context: {add_reverse}}`. Often an initial step.
+- BuildGraph: validates network topology and stores node-link JSON representation via NetworkX `MultiDiGraph`. Stores graph structure under `data.graph` and parameters under `data.context`. Primarily for validation and export; Core graph building happens in analysis functions.
 
 - NetworkStats: computes node/link counts, capacity statistics, cost statistics, and degree statistics. Supports optional `excluded_nodes`/`excluded_links` and `include_disabled`.
 
@@ -395,7 +673,7 @@ Common built-in steps:
 
 - CostPower: aggregates platform and per-end optics capex/power by hierarchy level (0..N). Respects `include_disabled` and `aggregation_level`. Stores `data.levels` and `data.context`.
 
-Each step is implemented in the code (in ngraph.workflow module) and has a corresponding step_type name. Steps are generally pure in that they don't modify the Network (except perhaps to disable something if that's the nature of the step, but usually they operate on views and copies). They take inputs, often including references to prior steps' results (the workflow engine allows one step to use another step's output). For instance, a placement step might need the value of alpha* from an MSD step; the workflow definition can specify that link.
+Each step is implemented in the code (in ngraph.workflow module) and has a corresponding step_type name. Steps are pure functions that don't modify the Network. They take inputs, often including references to prior steps' results (the workflow engine allows one step to use another step's output). For instance, a placement step might need the value of alpha* from an MSD step; the workflow definition can specify that link.
 
 ### Results storage
 
@@ -411,15 +689,15 @@ NetGraph's design includes several features that differentiate it from tradition
 
 - Declarative Scenario DSL: A YAML DSL with blueprints and programmatic expansion allows abstract definitions (e.g., a fully meshed Clos) to be expanded into concrete nodes and links. Strict schema validation ensures that scenarios are well-formed and rejects unknown or invalid fields.
 
-- NetworkView overlays vs graph copying: Read-only overlays avoid copying large structures for each scenario. The view is designed for availability toggles and caches built graphs for algorithms.
+- Runtime Exclusions vs graph copying: Analysis-time exclusions avoid copying large structures for each scenario. The design separates static topology from dynamic failure states.
 
-- Strict graph with stable edge IDs: Extends `MultiDiGraph` with explicit node management and monotonic edge keys, simplifying correlation of results to original links.
+- Stable edge IDs: Links have auto-generated unique IDs (`source|target|<base64_uuid>`) that remain stable throughout analysis, simplifying correlation of results to original links.
 
-- Flow placement strategies (proportional and equal): During augmentation, split flow across equal-cost paths and parallel links, modeling ECMP/WCMP behavior without linear programming.
+- Dual routing semantics: Models both IP/IGP (cost-only, fixed paths via `require_capacity=false` + `shortest_path=true`) and SDN/TE (capacity-aware, iterative via `require_capacity=true` + `shortest_path=false`)
 
-- Cost-aware augmentation: Prefer cheapest capacity first. It does not re-route previously placed flow.
+- Configurable flow placement: Proportional (WCMP-style, capacity-weighted) and Equal-Balanced (ECMP-style, uniform) splitting across parallel equal-cost edges
 
-- User-defined edge selection: Custom edge selection logic is supported (EdgeSelect.USER_DEFINED with a callback), enabling custom routing heuristics.
+- Cost-aware augmentation: Prefer cheapest capacity first via successive shortest paths. Does not re-route previously placed flow.
 
 - Deterministic simulation with seeding: Random aspects (e.g., failure sampling) are controlled by explicit seeds that propagate through steps. Runs are reproducible given the same scenario and seed.
 
@@ -427,19 +705,71 @@ NetGraph's design includes several features that differentiate it from tradition
 
 ### Performance Considerations
 
-Throughout the design, performance has been considered:
+**C++ Algorithm Implementation:**
 
-SPF uses Python heapq and optimized loops. Internal profiling shows expected scaling for typical network sizes.
+- Native C++ execution with optimized data structures (CSR adjacency, flat arrays)
+- GIL released during algorithm execution, enabling concurrent analysis across Python threads
+- Zero-copy NumPy integration for array inputs/outputs (via buffer protocol)
+- Deterministic edge ordering for reproducible results
+- Cache-friendly CSR representation for efficient neighbor traversal
 
-Caching graphs in views avoids O(N+E) rebuild costs repeatedly when analyzing many failures.
+**Graph Caching:**
 
-Monte Carlo deduplication collapses identical failure patterns (plus analysis parameters) into single executions. Runtime scales with the number of unique patterns U rather than requested iterations I; in many policies U << I.
+For Monte Carlo analysis with many failure iterations, graph construction is amortized via `GraphCache`:
 
-Pickle-based deep copy for StrictMultiDiGraph was faster than the default iterative copy for large graphs in local measurements. This reduces the cost of creating multiple independent graph instances.
+- Graph built once before iterations begin (includes all nodes and augmentation edges)
+- Per-iteration exclusions applied via boolean masks rather than graph rebuilding
+- Mask building is O(|excluded|) using pre-computed `link_id_to_edge_indices` mapping
+- FailureManager automatically pre-builds caches before parallel execution
 
-The complexity of algorithms has been kept polynomial and usually near-linear. For instance, typical network max flows (with unit capacities) can be O(VE^2), but by using shortest path (cost) and splitting, NetGraph's algorithm often uses far fewer augmentations than worst-case. Benchmarks on Clos topologies and grid graphs confirm the algorithms perform within expected growth rates and can handle networks of thousands of nodes and edges efficiently.
+This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Caching eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
 
-Summary: The design combines a declarative scenario model, reproducible views, a strict graph with stable IDs, cost-aware SPF and augmentation, and a structured results store. It adapts standard algorithms to network engineering use cases (flow splitting, failure simulation, traceable outputs).
+**Monte Carlo Deduplication:**
+
+FailureManager collapses identical failure patterns into single executions. Runtime
+scales with unique patterns U rather than requested iterations I; often U << I for
+common failure policies.
+
+**Complexity:**
+
+- SPF: \(O((V+E) \log V)\) using binary heap
+- Max-flow: \(O(V^2 E \log V)\) worst-case for successive shortest paths with blocking flow
+  - Practical performance dominated by \(O(F \cdot (V+E) \log V)\) for integer capacities where \(F\) is max-flow value
+  - Early termination when residual capacity exhausts provides significant speedup in typical networks
+
+**Scalability:**
+
+Benchmarks on structured topologies (Clos, grid) and realistic network graphs demonstrate scalability to networks with thousands of nodes and tens of thousands of edges. C++ execution with CSR adjacency and GIL release provides order-of-magnitude speedups over pure Python graph libraries for compute-intensive analysis.
+
+## Summary
+
+NetGraph's hybrid architecture combines:
+
+**Python Layer:**
+
+- Declarative scenario DSL with schema validation
+- Domain model (Network, Node, Link, RiskGroup)
+- Runtime exclusions for non-destructive failure simulation
+- Workflow orchestration and result aggregation
+- Managers for demand expansion and failure enumeration
+
+**C++ Layer:**
+
+- High-performance graph algorithms (SPF, K-shortest paths, max-flow)
+- Immutable StrictMultiDiGraph with CSR adjacency
+- Configurable flow placement policies (ECMP/WCMP simulation)
+- Runtime masking for efficient repeated analysis
+
+**Integration:**
+
+- Adapter layer for seamless Python ↔ C++ translation
+- Stable node/edge ID mapping for result traceability
+- NumPy array interface for efficient data transfer
+- GIL release during computation for concurrent thread execution
+
+This design adapts standard algorithms to network engineering use cases (flow splitting,
+failure simulation, cost-aware routing) while achieving high performance through native
+C++ execution and ergonomic interfaces through Python APIs.
 
 ## Cross-references
 

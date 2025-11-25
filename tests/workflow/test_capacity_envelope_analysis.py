@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ngraph.algorithms.base import FlowPlacement
-from ngraph.failure.policy import FailurePolicy, FailureRule
-from ngraph.failure.policy_set import FailurePolicySet
+from ngraph.model.failure.policy import FailurePolicy, FailureRule
+from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node
 from ngraph.results import Results
 from ngraph.scenario import Scenario
+from ngraph.types.base import FlowPlacement
 from ngraph.workflow.max_flow_step import MaxFlow
 
 
@@ -35,9 +35,9 @@ def simple_failure_policy() -> FailurePolicy:
     )
     return FailurePolicy(
         modes=[
-            __import__("ngraph.failure.policy", fromlist=["FailureMode"]).FailureMode(
-                weight=1.0, rules=[rule]
-            )
+            __import__(
+                "ngraph.model.failure.policy", fromlist=["FailureMode"]
+            ).FailureMode(weight=1.0, rules=[rule])
         ]
     )
 

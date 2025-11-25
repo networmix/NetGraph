@@ -1,44 +1,17 @@
-"""Network topology modeling with Node, Link, RiskGroup, and Network classes."""
+"""Network topology modeling with Node, Link, RiskGroup, and Network classes.
+
+This module provides the core network model classes (Node, Link, RiskGroup, Network)
+that can be used independently. The build_core_graph() method requires netgraph_core
+to be installed and will raise ImportError with a clear message if missing.
+"""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ngraph.algorithms.base import FlowPlacement
-from ngraph.algorithms.types import FlowSummary
-from ngraph.graph.strict_multidigraph import StrictMultiDiGraph
 from ngraph.logging import get_logger
-from ngraph.paths.path import Path as _NGPath
-from ngraph.solver.maxflow import (
-    max_flow as _solver_max_flow,
-)
-from ngraph.solver.maxflow import (
-    max_flow_detailed as _solver_max_flow_detailed,
-)
-from ngraph.solver.maxflow import (
-    max_flow_with_graph as _solver_max_flow_with_graph,
-)
-from ngraph.solver.maxflow import (
-    max_flow_with_summary as _solver_max_flow_with_summary,
-)
-from ngraph.solver.maxflow import (
-    saturated_edges as _solver_saturated_edges,
-)
-from ngraph.solver.maxflow import (
-    sensitivity_analysis as _solver_sensitivity_analysis,
-)
-from ngraph.solver.paths import (
-    k_shortest_paths as _solver_k_shortest_paths,
-)
-from ngraph.solver.paths import (
-    shortest_path_costs as _solver_shortest_path_costs,
-)
-from ngraph.solver.paths import (
-    shortest_paths as _solver_shortest_paths,
-)
 from ngraph.utils.ids import new_base64_uuid
 
 LOGGER = get_logger(__name__)
@@ -121,8 +94,8 @@ class Network:
 
     Network represents the scenario-level topology with persistent state (nodes/links
     that are disabled in the scenario configuration). For temporary exclusion of
-    nodes/links during analysis (e.g., failure simulation), use NetworkView instead
-    of modifying the Network's disabled states.
+    nodes/links during analysis (e.g., failure simulation), use node_mask and edge_mask
+    parameters when calling NetGraph-Core algorithms.
 
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
@@ -135,6 +108,9 @@ class Network:
     links: Dict[str, Link] = field(default_factory=dict)
     risk_groups: Dict[str, RiskGroup] = field(default_factory=dict)
     attrs: Dict[str, Any] = field(default_factory=dict)
+    _selection_cache: Dict[str, Dict[str, List[Node]]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def add_node(self, node: Node) -> None:
         """Add a node to the network (keyed by node.name).
@@ -148,6 +124,7 @@ class Network:
         if node.name in self.nodes:
             raise ValueError(f"Node '{node.name}' already exists in the network.")
         self.nodes[node.name] = node
+        self._selection_cache.clear()  # Invalidate cache on modification
 
     def add_link(self, link: Link) -> None:
         """Add a link to the network (keyed by the link's auto-generated ID).
@@ -164,115 +141,6 @@ class Network:
             raise ValueError(f"Target node '{link.target}' not found in network.")
 
         self.links[link.id] = link
-
-    def to_strict_multidigraph(
-        self,
-        add_reverse: bool = True,
-        *,
-        compact: bool = False,
-    ) -> StrictMultiDiGraph:
-        """Create a StrictMultiDiGraph representation of this Network.
-
-        Only includes nodes and links that are not disabled in the scenario.
-        Adds reverse edges by default so links behave bidirectionally in analysis.
-
-        When ``compact=True``, edges receive monotonically increasing integer keys and
-        only essential attributes (``capacity`` and ``cost``) are set. When
-        ``compact=False``, original network link IDs are used as edge keys and also
-        stored on edges as ``link_id`` for traceability, along with any custom
-        link attrs.
-
-        Args:
-            add_reverse: If True, add a reverse edge for each link.
-            compact: If True, omit non-essential attributes and use integer keys.
-
-        Returns:
-            StrictMultiDiGraph: Directed multigraph representation of the network.
-        """
-        return self._build_graph(add_reverse=add_reverse, compact=compact)
-
-    def _build_graph(
-        self,
-        add_reverse: bool = True,
-        excluded_nodes: Optional[AbstractSet[str]] = None,
-        excluded_links: Optional[AbstractSet[str]] = None,
-        *,
-        compact: bool = False,
-    ) -> StrictMultiDiGraph:
-        """Create a StrictMultiDiGraph with optional exclusions.
-
-        Args:
-            add_reverse: If True, add reverse edges for each link.
-            excluded_nodes: Additional nodes to exclude beyond disabled ones.
-            excluded_links: Additional links to exclude beyond disabled ones.
-
-        Returns:
-            StrictMultiDiGraph with specified exclusions applied.
-        """
-        if excluded_nodes is None:
-            excluded_nodes = set()
-        if excluded_links is None:
-            excluded_links = set()
-
-        graph = StrictMultiDiGraph()
-
-        # Collect all nodes to exclude (scenario-disabled + analysis exclusions)
-        all_excluded_nodes = excluded_nodes | {
-            name for name, nd in self.nodes.items() if nd.disabled
-        }
-
-        # Add enabled nodes
-        for node_name, node in self.nodes.items():
-            if node_name not in all_excluded_nodes:
-                if compact:
-                    graph.add_node(node_name)
-                else:
-                    graph.add_node(node_name, **node.attrs)
-
-        # Add enabled links
-        for link_id, link in self.links.items():
-            if (
-                link_id not in excluded_links
-                and not link.disabled
-                and link.source not in all_excluded_nodes
-                and link.target not in all_excluded_nodes
-            ):
-                if compact:
-                    # Forward edge with minimal attributes
-                    graph.add_edge(
-                        link.source,
-                        link.target,
-                        capacity=link.capacity,
-                        cost=link.cost,
-                    )
-                    if add_reverse:
-                        graph.add_edge(
-                            link.target,
-                            link.source,
-                            capacity=link.capacity,
-                            cost=link.cost,
-                        )
-                else:
-                    # Preserve original link id as attribute; edge key is assigned by graph
-                    graph.add_edge(
-                        link.source,
-                        link.target,
-                        capacity=link.capacity,
-                        cost=link.cost,
-                        link_id=link_id,
-                        **link.attrs,
-                    )
-                    if add_reverse:
-                        graph.add_edge(
-                            link.target,
-                            link.source,
-                            capacity=link.capacity,
-                            cost=link.cost,
-                            link_id=link_id,
-                            **link.attrs,
-                        )
-
-        return graph
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
         r"""Select and group nodes by regex on name or by attribute directive.
@@ -295,6 +163,10 @@ class Network:
         Returns:
             Mapping from group label to list of nodes.
         """
+        # Check cache first
+        if path in self._selection_cache:
+            return self._selection_cache[path]
+
         # Strict attribute directive detection: attr:<name>
         attr_match = re.fullmatch(r"attr:([A-Za-z_]\w*)", path)
         if attr_match:
@@ -310,6 +182,7 @@ class Network:
                     "Attribute directive '%s' matched no nodes (attribute missing)",
                     path,
                 )
+            self._selection_cache[path] = groups_by_attr
             return groups_by_attr
 
         # Fallback: regex over node.name
@@ -326,37 +199,8 @@ class Network:
                     label = path
                 groups_map.setdefault(label, []).append(node)
 
+        self._selection_cache[path] = groups_map
         return groups_map
-
-    def max_flow(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], float]:
-        """Compute maximum flow between node groups in this network.
-
-        Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` to merge all matching sources and sinks into
-                one group each; ``"pairwise"`` to compute per-group pairs.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting flow among equal-cost paths.
-
-        Returns:
-            Mapping from ``(source_label, sink_label)`` to flow values.
-        """
-        return _solver_max_flow(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
 
     def disable_node(self, node_name: str) -> None:
         """Mark a node as disabled.
@@ -543,238 +387,46 @@ class Network:
             if link_obj.risk_groups & to_enable:
                 self.enable_link(link_id)
 
-    def saturated_edges(
+    def build_core_graph(
         self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        tolerance: float = 1e-10,
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], List[Tuple[str, str, str]]]:
-        """Identify saturated edges in max flow solutions.
+        add_reverse: bool = True,
+        augmentations: Optional[List] = None,
+        excluded_nodes: Optional[Set[str]] = None,
+        excluded_links: Optional[Set[str]] = None,
+    ) -> Tuple[Any, Any, Any, Any]:
+        """Build NetGraph-Core graph representation.
+
+        Convenience method that delegates to build_graph() from ngraph.adapters.core.
+        Supports augmentations (for pseudo nodes) and exclusions (for filtered topology).
 
         Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` or ``"pairwise"``.
-            tolerance: Threshold for considering an edge saturated.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting among equal-cost paths.
+            add_reverse: If True, add reverse edges for bidirectional links.
+            augmentations: Optional list of AugmentationEdge for pseudo nodes.
+            excluded_nodes: Optional set of node names to exclude.
+            excluded_links: Optional set of link IDs to exclude.
 
         Returns:
-            Mapping from ``(source_label, sink_label)`` to lists of saturated
-            edge tuples ``(u, v, key)``.
+            Tuple of (graph_handle, multidigraph, edge_mapper, node_mapper):
+            - graph_handle: netgraph_core.Graph (opaque handle, not picklable)
+            - multidigraph: netgraph_core.StrictMultiDiGraph (picklable)
+            - edge_mapper: EdgeMapper for link_id <-> ext_edge_id translation
+            - node_mapper: NodeMapper for name <-> ID translation
+
+        Raises:
+            ImportError: If netgraph_core is not installed.
         """
-        return _solver_saturated_edges(
+        try:
+            from ngraph.adapters.core import build_graph
+        except ImportError as e:
+            raise ImportError(
+                "netgraph_core module not found. Ensure NetGraph-Core is installed. "
+                "See: https://github.com/networmix/NetGraph-Core"
+            ) from e
+
+        return build_graph(
             self,
-            source_path,
-            sink_path,
-            mode=mode,
-            tolerance=tolerance,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
-
-    def sensitivity_analysis(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        change_amount: float = 1.0,
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], Dict[Tuple[str, str, str], float]]:
-        """Perform sensitivity analysis for capacity changes.
-
-        Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` or ``"pairwise"``.
-            change_amount: Capacity change applied during analysis.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting among equal-cost paths.
-
-        Returns:
-            Mapping from ``(source_label, sink_label)`` to per-edge sensitivity
-            values, keyed by edge ``(u, v, key)``.
-        """
-        return _solver_sensitivity_analysis(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            change_amount=change_amount,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
-
-    def max_flow_with_summary(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], Tuple[float, FlowSummary]]:
-        """Compute maximum flow and return per-pair analytics summary.
-
-        Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` or ``"pairwise"``.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting among equal-cost paths.
-
-        Returns:
-            Mapping from ``(source_label, sink_label)`` to
-            ``(flow_value, summary)``.
-        """
-        return _solver_max_flow_with_summary(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
-
-    def max_flow_with_graph(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], Tuple[float, StrictMultiDiGraph]]:
-        """Compute maximum flow and return flow-assigned graphs.
-
-        Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` or ``"pairwise"``.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting among equal-cost paths.
-
-        Returns:
-            Mapping from ``(source_label, sink_label)`` to ``(flow_value, graph)``.
-        """
-        return _solver_max_flow_with_graph(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
-
-    def max_flow_detailed(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        shortest_path: bool = False,
-        flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    ) -> Dict[Tuple[str, str], Tuple[float, FlowSummary, StrictMultiDiGraph]]:
-        """Compute maximum flow with both analytics summary and graph.
-
-        Args:
-            source_path: Regex for selecting source nodes or ``attr:<name>``.
-            sink_path: Regex for selecting sink nodes or ``attr:<name>``.
-            mode: ``"combine"`` or ``"pairwise"``.
-            shortest_path: If True, restrict flows to shortest paths.
-            flow_placement: Strategy for splitting among equal-cost paths.
-
-        Returns:
-            Mapping from ``(source_label, sink_label)`` to
-            ``(flow_value, summary, graph)``.
-        """
-        return _solver_max_flow_detailed(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            shortest_path=shortest_path,
-            flow_placement=flow_placement,
-        )
-
-    def shortest_path_costs(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-    ) -> Dict[Tuple[str, str], float]:
-        """Return minimal path costs between node groups in this network.
-
-        Args:
-            source_path: Regex or ``attr:<name>`` for source selection.
-            sink_path: Regex or ``attr:<name>`` for sink selection.
-            mode: "combine" or "pairwise".
-
-        Returns:
-            Mapping from (source_label, sink_label) to minimal cost; ``inf`` if unreachable.
-        """
-        return _solver_shortest_path_costs(self, source_path, sink_path, mode=mode)
-
-    def shortest_paths(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "combine",
-        *,
-        split_parallel_edges: bool = False,
-    ) -> Dict[Tuple[str, str], List[_NGPath]]:
-        """Return concrete shortest path(s) between selected node groups.
-
-        Args:
-            source_path: Regex or ``attr:<name>`` for source selection.
-            sink_path: Regex or ``attr:<name>`` for sink selection.
-            mode: "combine" or "pairwise".
-            split_parallel_edges: Expand parallel edges into distinct paths when True.
-
-        Returns:
-            Mapping from (source_label, sink_label) to lists of Path.
-        """
-        return _solver_shortest_paths(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            split_parallel_edges=split_parallel_edges,
-        )
-
-    def k_shortest_paths(
-        self,
-        source_path: str,
-        sink_path: str,
-        mode: str = "pairwise",
-        *,
-        max_k: int = 3,
-        max_path_cost: float = float("inf"),
-        max_path_cost_factor: Optional[float] = None,
-        split_parallel_edges: bool = False,
-    ) -> Dict[Tuple[str, str], List[_NGPath]]:
-        """Return up to K shortest paths per group pair.
-
-        Args:
-            source_path: Regex or ``attr:<name>`` for source selection.
-            sink_path: Regex or ``attr:<name>`` for sink selection.
-            mode: "pairwise" (default) or "combine".
-            max_k: Max number of paths per pair.
-            max_path_cost: Absolute cost threshold.
-            max_path_cost_factor: Relative threshold versus best path.
-            split_parallel_edges: Expand parallel edges into distinct paths when True.
-
-        Returns:
-            Mapping from (source_label, sink_label) to lists of Path.
-        """
-        return _solver_k_shortest_paths(
-            self,
-            source_path,
-            sink_path,
-            mode=mode,
-            max_k=max_k,
-            max_path_cost=max_path_cost,
-            max_path_cost_factor=max_path_cost_factor,
-            split_parallel_edges=split_parallel_edges,
+            add_reverse=add_reverse,
+            augmentations=augmentations,
+            excluded_nodes=excluded_nodes,
+            excluded_links=excluded_links,
         )

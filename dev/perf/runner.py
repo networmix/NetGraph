@@ -8,10 +8,8 @@ import statistics
 import time
 from typing import Any, Callable
 
+import netgraph_core
 import networkx as nx
-
-from ngraph.algorithms.max_flow import calc_max_flow
-from ngraph.algorithms.spf import spf
 
 from .core import (
     BenchmarkCase,
@@ -75,9 +73,9 @@ def _time_func(func: Callable[[], Any], runs: int) -> dict[str, float]:
 
 
 def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSample:
-    """Execute SPF benchmark for a given case.
+    """Execute SPF benchmark for a given case using NetGraph-Core.
 
-    Creates network/graph once and reuses it across iterations to reduce variance.
+    Creates network and Core graph once outside timing loop to reduce variance.
     Uses the first node as the source for shortest path calculation.
 
     Args:
@@ -89,16 +87,27 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
     """
     topology: Topology = case.inputs["topology"]
 
-    # Create network and graph once outside timing loop
+    # Create network and Core graph once outside timing loop
     network = topology.create_network()
-    graph = network.to_strict_multidigraph()
+    graph_handle, multidigraph, edge_mapper, node_mapper = network.build_core_graph()
 
-    # Use first node as source for SPF
-    source = next(iter(graph.nodes))
+    # Create Core backend and algorithms
+    backend = netgraph_core.Backend.cpu()
+    algs = netgraph_core.Algorithms(backend)
+
+    # Use first node (ID 0) as source for SPF
+    source_id = 0
+
+    # Create edge selection for all min-cost edges
+    edge_selection = netgraph_core.EdgeSelection(
+        multi_edge=True,
+        require_capacity=False,
+        tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
+    )
 
     # Create a closure that captures the graph and source
     def run_spf():
-        return spf(graph, source)
+        return algs.spf(graph_handle, source_id, selection=edge_selection)
 
     # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)
@@ -119,10 +128,13 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
 def _execute_spf_networkx_benchmark(
     case: BenchmarkCase, iterations: int
 ) -> BenchmarkSample:
-    """Execute SPF benchmark for a given case.
+    """Execute SPF benchmark using NetworkX for comparison.
 
-    Creates network/graph once and reuses it across iterations to reduce variance.
-    Uses the first node as the source for shortest path calculation.
+    Creates network and NetworkX MultiDiGraph once outside timing loop to reduce
+    variance. Uses the first node as the source for shortest path calculation.
+
+    Note: This benchmarks NetworkX's dijkstra_predecessor_and_distance for
+    direct comparison with NetGraph-Core's SPF implementation.
 
     Args:
         case: Benchmark case containing topology and configuration.
@@ -133,16 +145,35 @@ def _execute_spf_networkx_benchmark(
     """
     topology: Topology = case.inputs["topology"]
 
-    # Create network and graph once outside timing loop
+    # Create network once outside timing loop
     network = topology.create_network()
-    graph = network.to_strict_multidigraph()
+
+    # Build NetworkX MultiDiGraph manually for NetworkX algorithms
+    nx_graph = nx.MultiDiGraph()
+
+    # Add nodes
+    for node_name, node in network.nodes.items():
+        if not node.disabled:
+            nx_graph.add_node(node_name)
+
+    # Add edges (with reverse edges for bidirectional connectivity)
+    for _, link in network.links.items():
+        if not link.disabled:
+            # Forward edge
+            nx_graph.add_edge(
+                link.source, link.target, capacity=link.capacity, cost=link.cost
+            )
+            # Reverse edge
+            nx_graph.add_edge(
+                link.target, link.source, capacity=link.capacity, cost=link.cost
+            )
 
     # Use first node as source for SPF
-    source = next(iter(graph.nodes))
+    source = next(iter(nx_graph.nodes))
 
     # Create a closure that captures the graph and source
     def run_spf():
-        return nx.dijkstra_predecessor_and_distance(graph, source)
+        return nx.dijkstra_predecessor_and_distance(nx_graph, source, weight="cost")
 
     # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)
@@ -163,19 +194,40 @@ def _execute_spf_networkx_benchmark(
 def _execute_max_flow_benchmark(
     case: BenchmarkCase, iterations: int
 ) -> BenchmarkSample:
-    """Execute max flow benchmark for a given case."""
+    """Execute max flow benchmark using NetGraph-Core.
+
+    Creates network and Core graph once outside timing loop to reduce variance.
+    Uses first node as source and last node as sink for maximum path length.
+
+    Args:
+        case: Benchmark case containing topology and configuration.
+        iterations: Number of timing iterations to perform.
+
+    Returns:
+        BenchmarkSample with timing statistics and metadata.
+    """
     topology: Topology = case.inputs["topology"]
     network = topology.create_network()
-    graph = network.to_strict_multidigraph()
+    graph_handle, multidigraph, edge_mapper, node_mapper = network.build_core_graph()
 
-    # Use first node as source and last node as sink
-    nodes = list(graph.nodes)
-    source = nodes[0]
-    sink = nodes[-1]
+    # Create Core backend and algorithms
+    backend = netgraph_core.Backend.cpu()
+    algs = netgraph_core.Algorithms(backend)
 
-    # Create a closure that captures the graph and source
+    # Use first node as source and last node as sink for maximum path length
+    source_id = 0
+    sink_id = multidigraph.num_nodes() - 1
+
+    # Create a closure that captures the graph handle and node IDs
     def run_max_flow():
-        return calc_max_flow(graph, source, sink)
+        flow_value, _ = algs.max_flow(
+            graph_handle,
+            source_id,
+            sink_id,
+            flow_placement=netgraph_core.FlowPlacement.PROPORTIONAL,
+            shortest_path=False,
+        )
+        return flow_value
 
     # Time the max flow execution
     timing_stats = _time_func(run_max_flow, iterations)

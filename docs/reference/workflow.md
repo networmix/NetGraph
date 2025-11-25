@@ -21,39 +21,53 @@ workflow:
   - step_type: MaximumSupportedDemand
     name: msd_baseline
     matrix_name: baseline_traffic_matrix
-  - step_type: TrafficMatrixPlacement
-    name: tm_placement
-    matrix_name: baseline_traffic_matrix
-    failure_policy: weighted_modes
-    iterations: 1000
-    baseline: true
+- step_type: TrafficMatrixPlacement
+  name: tm_placement
+  matrix_name: baseline_traffic_matrix
+  failure_policy: random_failures
+  iterations: 1000
+  baseline: true
 ```
 
 ## Execution Model
 
 - Steps run sequentially via `WorkflowStep.execute()`, which records timing and metadata and stores outputs under `{metadata, data}` for the step.
-- Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes a `NetworkView` that masks failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`.
+- Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes the network with exclusion sets applied to mask failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`.
 - Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, `seed_source`, and `active_seed`.
 
 ## Core Workflow Steps
 
 ### BuildGraph
 
-Export the network graph to node-link JSON for external analysis. Optional for other steps.
+Validates network topology and exports node-link JSON for external analysis. Optional for other workflow steps.
 
 ```yaml
 - step_type: BuildGraph
   name: build_graph
+  add_reverse: true  # Add reverse edges for bidirectional connectivity (default: true)
 ```
+
+Parameters:
+
+- `add_reverse`: If `true`, adds reverse edges for each link to enable bidirectional connectivity. Set to `false` for directed-only graphs. Default: `true`.
 
 ### NetworkStats
 
-Compute node, link, and degree metrics. Supports temporary exclusions.
+Compute node, link, and degree metrics. Supports temporary exclusions without modifying the base network.
 
 ```yaml
 - step_type: NetworkStats
   name: baseline_stats
+  include_disabled: false           # Include disabled nodes/links in stats
+  excluded_nodes: []                # Optional: Temporary node exclusions
+  excluded_links: []                # Optional: Temporary link exclusions
 ```
+
+Parameters:
+
+- `include_disabled`: If `true`, include disabled nodes and links in statistics. Default: `false`.
+- `excluded_nodes`: Optional list of node names to exclude temporarily (does not modify network).
+- `excluded_links`: Optional list of link IDs to exclude temporarily (does not modify network).
 
 ### MaxFlow
 
@@ -84,11 +98,13 @@ Monte Carlo placement of a named traffic matrix with optional alpha scaling.
 - step_type: TrafficMatrixPlacement
   name: tm_placement
   matrix_name: default
+  failure_policy: random_failures  # Optional: policy name in failure_policy_set
   iterations: 100
   parallelism: auto
+  placement_rounds: auto           # or an integer
   baseline: false
-  include_flow_details: true      # cost_distribution per flow
-  include_used_edges: false       # include per-demand used edge lists
+  include_flow_details: true       # cost_distribution per flow
+  include_used_edges: false        # include per-demand used edge lists
   store_failure_patterns: false
   # Alpha scaling – explicit or from another step
   alpha: 1.0
@@ -111,15 +127,31 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
 - step_type: MaximumSupportedDemand
   name: msd_default
   matrix_name: default
-  acceptance_rule: hard
-  alpha_start: 1.0
-  growth_factor: 2.0
-  resolution: 0.01
-  max_bracket_iters: 32
-  max_bisect_iters: 32
-  seeds_per_alpha: 1
-  placement_rounds: auto
+  acceptance_rule: hard          # Currently only "hard" is supported
+  alpha_start: 1.0               # Starting alpha value for search
+  growth_factor: 2.0             # Growth factor for bracketing (must be > 1.0)
+  alpha_min: 0.000001            # Minimum alpha bound (default: 1e-6)
+  alpha_max: 1000000000.0        # Maximum alpha bound (default: 1e9)
+  resolution: 0.01               # Convergence resolution for bisection
+  max_bracket_iters: 32          # Maximum bracketing iterations
+  max_bisect_iters: 32           # Maximum bisection iterations
+  seeds_per_alpha: 1             # Number of seeds to test per alpha (majority vote)
+  placement_rounds: auto         # Placement optimization rounds
 ```
+
+Parameters:
+
+- `matrix_name`: Name of the traffic matrix to analyze (default: "default").
+- `acceptance_rule`: Acceptance rule for feasibility (currently only "hard" is supported).
+- `alpha_start`: Initial alpha value to probe.
+- `growth_factor`: Multiplier for bracketing phase (must be > 1.0).
+- `alpha_min`: Minimum alpha bound for search.
+- `alpha_max`: Maximum alpha bound for search.
+- `resolution`: Convergence threshold for bisection.
+- `max_bracket_iters`: Maximum iterations for bracketing phase.
+- `max_bisect_iters`: Maximum iterations for bisection phase.
+- `seeds_per_alpha`: Number of random seeds to test per alpha (uses majority vote).
+- `placement_rounds`: Number of placement optimization rounds (`int` or `"auto"`).
 
 Outputs:
 

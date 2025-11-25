@@ -131,6 +131,8 @@ class TestBlueprintErrors:
 
     def test_malformed_adjacency_patterns(self):
         """Test malformed adjacency pattern definitions."""
+        import jsonschema.exceptions
+
         # Use raw YAML for invalid pattern value that builder might validate
         malformed_adjacency = """
         blueprints:
@@ -158,7 +160,8 @@ class TestBlueprintErrors:
             name: build_graph
         """
 
-        with pytest.raises((ValueError, KeyError)):
+        # Schema validation catches this before code execution
+        with pytest.raises(jsonschema.exceptions.ValidationError):
             scenario = Scenario.from_yaml(malformed_adjacency)
             scenario.run()
 
@@ -193,11 +196,9 @@ class TestEdgeCases:
 
         # Should succeed but produce empty graph
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert len(graph.nodes) == 0
-        assert len(graph.edges) == 0
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert len(graph_data.get("nodes", [])) == 0
+        assert len(graph_data.get("edges", [])) == 0
 
     def test_single_node_network(self):
         """Test scenario with only one node."""
@@ -209,11 +210,9 @@ class TestEdgeCases:
         scenario.run()
 
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert len(graph.nodes) == 1
-        assert len(graph.edges) == 0
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert len(graph_data.get("nodes", [])) == 1
+        assert len(graph_data.get("edges", [])) == 0
 
     def test_isolated_nodes(self):
         """Test network with isolated nodes (no connections)."""
@@ -226,11 +225,9 @@ class TestEdgeCases:
         scenario.run()
 
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert len(graph.nodes) == 3
-        assert len(graph.edges) == 0
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert len(graph_data.get("nodes", [])) == 3
+        assert len(graph_data.get("edges", [])) == 0
 
     def test_self_loop_links(self):
         """Test links from a node to itself."""
@@ -277,12 +274,16 @@ class TestEdgeCases:
 
         # Should handle parallel links correctly
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert len(graph.nodes) == 2
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert len(graph_data.get("nodes", [])) == 2
         # Should have multiple edges between the same nodes
-        assert graph.number_of_edges("NodeA", "NodeB") >= 2
+        edges = graph_data.get("edges", [])
+        nodeA_to_nodeB_edges = [
+            e
+            for e in edges
+            if e.get("source") == "NodeA" and e.get("target") == "NodeB"
+        ]
+        assert len(nodeA_to_nodeB_edges) >= 2
 
     def test_zero_capacity_links(self):
         """Test links with zero capacity."""
@@ -302,10 +303,8 @@ class TestEdgeCases:
 
         # Should handle zero capacity links appropriately
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert len(graph.nodes) == 2
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert len(graph_data.get("nodes", [])) == 2
 
     def test_very_large_network_parameters(self):
         """Test handling of very large numeric parameters."""
@@ -328,22 +327,25 @@ class TestEdgeCases:
 
         # Should handle large numbers without overflow issues
         exported = scenario.results.to_dict()
-        from ngraph.graph.io import node_link_to_graph
-
-        graph = node_link_to_graph(exported["steps"]["build_graph"]["data"]["graph"])
-        assert graph is not None, "BuildGraph should produce a graph"
-        assert len(graph.nodes) == 2
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        assert graph_data is not None, "BuildGraph should produce a graph"
+        assert len(graph_data.get("nodes", [])) == 2
 
     def test_special_characters_in_node_names(self):
-        """Test node names with special characters."""
+        """Test node names with valid special characters (dashes and underscores)."""
         builder = ScenarioDataBuilder()
-        special_names = ["node-with-dashes", "node.with.dots", "node_with_underscores"]
+        # Schema allows: alphanumeric, dashes, underscores (not dots)
+        special_names = ["node-with-dashes", "node_with_underscores", "Node-123_test"]
 
-        try:
-            builder.with_simple_nodes(special_names)
-            builder.with_workflow_step("BuildGraph", "build_graph")
-            scenario = builder.build_scenario()
-            scenario.run()
-        except (ValueError, KeyError):
-            # Some special characters might not be allowed
-            pass
+        builder.with_simple_nodes(special_names)
+        builder.with_workflow_step("BuildGraph", "build_graph")
+        scenario = builder.build_scenario()
+        scenario.run()
+
+        # Verify all nodes were created
+        exported = scenario.results.to_dict()
+        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
+        nodes = graph_data.get("nodes", [])
+        node_ids = [n.get("id") for n in nodes]
+        for name in special_names:
+            assert name in node_ids, f"Node {name} should be in graph"

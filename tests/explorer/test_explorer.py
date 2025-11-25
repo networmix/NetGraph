@@ -2,10 +2,10 @@ import logging
 
 import pytest
 
-from ngraph.components import Component, ComponentsLibrary
 from ngraph.explorer import (
     NetworkExplorer,
 )
+from ngraph.model.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 
 
@@ -270,7 +270,7 @@ def test_active_mode_excludes_disabled_nodes_and_links():
     network = Network()
     # Nodes: a (enabled), b (disabled) in dc1; c (enabled) in dc2
     network.nodes["dc1/a"] = Node(name="dc1/a")
-    network.nodes["dc1/b"] = Node(name="dc1/b", attrs={"disabled": True})
+    network.nodes["dc1/b"] = Node(name="dc1/b", disabled=True)
     network.nodes["dc2/c"] = Node(name="dc2/c")
 
     # Links:
@@ -280,7 +280,7 @@ def test_active_mode_excludes_disabled_nodes_and_links():
     network.links["l1"] = Link(source="dc1/a", target="dc1/b", capacity=100.0)
     network.links["l2"] = Link(source="dc1/a", target="dc2/c", capacity=200.0)
     network.links["l3"] = Link(
-        source="dc1/a", target="dc2/c", capacity=50.0, attrs={"disabled": True}
+        source="dc1/a", target="dc2/c", capacity=50.0, disabled=True
     )
 
     explorer = NetworkExplorer.explore_network(network)

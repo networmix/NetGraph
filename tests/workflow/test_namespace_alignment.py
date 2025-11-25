@@ -42,7 +42,7 @@ workflow:
 
 def test_cost_power_collects_levels_schema_smoke() -> None:
     # Minimal scenario with components and one link; results is a real store
-    from ngraph.components import Component, ComponentsLibrary
+    from ngraph.model.components import Component, ComponentsLibrary
     from ngraph.model.network import Link, Network, Node
 
     net = Network()

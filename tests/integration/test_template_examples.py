@@ -135,9 +135,9 @@ class TestScenarioTemplateBuilder:
         scenario.run()
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
         assert len(graph.nodes) == 4
 
 
@@ -149,9 +149,9 @@ class TestCommonScenarios:
         scenario.run()
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
         assert len(graph.nodes) == 3
 
 
@@ -196,9 +196,9 @@ class TestTemplateComposition:
         helper = create_scenario_helper(scenario)
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
         helper.set_graph(graph)
 
         assert len(graph.nodes) >= 3  # At least backbone nodes
@@ -232,9 +232,9 @@ class TestTemplateComposition:
 
             exported = scenario.results.to_dict()
             graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-            from ngraph.graph.io import node_link_to_graph
+            import networkx as nx
 
-            graph = node_link_to_graph(graph_dict)
+            graph = nx.node_link_graph(graph_dict, edges="edges")
             assert graph is not None, (
                 f"BuildGraph should produce a graph for scale {scale['nodes']}"
             )
@@ -371,9 +371,9 @@ class TestMainScenarioVariants:
         helper = create_scenario_helper(scenario)
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
         helper.set_graph(graph)
 
         # Validate it matches scenario 1 expectations
@@ -520,9 +520,9 @@ class TestMainScenarioVariants:
         helper = create_scenario_helper(scenario)
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
 
         # Validate basic structure (exact match would require complex blueprint logic)
         assert len(graph.nodes) > 15  # Should have many nodes from blueprint expansion
@@ -629,9 +629,9 @@ class TestMainScenarioVariants:
         helper = create_scenario_helper(scenario)
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        from ngraph.graph.io import node_link_to_graph
+        import networkx as nx
 
-        graph = node_link_to_graph(graph_dict)
+        graph = nx.node_link_graph(graph_dict, edges="edges")
         helper.set_graph(graph)
 
         # Validate basic structure matches scenario 3
@@ -669,9 +669,9 @@ class TestMainScenarioVariants:
             helper = create_scenario_helper(scenario)
             exported = scenario.results.to_dict()
             graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-            from ngraph.graph.io import node_link_to_graph
+            import networkx as nx
 
-            graph = node_link_to_graph(graph_dict)
+            graph = nx.node_link_graph(graph_dict, edges="edges")
 
             # Check for None graph and provide better error message
             assert graph is not None, (

@@ -1,16 +1,18 @@
 """
-Tests for flow analysis methods in the network module.
+Tests for flow analysis using the functional max_flow API.
 
-This module contains tests for:
-- Maximum flow calculations (max_flow)
-- Saturated edges identification (saturated_edges)
-- Sensitivity analysis (sensitivity_analysis)
-- Flow-related edge cases and overlapping patterns
+This module tests maximum flow calculations using the new functional API from
+ngraph.solver.maxflow after NetGraph-Core migration.
+
+Note: saturated_edges and sensitivity_analysis tests have been removed as these
+methods no longer exist in NetGraph-Core. These capabilities may be added back
+through different APIs in future versions.
 """
 
 import pytest
 
 from ngraph.model.network import Link, Network, Node
+from ngraph.solver.maxflow import max_flow
 
 
 class TestMaxFlow:
@@ -26,7 +28,7 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=5))
         net.add_link(Link("B", "C", capacity=3))
 
-        flow_value = net.max_flow("A", "C")
+        flow_value = max_flow(net, "A", "C")
         assert flow_value == {("A", "C"): 3.0}
 
     def test_max_flow_multi_parallel(self):
@@ -42,7 +44,7 @@ class TestMaxFlow:
         net.add_link(Link("A", "D", capacity=5))
         net.add_link(Link("D", "C", capacity=5))
 
-        flow_value = net.max_flow("A", "C")
+        flow_value = max_flow(net, "A", "C")
         assert flow_value == {("A", "C"): 10.0}
 
     def test_max_flow_no_source(self):
@@ -53,7 +55,7 @@ class TestMaxFlow:
         net.add_link(Link("B", "C", capacity=10))
 
         with pytest.raises(ValueError, match="No source nodes found matching 'A'"):
-            net.max_flow("A", "C")
+            max_flow(net, "A", "C")
 
     def test_max_flow_no_sink(self):
         """Test max flow when no sink nodes match the pattern."""
@@ -63,7 +65,7 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=10))
 
         with pytest.raises(ValueError, match="No sink nodes found matching 'C'"):
-            net.max_flow("A", "C")
+            max_flow(net, "A", "C")
 
     def test_max_flow_invalid_mode(self):
         """Invalid mode must raise ValueError."""
@@ -71,7 +73,7 @@ class TestMaxFlow:
         net.add_node(Node("A"))
         net.add_node(Node("B"))
         with pytest.raises(ValueError):
-            net.max_flow("A", "B", mode="foobar")
+            max_flow(net, "A", "B", mode="foobar")
 
     def test_max_flow_with_attribute_grouping_combine(self):
         """Test max flow when grouping sources/sinks by attribute directive."""
@@ -85,7 +87,7 @@ class TestMaxFlow:
         net.add_link(Link("S1", "T1", capacity=5.0))
         net.add_link(Link("S2", "T1", capacity=3.0))
 
-        flow = net.max_flow("attr:src_group", "attr:dst_group", mode="combine")
+        flow = max_flow(net, "attr:src_group", "attr:dst_group", mode="combine")
         assert flow == {("src", "dst"): 8.0}
 
     def test_max_flow_with_mixed_attr_and_regex(self):
@@ -99,7 +101,7 @@ class TestMaxFlow:
         net.add_link(Link("S1", "T1", capacity=2.0))
         net.add_link(Link("S2", "T2", capacity=3.0))
 
-        flow = net.max_flow("attr:role", r"^T\d$", mode="pairwise")
+        flow = max_flow(net, "attr:role", r"^T\d$", mode="pairwise")
         # Groups: sources -> {"edge": [S1, S2]}, sinks -> {"^T\\d$": [T1, T2]}
         # Expect pairs (edge, ^T\d$)
         assert ("edge", r"^T\d$") in flow
@@ -119,7 +121,8 @@ class TestMaxFlow:
         net.add_link(Link("B", "C", capacity=3.0))
 
         # Create a scenario where there are valid groups but they overlap
-        flow_result = net.max_flow(
+        flow_result = max_flow(
+            net,
             source_path=r"^(A|B)$",  # Matches A and B
             sink_path=r"^(B|C)$",  # Matches B and C (B overlaps!)
             mode="combine",
@@ -137,7 +140,7 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=10))
 
         with pytest.raises(ValueError):
-            net.max_flow("A", "B", mode="totally_invalid")
+            max_flow(net, "A", "B", mode="totally_invalid")
 
     def test_max_flow_disabled_nodes_coverage(self):
         """Test max_flow with disabled source nodes for coverage."""
@@ -147,73 +150,8 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=5.0))
 
         # This should trigger the empty sources condition
-        flow_result = net.max_flow("A", "B")
+        flow_result = max_flow(net, "A", "B")
         assert flow_result[("A", "B")] == 0.0
-
-    def test_saturated_edges_empty_combine_coverage(self):
-        """Test saturated_edges with empty nodes in combine mode for coverage."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B", disabled=True))
-        net.add_node(Node("C", disabled=True))
-        net.add_link(Link("A", "B", capacity=5.0))
-
-        # This should create empty combined sink nodes
-        saturated = net.saturated_edges("A", "B|C", mode="combine")
-        key = ("A", "B|C")
-        assert key in saturated
-        assert saturated[key] == []
-
-    def test_saturated_edges_invalid_mode_error(self):
-        """Invalid mode raises ValueError (no need to assert exact message)."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=10))
-
-        with pytest.raises(ValueError):
-            net.saturated_edges("A", "B", mode="bad_mode")
-
-    def test_sensitivity_analysis_empty_combine_coverage(self):
-        """Test sensitivity_analysis with empty nodes in combine mode for coverage."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B", disabled=True))
-        net.add_node(Node("C", disabled=True))
-        net.add_link(Link("A", "B", capacity=5.0))
-
-        # This should create empty combined sink nodes
-        sensitivity = net.sensitivity_analysis("A", "B|C", mode="combine")
-        key = ("A", "B|C")
-        assert key in sensitivity
-        assert sensitivity[key] == {}
-
-    def test_sensitivity_analysis_invalid_mode_error(self):
-        """Invalid mode raises ValueError (no need to assert exact message)."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=10))
-
-        with pytest.raises(ValueError):
-            net.sensitivity_analysis("A", "B", mode="wrong_mode")
-
-    def test_flow_methods_overlap_conditions_coverage(self):
-        """Test overlap conditions in flow methods for coverage."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=5.0))
-        net.add_link(Link("B", "C", capacity=3.0))
-
-        # Test overlap condition in saturated_edges pairwise mode
-        saturated = net.saturated_edges("A", "A", mode="pairwise")
-        assert saturated[("A", "A")] == []
-
-        # Test overlap condition in sensitivity_analysis pairwise mode
-        sensitivity = net.sensitivity_analysis("A", "A", mode="pairwise")
-        assert sensitivity[("A", "A")] == {}
 
     def test_no_private_method_calls(self):
         """Ensure public API suffices; don't rely on private helpers in tests."""
@@ -222,7 +160,7 @@ class TestMaxFlow:
         network.add_node(Node("T"))
         network.add_link(Link("S", "T", capacity=10))
 
-        flow = network.max_flow("S", "T")
+        flow = max_flow(network, "S", "T")
         assert flow[("S", "T")] == 10.0
 
 
@@ -236,7 +174,8 @@ class TestMaxFlowOverlapping:
         net.add_node(Node("N2"))
         net.add_link(Link("N1", "N2", capacity=5.0))
 
-        flow_result = net.max_flow(
+        flow_result = max_flow(
+            net,
             source_path=r"^N(\d+)$",
             sink_path=r"^N(\d+)$",
             mode="combine",
@@ -256,7 +195,8 @@ class TestMaxFlowOverlapping:
         net.add_node(Node("N2"))
         net.add_link(Link("N1", "N2", capacity=3.0))
 
-        flow_result = net.max_flow(
+        flow_result = max_flow(
+            net,
             source_path=r"^N(\d+)$",
             sink_path=r"^N(\d+)$",
             mode="pairwise",
@@ -289,7 +229,8 @@ class TestMaxFlowOverlapping:
         net.add_link(Link("BOTH1", "SINK1", capacity=1.5))
         net.add_link(Link("BOTH2", "BOTH1", capacity=1.0))
 
-        flow_result = net.max_flow(
+        flow_result = max_flow(
+            net,
             source_path=r"^(SRC\d+|BOTH\d+)$",  # Matches SRC1, BOTH1, BOTH2
             sink_path=r"^(SINK\d+|BOTH\d+)$",  # Matches SINK1, BOTH1, BOTH2 (partial overlap!)
             mode="pairwise",
@@ -316,7 +257,8 @@ class TestMaxFlowOverlapping:
         net.add_link(Link("N1", "N3", capacity=2.0))
         net.add_link(Link("N2", "N3", capacity=1.0))  # This link won't be used
 
-        flow_result = net.max_flow(
+        flow_result = max_flow(
+            net,
             source_path=r"^N(\d+)$",  # Matches N1, N2, N3
             sink_path=r"^N(\d+)$",  # Matches N1, N2, N3 (OVERLAPPING!)
             mode="pairwise",
@@ -341,273 +283,12 @@ class TestMaxFlowOverlapping:
         assert flow_result[("3", "1")] == 2.0  # N3->N1 (due to reverse edges)
 
 
-class TestSaturatedEdges:
-    """Tests for saturated edges identification."""
-
-    @pytest.fixture
-    def bottleneck_network(self):
-        """Fixture providing a network with a clear bottleneck."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=10.0))
-        net.add_link(Link("B", "C", capacity=5.0))  # bottleneck
-        return net
-
-    def test_saturated_edges_simple(self, bottleneck_network):
-        """Test saturated_edges method with a simple bottleneck scenario."""
-        saturated = bottleneck_network.saturated_edges("A", "C")
-
-        assert len(saturated) == 1
-        key = ("A", "C")
-        assert key in saturated
-
-        edge_list = saturated[key]
-        assert len(edge_list) == 1
-
-        edge = edge_list[0]
-        assert edge[0] == "B"  # source
-        assert edge[1] == "C"  # target
-
-    def test_saturated_edges_no_bottleneck(self):
-        """Test saturated_edges when there's no clear bottleneck."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=100.0))
-
-        saturated = net.saturated_edges("A", "B")
-
-        assert len(saturated) == 1
-        key = ("A", "B")
-        assert key in saturated
-
-    def test_saturated_edges_pairwise_mode(self):
-        """Test saturated_edges with pairwise mode using regex patterns."""
-        net = Network()
-        for node in ["A1", "A2", "B", "C1", "C2"]:
-            net.add_node(Node(node))
-
-        net.add_link(Link("A1", "B", capacity=3.0))
-        net.add_link(Link("A2", "B", capacity=4.0))
-        net.add_link(Link("B", "C1", capacity=2.0))
-        net.add_link(Link("B", "C2", capacity=3.0))
-
-        saturated = net.saturated_edges("A(.*)", "C(.*)", mode="pairwise")
-
-        assert len(saturated) >= 1
-
-        for (_src_label, _sink_label), edge_list in saturated.items():
-            assert isinstance(edge_list, list)
-
-    def test_saturated_edges_error_cases(self, bottleneck_network):
-        """Test error cases for saturated_edges."""
-        with pytest.raises(ValueError, match="No source nodes found matching"):
-            bottleneck_network.saturated_edges("NONEXISTENT", "C")
-
-        with pytest.raises(ValueError, match="No sink nodes found matching"):
-            bottleneck_network.saturated_edges("A", "NONEXISTENT")
-
-        with pytest.raises(ValueError, match="Invalid mode 'invalid'"):
-            bottleneck_network.saturated_edges("A", "C", mode="invalid")
-
-    def test_saturated_edges_disabled_nodes(self):
-        """Test saturated_edges with disabled nodes."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B", disabled=True))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=5.0))
-        net.add_link(Link("B", "C", capacity=3.0))
-
-        saturated = net.saturated_edges("A", "C")
-
-        key = ("A", "C")
-        assert key in saturated
-        assert saturated[key] == []
-
-    def test_saturated_edges_overlapping_groups(self):
-        """Test saturated_edges when source and sink groups overlap."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=5.0))
-
-        saturated = net.saturated_edges("A|B", "A|B")
-
-        key = ("A|B", "A|B")
-        assert key in saturated
-        assert saturated[key] == []
-
-    def test_saturated_edges_tolerance_parameter(self, bottleneck_network):
-        """Test saturated_edges with different tolerance values."""
-        saturated_strict = bottleneck_network.saturated_edges("A", "C", tolerance=1e-15)
-        saturated_loose = bottleneck_network.saturated_edges("A", "C", tolerance=1.0)
-
-        assert ("A", "C") in saturated_strict
-        assert ("A", "C") in saturated_loose
-
-
-class TestSensitivityAnalysis:
-    """Tests for sensitivity analysis."""
-
-    @pytest.fixture
-    def bottleneck_network(self):
-        """Fixture providing a network with a clear bottleneck."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=10.0))
-        net.add_link(Link("B", "C", capacity=5.0))  # bottleneck
-        return net
-
-    def test_sensitivity_analysis_simple(self, bottleneck_network):
-        """Test sensitivity_analysis method with a simple bottleneck scenario."""
-        sensitivity = bottleneck_network.sensitivity_analysis(
-            "A", "C", change_amount=1.0
-        )
-
-        assert len(sensitivity) == 1
-        key = ("A", "C")
-        assert key in sensitivity
-
-        sens_dict = sensitivity[key]
-        assert isinstance(sens_dict, dict)
-
-        if sens_dict:
-            for edge, flow_change in sens_dict.items():
-                assert isinstance(edge, tuple)
-                assert len(edge) == 3
-                assert isinstance(flow_change, (int, float))
-
-    def test_sensitivity_analysis_negative_change(self, bottleneck_network):
-        """Test sensitivity_analysis with negative capacity change."""
-        sensitivity = bottleneck_network.sensitivity_analysis(
-            "A", "C", change_amount=-1.0
-        )
-
-        assert ("A", "C") in sensitivity
-        sens_dict = sensitivity[("A", "C")]
-        assert isinstance(sens_dict, dict)
-
-    def test_sensitivity_analysis_pairwise_mode(self):
-        """Test sensitivity_analysis with pairwise mode."""
-        net = Network()
-        for node in ["A1", "A2", "B", "C1", "C2"]:
-            net.add_node(Node(node))
-
-        net.add_link(Link("A1", "B", capacity=3.0))
-        net.add_link(Link("A2", "B", capacity=4.0))
-        net.add_link(Link("B", "C1", capacity=2.0))
-        net.add_link(Link("B", "C2", capacity=3.0))
-
-        sensitivity = net.sensitivity_analysis("A(.*)", "C(.*)", mode="pairwise")
-
-        assert len(sensitivity) >= 1
-
-        for (_src_label, _sink_label), sens_dict in sensitivity.items():
-            assert isinstance(sens_dict, dict)
-
-    def test_sensitivity_analysis_error_cases(self, bottleneck_network):
-        """Test error cases for sensitivity_analysis."""
-        with pytest.raises(ValueError, match="No source nodes found matching"):
-            bottleneck_network.sensitivity_analysis("NONEXISTENT", "C")
-
-        with pytest.raises(ValueError, match="No sink nodes found matching"):
-            bottleneck_network.sensitivity_analysis("A", "NONEXISTENT")
-
-        with pytest.raises(ValueError, match="Invalid mode 'invalid'"):
-            bottleneck_network.sensitivity_analysis("A", "C", mode="invalid")
-
-    def test_sensitivity_analysis_disabled_nodes(self):
-        """Test sensitivity_analysis with disabled nodes."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B", disabled=True))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=5.0))
-        net.add_link(Link("B", "C", capacity=3.0))
-
-        sensitivity = net.sensitivity_analysis("A", "C")
-
-        key = ("A", "C")
-        assert key in sensitivity
-        assert sensitivity[key] == {}
-
-    def test_sensitivity_analysis_overlapping_groups(self):
-        """Test sensitivity_analysis when source and sink groups overlap."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=5.0))
-
-        sensitivity = net.sensitivity_analysis("A|B", "A|B")
-
-        key = ("A|B", "A|B")
-        assert key in sensitivity
-        assert sensitivity[key] == {}
-
-    def test_sensitivity_analysis_zero_change(self, bottleneck_network):
-        """Test sensitivity_analysis with zero capacity change."""
-        sensitivity = bottleneck_network.sensitivity_analysis(
-            "A", "C", change_amount=0.0
-        )
-
-        assert ("A", "C") in sensitivity
-        sens_dict = sensitivity[("A", "C")]
-        assert isinstance(sens_dict, dict)
-
-
 class TestFlowIntegration:
-    """Integration tests for flow analysis methods."""
-
-    def test_saturated_edges_and_sensitivity_consistency(self):
-        """Test that saturated_edges and sensitivity_analysis are consistent."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-
-        net.add_link(Link("A", "B", capacity=10.0))
-        net.add_link(Link("B", "C", capacity=5.0))
-
-        saturated = net.saturated_edges("A", "C")
-        sensitivity = net.sensitivity_analysis("A", "C")
-
-        key = ("A", "C")
-        saturated_edges_list = saturated[key]
-        sensitivity_dict = sensitivity[key]
-
-        for _edge in saturated_edges_list:
-            assert isinstance(sensitivity_dict, dict)
-
-    def test_complex_network_analysis(self):
-        """Test both methods on a more complex network topology."""
-        net = Network()
-
-        for node in ["A", "B", "C", "D"]:
-            net.add_node(Node(node))
-
-        net.add_link(Link("A", "B", capacity=5.0))
-        net.add_link(Link("A", "C", capacity=3.0))
-        net.add_link(Link("B", "D", capacity=4.0))
-        net.add_link(Link("C", "D", capacity=6.0))
-
-        saturated = net.saturated_edges("A", "D")
-        sensitivity = net.sensitivity_analysis("A", "D", change_amount=1.0)
-
-        key = ("A", "D")
-        assert key in saturated
-        assert key in sensitivity
-
-        assert isinstance(saturated[key], list)
-        assert isinstance(sensitivity[key], dict)
+    """Integration tests for max_flow with various parameters."""
 
     def test_flow_placement_parameter(self):
-        """Test that different flow_placement parameters work with both methods."""
-        from ngraph.algorithms.base import FlowPlacement
+        """Test that different flow_placement parameters work correctly."""
+        from ngraph.types.base import FlowPlacement
 
         net = Network()
         net.add_node(Node("A"))
@@ -621,41 +302,28 @@ class TestFlowIntegration:
             FlowPlacement.PROPORTIONAL,
             FlowPlacement.EQUAL_BALANCED,
         ]:
-            saturated = net.saturated_edges("A", "C", flow_placement=flow_placement)
-            sensitivity = net.sensitivity_analysis(
-                "A", "C", flow_placement=flow_placement
-            )
-
-            key = ("A", "C")
-            assert key in saturated
-            assert key in sensitivity
+            result = max_flow(net, "A", "C", flow_placement=flow_placement)
+            assert result == {("A", "C"): 5.0}
 
     def test_shortest_path_parameter(self):
-        """Test that shortest_path parameter works with both methods."""
+        """Test that shortest_path parameter works correctly."""
         net = Network()
 
         for node in ["A", "B", "C", "D"]:
             net.add_node(Node(node))
 
-        # Short path: A -> B -> D (cost 2)
+        # Short path: A -> B -> D (cost 2, capacity 3)
         net.add_link(Link("A", "B", capacity=5.0, cost=1))
         net.add_link(Link("B", "D", capacity=3.0, cost=1))
 
-        # Long path: A -> C -> D (cost 4)
+        # Long path: A -> C -> D (cost 4, capacity 4)
         net.add_link(Link("A", "C", capacity=4.0, cost=2))
         net.add_link(Link("C", "D", capacity=6.0, cost=2))
 
-        # Test with shortest_path=True
-        saturated_sp = net.saturated_edges("A", "D", shortest_path=True)
-        sensitivity_sp = net.sensitivity_analysis("A", "D", shortest_path=True)
+        # Test with shortest_path=True (single augmentation on lowest cost path)
+        result_sp = max_flow(net, "A", "D", shortest_path=True)
+        assert result_sp == {("A", "D"): 3.0}  # Limited by B->D capacity
 
-        key = ("A", "D")
-        assert key in saturated_sp
-        assert key in sensitivity_sp
-
-        # Test with shortest_path=False
-        saturated_all = net.saturated_edges("A", "D", shortest_path=False)
-        sensitivity_all = net.sensitivity_analysis("A", "D", shortest_path=False)
-
-        assert key in saturated_all
-        assert key in sensitivity_all
+        # Test with shortest_path=False (full max flow using all paths)
+        result_all = max_flow(net, "A", "D", shortest_path=False)
+        assert result_all == {("A", "D"): 7.0}  # 3.0 via B + 4.0 via C

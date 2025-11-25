@@ -30,10 +30,10 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from ngraph.algorithms.base import FlowPlacement
-from ngraph.failure.manager.manager import FailureManager
+from ngraph.exec.failure.manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.results.flow import FlowIterationResult
+from ngraph.types.base import FlowPlacement
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:

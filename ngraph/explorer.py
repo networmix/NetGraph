@@ -5,16 +5,26 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set
 
-from ngraph.components import (
+from ngraph.logging import get_logger
+from ngraph.model.components import (
     ComponentsLibrary,
     resolve_link_end_components,
     resolve_node_hardware,
     totals_with_multiplier,
 )
-from ngraph.logging import get_logger
-from ngraph.model.network import Network, Node
+from ngraph.model.network import Link, Network, Node
 
 logger = get_logger(__name__)
+
+
+def _node_is_disabled(node: Node) -> bool:
+    """Return True if the node should be treated as disabled."""
+    return bool(node.disabled)
+
+
+def _link_is_disabled(link: Link) -> bool:
+    """Return True if the link should be treated as disabled."""
+    return bool(link.disabled)
 
 
 @dataclass
@@ -257,13 +267,13 @@ class NetworkExplorer:
 
     def _compute_subtree_sets_active(self, node: TreeNode) -> Set[str]:
         """Recursively collect enabled node names into active_subtree_nodes.
-        A node is considered enabled if nd.attrs.get("disabled") is not truthy.
+        A node is considered enabled when the disabled flag is False.
         """
         collected = set()
         for child in node.children.values():
             collected |= self._compute_subtree_sets_active(child)
         for nd in node.raw_nodes:
-            if not nd.attrs.get("disabled"):
+            if not _node_is_disabled(nd):
                 collected.add(nd.name)
         node.active_subtree_nodes = collected
         return collected
@@ -373,7 +383,7 @@ class NetworkExplorer:
                     )
 
             # "Active" excludes disabled
-            if not nd.attrs.get("disabled"):
+            if not _node_is_disabled(nd):
                 for an in self._get_ancestors(tree_node):
                     an.active_stats.total_capex += cost_val
                     an.active_stats.total_power += power_val
@@ -386,7 +396,7 @@ class NetworkExplorer:
             if (
                 comp is not None
                 and node_comp_capacity > 0.0
-                and not nd.attrs.get("disabled")
+                and not _node_is_disabled(nd)
             ):
                 # Sum capacities of all enabled links attached to this node
                 attached_capacity = 0.0
@@ -394,14 +404,13 @@ class NetworkExplorer:
                 used_optics_equiv = 0.0
                 used_ports = 0.0
                 for lk in self.network.links.values():
-                    if lk.attrs.get("disabled"):
+                    if _link_is_disabled(lk):
                         continue
                     if lk.source == nd.name or lk.target == nd.name:
                         # If the opposite endpoint is disabled, skip in active view
                         other = lk.target if lk.source == nd.name else lk.source
-                        if self.network.nodes.get(other, Node(name=other)).attrs.get(
-                            "disabled"
-                        ):
+                        other_node = self.network.nodes.get(other, Node(name=other))
+                        if _node_is_disabled(other_node):
                             continue
                         attached_capacity += float(lk.capacity)
 
@@ -454,7 +463,7 @@ class NetworkExplorer:
                     ports_utilization=float(ports_utilization),
                     capacity_violation=bool(capacity_violation),
                     ports_violation=bool(ports_violation),
-                    disabled=bool(nd.attrs.get("disabled")),
+                    disabled=_node_is_disabled(nd),
                 )
 
                 # Enforce strict behavior after recording
@@ -617,11 +626,11 @@ class NetworkExplorer:
 
             # ----- "ACTIVE" stats and validations -----
             # If link or either endpoint is disabled, skip
-            if link.attrs.get("disabled"):
+            if _link_is_disabled(link):
                 continue
-            if self.network.nodes[src].attrs.get("disabled"):
+            if _node_is_disabled(self.network.nodes[src]):
                 continue
-            if self.network.nodes[dst].attrs.get("disabled"):
+            if _node_is_disabled(self.network.nodes[dst]):
                 continue
 
             # Validation: if both ends provide capacity, enforce min-end capacity

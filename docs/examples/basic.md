@@ -2,7 +2,7 @@
 
 This example builds a tiny topology inline to show APIs. For real analysis, prefer running a provided scenario and generating metrics via the CLI.
 
-See Quickstart for CLI usage and bundled scenarios.
+See [Tutorial](../getting-started/tutorial.md) for CLI usage and bundled scenarios.
 
 ## Creating a Simple Network
 
@@ -23,7 +23,8 @@ Let's create this network by using NetGraph's scenario system:
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.algorithms.base import FlowPlacement
+from ngraph.types.base import FlowPlacement
+from ngraph.solver.maxflow import max_flow, max_flow_with_details
 
 # Define network topology with parallel paths
 scenario_yaml = """
@@ -91,28 +92,30 @@ Now let's run MaxFlow using the high-level Network API:
 
 ```python
 # 1. "True" maximum flow (uses all available paths)
-max_flow_all = network.max_flow(source_path="A", sink_path="C")
+max_flow_all = max_flow(network, source_path="A", sink_path="C")
 print(f"Maximum flow (all paths): {max_flow_all}")
-# Result: 6.0 (uses both A→B→C path capacity of 3 and A→D→C path capacity of 3)
+# Result: {('A', 'C'): 6.0} (uses both A→B→C path capacity of 3 and A→D→C path capacity of 3)
 
 # 2. Flow along shortest paths only
-max_flow_shortest = network.max_flow(
+max_flow_shortest = max_flow(
+    network,
     source_path="A",
     sink_path="C",
     shortest_path=True
 )
 print(f"Flow on shortest paths: {max_flow_shortest}")
-# Result: 3.0 (only uses A→B→C path, ignoring higher-cost A→D→C path)
+# Result: {('A', 'C'): 3.0} (only uses A→B→C path, ignoring higher-cost A→D→C path)
 
 # 3. Equal-balanced flow placement on shortest paths
-max_flow_shortest_balanced = network.max_flow(
+max_flow_shortest_balanced = max_flow(
+    network,
     source_path="A",
     sink_path="C",
     shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED
 )
 print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
-# Result: 2.0 (splits flow equally across parallel edges in A→B and B→C)
+# Result: {('A', 'C'): 2.0} (splits flow equally across parallel edges in A→B and B→C)
 ```
 
 ## Results Interpretation
@@ -123,22 +126,23 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 
 Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
 
-## Cost Distribution (concise)
+## Cost Distribution
 
-Cost distribution shows how flow splits across path costs for latency/span analysis.
+Cost distribution shows how flow splits across path costs for latency/span analysis:
 
 ```python
 # Get flow analysis with cost distribution
-result = network.max_flow_with_summary(
+result = max_flow_with_details(
+    network,
     source_path="A",
     sink_path="C",
     mode="combine"
 )
 
 # Extract flow value and summary
-(src_label, sink_label), (flow_value, summary) = next(iter(result.items()))
+(src_label, sink_label), summary = next(iter(result.items()))
 
-print(f"Total flow: {flow_value}")
+print(f"Total flow: {summary.total_flow}")
 print(f"Cost distribution: {summary.cost_distribution}")
 
 # Example output:
@@ -150,9 +154,9 @@ print(f"Cost distribution: {summary.cost_distribution}")
 # - 3.0 units of flow use paths with total cost 4.0 (A→D→C path)
 ```
 
-### Latency Span (optional)
+### Latency Span Analysis
 
-If link costs approximate latency, you can derive a quick span summary:
+If link costs approximate latency, derive span summary from cost distribution:
 
 ```python
 def analyze_latency_span(cost_distribution):
@@ -161,7 +165,9 @@ def analyze_latency_span(cost_distribution):
         return "No flow paths available"
 
     total_flow = sum(cost_distribution.values())
-    weighted_avg_latency = sum(cost * flow for cost, flow in cost_distribution.items()) / total_flow
+    weighted_avg_latency = sum(
+        cost * flow for cost, flow in cost_distribution.items()
+    ) / total_flow
 
     min_latency = min(cost_distribution.keys())
     max_latency = max(cost_distribution.keys())
@@ -174,7 +180,7 @@ def analyze_latency_span(cost_distribution):
     print(f"  Flow distribution:")
     for cost, flow in sorted(cost_distribution.items()):
         percentage = (flow / total_flow) * 100
-        print(f"    {percentage:.1f}% of traffic uses paths with latency {cost:.1f}")
+        print(f"    {percentage:.1f}% uses paths with latency {cost:.1f}")
 
 # Example usage
 analyze_latency_span(summary.cost_distribution)
@@ -182,34 +188,40 @@ analyze_latency_span(summary.cost_distribution)
 
 This helps identify traffic concentration, latency span, and potential bottlenecks.
 
-## Advanced Analysis: Sensitivity Analysis
+## Advanced Analysis: Failure Simulation
 
-For network analysis, you can use the low-level graph algorithms to run sensitivity analysis and identify bottleneck edges:
+You can analyze the network under different failure scenarios by excluding nodes or links:
 
 ```python
-from ngraph.algorithms.max_flow import calc_max_flow, saturated_edges, run_sensitivity
+# Identify link to fail
+failed_links = set()
+for link_id, link in network.links.items():
+    if link.source == "A" and link.target == "D":
+        failed_links.add(link_id)
+        break
 
-# Get the underlying graph for low-level analysis
-graph = network.to_strict_multidigraph()
+# Compare flows: baseline vs. with failure
+baseline_flow_dict = max_flow(network, source_path="A", sink_path="C")
+baseline_flow = baseline_flow_dict[('A', 'C')]
 
-# Identify bottleneck (saturated) edges
-bottlenecks = saturated_edges(graph, "A", "C")
-print(f"Bottleneck edges: {bottlenecks}")
+degraded_flow_dict = max_flow(
+    network,
+    source_path="A",
+    sink_path="C",
+    excluded_links=failed_links
+)
+degraded_flow = degraded_flow_dict[('A', 'C')]
 
-# Perform sensitivity analysis - test increasing capacity by 1 unit
-sensitivity_increase = run_sensitivity(graph, "A", "C", change_amount=1.0)
-print(f"Sensitivity to capacity increases: {sensitivity_increase}")
-
-# Test sensitivity to capacity decreases
-sensitivity_decrease = run_sensitivity(graph, "A", "C", change_amount=-1.0)
-print(f"Sensitivity to capacity decreases: {sensitivity_decrease}")
+print(f"Baseline flow: {baseline_flow}")
+print(f"Flow with A->D link failed: {degraded_flow}")
+print(f"Impact: {baseline_flow - degraded_flow} units lost")
 ```
 
 This analysis helps identify:
 
-- **Bottleneck edges**: Links that are fully utilized and limit overall flow
-- **High-impact upgrades**: Which capacity increases provide the most benefit
-- **Vulnerability assessment**: How flow decreases when links are degraded
+- **Critical links**: Links whose failure significantly impacts flow
+- **Redundancy**: How well the network handles failures
+- **Vulnerability assessment**: Network resilience under different failure scenarios
 
 ## Next Steps
 

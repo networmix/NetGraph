@@ -87,13 +87,14 @@ def test_msd_no_feasible_raises(mock_eval: MagicMock) -> None:
 
 
 def test_msd_end_to_end_single_link() -> None:
-    # Build a tiny deterministic scenario: A --(cap=10)--> B, demand base=5
-    from ngraph.demand.manager.manager import TrafficManager
+    """Test MSD end-to-end with a simple single-link scenario."""
+    from ngraph.exec.analysis.flow import demand_placement_analysis
     from ngraph.workflow.maximum_supported_demand_step import (
         MaximumSupportedDemand as MSD,
     )
     from tests.integration.helpers import ScenarioDataBuilder
 
+    # Build a tiny deterministic scenario: A --(cap=10)--> B, demand base=5
     scenario = (
         ScenarioDataBuilder()
         .with_simple_nodes(["A", "B"])
@@ -123,45 +124,66 @@ def test_msd_end_to_end_single_link() -> None:
     base_demands = data.get("base_demands")
     assert isinstance(base_demands, list) and base_demands
 
-    # Verify feasibility at alpha*
-    tmset = MSD._build_scaled_matrix(base_demands, float(alpha_star))
-    tm = TrafficManager(
-        network=scenario.network, traffic_matrix_set=tmset, matrix_name="temp"
+    # Verify feasibility at alpha* using new Core-based API
+    scaled_demands = MSD._build_scaled_demands(base_demands, float(alpha_star))
+    demands_config = [
+        {
+            "source_path": d.source_path,
+            "sink_path": d.sink_path,
+            "demand": d.demand,
+            "mode": d.mode,
+            "priority": d.priority,
+            "flow_policy_config": d.flow_policy_config,
+        }
+        for d in scaled_demands
+    ]
+
+    result = demand_placement_analysis(
+        network=scenario.network,
+        excluded_nodes=set(),
+        excluded_links=set(),
+        demands_config=demands_config,
+        placement_rounds=1,
     )
-    tm.build_graph(add_reverse=True)
-    tm.expand_demands()
-    tm.place_all_demands(placement_rounds="auto")
-    res = tm.get_traffic_results(detailed=False)
-    for r in res:
-        total = float(r.total_volume)
-        placed = float(r.placed_volume)
-        assert pytest.approx(placed, rel=1e-9, abs=1e-9) == total
+
+    # At alpha*, all demands should be fully placed
+    assert result.summary.overall_ratio >= 1.0 - 1e-9
 
     # Verify infeasibility just above alpha*
     alpha_above = float(alpha_star) + 0.05
-    tmset2 = MSD._build_scaled_matrix(base_demands, alpha_above)
-    tm2 = TrafficManager(
-        network=scenario.network, traffic_matrix_set=tmset2, matrix_name="temp"
+    scaled_demands_above = MSD._build_scaled_demands(base_demands, alpha_above)
+    demands_config_above = [
+        {
+            "source_path": d.source_path,
+            "sink_path": d.sink_path,
+            "demand": d.demand,
+            "mode": d.mode,
+            "priority": d.priority,
+            "flow_policy_config": d.flow_policy_config,
+        }
+        for d in scaled_demands_above
+    ]
+
+    result_above = demand_placement_analysis(
+        network=scenario.network,
+        excluded_nodes=set(),
+        excluded_links=set(),
+        demands_config=demands_config_above,
+        placement_rounds=1,
     )
-    tm2.build_graph(add_reverse=True)
-    tm2.expand_demands()
-    tm2.place_all_demands(placement_rounds="auto")
-    res2 = tm2.get_traffic_results(detailed=False)
-    ratios = []
-    for r in res2:
-        total = float(r.total_volume)
-        placed = float(r.placed_volume)
-        ratios.append(1.0 if total == 0 else placed / total)
-    assert any(x < 1.0 - 1e-9 for x in ratios)
+
+    # Above alpha*, placement should fail (ratio < 1.0)
+    assert result_above.summary.overall_ratio < 1.0 - 1e-9
 
 
 def test_msd_auto_vs_one_equivalence_single_link() -> None:
-    # Same single-link scenario; compare auto vs 1 rounds
+    """Test that MSD with auto vs 1 placement rounds produces equivalent results."""
     from ngraph.workflow.maximum_supported_demand_step import (
         MaximumSupportedDemand as MSD,
     )
     from tests.integration.helpers import ScenarioDataBuilder
 
+    # Same single-link scenario; compare auto vs 1 rounds
     scenario = (
         ScenarioDataBuilder()
         .with_simple_nodes(["A", "B"])
@@ -196,4 +218,5 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
     exported = scenario.results.to_dict()
     alpha_auto = float(exported["steps"]["msd_auto"]["data"]["alpha_star"])
     alpha_one = float(exported["steps"]["msd_one"]["data"]["alpha_star"])
+    # Both should find approximately the same alpha* for this simple case
     assert abs(alpha_auto - alpha_one) <= 0.02

@@ -147,7 +147,7 @@ def _calculate_scenario_4_total_nodes() -> int:
     - 2 DCs, each with 2 pods, each with 2 racks
     - Each rack has 9 nodes (1 ToR + 8 servers)
     - Each DC has 2 leaf + 2 spine switches (4 fabric nodes)
-    - 1 rack is disabled (dc2_podb_rack2), reducing count by 9 nodes
+    - 1 rack is disabled (dc2_podb_rack2) but still included in graph with disabled=True
 
     Returns:
         Expected total node count for scenario 4.
@@ -160,37 +160,28 @@ def _calculate_scenario_4_total_nodes() -> int:
     # Calculate fabric nodes: 2 DCs × (2 leaf + 2 spine) = 8
     fabric_nodes = b["dcs"] * (b["leaf_switches_per_dc"] + b["spine_switches_per_dc"])
 
-    # Subtract disabled rack nodes: 1 rack × 9 nodes = 9
-    disabled_nodes = b["disabled_racks"] * b["nodes_per_rack"]
+    # Note: Disabled nodes are still included in the graph (with disabled=True attribute)
+    # They are not subtracted from the total count
+    total = rack_nodes + fabric_nodes
 
-    # Total after accounting for disabled rack that doesn't get re-enabled
-    total = rack_nodes + fabric_nodes - disabled_nodes
-
-    return total  # 72 + 8 - 9 = 71
+    return total  # 72 + 8 = 80
 
 
 def _calculate_scenario_4_total_links() -> int:
     """
-    Calculate approximate total directed edges for scenario 4.
+    Calculate total directed edges for scenario 4.
 
-    This is complex due to variable expansion, so we calculate major link types:
-    - Server to ToR links within racks
-    - Leaf to spine links within fabric
-    - Rack-to-fabric connections
-    - Inter-DC spine connections
+    BuildGraph now adds bidirectional edges for each link in the network.
+    The scenario has 84 physical links, which results in 168 directed edges
+    (84 forward + 84 reverse).
 
     Returns:
-        Approximate total directed edge count.
+        Total directed edge count.
     """
-    # Based on actual scenario execution:
-    # - Server to ToR links: 8 servers * 8 racks * 2 directions = 128
-    # - Leaf to spine links within fabrics: 2 leaf * 2 spine * 2 DCs * 2 directions = 16
-    # - Rack to fabric connections: 8 racks * 2 leaf per rack * 2 directions = 32
-    # - Inter-DC spine connections: 2 spine * 2 spine * 2 directions = 8
-
-    # - Some connections may be missing due to disabled nodes or complex adjacency patterns
-    # Actual observed value: 148 directed edges (updated after attribute cleanup)
-    return 148  # Current observed value from execution
+    # Scenario 4 has 84 physical links
+    # BuildGraph adds reverse edges, so total edges = links * 2
+    physical_links = 84
+    return physical_links * DEFAULT_BIDIRECTIONAL_MULTIPLIER  # 84 * 2 = 168
 
 
 # Main expectation structure for scenario 4

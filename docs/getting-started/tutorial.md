@@ -1,6 +1,6 @@
-# Quickstart
+# Tutorial
 
-This guide shows the fastest way to run a scenario from the CLI and a minimal programmatic example. Use examples for detailed scenarios and policies.
+This guide shows the fastest way to run a scenario from the CLI and a minimal programmatic example. See the Examples section for detailed scenarios and policies.
 
 ## CLI: run and inspect
 
@@ -41,11 +41,13 @@ exported = scenario.results.to_dict()
 print(list(exported["steps"].keys()))
 ```
 
-## Results shape (high level)
+## Results structure
 
-Results are exported as a fixed shape with `workflow`, `steps`, and `scenario`. Steps such as `MaxFlow`, `TrafficMatrixPlacement`, and `MaximumSupportedDemand` write under their step name. See Reference → Workflow for exact fields.
+Results are exported with a fixed structure containing `workflow`, `steps`, and `scenario` sections. Steps such as `MaxFlow`, `TrafficMatrixPlacement`, and `MaximumSupportedDemand` write their outputs under their step name. See the Workflow Reference for field details.
 
 ## Next steps
 
-- Examples → Bundled Scenarios
-- Reference → DSL, Workflow, CLI
+- [Bundled Scenarios](../examples/bundled-scenarios.md) - Ready-to-run example scenarios
+- [DSL Reference](../reference/dsl.md) - YAML scenario syntax
+- [Workflow Reference](../reference/workflow.md) - Analysis step configuration
+- [CLI Reference](../reference/cli.md) - Command-line interface details

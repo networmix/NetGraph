@@ -1,25 +1,30 @@
 # NetGraph Development Makefile
 # This Makefile provides convenient shortcuts for common development tasks
 
-.PHONY: help dev install check check-ci lint format test qt clean docs docs-serve docs-diagrams build check-dist publish-test publish validate perf info
+.PHONY: help venv clean-venv dev install check check-ci lint format test qt clean docs docs-serve docs-diagrams build check-dist publish-test publish validate perf info check-python hooks
 
 # Default target - show help
 .DEFAULT_GOAL := help
 
 # Toolchain (prefer project venv if present)
-VENV_BIN := $(PWD)/ngraph-venv/bin
-PYTHON := $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,python3)
-PIP := $(PYTHON) -m pip
-PYTEST := $(PYTHON) -m pytest
-RUFF := $(PYTHON) -m ruff
-PRECOMMIT := $(PYTHON) -m pre_commit
+VENV_BIN := $(PWD)/venv/bin
+# Use dynamic (recursive) assignment so a newly created venv is picked up
+# Prefer the python3 on PATH (e.g., set by setup-python)
+PY_FIND := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
+PYTHON ?= $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(PY_FIND))
+PIP = $(PYTHON) -m pip
+PYTEST = $(PYTHON) -m pytest
+RUFF = $(PYTHON) -m ruff
+PRECOMMIT = $(PYTHON) -m pre_commit
 
 help:
 	@echo "🔧 NetGraph Development Commands"
 	@echo ""
 	@echo "Setup & Installation:"
-	@echo "  make install       - Install package for usage (no dev dependencies)"
+	@echo "  make venv          - Create a local virtualenv (./venv)"
 	@echo "  make dev           - Full development environment (package + dev deps + hooks)"
+	@echo "  make install       - Install package for usage (no dev dependencies)"
+	@echo "  make clean-venv    - Remove virtual environment"
 	@echo ""
 	@echo "Code Quality & Testing:"
 	@echo "  make check         - Run pre-commit (auto-fix) + schema + tests, then lint"
@@ -46,11 +51,48 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make info          - Show project information"
+	@echo "  make hooks         - Run pre-commit on all files"
+	@echo "  make check-python  - Check if venv Python matches system Python"
 
 # Setup and Installation
 dev:
 	@echo "🚀 Setting up development environment..."
-	@bash dev/setup-dev.sh
+	@if [ ! -x "$(VENV_BIN)/python" ]; then \
+		if [ -z "$(PY_FIND)" ]; then \
+			echo "❌ Error: No Python interpreter found (python3 or python)"; \
+			exit 1; \
+		fi; \
+		echo "🐍 Creating virtual environment with $(PY_FIND) ..."; \
+		$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }; \
+		if [ ! -x "$(VENV_BIN)/python" ]; then \
+			echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
+			exit 1; \
+		fi; \
+		$(VENV_BIN)/python -m pip install -U pip wheel; \
+	fi
+	@echo "📦 Installing dev dependencies..."
+	@$(VENV_BIN)/python -m pip install -e .'[dev]'
+	@echo "🔗 Installing pre-commit hooks..."
+	@$(VENV_BIN)/python -m pre_commit install --install-hooks
+	@echo "✅ Dev environment ready. Activate with: source venv/bin/activate"
+	@$(MAKE) check-python
+
+venv:
+	@echo "🐍 Creating virtual environment in ./venv ..."
+	@if [ -z "$(PY_FIND)" ]; then \
+		echo "❌ Error: No Python interpreter found (python3 or python)"; \
+		exit 1; \
+	fi
+	@$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }
+	@if [ ! -x "$(VENV_BIN)/python" ]; then \
+		echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
+		exit 1; \
+	fi
+	@$(VENV_BIN)/python -m pip install -U pip wheel
+	@echo "✅ venv ready. Activate with: source venv/bin/activate"
+
+clean-venv:
+	@rm -rf venv/
 
 install:
 	@echo "📦 Installing package for usage (no dev dependencies)..."
@@ -184,7 +226,9 @@ info:
 	@echo "================================"
 	@echo ""
 	@echo "🐍 Python Environment:"
-	@echo "  Python version: $$($(PYTHON) --version)"
+	@echo "  Python (active): $$($(PYTHON) --version)"
+	@echo "  Python (system): $$($(PY_FIND) --version 2>/dev/null || echo 'missing')"
+	@$(MAKE) check-python
 	@echo "  Package version: $$($(PYTHON) -c 'import importlib.metadata; print(importlib.metadata.version("ngraph"))' 2>/dev/null || echo 'Not installed')"
 	@echo "  Virtual environment: $$(echo $$VIRTUAL_ENV | sed 's|.*/||' || echo 'None active')"
 	@echo ""
@@ -206,5 +250,19 @@ info:
 		git status --porcelain | head -5 | sed 's/^/    /'; \
 		if [ "$$(git status --porcelain | wc -l | tr -d ' ')" -gt "5" ]; then \
 			echo "    ... and $$(( $$(git status --porcelain | wc -l | tr -d ' ') - 5 )) more"; \
+		fi; \
+	fi
+
+hooks:
+	@echo "🔗 Running pre-commit on all files..."
+	@$(PRECOMMIT) run --all-files || (echo "Some pre-commit hooks failed. Fix and re-run." && exit 1)
+
+check-python:
+	@if [ -x "$(VENV_BIN)/python" ]; then \
+		VENV_VER=$$($(VENV_BIN)/python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown"); \
+		SYS_VER=$$($(PY_FIND) -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown"); \
+		if [ -n "$$VENV_VER" ] && [ -n "$$SYS_VER" ] && [ "$$VENV_VER" != "$$SYS_VER" ]; then \
+			echo "⚠️  WARNING: venv Python ($$VENV_VER) != system Python ($$SYS_VER)"; \
+			echo "   Run 'make clean-venv && make dev' to recreate venv with system Python"; \
 		fi; \
 	fi

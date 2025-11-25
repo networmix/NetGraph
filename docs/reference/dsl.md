@@ -472,11 +472,13 @@ traffic_matrix_set:
 
 **Flow Policies:**
 
-- `SHORTEST_PATHS_ECMP`: Equal-cost multi-path (ECMP) over shortest paths; equal split across paths.
-- `SHORTEST_PATHS_WCMP`: Weighted ECMP (WCMP) over equal-cost shortest paths; weighted split (proportional).
-- `TE_WCMP_UNLIM`: Traffic engineering weighted multipath (WCMP) with capacity-aware selection; unlimited LSPs.
-- `TE_ECMP_16_LSP`: Traffic engineering with 16 ECMP LSPs; equal split across LSPs.
-- `TE_ECMP_UP_TO_256_LSP`: Traffic engineering with up to 256 ECMP LSPs; equal split across LSPs.
+- `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths
+- `SHORTEST_PATHS_WCMP`: IP/IGP routing with weighted ECMP; proportional split by link capacity
+- `TE_WCMP_UNLIM`: MPLS-TE / SDN with capacity-aware WCMP; unlimited tunnels
+- `TE_ECMP_16_LSP`: MPLS-TE with exactly 16 ECMP LSPs per demand
+- `TE_ECMP_UP_TO_256_LSP`: MPLS-TE with up to 256 ECMP LSPs per demand
+
+See [Flow Policy Presets](design.md#flow-policy-presets) for detailed configuration mapping and real-world network behavior.
 
 ## `failure_policy_set` - Failure Simulation
 

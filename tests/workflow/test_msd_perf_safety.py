@@ -14,8 +14,8 @@ class _ScenarioStub:
 
 def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
     # Build a tiny scenario
-    from ngraph.demand.matrix import TrafficMatrixSet
-    from ngraph.demand.spec import TrafficDemand
+    from ngraph.model.demand.matrix import TrafficMatrixSet
+    from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.network import Link, Network, Node
 
     net = Network()

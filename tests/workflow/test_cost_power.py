@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from ngraph.components import Component, ComponentsLibrary
+from ngraph.model.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 from ngraph.results.store import Results
 from ngraph.workflow.cost_power import CostPower
@@ -105,7 +105,8 @@ def test_cost_power_include_disabled_filters_active_view() -> None:
     net.add_node(
         Node(
             "dc1/leaf/B",
-            attrs={"hardware": {"component": "NodeHW", "count": 1}, "disabled": True},
+            disabled=True,
+            attrs={"hardware": {"component": "NodeHW", "count": 1}},
         )
     )
 

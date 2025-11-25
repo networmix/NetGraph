@@ -33,8 +33,8 @@ network:
     assert scenario.network.attrs["name"] == "NetworkName"
     assert scenario.network.attrs["version"] == "1.0"
     assert len(scenario.network.nodes) == 2
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) == 2  # Bidirectional
+    # NetGraph models links as bidirectional by default (single link = 2 directional edges)
+    assert len(scenario.network.links) == 1  # 1 link between NodeA and NodeB
 
 
 def test_groups_example():
@@ -64,9 +64,8 @@ network:
     scenario = Scenario.from_yaml(yaml_content)
     # Should have 4 nodes total: 2 servers + 2 switches
     assert len(scenario.network.nodes) == 4
-    # Should have mesh connections: 2*2 = 4 bidirectional links = 8 edges
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) == 8
+    # Should have mesh connections: 2*2 = 4 links
+    assert len(scenario.network.links) == 4
 
 
 def test_adjacency_selector_match_filters_nodes():
@@ -119,10 +118,8 @@ network:
 
     scenario = Scenario.from_yaml(yaml_content)
     # Expect only /servers (4 nodes) to be considered (servers_b excluded via rack != rack-9)
-    # Mesh between 4 servers and 2 switches => 8 directed pairs but dedup as bidirectional added later.
-    graph = scenario.network.to_strict_multidigraph()
-    # 4*2*2 directions = 16 edges
-    assert len(list(graph.edges())) == 16
+    # Mesh between 4 servers and 2 switches => 4*2 = 8 links
+    assert len(scenario.network.links) == 8
 
 
 def test_bracket_expansion():
@@ -181,9 +178,8 @@ network:
     scenario = Scenario.from_yaml(yaml_content)
     # Should have 4 nodes: 2 from group_name_1 + 2 from group_name_2
     assert len(scenario.network.nodes) == 4
-    # Should have mesh connections: 2*2 = 4 bidirectional links = 8 edges
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) == 8
+    # Should have mesh connections: 2*2 = 4 links
+    assert len(scenario.network.links) == 4
 
 
 def test_components_example():
@@ -429,16 +425,15 @@ network:
     scenario = Scenario.from_yaml(yaml_content)
 
     # Find the specific overridden link
-    overridden_edge = None
-    graph = scenario.network.to_strict_multidigraph()
-    for u, v, data in graph.edges(data=True):
-        if u == "group1/node-1" and v == "group2/node-1":
-            overridden_edge = data
+    overridden_link = None
+    for _link_id, link in scenario.network.links.items():
+        if link.source == "group1/node-1" and link.target == "group2/node-1":
+            overridden_link = link
             break
 
-    assert overridden_edge is not None
-    assert overridden_edge["capacity"] == 200
-    assert overridden_edge["cost"] == 5
+    assert overridden_link is not None
+    assert overridden_link.capacity == 200
+    assert overridden_link.cost == 5
 
 
 def test_variable_expansion():
@@ -479,9 +474,8 @@ network:
     assert len(scenario.network.nodes) == 6
 
     # Each plane rack group (2 nodes) connects to spine group (2 nodes) in mesh
-    # 2 plane groups * 2 nodes each * 2 spine nodes * 2 directions = 16 edges
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) == 16
+    # 2 plane groups * 2 nodes each * 2 spine nodes = 4 * 2 = 8 links
+    assert len(scenario.network.links) == 8
 
 
 def test_unknown_blueprint_raises():
@@ -671,9 +665,8 @@ network:
     scenario = Scenario.from_yaml(yaml_content)
     # Expect 3 nodes total (2 leaf, 1 spine)
     assert len(scenario.network.nodes) == 3
-    # Mesh between 2 leaf and 1 spine = 2 bidirectional adjacencies => 4 edges
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) == 4
+    # Mesh between 2 leaf and 1 spine = 2 links
+    assert len(scenario.network.links) == 2
 
 
 def test_attr_selector_with_expand_vars_inside_blueprint_paths():
@@ -716,9 +709,8 @@ network:
     scenario = Scenario.from_yaml(yaml_content)
     # Expect 3 nodes total (2 leaf, 1 spine)
     assert len(scenario.network.nodes) == 3
-    # Without the fix, zero edges would be created due to prefixed attr: paths.
-    graph = scenario.network.to_strict_multidigraph()
-    assert len(list(graph.edges())) > 0
+    # Without the fix, zero links would be created due to prefixed attr: paths.
+    assert len(scenario.network.links) > 0
 
 
 def test_invalid_nodes_type_raises():

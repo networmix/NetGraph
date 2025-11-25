@@ -2,7 +2,7 @@
 
 This example demonstrates analysis of a 3-tier Clos fabric. For production use, run the bundled scenario and generate metrics via CLI, then iterate in Python if needed.
 
-Refer to Quickstart for running bundled scenarios via CLI.
+Refer to [Tutorial](../getting-started/tutorial.md) for running bundled scenarios via CLI.
 
 ## Scenario Overview
 
@@ -16,7 +16,8 @@ We'll create two separate 3-tier Clos networks and analyze the maximum flow capa
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.algorithms.base import FlowPlacement
+from ngraph.types.base import FlowPlacement
+from ngraph.solver.maxflow import max_flow
 
 scenario_yaml = """
 blueprints:
@@ -24,10 +25,10 @@ blueprints:
     groups:
       t1:
         node_count: 8
-        name_template: t1-{node_num}
+        name_template: "t1-{node_num}"
       t2:
         node_count: 8
-        name_template: t2-{node_num}
+        name_template: "t2-{node_num}"
 
     adjacency:
       - source: /t1
@@ -45,7 +46,7 @@ blueprints:
         use_blueprint: brick_2tier
       spine:
         node_count: 64
-        name_template: t3-{node_num}
+        name_template: "t3-{node_num}"
 
     adjacency:
       - source: b1/t2
@@ -87,7 +88,8 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 
 # Calculate maximum flow with ECMP (Equal Cost Multi-Path)
-max_flow_ecmp = network.max_flow(
+max_flow_ecmp = max_flow(
+    network,
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine",
@@ -127,22 +129,23 @@ We emulate partial inter-spine degradation by making capacities uneven across th
 the effect of the splitting policy.
 
 ```python
-from ngraph.algorithms.base import FlowPlacement
+from ngraph.types.base import FlowPlacement
 from ngraph.scenario import Scenario
+from ngraph.solver.maxflow import max_flow
 
 scenario_yaml = """
 blueprints:
   brick_2tier:
     groups:
-      t1: {node_count: 8, name_template: t1-{node_num}}
-      t2: {node_count: 8, name_template: t2-{node_num}}
+      t1: {node_count: 8, name_template: "t1-{node_num}"}
+      t2: {node_count: 8, name_template: "t2-{node_num}"}
     adjacency:
       - {source: /t1, target: /t2, pattern: mesh, link_params: {capacity: 2, cost: 1}}
   3tier_clos:
     groups:
       b1: {use_blueprint: brick_2tier}
       b2: {use_blueprint: brick_2tier}
-      spine: {node_count: 64, name_template: t3-{node_num}}
+      spine: {node_count: 64, name_template: "t3-{node_num}"}
     adjacency:
       - {source: b1/t2, target: spine, pattern: one_to_one, link_params: {capacity: 2, cost: 1}}
       - {source: b2/t2, target: spine, pattern: one_to_one, link_params: {capacity: 2, cost: 1}}
@@ -159,13 +162,15 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 
 # Baseline (symmetric)
-baseline_ecmp = network.max_flow(
+baseline_ecmp = max_flow(
+    network,
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine", shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
-baseline_wcmp = network.max_flow(
+baseline_wcmp = max_flow(
+    network,
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine", shortest_path=True,
@@ -186,13 +191,15 @@ for i, key in enumerate(sorted(groups.keys())):
     for lk, cap in zip(links, caps):
         lk.capacity = cap
 
-ecmp = network.max_flow(
+ecmp = max_flow(
+    network,
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine", shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
-wcmp = network.max_flow(
+wcmp = max_flow(
+    network,
     source_path=r"my_clos1.*(b[0-9]*)/t1",
     sink_path=r"my_clos2.*(b[0-9]*)/t1",
     mode="combine", shortest_path=True,
@@ -217,7 +224,7 @@ As expected, WCMP achieves higher throughput than ECMP when parallel links withi
 
 ## Network Structure Analysis
 
-We can also analyze the network structure to understand the flow distribution.
+We can also analyze the network structure using the NetworkExplorer:
 
 ```python
 from ngraph.explorer import NetworkExplorer
@@ -226,19 +233,9 @@ from ngraph.explorer import NetworkExplorer
 explorer = NetworkExplorer.explore_network(network)
 explorer.print_tree(skip_leaves=True, detailed=False)
 
-# Analyze specific paths between border nodes
-from ngraph.algorithms.spf import spf
-from ngraph.algorithms.paths import resolve_to_paths
-
-# Get border nodes from different segments
-border_nodes = [node for node in network.nodes.values() if '/b1/t1' in node.name or '/b2/t1' in node.name]
-src_node = next(node.name for node in border_nodes if "my_clos1/b1/t1" in node.name)
-dst_node = next(node.name for node in border_nodes if "my_clos2/b1/t1" in node.name)
-
-# Find shortest paths using SPF
-costs, pred = spf(network.to_strict_multidigraph(), src_node)
-paths = list(resolve_to_paths(src_node, dst_node, pred))
-print(f"Found {len(paths)} paths between segments")
+# The explorer shows hierarchical structure and connectivity patterns
+# For detailed path analysis, use max_flow_with_summary to get flow details
+# including cost distribution and path information
 ```
 
 ## Next Steps
