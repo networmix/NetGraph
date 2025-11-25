@@ -4,8 +4,14 @@ Defines small, serializable dataclasses that capture per-iteration outcomes
 for capacity and demand-placement style analyses in a unit-agnostic form.
 
 Objects expose `to_dict()` that returns JSON-safe primitives. Float-keyed
-distributions are normalized to string keys, and arbitrary `data` payloads are
-sanitized. These dicts are written under `data.flow_results` by steps.
+distributions are normalized to string keys via `_fmt_float_key()`, and
+arbitrary `data` payloads are sanitized. These dicts are written under
+`data.flow_results` by steps.
+
+Utilities:
+    _fmt_float_key: Formats floats as stable string keys for JSON serialization.
+        Uses fixed-point notation with trailing zeros stripped for human-readable,
+        canonical representations of numeric keys like cost distributions.
 """
 
 from __future__ import annotations

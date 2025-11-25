@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: November 25, 2025 at 04:05 UTC
+Generated from source code on: November 25, 2025 at 05:16 UTC
 
 Modules auto-discovered: 44
 
@@ -943,40 +943,32 @@ This module provides max-flow analysis for Network models by transforming
 multi-source/multi-sink problems into single-source/single-sink problems
 using pseudo nodes.
 
-Graph caching enables efficient repeated analysis with different exclusion
-sets by building the graph with pseudo nodes once and using O(|excluded|)
-masks for exclusions.
+Key functions:
+
+- max_flow(): Compute max flow values between node groups
+- max_flow_with_details(): Max flow with cost distribution details
+- sensitivity_analysis(): Identify critical edges and flow reduction
+- build_maxflow_cache(): Build cache for efficient repeated analysis
+
+Graph caching (via MaxFlowGraphCache) enables efficient repeated analysis with
+different exclusion sets by building the graph with pseudo nodes once and using
+O(|excluded|) masks for exclusions. Disabled nodes/links are automatically
+handled via the underlying GraphCache from ngraph.adapters.core.
 
 ### MaxFlowGraphCache
 
 Pre-built graph with pseudo nodes for efficient repeated max-flow analysis.
 
-Holds all components needed for running max-flow analysis with different
-exclusion sets without rebuilding the graph. Includes pre-computed pseudo
-node ID mappings for all source/sink pairs.
+Composes a GraphCache with additional pseudo node mappings for max-flow.
 
 Attributes:
-    graph_handle: Core Graph handle for algorithm execution.
-    multidigraph: Core StrictMultiDiGraph with topology data.
-    edge_mapper: Mapper for link_id <-> edge_id translation.
-    node_mapper: Mapper for node_name <-> node_id translation.
-    algorithms: Core Algorithms instance for running computations.
+    base_cache: Underlying GraphCache with graph, mappers, and disabled topology.
     pair_to_pseudo_ids: Mapping from (src_label, snk_label) to (pseudo_src_id, pseudo_snk_id).
-    disabled_node_ids: Pre-computed set of disabled node IDs.
-    disabled_link_ids: Pre-computed set of disabled link IDs.
-    link_id_to_edge_indices: Mapping from link_id to edge array indices.
 
 **Attributes:**
 
-- `graph_handle` (netgraph_core.Graph)
-- `multidigraph` (netgraph_core.StrictMultiDiGraph)
-- `edge_mapper` (EdgeMapper)
-- `node_mapper` (NodeMapper)
-- `algorithms` (netgraph_core.Algorithms)
+- `base_cache` (GraphCache)
 - `pair_to_pseudo_ids` (Dict[Tuple[str, str], Tuple[int, int]]) = {}
-- `disabled_node_ids` (Set[int]) = set()
-- `disabled_link_ids` (Set[str]) = set()
-- `link_id_to_edge_indices` (Dict[str, List[int]]) = {}
 
 ### build_maxflow_cache(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine') -> 'MaxFlowGraphCache'
 
@@ -2369,8 +2361,16 @@ Adapter layer for NetGraph-Core integration.
 Provides graph building, node/edge ID mapping, and result translation between
 NetGraph's scenario-level types and NetGraph-Core's internal representations.
 
+Key components:
+
+- build_graph(): One-shot graph construction with exclusions
+- build_graph_cache(): Cached graph for repeated analysis with masks
+- build_node_mask() / build_edge_mask(): O(|excluded|) mask construction
+- get_disabled_exclusions(): Helper to collect disabled topology for exclusions
+
 Graph caching enables efficient repeated analysis with different exclusion sets
-by building the graph once and using lightweight masks for exclusions.
+by building the graph once and using lightweight masks for exclusions. Disabled
+nodes and links are automatically included in masks built from a GraphCache.
 
 ### AugmentationEdge
 
@@ -2533,6 +2533,21 @@ Args:
 
 Returns:
     Boolean numpy array of shape (num_nodes,) where True means included.
+
+### get_disabled_exclusions(network: "'Network'", excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'tuple[Optional[Set[str]], Optional[Set[str]]]'
+
+Merge user exclusions with disabled nodes/links from the network.
+
+Use this when calling build_graph() to ensure disabled topology is excluded.
+
+Args:
+    network: Network instance.
+    excluded_nodes: User-provided node exclusions (or None).
+    excluded_links: User-provided link exclusions (or None).
+
+Returns:
+    Tuple of (full_excluded_nodes, full_excluded_links) including disabled.
+    Returns None for either if empty (for efficient build_graph calls).
 
 ---
 

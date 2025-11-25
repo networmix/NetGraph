@@ -194,9 +194,14 @@ The `GraphCache` dataclass holds pre-built graph components:
 - `graph_handle`, `multidigraph`: Core graph structures
 - `node_mapper`, `edge_mapper`: Name ↔ ID translation
 - `algorithms`: Core Algorithms instance
+- `disabled_node_ids`, `disabled_link_ids`: Pre-computed disabled topology
 - `link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
 
-When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
+When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks using `build_node_mask()` and `build_edge_mask()`. These mask builders automatically include disabled nodes/links from the cache, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
+
+**Disabled Topology Handling:**
+
+The `get_disabled_exclusions()` helper collects disabled nodes/links from a Network and merges them with user-provided exclusions. This is used when calling `build_graph()` directly (non-cached path). For the cached path, disabled topology is pre-computed in `GraphCache` and automatically applied by the mask builders.
 
 **C++ Side (`netgraph_core.StrictMultiDiGraph`):**
 

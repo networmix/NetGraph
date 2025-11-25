@@ -173,7 +173,7 @@ def _execute_spf_networkx_benchmark(
 
     # Create a closure that captures the graph and source
     def run_spf():
-        return nx.dijkstra_predecessor_and_distance(nx_graph, source)
+        return nx.dijkstra_predecessor_and_distance(nx_graph, source, weight="cost")
 
     # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)

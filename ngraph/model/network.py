@@ -1,4 +1,9 @@
-"""Network topology modeling with Node, Link, RiskGroup, and Network classes."""
+"""Network topology modeling with Node, Link, RiskGroup, and Network classes.
+
+This module provides the core network model classes (Node, Link, RiskGroup, Network)
+that can be used independently. The build_core_graph() method requires netgraph_core
+to be installed and will raise ImportError with a clear message if missing.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +13,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ngraph.logging import get_logger
 from ngraph.utils.ids import new_base64_uuid
-
-try:
-    import netgraph_core  # noqa: F401
-except ImportError as e:
-    raise ImportError(
-        "netgraph_core module not found. Ensure NetGraph-Core is installed."
-    ) from e
 
 LOGGER = get_logger(__name__)
 
@@ -413,8 +411,17 @@ class Network:
             - multidigraph: netgraph_core.StrictMultiDiGraph (picklable)
             - edge_mapper: EdgeMapper for link_id <-> ext_edge_id translation
             - node_mapper: NodeMapper for name <-> ID translation
+
+        Raises:
+            ImportError: If netgraph_core is not installed.
         """
-        from ngraph.adapters.core import build_graph
+        try:
+            from ngraph.adapters.core import build_graph
+        except ImportError as e:
+            raise ImportError(
+                "netgraph_core module not found. Ensure NetGraph-Core is installed. "
+                "See: https://github.com/networmix/NetGraph-Core"
+            ) from e
 
         return build_graph(
             self,

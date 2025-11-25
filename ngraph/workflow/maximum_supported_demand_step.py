@@ -275,13 +275,17 @@ class MaximumSupportedDemand(WorkflowStep):
         )
 
         # Phase 2: Build Core infrastructure with augmentations
-        from ngraph.adapters.core import build_graph
+        from ngraph.adapters.core import build_graph, get_disabled_exclusions
+
+        # Include disabled nodes/links in exclusions
+        excluded_nodes, excluded_links = get_disabled_exclusions(scenario.network)
 
         graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
             scenario.network,
             augmentations=expansion.augmentations,
+            excluded_nodes=excluded_nodes,
+            excluded_links=excluded_links,
         )
-        # Note: No exclusions in MSD evaluation (excluded_nodes/links are empty sets)
         # Augmentations include pseudo nodes for combine mode
 
         backend = netgraph_core.Backend.cpu()

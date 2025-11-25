@@ -4,9 +4,16 @@ This module provides max-flow analysis for Network models by transforming
 multi-source/multi-sink problems into single-source/single-sink problems
 using pseudo nodes.
 
-Graph caching enables efficient repeated analysis with different exclusion
-sets by building the graph with pseudo nodes once and using O(|excluded|)
-masks for exclusions.
+Key functions:
+- max_flow(): Compute max flow values between node groups
+- max_flow_with_details(): Max flow with cost distribution details
+- sensitivity_analysis(): Identify critical edges and flow reduction
+- build_maxflow_cache(): Build cache for efficient repeated analysis
+
+Graph caching (via MaxFlowGraphCache) enables efficient repeated analysis with
+different exclusion sets by building the graph with pseudo nodes once and using
+O(|excluded|) masks for exclusions. Disabled nodes/links are automatically
+handled via the underlying GraphCache from ngraph.adapters.core.
 """
 
 from __future__ import annotations
@@ -15,9 +22,16 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 import netgraph_core
-import numpy as np
 
-from ngraph.adapters.core import AugmentationEdge, EdgeMapper, NodeMapper, build_graph
+from ngraph.adapters.core import (
+    AugmentationEdge,
+    GraphCache,
+    build_edge_mask,
+    build_graph,
+    build_graph_cache,
+    build_node_mask,
+    get_disabled_exclusions,
+)
 from ngraph.model.network import Network
 from ngraph.types.base import FlowPlacement
 from ngraph.types.dto import FlowSummary
@@ -30,33 +44,50 @@ LARGE_CAPACITY = 1e15
 class MaxFlowGraphCache:
     """Pre-built graph with pseudo nodes for efficient repeated max-flow analysis.
 
-    Holds all components needed for running max-flow analysis with different
-    exclusion sets without rebuilding the graph. Includes pre-computed pseudo
-    node ID mappings for all source/sink pairs.
+    Composes a GraphCache with additional pseudo node mappings for max-flow.
 
     Attributes:
-        graph_handle: Core Graph handle for algorithm execution.
-        multidigraph: Core StrictMultiDiGraph with topology data.
-        edge_mapper: Mapper for link_id <-> edge_id translation.
-        node_mapper: Mapper for node_name <-> node_id translation.
-        algorithms: Core Algorithms instance for running computations.
+        base_cache: Underlying GraphCache with graph, mappers, and disabled topology.
         pair_to_pseudo_ids: Mapping from (src_label, snk_label) to (pseudo_src_id, pseudo_snk_id).
-        disabled_node_ids: Pre-computed set of disabled node IDs.
-        disabled_link_ids: Pre-computed set of disabled link IDs.
-        link_id_to_edge_indices: Mapping from link_id to edge array indices.
     """
 
-    graph_handle: netgraph_core.Graph
-    multidigraph: netgraph_core.StrictMultiDiGraph
-    edge_mapper: EdgeMapper
-    node_mapper: NodeMapper
-    algorithms: netgraph_core.Algorithms
+    base_cache: GraphCache
     pair_to_pseudo_ids: Dict[Tuple[str, str], Tuple[int, int]] = field(
         default_factory=dict
     )
-    disabled_node_ids: Set[int] = field(default_factory=set)
-    disabled_link_ids: Set[str] = field(default_factory=set)
-    link_id_to_edge_indices: Dict[str, List[int]] = field(default_factory=dict)
+
+    # Convenience properties for backward compatibility
+    @property
+    def graph_handle(self) -> netgraph_core.Graph:
+        return self.base_cache.graph_handle
+
+    @property
+    def multidigraph(self) -> netgraph_core.StrictMultiDiGraph:
+        return self.base_cache.multidigraph
+
+    @property
+    def edge_mapper(self):
+        return self.base_cache.edge_mapper
+
+    @property
+    def node_mapper(self):
+        return self.base_cache.node_mapper
+
+    @property
+    def algorithms(self) -> netgraph_core.Algorithms:
+        return self.base_cache.algorithms
+
+    @property
+    def disabled_node_ids(self) -> Set[int]:
+        return self.base_cache.disabled_node_ids
+
+    @property
+    def disabled_link_ids(self) -> Set[str]:
+        return self.base_cache.disabled_link_ids
+
+    @property
+    def link_id_to_edge_indices(self) -> Dict[str, List[int]]:
+        return self.base_cache.link_id_to_edge_indices
 
 
 def build_maxflow_cache(
@@ -165,103 +196,23 @@ def build_maxflow_cache(
     else:
         raise ValueError(f"Invalid mode '{mode}'. Must be 'combine' or 'pairwise'.")
 
-    # Build graph with all pseudo nodes (no exclusions - handled via masks)
-    graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
+    # Build base cache with all pseudo nodes (exclusions handled via masks)
+    base_cache = build_graph_cache(
         network,
         augmentations=augmentations if augmentations else None,
-        excluded_nodes=None,
-        excluded_links=None,
     )
-
-    # Create algorithms instance
-    backend = netgraph_core.Backend.cpu()
-    algorithms = netgraph_core.Algorithms(backend)
 
     # Pre-compute pseudo node IDs from names
     pair_to_pseudo_ids: Dict[Tuple[str, str], Tuple[int, int]] = {}
     for pair_key, (pseudo_src_name, pseudo_snk_name) in pair_to_pseudo_names.items():
-        pseudo_src_id = node_mapper.to_id(pseudo_src_name)
-        pseudo_snk_id = node_mapper.to_id(pseudo_snk_name)
+        pseudo_src_id = base_cache.node_mapper.to_id(pseudo_src_name)
+        pseudo_snk_id = base_cache.node_mapper.to_id(pseudo_snk_name)
         pair_to_pseudo_ids[pair_key] = (pseudo_src_id, pseudo_snk_id)
 
-    # Pre-compute disabled node IDs
-    disabled_node_ids: Set[int] = set()
-    for node_name, node in network.nodes.items():
-        if node.disabled and node_name in node_mapper.node_id_of:
-            disabled_node_ids.add(node_mapper.node_id_of[node_name])
-
-    # Pre-compute disabled link IDs
-    disabled_link_ids: Set[str] = {
-        link_id for link_id, link in network.links.items() if link.disabled
-    }
-
-    # Pre-compute link_id -> edge indices mapping
-    ext_edge_ids = multidigraph.ext_edge_ids_view()
-    link_id_to_edge_indices: Dict[str, List[int]] = {}
-    for edge_idx in range(len(ext_edge_ids)):
-        ext_id = int(ext_edge_ids[edge_idx])
-        if ext_id == -1:  # Skip augmentation edges
-            continue
-        edge_ref = edge_mapper.decode_ext_id(ext_id)
-        if edge_ref:
-            link_id_to_edge_indices.setdefault(edge_ref.link_id, []).append(edge_idx)
-
     return MaxFlowGraphCache(
-        graph_handle=graph_handle,
-        multidigraph=multidigraph,
-        edge_mapper=edge_mapper,
-        node_mapper=node_mapper,
-        algorithms=algorithms,
+        base_cache=base_cache,
         pair_to_pseudo_ids=pair_to_pseudo_ids,
-        disabled_node_ids=disabled_node_ids,
-        disabled_link_ids=disabled_link_ids,
-        link_id_to_edge_indices=link_id_to_edge_indices,
     )
-
-
-def _build_node_mask(
-    cache: MaxFlowGraphCache,
-    excluded_nodes: Optional[Set[str]] = None,
-) -> np.ndarray:
-    """Build node mask using O(|excluded|) complexity."""
-    num_nodes = len(cache.node_mapper.node_names)
-    mask = np.ones(num_nodes, dtype=bool)
-
-    # Exclude disabled nodes
-    for node_id in cache.disabled_node_ids:
-        mask[node_id] = False
-
-    # Exclude requested nodes
-    if excluded_nodes:
-        for node_name in excluded_nodes:
-            if node_name in cache.node_mapper.node_id_of:
-                mask[cache.node_mapper.node_id_of[node_name]] = False
-
-    return mask
-
-
-def _build_edge_mask(
-    cache: MaxFlowGraphCache,
-    excluded_links: Optional[Set[str]] = None,
-) -> np.ndarray:
-    """Build edge mask using O(|excluded|) complexity."""
-    num_edges = cache.multidigraph.num_edges()
-    mask = np.ones(num_edges, dtype=bool)
-
-    # Exclude disabled links
-    for link_id in cache.disabled_link_ids:
-        if link_id in cache.link_id_to_edge_indices:
-            for edge_idx in cache.link_id_to_edge_indices[link_id]:
-                mask[edge_idx] = False
-
-    # Exclude requested links
-    if excluded_links:
-        for link_id in excluded_links:
-            if link_id in cache.link_id_to_edge_indices:
-                for edge_idx in cache.link_id_to_edge_indices[link_id]:
-                    mask[edge_idx] = False
-
-    return mask
 
 
 def max_flow(
@@ -307,9 +258,15 @@ def max_flow(
     if _cache is not None:
         node_mask = None
         edge_mask = None
-        if excluded_nodes or excluded_links:
-            node_mask = _build_node_mask(_cache, excluded_nodes)
-            edge_mask = _build_edge_mask(_cache, excluded_links)
+        # Build masks if there are disabled nodes/links in cache or explicit exclusions
+        if (
+            excluded_nodes
+            or excluded_links
+            or _cache.disabled_node_ids
+            or _cache.disabled_link_ids
+        ):
+            node_mask = build_node_mask(_cache.base_cache, excluded_nodes)
+            edge_mask = build_edge_mask(_cache.base_cache, excluded_links)
 
         results: Dict[Tuple[str, str], float] = {}
         for pair_key, (
@@ -393,11 +350,16 @@ def max_flow(
                 AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
             )
 
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
         graph_handle, _, _, node_mapper = build_graph(
             network,
             augmentations=augmentations,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
+            excluded_nodes=full_excluded_nodes,
+            excluded_links=full_excluded_links,
         )
 
         pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -413,7 +375,12 @@ def max_flow(
         return {(combined_src_label, combined_snk_label): flow_value}
 
     if mode == "pairwise":
-        results: Dict[Tuple[str, str], float] = {}
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
+        results = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
                 active_src_names = _filter_active_nodes(src_nodes)
@@ -442,8 +409,8 @@ def max_flow(
                 graph_handle, _, _, node_mapper = build_graph(
                     network,
                     augmentations=augmentations,
-                    excluded_nodes=excluded_nodes,
-                    excluded_links=excluded_links,
+                    excluded_nodes=full_excluded_nodes,
+                    excluded_links=full_excluded_links,
                 )
 
                 pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -512,9 +479,15 @@ def max_flow_with_details(
     if _cache is not None:
         node_mask = None
         edge_mask = None
-        if excluded_nodes or excluded_links:
-            node_mask = _build_node_mask(_cache, excluded_nodes)
-            edge_mask = _build_edge_mask(_cache, excluded_links)
+        # Build masks if there are disabled nodes/links in cache or explicit exclusions
+        if (
+            excluded_nodes
+            or excluded_links
+            or _cache.disabled_node_ids
+            or _cache.disabled_link_ids
+        ):
+            node_mask = build_node_mask(_cache.base_cache, excluded_nodes)
+            edge_mask = build_edge_mask(_cache.base_cache, excluded_links)
 
         results: Dict[Tuple[str, str], FlowSummary] = {}
         for pair_key, (
@@ -604,11 +577,16 @@ def max_flow_with_details(
                 AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
             )
 
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
         graph_handle, _, _, node_mapper = build_graph(
             network,
             augmentations=augmentations,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
+            excluded_nodes=full_excluded_nodes,
+            excluded_links=full_excluded_links,
         )
 
         pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -629,7 +607,12 @@ def max_flow_with_details(
         }
 
     if mode == "pairwise":
-        results: Dict[Tuple[str, str], FlowSummary] = {}
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
+        results = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
                 active_src_names = _filter_active_nodes(src_nodes)
@@ -658,8 +641,8 @@ def max_flow_with_details(
                 graph_handle, _, _, node_mapper = build_graph(
                     network,
                     augmentations=augmentations,
-                    excluded_nodes=excluded_nodes,
-                    excluded_links=excluded_links,
+                    excluded_nodes=full_excluded_nodes,
+                    excluded_links=full_excluded_links,
                 )
 
                 pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -727,9 +710,15 @@ def sensitivity_analysis(
     if _cache is not None:
         node_mask = None
         edge_mask = None
-        if excluded_nodes or excluded_links:
-            node_mask = _build_node_mask(_cache, excluded_nodes)
-            edge_mask = _build_edge_mask(_cache, excluded_links)
+        # Build masks if there are disabled nodes/links in cache or explicit exclusions
+        if (
+            excluded_nodes
+            or excluded_links
+            or _cache.disabled_node_ids
+            or _cache.disabled_link_ids
+        ):
+            node_mask = build_node_mask(_cache.base_cache, excluded_nodes)
+            edge_mask = build_edge_mask(_cache.base_cache, excluded_links)
 
         results: Dict[Tuple[str, str], Dict[str, float]] = {}
         ext_edge_ids = _cache.multidigraph.ext_edge_ids_view()
@@ -823,11 +812,16 @@ def sensitivity_analysis(
                 AugmentationEdge(snk_name, pseudo_snk, LARGE_CAPACITY, 0)
             )
 
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
         graph_handle, multidigraph, link_mapper, node_mapper = build_graph(
             network,
             augmentations=augmentations,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
+            excluded_nodes=full_excluded_nodes,
+            excluded_links=full_excluded_links,
         )
 
         pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -841,7 +835,7 @@ def sensitivity_analysis(
             shortest_path=shortest_path,
         )
 
-        sensitivity_map: Dict[str, float] = {}
+        sensitivity_map = {}
         ext_edge_ids = multidigraph.ext_edge_ids_view()
         for edge_id, delta in sens_results:
             ext_id = ext_edge_ids[edge_id]
@@ -852,6 +846,11 @@ def sensitivity_analysis(
         return {(combined_src_label, combined_snk_label): sensitivity_map}
 
     if mode == "pairwise":
+        # Include disabled nodes/links in exclusions
+        full_excluded_nodes, full_excluded_links = get_disabled_exclusions(
+            network, excluded_nodes, excluded_links
+        )
+
         out: Dict[Tuple[str, str], Dict[str, float]] = {}
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
@@ -881,8 +880,8 @@ def sensitivity_analysis(
                 graph_handle, multidigraph, link_mapper, node_mapper = build_graph(
                     network,
                     augmentations=augmentations,
-                    excluded_nodes=excluded_nodes,
-                    excluded_links=excluded_links,
+                    excluded_nodes=full_excluded_nodes,
+                    excluded_links=full_excluded_links,
                 )
 
                 pseudo_src_id = node_mapper.to_id(pseudo_src)
@@ -896,7 +895,7 @@ def sensitivity_analysis(
                     shortest_path=shortest_path,
                 )
 
-                sensitivity_map: Dict[str, float] = {}
+                sensitivity_map = {}
                 ext_edge_ids = multidigraph.ext_edge_ids_view()
                 for edge_id, delta in sens_results:
                     ext_id = ext_edge_ids[edge_id]

@@ -6,7 +6,7 @@ instances using the WORKFLOW_STEP_REGISTRY and attaches unique names/seeds.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from ngraph.logging import get_logger
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
@@ -17,13 +17,13 @@ _logger = get_logger(__name__)
 
 def build_workflow_steps(
     workflow_data: List[Dict[str, Any]],
-    derive_seed,
+    derive_seed: Callable[[str], Optional[int]],
 ) -> List[WorkflowStep]:
     """Instantiate workflow steps from normalized dictionaries.
 
     Args:
         workflow_data: List of step dicts; each must have "step_type".
-        derive_seed: Callable(name: str) -> int | None, used to derive step seeds.
+        derive_seed: Callable that takes a step name and returns a seed or None.
 
     Returns:
         A list of WorkflowStep instances with unique names and optional seeds.

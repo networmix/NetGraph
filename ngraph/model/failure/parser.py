@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from ngraph.logging import get_logger
-from ngraph.model.failure.policy import FailureCondition, FailureMode, FailurePolicy
+from ngraph.model.failure.policy import (
+    FailureCondition,
+    FailureMode,
+    FailurePolicy,
+    FailureRule,
+)
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import RiskGroup
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
@@ -28,10 +33,13 @@ def build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
 
 
 def build_failure_policy(
-    fp_data: Dict[str, Any], *, policy_name: str, derive_seed
+    fp_data: Dict[str, Any],
+    *,
+    policy_name: str,
+    derive_seed: Callable[[str], Optional[int]],
 ) -> FailurePolicy:
-    def build_rules(rule_dicts: List[Dict[str, Any]]):
-        out: List[Any] = []
+    def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
+        out: List[FailureRule] = []
         for rule_dict in rule_dicts:
             entity_scope = rule_dict.get("entity_scope", "node")
             conditions_data = rule_dict.get("conditions", [])
@@ -47,18 +55,14 @@ def build_failure_policy(
                     )
                 )
             out.append(
-                type(
-                    "_Rule",
-                    (),
-                    {
-                        "entity_scope": entity_scope,
-                        "conditions": conditions,
-                        "logic": rule_dict.get("logic", "or"),
-                        "rule_type": rule_dict.get("rule_type", "all"),
-                        "probability": rule_dict.get("probability", 1.0),
-                        "count": rule_dict.get("count", 1),
-                        "weight_by": rule_dict.get("weight_by"),
-                    },
+                FailureRule(
+                    entity_scope=entity_scope,
+                    conditions=conditions,
+                    logic=rule_dict.get("logic", "or"),
+                    rule_type=rule_dict.get("rule_type", "all"),
+                    probability=rule_dict.get("probability", 1.0),
+                    count=rule_dict.get("count", 1),
+                    weight_by=rule_dict.get("weight_by"),
                 )
             )
         return out
@@ -93,7 +97,23 @@ def build_failure_policy(
     )
 
 
-def build_failure_policy_set(raw: Dict[str, Any], *, derive_seed) -> FailurePolicySet:
+def build_failure_policy_set(
+    raw: Dict[str, Any],
+    *,
+    derive_seed: Callable[[str], Optional[int]],
+) -> FailurePolicySet:
+    """Build a FailurePolicySet from raw config data.
+
+    Args:
+        raw: Mapping of policy name -> policy definition dict.
+        derive_seed: Callable to derive deterministic seeds from component names.
+
+    Returns:
+        Configured FailurePolicySet.
+
+    Raises:
+        ValueError: If raw is not a dict or contains invalid policy definitions.
+    """
     if not isinstance(raw, dict):
         raise ValueError(
             "'failure_policy_set' must be a mapping of name -> FailurePolicy definition"
@@ -101,6 +121,11 @@ def build_failure_policy_set(raw: Dict[str, Any], *, derive_seed) -> FailurePoli
 
     normalized_fps = normalize_yaml_dict_keys(raw)
     fps = FailurePolicySet()
+
+    # Capture derive_seed in a closure with a different name to avoid confusion
+    # when passing to build_failure_policy (which also has a derive_seed parameter)
+    outer_derive_seed = derive_seed
+
     for name, fp_data in normalized_fps.items():
         if not isinstance(fp_data, dict):
             raise ValueError(
@@ -109,7 +134,7 @@ def build_failure_policy_set(raw: Dict[str, Any], *, derive_seed) -> FailurePoli
         policy = build_failure_policy(
             fp_data,
             policy_name=name,
-            derive_seed=lambda n: derive_seed(f"failure_policy:{n}"),
+            derive_seed=lambda n, _fn=outer_derive_seed: _fn(f"failure_policy:{n}"),
         )
         fps.add(name, policy)
     return fps

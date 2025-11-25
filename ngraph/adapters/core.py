@@ -3,8 +3,15 @@
 Provides graph building, node/edge ID mapping, and result translation between
 NetGraph's scenario-level types and NetGraph-Core's internal representations.
 
+Key components:
+- build_graph(): One-shot graph construction with exclusions
+- build_graph_cache(): Cached graph for repeated analysis with masks
+- build_node_mask() / build_edge_mask(): O(|excluded|) mask construction
+- get_disabled_exclusions(): Helper to collect disabled topology for exclusions
+
 Graph caching enables efficient repeated analysis with different exclusion sets
-by building the graph once and using lightweight masks for exclusions.
+by building the graph once and using lightweight masks for exclusions. Disabled
+nodes and links are automatically included in masks built from a GraphCache.
 """
 
 from __future__ import annotations
@@ -19,6 +26,38 @@ from ngraph.types.dto import EdgeRef
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
+
+
+def get_disabled_exclusions(
+    network: "Network",
+    excluded_nodes: Optional[Set[str]] = None,
+    excluded_links: Optional[Set[str]] = None,
+) -> tuple[Optional[Set[str]], Optional[Set[str]]]:
+    """Merge user exclusions with disabled nodes/links from the network.
+
+    Use this when calling build_graph() to ensure disabled topology is excluded.
+
+    Args:
+        network: Network instance.
+        excluded_nodes: User-provided node exclusions (or None).
+        excluded_links: User-provided link exclusions (or None).
+
+    Returns:
+        Tuple of (full_excluded_nodes, full_excluded_links) including disabled.
+        Returns None for either if empty (for efficient build_graph calls).
+    """
+    disabled_nodes = {name for name, node in network.nodes.items() if node.disabled}
+    disabled_links = {lid for lid, link in network.links.items() if link.disabled}
+
+    full_excluded_nodes: Optional[Set[str]] = None
+    if disabled_nodes or excluded_nodes:
+        full_excluded_nodes = (excluded_nodes or set()) | disabled_nodes
+
+    full_excluded_links: Optional[Set[str]] = None
+    if disabled_links or excluded_links:
+        full_excluded_links = (excluded_links or set()) | disabled_links
+
+    return full_excluded_nodes, full_excluded_links
 
 
 class AugmentationEdge(NamedTuple):

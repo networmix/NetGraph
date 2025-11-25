@@ -167,22 +167,27 @@ class Path:
         The sub-path is formed by truncating the original path at the first occurrence
         of `dst_node` and ensuring that the final element has an empty tuple of edges.
 
-        Note: With EdgeRef-based paths, cost recalculation requires a graph lookup.
-        If graph is None, cost is set to 0 (caller must recalculate if needed).
+        Note: With EdgeRef-based paths, cost recalculation requires graph lookup.
+        The graph parameter is reserved for future implementation. Currently, cost
+        is set to infinity to explicitly indicate it needs recalculation. Check for
+        `math.isinf(sub_path.cost)` if you need the actual cost.
 
         Args:
             dst_node: The node at which to truncate the path.
-            graph: Optional graph for cost recalculation (not yet supported with EdgeRef).
-            cost_attr: The edge attribute name to use for cost (default is "cost").
+            graph: Reserved for future cost recalculation (currently unused).
+            cost_attr: Reserved for future cost recalculation (currently unused).
 
         Returns:
-            A new Path instance representing the sub-path from the original source to `dst_node`.
+            A new Path instance representing the sub-path from the original source
+            to `dst_node`. Cost is set to infinity to indicate recalculation needed.
 
         Raises:
             ValueError: If `dst_node` is not found in the current path.
         """
+        # Suppress unused parameter warnings - reserved for future cost recalculation
+        _ = graph, cost_attr
+
         new_elements = []
-        new_cost = 0.0
         found = False
 
         for node, parallel_edges in self.path:
@@ -193,10 +198,10 @@ class Path:
                 break
 
             new_elements.append((node, parallel_edges))
-            # Cost recalculation with EdgeRef requires mapping back to graph edges
-            # For now, we leave cost at 0 (caller can recalculate if needed)
 
         if not found:
             raise ValueError(f"Node '{dst_node}' not found in path.")
 
-        return Path(tuple(new_elements), new_cost)
+        # Cost set to infinity to explicitly signal recalculation is needed.
+        # EdgeRef-based cost calculation requires mapping back to graph edges.
+        return Path(tuple(new_elements), float("inf"))
