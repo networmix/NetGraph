@@ -73,22 +73,24 @@ ngraph run scenarios/backbone_clos.yml --results clos.results.json
 ### Python API
 
 ```python
-from ngraph.scenario import Scenario
-from ngraph.types.base import FlowPlacement
-from ngraph.solver.maxflow import max_flow
+from ngraph import Network, Node, Link, analyze, Mode
 
-# Load scenario
-scenario = Scenario.from_yaml("""
-network:
-  nodes: {A: {}, B: {}, C: {}}
-  links:
-    - {source: A, target: B, link_params: {capacity: 10, cost: 1}}
-    - {source: B, target: C, link_params: {capacity: 10, cost: 1}}
-""")
+# Build network programmatically
+network = Network()
+network.add_node(Node("A"))
+network.add_node(Node("B"))
+network.add_node(Node("C"))
+network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
+network.add_link(Link("B", "C", capacity=10.0, cost=1.0))
 
-# Compute max flow
-flow = max_flow(scenario.network, "A", "C", shortest_path=True)
-print(f"Max flow: {flow}")
+# Compute max flow with the analyze() API
+flow = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+print(f"Max flow: {flow}")  # {('^A$', '^C$'): 10.0}
+
+# Efficient repeated analysis with bound context
+ctx = analyze(network, source="^A$", sink="^C$", mode=Mode.COMBINE)
+baseline = ctx.max_flow()
+degraded = ctx.max_flow(excluded_nodes={"B"})  # Test failure scenario
 ```
 
 ## Example Scenario

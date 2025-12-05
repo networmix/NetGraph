@@ -1,15 +1,14 @@
 """Network topology modeling with Node, Link, RiskGroup, and Network classes.
 
 This module provides the core network model classes (Node, Link, RiskGroup, Network)
-that can be used independently. The build_core_graph() method requires netgraph_core
-to be installed and will raise ImportError with a clear message if missing.
+that can be used independently.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 from ngraph.logging import get_logger
 from ngraph.utils.ids import new_base64_uuid
@@ -386,47 +385,3 @@ class Network:
         for link_id, link_obj in self.links.items():
             if link_obj.risk_groups & to_enable:
                 self.enable_link(link_id)
-
-    def build_core_graph(
-        self,
-        add_reverse: bool = True,
-        augmentations: Optional[List] = None,
-        excluded_nodes: Optional[Set[str]] = None,
-        excluded_links: Optional[Set[str]] = None,
-    ) -> Tuple[Any, Any, Any, Any]:
-        """Build NetGraph-Core graph representation.
-
-        Convenience method that delegates to build_graph() from ngraph.adapters.core.
-        Supports augmentations (for pseudo nodes) and exclusions (for filtered topology).
-
-        Args:
-            add_reverse: If True, add reverse edges for bidirectional links.
-            augmentations: Optional list of AugmentationEdge for pseudo nodes.
-            excluded_nodes: Optional set of node names to exclude.
-            excluded_links: Optional set of link IDs to exclude.
-
-        Returns:
-            Tuple of (graph_handle, multidigraph, edge_mapper, node_mapper):
-            - graph_handle: netgraph_core.Graph (opaque handle, not picklable)
-            - multidigraph: netgraph_core.StrictMultiDiGraph (picklable)
-            - edge_mapper: EdgeMapper for link_id <-> ext_edge_id translation
-            - node_mapper: NodeMapper for name <-> ID translation
-
-        Raises:
-            ImportError: If netgraph_core is not installed.
-        """
-        try:
-            from ngraph.adapters.core import build_graph
-        except ImportError as e:
-            raise ImportError(
-                "netgraph_core module not found. Ensure NetGraph-Core is installed. "
-                "See: https://github.com/networmix/NetGraph-Core"
-            ) from e
-
-        return build_graph(
-            self,
-            add_reverse=add_reverse,
-            augmentations=augmentations,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
-        )

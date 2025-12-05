@@ -103,19 +103,7 @@ class TrafficMatrixPlacement(WorkflowStep):
                 f"Traffic matrix '{self.matrix_name}' not found in scenario."
             ) from exc
 
-        def _serialize_policy(cfg: Any) -> Any:
-            from ngraph.model.flow.policy_config import FlowPolicyPreset  # local import
-
-            if cfg is None:
-                return None
-            if isinstance(cfg, FlowPolicyPreset):
-                return cfg.name
-            # Fall back to string when it cannot be coerced to enum
-            try:
-                return FlowPolicyPreset(int(cfg)).name
-            except Exception as exc:
-                logger.debug("Unrecognized flow_policy_preset value: %r (%s)", cfg, exc)
-                return str(cfg)
+        from ngraph.model.flow.policy_config import serialize_policy_preset
 
         base_demands: list[dict[str, Any]] = [
             {
@@ -124,7 +112,7 @@ class TrafficMatrixPlacement(WorkflowStep):
                 "demand": float(getattr(td, "demand", 0.0)),
                 "mode": getattr(td, "mode", "pairwise"),
                 "priority": int(getattr(td, "priority", 0)),
-                "flow_policy_config": _serialize_policy(
+                "flow_policy_config": serialize_policy_preset(
                     getattr(td, "flow_policy_config", None)
                 ),
             }

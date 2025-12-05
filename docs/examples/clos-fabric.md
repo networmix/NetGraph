@@ -16,8 +16,7 @@ We'll create two separate 3-tier Clos networks and analyze the maximum flow capa
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.types.base import FlowPlacement
-from ngraph.solver.maxflow import max_flow
+from ngraph import analyze, Mode, FlowPlacement
 
 scenario_yaml = """
 blueprints:
@@ -88,11 +87,10 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 
 # Calculate maximum flow with ECMP (Equal Cost Multi-Path)
-max_flow_ecmp = max_flow(
-    network,
-    source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine",
+max_flow_ecmp = analyze(network).max_flow(
+    r"my_clos1.*(b[0-9]*)/t1",
+    r"my_clos2.*(b[0-9]*)/t1",
+    mode=Mode.COMBINE,
     shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
@@ -120,8 +118,8 @@ Combined with the path selection settings (shortest_path=True|False), we can ach
 
 In this example, we use the `FlowPlacement.EQUAL_BALANCED` policy and `shortest_path=True` to emulate ECMP behavior and we will compare it with WCMP `FlowPlacement.PROPORTIONAL` (capacity-weighted split across equal-cost paths) under two conditions:
 
-- Baseline: symmetric parallel inter-spine links → ECMP = WCMP (256.0).
-- Uneven links: make capacities within each equal-cost bundle different → WCMP
+- Baseline: symmetric parallel inter-spine links -> ECMP = WCMP (256.0).
+- Uneven links: make capacities within each equal-cost bundle different -> WCMP
   achieves higher throughput than ECMP, which is limited by equal splitting.
 
 We emulate partial inter-spine degradation by making capacities uneven across the
@@ -129,9 +127,8 @@ We emulate partial inter-spine degradation by making capacities uneven across th
 the effect of the splitting policy.
 
 ```python
-from ngraph.types.base import FlowPlacement
+from ngraph import analyze, Mode, FlowPlacement
 from ngraph.scenario import Scenario
-from ngraph.solver.maxflow import max_flow
 
 scenario_yaml = """
 blueprints:
@@ -162,18 +159,16 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 
 # Baseline (symmetric)
-baseline_ecmp = max_flow(
-    network,
-    source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine", shortest_path=True,
+baseline_ecmp = analyze(network).max_flow(
+    r"my_clos1.*(b[0-9]*)/t1",
+    r"my_clos2.*(b[0-9]*)/t1",
+    mode=Mode.COMBINE, shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
-baseline_wcmp = max_flow(
-    network,
-    source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine", shortest_path=True,
+baseline_wcmp = analyze(network).max_flow(
+    r"my_clos1.*(b[0-9]*)/t1",
+    r"my_clos2.*(b[0-9]*)/t1",
+    mode=Mode.COMBINE, shortest_path=True,
     flow_placement=FlowPlacement.PROPORTIONAL,
 )
 
@@ -191,18 +186,16 @@ for i, key in enumerate(sorted(groups.keys())):
     for lk, cap in zip(links, caps):
         lk.capacity = cap
 
-ecmp = max_flow(
-    network,
-    source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine", shortest_path=True,
+ecmp = analyze(network).max_flow(
+    r"my_clos1.*(b[0-9]*)/t1",
+    r"my_clos2.*(b[0-9]*)/t1",
+    mode=Mode.COMBINE, shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED,
 )
-wcmp = max_flow(
-    network,
-    source_path=r"my_clos1.*(b[0-9]*)/t1",
-    sink_path=r"my_clos2.*(b[0-9]*)/t1",
-    mode="combine", shortest_path=True,
+wcmp = analyze(network).max_flow(
+    r"my_clos1.*(b[0-9]*)/t1",
+    r"my_clos2.*(b[0-9]*)/t1",
+    mode=Mode.COMBINE, shortest_path=True,
     flow_placement=FlowPlacement.PROPORTIONAL,
 )
 print("Baseline ECMP:", baseline_ecmp)
@@ -234,7 +227,7 @@ explorer = NetworkExplorer.explore_network(network)
 explorer.print_tree(skip_leaves=True, detailed=False)
 
 # The explorer shows hierarchical structure and connectivity patterns
-# For detailed path analysis, use max_flow_with_summary to get flow details
+# For detailed path analysis, use max_flow_detailed to get flow details
 # including cost distribution and path information
 ```
 

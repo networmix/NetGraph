@@ -28,14 +28,30 @@ NetGraph is a network scenario analysis engine using a **hybrid Python+C++ archi
 
 ### Integration Points
 
-The Python layer uses an adapter (`ngraph.adapters.core`) to:
+The Python layer uses the `analyze()` function and `AnalysisContext` class (`ngraph.analysis`) to:
 
-1. Build Core graphs from Network instances with optional exclusions
-2. Map node names (str) ↔ NodeId (int32)
-3. Map link IDs (str) ↔ EdgeId/ext_edge_id (int64)
+1. Build Core graphs from Network instances with optional pseudo-nodes for source/sink groups
+2. Map node names (str) to NodeId (int32) and link IDs (str) to EdgeId/ext_edge_id (int64)
+3. Execute analysis methods (max_flow, shortest_paths, sensitivity) with efficient masking
 4. Translate results (costs, flows, paths) back to scenario-level objects
 
 Core algorithms release the GIL during execution, enabling concurrent Python threads to execute analysis in parallel with minimal Python-level overhead.
+
+**Primary API:**
+
+```python
+from ngraph import analyze, Mode
+
+# One-off analysis (unbound context)
+flow = analyze(network).max_flow("^src$", "^dst$", mode=Mode.COMBINE)
+
+# Efficient repeated analysis (bound context)
+ctx = analyze(network, source="^src$", sink="^dst$", mode=Mode.COMBINE)
+baseline = ctx.max_flow()
+degraded = ctx.max_flow(excluded_links=failed_links)
+```
+
+The `AnalysisContext` encapsulates all graph building and provides properties for advanced use by workflow steps and the FailureManager.
 
 ### Execution Flow
 
@@ -153,10 +169,9 @@ To simulate failures or other what-if scenarios without modifying the base netwo
 
 ```python
 # Analyze with specific exclusions
-results = max_flow(
-    network,
-    source_path="A",
-    sink_path="B",
+results = analyze(network).max_flow(
+    "^A$",
+    "^B$",
     excluded_nodes={"Node5"},
     excluded_links={"A|B|xyz123"}
 )
@@ -170,14 +185,13 @@ Multiple concurrent analyses can run on the same base network with different exc
 
 ### Graph Construction
 
-NetGraph builds graphs through an adapter layer that translates from the Python domain model to NetGraph-Core's C++ representation.
+NetGraph builds graphs through `AnalysisContext` which translates from the Python domain model to NetGraph-Core's C++ representation.
 
-**Python Side (`ngraph.adapters.core`):**
+**Python Side (`ngraph.analysis.AnalysisContext`):**
 
-Two construction patterns are provided:
+A single construction method is provided:
 
-- `build_graph()`: Constructs a Core graph with optional exclusions applied during build. Used for one-off solver calls where caching overhead isn't justified.
-- `build_graph_cache()`: Returns a `GraphCache` with pre-built components and mappings for efficient repeated analysis. Graph is built without exclusions; per-iteration exclusions are applied via masks at algorithm call time.
+- `AnalysisContext.from_network()`: Constructs an immutable context with pre-built Core graph, mappers, algorithms instance, and pre-computed disabled topology. Exclusions are applied at algorithm call time via boolean masks rather than during graph construction.
 
 **Graph Construction Steps:**
 
@@ -187,21 +201,22 @@ Two construction patterns are provided:
 - Constructs NumPy arrays (src, dst, capacity, cost, ext_edge_ids)
 - Supports augmentation edges (e.g., pseudo-source/sink for multi-source max-flow)
 
-**GraphCache for Repeated Analysis:**
+**Graph Container:**
 
-The `GraphCache` dataclass holds pre-built graph components:
+The `Graph` dataclass holds pre-built graph components:
 
-- `graph_handle`, `multidigraph`: Core graph structures
+- `handle`, `multidigraph`: Core graph structures
 - `node_mapper`, `edge_mapper`: Name ↔ ID translation
 - `algorithms`: Core Algorithms instance
 - `disabled_node_ids`, `disabled_link_ids`: Pre-computed disabled topology
 - `link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
+- `pseudo_node_context`: Optional context for pseudo source/sink node mappings
 
-When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks using `build_node_mask()` and `build_edge_mask()`. These mask builders automatically include disabled nodes/links from the cache, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
+When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks using `build_node_mask()` and `build_edge_mask()`. These mask builders automatically include disabled nodes/links from the `Graph`, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
 
 **Disabled Topology Handling:**
 
-The `get_disabled_exclusions()` helper collects disabled nodes/links from a Network and merges them with user-provided exclusions. This is used when calling `build_graph()` directly (non-cached path). For the cached path, disabled topology is pre-computed in `GraphCache` and automatically applied by the mask builders.
+Disabled nodes and links from the Network are pre-computed when `build_graph()` is called and stored in the `Graph` container. The mask builders (`build_node_mask()`, `build_edge_mask()`) automatically include these disabled elements alongside any per-iteration exclusions.
 
 **C++ Side (`netgraph_core.StrictMultiDiGraph`):**
 
@@ -394,9 +409,7 @@ configurable flow splitting across equal-cost parallel edges.
 
 **Goal:** Compute maximum feasible flow between source and sink under edge capacity constraints.
 
-**Multi-source/multi-sink:** Handled by the Python adapter layer (`ngraph.solver.maxflow`)
-which creates pseudo-source and pseudo-sink nodes with large-capacity, zero-cost edges
-to/from real endpoints. The C++ algorithm operates on single source and single sink.
+**Multi-source/multi-sink:** Handled by `AnalysisContext` which creates pseudo-source and pseudo-sink nodes with large-capacity, zero-cost edges to/from real endpoints. The C++ algorithm operates on single source and single sink.
 
 **Routing Semantics:** The algorithm's behavior is controlled by `require_capacity` and `shortest_path`:
 
@@ -508,22 +521,22 @@ Beyond routing semantics, NetGraph controls how flow splits across equal-cost pa
 
 ```python
 # IP/ECMP: Traditional router behavior (cost-based routing, equal splits)
-max_flow(network, src, dst,
-         flow_placement=FlowPlacement.EQUAL_BALANCED,
-         shortest_path=True,  # Single SPF tier
-         require_capacity=False)  # Ignore capacity when routing
+analyze(network).max_flow(src, dst,
+    flow_placement=FlowPlacement.EQUAL_BALANCED,
+    shortest_path=True,  # Single SPF tier
+    require_capacity=False)  # Ignore capacity when routing
 
 # SDN/TE with WCMP: Capacity-aware routing with proportional splits
-max_flow(network, src, dst,
-         flow_placement=FlowPlacement.PROPORTIONAL,
-         shortest_path=False,  # Iterative augmentation
-         require_capacity=True)  # Adapt routes to capacity
+analyze(network).max_flow(src, dst,
+    flow_placement=FlowPlacement.PROPORTIONAL,
+    shortest_path=False,  # Iterative augmentation
+    require_capacity=True)  # Adapt routes to capacity
 
 # WCMP: Fixed equal-cost paths with bandwidth-weighted splits
-max_flow(network, src, dst,
-         flow_placement=FlowPlacement.PROPORTIONAL,
-         shortest_path=True,  # Single tier of equal-cost paths
-         require_capacity=False)  # Fixed paths regardless of utilization
+analyze(network).max_flow(src, dst,
+    flow_placement=FlowPlacement.PROPORTIONAL,
+    shortest_path=True,  # Single tier of equal-cost paths
+    require_capacity=False)  # Fixed paths regardless of utilization
 ```
 
 These configurations enable realistic modeling of diverse forwarding behaviors: from traditional IP networks with best-effort delivery to modern SDN deployments with capacity-aware traffic engineering.
@@ -651,7 +664,7 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Optional baseline execution (no failures) for comparing degraded vs. intact capacity
 - Automatic parallelism adjustment: Forces serial execution when analysis function defined in `__main__` (notebook context) to avoid pickling failures
 - Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
-- Automatic graph cache pre-building: Before parallel iterations, builds `GraphCache` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
+- Automatic graph pre-building: Before parallel iterations, builds `Graph` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
 
 Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
 
@@ -713,16 +726,16 @@ NetGraph's design includes several features that differentiate it from tradition
 - Deterministic edge ordering for reproducible results
 - Cache-friendly CSR representation for efficient neighbor traversal
 
-**Graph Caching:**
+**Graph Building and Reuse:**
 
-For Monte Carlo analysis with many failure iterations, graph construction is amortized via `GraphCache`:
+For Monte Carlo analysis with many failure iterations, graph construction is amortized via the `Graph` dataclass:
 
 - Graph built once before iterations begin (includes all nodes and augmentation edges)
 - Per-iteration exclusions applied via boolean masks rather than graph rebuilding
 - Mask building is O(|excluded|) using pre-computed `link_id_to_edge_indices` mapping
-- FailureManager automatically pre-builds caches before parallel execution
+- FailureManager automatically pre-builds the `Graph` before parallel execution
 
-This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Caching eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
+This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Building the graph once eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
 
 **Monte Carlo Deduplication:**
 

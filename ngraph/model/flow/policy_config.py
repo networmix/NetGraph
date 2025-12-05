@@ -7,6 +7,9 @@ using NetGraph-Core's FlowPolicy and FlowPolicyConfig.
 from __future__ import annotations
 
 from enum import IntEnum
+from typing import Any, Optional
+
+from ngraph.logging import get_logger
 
 try:
     import netgraph_core
@@ -14,6 +17,8 @@ except ImportError as e:
     raise ImportError(
         "netgraph_core module not found. Ensure NetGraph-Core is installed."
     ) from e
+
+logger = get_logger(__name__)
 
 
 class FlowPolicyPreset(IntEnum):
@@ -75,8 +80,8 @@ def create_flow_policy(
     algorithms: netgraph_core.Algorithms,
     graph: netgraph_core.Graph,
     preset: FlowPolicyPreset,
-    node_mask=None,  # Will be supported after C++ bindings are rebuilt
-    edge_mask=None,  # Will be supported after C++ bindings are rebuilt
+    node_mask=None,
+    edge_mask=None,
 ) -> netgraph_core.FlowPolicy:
     """Create a FlowPolicy instance from a preset configuration.
 
@@ -187,3 +192,27 @@ def create_flow_policy(
 
     else:
         raise ValueError(f"Unknown flow policy preset: {preset}")
+
+
+def serialize_policy_preset(cfg: Any) -> Optional[str]:
+    """Serialize a FlowPolicyPreset to its string name for JSON storage.
+
+    Handles FlowPolicyPreset enum values, integer enum values, and string fallbacks.
+    Returns None for None input.
+
+    Args:
+        cfg: FlowPolicyPreset enum, integer, or other value to serialize.
+
+    Returns:
+        String name of the preset (e.g., "SHORTEST_PATHS_ECMP"), or None if input is None.
+    """
+    if cfg is None:
+        return None
+    if isinstance(cfg, FlowPolicyPreset):
+        return cfg.name
+    # Try to coerce integer to enum
+    try:
+        return FlowPolicyPreset(int(cfg)).name
+    except (ValueError, TypeError) as exc:
+        logger.debug("Unrecognized flow_policy_preset value: %r (%s)", cfg, exc)
+        return str(cfg)

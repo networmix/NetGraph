@@ -8,13 +8,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-from ngraph.adapters.core import AugmentationEdge
+from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Network
-
-# Pseudo edge capacity (avoid float('inf') due to Core int64 limitation)
-PSEUDO_EDGE_CAPACITY = 1e15
+from ngraph.utils.nodes import (
+    collect_active_node_names_from_groups,
+    collect_active_nodes_from_groups,
+)
 
 
 @dataclass
@@ -54,16 +55,6 @@ class DemandExpansion:
     augmentations: List[AugmentationEdge]
 
 
-def _collect_active_node_names(groups) -> list[str]:
-    """Extract active (non-disabled) node names from selection groups."""
-    return [n.name for nodes in groups.values() for n in nodes if not n.disabled]
-
-
-def _collect_active_nodes(groups) -> list:
-    """Extract active (non-disabled) nodes from selection groups."""
-    return [n for nodes in groups.values() for n in nodes if not n.disabled]
-
-
 def _expand_combine(
     td: TrafficDemand,
     src_groups,
@@ -74,8 +65,8 @@ def _expand_combine(
     pseudo_src = f"_src_{td.id}"
     pseudo_snk = f"_snk_{td.id}"
 
-    src_names = _collect_active_node_names(src_groups)
-    dst_names = _collect_active_node_names(dst_groups)
+    src_names = collect_active_node_names_from_groups(src_groups)
+    dst_names = collect_active_node_names_from_groups(dst_groups)
 
     if not src_names or not dst_names:
         return [], []
@@ -84,15 +75,11 @@ def _expand_combine(
 
     # Pseudo-source → real sources (unidirectional OUT)
     for src_name in src_names:
-        augmentations.append(
-            AugmentationEdge(pseudo_src, src_name, PSEUDO_EDGE_CAPACITY, 0)
-        )
+        augmentations.append(AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0))
 
     # Real sinks → pseudo-sink (unidirectional IN)
     for dst_name in dst_names:
-        augmentations.append(
-            AugmentationEdge(dst_name, pseudo_snk, PSEUDO_EDGE_CAPACITY, 0)
-        )
+        augmentations.append(AugmentationEdge(dst_name, pseudo_snk, LARGE_CAPACITY, 0))
 
     # Single aggregated demand
     demand = ExpandedDemand(
@@ -114,8 +101,8 @@ def _expand_pairwise(
     policy_preset: FlowPolicyPreset,
 ) -> tuple[list[ExpandedDemand], list[AugmentationEdge]]:
     """Expand pairwise mode: create demand for each (src, dst) pair."""
-    src_nodes = _collect_active_nodes(src_groups)
-    dst_nodes = _collect_active_nodes(dst_groups)
+    src_nodes = collect_active_nodes_from_groups(src_groups)
+    dst_nodes = collect_active_nodes_from_groups(dst_groups)
 
     # Filter self-pairs
     pairs = [

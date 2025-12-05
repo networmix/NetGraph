@@ -507,34 +507,34 @@ class FailureManager:
 
         logger.info(f"Running {mc_iters} Monte-Carlo iterations")
 
-        # Pre-build graph cache for analysis functions
+        # Pre-build context for analysis functions
         # This amortizes expensive graph construction across all iterations
-        if "_graph_cache" not in analysis_kwargs:
+        if "context" not in analysis_kwargs:
             analysis_kwargs = dict(analysis_kwargs)  # Don't mutate caller's dict
             cache_start = time.time()
 
             if "demands_config" in analysis_kwargs:
                 # Demand placement analysis
-                from ngraph.exec.analysis.flow import build_demand_graph_cache
+                from ngraph.exec.analysis.flow import build_demand_context
 
-                logger.debug("Pre-building graph cache for demand placement analysis")
-                analysis_kwargs["_graph_cache"] = build_demand_graph_cache(
+                logger.debug("Pre-building context for demand placement analysis")
+                analysis_kwargs["context"] = build_demand_context(
                     self.network, analysis_kwargs["demands_config"]
                 )
-                logger.debug(f"Graph cache built in {time.time() - cache_start:.3f}s")
+                logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
 
-            elif "source_regex" in analysis_kwargs and "sink_regex" in analysis_kwargs:
+            elif "source_path" in analysis_kwargs and "sink_path" in analysis_kwargs:
                 # Max-flow analysis or sensitivity analysis
-                from ngraph.exec.analysis.flow import build_maxflow_graph_cache
+                from ngraph.exec.analysis.flow import build_maxflow_context
 
-                logger.debug("Pre-building graph cache for max-flow analysis")
-                analysis_kwargs["_graph_cache"] = build_maxflow_graph_cache(
+                logger.debug("Pre-building context for max-flow analysis")
+                analysis_kwargs["context"] = build_maxflow_context(
                     self.network,
-                    analysis_kwargs["source_regex"],
-                    analysis_kwargs["sink_regex"],
+                    analysis_kwargs["source_path"],
+                    analysis_kwargs["sink_path"],
                     mode=analysis_kwargs.get("mode", "combine"),
                 )
-                logger.debug(f"Graph cache built in {time.time() - cache_start:.3f}s")
+                logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
 
         # Get function name safely (Protocol doesn't guarantee __name__)
         func_name = getattr(analysis_func, "__name__", "analysis_function")
@@ -939,6 +939,7 @@ class FailureManager:
         iterations: int = 100,
         parallelism: int = 1,
         shortest_path: bool = False,
+        require_capacity: bool = True,
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
         baseline: bool = False,
         seed: int | None = None,
@@ -959,6 +960,8 @@ class FailureManager:
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
             shortest_path: Whether to use shortest paths only.
+            require_capacity: If True (default), path selection considers available
+                capacity. If False, path selection is cost-only (true IP/IGP semantics).
             flow_placement: Flow placement strategy.
             baseline: Whether to include baseline (no failures) iteration.
             seed: Optional seed for reproducible results.
@@ -992,10 +995,11 @@ class FailureManager:
             baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
-            source_regex=source_path,
-            sink_regex=sink_path,
+            source_path=source_path,
+            sink_path=sink_path,
             mode=mode,
             shortest_path=shortest_path,
+            require_capacity=require_capacity,
             flow_placement=flow_placement,
             include_flow_details=include_flow_summary,
             **kwargs,
@@ -1004,37 +1008,45 @@ class FailureManager:
         return raw_results
 
     def _process_sensitivity_results(
-        self, results: list[dict[str, dict[str, float]]]
+        self, results: list[Any]
     ) -> dict[str, dict[str, dict[str, float]]]:
         """Process sensitivity results to aggregate component impact scores.
 
         Args:
-            results: List of sensitivity results from each iteration.
+            results: List of FlowIterationResult from each iteration.
 
         Returns:
             Dictionary mapping flow keys to component impact aggregations.
         """
         from collections import defaultdict
 
+        from ngraph.results.flow import FlowIterationResult
+
         # Aggregate component scores across all iterations
-        flow_aggregates = defaultdict(lambda: defaultdict(list))
+        flow_aggregates: dict[str, dict[str, list[float]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
 
         for result in results:
-            for flow_key, components in result.items():
-                for component_key, score in components.items():
+            if not isinstance(result, FlowIterationResult):
+                continue
+            for entry in result.flows:
+                flow_key = f"{entry.source}->{entry.destination}"
+                sensitivity = entry.data.get("sensitivity", {})
+                for component_key, score in sensitivity.items():
                     flow_aggregates[flow_key][component_key].append(score)
 
         # Calculate statistics for each component
-        processed_scores = {}
+        processed_scores: dict[str, dict[str, dict[str, float]]] = {}
         for flow_key, components in flow_aggregates.items():
-            flow_stats = {}
+            flow_stats: dict[str, dict[str, float]] = {}
             for component_key, scores in components.items():
                 if scores:
                     flow_stats[component_key] = {
                         "mean": sum(scores) / len(scores),
                         "max": max(scores),
                         "min": min(scores),
-                        "count": len(scores),
+                        "count": float(len(scores)),
                     }
             processed_scores[flow_key] = flow_stats
 
@@ -1180,8 +1192,8 @@ class FailureManager:
             baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
-            source_regex=source_path,
-            sink_regex=sink_path,
+            source_path=source_path,
+            sink_path=sink_path,
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,

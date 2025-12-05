@@ -37,8 +37,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_regex="datacenter.*",
-            sink_regex="edge.*",
+            source_path="datacenter.*",
+            sink_path="edge.*",
             mode="combine",
         )
 
@@ -58,8 +58,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_regex="datacenter.*",
-            sink_regex="edge.*",
+            source_path="datacenter.*",
+            sink_path="edge.*",
             include_flow_details=True,
             include_min_cut=True,
         )
@@ -84,8 +84,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_regex="datacenter.*",
-            sink_regex="edge.*",
+            source_path="datacenter.*",
+            sink_path="edge.*",
             mode="pairwise",
             shortest_path=True,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
@@ -108,8 +108,8 @@ class TestMaxFlowAnalysis:
                 network=simple_network,
                 excluded_nodes=set(),
                 excluded_links=set(),
-                source_regex="nonexistent.*",
-                sink_regex="also_nonexistent.*",
+                source_path="nonexistent.*",
+                sink_path="also_nonexistent.*",
             )
 
 
@@ -215,20 +215,32 @@ class TestSensitivityAnalysis:
 
     def test_sensitivity_analysis_basic(self, simple_network: Network) -> None:
         """Test basic sensitivity_analysis functionality."""
-        # Note: Current implementation returns empty dict as a placeholder
-        # This is documented in the function - full implementation requires
-        # additional Core API support for component criticality scores
         result = sensitivity_analysis(
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_regex="A",
-            sink_regex="C",
+            source_path="A",
+            sink_path="C",
             mode="combine",
         )
 
-        # Current implementation returns empty dict
-        assert isinstance(result, dict)
+        # Returns FlowIterationResult with sensitivity data
+        assert isinstance(result, FlowIterationResult)
+        assert len(result.flows) == 1
+
+        # Check flow entry structure
+        entry = result.flows[0]
+        assert entry.source == "A"
+        assert entry.destination == "C"
+        assert entry.demand == entry.placed == 10.0  # max flow value
+        assert entry.dropped == 0.0
+
+        # Check sensitivity data in entry.data
+        assert "sensitivity" in entry.data
+        sensitivity = entry.data["sensitivity"]
+        assert isinstance(sensitivity, dict)
+        # Both edges A->B and B->C are critical (saturated)
+        assert len(sensitivity) == 2
 
     def test_sensitivity_analysis_empty_result(self, simple_network: Network) -> None:
         """Test sensitivity_analysis with empty result."""
@@ -237,6 +249,6 @@ class TestSensitivityAnalysis:
                 network=simple_network,
                 excluded_nodes=set(),
                 excluded_links=set(),
-                source_regex="nonexistent.*",
-                sink_regex="also_nonexistent.*",
+                source_path="nonexistent.*",
+                sink_path="also_nonexistent.*",
             )

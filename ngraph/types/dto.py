@@ -31,26 +31,17 @@ class EdgeRef:
 
 
 @dataclass(frozen=True)
-class FlowSummary:
-    """Summary of max-flow computation results.
+class MaxFlowResult:
+    """Result of max-flow computation between a source/sink pair.
 
-    Captures edge flows, residual capacities, reachable set, and min-cut.
-
-    Breaking change from v1.x: Fields now use EdgeRef instead of (src, dst, key) tuples
-    for stable scenario-level edge identification.
+    Captures total flow, cost distribution, and optionally min-cut edges.
 
     Attributes:
         total_flow: Maximum flow value achieved.
         cost_distribution: Mapping of path cost to flow volume placed at that cost.
-        min_cut: Saturated edges crossing the s-t cut.
-        reachable_nodes: Nodes reachable from source in residual graph (optional).
-        edge_flow: Flow amount per edge (optional, only populated when requested).
-        residual_cap: Remaining capacity per edge after placement (optional).
+        min_cut: Saturated edges forming the min-cut (None if not computed).
     """
 
     total_flow: float
     cost_distribution: Dict[Cost, float]
-    min_cut: Tuple[EdgeRef, ...]
-    reachable_nodes: Tuple[str, ...] | None = None
-    edge_flow: Dict[EdgeRef, float] | None = None
-    residual_cap: Dict[EdgeRef, float] | None = None
+    min_cut: Tuple[EdgeRef, ...] | None = None

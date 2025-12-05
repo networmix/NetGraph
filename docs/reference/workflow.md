@@ -84,6 +84,7 @@ Monte Carlo maximum flow analysis between node groups.
   parallelism: auto             # or an integer
   baseline: true
   shortest_path: false
+  require_capacity: true        # false for true IP/IGP semantics
   flow_placement: PROPORTIONAL  # or EQUAL_BALANCED
   store_failure_patterns: false
   include_flow_details: false   # cost_distribution per flow
@@ -247,6 +248,8 @@ failure_policy: policy_name      # Name in failure_policy_set (default: null)
 baseline: true                   # Include baseline iteration first (default: false)
 parallelism: auto                # Worker processes (default: auto)
 shortest_path: false             # Restrict to shortest paths (default: false)
+require_capacity: true           # Path selection considers capacity (default: true)
+                                 # Set false for true IP/IGP semantics (cost-only routing)
 flow_placement: PROPORTIONAL     # PROPORTIONAL | EQUAL_BALANCED
 store_failure_patterns: false    # Store failure patterns in results
 include_flow_details: false      # Emit cost_distribution per flow

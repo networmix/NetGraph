@@ -15,6 +15,7 @@ YAML Configuration Example:
         iterations: 100
         parallelism: auto
         shortest_path: false
+        require_capacity: true           # false for true IP/IGP semantics
         flow_placement: "PROPORTIONAL"
         baseline: false
         seed: 42
@@ -54,6 +55,8 @@ class MaxFlow(WorkflowStep):
         iterations: Number of Monte Carlo trials.
         parallelism: Number of parallel worker processes.
         shortest_path: Whether to use shortest paths only.
+        require_capacity: If True (default), path selection considers capacity.
+            If False, path selection is cost-only (true IP/IGP semantics).
         flow_placement: Flow placement strategy.
         baseline: Whether to run first iteration without failures as baseline.
         seed: Optional seed for reproducible results.
@@ -69,6 +72,7 @@ class MaxFlow(WorkflowStep):
     iterations: int = 1
     parallelism: int | str = "auto"
     shortest_path: bool = False
+    require_capacity: bool = True
     flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL
     baseline: bool = False
     seed: int | None = None
@@ -138,6 +142,7 @@ class MaxFlow(WorkflowStep):
             iterations=self.iterations,
             parallelism=effective_parallelism,
             shortest_path=self.shortest_path,
+            require_capacity=self.require_capacity,
             flow_placement=self.flow_placement,
             baseline=self.baseline,
             seed=self.seed,
@@ -161,6 +166,7 @@ class MaxFlow(WorkflowStep):
             "sink_path": self.sink_path,
             "mode": self.mode,
             "shortest_path": bool(self.shortest_path),
+            "require_capacity": bool(self.require_capacity),
             "flow_placement": getattr(
                 self.flow_placement, "name", str(self.flow_placement)
             ),

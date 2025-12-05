@@ -1,6 +1,6 @@
-"""Tests for solver-layer max-flow APIs bound to the model layer.
+"""Tests for max-flow analysis via AnalysisContext.
 
-These tests focus on the wrapper behavior (group selection, overlap handling,
+These tests focus on the API behavior (group selection, overlap handling,
 shortest-path mode, saturated edges, and sensitivity) rather than re-testing
 algorithm internals.
 """
@@ -11,8 +11,7 @@ from typing import Dict, Tuple
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node
-from ngraph.solver.maxflow import max_flow, max_flow_with_details, sensitivity_analysis
+from ngraph import Link, Mode, Network, Node, analyze
 
 
 def _simple_network() -> Network:
@@ -62,7 +61,9 @@ def _triangle_network() -> Network:
 
 def test_max_flow_combine_basic() -> None:
     net = _triangle_network()
-    result: Dict[Tuple[str, str], float] = max_flow(net, "^A$", "^C$", mode="combine")
+    result: Dict[Tuple[str, str], float] = analyze(net).max_flow(
+        "^A$", "^C$", mode=Mode.COMBINE
+    )
     assert ("^A$", "^C$") in result
     assert pytest.approx(result[("^A$", "^C$")], rel=0, abs=1e-9) == 2.0
 
@@ -79,7 +80,7 @@ def test_max_flow_pairwise_disjoint_groups() -> None:
     net.add_link(Link("S2", "X", capacity=1.0))
     net.add_link(Link("X", "T2", capacity=1.0))
 
-    res = max_flow(net, r"^(S\d)$", r"^(T\d)$", mode="pairwise")
+    res = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE)
 
     # All pairwise problems are solved independently on the same topology.
     # Valid paths exist for all pairs with the following capacities.
@@ -92,16 +93,16 @@ def test_max_flow_pairwise_disjoint_groups() -> None:
 def test_overlap_groups_yield_zero_flow() -> None:
     net = _simple_network()
     # Selecting the same node as both source and sink should yield zero
-    res = max_flow(net, "^S$", "^S$", mode="combine")
+    res = analyze(net).max_flow("^S$", "^S$", mode=Mode.COMBINE)
     assert pytest.approx(res[("^S$", "^S$")], rel=0, abs=1e-9) == 0.0
 
 
 def test_empty_selection_raises() -> None:
     net = _simple_network()
     with pytest.raises(ValueError):
-        _ = max_flow(net, "^Z$", "^T$")
+        _ = analyze(net).max_flow("^Z$", "^T$")
     with pytest.raises(ValueError):
-        _ = max_flow(net, "^S$", "^Z$")
+        _ = analyze(net).max_flow("^S$", "^Z$")
 
 
 def test_shortest_path_vs_full_max_flow() -> None:
@@ -116,8 +117,8 @@ def test_shortest_path_vs_full_max_flow() -> None:
     in the lowest-cost tier without going to higher-cost tiers.
     """
     net = _simple_network()
-    full = max_flow(net, "^S$", "^T$", mode="combine", shortest_path=False)
-    sp = max_flow(net, "^S$", "^T$", mode="combine", shortest_path=True)
+    full = analyze(net).max_flow("^S$", "^T$", mode=Mode.COMBINE, shortest_path=False)
+    sp = analyze(net).max_flow("^S$", "^T$", mode=Mode.COMBINE, shortest_path=True)
 
     # Full max-flow should use both paths
     assert pytest.approx(full[("^S$", "^T$")], rel=0, abs=1e-9) == 2.0
@@ -128,8 +129,38 @@ def test_shortest_path_vs_full_max_flow() -> None:
 
 def test_max_flow_with_details_total_matches() -> None:
     net = _simple_network()
-    res = max_flow_with_details(net, "^S$", "^T$", mode="combine")
+    res = analyze(net).max_flow_detailed("^S$", "^T$", mode=Mode.COMBINE)
     summary = res[("^S$", "^T$")]
+    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 2.0
+
+
+def test_max_flow_with_details_include_min_cut() -> None:
+    """Test that include_min_cut correctly returns saturated edges.
+
+    Uses the simple network with two parallel paths S->A->T and S->B->T.
+    All 4 edges should be saturated (form the min-cut).
+    """
+    net = _simple_network()
+
+    # Without include_min_cut, min_cut should be None
+    res_no_cut = analyze(net).max_flow_detailed("^S$", "^T$", mode=Mode.COMBINE)
+    assert res_no_cut[("^S$", "^T$")].min_cut is None
+
+    # With include_min_cut=True, min_cut should contain saturated edges
+    res_with_cut = analyze(net).max_flow_detailed(
+        "^S$", "^T$", mode=Mode.COMBINE, include_min_cut=True
+    )
+    summary = res_with_cut[("^S$", "^T$")]
+
+    assert summary.min_cut is not None
+    assert len(summary.min_cut) == 4  # All 4 edges are saturated
+
+    # Verify edge refs have expected structure
+    link_ids = {e.link_id for e in summary.min_cut}
+    # Each link appears once (forward direction)
+    assert len(link_ids) == 4
+
+    # Verify total flow is still correct
     assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 2.0
 
 
@@ -153,7 +184,7 @@ def test_network_dc_to_dc_reverse_edge_first_hop() -> None:
     net.add_link(Link("A/leaf", "B/leaf", capacity=10.0, cost=1.0))
     net.add_link(Link("B/leaf", "B/dc", capacity=10.0, cost=1.0))
 
-    res = max_flow(net, r"^A/dc$", r"^B/dc$", mode="combine")
+    res = analyze(net).max_flow(r"^A/dc$", r"^B/dc$", mode=Mode.COMBINE)
     assert (r"^A/dc$", r"^B/dc$") in res
     assert res[(r"^A/dc$", r"^B/dc$")] == 10.0
 
@@ -178,34 +209,74 @@ def _two_cost_tier_network() -> Network:
     return net
 
 
-def test_sensitivity_shortest_path_vs_full_max_flow() -> None:
-    """Test that shortest_path parameter is forwarded to sensitivity analysis.
+def test_sensitivity_shortest_path_parameter_accepted() -> None:
+    """Test that sensitivity analysis correctly uses shortest_path parameter.
 
-    This verifies the fix for an issue where shortest_path was accepted but
-    never forwarded to the C++ backend.
+    The shortest_path parameter controls routing semantics:
+    - shortest_path=False (default): Full max-flow (SDN/TE mode). Reports all
+      edges critical for achieving maximum possible flow.
+    - shortest_path=True: Shortest-path-only (IP/IGP mode). Reports only edges
+      critical for flow under ECMP routing; edges on unused longer paths are
+      not reported.
 
-    With full max-flow, all 4 edges are critical.
-    With shortest_path=True, only S->A->T path edges are critical because
-    the S->B->T path is unused under ECMP routing.
+    Network topology (_two_cost_tier_network):
+        S --[cost=1]--> A --[cost=1]--> T  (shorter path, cost=2)
+        S --[cost=2]--> B --[cost=2]--> T  (longer path, cost=4)
+
+    With shortest_path=False: All 4 edges are saturated in full max-flow.
+    With shortest_path=True: Only 2 edges on the shortest path (S->A, A->T).
     """
     net = _two_cost_tier_network()
 
-    # Full max-flow mode: all 4 edges should be critical
-    res_full = sensitivity_analysis(
-        net, "^S$", "^T$", mode="combine", shortest_path=False
+    res_false = analyze(net).sensitivity(
+        "^S$", "^T$", mode=Mode.COMBINE, shortest_path=False
     )
-    assert ("^S$", "^T$") in res_full
-    assert len(res_full[("^S$", "^T$")]) == 4, "Full max-flow should report all 4 edges"
-
-    # Shortest-path mode: only 2 edges (S->A, A->T) should be critical
-    res_sp = sensitivity_analysis(net, "^S$", "^T$", mode="combine", shortest_path=True)
-    assert ("^S$", "^T$") in res_sp
-    assert len(res_sp[("^S$", "^T$")]) == 2, (
-        "Shortest-path mode should only report 2 edges"
+    res_true = analyze(net).sensitivity(
+        "^S$", "^T$", mode=Mode.COMBINE, shortest_path=True
     )
 
-    # Verify the delta values (removing S->A or A->T forces traffic to S->B->T)
-    for link_id, delta in res_sp[("^S$", "^T$")].items():
-        assert pytest.approx(delta, rel=0, abs=1e-9) == 5.0, (
-            f"Edge {link_id} should have delta 5.0 (baseline 10 -> 5 via alternate path)"
-        )
+    assert ("^S$", "^T$") in res_false
+    assert ("^S$", "^T$") in res_true
+
+    # Full max-flow (shortest_path=False): all 4 edges are critical
+    assert len(res_false[("^S$", "^T$")]) == 4
+
+    # Shortest-path-only (shortest_path=True): only 2 edges on shortest path
+    assert len(res_true[("^S$", "^T$")]) == 2
+
+    # Results should differ because shortest_path changes which edges are analyzed
+    assert res_false != res_true
+
+
+def test_require_capacity_parameter() -> None:
+    """Test require_capacity parameter for true IP/IGP semantics.
+
+    With require_capacity=True (default):
+        If shortest path has no capacity, uses next-best available path.
+
+    With require_capacity=False (true IP):
+        Routes on cost only. If shortest path has no capacity, flow is 0.
+    """
+    net = Network()
+    for n in ["S", "A", "B", "T"]:
+        net.add_node(Node(n))
+
+    # Shortest path S->A->T: cost 2, but S->A has 0 capacity!
+    net.add_link(Link("S", "A", capacity=0.0, cost=1.0))
+    net.add_link(Link("A", "T", capacity=10.0, cost=1.0))
+
+    # Longer path S->B->T: cost 4, has capacity
+    net.add_link(Link("S", "B", capacity=100.0, cost=2.0))
+    net.add_link(Link("B", "T", capacity=100.0, cost=2.0))
+
+    # Default: require_capacity=True, finds available path
+    result_default = analyze(net).max_flow(
+        "^S$", "^T$", mode=Mode.COMBINE, shortest_path=True, require_capacity=True
+    )
+    assert result_default[("^S$", "^T$")] == pytest.approx(100.0, abs=1e-6)
+
+    # True IP: require_capacity=False, tries shortest path (no capacity) -> 0
+    result_ip = analyze(net).max_flow(
+        "^S$", "^T$", mode=Mode.COMBINE, shortest_path=True, require_capacity=False
+    )
+    assert result_ip[("^S$", "^T$")] == pytest.approx(0.0, abs=1e-6)

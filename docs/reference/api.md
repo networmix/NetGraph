@@ -2,11 +2,11 @@
 
 Quick links:
 
-- [Design](design.md) — architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) — YAML syntax for scenario definition
-- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
-- [CLI Reference](cli.md) — command-line tools for running scenarios
-- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
+- [Design](design.md) -- architecture, model, algorithms, workflow
+- [DSL Reference](dsl.md) -- YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) -- analysis workflow configuration and execution
+- [CLI Reference](cli.md) -- command-line tools for running scenarios
+- [Auto-Generated API Reference](api-full.md) -- complete class and method documentation
 
 This section provides a curated guide to NetGraph's Python API, organized by typical usage patterns.
 
@@ -62,8 +62,7 @@ print(exported["workflow"].keys())
 **When to use:** Core component for representing network structure. Used directly for programmatic topology creation or accessed via `scenario.network`.
 
 ```python
-from ngraph.model.network import Network, Node, Link
-from ngraph.solver.maxflow import max_flow
+from ngraph import Network, Node, Link, analyze
 
 # Create a tiny network
 network = Network()
@@ -71,13 +70,9 @@ network.add_node(Node(name="n1"))
 network.add_node(Node(name="n2"))
 network.add_link(Link(source="n1", target="n2", capacity=100.0))
 
-# Calculate maximum flow (returns Dict[Tuple[str, str], float])
-flow_result = max_flow(
-    network,
-    source_path="n1",
-    sink_path="n2"
-)
-print(flow_result)  # {("n1", "n2"): 100.0}
+# Calculate maximum flow using analyze()
+flow_result = analyze(network).max_flow("^n1$", "^n2$")
+print(flow_result)  # {("^n1$", "^n2$"): 100.0}
 ```
 
 **Key Methods:**
@@ -89,7 +84,6 @@ print(flow_result)  # {("n1", "n2"): 100.0}
 
 - **disabled flags:** Node.disabled and Link.disabled mark components as inactive in the scenario topology (use `excluded_nodes`/`excluded_links` parameters for temporary analysis-time exclusion)
 - **Node selection:** Use regex patterns anchored at start (e.g., `"^datacenter.*"`) or attribute directives (`"attr:role"`) to select and group nodes (see DSL Node Selection)
-
 
 ### Results
 
@@ -120,310 +114,308 @@ print(list(all_data["steps"].keys()))
 
 Essential analysis capabilities for network evaluation.
 
-### Flow Analysis
+### Flow Analysis with `analyze()`
 
 **Purpose:** Calculate network flows between source and sink groups with various policies and constraints.
 
 **When to use:** Compute network capacity between source and sink groups. Supports multiple flow placement policies and failure scenarios.
 
-**Performance:** Max-flow computation executes in C++ with the GIL released for concurrent execution. Algorithm complexity is O(V²E) for push-relabel with gap heuristic.
+**Performance:** Max-flow computation executes in C++ with the GIL released for concurrent execution. Algorithm complexity is O(V^2E) for push-relabel with gap heuristic.
 
 ```python
-from ngraph.types.base import FlowPlacement
-from ngraph.solver.maxflow import max_flow, max_flow_with_details
+from ngraph import analyze, Mode, FlowPlacement
 
 # Maximum flow between group patterns (combine all sources/sinks)
-flow_result = max_flow(
-    network,
-    source_path="^metro1/.*",
-    sink_path="^metro5/.*",
-    mode="combine"
+flow_result = analyze(network).max_flow(
+    "^metro1/.*",
+    "^metro5/.*",
+    mode=Mode.COMBINE
 )
 
 # Detailed flow analysis with cost distribution
-result = max_flow_with_details(
-    network,
-    source_path="^metro1/.*",
-    sink_path="^metro5/.*",
-    mode="combine"
+result = analyze(network).max_flow_detailed(
+    "^metro1/.*",
+    "^metro5/.*",
+    mode=Mode.COMBINE
 )
 (src_label, sink_label), summary = next(iter(result.items()))
 print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volume
 ```
 
-**Key Options:**
+**Key Functions:**
 
-- `mode`: `"combine"` (aggregate flows) or `"pairwise"` (individual pair flows)
-- `shortest_path`: `True` (shortest only) or `False` (all available paths)
-- `flow_placement`: `FlowPlacement.PROPORTIONAL` (WCMP) or `FlowPlacement.EQUAL_BALANCED` (ECMP)
+- `analyze(network, *, source=None, sink=None, mode=Mode.COMBINE)` - Create analysis context
+- `ctx.max_flow(source, sink, *, mode, flow_placement, shortest_path, excluded_nodes, excluded_links)` - Maximum flow
+- `ctx.max_flow_detailed(...)` - Maximum flow with cost distribution and optional min-cut
+- `ctx.sensitivity(...)` - Identify critical edges and their impact on flow
+- `ctx.shortest_path_cost(source, sink, *, mode, excluded_nodes, excluded_links)` - Shortest path cost
+- `ctx.shortest_paths(source, sink, *, mode)` - Full Path objects
 
-**Advanced Features:**
+**Key Concepts:**
 
-- **Cost Distribution**: `FlowSummary.cost_distribution` maps path cost to flow volume at that cost tier
-- **Min-cut**: `FlowSummary.min_cut` contains saturated edges crossing the source-sink cut
+- **Mode.COMBINE:** Aggregate sources into one super-source, sinks into one super-sink; returns single total flow
+- **Mode.PAIRWISE:** Compute flow for each (source_group, sink_group) pair independently
+- **FlowPlacement.PROPORTIONAL (WCMP):** Split flow proportional to edge capacity
+- **FlowPlacement.EQUAL_BALANCED (ECMP):** Equal split across parallel paths
+- **shortest_path=True:** Restricts flow to lowest-cost paths only (IP/IGP routing semantics)
+- **shortest_path=False:** Uses all paths progressively (TE/SDN semantics)
 
-**Integration:** Uses `excluded_nodes` and `excluded_links` parameters for filtered analysis. Foundation for FailureManager Monte Carlo analysis.
+### Efficient Repeated Analysis (Bound Context)
 
-### Filtered Analysis (Failure Simulation)
-
-**Purpose:** Execute analysis on filtered topology views using exclusion sets rather than graph mutation.
-
-**When to use:** Failure simulation, sensitivity analysis, or concurrent evaluation of multiple degraded states.
+For efficient repeated analysis with the same source/sink groups:
 
 ```python
-# Identify links to fail (e.g., all links from "n2")
-failed_links = {
-    l.id for l in network.links.values()
-    if l.source == "n2" or l.target == "n2"
-}
+from ngraph import analyze, Mode
 
-# Analyze degraded network by passing excluded_links
-degraded_flow = max_flow(
-    network,
-    source_path="n1",
-    sink_path="n3",
-    excluded_links=failed_links
-)
-print(degraded_flow)
+# Create bound context - graph built once with pseudo-nodes
+ctx = analyze(network, source="^dc/", sink="^edge/", mode=Mode.COMBINE)
+
+# Baseline capacity
+baseline = ctx.max_flow()
+
+# Test with different failures - only mask building per call
+for failed_links in failure_scenarios:
+    degraded = ctx.max_flow(excluded_links=failed_links)
+    print(f"Capacity with {failed_links}: {degraded}")
 ```
 
-**Key Features:**
+**Benefits of Bound Context:**
 
-- **Read-only filtering:** Uses analysis-time exclusion lists without mutating the Network
-- **Concurrent analysis:** Supports different failure scenarios in parallel (thread-safe)
-- **Identical API:** Uses the same solver functions (`max_flow`, etc.) with optional exclusion arguments
+- Graph infrastructure built once at context creation
+- Each analysis call only builds O(|excluded|) masks
+- Thread-safe: can run concurrent analysis calls with different exclusions
 
+### Shortest Paths
 
-## 3. Advanced Analysis
+```python
+from ngraph import analyze, Mode, EdgeSelect
 
-Sophisticated analysis capabilities using Monte Carlo methods and parallel processing.
+# Get shortest path cost between groups
+costs = analyze(network).shortest_path_cost(
+    "^dc1/.*",
+    "^dc2/.*",
+    mode=Mode.PAIRWISE
+)
+
+# Get full path objects
+paths = analyze(network).shortest_paths(
+    "^A$",
+    "^B$",
+    mode=Mode.COMBINE,
+    edge_select=EdgeSelect.ALL_MIN_COST
+)
+
+# K-shortest paths with constraints
+k_paths = analyze(network).k_shortest_paths(
+    "^A$",
+    "^B$",
+    max_k=5,
+    mode=Mode.PAIRWISE,
+    max_path_cost_factor=1.5  # Limit to 1.5x best path cost
+)
+```
+
+**Key Functions:**
+
+- `ctx.shortest_path_cost(source, sink, *, mode, edge_select)` - Cost only, no path objects
+- `ctx.shortest_paths(source, sink, *, mode, edge_select, split_parallel_edges)` - Full Path objects
+- `ctx.k_shortest_paths(source, sink, *, max_k, max_path_cost, max_path_cost_factor)` - Multiple paths per pair
+
+### Sensitivity Analysis
+
+Identify critical edges and quantify their impact:
+
+```python
+from ngraph import analyze, Mode
+
+# Get sensitivity map: which edges are critical and by how much
+sensitivity = analyze(network).sensitivity(
+    "^metro1/.*",
+    "^metro5/.*",
+    mode=Mode.COMBINE,
+    shortest_path=False  # Full max-flow mode
+)
+
+for pair, edge_impacts in sensitivity.items():
+    print(f"Critical edges for {pair}:")
+    for edge_key, flow_reduction in edge_impacts.items():
+        print(f"  {edge_key}: -{flow_reduction:.2f}")
+```
+
+## 3. Monte Carlo Analysis
+
+Probabilistic failure analysis using FailureManager.
 
 ### FailureManager
 
-**Purpose:** Monte Carlo failure analysis engine with parallel execution and automatic result aggregation.
-
-**When to use:** Monte Carlo failure analysis for capacity distribution, demand placement, or component criticality studies.
+**Purpose:** Execute Monte Carlo failure scenarios and aggregate results across multiple iterations.
 
 ```python
-from ngraph.exec.failure.manager import FailureManager
-from ngraph.model.failure.policy import FailurePolicy, FailureMode, FailureRule
+from ngraph import Network, FailureManager
 from ngraph.model.failure.policy_set import FailurePolicySet
 
-policy_set = FailurePolicySet()
-policy = FailurePolicy(modes=[
-    FailureMode(
-        weight=1.0,
-        rules=[FailureRule(entity_scope="link", rule_type="choice", count=1)]
-    )
-])
-policy_set.policies["one_link"] = policy
-
-manager = FailureManager(
+# Create failure manager
+fm = FailureManager(
     network=network,
-    failure_policy_set=policy_set,
-    policy_name="one_link"
+    failure_policy_set=failure_policy_set,
+    policy_name="single_link_failure"
 )
 
-results = manager.run_max_flow_monte_carlo(
-    source_path="n1",
-    sink_path="n2",
-    iterations=10,
-    parallelism=1,
-    baseline=True
+# Run max-flow Monte Carlo analysis
+results = fm.run_max_flow_monte_carlo(
+    source_path="^dc/.*",
+    sink_path="^edge/.*",
+    mode="combine",
+    iterations=1000,
+    parallelism="auto",
+    baseline=True,  # Include no-failure baseline
+    seed=42  # For reproducibility
 )
+
+# Access results
+for iter_result in results["results"]:
+    print(f"Flow: {iter_result.summary.total_placed}")
 ```
 
 **Key Methods:**
 
-- `run_max_flow_monte_carlo()` - Capacity envelope analysis under failures
-- `run_demand_placement_monte_carlo()` - Traffic demand placement success analysis
-- `run_sensitivity_monte_carlo()` - Component criticality and impact analysis
-- `run_monte_carlo_analysis()` - Generic Monte Carlo with custom analysis functions
+- `run_max_flow_monte_carlo(...)` - Max-flow capacity analysis under failures
+- `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
+- `run_monte_carlo_analysis(analysis_func, ...)` - Generic Monte Carlo with custom function
 
-**Key Features:**
+## 4. Workflow Steps
 
-- **Parallel processing** with worker caching for performance
-- **Automatic result aggregation** into rich statistical objects
-- **Reproducible results** with seed support
-- **Failure policy integration** for realistic failure scenarios
+Pre-built analysis steps for YAML-driven workflows.
 
-**Integration:** Uses `excluded_nodes`/`excluded_links` for isolated failure simulation. Returns specialized result objects for statistical analysis.
+### MaxFlow Step
 
-### Monte Carlo Results
-
-**Purpose:** Rich result objects with statistical analysis and visualization capabilities.
-
-**When to use:** Process results from FailureManager Monte Carlo methods. Provides statistical aggregation and serialization.
-
-```python
-from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
-
-# Construct flow entries for a single iteration
-flow = FlowEntry(
-    source="n1", destination="n2", priority=0,
-    demand=10.0, placed=10.0, dropped=0.0,
-    cost_distribution={2.0: 6.0, 4.0: 4.0}
-)
-summary = FlowSummary(
-    total_demand=10.0, total_placed=10.0, overall_ratio=1.0,
-    dropped_flows=0, num_flows=1
-)
-iteration = FlowIterationResult(
-    failure_id="baseline",
-    flows=[flow],
-    summary=summary
-)
-# Export to JSON-serializable dict
-result_dict = iteration.to_dict()
+```yaml
+workflow:
+  - step_type: MaxFlow
+    name: "dc_to_edge_capacity"
+    source_path: "^datacenter/.*"
+    sink_path: "^edge/.*"
+    mode: "combine"
+    failure_policy: "random_link_failures"
+    iterations: 100
+    parallelism: auto
+    shortest_path: false
+    require_capacity: true       # false for true IP/IGP semantics
+    flow_placement: "PROPORTIONAL"
 ```
 
-**Key Result Types:**
+### TrafficMatrixPlacement Step
 
-- `FlowIterationResult` - Per-iteration flow results (flows + summary)
-- `FlowEntry` - Per-flow entry (source, destination, volumes, cost distribution)
-- `FlowSummary` - Aggregate totals for an iteration
-- `SensitivityResults` - Component criticality rankings
-
-**Integration:** Returned by FailureManager convenience methods. Analyze exported JSON results using external scripts.
-
-## 4. Data & Results
-
-Working with analysis outputs and implementing custom result storage.
-
-### Result Artifacts
-
-**Purpose:** Serializable data structures that store analysis results with consistent interfaces for export and reconstruction.
-
-**When to use:** Working with stored analysis results, implementing custom workflow steps, or exporting data for external analysis.
-
-```python
-from ngraph.results import Results
-
-# Access results after scenario execution
-exported = scenario.results.to_dict()
-print(list(exported["steps"].keys()))
+```yaml
+workflow:
+  - step_type: TrafficMatrixPlacement
+    name: "tm_placement_analysis"
+    matrix_name: "peak_traffic"
+    failure_policy: "dual_link_failures"
+    iterations: 100
+    parallelism: auto
+    placement_rounds: auto
 ```
 
-**Key Classes:**
+### MaximumSupportedDemand Step
 
-- `CapacityEnvelope` - Frequency-based capacity distributions with percentile analysis
-- `FailurePatternResult` - Failure scenario details with capacity impact
-- `FailurePolicySet` - Collections of named failure policies
-
-**Integration:** Used by workflow steps and FailureManager. All provide `to_dict()` and `from_dict()` for serialization.
-
-### Export Patterns
-
-**Purpose:** Patterns for result storage in custom workflow steps with consistent serialization.
-
-```python
-from ngraph.workflow.base import WorkflowStep
-
-class CustomAnalysis(WorkflowStep):
-    def run(self, scenario):
-        # Simple metrics
-        scenario.results.put("metadata", {})
-        scenario.results.put("data", {"node_count": len(scenario.network.nodes)})
-
-        # Complex objects - convert to dict first
-        analysis_result = self.perform_analysis(scenario.network)
-        payload = analysis_result.to_dict() if hasattr(analysis_result, 'to_dict') else analysis_result
-        scenario.results.put("data", {"analysis": payload})
+```yaml
+workflow:
+  - step_type: MaximumSupportedDemand
+    name: "find_alpha_star"
+    matrix_name: "peak_traffic"
+    search_strategy: "bisection"
+    precision: 0.01
 ```
 
-**Storage Conventions:**
+## 5. Types Reference
 
-- Store step metadata using `results.put("metadata", {})`
-- Store step data using `results.put("data", {...})`
-- Convert complex objects to dicts via `to_dict()` before storage
-- Export complete results via `scenario.results.to_dict()`
-
-## 5. Automation
-
-Workflow orchestration and reusable network templates.
-
-### Workflow Steps
-
-**Purpose:** Automated analysis sequences with standardized result storage and execution order.
-
-**When to use:** Multi-step analysis pipelines with automatic result storage, execution ordering, and metadata tracking.
-
-Available workflow steps:
-
-- `BuildGraph` - Exports graph in node-link JSON under `data.graph`
-- `NetworkStats` - Basic topology statistics under `data`
-- `MaxFlow` - Monte Carlo flow capacity analysis under `data.flow_results`
-- `TrafficMatrixPlacement` - Monte Carlo demand placement under `data.flow_results`
-- `MaximumSupportedDemand` - Alpha search results under `data`
-
-**Integration:** Defined in YAML scenarios or created programmatically. Each step stores results using consistent naming patterns in `scenario.results`.
-
-### Blueprint System
-
-**Purpose:** Reusable network topology templates defined in YAML for complex, hierarchical network structures.
-
-**When to use:** Define reusable topology templates with parameterization. Common for data center fabrics and hierarchical network structures.
+### Enums
 
 ```python
-# Blueprints are typically defined in YAML and used via Scenario
-# For programmatic topology creation, use Network class directly
+from ngraph import Mode, FlowPlacement, EdgeSelect
+
+# Mode - Source/sink group handling
+Mode.COMBINE    # Aggregate all sources/sinks
+Mode.PAIRWISE   # Each (src_group, sink_group) pair independently
+
+# FlowPlacement - Flow distribution strategy
+FlowPlacement.PROPORTIONAL   # WCMP: proportional to capacity
+FlowPlacement.EQUAL_BALANCED # ECMP: equal split
+
+# EdgeSelect - SPF edge selection
+EdgeSelect.ALL_MIN_COST     # All equal-cost edges (ECMP)
+EdgeSelect.SINGLE_MIN_COST  # Single lowest-cost edge
 ```
 
-**Integration:** Blueprints are processed during scenario creation. See [DSL Reference](dsl.md) for YAML blueprint syntax and examples.
-
-## 6. Extensions
-
-Advanced capabilities for custom analysis and low-level operations.
-
-### Utilities & Helpers
-
-**Purpose:** Graph format conversion and access to adapter layer for advanced use cases.
-
-**When to use:** Custom analysis requiring direct access to Core graphs, or when built-in analysis methods are insufficient.
-
-**Note:** For most use cases, use the high-level Network API. The adapter layer (`ngraph.adapters.core`) is available for advanced scenarios requiring direct Core graph access.
+### Result Types
 
 ```python
-from ngraph.adapters.core import build_graph
-import netgraph_core
+from ngraph import MaxFlowResult, FlowEntry, FlowSummary, FlowIterationResult
 
-# Access Core layer for custom algorithm implementation
-graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
-    network, add_reverse=True
-)
+# MaxFlowResult - Detailed max-flow result
+result.total_flow        # Total flow placed
+result.cost_distribution # Dict[cost, flow_volume]
+result.min_cut           # Optional tuple of EdgeRef (saturated edges)
 
-# Execute Core algorithms directly (operate on int node IDs, return NumPy arrays)
-backend = netgraph_core.Backend.cpu()
-algs = netgraph_core.Algorithms(backend)
+# FlowEntry - Single flow entry
+entry.source        # Source label
+entry.destination   # Destination label
+entry.demand        # Requested demand
+entry.placed        # Actually placed
+entry.dropped       # Unmet demand
 
-src_id = node_mapper.to_id("A")
-costs, predecessors = algs.spf(graph_handle, src_id)
-# costs: numpy array of float64 distances from src_id to each node
+# FlowSummary - Aggregated statistics
+summary.total_demand    # Sum of all demands
+summary.total_placed    # Sum of placed flows
+summary.overall_ratio   # placed / demand
+
+# FlowIterationResult - Full iteration result
+iter_result.flows    # List[FlowEntry]
+iter_result.summary  # FlowSummary
 ```
 
-**Integration:** Direct Core access for custom algorithm implementation. Built-in solver functions (`max_flow`, etc.) already provide Core integration.
-
-### Error Handling
-
-**Purpose:** Exception handling patterns and result validation for reliable analysis.
+## 6. Complete Example
 
 ```python
-try:
-    scenario = Scenario.from_yaml(yaml_content)
-    scenario.run()
+from ngraph import Network, Node, Link, analyze, Mode, FlowPlacement
 
-    # Validate expected results
-    exported = scenario.results.to_dict()
-    assert "steps" in exported and exported["steps"], "No steps present in results"
+# Build network
+network = Network()
+for name in ["dc1", "dc2", "spine1", "spine2", "leaf1", "leaf2"]:
+    network.add_node(Node(name))
 
-except ValueError as e:
-    print(f"YAML validation failed: {e}")
-except Exception as e:
-    print(f"Analysis error: {e}")
+# Add links with varying capacities
+network.add_link(Link("dc1", "spine1", capacity=100.0, cost=1.0))
+network.add_link(Link("dc1", "spine2", capacity=100.0, cost=1.0))
+network.add_link(Link("dc2", "spine1", capacity=100.0, cost=1.0))
+network.add_link(Link("dc2", "spine2", capacity=100.0, cost=1.0))
+network.add_link(Link("spine1", "leaf1", capacity=50.0, cost=1.0))
+network.add_link(Link("spine1", "leaf2", capacity=50.0, cost=1.0))
+network.add_link(Link("spine2", "leaf1", capacity=50.0, cost=1.0))
+network.add_link(Link("spine2", "leaf2", capacity=50.0, cost=1.0))
+
+# One-off max flow analysis
+flow = analyze(network).max_flow("^dc", "^leaf", mode=Mode.COMBINE)
+print(f"DC to Leaf capacity: {list(flow.values())[0]:.1f}")
+
+# Efficient repeated analysis with bound context
+ctx = analyze(network, source="^dc", sink="^leaf", mode=Mode.COMBINE)
+
+# Baseline
+baseline = ctx.max_flow()
+
+# Test spine failures
+spine_links = [lid for lid, l in network.links.items() if "spine" in l.source]
+for link_id in spine_links:
+    degraded = ctx.max_flow(excluded_links={link_id})
+    reduction = list(baseline.values())[0] - list(degraded.values())[0]
+    print(f"If {link_id} fails: {reduction:.1f} capacity loss")
+
+# Sensitivity analysis
+sensitivity = ctx.sensitivity()
+for pair, impacts in sensitivity.items():
+    print(f"\nCritical edges for {pair}:")
+    for edge, impact in sorted(impacts.items(), key=lambda x: -x[1])[:3]:
+        print(f"  {edge}: {impact:.1f}")
 ```
-
-**Common Patterns:**
-
-- Catch `ValueError` for YAML schema validation failures
-- Use `results.get(key, default=None)` for optional result values
-- Validate presence of expected workflow steps in exported results

@@ -1,5 +1,4 @@
-"""
-Tests for integration scenarios and complex network operations.
+"""Tests for integration scenarios and complex network operations.
 
 This module contains tests for:
 - Complex multi-component network scenarios
@@ -10,8 +9,7 @@ This module contains tests for:
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node, RiskGroup
-from ngraph.solver.maxflow import max_flow
+from ngraph import Link, Mode, Network, Node, RiskGroup, analyze
 
 
 class TestNetworkIntegration:
@@ -44,15 +42,15 @@ class TestNetworkIntegration:
         net.risk_groups["critical"] = RiskGroup("critical")
 
         # Flow should work normally when risk group is enabled
-        flow = max_flow(net, "A", "D")
-        assert flow[("A", "D")] == 1.0
+        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
+        assert flow[("^A$", "^D$")] == 1.0
 
         # Flow should be 0 when critical nodes are disabled
         net.disable_risk_group("critical")
-        flow = max_flow(net, "A", "D")
-        assert flow[("A", "D")] == 0.0
+        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
+        assert flow[("^A$", "^D$")] == 0.0
 
         # Flow should resume when risk group is re-enabled
         net.enable_risk_group("critical")
-        flow = max_flow(net, "A", "D")
-        assert flow[("A", "D")] == 1.0
+        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
+        assert flow[("^A$", "^D$")] == 1.0

@@ -4,8 +4,8 @@ This test suite validates that NetGraph correctly implements the distinct behavi
 semantics of IP routing vs Traffic Engineering, and ECMP vs WCMP flow placement.
 
 Key distinctions tested:
-1. IP routing (require_capacity=False): Routes based on costs only, ignoring capacity
-2. TE routing (require_capacity=True): Routes adapt to residual capacity
+1. IP routing (shortest_path=True): Uses only lowest-cost paths
+2. TE routing (shortest_path=False): Uses multiple cost tiers progressively
 3. ECMP (EQUAL_BALANCED): Equal splitting across equal-cost paths
 4. WCMP (PROPORTIONAL): Capacity-proportional splitting across equal-cost paths
 
@@ -17,9 +17,7 @@ from __future__ import annotations
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node
-from ngraph.solver.maxflow import max_flow, max_flow_with_details
-from ngraph.types.base import FlowPlacement
+from ngraph import FlowPlacement, Link, Mode, Network, Node, analyze
 
 
 def _unbalanced_parallel_paths() -> Network:
@@ -102,15 +100,15 @@ class TestECMPvsWCMPSemantics:
         # With equal splitting, the smallest path (cap 10) becomes the bottleneck
         # Each path can carry at most 10 units (limited by smallest path)
         # Total: 3 * 10 = 30 units
-        result = max_flow(
-            net,
-            "S",
-            "T",
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             shortest_path=True,
         )
 
-        assert result[("S", "T")] == pytest.approx(30.0, abs=1e-6), (
+        assert result[("^S$", "^T$")] == pytest.approx(30.0, abs=1e-6), (
             "ECMP with equal splitting should be limited by smallest path capacity"
         )
 
@@ -123,11 +121,15 @@ class TestECMPvsWCMPSemantics:
         # Path 2: 30 units (30 / 90 = 33.3%)
         # Path 3: 50 units (50 / 90 = 55.6%)
         # Total: 90 units (full utilization)
-        result = max_flow(
-            net, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            shortest_path=True,
         )
 
-        assert result[("S", "T")] == pytest.approx(90.0, abs=1e-6), (
+        assert result[("^S$", "^T$")] == pytest.approx(90.0, abs=1e-6), (
             "WCMP with proportional splitting should fully utilize all paths"
         )
 
@@ -135,20 +137,24 @@ class TestECMPvsWCMPSemantics:
         """Verify that WCMP achieves higher utilization than ECMP on unbalanced paths."""
         net = _unbalanced_parallel_paths()
 
-        ecmp_result = max_flow(
-            net,
-            "S",
-            "T",
+        ecmp_result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             shortest_path=True,
         )
 
-        wcmp_result = max_flow(
-            net, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
+        wcmp_result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            shortest_path=True,
         )
 
-        ecmp_flow = ecmp_result[("S", "T")]
-        wcmp_flow = wcmp_result[("S", "T")]
+        ecmp_flow = ecmp_result[("^S$", "^T$")]
+        wcmp_flow = wcmp_result[("^S$", "^T$")]
 
         # WCMP should achieve 3x the flow of ECMP on this topology
         assert wcmp_flow == pytest.approx(3.0 * ecmp_flow, abs=1e-6), (
@@ -169,27 +175,31 @@ class TestIPvsTE_Semantics:
 
         # IP mode: shortest_path=True, uses only tier 1 (cost 10)
         # Tier 1 capacity: 60 units
-        result_ip_ecmp = max_flow(
-            net,
-            "S",
-            "T",
+        result_ip_ecmp = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             shortest_path=True,
         )
 
-        result_ip_wcmp = max_flow(
-            net, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
+        result_ip_wcmp = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            shortest_path=True,
         )
 
         # ECMP on tier 1: limited by smallest path (20)
         # Equal split: 2 * 20 = 40 units
-        assert result_ip_ecmp[("S", "T")] == pytest.approx(40.0, abs=1e-6), (
+        assert result_ip_ecmp[("^S$", "^T$")] == pytest.approx(40.0, abs=1e-6), (
             "IP ECMP should use only tier 1 with equal splitting"
         )
 
         # WCMP on tier 1: proportional split
         # 20 + 40 = 60 units (full tier 1 utilization)
-        assert result_ip_wcmp[("S", "T")] == pytest.approx(60.0, abs=1e-6), (
+        assert result_ip_wcmp[("^S$", "^T$")] == pytest.approx(60.0, abs=1e-6), (
             "IP WCMP should use only tier 1 with proportional splitting"
         )
 
@@ -201,29 +211,28 @@ class TestIPvsTE_Semantics:
         # Tier 1: 60 units (fills first)
         # Tier 2: 90 units (fills next)
         # Total: 150 units
-        result_te_wcmp = max_flow(
-            net,
-            "S",
-            "T",
+        result_te_wcmp = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.PROPORTIONAL,
             shortest_path=False,
         )
 
-        assert result_te_wcmp[("S", "T")] == pytest.approx(150.0, abs=1e-6), (
+        assert result_te_wcmp[("^S$", "^T$")] == pytest.approx(150.0, abs=1e-6), (
             "TE WCMP should progressively fill all cost tiers"
         )
 
         # Verify cost distribution shows both tiers were used
-        result_details = max_flow_with_details(
-            net,
-            "S",
-            "T",
-            mode="combine",
+        result_details = analyze(net).max_flow_detailed(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.PROPORTIONAL,
             shortest_path=False,
         )
 
-        summary = result_details[("S", "T")]
+        summary = result_details[("^S$", "^T$")]
 
         # Should have flow at two different cost levels
         assert len(summary.cost_distribution) == 2, "TE mode should use both cost tiers"
@@ -245,19 +254,19 @@ class TestIPvsTE_Semantics:
         """
         net = _multi_tier_unbalanced()
 
-        result_te_ecmp = max_flow(
-            net,
-            "S",
-            "T",
+        result_te_ecmp = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
             shortest_path=False,
         )
 
         # Progressive ECMP fills tiers sequentially with equal splitting per tier:
-        # Round 1 (Tier 1): 2 paths with equal splitting → fills both (20 + 40 = 60)
-        # Round 2 (Tier 2): 2 paths with equal splitting → fills both (30 + 60 = 90)
+        # Round 1 (Tier 1): 2 paths with equal splitting -> fills both (20 + 40 = 60)
+        # Round 2 (Tier 2): 2 paths with equal splitting -> fills both (30 + 60 = 90)
         # Total: 150 units (full utilization achieved via multiple rounds)
-        assert result_te_ecmp[("S", "T")] == pytest.approx(150.0, abs=1e-6), (
+        assert result_te_ecmp[("^S$", "^T$")] == pytest.approx(150.0, abs=1e-6), (
             "TE ECMP progressive mode should achieve full utilization via multi-round placement"
         )
 
@@ -268,13 +277,13 @@ class TestCombinedSemantics:
     @pytest.mark.parametrize(
         "shortest_path,flow_placement,expected_flow",
         [
-            # IP ECMP: single tier, equal split → limited by smallest path
+            # IP ECMP: single tier, equal split -> limited by smallest path
             (True, FlowPlacement.EQUAL_BALANCED, 40.0),
-            # IP WCMP: single tier, proportional split → full tier utilization
+            # IP WCMP: single tier, proportional split -> full tier utilization
             (True, FlowPlacement.PROPORTIONAL, 60.0),
-            # TE ECMP: multi-tier, multi-round equal splitting → full utilization
+            # TE ECMP: multi-tier, multi-round equal splitting -> full utilization
             (False, FlowPlacement.EQUAL_BALANCED, 150.0),
-            # TE WCMP: multi-tier, progressive proportional splitting → full utilization
+            # TE WCMP: multi-tier, progressive proportional splitting -> full utilization
             (False, FlowPlacement.PROPORTIONAL, 150.0),
         ],
     )
@@ -284,11 +293,15 @@ class TestCombinedSemantics:
         """Test all four combinations of IP/TE and ECMP/WCMP semantics."""
         net = _multi_tier_unbalanced()
 
-        result = max_flow(
-            net, "S", "T", flow_placement=flow_placement, shortest_path=shortest_path
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            flow_placement=flow_placement,
+            shortest_path=shortest_path,
         )
 
-        assert result[("S", "T")] == pytest.approx(expected_flow, abs=1e-6), (
+        assert result[("^S$", "^T$")] == pytest.approx(expected_flow, abs=1e-6), (
             f"Expected {expected_flow} for shortest_path={shortest_path}, "
             f"flow_placement={flow_placement.name}"
         )
@@ -296,13 +309,13 @@ class TestCombinedSemantics:
     @pytest.mark.parametrize(
         "shortest_path,flow_placement,expected_flow",
         [
-            # IP ECMP: single tier (all equal cost), equal split → limited by smallest
+            # IP ECMP: single tier (all equal cost), equal split -> limited by smallest
             (True, FlowPlacement.EQUAL_BALANCED, 30.0),
-            # IP WCMP: single tier (all equal cost), proportional split → full utilization
+            # IP WCMP: single tier (all equal cost), proportional split -> full utilization
             (True, FlowPlacement.PROPORTIONAL, 90.0),
-            # TE ECMP: multi-round on single tier → achieves full utilization
+            # TE ECMP: multi-round on single tier -> achieves full utilization
             (False, FlowPlacement.EQUAL_BALANCED, 90.0),
-            # TE WCMP: progressive on single tier → full utilization
+            # TE WCMP: progressive on single tier -> full utilization
             (False, FlowPlacement.PROPORTIONAL, 90.0),
         ],
     )
@@ -312,14 +325,152 @@ class TestCombinedSemantics:
         """Test all four combinations on parallel paths topology."""
         net = _unbalanced_parallel_paths()
 
-        result = max_flow(
-            net, "S", "T", flow_placement=flow_placement, shortest_path=shortest_path
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            flow_placement=flow_placement,
+            shortest_path=shortest_path,
         )
 
-        assert result[("S", "T")] == pytest.approx(expected_flow, abs=1e-6), (
+        assert result[("^S$", "^T$")] == pytest.approx(expected_flow, abs=1e-6), (
             f"Expected {expected_flow} for shortest_path={shortest_path}, "
             f"flow_placement={flow_placement.name}"
         )
+
+
+class TestTrueIPSemantics:
+    """Test true IP routing semantics with require_capacity=False.
+
+    True IP/IGP routing:
+    - Routes based on cost only, ignores available capacity
+    - If shortest path has no capacity, traffic is "lost" (flow=0)
+    - ECMP splits equally regardless of capacity
+    - WCMP splits proportionally to original capacity (not residual)
+    """
+
+    def _saturated_shortest_path_network(self) -> Network:
+        """Network where shortest path has zero capacity.
+
+        Topology:
+            Shortest path: S -> A -> T (cost 2, S->A has cap 0!)
+            Longer path:   S -> B -> T (cost 4, cap 100)
+
+        True IP routes on cost only -> 0 flow.
+        """
+        net = Network()
+        for n in ["S", "A", "B", "T"]:
+            net.add_node(Node(n))
+
+        net.add_link(Link("S", "A", capacity=0.0, cost=1.0))
+        net.add_link(Link("A", "T", capacity=10.0, cost=1.0))
+        net.add_link(Link("S", "B", capacity=100.0, cost=2.0))
+        net.add_link(Link("B", "T", capacity=100.0, cost=2.0))
+
+        return net
+
+    def test_true_ip_ecmp_with_saturated_shortest_path(self):
+        """True IP ECMP: routes on cost only, gets 0 if shortest path saturated."""
+        net = self._saturated_shortest_path_network()
+
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=False,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+        )
+
+        assert result[("^S$", "^T$")] == pytest.approx(0.0, abs=1e-6), (
+            "True IP ECMP should return 0 when shortest path is saturated"
+        )
+
+    def test_true_ip_wcmp_with_saturated_shortest_path(self):
+        """True IP WCMP: routes on cost only, gets 0 if shortest path saturated."""
+        net = self._saturated_shortest_path_network()
+
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=False,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        assert result[("^S$", "^T$")] == pytest.approx(0.0, abs=1e-6), (
+            "True IP WCMP should return 0 when shortest path is saturated"
+        )
+
+    def test_true_ip_ecmp_on_unbalanced_paths(self):
+        """True IP ECMP on paths with available capacity.
+
+        Uses _unbalanced_parallel_paths: 3 equal-cost paths with caps 10, 30, 50.
+        ECMP splits equally, limited by smallest capacity: 3 * 10 = 30.
+        """
+        net = _unbalanced_parallel_paths()
+
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=False,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+        )
+
+        assert result[("^S$", "^T$")] == pytest.approx(30.0, abs=1e-6), (
+            "True IP ECMP should achieve 30 (3 paths * 10 min capacity)"
+        )
+
+    def test_true_ip_wcmp_on_unbalanced_paths(self):
+        """True IP WCMP on paths with available capacity.
+
+        Uses _unbalanced_parallel_paths: 3 equal-cost paths with caps 10, 30, 50.
+        WCMP splits proportionally: 10 + 30 + 50 = 90.
+        """
+        net = _unbalanced_parallel_paths()
+
+        result = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=False,
+            flow_placement=FlowPlacement.PROPORTIONAL,
+        )
+
+        assert result[("^S$", "^T$")] == pytest.approx(90.0, abs=1e-6), (
+            "True IP WCMP should achieve 90 (full utilization)"
+        )
+
+    def test_progressive_ip_vs_true_ip(self):
+        """Compare progressive IP (require_capacity=True) vs true IP."""
+        net = self._saturated_shortest_path_network()
+
+        # Progressive IP: finds available path when shortest is saturated
+        result_progressive = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=True,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+        )
+
+        # True IP: routes on cost only, gets 0 if saturated
+        result_true_ip = analyze(net).max_flow(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
+            shortest_path=True,
+            require_capacity=False,
+            flow_placement=FlowPlacement.EQUAL_BALANCED,
+        )
+
+        assert result_progressive[("^S$", "^T$")] == pytest.approx(100.0, abs=1e-6)
+        assert result_true_ip[("^S$", "^T$")] == pytest.approx(0.0, abs=1e-6)
 
 
 class TestAccountingValidation:
@@ -333,16 +484,15 @@ class TestAccountingValidation:
         """Verify cost distribution values sum to total flow."""
         net = _multi_tier_unbalanced()
 
-        result = max_flow_with_details(
-            net,
-            "S",
-            "T",
-            mode="combine",
+        result = analyze(net).max_flow_detailed(
+            "^S$",
+            "^T$",
+            mode=Mode.COMBINE,
             flow_placement=flow_placement,
             shortest_path=shortest_path,
         )
 
-        summary = result[("S", "T")]
+        summary = result[("^S$", "^T$")]
 
         # Sum of cost distribution should equal total flow
         cost_dist_sum = sum(summary.cost_distribution.values())
@@ -360,14 +510,14 @@ class TestAccountingValidation:
 
         results = []
         for _ in range(3):
-            result = max_flow(
-                net,
-                "S",
-                "T",
+            result = analyze(net).max_flow(
+                "^S$",
+                "^T$",
+                mode=Mode.COMBINE,
                 flow_placement=flow_placement,
                 shortest_path=shortest_path,
             )
-            results.append(result[("S", "T")])
+            results.append(result[("^S$", "^T$")])
 
         # All runs should produce identical results
         assert all(r == pytest.approx(results[0], abs=1e-9) for r in results), (
@@ -395,7 +545,7 @@ class TestTELSPLimits:
         """
         import netgraph_core
 
-        from ngraph.adapters.core import build_graph
+        from ngraph.analysis import AnalysisContext
 
         # Create 8 diverse paths with different capacities
         # Capacities: 10, 15, 20, 25, 30, 35, 40, 45
@@ -411,9 +561,11 @@ class TestTELSPLimits:
             net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
 
         # Use netgraph_core directly to create custom FlowPolicy with 4 LSPs
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
+        ctx = AnalysisContext.from_network(net)
+        graph_handle = ctx.handle
+        multidigraph = ctx.multidigraph
+        node_mapper = ctx.node_mapper
+        algs = ctx.algorithms
 
         # Create TE LSP config with custom max_flow_count
         config = netgraph_core.FlowPolicyConfig()
@@ -442,9 +594,9 @@ class TestTELSPLimits:
         # With 4 LSPs on 8 paths, should use the 4 highest-capacity paths
         # Highest 4 capacities: 45, 40, 35, 30
         # With ECMP constraint (EQUAL_BALANCED), all LSPs must carry equal volume
-        # Limited by smallest selected path: 4 × 30 = 120
+        # Limited by smallest selected path: 4 x 30 = 120
         assert placed == pytest.approx(120.0, abs=1e-3), (
-            f"Expected 4 LSPs with ECMP constraint (4×30=120), got {placed}"
+            f"Expected 4 LSPs with ECMP constraint (4x30=120), got {placed}"
         )
         assert policy.flow_count() == 4
 
@@ -452,7 +604,7 @@ class TestTELSPLimits:
         """With 2 LSPs and 5 diverse paths, should use the 2 highest-capacity paths."""
         import netgraph_core
 
-        from ngraph.adapters.core import build_graph
+        from ngraph.analysis import AnalysisContext
 
         net = Network()
         nodes = ["S"] + [f"M{i}" for i in range(5)] + ["T"]
@@ -465,9 +617,11 @@ class TestTELSPLimits:
             net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
             net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
 
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
+        ctx = AnalysisContext.from_network(net)
+        graph_handle = ctx.handle
+        multidigraph = ctx.multidigraph
+        node_mapper = ctx.node_mapper
+        algs = ctx.algorithms
 
         config = netgraph_core.FlowPolicyConfig()
         config.path_alg = netgraph_core.PathAlg.SPF
@@ -492,410 +646,57 @@ class TestTELSPLimits:
             fg, src_id, dst_id, flowClass=0, volume=500.0
         )
 
-        # Should use 2 highest-capacity paths: 50, 40
-        # With ECMP constraint, all LSPs carry equal volume: 2 × 40 = 80
+        # With 2 LSPs and ECMP constraint
+        # Highest 2 capacities: 50, 40
+        # Limited by smallest selected path: 2 x 40 = 80
         assert placed == pytest.approx(80.0, abs=1e-3), (
-            f"Expected 2 LSPs with ECMP constraint (2×40=80), got {placed}"
-        )
-        assert policy.flow_count() == 2
-
-    def test_lsps_equal_to_path_count(self):
-        """When LSP count equals path count, should utilize all paths."""
-        import netgraph_core
-
-        from ngraph.adapters.core import build_graph
-
-        net = Network()
-        nodes = ["S", "M1", "M2", "M3", "T"]
-        for node in nodes:
-            net.add_node(Node(node))
-
-        # 3 paths with capacities 20, 30, 40
-        capacities = [20, 30, 40]
-        for i, cap in enumerate(capacities, 1):
-            net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
-            net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
-
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
-
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.multipath = False
-        config.min_flow_count = 3
-        config.max_flow_count = 3
-        config.reoptimize_flows_on_each_placement = True
-
-        policy = netgraph_core.FlowPolicy(algs, graph_handle, config)
-        fg = netgraph_core.FlowGraph(multidigraph)
-
-        src_id = node_mapper.to_id("S")
-        dst_id = node_mapper.to_id("T")
-
-        placed, remaining = policy.place_demand(
-            fg, src_id, dst_id, flowClass=0, volume=500.0
-        )
-
-        # Should utilize all 3 paths with capacities 20, 30, 40
-        # With ECMP constraint, all LSPs carry equal volume: 3 × 20 = 60
-        assert placed == pytest.approx(60.0, abs=1e-3), (
-            f"Expected 3 LSPs with ECMP constraint (3×20=60), got {placed}"
-        )
-        assert policy.flow_count() == 3
-
-    def test_lsp_vs_unlimited_te_comparison(self):
-        """Compare limited LSP allocation vs unlimited TE on same topology."""
-        import netgraph_core
-
-        from ngraph.adapters.core import build_graph
-
-        net = Network()
-        nodes = ["S"] + [f"M{i}" for i in range(6)] + ["T"]
-        for node in nodes:
-            net.add_node(Node(node))
-
-        # 6 paths: 10, 20, 30, 40, 50, 60
-        capacities = [10, 20, 30, 40, 50, 60]
-        for i, cap in enumerate(capacities):
-            net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
-            net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
-
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
-
-        src_id = node_mapper.to_id("S")
-        dst_id = node_mapper.to_id("T")
-
-        # Test with 3 LSPs
-        config_3lsp = netgraph_core.FlowPolicyConfig()
-        config_3lsp.path_alg = netgraph_core.PathAlg.SPF
-        config_3lsp.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config_3lsp.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config_3lsp.multipath = False
-        config_3lsp.min_flow_count = 3
-        config_3lsp.max_flow_count = 3
-        config_3lsp.reoptimize_flows_on_each_placement = True
-
-        policy_3lsp = netgraph_core.FlowPolicy(algs, graph_handle, config_3lsp)
-        fg_3lsp = netgraph_core.FlowGraph(multidigraph)
-        placed_3lsp, _ = policy_3lsp.place_demand(
-            fg_3lsp, src_id, dst_id, flowClass=0, volume=1000.0
-        )
-
-        # Test with unlimited TE
-        config_unlim = netgraph_core.FlowPolicyConfig()
-        config_unlim.path_alg = netgraph_core.PathAlg.SPF
-        config_unlim.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
-        config_unlim.selection = netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config_unlim.min_flow_count = 1
-        # max_flow_count defaults to None (unlimited)
-
-        policy_unlim = netgraph_core.FlowPolicy(algs, graph_handle, config_unlim)
-        fg_unlim = netgraph_core.FlowGraph(multidigraph)
-        placed_unlim, _ = policy_unlim.place_demand(
-            fg_unlim, src_id, dst_id, flowClass=0, volume=1000.0
-        )
-
-        # 3 LSPs with ECMP constraint on top 3 paths (60, 50, 40): 3 × 40 = 120
-        assert placed_3lsp == pytest.approx(120.0, abs=1e-3)
-        assert policy_3lsp.flow_count() == 3
-
-        # Unlimited TE: all paths = 10 + 20 + 30 + 40 + 50 + 60 = 210
-        assert placed_unlim == pytest.approx(210.0, abs=1e-3)
-
-        # Verify that limited LSPs achieve less than unlimited
-        assert placed_3lsp < placed_unlim
-
-
-class TestTELSPLimitsWCMP:
-    """Test TE LSP scenarios with WCMP (proportional splitting).
-
-    These tests validate WCMP behavior with limited LSPs. Unlike ECMP, WCMP allows
-    each LSP to carry different volumes proportional to path capacity, achieving
-    better utilization without the equal-splitting constraint.
-    """
-
-    def test_4_lsps_wcmp_on_8_diverse_paths(self):
-        """With 4 WCMP LSPs and 8 diverse paths, should fully utilize 4 highest-capacity paths.
-
-        Unlike ECMP, WCMP allows each LSP to carry volume proportional to its path capacity,
-        so total = sum of the 4 highest capacities.
-        """
-        import netgraph_core
-
-        from ngraph.adapters.core import build_graph
-
-        net = Network()
-        nodes = ["S"] + [f"M{i}" for i in range(8)] + ["T"]
-        for node in nodes:
-            net.add_node(Node(node))
-
-        capacities = [10, 15, 20, 25, 30, 35, 40, 45]
-        for i, cap in enumerate(capacities):
-            net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
-            net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
-
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
-
-        # WCMP TE LSP config
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL  # WCMP
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.multipath = False
-        config.min_flow_count = 4
-        config.max_flow_count = 4
-        config.reoptimize_flows_on_each_placement = True
-
-        policy = netgraph_core.FlowPolicy(algs, graph_handle, config)
-        fg = netgraph_core.FlowGraph(multidigraph)
-
-        src_id = node_mapper.to_id("S")
-        dst_id = node_mapper.to_id("T")
-
-        placed, remaining = policy.place_demand(
-            fg, src_id, dst_id, flowClass=0, volume=1000.0
-        )
-
-        # WCMP: 4 LSPs on top 4 paths can each utilize full path capacity
-        # Top 4: 45, 40, 35, 30 → total = 150
-        assert placed == pytest.approx(150.0, abs=1e-3), (
-            f"Expected 4 WCMP LSPs to fully utilize 4 highest paths (45+40+35+30=150), "
-            f"got {placed}"
-        )
-        assert policy.flow_count() == 4
-
-    def test_wcmp_vs_ecmp_utilization_with_limited_lsps(self):
-        """Compare WCMP vs ECMP with limited LSPs to validate utilization difference."""
-        import netgraph_core
-
-        from ngraph.adapters.core import build_graph
-
-        net = Network()
-        nodes = ["S"] + [f"M{i}" for i in range(5)] + ["T"]
-        for node in nodes:
-            net.add_node(Node(node))
-
-        capacities = [10, 20, 30, 40, 50]
-        for i, cap in enumerate(capacities):
-            net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
-            net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
-
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
-
-        src_id = node_mapper.to_id("S")
-        dst_id = node_mapper.to_id("T")
-
-        # Test with ECMP (3 LSPs)
-        config_ecmp = netgraph_core.FlowPolicyConfig()
-        config_ecmp.path_alg = netgraph_core.PathAlg.SPF
-        config_ecmp.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config_ecmp.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config_ecmp.multipath = False
-        config_ecmp.min_flow_count = 3
-        config_ecmp.max_flow_count = 3
-        config_ecmp.reoptimize_flows_on_each_placement = True
-
-        policy_ecmp = netgraph_core.FlowPolicy(algs, graph_handle, config_ecmp)
-        fg_ecmp = netgraph_core.FlowGraph(multidigraph)
-        placed_ecmp, _ = policy_ecmp.place_demand(
-            fg_ecmp, src_id, dst_id, flowClass=0, volume=500.0
-        )
-
-        # Test with WCMP (3 LSPs)
-        config_wcmp = netgraph_core.FlowPolicyConfig()
-        config_wcmp.path_alg = netgraph_core.PathAlg.SPF
-        config_wcmp.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
-        config_wcmp.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config_wcmp.multipath = False
-        config_wcmp.min_flow_count = 3
-        config_wcmp.max_flow_count = 3
-        config_wcmp.reoptimize_flows_on_each_placement = True
-
-        policy_wcmp = netgraph_core.FlowPolicy(algs, graph_handle, config_wcmp)
-        fg_wcmp = netgraph_core.FlowGraph(multidigraph)
-        placed_wcmp, _ = policy_wcmp.place_demand(
-            fg_wcmp, src_id, dst_id, flowClass=0, volume=500.0
-        )
-
-        # ECMP: 3 LSPs on top 3 paths (50, 40, 30) with equal constraint: 3 × 30 = 90
-        assert placed_ecmp == pytest.approx(90.0, abs=1e-3)
-
-        # WCMP: 3 LSPs on top 3 paths with proportional splitting: 50 + 40 + 30 = 120
-        assert placed_wcmp == pytest.approx(120.0, abs=1e-3)
-
-        # WCMP should achieve better utilization than ECMP
-        assert placed_wcmp > placed_ecmp
-
-        # Verify the utilization ratio
-        utilization_ratio = placed_wcmp / placed_ecmp
-        assert utilization_ratio == pytest.approx(120.0 / 90.0, abs=0.01), (
-            f"Expected WCMP to achieve ~1.33x ECMP utilization, got {utilization_ratio}"
-        )
-
-    def test_2_wcmp_lsps_on_5_diverse_paths(self):
-        """With 2 WCMP LSPs, should fully utilize 2 highest-capacity paths."""
-        import netgraph_core
-
-        from ngraph.adapters.core import build_graph
-
-        net = Network()
-        nodes = ["S"] + [f"M{i}" for i in range(5)] + ["T"]
-        for node in nodes:
-            net.add_node(Node(node))
-
-        capacities = [10, 20, 30, 40, 50]
-        for i, cap in enumerate(capacities):
-            net.add_link(Link("S", f"M{i}", capacity=cap, cost=1.0))
-            net.add_link(Link(f"M{i}", "T", capacity=cap, cost=1.0))
-
-        backend = netgraph_core.Backend.cpu()
-        algs = netgraph_core.Algorithms(backend)
-        graph_handle, multidigraph, _, node_mapper = build_graph(net)
-
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.multipath = False
-        config.min_flow_count = 2
-        config.max_flow_count = 2
-        config.reoptimize_flows_on_each_placement = True
-
-        policy = netgraph_core.FlowPolicy(algs, graph_handle, config)
-        fg = netgraph_core.FlowGraph(multidigraph)
-
-        src_id = node_mapper.to_id("S")
-        dst_id = node_mapper.to_id("T")
-
-        placed, _ = policy.place_demand(fg, src_id, dst_id, flowClass=0, volume=500.0)
-
-        # WCMP: 2 LSPs on top 2 paths (50, 40) → 50 + 40 = 90
-        assert placed == pytest.approx(90.0, abs=1e-3), (
-            f"Expected 2 WCMP LSPs to fully utilize 2 highest paths (50+40=90), got {placed}"
+            f"Expected 2 LSPs with ECMP constraint (2x40=80), got {placed}"
         )
         assert policy.flow_count() == 2
 
 
-class TestEdgeCases:
-    """Test edge cases and boundary conditions."""
+class TestContextReuse:
+    """Test that AnalysisContext can be reused efficiently."""
 
-    def test_single_path_ecmp_equals_wcmp(self):
-        """When there's only one path, ECMP and WCMP should behave identically."""
-        net = Network()
-        for name in ["A", "B", "C"]:
-            net.add_node(Node(name))
+    def test_multiple_flow_calls_same_context(self):
+        """Test that the same context can compute multiple flows."""
+        net = _multi_tier_unbalanced()
 
-        net.add_link(Link("A", "B", capacity=10.0, cost=1.0))
-        net.add_link(Link("B", "C", capacity=5.0, cost=1.0))
+        ctx = analyze(net, source="^S$", sink="^T$", mode=Mode.COMBINE)
 
-        result_ecmp = max_flow(
-            net,
-            "A",
-            "C",
-            flow_placement=FlowPlacement.EQUAL_BALANCED,
-            shortest_path=True,
+        # Multiple calls with different parameters
+        result1 = ctx.max_flow(
+            flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
+        )
+        result2 = ctx.max_flow(
+            flow_placement=FlowPlacement.EQUAL_BALANCED, shortest_path=True
+        )
+        result3 = ctx.max_flow(
+            flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=False
         )
 
-        result_wcmp = max_flow(
-            net, "A", "C", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
+        assert result1[("^S$", "^T$")] == pytest.approx(60.0, abs=1e-6)
+        assert result2[("^S$", "^T$")] == pytest.approx(40.0, abs=1e-6)
+        assert result3[("^S$", "^T$")] == pytest.approx(150.0, abs=1e-6)
+
+    def test_exclusions_with_same_context(self):
+        """Test that the same context works with different exclusions."""
+        net = _multi_tier_unbalanced()
+
+        ctx = analyze(net, source="^S$", sink="^T$", mode=Mode.COMBINE)
+
+        # Full flow
+        full = ctx.max_flow(
+            flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=False
         )
 
-        # Both should be limited by bottleneck capacity (5.0)
-        assert result_ecmp[("A", "C")] == pytest.approx(5.0, abs=1e-9)
-        assert result_wcmp[("A", "C")] == pytest.approx(5.0, abs=1e-9)
-        assert result_ecmp[("A", "C")] == pytest.approx(
-            result_wcmp[("A", "C")], abs=1e-9
+        # Exclude tier 1 middle node A1
+        partial = ctx.max_flow(
+            flow_placement=FlowPlacement.PROPORTIONAL,
+            shortest_path=False,
+            excluded_nodes={"A1"},
         )
 
-    def test_balanced_parallel_paths_ecmp_equals_wcmp(self):
-        """When parallel paths have equal capacity, ECMP and WCMP should produce same results."""
-        net = Network()
-        for name in ["S", "A", "B", "T"]:
-            net.add_node(Node(name))
-
-        # Two paths with equal capacity
-        net.add_link(Link("S", "A", capacity=20.0, cost=1.0))
-        net.add_link(Link("A", "T", capacity=20.0, cost=1.0))
-        net.add_link(Link("S", "B", capacity=20.0, cost=1.0))
-        net.add_link(Link("B", "T", capacity=20.0, cost=1.0))
-
-        result_ecmp = max_flow(
-            net,
-            "S",
-            "T",
-            flow_placement=FlowPlacement.EQUAL_BALANCED,
-            shortest_path=True,
-        )
-
-        result_wcmp = max_flow(
-            net, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
-        )
-
-        # Both should achieve full utilization (40.0)
-        assert result_ecmp[("S", "T")] == pytest.approx(40.0, abs=1e-9)
-        assert result_wcmp[("S", "T")] == pytest.approx(40.0, abs=1e-9)
-
-    def test_zero_capacity_path_ignored(self):
-        """Paths with zero capacity should be ignored in both ECMP and WCMP."""
-        net = Network()
-        for name in ["S", "A", "B", "T"]:
-            net.add_node(Node(name))
-
-        # One path with capacity, one with zero capacity
-        net.add_link(Link("S", "A", capacity=10.0, cost=1.0))
-        net.add_link(Link("A", "T", capacity=10.0, cost=1.0))
-        net.add_link(Link("S", "B", capacity=0.0, cost=1.0))
-        net.add_link(Link("B", "T", capacity=0.0, cost=1.0))
-
-        result_ecmp = max_flow(
-            net,
-            "S",
-            "T",
-            flow_placement=FlowPlacement.EQUAL_BALANCED,
-            shortest_path=True,
-        )
-
-        result_wcmp = max_flow(
-            net, "S", "T", flow_placement=FlowPlacement.PROPORTIONAL, shortest_path=True
-        )
-
-        # Both should only use the path with capacity
-        assert result_ecmp[("S", "T")] == pytest.approx(10.0, abs=1e-9)
-        assert result_wcmp[("S", "T")] == pytest.approx(10.0, abs=1e-9)
+        # Full should be 150, partial should be 130 (150 - 20)
+        assert full[("^S$", "^T$")] == pytest.approx(150.0, abs=1e-6)
+        assert partial[("^S$", "^T$")] == pytest.approx(130.0, abs=1e-6)

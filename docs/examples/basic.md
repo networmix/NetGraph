@@ -10,10 +10,10 @@ See [Tutorial](../getting-started/tutorial.md) for CLI usage and bundled scenari
 
 ```text
              [1,1] & [1,2]     [1,1] & [1,2]
-      A ─────────────────── B ────────────── C
-      │                                      │
-      │    [2,3]                             │ [2,3]
-      └──────────────────── D ───────────────┘
+      A -------------------- B ---------------- C
+      |                                         |
+      |    [2,3]                                | [2,3]
+      +-------------------- D -----------------+
 
 [1,1] and [1,2] are parallel edges between A and B.
 They have the same metric of 1 but different capacities (1 and 2).
@@ -23,8 +23,7 @@ Let's create this network by using NetGraph's scenario system:
 
 ```python
 from ngraph.scenario import Scenario
-from ngraph.types.base import FlowPlacement
-from ngraph.solver.maxflow import max_flow, max_flow_with_details
+from ngraph import analyze, Mode, FlowPlacement
 
 # Define network topology with parallel paths
 scenario_yaml = """
@@ -42,7 +41,7 @@ network:
 
   # Create links with different capacities and costs
   links:
-    # Parallel edges between A→B
+    # Parallel edges between A->B
     - source: A
       target: B
       link_params:
@@ -54,7 +53,7 @@ network:
         capacity: 2
         cost: 1
 
-    # Parallel edges between B→C
+    # Parallel edges between B->C
     - source: B
       target: C
       link_params:
@@ -66,7 +65,7 @@ network:
         capacity: 2
         cost: 1
 
-    # Alternative path A→D→C
+    # Alternative path A->D->C
     - source: A
       target: D
       link_params:
@@ -88,34 +87,34 @@ Note that here we used a simple `nodes` and `links` structure to directly define
 
 ### Flow Analysis Variants
 
-Now let's run MaxFlow using the high-level Network API:
+Now let's run MaxFlow using the `analyze()` API:
 
 ```python
 # 1. "True" maximum flow (uses all available paths)
-max_flow_all = max_flow(network, source_path="A", sink_path="C")
+max_flow_all = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
 print(f"Maximum flow (all paths): {max_flow_all}")
-# Result: {('A', 'C'): 6.0} (uses both A→B→C path capacity of 3 and A→D→C path capacity of 3)
+# Result: {('^A$', '^C$'): 6.0} (uses both A->B->C path capacity of 3 and A->D->C path capacity of 3)
 
 # 2. Flow along shortest paths only
-max_flow_shortest = max_flow(
-    network,
-    source_path="A",
-    sink_path="C",
+max_flow_shortest = analyze(network).max_flow(
+    "^A$",
+    "^C$",
+    mode=Mode.COMBINE,
     shortest_path=True
 )
 print(f"Flow on shortest paths: {max_flow_shortest}")
-# Result: {('A', 'C'): 3.0} (only uses A→B→C path, ignoring higher-cost A→D→C path)
+# Result: {('^A$', '^C$'): 3.0} (only uses A->B->C path, ignoring higher-cost A->D->C path)
 
 # 3. Equal-balanced flow placement on shortest paths
-max_flow_shortest_balanced = max_flow(
-    network,
-    source_path="A",
-    sink_path="C",
+max_flow_shortest_balanced = analyze(network).max_flow(
+    "^A$",
+    "^C$",
+    mode=Mode.COMBINE,
     shortest_path=True,
     flow_placement=FlowPlacement.EQUAL_BALANCED
 )
 print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
-# Result: {('A', 'C'): 2.0} (splits flow equally across parallel edges in A→B and B→C)
+# Result: {('^A$', '^C$'): 2.0} (splits flow equally across parallel edges in A->B and B->C)
 ```
 
 ## Results Interpretation
@@ -132,11 +131,10 @@ Cost distribution shows how flow splits across path costs for latency/span analy
 
 ```python
 # Get flow analysis with cost distribution
-result = max_flow_with_details(
-    network,
-    source_path="A",
-    sink_path="C",
-    mode="combine"
+result = analyze(network).max_flow_detailed(
+    "^A$",
+    "^C$",
+    mode=Mode.COMBINE
 )
 
 # Extract flow value and summary
@@ -150,8 +148,8 @@ print(f"Cost distribution: {summary.cost_distribution}")
 # Cost distribution: {2.0: 3.0, 4.0: 3.0}
 #
 # This means:
-# - 3.0 units of flow use paths with total cost 2.0 (A→B→C path)
-# - 3.0 units of flow use paths with total cost 4.0 (A→D→C path)
+# - 3.0 units of flow use paths with total cost 2.0 (A->B->C path)
+# - 3.0 units of flow use paths with total cost 4.0 (A->D->C path)
 ```
 
 ### Latency Span Analysis
@@ -159,74 +157,93 @@ print(f"Cost distribution: {summary.cost_distribution}")
 If link costs approximate latency, derive span summary from cost distribution:
 
 ```python
-def analyze_latency_span(cost_distribution):
-    """Analyze latency characteristics from cost distribution."""
-    if not cost_distribution:
-        return "No flow paths available"
+# Example cost distribution analysis
+cost_dist = summary.cost_distribution  # {2.0: 3.0, 4.0: 3.0}
+total_flow = summary.total_flow        # 6.0
 
-    total_flow = sum(cost_distribution.values())
-    weighted_avg_latency = sum(
-        cost * flow for cost, flow in cost_distribution.items()
-    ) / total_flow
+# Calculate weighted average latency
+avg_latency = sum(cost * flow for cost, flow in cost_dist.items()) / total_flow
+print(f"Average latency: {avg_latency}")  # 3.0
 
-    min_latency = min(cost_distribution.keys())
-    max_latency = max(cost_distribution.keys())
-    latency_span = max_latency - min_latency
-
-    print(f"Latency Analysis:")
-    print(f"  Average latency: {weighted_avg_latency:.2f}")
-    print(f"  Latency range: {min_latency:.1f} - {max_latency:.1f}")
-    print(f"  Latency span: {latency_span:.1f}")
-    print(f"  Flow distribution:")
-    for cost, flow in sorted(cost_distribution.items()):
-        percentage = (flow / total_flow) * 100
-        print(f"    {percentage:.1f}% uses paths with latency {cost:.1f}")
-
-# Example usage
-analyze_latency_span(summary.cost_distribution)
+# Find min/max latency tiers
+min_latency = min(cost_dist.keys())
+max_latency = max(cost_dist.keys())
+print(f"Latency range: {min_latency} - {max_latency}")  # 2.0 - 4.0
 ```
 
-This helps identify traffic concentration, latency span, and potential bottlenecks.
+## Efficient Repeated Analysis
 
-## Advanced Analysis: Failure Simulation
-
-You can analyze the network under different failure scenarios by excluding nodes or links:
+For scenarios requiring multiple analyses with different exclusions (e.g., failure testing), use a bound context:
 
 ```python
-# Identify link to fail
-failed_links = set()
-for link_id, link in network.links.items():
-    if link.source == "A" and link.target == "D":
-        failed_links.add(link_id)
-        break
+# Create bound context - graph built once
+ctx = analyze(network, source="^A$", sink="^C$", mode=Mode.COMBINE)
 
-# Compare flows: baseline vs. with failure
-baseline_flow_dict = max_flow(network, source_path="A", sink_path="C")
-baseline_flow = baseline_flow_dict[('A', 'C')]
+# Baseline capacity
+baseline = ctx.max_flow()
+print(f"Baseline: {baseline}")
 
-degraded_flow_dict = max_flow(
-    network,
-    source_path="A",
-    sink_path="C",
-    excluded_links=failed_links
-)
-degraded_flow = degraded_flow_dict[('A', 'C')]
+# Test various failure scenarios
+for node in ["B", "D"]:
+    degraded = ctx.max_flow(excluded_nodes={node})
+    print(f"Without {node}: {degraded}")
 
-print(f"Baseline flow: {baseline_flow}")
-print(f"Flow with A->D link failed: {degraded_flow}")
-print(f"Impact: {baseline_flow - degraded_flow} units lost")
+# Output:
+# Baseline: {('^A$', '^C$'): 6.0}
+# Without B: {('^A$', '^C$'): 3.0}
+# Without D: {('^A$', '^C$'): 3.0}
 ```
 
-This analysis helps identify:
+## Sensitivity Analysis
 
-- **Critical links**: Links whose failure significantly impacts flow
-- **Redundancy**: How well the network handles failures
-- **Vulnerability assessment**: Network resilience under different failure scenarios
+Identify which edges are critical for the flow:
 
-## Next Steps
+```python
+# Get sensitivity analysis
+sensitivity = analyze(network).sensitivity(
+    "^A$",
+    "^C$",
+    mode=Mode.COMBINE,
+    shortest_path=False  # Full max-flow mode
+)
 
-- **[Bundled Scenarios](bundled-scenarios.md)** - Ready-to-run examples
-- **[Clos Fabric Analysis](clos-fabric.md)** - More complex example
-- **[Workflow Reference](../reference/workflow.md)** - Analysis workflows and Monte Carlo simulation
-- **[DSL Reference](../reference/dsl.md)** - Learn the full YAML syntax for scenarios
-- **[API Reference](../reference/api.md)** - Explore the Python API for advanced usage
+for pair, edge_impacts in sensitivity.items():
+    print(f"Critical edges for {pair}:")
+    for edge_key, flow_reduction in sorted(edge_impacts.items(), key=lambda x: -x[1]):
+        print(f"  {edge_key}: -{flow_reduction:.1f}")
+```
+
+## Shortest Paths
+
+Get actual path objects for routing analysis:
+
+```python
+from ngraph import EdgeSelect
+
+# Get all equal-cost shortest paths
+paths = analyze(network).shortest_paths(
+    "^A$",
+    "^C$",
+    mode=Mode.COMBINE,
+    edge_select=EdgeSelect.ALL_MIN_COST
+)
+
+for pair, path_list in paths.items():
+    print(f"Paths from {pair[0]} to {pair[1]}:")
+    for path in path_list:
+        nodes = [elem[0] for elem in path.path]
+        print(f"  {' -> '.join(nodes)} (cost: {path.cost})")
+
+# Get k-shortest paths
+k_paths = analyze(network).k_shortest_paths(
+    "^A$",
+    "^C$",
+    max_k=3,
+    mode=Mode.PAIRWISE
+)
+
+for pair, path_list in k_paths.items():
+    print(f"Top {len(path_list)} paths from {pair[0]} to {pair[1]}:")
+    for i, path in enumerate(path_list, 1):
+        print(f"  {i}. Cost: {path.cost}")
+```

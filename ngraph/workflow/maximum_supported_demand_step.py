@@ -74,21 +74,7 @@ class MaximumSupportedDemand(WorkflowStep):
         )
         base_tds = scenario.traffic_matrix_set.get_matrix(self.matrix_name)
 
-        def _serialize_policy(cfg: Any) -> Any:
-            try:
-                from ngraph.model.flow.policy_config import (
-                    FlowPolicyPreset,  # local import to avoid heavy deps
-                )
-            except Exception:  # pragma: no cover - defensive
-                return str(cfg) if cfg is not None else None
-            if cfg is None:
-                return None
-            if isinstance(cfg, FlowPolicyPreset):
-                return cfg.name
-            try:
-                return FlowPolicyPreset(int(cfg)).name
-            except Exception:
-                return str(cfg)
+        from ngraph.model.flow.policy_config import serialize_policy_preset
 
         base_demands: list[dict[str, Any]] = [
             {
@@ -97,7 +83,7 @@ class MaximumSupportedDemand(WorkflowStep):
                 "demand": float(getattr(td, "demand", 0.0)),
                 "mode": getattr(td, "mode", "pairwise"),
                 "priority": int(getattr(td, "priority", 0)),
-                "flow_policy_config": _serialize_policy(
+                "flow_policy_config": serialize_policy_preset(
                     getattr(td, "flow_policy_config", None)
                 ),
             }
@@ -275,28 +261,23 @@ class MaximumSupportedDemand(WorkflowStep):
         )
 
         # Phase 2: Build Core infrastructure with augmentations
-        from ngraph.adapters.core import build_graph, get_disabled_exclusions
+        from ngraph.analysis import AnalysisContext
 
-        # Include disabled nodes/links in exclusions
-        excluded_nodes, excluded_links = get_disabled_exclusions(scenario.network)
-
-        graph_handle, multidigraph, edge_mapper, node_mapper = build_graph(
+        ctx = AnalysisContext.from_network(
             scenario.network,
             augmentations=expansion.augmentations,
-            excluded_nodes=excluded_nodes,
-            excluded_links=excluded_links,
         )
-        # Augmentations include pseudo nodes for combine mode
 
-        backend = netgraph_core.Backend.cpu()
-        algorithms = netgraph_core.Algorithms(backend)
+        # Build masks for disabled nodes/links (using internal methods)
+        node_mask = ctx._build_node_mask(excluded_nodes=None)
+        edge_mask = ctx._build_edge_mask(excluded_links=None)
 
         decisions: list[bool] = []
         min_ratios: list[float] = []
 
         for _ in range(max(1, int(seeds))):
             # Create fresh FlowGraph for each seed
-            flow_graph = netgraph_core.FlowGraph(multidigraph)
+            flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
 
             # Phase 3: Place demands using Core
             total_demand = 0.0
@@ -304,13 +285,15 @@ class MaximumSupportedDemand(WorkflowStep):
 
             for demand in expansion.demands:
                 # Resolve node names to IDs (includes pseudo nodes)
-                src_id = node_mapper.to_id(demand.src_name)
-                dst_id = node_mapper.to_id(demand.dst_name)
+                src_id = ctx.node_mapper.to_id(demand.src_name)
+                dst_id = ctx.node_mapper.to_id(demand.dst_name)
 
                 policy = create_flow_policy(
-                    algorithms,
-                    graph_handle,
+                    ctx.algorithms,
+                    ctx.handle,
                     demand.policy_preset,
+                    node_mask=node_mask,
+                    edge_mask=edge_mask,
                 )
 
                 placed, _ = policy.place_demand(

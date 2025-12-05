@@ -1,19 +1,80 @@
 """NetGraph: Network modeling and analysis library.
 
-Provides interfaces for network topology modeling, traffic analysis, and
-capacity planning. Exposes selected modules and artifact types at the package
-root for convenience.
+NetGraph provides interfaces for network topology modeling, traffic analysis, and
+capacity planning using a hybrid Python+C++ architecture.
+
+Primary API:
+    analyze() - Create an analysis context for network queries
+    AnalysisContext - Prepared state for efficient repeated analysis
+    Network, Node, Link - Network topology model
+
+Example:
+    from ngraph import Network, Node, Link, analyze
+
+    # Build network
+    net = Network()
+    net.add_node(Node(name="A"))
+    net.add_node(Node(name="B"))
+    net.add_link(Link(source="A", target="B", capacity=100.0))
+
+    # One-off analysis
+    flow = analyze(net).max_flow("^A$", "^B$")
+
+    # Efficient repeated analysis
+    ctx = analyze(net, source="^A$", sink="^B$")
+    baseline = ctx.max_flow()
+    degraded = ctx.max_flow(excluded_links=failed_links)
 """
 
 from __future__ import annotations
 
-from . import cli, logging
-from .model.demand.matrix import TrafficMatrixSet
-from .results.artifacts import CapacityEnvelope
+# Utilities
+from ngraph import cli, logging
+
+# Analysis (primary API)
+from ngraph.analysis import AnalysisContext, analyze
+
+# Execution
+from ngraph.exec.failure.manager import FailureManager
+from ngraph.model.demand.matrix import TrafficMatrixSet
+
+# Model
+from ngraph.model.network import Link, Network, Node, RiskGroup
+from ngraph.model.path import Path
+from ngraph.results.artifacts import CapacityEnvelope
+
+# Results
+from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
+
+# Types
+from ngraph.types.base import EdgeSelect, FlowPlacement, Mode
+from ngraph.types.dto import EdgeRef, MaxFlowResult
 
 __all__ = [
+    # Model
+    "Network",
+    "Node",
+    "Link",
+    "RiskGroup",
+    "Path",
+    "TrafficMatrixSet",
+    # Analysis (primary API)
+    "analyze",
+    "AnalysisContext",
+    # Types
+    "FlowPlacement",
+    "EdgeSelect",
+    "Mode",
+    "EdgeRef",
+    "MaxFlowResult",
+    # Results
+    "FlowEntry",
+    "FlowIterationResult",
+    "FlowSummary",
+    "CapacityEnvelope",
+    # Execution
+    "FailureManager",
+    # Utilities
     "cli",
     "logging",
-    "CapacityEnvelope",
-    "TrafficMatrixSet",
 ]

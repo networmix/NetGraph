@@ -17,26 +17,12 @@ from typing import TYPE_CHECKING, Any, Optional, Set
 
 import netgraph_core
 
-from ngraph.adapters.core import (
-    GraphCache,
-    build_edge_mask,
-    build_graph_cache,
-    build_node_mask,
-)
+from ngraph.analysis import AnalysisContext, analyze
 from ngraph.exec.demand.expand import expand_demands
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
-from ngraph.solver.maxflow import (
-    MaxFlowGraphCache,
-    build_maxflow_cache,
-    max_flow,
-    max_flow_with_details,
-)
-from ngraph.solver.maxflow import (
-    sensitivity_analysis as solver_sensitivity_analysis,
-)
-from ngraph.types.base import FlowPlacement
+from ngraph.types.base import FlowPlacement, Mode
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
@@ -46,58 +32,64 @@ def max_flow_analysis(
     network: "Network",
     excluded_nodes: Set[str],
     excluded_links: Set[str],
-    source_regex: str,
-    sink_regex: str,
+    source_path: str,
+    sink_path: str,
     mode: str = "combine",
     shortest_path: bool = False,
+    require_capacity: bool = True,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     include_flow_details: bool = False,
     include_min_cut: bool = False,
-    _graph_cache: Optional[MaxFlowGraphCache] = None,
+    context: Optional[AnalysisContext] = None,
     **kwargs,
 ) -> FlowIterationResult:
     """Analyze maximum flow capacity between node groups.
-
-    When `_graph_cache` is provided, uses O(|excluded|) mask building instead
-    of O(V+E) graph reconstruction for efficient repeated analysis.
 
     Args:
         network: Network instance.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
-        source_regex: Regex pattern for source node groups.
-        sink_regex: Regex pattern for sink node groups.
+        source_path: Selection expression for source node groups.
+        sink_path: Selection expression for sink node groups.
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: Whether to use shortest paths only.
+        require_capacity: If True (default), path selection considers available
+            capacity. If False, path selection is cost-only (true IP/IGP semantics).
         flow_placement: Flow placement strategy.
         include_flow_details: Whether to collect cost distribution and similar details.
         include_min_cut: Whether to include min-cut edge list in entry data.
-        _graph_cache: Pre-built cache for efficient repeated analysis.
+        context: Pre-built AnalysisContext for efficient repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
         FlowIterationResult describing this iteration.
     """
+    # Convert string mode to Mode enum
+    mode_enum = Mode.COMBINE if mode == "combine" else Mode.PAIRWISE
+
+    # Use provided context or create a new one
+    if context is not None:
+        ctx = context
+    else:
+        ctx = analyze(network, source=source_path, sink=sink_path, mode=mode_enum)
+
     flow_entries: list[FlowEntry] = []
     total_demand = 0.0
     total_placed = 0.0
 
     if include_flow_details or include_min_cut:
-        flows = max_flow_with_details(
-            network,
-            source_regex,
-            sink_regex,
-            mode=mode,
+        flows = ctx.max_flow_detailed(
             shortest_path=shortest_path,
+            require_capacity=require_capacity,
             flow_placement=flow_placement,
             excluded_nodes=excluded_nodes,
             excluded_links=excluded_links,
-            _cache=_graph_cache,
+            include_min_cut=include_min_cut,
         )
         for (src, dst), summary in flows.items():
             value = float(summary.total_flow)
-            cost_dist = getattr(summary, "cost_distribution", {}) or {}
-            min_cut = getattr(summary, "saturated_edges", []) or []
+            cost_dist = summary.cost_distribution or {}
+            min_cut_edges = summary.min_cut or ()
             entry = FlowEntry(
                 source=str(src),
                 destination=str(dst),
@@ -111,8 +103,11 @@ def max_flow_analysis(
                     else {}
                 ),
                 data=(
-                    {"edges": [str(e) for e in min_cut], "edges_kind": "min_cut"}
-                    if include_min_cut and min_cut
+                    {
+                        "edges": [f"{e.link_id}:{e.direction}" for e in min_cut_edges],
+                        "edges_kind": "min_cut",
+                    }
+                    if include_min_cut and min_cut_edges
                     else {}
                 ),
             )
@@ -120,16 +115,12 @@ def max_flow_analysis(
             total_demand += value
             total_placed += value
     else:
-        flows = max_flow(
-            network,
-            source_regex,
-            sink_regex,
-            mode=mode,
+        flows = ctx.max_flow(
             shortest_path=shortest_path,
+            require_capacity=require_capacity,
             flow_placement=flow_placement,
             excluded_nodes=excluded_nodes,
             excluded_links=excluded_links,
-            _cache=_graph_cache,
         )
         for (src, dst), val in flows.items():
             value = float(val)
@@ -165,7 +156,7 @@ def demand_placement_analysis(
     placement_rounds: int | str = "auto",
     include_flow_details: bool = False,
     include_used_edges: bool = False,
-    _graph_cache: Optional[GraphCache] = None,
+    context: Optional[AnalysisContext] = None,
     **kwargs,
 ) -> FlowIterationResult:
     """Analyze traffic demand placement success rates using Core directly.
@@ -184,7 +175,7 @@ def demand_placement_analysis(
         placement_rounds: Number of placement optimization rounds (unused - Core handles internally).
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
-        _graph_cache: Pre-built graph cache for fast repeated analysis.
+        context: Pre-built AnalysisContext for fast repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
@@ -210,25 +201,23 @@ def demand_placement_analysis(
         default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
     )
 
-    # Phase 2: Use cached graph infrastructure or build fresh
-    if _graph_cache is not None:
-        cache = _graph_cache
+    # Phase 2: Use cached context infrastructure or build fresh
+    if context is not None:
+        ctx = context
     else:
-        # Build fresh cache (slower path for direct calls without pre-built cache)
-        cache = build_graph_cache(network, augmentations=expansion.augmentations)
+        # Build fresh context with augmentations
+        ctx = AnalysisContext.from_network(
+            network, augmentations=expansion.augmentations
+        )
 
-    graph_handle = cache.graph_handle
-    multidigraph = cache.multidigraph
-    edge_mapper = cache.edge_mapper
-    node_mapper = cache.node_mapper
-    algorithms = cache.algorithms
-
-    # Build masks for exclusions (consistent behavior for both paths)
-    node_mask = None
-    edge_mask = None
-    if excluded_nodes or excluded_links:
-        node_mask = build_node_mask(cache, excluded_nodes)
-        edge_mask = build_edge_mask(cache, excluded_links)
+    # Extract infrastructure from context
+    handle = ctx.handle
+    multidigraph = ctx.multidigraph
+    node_mapper = ctx.node_mapper
+    edge_mapper = ctx.edge_mapper
+    algorithms = ctx.algorithms
+    node_mask = ctx._build_node_mask(excluded_nodes)
+    edge_mask = ctx._build_edge_mask(excluded_links)
 
     flow_graph = netgraph_core.FlowGraph(multidigraph)
 
@@ -245,7 +234,7 @@ def demand_placement_analysis(
         # Create FlowPolicy for this demand with masks
         policy = create_flow_policy(
             algorithms,
-            graph_handle,
+            handle,
             demand.policy_preset,
             node_mask=node_mask,
             edge_mask=edge_mask,
@@ -332,66 +321,100 @@ def sensitivity_analysis(
     network: "Network",
     excluded_nodes: Set[str],
     excluded_links: Set[str],
-    source_regex: str,
-    sink_regex: str,
+    source_path: str,
+    sink_path: str,
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
-    _graph_cache: Optional[MaxFlowGraphCache] = None,
+    context: Optional[AnalysisContext] = None,
     **kwargs,
-) -> dict[str, dict[str, float]]:
+) -> FlowIterationResult:
     """Analyze component sensitivity to failures.
 
     Identifies critical edges (saturated edges) and computes the flow reduction
-    caused by removing each one.
-
-    When `_graph_cache` is provided, uses O(|excluded|) mask building instead
-    of O(V+E) graph reconstruction for efficient repeated analysis.
+    caused by removing each one. Returns a FlowIterationResult where each
+    FlowEntry represents a source/sink pair with:
+    - demand/placed = max flow value (the capacity being analyzed)
+    - dropped = 0.0 (baseline analysis, no failures applied)
+    - data["sensitivity"] = {link_id:direction: flow_reduction} for critical edges
 
     Args:
         network: Network instance.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
-        source_regex: Regex pattern for source node groups.
-        sink_regex: Regex pattern for sink node groups.
+        source_path: Selection expression for source node groups.
+        sink_path: Selection expression for sink node groups.
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
             Reports only edges used under ECMP routing. If False (default), use
             full iterative max-flow (SDN/TE mode) and report all saturated edges.
         flow_placement: Flow placement strategy.
-        _graph_cache: Pre-built cache for efficient repeated analysis.
+        context: Pre-built AnalysisContext for efficient repeated analysis.
         **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
-        Dictionary mapping flow keys ("src->dst") to dictionaries of component
-        identifiers mapped to sensitivity scores.
+        FlowIterationResult with sensitivity data in each FlowEntry.data.
     """
-    results = solver_sensitivity_analysis(
-        network,
-        source_regex,
-        sink_regex,
-        mode=mode,
+    # Convert string mode to Mode enum
+    mode_enum = Mode.COMBINE if mode == "combine" else Mode.PAIRWISE
+
+    # Use provided context or create a new one
+    if context is not None:
+        ctx = context
+    else:
+        ctx = analyze(network, source=source_path, sink=sink_path, mode=mode_enum)
+
+    # Get max flow values for each pair
+    flow_values = ctx.max_flow(
         shortest_path=shortest_path,
         flow_placement=flow_placement,
         excluded_nodes=excluded_nodes,
         excluded_links=excluded_links,
-        _cache=_graph_cache,
     )
 
-    # Remap keys from tuple (src, dst) to string "src->dst"
-    out = {}
-    for (src, dst), components in results.items():
-        key = f"{src}->{dst}"
-        out[key] = components
+    # Get sensitivity (critical edges) for each pair
+    sensitivity_results = ctx.sensitivity(
+        shortest_path=shortest_path,
+        flow_placement=flow_placement,
+        excluded_nodes=excluded_nodes,
+        excluded_links=excluded_links,
+    )
 
-    return out
+    # Build FlowEntry for each pair
+    flow_entries: list[FlowEntry] = []
+    total_flow = 0.0
+
+    for (src, dst), flow_value in flow_values.items():
+        sensitivity_map = sensitivity_results.get((src, dst), {})
+        entry = FlowEntry(
+            source=str(src),
+            destination=str(dst),
+            priority=0,
+            demand=flow_value,
+            placed=flow_value,
+            dropped=0.0,
+            data={"sensitivity": sensitivity_map},
+        )
+        flow_entries.append(entry)
+        total_flow += flow_value
+
+    # Build summary
+    summary = FlowSummary(
+        total_demand=total_flow,
+        total_placed=total_flow,
+        overall_ratio=1.0,
+        dropped_flows=0,
+        num_flows=len(flow_entries),
+    )
+
+    return FlowIterationResult(flows=flow_entries, summary=summary)
 
 
-def build_demand_graph_cache(
+def build_demand_context(
     network: "Network",
     demands_config: list[dict[str, Any]],
-) -> GraphCache:
-    """Build a graph cache for repeated demand placement analysis.
+) -> AnalysisContext:
+    """Build an AnalysisContext for repeated demand placement analysis.
 
     Pre-computes the graph with augmentations (pseudo source/sink nodes) for
     efficient repeated analysis with different exclusion sets.
@@ -401,7 +424,7 @@ def build_demand_graph_cache(
         demands_config: List of demand configurations (same format as demand_placement_analysis).
 
     Returns:
-        GraphCache ready for use with demand_placement_analysis.
+        AnalysisContext ready for use with demand_placement_analysis.
     """
     # Reconstruct TrafficDemand objects
     traffic_demands = []
@@ -423,28 +446,29 @@ def build_demand_graph_cache(
         default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
     )
 
-    # Build cache with augmentations
-    return build_graph_cache(network, augmentations=expansion.augmentations)
+    # Build context with augmentations
+    return analyze(network, augmentations=expansion.augmentations)
 
 
-def build_maxflow_graph_cache(
+def build_maxflow_context(
     network: "Network",
-    source_regex: str,
-    sink_regex: str,
+    source_path: str,
+    sink_path: str,
     mode: str = "combine",
-) -> MaxFlowGraphCache:
-    """Build a graph cache for repeated max-flow analysis.
+) -> AnalysisContext:
+    """Build an AnalysisContext for repeated max-flow analysis.
 
     Pre-computes the graph with pseudo source/sink nodes for all source/sink
     pairs, enabling O(|excluded|) mask building per iteration.
 
     Args:
         network: Network instance.
-        source_regex: Regex pattern for source node groups.
-        sink_regex: Regex pattern for sink node groups.
+        source_path: Selection expression for source node groups.
+        sink_path: Selection expression for sink node groups.
         mode: Flow analysis mode ("combine" or "pairwise").
 
     Returns:
-        MaxFlowGraphCache ready for use with max_flow_analysis or sensitivity_analysis.
+        AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
     """
-    return build_maxflow_cache(network, source_regex, sink_regex, mode=mode)
+    mode_enum = Mode.COMBINE if mode == "combine" else Mode.PAIRWISE
+    return analyze(network, source=source_path, sink=sink_path, mode=mode_enum)

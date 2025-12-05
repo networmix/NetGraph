@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: November 25, 2025 at 05:16 UTC
+Generated from source code on: December 05, 2025 at 01:15 UTC
 
-Modules auto-discovered: 44
+Modules auto-discovered: 43
 
 ---
 
@@ -537,13 +537,23 @@ Returns:
 
 Parsers for FailurePolicySet and related failure modeling structures.
 
-### build_failure_policy(fp_data: 'Dict[str, Any]', *, policy_name: 'str', derive_seed) -> 'FailurePolicy'
+### build_failure_policy(fp_data: 'Dict[str, Any]', *, policy_name: 'str', derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicy'
 
 No documentation available.
 
-### build_failure_policy_set(raw: 'Dict[str, Any]', *, derive_seed) -> 'FailurePolicySet'
+### build_failure_policy_set(raw: 'Dict[str, Any]', *, derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicySet'
 
-No documentation available.
+Build a FailurePolicySet from raw config data.
+
+Args:
+    raw: Mapping of policy name -> policy definition dict.
+    derive_seed: Callable to derive deterministic seeds from component names.
+
+Returns:
+    Configured FailurePolicySet.
+
+Raises:
+    ValueError: If raw is not a dict or contains invalid policy definitions.
 
 ### build_risk_groups(rg_data: 'List[Dict[str, Any]]') -> 'List[RiskGroup]'
 
@@ -779,11 +789,27 @@ Example:
     >>> graph = algs.build_graph(strict_multidigraph)
     >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
 
+### serialize_policy_preset(cfg: 'Any') -> 'Optional[str]'
+
+Serialize a FlowPolicyPreset to its string name for JSON storage.
+
+Handles FlowPolicyPreset enum values, integer enum values, and string fallbacks.
+Returns None for None input.
+
+Args:
+    cfg: FlowPolicyPreset enum, integer, or other value to serialize.
+
+Returns:
+    String name of the preset (e.g., "SHORTEST_PATHS_ECMP"), or None if input is None.
+
 ---
 
 ## ngraph.model.network
 
 Network topology modeling with Node, Link, RiskGroup, and Network classes.
+
+This module provides the core network model classes (Node, Link, RiskGroup, Network)
+that can be used independently.
 
 ### Link
 
@@ -842,7 +868,6 @@ Attributes:
 
 - `add_link(self, link: 'Link') -> 'None'` - Add a link to the network (keyed by the link's auto-generated ID).
 - `add_node(self, node: 'Node') -> 'None'` - Add a node to the network (keyed by node.name).
-- `build_core_graph(self, add_reverse: 'bool' = True, augmentations: 'Optional[List]' = None, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Tuple[Any, Any, Any, Any]'` - Build NetGraph-Core graph representation.
 - `disable_all(self) -> 'None'` - Mark all nodes and links as disabled.
 - `disable_link(self, link_id: 'str') -> 'None'` - Mark a link as disabled.
 - `disable_node(self, node_name: 'str') -> 'None'` - Mark a node as disabled.
@@ -932,238 +957,6 @@ Attributes:
 **Methods:**
 
 - `get_sub_path(self, dst_node: 'str', graph: 'StrictMultiDiGraph | None' = None, cost_attr: 'str' = 'cost') -> 'Path'` - Create a sub-path ending at the specified destination node.
-
----
-
-## ngraph.solver.maxflow
-
-Max-flow computation between node groups with NetGraph-Core integration.
-
-This module provides max-flow analysis for Network models by transforming
-multi-source/multi-sink problems into single-source/single-sink problems
-using pseudo nodes.
-
-Key functions:
-
-- max_flow(): Compute max flow values between node groups
-- max_flow_with_details(): Max flow with cost distribution details
-- sensitivity_analysis(): Identify critical edges and flow reduction
-- build_maxflow_cache(): Build cache for efficient repeated analysis
-
-Graph caching (via MaxFlowGraphCache) enables efficient repeated analysis with
-different exclusion sets by building the graph with pseudo nodes once and using
-O(|excluded|) masks for exclusions. Disabled nodes/links are automatically
-handled via the underlying GraphCache from ngraph.adapters.core.
-
-### MaxFlowGraphCache
-
-Pre-built graph with pseudo nodes for efficient repeated max-flow analysis.
-
-Composes a GraphCache with additional pseudo node mappings for max-flow.
-
-Attributes:
-    base_cache: Underlying GraphCache with graph, mappers, and disabled topology.
-    pair_to_pseudo_ids: Mapping from (src_label, snk_label) to (pseudo_src_id, pseudo_snk_id).
-
-**Attributes:**
-
-- `base_cache` (GraphCache)
-- `pair_to_pseudo_ids` (Dict[Tuple[str, str], Tuple[int, int]]) = {}
-
-### build_maxflow_cache(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine') -> 'MaxFlowGraphCache'
-
-Build cached graph with pseudo nodes for efficient repeated max-flow analysis.
-
-Constructs a single graph with all pseudo source/sink nodes for all
-source/sink pairs, enabling O(|excluded|) mask building per iteration
-instead of O(V+E) graph reconstruction.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source node groups.
-    sink_path: Selection expression for sink node groups.
-    mode: "combine" (single pair) or "pairwise" (N×M pairs).
-
-Returns:
-    MaxFlowGraphCache with pre-built graph and pseudo node mappings.
-
-Raises:
-    ValueError: If no matching sources or sinks are found.
-
-### max_flow(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, _cache: 'Optional[MaxFlowGraphCache]' = None) -> 'Dict[Tuple[str, str], float]'
-
-Compute max flow between node groups in a network.
-
-This function calculates the maximum flow from a set of source nodes
-to a set of sink nodes within the provided network.
-
-When `_cache` is provided, uses O(|excluded|) mask building instead of
-O(V+E) graph reconstruction for efficient repeated analysis.
-
-Args:
-    network: Network instance containing topology and node/link data.
-    source_path: Selection expression for source node groups.
-    sink_path: Selection expression for sink node groups.
-    mode: "combine" (all sources to all sinks) or "pairwise" (each pair separately).
-    shortest_path: If True, restricts flow to shortest paths only.
-    flow_placement: Strategy for distributing flow among equal-cost edges.
-    excluded_nodes: Optional set of node names to exclude.
-    excluded_links: Optional set of link IDs to exclude.
-    _cache: Pre-built cache for efficient repeated analysis.
-
-Returns:
-    Dict mapping (source_label, sink_label) to total flow value.
-
-Raises:
-    ValueError: If no matching sources or sinks are found.
-
-### max_flow_with_details(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, _cache: 'Optional[MaxFlowGraphCache]' = None) -> 'Dict[Tuple[str, str], FlowSummary]'
-
-Compute max flow with detailed results including cost distribution.
-
-When `_cache` is provided, uses O(|excluded|) mask building instead of
-O(V+E) graph reconstruction for efficient repeated analysis.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source groups.
-    sink_path: Selection expression for sink groups.
-    mode: "combine" or "pairwise".
-    shortest_path: If True, restricts flow to shortest paths.
-    flow_placement: Flow placement strategy.
-    excluded_nodes: Optional set of node names to exclude.
-    excluded_links: Optional set of link IDs to exclude.
-    _cache: Pre-built cache for efficient repeated analysis.
-
-Returns:
-    Dict mapping (source_label, sink_label) to FlowSummary.
-
-### sensitivity_analysis(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, _cache: 'Optional[MaxFlowGraphCache]' = None) -> 'Dict[Tuple[str, str], Dict[str, float]]'
-
-Analyze sensitivity of max flow to edge failures.
-
-Identifies critical edges and computes the flow reduction caused by
-removing each one.
-
-When `_cache` is provided, uses O(|excluded|) mask building instead of
-O(V+E) graph reconstruction for efficient repeated analysis.
-
-The `shortest_path` parameter controls routing semantics:
-
-- shortest_path=False (default): Full max-flow; reports all saturated edges.
-- shortest_path=True: Shortest-path-only (IP/IGP); reports only edges
-
-  used under ECMP routing.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source groups.
-    sink_path: Selection expression for sink groups.
-    mode: "combine" or "pairwise".
-    shortest_path: If True, use single-tier shortest-path flow (IP/IGP).
-                  If False, use full iterative max-flow (SDN/TE).
-    flow_placement: Flow placement strategy.
-    excluded_nodes: Optional set of node names to exclude.
-    excluded_links: Optional set of link IDs to exclude.
-    _cache: Pre-built cache for efficient repeated analysis.
-
-Returns:
-    Dict mapping (source_label, sink_label) to {link_id: flow_reduction}.
-
----
-
-## ngraph.solver.paths
-
-Shortest-path solver wrappers bound to the model layer.
-
-Expose convenience functions for computing shortest paths between node groups
-selected from a ``Network`` context. Selection semantics mirror the max-flow
-wrappers with ``mode`` in {"combine", "pairwise"}.
-
-Functions return minimal costs or concrete ``Path`` objects built from SPF
-predecessor maps. Parallel equal-cost edges can be expanded into distinct
-paths.
-
-Graph caching is used internally for efficient mask-based exclusions. For
-repeated queries with different exclusions, consider using the lower-level
-adapters/core.py functions with explicit cache management.
-
-All functions fail fast on invalid selection inputs and do not mutate the
-input context.
-
-Note:
-    For path queries, overlapping source/sink membership is treated as
-    unreachable.
-
-### k_shortest_paths(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'pairwise', max_k: 'int' = 3, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, max_path_cost: 'float' = inf, max_path_cost_factor: 'Optional[float]' = None, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'
-
-Return up to K shortest paths per group pair.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source groups.
-    sink_path: Selection expression for sink groups.
-    mode: "pairwise" (default) or "combine".
-    max_k: Max paths per pair.
-    edge_select: SPF/KSP edge selection strategy.
-    max_path_cost: Absolute cost threshold.
-    max_path_cost_factor: Relative threshold versus best path.
-    split_parallel_edges: Expand parallel edges into distinct paths when True.
-    excluded_nodes: Optional set of node names to exclude temporarily.
-    excluded_links: Optional set of link IDs to exclude temporarily.
-
-Returns:
-    Mapping from (source_label, sink_label) to list of Path (<= max_k).
-
-Raises:
-    ValueError: If no source nodes match ``source_path``.
-    ValueError: If no sink nodes match ``sink_path``.
-    ValueError: If ``mode`` is not "combine" or "pairwise".
-
-### shortest_path_costs(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine', edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'
-
-Return minimal path cost(s) between selected node groups.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source groups.
-    sink_path: Selection expression for sink groups.
-    mode: "combine" or "pairwise".
-    edge_select: SPF edge selection strategy.
-    excluded_nodes: Optional set of node names to exclude temporarily.
-    excluded_links: Optional set of link IDs to exclude temporarily.
-
-Returns:
-    Mapping from (source_label, sink_label) to minimal cost; ``inf`` if no
-    path.
-
-Raises:
-    ValueError: If no source nodes match ``source_path``.
-    ValueError: If no sink nodes match ``sink_path``.
-    ValueError: If ``mode`` is not "combine" or "pairwise".
-
-### shortest_paths(network: 'Network', source_path: 'str', sink_path: 'str', *, mode: 'str' = 'combine', edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'
-
-Return concrete shortest path(s) between selected node groups.
-
-Args:
-    network: Network instance.
-    source_path: Selection expression for source groups.
-    sink_path: Selection expression for sink groups.
-    mode: "combine" or "pairwise".
-    edge_select: SPF edge selection strategy.
-    split_parallel_edges: Expand parallel edges into distinct paths when True.
-    excluded_nodes: Optional set of node names to exclude temporarily.
-    excluded_links: Optional set of link IDs to exclude temporarily.
-
-Returns:
-    Mapping from (source_label, sink_label) to list of Path. Empty if
-    unreachable.
-
-Raises:
-    ValueError: If no source nodes match ``source_path``.
-    ValueError: If no sink nodes match ``sink_path``.
-    ValueError: If ``mode`` is not "combine" or "pairwise".
 
 ---
 
@@ -1372,6 +1165,7 @@ YAML Configuration Example:
         iterations: 100
         parallelism: auto
         shortest_path: false
+        require_capacity: true           # false for true IP/IGP semantics
         flow_placement: "PROPORTIONAL"
         baseline: false
         seed: 42
@@ -1391,6 +1185,8 @@ Attributes:
     iterations: Number of Monte Carlo trials.
     parallelism: Number of parallel worker processes.
     shortest_path: Whether to use shortest paths only.
+    require_capacity: If True (default), path selection considers capacity.
+        If False, path selection is cost-only (true IP/IGP semantics).
     flow_placement: Flow placement strategy.
     baseline: Whether to run first iteration without failures as baseline.
     seed: Optional seed for reproducible results.
@@ -1410,6 +1206,7 @@ Attributes:
 - `iterations` (int) = 1
 - `parallelism` (int | str) = auto
 - `shortest_path` (bool) = False
+- `require_capacity` (bool) = True
 - `flow_placement` (FlowPlacement | str) = 1
 - `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
@@ -1526,13 +1323,13 @@ Workflow parsing helpers.
 Converts a normalized workflow section (list[dict]) into WorkflowStep
 instances using the WORKFLOW_STEP_REGISTRY and attaches unique names/seeds.
 
-### build_workflow_steps(workflow_data: 'List[Dict[str, Any]]', derive_seed) -> 'List[WorkflowStep]'
+### build_workflow_steps(workflow_data: 'List[Dict[str, Any]]', derive_seed: 'Callable[[str], Optional[int]]') -> 'List[WorkflowStep]'
 
 Instantiate workflow steps from normalized dictionaries.
 
 Args:
     workflow_data: List of step dicts; each must have "step_type".
-    derive_seed: Callable(name: str) -> int | None, used to derive step seeds.
+    derive_seed: Callable that takes a step name and returns a seed or None.
 
 Returns:
     A list of WorkflowStep instances with unique names and optional seeds.
@@ -1870,8 +1667,14 @@ Defines small, serializable dataclasses that capture per-iteration outcomes
 for capacity and demand-placement style analyses in a unit-agnostic form.
 
 Objects expose `to_dict()` that returns JSON-safe primitives. Float-keyed
-distributions are normalized to string keys, and arbitrary `data` payloads are
-sanitized. These dicts are written under `data.flow_results` by steps.
+distributions are normalized to string keys via `_fmt_float_key()`, and
+arbitrary `data` payloads are sanitized. These dicts are written under
+`data.flow_results` by steps.
+
+Utilities:
+    _fmt_float_key: Formats floats as stable string keys for JSON serialization.
+        Uses fixed-point notation with trailing zeros stripped for human-readable,
+        canonical representations of numeric keys like cost distributions.
 
 ### FlowEntry
 
@@ -2134,18 +1937,20 @@ Base classes and enums for network analysis algorithms.
 
 ### EdgeSelect
 
-Edge selection criteria.
+Edge selection criteria for shortest-path algorithms.
 
-Determines which edges are considered for path-finding between a node and
-its neighbor(s).
+Determines which edges are considered when finding paths between nodes.
+These map to NetGraph-Core's EdgeSelection configuration.
 
 ### FlowPlacement
 
 Strategies to distribute flow across parallel equal-cost paths.
 
-### PathAlg
+### Mode
 
-Path-finding algorithm types.
+Analysis mode for source/sink group handling.
+
+Determines how multiple source and sink nodes are combined for analysis.
 
 ---
 
@@ -2171,31 +1976,22 @@ Attributes:
 - `link_id` (str)
 - `direction` (EdgeDir)
 
-### FlowSummary
+### MaxFlowResult
 
-Summary of max-flow computation results.
+Result of max-flow computation between a source/sink pair.
 
-Captures edge flows, residual capacities, reachable set, and min-cut.
-
-Breaking change from v1.x: Fields now use EdgeRef instead of (src, dst, key) tuples
-for stable scenario-level edge identification.
+Captures total flow, cost distribution, and optionally min-cut edges.
 
 Attributes:
     total_flow: Maximum flow value achieved.
     cost_distribution: Mapping of path cost to flow volume placed at that cost.
-    min_cut: Saturated edges crossing the s-t cut.
-    reachable_nodes: Nodes reachable from source in residual graph (optional).
-    edge_flow: Flow amount per edge (optional, only populated when requested).
-    residual_cap: Remaining capacity per edge after placement (optional).
+    min_cut: Saturated edges forming the min-cut (None if not computed).
 
 **Attributes:**
 
 - `total_flow` (float)
 - `cost_distribution` (Dict[Cost, float])
-- `min_cut` (Tuple[EdgeRef, ...])
-- `reachable_nodes` (Tuple[str, ...] | None)
-- `edge_flow` (Dict[EdgeRef, float] | None)
-- `residual_cap` (Dict[EdgeRef, float] | None)
+- `min_cut` (Tuple[EdgeRef, ...] | None)
 
 ---
 
@@ -2212,6 +2008,63 @@ decodes to ASCII. The resulting string length is 22 characters.
 Returns:
     A 22-character URL-safe Base64 representation of a UUID4 without
     padding.
+
+---
+
+## ngraph.utils.nodes
+
+Node utility functions for filtering and selection.
+
+Provides centralized helpers for filtering active (non-disabled) nodes,
+used across analysis, workflows, and demand expansion.
+
+### collect_active_node_names_from_groups(groups: "Dict[str, List['Node']]", excluded_nodes: 'Optional[Set[str]]' = None) -> 'List[str]'
+
+Extract active (non-disabled) node names from selection groups dict.
+
+Flattens all group values and filters to active nodes.
+
+Args:
+    groups: Dictionary mapping group labels to lists of Node objects.
+    excluded_nodes: Optional set of node names to exclude.
+
+Returns:
+    List of node names from all groups that are active.
+
+### collect_active_nodes_from_groups(groups: "Dict[str, List['Node']]", excluded_nodes: 'Optional[Set[str]]' = None) -> "List['Node']"
+
+Extract active (non-disabled) nodes from selection groups dict.
+
+Flattens all group values and filters to active nodes.
+
+Args:
+    groups: Dictionary mapping group labels to lists of Node objects.
+    excluded_nodes: Optional set of node names to exclude.
+
+Returns:
+    List of Node objects from all groups that are active.
+
+### get_active_node_names(nodes: "Iterable['Node']", excluded_nodes: 'Optional[Set[str]]' = None) -> 'List[str]'
+
+Extract names of active (non-disabled) nodes, optionally excluding some.
+
+Args:
+    nodes: Iterable of Node objects to filter.
+    excluded_nodes: Optional set of node names to exclude.
+
+Returns:
+    List of node names that are not disabled and not in excluded_nodes.
+
+### get_active_nodes(nodes: "Iterable['Node']", excluded_nodes: 'Optional[Set[str]]' = None) -> "List['Node']"
+
+Extract active (non-disabled) nodes, optionally excluding some.
+
+Args:
+    nodes: Iterable of Node objects to filter.
+    excluded_nodes: Optional set of node names to exclude.
+
+Returns:
+    List of Node objects that are not disabled and not in excluded_nodes.
 
 ---
 
@@ -2354,23 +2207,79 @@ Examples:
 
 ---
 
-## ngraph.adapters.core
+## ngraph.analysis.context
 
-Adapter layer for NetGraph-Core integration.
+AnalysisContext: Prepared state for efficient network analysis.
 
-Provides graph building, node/edge ID mapping, and result translation between
-NetGraph's scenario-level types and NetGraph-Core's internal representations.
+This module provides the primary API for network analysis in NetGraph.
+AnalysisContext encapsulates Core graph infrastructure and provides
+methods for max-flow, shortest paths, and sensitivity analysis.
 
-Key components:
+Usage:
+    # One-off analysis
+    from ngraph import analyze
+    flow = analyze(network).max_flow("^A$", "^B$")
 
-- build_graph(): One-shot graph construction with exclusions
-- build_graph_cache(): Cached graph for repeated analysis with masks
-- build_node_mask() / build_edge_mask(): O(|excluded|) mask construction
-- get_disabled_exclusions(): Helper to collect disabled topology for exclusions
+    # Efficient repeated analysis (bound context)
+    ctx = analyze(network, source="^A$", sink="^B$")
+    baseline = ctx.max_flow()
+    degraded = ctx.max_flow(excluded_links=failed_links)
 
-Graph caching enables efficient repeated analysis with different exclusion sets
-by building the graph once and using lightweight masks for exclusions. Disabled
-nodes and links are automatically included in masks built from a GraphCache.
+### AnalysisContext
+
+Prepared state for efficient network analysis.
+
+Encapsulates Core graph infrastructure. Supports two usage patterns:
+
+**Unbound** - flexible, specify source/sink per-call:
+
+    ctx = AnalysisContext.from_network(network)
+    cost = ctx.shortest_path_cost("A", "B")
+    flow = ctx.max_flow("A", "B")  # Builds pseudo-nodes each call
+
+**Bound** - optimized for repeated analysis with same groups:
+
+    ctx = AnalysisContext.from_network(
+        network,
+        source="^dc/",
+        sink="^edge/"
+    )
+    baseline = ctx.max_flow()  # Uses pre-built pseudo-nodes
+    degraded = ctx.max_flow(excluded_links=failed)
+
+Thread Safety:
+    Immutable after creation. Safe for concurrent analysis calls
+    with different exclusion sets.
+
+Attributes:
+    network: Reference to source Network (read-only).
+    is_bound: True if source/sink groups are pre-configured.
+
+**Attributes:**
+
+- `_network` ('Network')
+- `_handle` (netgraph_core.Graph)
+- `_multidigraph` (netgraph_core.StrictMultiDiGraph)
+- `_node_mapper` (_NodeMapper)
+- `_edge_mapper` (_EdgeMapper)
+- `_algorithms` (netgraph_core.Algorithms)
+- `_disabled_node_ids` (FrozenSet[int])
+- `_disabled_link_ids` (FrozenSet[str])
+- `_link_id_to_edge_indices` (Mapping[str, Tuple[int, ...]])
+- `_source_path` (Optional[str])
+- `_sink_path` (Optional[str])
+- `_mode` (Optional[Mode])
+- `_pseudo_context` (Optional[_PseudoNodeContext])
+
+**Methods:**
+
+- `from_network(network: "'Network'", *, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, mode: 'Mode' = <Mode.COMBINE: 1>, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> "'AnalysisContext'"` - Create analysis context from network.
+- `k_shortest_paths(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.PAIRWISE: 2>, max_k: 'int' = 3, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, max_path_cost: 'float' = inf, max_path_cost_factor: 'Optional[float]' = None, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute up to K shortest paths per group pair.
+- `max_flow(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between node groups.
+- `max_flow_detailed(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, include_min_cut: 'bool' = False) -> 'Dict[Tuple[str, str], MaxFlowResult]'` - Compute max flow with detailed results including cost distribution.
+- `sensitivity(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], Dict[str, float]]'` - Analyze sensitivity of max flow to edge failures.
+- `shortest_path_cost(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute shortest path costs between node groups.
+- `shortest_paths(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute concrete shortest paths between node groups.
 
 ### AugmentationEdge
 
@@ -2386,168 +2295,33 @@ Attributes:
     capacity: Edge capacity
     cost: Edge cost (converted to int64 for Core)
 
-### EdgeMapper
-
-Bidirectional mapping between external edge IDs and EdgeRef (link_id + direction).
-
-External edge ID encoding: (linkIndex << 1) | dirBit
-
-- linkIndex: stable sorted index of link_id in Network.links
-- dirBit: 0 for forward ('fwd'), 1 for reverse ('rev')
-
-**Methods:**
-
-- `decode_ext_id(self, ext_id: 'int') -> 'Optional[EdgeRef]'` - Decode external edge ID to EdgeRef.
-- `encode_ext_id(self, link_id: 'str', direction: 'str') -> 'int'` - Encode (link_id, direction) to external edge ID.
-- `to_name(self, ext_id: 'int') -> 'Optional[str]'` - Map external edge ID to link ID (name).
-- `to_ref(self, core_edge_id: 'int', multidigraph: 'netgraph_core.StrictMultiDiGraph') -> 'Optional[EdgeRef]'` - Map Core EdgeId to EdgeRef using the Core graph's ext_edge_ids.
-
-### GraphCache
-
-Pre-built graph components for efficient repeated analysis.
-
-Holds all components needed for running analysis with different exclusion
-sets without rebuilding the graph. Use build_graph_cache() to create.
-
-Attributes:
-    graph_handle: Core Graph handle for algorithm execution.
-    multidigraph: Core StrictMultiDiGraph with topology data.
-    edge_mapper: Mapper for link_id <-> edge_id translation.
-    node_mapper: Mapper for node_name <-> node_id translation.
-    algorithms: Core Algorithms instance for running computations.
-    disabled_node_ids: Pre-computed set of disabled node IDs.
-    disabled_link_ids: Pre-computed set of disabled link IDs.
-    link_id_to_edge_indices: Mapping from link_id to edge array indices.
-
-**Attributes:**
-
-- `graph_handle` (netgraph_core.Graph)
-- `multidigraph` (netgraph_core.StrictMultiDiGraph)
-- `edge_mapper` (EdgeMapper)
-- `node_mapper` (NodeMapper)
-- `algorithms` (netgraph_core.Algorithms)
-- `disabled_node_ids` (Set[int]) = set()
-- `disabled_link_ids` (Set[str]) = set()
-- `link_id_to_edge_indices` (Dict[str, List[int]]) = {}
-
-### NodeMapper
-
-Bidirectional mapping between NetGraph node names (str) and Core NodeId (int).
-
-**Methods:**
-
-- `to_id(self, name: 'str') -> 'int'` - Map node name to Core NodeId.
-- `to_name(self, node_id: 'int') -> 'str'` - Map Core NodeId to node name.
-
-### build_edge_mask(cache: 'GraphCache', excluded_links: 'Optional[Set[str]]' = None) -> 'np.ndarray'
+### build_edge_mask(ctx: 'AnalysisContext', excluded_links: 'Optional[Set[str]]' = None) -> 'np.ndarray'
 
 Build an edge mask array for Core algorithms.
 
-Uses O(|excluded| + |disabled|) time complexity by using the pre-computed
-link_id -> edge_indices mapping, rather than iterating all edges.
-
+Uses O(|excluded| + |disabled|) time complexity.
 Core semantics: True = include, False = exclude.
 
 Args:
-    cache: GraphCache with pre-computed edge index mapping.
+    ctx: AnalysisContext with pre-computed edge index mapping.
     excluded_links: Optional set of link IDs to exclude.
 
 Returns:
     Boolean numpy array of shape (num_edges,) where True means included.
 
-### build_graph(network: "'Network'", *, add_reverse: 'bool' = True, augmentations: 'Optional[List[AugmentationEdge]]' = None, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'tuple[netgraph_core.Graph, netgraph_core.StrictMultiDiGraph, EdgeMapper, NodeMapper]'
-
-Build Core graph with optional augmentations and exclusions.
-
-This is the unified graph builder for all analysis functions. It supports:
-
-- Standard network topology
-- Pseudo/virtual nodes (via augmentations)
-- Filtered topology (via exclusions)
-
-For repeated analysis with different exclusions, use build_graph_cache()
-with build_node_mask()/build_edge_mask() for better performance.
-
-Args:
-    network: NetGraph Network instance.
-    add_reverse: If True, add reverse edges for network links.
-    augmentations: Optional list of edges to add (for pseudo nodes, etc.).
-    excluded_nodes: Optional set of node names to exclude.
-    excluded_links: Optional set of link IDs to exclude.
-
-Returns:
-    Tuple of (graph_handle, multidigraph, edge_mapper, node_mapper).
-
-Pseudo Nodes:
-    Any node name in augmentations that doesn't exist in network.nodes
-    is automatically treated as a pseudo node and assigned a node ID.
-
-Augmentation Edges:
-
-- Added unidirectionally as specified
-- Assigned ext_edge_id of -1 (sentinel for non-network edges)
-- Not included in edge_mapper translation
-
-Node ID Assignment:
-    Real nodes (sorted): IDs 0..(num_real-1)
-    Pseudo nodes (sorted): IDs num_real..(num_real+num_pseudo-1)
-
-### build_graph_cache(network: "'Network'", *, add_reverse: 'bool' = True, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> 'GraphCache'
-
-Build cached graph components for efficient repeated analysis.
-
-Constructs the graph once and pre-computes mappings needed for fast
-mask building. Use with build_node_mask() and build_edge_mask() for
-O(|excluded|) exclusion handling instead of O(V+E).
-
-Args:
-    network: NetGraph Network instance.
-    add_reverse: If True, add reverse edges for network links.
-    augmentations: Optional list of edges to add (for pseudo nodes, etc.).
-
-Returns:
-    GraphCache with all pre-built components.
-
-Example:
-    >>> cache = build_graph_cache(network)
-    >>> for excluded_nodes, excluded_links in failure_patterns:
-    ...     node_mask = build_node_mask(cache, excluded_nodes)
-    ...     edge_mask = build_edge_mask(cache, excluded_links)
-    ...     result = cache.algorithms.max_flow(
-    ...         cache.graph_handle, src, dst,
-    ...         node_mask=node_mask, edge_mask=edge_mask
-    ...     )
-
-### build_node_mask(cache: 'GraphCache', excluded_nodes: 'Optional[Set[str]]' = None) -> 'np.ndarray'
+### build_node_mask(ctx: 'AnalysisContext', excluded_nodes: 'Optional[Set[str]]' = None) -> 'np.ndarray'
 
 Build a node mask array for Core algorithms.
 
-Uses O(|excluded| + |disabled|) time complexity by only setting
-excluded/disabled nodes to False, rather than iterating all nodes.
-
+Uses O(|excluded| + |disabled|) time complexity.
 Core semantics: True = include, False = exclude.
 
 Args:
-    cache: GraphCache with pre-computed disabled node IDs.
+    ctx: AnalysisContext with pre-computed disabled node IDs.
     excluded_nodes: Optional set of node names to exclude.
 
 Returns:
     Boolean numpy array of shape (num_nodes,) where True means included.
-
-### get_disabled_exclusions(network: "'Network'", excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'tuple[Optional[Set[str]], Optional[Set[str]]]'
-
-Merge user exclusions with disabled nodes/links from the network.
-
-Use this when calling build_graph() to ensure disabled topology is excluded.
-
-Args:
-    network: Network instance.
-    excluded_nodes: User-provided node exclusions (or None).
-    excluded_links: User-provided link exclusions (or None).
-
-Returns:
-    Tuple of (full_excluded_nodes, full_excluded_links) including disabled.
-    Returns None for either if empty (for efficient build_graph calls).
 
 ---
 
@@ -2565,9 +2339,9 @@ with FailureManager's caching and multiprocessing systems.
 Graph caching enables efficient repeated analysis with different exclusion
 sets by building the graph once and using O(|excluded|) masks for exclusions.
 
-### build_demand_graph_cache(network: "'Network'", demands_config: 'list[dict[str, Any]]') -> 'GraphCache'
+### build_demand_context(network: "'Network'", demands_config: 'list[dict[str, Any]]') -> 'AnalysisContext'
 
-Build a graph cache for repeated demand placement analysis.
+Build an AnalysisContext for repeated demand placement analysis.
 
 Pre-computes the graph with augmentations (pseudo source/sink nodes) for
 efficient repeated analysis with different exclusion sets.
@@ -2577,25 +2351,25 @@ Args:
     demands_config: List of demand configurations (same format as demand_placement_analysis).
 
 Returns:
-    GraphCache ready for use with demand_placement_analysis.
+    AnalysisContext ready for use with demand_placement_analysis.
 
-### build_maxflow_graph_cache(network: "'Network'", source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine') -> 'MaxFlowGraphCache'
+### build_maxflow_context(network: "'Network'", source_path: 'str', sink_path: 'str', mode: 'str' = 'combine') -> 'AnalysisContext'
 
-Build a graph cache for repeated max-flow analysis.
+Build an AnalysisContext for repeated max-flow analysis.
 
 Pre-computes the graph with pseudo source/sink nodes for all source/sink
 pairs, enabling O(|excluded|) mask building per iteration.
 
 Args:
     network: Network instance.
-    source_regex: Regex pattern for source node groups.
-    sink_regex: Regex pattern for sink node groups.
+    source_path: Selection expression for source node groups.
+    sink_path: Selection expression for sink node groups.
     mode: Flow analysis mode ("combine" or "pairwise").
 
 Returns:
-    MaxFlowGraphCache ready for use with max_flow_analysis or sensitivity_analysis.
+    AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
 
-### demand_placement_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, _graph_cache: 'Optional[GraphCache]' = None, **kwargs) -> 'FlowIterationResult'
+### demand_placement_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze traffic demand placement success rates using Core directly.
 
@@ -2614,63 +2388,63 @@ Args:
     placement_rounds: Number of placement optimization rounds (unused - Core handles internally).
     include_flow_details: When True, include cost_distribution per flow.
     include_used_edges: When True, include set of used edges per demand in entry data.
-    _graph_cache: Pre-built graph cache for fast repeated analysis.
+    context: Pre-built AnalysisContext for fast repeated analysis.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
     FlowIterationResult describing this iteration.
 
-### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, _graph_cache: 'Optional[MaxFlowGraphCache]' = None, **kwargs) -> 'FlowIterationResult'
+### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze maximum flow capacity between node groups.
-
-When `_graph_cache` is provided, uses O(|excluded|) mask building instead
-of O(V+E) graph reconstruction for efficient repeated analysis.
 
 Args:
     network: Network instance.
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
-    source_regex: Regex pattern for source node groups.
-    sink_regex: Regex pattern for sink node groups.
+    source_path: Selection expression for source node groups.
+    sink_path: Selection expression for sink node groups.
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: Whether to use shortest paths only.
+    require_capacity: If True (default), path selection considers available
+        capacity. If False, path selection is cost-only (true IP/IGP semantics).
     flow_placement: Flow placement strategy.
     include_flow_details: Whether to collect cost distribution and similar details.
     include_min_cut: Whether to include min-cut edge list in entry data.
-    _graph_cache: Pre-built cache for efficient repeated analysis.
+    context: Pre-built AnalysisContext for efficient repeated analysis.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
     FlowIterationResult describing this iteration.
 
-### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_regex: 'str', sink_regex: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, _graph_cache: 'Optional[MaxFlowGraphCache]' = None, **kwargs) -> 'dict[str, dict[str, float]]'
+### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze component sensitivity to failures.
 
 Identifies critical edges (saturated edges) and computes the flow reduction
-caused by removing each one.
+caused by removing each one. Returns a FlowIterationResult where each
+FlowEntry represents a source/sink pair with:
 
-When `_graph_cache` is provided, uses O(|excluded|) mask building instead
-of O(V+E) graph reconstruction for efficient repeated analysis.
+- demand/placed = max flow value (the capacity being analyzed)
+- dropped = 0.0 (baseline analysis, no failures applied)
+- data["sensitivity"] = {link_id:direction: flow_reduction} for critical edges
 
 Args:
     network: Network instance.
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
-    source_regex: Regex pattern for source node groups.
-    sink_regex: Regex pattern for sink node groups.
+    source_path: Selection expression for source node groups.
+    sink_path: Selection expression for sink node groups.
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
         Reports only edges used under ECMP routing. If False (default), use
         full iterative max-flow (SDN/TE mode) and report all saturated edges.
     flow_placement: Flow placement strategy.
-    _graph_cache: Pre-built cache for efficient repeated analysis.
+    context: Pre-built AnalysisContext for efficient repeated analysis.
     **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
-    Dictionary mapping flow keys ("src->dst") to dictionaries of component
-    identifiers mapped to sensitivity scores.
+    FlowIterationResult with sensitivity data in each FlowEntry.data.
 
 ---
 
@@ -2850,7 +2624,7 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
 - `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
 - `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.

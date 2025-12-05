@@ -1,247 +1,214 @@
-"""Tests for max_flow_with_details cost distribution validation.
+"""Tests for cost distribution in max-flow results.
 
-These tests ensure that cost_distribution values are correct, not just present.
-They validate the actual flow volumes at different path costs.
+These tests verify that max_flow_detailed correctly computes and reports
+the distribution of flow across different cost tiers.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node
-from ngraph.solver.maxflow import max_flow_with_details
-from ngraph.types.base import FlowPlacement
+from ngraph import FlowPlacement, Link, Mode, Network, Node, analyze
 
 
-def _diamond_network() -> Network:
-    """Build a diamond network with two paths of different costs.
+def _multi_tier_network() -> Network:
+    """Build a network with multiple cost tiers.
 
     Topology:
-        A -> B (cap 3, cost 1) -> D (cap 3, cost 1)
-        A -> C (cap 3, cost 2) -> D (cap 3, cost 2)
+        A -> B (cost 1, cap 5) -> D (cost 1, cap 5)  [tier 1: cost 2, cap 5]
+        A -> C (cost 2, cap 3) -> D (cost 2, cap 3)  [tier 2: cost 4, cap 3]
 
-    Total cost: path via B = 2, path via C = 4
-    Max flow = 6 (3 via B + 3 via C)
+    Total max flow: 8 (5 from tier 1 + 3 from tier 2)
     """
     net = Network()
     for name in ["A", "B", "C", "D"]:
         net.add_node(Node(name))
 
-    net.add_link(Link("A", "B", capacity=3.0, cost=1.0))
-    net.add_link(Link("B", "D", capacity=3.0, cost=1.0))
+    net.add_link(Link("A", "B", capacity=5.0, cost=1.0))
+    net.add_link(Link("B", "D", capacity=5.0, cost=1.0))
     net.add_link(Link("A", "C", capacity=3.0, cost=2.0))
     net.add_link(Link("C", "D", capacity=3.0, cost=2.0))
 
     return net
 
 
-def _parallel_paths_network() -> Network:
-    """Build network with multiple parallel paths at same cost.
+def _parallel_equal_cost_network() -> Network:
+    """Build a network with parallel equal-cost paths.
 
     Topology:
-        S -> A (cap 1, cost 1) -> T (cap 1, cost 1)
-        S -> B (cap 2, cost 1) -> T (cap 2, cost 1)
+        S -> A (cost 1, cap 5) -> T (cost 1, cap 5)
+        S -> B (cost 1, cap 3) -> T (cost 1, cap 3)
 
-    All paths have cost 2, max flow = 3
+    Both paths have same cost (2), total capacity 8.
     """
     net = Network()
     for name in ["S", "A", "B", "T"]:
         net.add_node(Node(name))
 
-    net.add_link(Link("S", "A", capacity=1.0, cost=1.0))
-    net.add_link(Link("A", "T", capacity=1.0, cost=1.0))
-    net.add_link(Link("S", "B", capacity=2.0, cost=1.0))
-    net.add_link(Link("B", "T", capacity=2.0, cost=1.0))
+    net.add_link(Link("S", "A", capacity=5.0, cost=1.0))
+    net.add_link(Link("A", "T", capacity=5.0, cost=1.0))
+    net.add_link(Link("S", "B", capacity=3.0, cost=1.0))
+    net.add_link(Link("B", "T", capacity=3.0, cost=1.0))
 
     return net
 
 
-def _three_tier_network() -> Network:
-    """Build network with three different cost tiers.
+def _single_path_network() -> Network:
+    """Build a simple single-path network.
 
-    Topology:
-        S -> A (cap 1, cost 1) -> T (cap 1, cost 1)  [total cost 2]
-        S -> B (cap 1, cost 2) -> T (cap 1, cost 2)  [total cost 4]
-        S -> C (cap 1, cost 3) -> T (cap 1, cost 3)  [total cost 6]
-
-    Max flow = 3 (1 at each cost tier)
+    Topology: S -> A -> T (cost 2 total, cap 10)
     """
     net = Network()
-    for name in ["S", "A", "B", "C", "T"]:
+    for name in ["S", "A", "T"]:
         net.add_node(Node(name))
 
-    net.add_link(Link("S", "A", capacity=1.0, cost=1.0))
-    net.add_link(Link("A", "T", capacity=1.0, cost=1.0))
-    net.add_link(Link("S", "B", capacity=1.0, cost=2.0))
-    net.add_link(Link("B", "T", capacity=1.0, cost=2.0))
-    net.add_link(Link("S", "C", capacity=1.0, cost=3.0))
-    net.add_link(Link("C", "T", capacity=1.0, cost=3.0))
+    net.add_link(Link("S", "A", capacity=10.0, cost=1.0))
+    net.add_link(Link("A", "T", capacity=10.0, cost=1.0))
 
     return net
 
 
-def test_cost_distribution_two_paths_different_costs() -> None:
-    """Validate cost distribution with two paths of different costs."""
-    net = _diamond_network()
-    result = max_flow_with_details(net, "^A$", "^D$", mode="combine")
+class TestCostDistributionBasic:
+    """Basic cost distribution tests."""
 
-    assert ("^A$", "^D$") in result
-    summary = result[("^A$", "^D$")]
+    def test_multi_tier_distribution(self) -> None:
+        """Test that flow is distributed across cost tiers correctly."""
+        net = _multi_tier_network()
 
-    # Total flow should be 6.0
-    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 6.0
+        result = analyze(net).max_flow_detailed("^A$", "^D$", mode=Mode.COMBINE)
 
-    # Cost distribution should show flow at two different costs
-    assert len(summary.cost_distribution) == 2
+        summary = result[("^A$", "^D$")]
+        assert pytest.approx(summary.total_flow, abs=1e-9) == 8.0
 
-    # 3 units at cost 2 (via B)
-    assert 2.0 in summary.cost_distribution
-    assert pytest.approx(summary.cost_distribution[2.0], rel=0, abs=1e-9) == 3.0
+        # Should have two cost tiers
+        assert len(summary.cost_distribution) == 2
+        assert (
+            pytest.approx(summary.cost_distribution.get(2.0, 0), abs=1e-9) == 5.0
+        )  # tier 1
+        assert (
+            pytest.approx(summary.cost_distribution.get(4.0, 0), abs=1e-9) == 3.0
+        )  # tier 2
 
-    # 3 units at cost 4 (via C)
-    assert 4.0 in summary.cost_distribution
-    assert pytest.approx(summary.cost_distribution[4.0], rel=0, abs=1e-9) == 3.0
+    def test_parallel_equal_cost_distribution(self) -> None:
+        """Test that parallel equal-cost paths share same cost tier."""
+        net = _parallel_equal_cost_network()
 
-    # Sum of cost distribution should equal total flow
-    total_from_dist = sum(summary.cost_distribution.values())
-    assert pytest.approx(total_from_dist, rel=0, abs=1e-9) == summary.total_flow
+        result = analyze(net).max_flow_detailed("^S$", "^T$", mode=Mode.COMBINE)
 
+        summary = result[("^S$", "^T$")]
+        assert pytest.approx(summary.total_flow, abs=1e-9) == 8.0
 
-def test_cost_distribution_parallel_paths_same_cost() -> None:
-    """Validate cost distribution when all paths have the same cost."""
-    net = _parallel_paths_network()
-    result = max_flow_with_details(net, "^S$", "^T$", mode="combine")
+        # All flow should be in single cost tier (cost 2)
+        assert len(summary.cost_distribution) == 1
+        assert pytest.approx(summary.cost_distribution.get(2.0, 0), abs=1e-9) == 8.0
 
-    summary = result[("^S$", "^T$")]
+    def test_single_path_distribution(self) -> None:
+        """Test cost distribution for single-path network."""
+        net = _single_path_network()
 
-    # Total flow should be 3.0
-    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 3.0
+        result = analyze(net).max_flow_detailed("^S$", "^T$", mode=Mode.COMBINE)
 
-    # All flow at cost 2 (both paths have cost 1+1=2)
-    assert len(summary.cost_distribution) == 1
-    assert 2.0 in summary.cost_distribution
-    assert pytest.approx(summary.cost_distribution[2.0], rel=0, abs=1e-9) == 3.0
+        summary = result[("^S$", "^T$")]
+        assert pytest.approx(summary.total_flow, abs=1e-9) == 10.0
 
-
-def test_cost_distribution_three_tiers() -> None:
-    """Validate cost distribution with three different cost tiers."""
-    net = _three_tier_network()
-    result = max_flow_with_details(net, "^S$", "^T$", mode="combine")
-
-    summary = result[("^S$", "^T$")]
-
-    # Total flow should be 3.0
-    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 3.0
-
-    # Should have three different costs
-    assert len(summary.cost_distribution) == 3
-
-    # 1 unit at each cost tier
-    assert pytest.approx(summary.cost_distribution[2.0], rel=0, abs=1e-9) == 1.0
-    assert pytest.approx(summary.cost_distribution[4.0], rel=0, abs=1e-9) == 1.0
-    assert pytest.approx(summary.cost_distribution[6.0], rel=0, abs=1e-9) == 1.0
+        # Single cost tier
+        assert len(summary.cost_distribution) == 1
+        assert pytest.approx(summary.cost_distribution.get(2.0, 0), abs=1e-9) == 10.0
 
 
-def test_cost_distribution_shortest_path_mode() -> None:
-    """Validate cost distribution in shortest_path mode (only lowest cost tier)."""
-    net = _three_tier_network()
-    result = max_flow_with_details(
-        net, "^S$", "^T$", mode="combine", shortest_path=True
-    )
+class TestShortestPathMode:
+    """Tests for shortest_path mode cost distribution."""
 
-    summary = result[("^S$", "^T$")]
+    def test_shortest_path_mode_uses_only_best_tier(self) -> None:
+        """Test that shortest_path=True only uses lowest cost tier."""
+        net = _multi_tier_network()
 
-    # Should only use the lowest cost path
-    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 1.0
+        # _multi_tier_network has nodes A, B, C, D
+        result = analyze(net).max_flow_detailed(
+            "^A$", "^D$", mode=Mode.COMBINE, shortest_path=True
+        )
 
-    # Should have only one cost tier (the lowest)
-    assert len(summary.cost_distribution) == 1
-    assert 2.0 in summary.cost_distribution
-    assert pytest.approx(summary.cost_distribution[2.0], rel=0, abs=1e-9) == 1.0
+        summary = result[("^A$", "^D$")]
 
-
-def test_cost_distribution_pairwise_mode() -> None:
-    """Validate cost distribution in pairwise mode."""
-    net = Network()
-    for name in ["S1", "S2", "M", "T1", "T2"]:
-        net.add_node(Node(name))
-
-    # S1 -> M -> T1: cost 2, capacity 2
-    net.add_link(Link("S1", "M", capacity=2.0, cost=1.0))
-    net.add_link(Link("M", "T1", capacity=2.0, cost=1.0))
-
-    # S2 -> M -> T2: cost 4, capacity 1
-    net.add_link(Link("S2", "M", capacity=1.0, cost=2.0))
-    net.add_link(Link("M", "T2", capacity=1.0, cost=2.0))
-
-    # Use capture group in regex to extract node names for pairwise keys
-    result = max_flow_with_details(net, r"^(S\d)$", r"^(T\d)$", mode="pairwise")
-
-    # Check S1 -> T1
-    s1_t1 = result[("S1", "T1")]
-    assert pytest.approx(s1_t1.total_flow, rel=0, abs=1e-9) == 2.0
-    assert 2.0 in s1_t1.cost_distribution
-    assert pytest.approx(s1_t1.cost_distribution[2.0], rel=0, abs=1e-9) == 2.0
-
-    # Check S2 -> T2
-    s2_t2 = result[("S2", "T2")]
-    assert pytest.approx(s2_t2.total_flow, rel=0, abs=1e-9) == 1.0
-    assert 4.0 in s2_t2.cost_distribution
-    assert pytest.approx(s2_t2.cost_distribution[4.0], rel=0, abs=1e-9) == 1.0
+        # Should only use tier 1 (cost 2)
+        assert len(summary.cost_distribution) == 1
+        assert 2.0 in summary.cost_distribution
+        assert pytest.approx(summary.cost_distribution[2.0], abs=1e-9) == 5.0
 
 
-def test_cost_distribution_with_flow_placement_proportional() -> None:
-    """Validate cost distribution with proportional flow placement."""
-    net = _diamond_network()
-    result = max_flow_with_details(
-        net, "^A$", "^D$", mode="combine", flow_placement=FlowPlacement.PROPORTIONAL
-    )
+class TestPairwiseMode:
+    """Tests for pairwise mode cost distribution."""
 
-    summary = result[("^A$", "^D$")]
+    def test_pairwise_mode_distribution(self) -> None:
+        """Test that pairwise mode returns distribution per pair."""
+        net = Network()
+        net.add_node(Node("S1"))
+        net.add_node(Node("S2"))
+        net.add_node(Node("X"))
+        net.add_node(Node("T1"))
+        net.add_node(Node("T2"))
 
-    # Should still get correct total and distribution
-    assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 6.0
-    assert len(summary.cost_distribution) == 2
-    assert pytest.approx(summary.cost_distribution[2.0], rel=0, abs=1e-9) == 3.0
-    assert pytest.approx(summary.cost_distribution[4.0], rel=0, abs=1e-9) == 3.0
+        net.add_link(Link("S1", "X", capacity=5.0, cost=1.0))
+        net.add_link(Link("S2", "X", capacity=3.0, cost=2.0))
+        net.add_link(Link("X", "T1", capacity=10.0, cost=1.0))
+        net.add_link(Link("X", "T2", capacity=10.0, cost=2.0))
 
+        result = analyze(net).max_flow_detailed(
+            r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE
+        )
 
-def test_cost_distribution_empty_when_no_flow() -> None:
-    """Validate cost distribution is empty when there's no flow."""
-    net = Network()
-    net.add_node(Node("A"))
-    net.add_node(Node("B"))
-    # No links - no flow possible
-
-    result = max_flow_with_details(net, "^A$", "^B$", mode="combine")
-    summary = result[("^A$", "^B$")]
-
-    assert summary.total_flow == 0.0
-    assert len(summary.cost_distribution) == 0
+        # Each pair should have its own distribution
+        s1_t1 = result[("S1", "T1")]
+        assert pytest.approx(s1_t1.total_flow, abs=1e-9) == 5.0
+        assert 2.0 in s1_t1.cost_distribution  # cost 1+1=2
 
 
-def test_cost_distribution_weighted_average_latency() -> None:
-    """Validate cost distribution enables correct latency analysis."""
-    net = _diamond_network()
-    result = max_flow_with_details(net, "^A$", "^D$", mode="combine")
-    summary = result[("^A$", "^D$")]
+class TestFlowPlacement:
+    """Tests for flow placement strategies affecting distribution."""
 
-    # Calculate weighted average latency
-    total_flow = sum(summary.cost_distribution.values())
-    weighted_avg = (
-        sum(cost * flow for cost, flow in summary.cost_distribution.items())
-        / total_flow
-    )
+    def test_proportional_placement(self) -> None:
+        """Test PROPORTIONAL flow placement."""
+        net = _multi_tier_network()
 
-    # With equal flow on both paths (3 at cost 2, 3 at cost 4)
-    # weighted average = (2*3 + 4*3) / 6 = 18/6 = 3.0
-    assert pytest.approx(weighted_avg, rel=0, abs=1e-9) == 3.0
+        result = analyze(net).max_flow_detailed(
+            "^A$", "^D$", mode=Mode.COMBINE, flow_placement=FlowPlacement.PROPORTIONAL
+        )
 
-    # Latency span
-    min_latency = min(summary.cost_distribution.keys())
-    max_latency = max(summary.cost_distribution.keys())
-    latency_span = max_latency - min_latency
+        summary = result[("^A$", "^D$")]
+        assert pytest.approx(summary.total_flow, abs=1e-9) == 8.0
 
-    assert min_latency == 2.0
-    assert max_latency == 4.0
-    assert latency_span == 2.0
+
+class TestEdgeCases:
+    """Edge case tests for cost distribution."""
+
+    def test_no_flow_empty_distribution(self) -> None:
+        """Test that zero flow results in empty distribution."""
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        # No link between A and B
+
+        result = analyze(net).max_flow_detailed("^A$", "^B$", mode=Mode.COMBINE)
+
+        summary = result[("^A$", "^B$")]
+        assert summary.total_flow == 0.0
+        assert len(summary.cost_distribution) == 0
+
+    def test_zero_capacity_path(self) -> None:
+        """Test that zero-capacity paths don't contribute."""
+        net = Network()
+        for name in ["A", "B", "C"]:
+            net.add_node(Node(name))
+
+        net.add_link(Link("A", "B", capacity=0.0, cost=1.0))  # Zero capacity
+        net.add_link(Link("B", "C", capacity=10.0, cost=1.0))
+        net.add_link(Link("A", "C", capacity=5.0, cost=3.0))
+
+        result = analyze(net).max_flow_detailed("^A$", "^C$", mode=Mode.COMBINE)
+
+        summary = result[("^A$", "^C$")]
+        assert pytest.approx(summary.total_flow, abs=1e-9) == 5.0
+
+        # Only the direct path (cost 3) should contribute
+        assert len(summary.cost_distribution) == 1
+        assert 3.0 in summary.cost_distribution

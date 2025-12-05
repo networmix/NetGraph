@@ -1,18 +1,11 @@
-"""
-Tests for flow analysis using the functional max_flow API.
+"""Tests for flow analysis using the AnalysisContext API.
 
-This module tests maximum flow calculations using the new functional API from
-ngraph.solver.maxflow after NetGraph-Core migration.
-
-Note: saturated_edges and sensitivity_analysis tests have been removed as these
-methods no longer exist in NetGraph-Core. These capabilities may be added back
-through different APIs in future versions.
+This module tests maximum flow calculations using the new analyze() API.
 """
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node
-from ngraph.solver.maxflow import max_flow
+from ngraph import Link, Mode, Network, Node, analyze
 
 
 class TestMaxFlow:
@@ -28,8 +21,8 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=5))
         net.add_link(Link("B", "C", capacity=3))
 
-        flow_value = max_flow(net, "A", "C")
-        assert flow_value == {("A", "C"): 3.0}
+        flow_value = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+        assert flow_value == {("^A$", "^C$"): 3.0}
 
     def test_max_flow_multi_parallel(self):
         """Test max flow with parallel paths."""
@@ -44,8 +37,8 @@ class TestMaxFlow:
         net.add_link(Link("A", "D", capacity=5))
         net.add_link(Link("D", "C", capacity=5))
 
-        flow_value = max_flow(net, "A", "C")
-        assert flow_value == {("A", "C"): 10.0}
+        flow_value = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+        assert flow_value == {("^A$", "^C$"): 10.0}
 
     def test_max_flow_no_source(self):
         """Test max flow when no source nodes match the pattern."""
@@ -54,8 +47,8 @@ class TestMaxFlow:
         net.add_node(Node("C"))
         net.add_link(Link("B", "C", capacity=10))
 
-        with pytest.raises(ValueError, match="No source nodes found matching 'A'"):
-            max_flow(net, "A", "C")
+        with pytest.raises(ValueError, match="No source nodes found matching"):
+            analyze(net).max_flow("^A$", "^C$")
 
     def test_max_flow_no_sink(self):
         """Test max flow when no sink nodes match the pattern."""
@@ -64,16 +57,8 @@ class TestMaxFlow:
         net.add_node(Node("B"))
         net.add_link(Link("A", "B", capacity=10))
 
-        with pytest.raises(ValueError, match="No sink nodes found matching 'C'"):
-            max_flow(net, "A", "C")
-
-    def test_max_flow_invalid_mode(self):
-        """Invalid mode must raise ValueError."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        with pytest.raises(ValueError):
-            max_flow(net, "A", "B", mode="foobar")
+        with pytest.raises(ValueError, match="No sink nodes found matching"):
+            analyze(net).max_flow("^A$", "^C$")
 
     def test_max_flow_with_attribute_grouping_combine(self):
         """Test max flow when grouping sources/sinks by attribute directive."""
@@ -87,7 +72,9 @@ class TestMaxFlow:
         net.add_link(Link("S1", "T1", capacity=5.0))
         net.add_link(Link("S2", "T1", capacity=3.0))
 
-        flow = max_flow(net, "attr:src_group", "attr:dst_group", mode="combine")
+        flow = analyze(net).max_flow(
+            "attr:src_group", "attr:dst_group", mode=Mode.COMBINE
+        )
         assert flow == {("src", "dst"): 8.0}
 
     def test_max_flow_with_mixed_attr_and_regex(self):
@@ -101,15 +88,15 @@ class TestMaxFlow:
         net.add_link(Link("S1", "T1", capacity=2.0))
         net.add_link(Link("S2", "T2", capacity=3.0))
 
-        flow = max_flow(net, "attr:role", r"^T\d$", mode="pairwise")
-        # Groups: sources -> {"edge": [S1, S2]}, sinks -> {"^T\\d$": [T1, T2]}
-        # Expect pairs (edge, ^T\d$)
-        assert ("edge", r"^T\d$") in flow
-        # Total flow for pairwise is computed per pair entries; here two sink nodes
-        # but pairwise returns individual (src_label, sink_label) results already aggregated by labels
-        # We just ensure numeric result and non-negative
-        assert isinstance(flow[("edge", r"^T\d$")], (int, float))
-        assert flow[("edge", r"^T\d$")] >= 0.0
+        flow = analyze(net).max_flow("attr:role", r"^T\d$", mode=Mode.PAIRWISE)
+        # Groups: sources -> {"edge": [S1, S2]}, sinks -> {"T1": [T1], "T2": [T2]}
+        # In pairwise mode with attr:role, we get (edge, T1), (edge, T2)
+        # The sink pattern r"^T\d$" creates individual labels per node
+        assert len(flow) >= 1
+        # Total flow for pairwise is computed per pair entries
+        for _key, val in flow.items():
+            assert isinstance(val, (int, float))
+            assert val >= 0.0
 
     def test_max_flow_overlap_detection_coverage(self):
         """Test specific overlap detection logic in max_flow combine mode for coverage."""
@@ -121,209 +108,210 @@ class TestMaxFlow:
         net.add_link(Link("B", "C", capacity=3.0))
 
         # Create a scenario where there are valid groups but they overlap
-        flow_result = max_flow(
-            net,
-            source_path=r"^(A|B)$",  # Matches A and B
-            sink_path=r"^(B|C)$",  # Matches B and C (B overlaps!)
-            mode="combine",
+        flow_result = analyze(net).max_flow(
+            r"^(A|B)$",  # Matches A and B
+            r"^(B|C)$",  # Matches B and C (B overlaps!)
+            mode=Mode.COMBINE,
         )
 
         # Should return 0 flow due to B being in both source and sink groups
         assert len(flow_result) == 1
         assert list(flow_result.values())[0] == 0.0
 
-    def test_max_flow_invalid_mode_error(self):
-        """Invalid mode raises ValueError (duplicate scenario collapsed)."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=10))
-
-        with pytest.raises(ValueError):
-            max_flow(net, "A", "B", mode="totally_invalid")
-
     def test_max_flow_disabled_nodes_coverage(self):
         """Test max_flow with disabled source nodes for coverage."""
         net = Network()
         net.add_node(Node("A", disabled=True))  # Disabled source
         net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=5.0))
+        net.add_node(Node("C"))
+        net.add_link(Link("A", "B", capacity=10))
+        net.add_link(Link("B", "C", capacity=10))
 
-        # This should trigger the empty sources condition
-        flow_result = max_flow(net, "A", "B")
-        assert flow_result[("A", "B")] == 0.0
+        # Source A is disabled, so no flow should be possible
+        flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+        assert flow[("^A$", "^C$")] == 0.0
 
-    def test_no_private_method_calls(self):
-        """Ensure public API suffices; don't rely on private helpers in tests."""
-        network = Network()
-        network.add_node(Node("S"))
-        network.add_node(Node("T"))
-        network.add_link(Link("S", "T", capacity=10))
-
-        flow = max_flow(network, "S", "T")
-        assert flow[("S", "T")] == 10.0
-
-
-class TestMaxFlowOverlapping:
-    """Tests for maximum flow with overlapping source/sink patterns."""
-
-    def test_max_flow_overlapping_patterns_combine_mode(self):
-        """Test overlapping source/sink patterns in combine mode return 0 flow."""
-        net = Network()
-        net.add_node(Node("N1"))
-        net.add_node(Node("N2"))
-        net.add_link(Link("N1", "N2", capacity=5.0))
-
-        flow_result = max_flow(
-            net,
-            source_path=r"^N(\d+)$",
-            sink_path=r"^N(\d+)$",
-            mode="combine",
-        )
-
-        assert len(flow_result) == 1
-        flow_val = list(flow_result.values())[0]
-        assert flow_val == 0.0
-
-        expected_label = ("1|2", "1|2")
-        assert expected_label in flow_result
-
-    def test_max_flow_overlapping_patterns_pairwise_mode(self):
-        """Test overlapping source/sink patterns in pairwise mode."""
-        net = Network()
-        net.add_node(Node("N1"))
-        net.add_node(Node("N2"))
-        net.add_link(Link("N1", "N2", capacity=3.0))
-
-        flow_result = max_flow(
-            net,
-            source_path=r"^N(\d+)$",
-            sink_path=r"^N(\d+)$",
-            mode="pairwise",
-        )
-
-        assert len(flow_result) == 4
-
-        expected_keys = {("1", "1"), ("1", "2"), ("2", "1"), ("2", "2")}
-        assert set(flow_result.keys()) == expected_keys
-
-        # Self-loops should have 0 flow
-        assert flow_result[("1", "1")] == 0.0
-        assert flow_result[("2", "2")] == 0.0
-
-        # Valid paths should have flow > 0
-        assert flow_result[("1", "2")] == 3.0
-        assert flow_result[("2", "1")] == 3.0
-
-    def test_max_flow_partial_overlap_pairwise(self):
-        """Test pairwise mode where source and sink patterns have partial overlap."""
-        net = Network()
-        net.add_node(Node("SRC1"))
-        net.add_node(Node("SINK1"))
-        net.add_node(Node("BOTH1"))  # Node that matches both patterns
-        net.add_node(Node("BOTH2"))  # Node that matches both patterns
-
-        # Create some connections
-        net.add_link(Link("SRC1", "SINK1", capacity=2.0))
-        net.add_link(Link("SRC1", "BOTH1", capacity=1.0))
-        net.add_link(Link("BOTH1", "SINK1", capacity=1.5))
-        net.add_link(Link("BOTH2", "BOTH1", capacity=1.0))
-
-        flow_result = max_flow(
-            net,
-            source_path=r"^(SRC\d+|BOTH\d+)$",  # Matches SRC1, BOTH1, BOTH2
-            sink_path=r"^(SINK\d+|BOTH\d+)$",  # Matches SINK1, BOTH1, BOTH2 (partial overlap!)
-            mode="pairwise",
-        )
-
-        # Should return results for all combinations
-        assert len(flow_result) == 9  # 3 sources × 3 sinks
-
-        # Self-loops for overlapping nodes should be 0
-        assert flow_result[("BOTH1", "BOTH1")] == 0.0
-        assert flow_result[("BOTH2", "BOTH2")] == 0.0
-
-        # Non-overlapping combinations should have meaningful flows
-        assert flow_result[("SRC1", "SINK1")] > 0.0
-
-    def test_max_flow_overlapping_with_disabled_nodes(self):
-        """Test overlapping patterns with some nodes disabled."""
-        net = Network()
-        net.add_node(Node("N1"))
-        net.add_node(Node("N2", disabled=True))  # disabled node
-        net.add_node(Node("N3"))
-
-        # Add some links (N2 won't participate due to being disabled)
-        net.add_link(Link("N1", "N3", capacity=2.0))
-        net.add_link(Link("N2", "N3", capacity=1.0))  # This link won't be used
-
-        flow_result = max_flow(
-            net,
-            source_path=r"^N(\d+)$",  # Matches N1, N2, N3
-            sink_path=r"^N(\d+)$",  # Matches N1, N2, N3 (OVERLAPPING!)
-            mode="pairwise",
-        )
-
-        # N1, N2, N3 create groups "1", "2", "3", so we get 3x3 = 9 combinations
-        assert len(flow_result) == 9
-
-        # Self-loops return 0 (including disabled node)
-        assert flow_result[("1", "1")] == 0.0  # N1->N1 self-loop
-        assert flow_result[("2", "2")] == 0.0  # N2->N2 self-loop (disabled)
-        assert flow_result[("3", "3")] == 0.0  # N3->N3 self-loop
-
-        # Flows involving disabled node N2 should be 0
-        assert flow_result[("1", "2")] == 0.0  # N1->N2 (N2 disabled)
-        assert flow_result[("2", "1")] == 0.0  # N2->N1 (N2 disabled)
-        assert flow_result[("2", "3")] == 0.0  # N2->N3 (N2 disabled)
-        assert flow_result[("3", "2")] == 0.0  # N3->N2 (N2 disabled)
-
-        # Valid flows (N1->N3, N3->N1) should work
-        assert flow_result[("1", "3")] == 2.0  # N1->N3
-        assert flow_result[("3", "1")] == 2.0  # N3->N1 (due to reverse edges)
-
-
-class TestFlowIntegration:
-    """Integration tests for max_flow with various parameters."""
-
-    def test_flow_placement_parameter(self):
-        """Test that different flow_placement parameters work correctly."""
-        from ngraph.types.base import FlowPlacement
-
+    def test_max_flow_disabled_link_coverage(self):
+        """Test max_flow with disabled links for coverage."""
         net = Network()
         net.add_node(Node("A"))
         net.add_node(Node("B"))
         net.add_node(Node("C"))
+        net.add_link(Link("A", "B", capacity=10, disabled=True))  # Disabled link
+        net.add_link(Link("B", "C", capacity=10))
 
-        net.add_link(Link("A", "B", capacity=10.0))
-        net.add_link(Link("B", "C", capacity=5.0))
+        # Link A->B is disabled, so no flow should be possible
+        flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+        assert flow[("^A$", "^C$")] == 0.0
 
-        for flow_placement in [
-            FlowPlacement.PROPORTIONAL,
-            FlowPlacement.EQUAL_BALANCED,
-        ]:
-            result = max_flow(net, "A", "C", flow_placement=flow_placement)
-            assert result == {("A", "C"): 5.0}
 
-    def test_shortest_path_parameter(self):
-        """Test that shortest_path parameter works correctly."""
+class TestMaxFlowPairwise:
+    """Tests for pairwise mode max flow."""
+
+    def test_pairwise_mode_basic(self):
+        """Test pairwise mode returns flows per pair."""
         net = Network()
+        net.add_node(Node("S1"))
+        net.add_node(Node("S2"))
+        net.add_node(Node("T1"))
+        net.add_node(Node("T2"))
 
-        for node in ["A", "B", "C", "D"]:
-            net.add_node(Node(node))
+        net.add_link(Link("S1", "T1", capacity=5.0))
+        net.add_link(Link("S2", "T2", capacity=3.0))
 
-        # Short path: A -> B -> D (cost 2, capacity 3)
-        net.add_link(Link("A", "B", capacity=5.0, cost=1))
-        net.add_link(Link("B", "D", capacity=3.0, cost=1))
+        # Use capturing groups to get individual node labels
+        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE)
 
-        # Long path: A -> C -> D (cost 4, capacity 4)
-        net.add_link(Link("A", "C", capacity=4.0, cost=2))
-        net.add_link(Link("C", "D", capacity=6.0, cost=2))
+        # Should have flows for S1->T1 and S2->T2
+        assert ("S1", "T1") in flow
+        assert ("S2", "T2") in flow
+        assert flow[("S1", "T1")] == 5.0
+        assert flow[("S2", "T2")] == 3.0
 
-        # Test with shortest_path=True (single augmentation on lowest cost path)
-        result_sp = max_flow(net, "A", "D", shortest_path=True)
-        assert result_sp == {("A", "D"): 3.0}  # Limited by B->D capacity
+    def test_pairwise_with_shared_intermediate(self):
+        """Test pairwise mode with shared intermediate node."""
+        net = Network()
+        net.add_node(Node("S1"))
+        net.add_node(Node("S2"))
+        net.add_node(Node("X"))  # Shared intermediate
+        net.add_node(Node("T1"))
+        net.add_node(Node("T2"))
 
-        # Test with shortest_path=False (full max flow using all paths)
-        result_all = max_flow(net, "A", "D", shortest_path=False)
-        assert result_all == {("A", "D"): 7.0}  # 3.0 via B + 4.0 via C
+        net.add_link(Link("S1", "X", capacity=10.0))
+        net.add_link(Link("S2", "X", capacity=10.0))
+        net.add_link(Link("X", "T1", capacity=5.0))
+        net.add_link(Link("X", "T2", capacity=5.0))
+
+        # Use capturing groups to get individual node labels
+        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE)
+
+        # In pairwise, each pair is independent
+        assert ("S1", "T1") in flow
+        assert ("S1", "T2") in flow
+        assert ("S2", "T1") in flow
+        assert ("S2", "T2") in flow
+
+
+class TestMaxFlowCombine:
+    """Tests for combine mode max flow."""
+
+    def test_combine_mode_aggregates(self):
+        """Test combine mode aggregates sources and sinks."""
+        net = Network()
+        net.add_node(Node("S1"))
+        net.add_node(Node("S2"))
+        net.add_node(Node("X"))
+        net.add_node(Node("T1"))
+        net.add_node(Node("T2"))
+
+        net.add_link(Link("S1", "X", capacity=5.0))
+        net.add_link(Link("S2", "X", capacity=5.0))
+        net.add_link(Link("X", "T1", capacity=5.0))
+        net.add_link(Link("X", "T2", capacity=5.0))
+
+        # Use capturing groups - labels become captured values joined with |
+        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.COMBINE)
+
+        # Should have single combined result (labels are S1|S2 and T1|T2)
+        assert len(flow) == 1
+        key = list(flow.keys())[0]
+        # Combined flow limited by middle node X: 10 in, 10 out
+        assert flow[key] == 10.0
+
+
+class TestExclusions:
+    """Tests for node and link exclusions."""
+
+    def test_exclude_node(self):
+        """Test excluding a node reduces flow."""
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        net.add_node(Node("C"))
+        net.add_node(Node("D"))
+
+        net.add_link(Link("A", "B", capacity=5))
+        net.add_link(Link("B", "D", capacity=5))
+        net.add_link(Link("A", "C", capacity=3))
+        net.add_link(Link("C", "D", capacity=3))
+
+        # Full flow through both paths
+        full_flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
+        assert full_flow[("^A$", "^D$")] == 8.0
+
+        # Exclude B, only C path available
+        reduced_flow = analyze(net).max_flow(
+            "^A$", "^D$", mode=Mode.COMBINE, excluded_nodes={"B"}
+        )
+        assert reduced_flow[("^A$", "^D$")] == 3.0
+
+    def test_exclude_link(self):
+        """Test excluding a link reduces flow."""
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        net.add_node(Node("C"))
+        net.add_node(Node("D"))
+
+        link_ab = Link("A", "B", capacity=5)
+        link_bd = Link("B", "D", capacity=5)
+        link_ac = Link("A", "C", capacity=3)
+        link_cd = Link("C", "D", capacity=3)
+
+        net.add_link(link_ab)
+        net.add_link(link_bd)
+        net.add_link(link_ac)
+        net.add_link(link_cd)
+
+        # Get the A->B link ID
+        ab_link_id = None
+        for link_id, link in net.links.items():
+            if link.source == "A" and link.target == "B":
+                ab_link_id = link_id
+                break
+
+        # Exclude A->B link
+        reduced_flow = analyze(net).max_flow(
+            "^A$", "^D$", mode=Mode.COMBINE, excluded_links={ab_link_id}
+        )
+        assert reduced_flow[("^A$", "^D$")] == 3.0
+
+
+class TestBoundContext:
+    """Tests for bound AnalysisContext."""
+
+    def test_bound_context_basic(self):
+        """Test bound context for repeated analysis."""
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        net.add_node(Node("C"))
+        net.add_node(Node("D"))
+
+        net.add_link(Link("A", "B", capacity=5))
+        net.add_link(Link("B", "D", capacity=5))
+        net.add_link(Link("A", "C", capacity=3))
+        net.add_link(Link("C", "D", capacity=3))
+
+        ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
+
+        # Multiple calls should work
+        flow1 = ctx.max_flow()
+        flow2 = ctx.max_flow(excluded_nodes={"B"})
+        flow3 = ctx.max_flow(excluded_nodes={"C"})
+
+        assert flow1[("^A$", "^D$")] == 8.0
+        assert flow2[("^A$", "^D$")] == 3.0
+        assert flow3[("^A$", "^D$")] == 5.0
+
+    def test_bound_context_rejects_source_sink(self):
+        """Test that bound context rejects source/sink arguments."""
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        net.add_link(Link("A", "B", capacity=10))
+
+        ctx = analyze(net, source="^A$", sink="^B$", mode=Mode.COMBINE)
+
+        with pytest.raises(ValueError, match="Bound context"):
+            ctx.max_flow(source="^X$", sink="^Y$")

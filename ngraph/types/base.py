@@ -15,35 +15,17 @@ MIN_CAP = 2**-12
 MIN_FLOW = 2**-12
 
 
-class PathAlg(IntEnum):
-    """Path-finding algorithm types."""
-
-    SPF = 1
-    KSP_YENS = 2
-
-
 class EdgeSelect(IntEnum):
-    """Edge selection criteria.
+    """Edge selection criteria for shortest-path algorithms.
 
-    Determines which edges are considered for path-finding between a node and
-    its neighbor(s).
+    Determines which edges are considered when finding paths between nodes.
+    These map to NetGraph-Core's EdgeSelection configuration.
     """
 
-    #: Return all edges matching the minimum cost among the candidate edges.
+    #: Return all edges matching the minimum cost (ECMP-style).
     ALL_MIN_COST = 1
-    #: Return all edges matching the minimum cost among edges with remaining capacity.
-    ALL_MIN_COST_WITH_CAP_REMAINING = 2
-    #: Return all edges that have remaining capacity, ignoring cost except for returning min_cost.
-    ALL_ANY_COST_WITH_CAP_REMAINING = 3
-    #: Return exactly one edge (the single lowest cost).
-    SINGLE_MIN_COST = 4
-    #: Return exactly one edge, the lowest-cost edge with remaining capacity.
-    SINGLE_MIN_COST_WITH_CAP_REMAINING = 5
-    #: Return exactly one edge factoring both cost and load:
-    #: cost = (cost * 100) + round(flow / capacity * 10).
-    SINGLE_MIN_COST_WITH_CAP_REMAINING_LOAD_FACTORED = 6
-    #: Use a user-defined function for edge selection logic.
-    USER_DEFINED = 99
+    #: Return exactly one edge with the lowest cost (single-path).
+    SINGLE_MIN_COST = 2
 
 
 class FlowPlacement(IntEnum):
@@ -51,3 +33,18 @@ class FlowPlacement(IntEnum):
 
     PROPORTIONAL = 1  # Flow is split proportional to capacity (Dinic-like approach)
     EQUAL_BALANCED = 2  # Flow is equally divided among parallel paths of equal cost
+
+
+class Mode(IntEnum):
+    """Analysis mode for source/sink group handling.
+
+    Determines how multiple source and sink nodes are combined for analysis.
+    """
+
+    #: Aggregate all sources into one super-source, all sinks into one super-sink.
+    #: Returns single flow value representing total capacity between groups.
+    COMBINE = 1
+
+    #: Analyze each (source_group, sink_group) pair independently.
+    #: Returns flow values for each pair separately.
+    PAIRWISE = 2

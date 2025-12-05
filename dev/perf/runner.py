@@ -11,6 +11,8 @@ from typing import Any, Callable
 import netgraph_core
 import networkx as nx
 
+from ngraph.analysis import AnalysisContext
+
 from .core import (
     BenchmarkCase,
     BenchmarkProfile,
@@ -89,11 +91,10 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
 
     # Create network and Core graph once outside timing loop
     network = topology.create_network()
-    graph_handle, multidigraph, edge_mapper, node_mapper = network.build_core_graph()
+    ctx = AnalysisContext.from_network(network)
 
-    # Create Core backend and algorithms
-    backend = netgraph_core.Backend.cpu()
-    algs = netgraph_core.Algorithms(backend)
+    # Use context's algorithms instance
+    algs = ctx.algorithms
 
     # Use first node (ID 0) as source for SPF
     source_id = 0
@@ -105,9 +106,9 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
         tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
     )
 
-    # Create a closure that captures the graph and source
+    # Create a closure that captures the context and source
     def run_spf():
-        return algs.spf(graph_handle, source_id, selection=edge_selection)
+        return algs.spf(ctx.handle, source_id, selection=edge_selection)
 
     # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)
@@ -208,20 +209,19 @@ def _execute_max_flow_benchmark(
     """
     topology: Topology = case.inputs["topology"]
     network = topology.create_network()
-    graph_handle, multidigraph, edge_mapper, node_mapper = network.build_core_graph()
+    ctx = AnalysisContext.from_network(network)
 
-    # Create Core backend and algorithms
-    backend = netgraph_core.Backend.cpu()
-    algs = netgraph_core.Algorithms(backend)
+    # Use context's algorithms instance
+    algs = ctx.algorithms
 
     # Use first node as source and last node as sink for maximum path length
     source_id = 0
-    sink_id = multidigraph.num_nodes() - 1
+    sink_id = ctx.multidigraph.num_nodes() - 1
 
-    # Create a closure that captures the graph handle and node IDs
+    # Create a closure that captures the context handle and node IDs
     def run_max_flow():
         flow_value, _ = algs.max_flow(
-            graph_handle,
+            ctx.handle,
             source_id,
             sink_id,
             flow_placement=netgraph_core.FlowPlacement.PROPORTIONAL,
