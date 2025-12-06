@@ -1,21 +1,19 @@
 # NetGraph Development Makefile
 # This Makefile provides convenient shortcuts for common development tasks
 
-.PHONY: help venv clean-venv dev install check check-ci lint format test qt clean docs docs-serve docs-diagrams build check-dist publish-test publish validate perf info check-python hooks
+.PHONY: help venv clean-venv dev install check check-ci lint format test qt build clean check-dist publish-test publish info hooks check-python docs docs-serve docs-diagrams validate perf
 
 # Default target - show help
 .DEFAULT_GOAL := help
 
 # Toolchain (prefer project venv if present)
 VENV_BIN := $(PWD)/venv/bin
-# Use dynamic (recursive) assignment so a newly created venv is picked up
-# Prefer the python3 on PATH (e.g., set by setup-python)
 PY_FIND := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
 PYTHON ?= $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(PY_FIND))
-PIP = $(PYTHON) -m pip
-PYTEST = $(PYTHON) -m pytest
-RUFF = $(PYTHON) -m ruff
-PRECOMMIT = $(PYTHON) -m pre_commit
+PIP := $(PYTHON) -m pip
+PYTEST := $(PYTHON) -m pytest
+RUFF := $(PYTHON) -m ruff
+PRECOMMIT := $(PYTHON) -m pre_commit
 
 help:
 	@echo "🔧 NetGraph Development Commands"
@@ -181,16 +179,14 @@ build:
 
 clean:
 	@echo "🧹 Cleaning build artifacts and cache files..."
-	@rm -rf build/
-	@rm -rf dist/
-	@rm -rf *.egg-info/
-	@find . -type f -name "*.pyc" -delete
-	@find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	@find . -type f -name "*.pyo" -delete
-	@find . -type f -name "*~" -delete
-	@find . -type f -name "*.orig" -delete
+	@rm -rf build/ dist/ *.egg-info/
+	@rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage coverage.xml coverage-*.xml .benchmarks .pytest-benchmark || true
+	@find . -path "./venv" -prune -o -type f -name "*.pyc" -delete 2>/dev/null || true
+	@find . -path "./venv" -prune -o -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@find . -path "./venv" -prune -o -type f -name "*.pyo" -delete 2>/dev/null || true
+	@find . -path "./venv" -prune -o -type f -name "*~" -delete 2>/dev/null || true
+	@find . -path "./venv" -prune -o -type f -name "*.orig" -delete 2>/dev/null || true
 	@echo "✅ Cleanup complete!"
-
 
 # Publishing
 check-dist:
