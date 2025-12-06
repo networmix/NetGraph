@@ -6,10 +6,27 @@
 # Default target - show help
 .DEFAULT_GOAL := help
 
-# Toolchain (prefer project venv if present)
+# --------------------------------------------------------------------------
+# Python interpreter detection
+# --------------------------------------------------------------------------
+# VENV_BIN: path to local virtualenv bin directory
 VENV_BIN := $(PWD)/venv/bin
-PY_FIND := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
-PYTHON ?= $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(PY_FIND))
+
+# PY_BEST: scan for newest supported Python (used when creating new venvs)
+# Supports 3.9-3.13 to match CI matrix
+PY_BEST := $(shell for v in 3.13 3.12 3.11 3.10 3.9; do command -v python$$v >/dev/null 2>&1 && { echo python$$v; exit 0; }; done; command -v python3 2>/dev/null || command -v python 2>/dev/null)
+
+# PY_PATH: active python3/python on PATH (respects CI setup-python and activated venvs)
+PY_PATH := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
+
+# PYTHON: interpreter used for all commands
+#   1. Use local venv if present
+#   2. Otherwise use active python on PATH (important for CI)
+#   3. Fall back to best available version
+#   4. Final fallback to 'python3' literal for clear error messages
+PYTHON ?= $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(if $(PY_PATH),$(PY_PATH),$(if $(PY_BEST),$(PY_BEST),python3)))
+
+# Derived tool commands (always use -m to ensure correct environment)
 PIP := $(PYTHON) -m pip
 PYTEST := $(PYTHON) -m pytest
 RUFF := $(PYTHON) -m ruff
@@ -50,23 +67,23 @@ help:
 	@echo "Utilities:"
 	@echo "  make info          - Show project information"
 	@echo "  make hooks         - Run pre-commit on all files"
-	@echo "  make check-python  - Check if venv Python matches system Python"
+	@echo "  make check-python  - Check if venv Python matches best available"
 
 # Setup and Installation
 dev:
 	@echo "🚀 Setting up development environment..."
 	@if [ ! -x "$(VENV_BIN)/python" ]; then \
-		if [ -z "$(PY_FIND)" ]; then \
+		if [ -z "$(PY_BEST)" ]; then \
 			echo "❌ Error: No Python interpreter found (python3 or python)"; \
 			exit 1; \
 		fi; \
-		echo "🐍 Creating virtual environment with $(PY_FIND) ..."; \
-		$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }; \
+		echo "🐍 Creating virtual environment with $(PY_BEST) ..."; \
+		$(PY_BEST) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }; \
 		if [ ! -x "$(VENV_BIN)/python" ]; then \
 			echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
 			exit 1; \
 		fi; \
-		$(VENV_BIN)/python -m pip install -U pip wheel; \
+		$(VENV_BIN)/python -m pip install -U pip setuptools wheel; \
 	fi
 	@echo "📦 Installing dev dependencies..."
 	@$(VENV_BIN)/python -m pip install -e .'[dev]'
@@ -77,16 +94,16 @@ dev:
 
 venv:
 	@echo "🐍 Creating virtual environment in ./venv ..."
-	@if [ -z "$(PY_FIND)" ]; then \
+	@if [ -z "$(PY_BEST)" ]; then \
 		echo "❌ Error: No Python interpreter found (python3 or python)"; \
 		exit 1; \
 	fi
-	@$(PY_FIND) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }
+	@$(PY_BEST) -m venv venv || { echo "❌ Failed to create venv"; exit 1; }
 	@if [ ! -x "$(VENV_BIN)/python" ]; then \
 		echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
 		exit 1; \
 	fi
-	@$(VENV_BIN)/python -m pip install -U pip wheel
+	@$(VENV_BIN)/python -m pip install -U pip setuptools wheel
 	@echo "✅ venv ready. Activate with: source venv/bin/activate"
 
 clean-venv:
@@ -223,7 +240,7 @@ info:
 	@echo ""
 	@echo "🐍 Python Environment:"
 	@echo "  Python (active): $$($(PYTHON) --version)"
-	@echo "  Python (system): $$($(PY_FIND) --version 2>/dev/null || echo 'missing')"
+	@echo "  Python (best):   $$($(PY_BEST) --version 2>/dev/null || echo 'missing')"
 	@$(MAKE) check-python
 	@echo "  Package version: $$($(PYTHON) -c 'import importlib.metadata; print(importlib.metadata.version("ngraph"))' 2>/dev/null || echo 'Not installed')"
 	@echo "  Virtual environment: $$(echo $$VIRTUAL_ENV | sed 's|.*/||' || echo 'None active')"
@@ -256,9 +273,9 @@ hooks:
 check-python:
 	@if [ -x "$(VENV_BIN)/python" ]; then \
 		VENV_VER=$$($(VENV_BIN)/python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown"); \
-		SYS_VER=$$($(PY_FIND) -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown"); \
-		if [ -n "$$VENV_VER" ] && [ -n "$$SYS_VER" ] && [ "$$VENV_VER" != "$$SYS_VER" ]; then \
-			echo "⚠️  WARNING: venv Python ($$VENV_VER) != system Python ($$SYS_VER)"; \
-			echo "   Run 'make clean-venv && make dev' to recreate venv with system Python"; \
+		BEST_VER=$$($(PY_BEST) -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "unknown"); \
+		if [ -n "$$VENV_VER" ] && [ -n "$$BEST_VER" ] && [ "$$VENV_VER" != "$$BEST_VER" ]; then \
+			echo "⚠️  WARNING: venv Python ($$VENV_VER) != best available Python ($$BEST_VER)"; \
+			echo "   Run 'make clean-venv && make dev' to recreate venv if desired"; \
 		fi; \
 	fi
