@@ -177,13 +177,14 @@ class PerformanceProfiler:
                 try:
                     current, peak = tracemalloc.get_traced_memory()
                     memory_peak_bytes = int(peak)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Failed to get traced memory: %s", exc)
                     memory_peak_bytes = None
                 finally:
                     try:
                         tracemalloc.stop()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Failed to stop tracemalloc: %s", exc)
 
             # Create step profile
             step_profile = StepProfile(
@@ -254,8 +255,10 @@ class PerformanceProfiler:
             for worker_file in worker_files:
                 try:
                     worker_file.unlink()
-                except Exception:
-                    pass  # Best effort cleanup
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to remove worker profile %s: %s", worker_file, exc
+                    )
 
         except Exception as e:
             logger.warning(f"Failed to merge worker profiles: {type(e).__name__}: {e}")

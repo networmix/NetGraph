@@ -16,7 +16,7 @@ NetGraph is a network scenario analysis engine using a **hybrid Python+C++ archi
 - Managers: Orchestrators for higher-level behaviors (demand expansion, failure enumeration)
 - Workflow Engine: Composes steps into end-to-end analyses, storing outputs in a results store
 - Results Store: Collects outputs and metadata from each step, enabling structured JSON export
-- Adapter Layer: Translates between Python domain objects and C++ graph representations
+- Analysis bridge: `AnalysisContext` builds Core graphs from the model, manages name/ID mapping, and executes Core algorithms
 
 **C++ Layer (NetGraph-Core):**
 
@@ -151,7 +151,7 @@ Network is the container for scenario topology. It enforces invariants during co
 
 ### Node and Link Selection
 
-A powerful feature of the model is the ability to select groups of nodes by pattern, which is used by algorithms to choose source/sink sets matching on their structured names or attributes. Network.select_node_groups_by_path(pattern) accepts either a regex or an attribute query:
+The model supports selecting groups of nodes by pattern, which is used by algorithms to choose source/sink sets matching on their structured names or attributes. Network.select_node_groups_by_path(pattern) accepts either a regex or an attribute query:
 
 If the pattern is of the form `attr:<name>`, it groups nodes by the value of the given attribute name. For example, `attr:role` might group nodes by their role attribute (like "core", "leaf", etc.), returning a dict mapping each distinct value to the list of nodes with that value. Nodes missing the attribute are excluded.
 
@@ -161,7 +161,7 @@ This selection mechanism allows workflow steps and API calls to refer to nodes f
 
 ### Disabled Elements
 
-Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but solver functions filter them out when selecting active nodes. This design preserves topology information (e.g., you know a link exists but is just turned off) and allows easily enabling it later if needed.
+Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but analysis functions filter them out when selecting active nodes. This design preserves topology information (e.g., you know a link exists but is just turned off) and allows easily enabling it later if needed.
 
 ### Filtered Analysis (Exclusions)
 
@@ -229,7 +229,7 @@ Disabled nodes and links from the Network are pre-computed when `build_graph()` 
 
 **Edge Direction Handling:**
 
-If `add_reverse=True` (default), the adapter creates bidirectional edges for each network link:
+If `add_reverse=True` (default), graph construction creates bidirectional edges for each network link:
 
 - Forward edge: original link direction with ext_edge_id encoding (link_id, 'fwd')
 - Reverse edge: opposite direction with ext_edge_id encoding (link_id, 'rev')
@@ -553,22 +553,22 @@ For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that b
 | `TE_ECMP_16_LSP` | MPLS-TE with 16 LSPs | Fixed 16 ECMP tunnels per demand, models RSVP-TE with LSP limits |
 | `TE_ECMP_UP_TO_256_LSP` | MPLS-TE with up to 256 LSPs | Scalable TE with tunnel limit, models SR-TE or large-scale RSVP |
 
-**Detailed Configuration Mapping:**
+**Detailed Configuration Mapping (preset internals):**
 
-| Preset | `require_capacity` | `max_flows` | `multi_edge` | `flow_placement` |
-|--------|--------------------|--------------|--------------|--------------------|
-| `SHORTEST_PATHS_ECMP` | `false` | 1 | `true` | `EQUAL_BALANCED` |
-| `SHORTEST_PATHS_WCMP` | `false` | 1 | `true` | `PROPORTIONAL` |
-| `TE_WCMP_UNLIM` | `true` | unlimited | `true` | `PROPORTIONAL` |
-| `TE_ECMP_16_LSP` | `true` | 16 | `false` | `EQUAL_BALANCED` |
-| `TE_ECMP_UP_TO_256_LSP` | `true` | 256 | `false` | `EQUAL_BALANCED` |
+| Preset | `require_capacity` | `multi_edge` | `max_flow_count` | `flow_placement` |
+|--------|--------------------|--------------|------------------|------------------|
+| `SHORTEST_PATHS_ECMP` | `false` | `true` | `1` | `EQUAL_BALANCED` |
+| `SHORTEST_PATHS_WCMP` | `false` | `true` | `1` | `PROPORTIONAL` |
+| `TE_WCMP_UNLIM` | `true` | `true` | unlimited | `PROPORTIONAL` |
+| `TE_ECMP_16_LSP` | `true` | `false` | `16` | `EQUAL_BALANCED` |
+| `TE_ECMP_UP_TO_256_LSP` | `true` | `false` | `256` | `EQUAL_BALANCED` |
 
-**Key parameters:**
+**Key parameters (preset-managed):**
 
 - `require_capacity`: When `false`, paths are selected based on link costs alone (models IP/IGP routing). When `true`, paths adapt to residual capacity during placement (models SDN/TE). See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) for details.
-- `max_flows`: With `1`, demand is placed in a single pass over fixed paths, equivalent to `shortest_path=true` in the max-flow solver. With `> 1`, paths are recomputed as capacity is consumed (iterative placement), equivalent to `shortest_path=false`.
-- `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics)
-- `flow_placement`: `EQUAL_BALANCED` splits equally across paths; `PROPORTIONAL` splits by residual capacity
+- `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics).
+- `max_flow_count`: Internal per-preset limit on flows/LSPs for TE presets; not a user-facing parameter.
+- `flow_placement`: `EQUAL_BALANCED` splits equally across paths; `PROPORTIONAL` splits by residual capacity.
 
 **Example: Modeling IP vs MPLS Networks**
 
@@ -775,7 +775,7 @@ NetGraph's hybrid architecture combines:
 
 **Integration:**
 
-- Adapter layer for seamless Python ↔ C++ translation
+- `AnalysisContext` builds Core graphs, manages name/ID mapping, and bridges Python ↔ C++
 - Stable node/edge ID mapping for result traceability
 - NumPy array interface for efficient data transfer
 - GIL release during computation for concurrent thread execution

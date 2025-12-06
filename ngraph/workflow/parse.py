@@ -74,8 +74,8 @@ def build_workflow_steps(
                 if "seed" in ctor_args and ctor_args["seed"] is not None
                 else "scenario-derived"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.debug("Failed to set _seed_source on step %s: %s", step_name, exc)
 
         steps.append(step_obj)
 

@@ -19,9 +19,7 @@ from ngraph.types.base import Cost
 from ngraph.types.dto import EdgeRef
 
 if TYPE_CHECKING:
-    from ngraph.graph.strict_multidigraph import (  # pyright: ignore[reportMissingImports]
-        StrictMultiDiGraph,
-    )
+    from netgraph_core import StrictMultiDiGraph
 
 
 @dataclass

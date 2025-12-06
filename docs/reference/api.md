@@ -10,19 +10,40 @@ Quick links:
 
 This section provides a curated guide to NetGraph's Python API, organized by typical usage patterns.
 
-## Performance Notes
+## 1. Programmatic Quickstart
 
-NetGraph uses a **hybrid Python+C++ architecture**:
+Minimal, copy-pastable start: build a tiny network, run max-flow, and reuse a bound context.
 
-- **High-level APIs** (Network, Scenario, Workflow) are pure Python with ergonomic interfaces
-- **Core algorithms** (shortest paths, max-flow, K-shortest paths) execute in optimized C++ via NetGraph-Core
-- **GIL released** during algorithm execution for true parallel processing
-- **Transparent integration**: You work with Python objects; Core acceleration is automatic
+```python
+from ngraph import Network, Node, Link, analyze, Mode
 
-All public APIs accept and return Python types (Network, Node, Link, FlowSummary, etc.).
-The C++ layer is an implementation detail you generally don't interact with directly.
+# Build a small directed network
+net = Network()
+net.add_node(Node(name="A"))
+net.add_node(Node(name="B"))
+net.add_node(Node(name="C"))
+net.add_link(Link(source="A", target="B", capacity=10.0, cost=1.0))
+net.add_link(Link(source="B", target="C", capacity=5.0, cost=1.0))
 
-## 1. Fundamentals
+# One-off max-flow (unbound context)
+flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+print(flow)  # {('^A$', '^C$'): 5.0}
+
+# Detailed flow with cost distribution
+detailed = analyze(net).max_flow_detailed("^A$", "^C$", mode=Mode.COMBINE)
+(_, _), summary = next(iter(detailed.items()))
+print(summary.total_flow, summary.cost_distribution)
+
+# Bound context for repeated runs with exclusions
+ctx = analyze(net, source="^A$", sink="^C$", mode=Mode.COMBINE)
+baseline = ctx.max_flow()
+# Exclude first link by getting its ID from the network
+first_link_id = next(iter(net.links.keys()))
+degraded = ctx.max_flow(excluded_links={first_link_id})
+print("baseline", baseline, "degraded", degraded)
+```
+
+## 2. Fundamentals
 
 The core components that form the foundation of most NetGraph programs.
 
@@ -66,9 +87,9 @@ from ngraph import Network, Node, Link, analyze
 
 # Create a tiny network
 network = Network()
-network.add_node(Node(name="n1"))
-network.add_node(Node(name="n2"))
-network.add_link(Link(source="n1", target="n2", capacity=100.0))
+network.add_node(Node(name="n1", risk_groups={"rack1"}))
+network.add_node(Node(name="n2", risk_groups={"rack2"}))
+network.add_link(Link(source="n1", target="n2", capacity=100.0, risk_groups={"fiber_bundle_A"}))
 
 # Calculate maximum flow using analyze()
 flow_result = analyze(network).max_flow("^n1$", "^n2$")
@@ -83,6 +104,7 @@ print(flow_result)  # {("^n1$", "^n2$"): 100.0}
 **Key Concepts:**
 
 - **disabled flags:** Node.disabled and Link.disabled mark components as inactive in the scenario topology (use `excluded_nodes`/`excluded_links` parameters for temporary analysis-time exclusion)
+- **Risk Groups:** Nodes and links can be tagged with risk group names (e.g., "rack1", "fiber_bundle") to model shared failure domains.
 - **Node selection:** Use regex patterns anchored at start (e.g., `"^datacenter.*"`) or attribute directives (`"attr:role"`) to select and group nodes (see DSL Node Selection)
 
 ### Results
@@ -110,7 +132,7 @@ print(list(all_data["steps"].keys()))
 
 **Integration:** Used by all workflow steps for result storage. Provides consistent access pattern for analysis outputs.
 
-## 2. Basic Analysis
+## 3. Basic Analysis
 
 Essential analysis capabilities for network evaluation.
 
@@ -145,11 +167,11 @@ print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volu
 **Key Functions:**
 
 - `analyze(network, *, source=None, sink=None, mode=Mode.COMBINE)` - Create analysis context
-- `ctx.max_flow(source, sink, *, mode, flow_placement, shortest_path, excluded_nodes, excluded_links)` - Maximum flow
-- `ctx.max_flow_detailed(...)` - Maximum flow with cost distribution and optional min-cut
+- `ctx.max_flow(source, sink, *, mode, shortest_path, require_capacity, flow_placement, excluded_nodes, excluded_links)` - Maximum flow
+- `ctx.max_flow_detailed(..., include_min_cut=False)` - Maximum flow with cost distribution and optional min-cut
 - `ctx.sensitivity(...)` - Identify critical edges and their impact on flow
-- `ctx.shortest_path_cost(source, sink, *, mode, excluded_nodes, excluded_links)` - Shortest path cost
-- `ctx.shortest_paths(source, sink, *, mode)` - Full Path objects
+- `ctx.shortest_path_cost(source, sink, *, mode, edge_select=ALL_MIN_COST, excluded_nodes, excluded_links)` - Shortest path cost
+- `ctx.shortest_paths(source, sink, *, mode, edge_select, split_parallel_edges)` - Full Path objects
 
 **Key Concepts:**
 
@@ -159,6 +181,8 @@ print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volu
 - **FlowPlacement.EQUAL_BALANCED (ECMP):** Equal split across parallel paths
 - **shortest_path=True:** Restricts flow to lowest-cost paths only (IP/IGP routing semantics)
 - **shortest_path=False:** Uses all paths progressively (TE/SDN semantics)
+- **require_capacity=True:** Flow cannot exceed link capacity (default)
+- **require_capacity=False:** Unconstrained flow for capacity-free analysis
 
 ### Efficient Repeated Analysis (Bound Context)
 
@@ -217,9 +241,9 @@ k_paths = analyze(network).k_shortest_paths(
 
 **Key Functions:**
 
-- `ctx.shortest_path_cost(source, sink, *, mode, edge_select)` - Cost only, no path objects
-- `ctx.shortest_paths(source, sink, *, mode, edge_select, split_parallel_edges)` - Full Path objects
-- `ctx.k_shortest_paths(source, sink, *, max_k, max_path_cost, max_path_cost_factor)` - Multiple paths per pair
+- `ctx.shortest_path_cost(source, sink, *, mode, edge_select=ALL_MIN_COST)` - Cost only, no path objects
+- `ctx.shortest_paths(source, sink, *, mode, edge_select=ALL_MIN_COST, split_parallel_edges=False)` - Full Path objects
+- `ctx.k_shortest_paths(source, sink, *, mode=PAIRWISE, max_k=3, max_path_cost, max_path_cost_factor, excluded_nodes, excluded_links)` - Multiple paths per pair
 
 ### Sensitivity Analysis
 
@@ -242,7 +266,7 @@ for pair, edge_impacts in sensitivity.items():
         print(f"  {edge_key}: -{flow_reduction:.2f}")
 ```
 
-## 3. Monte Carlo Analysis
+## 4. Monte Carlo Analysis
 
 Probabilistic failure analysis using FailureManager.
 
@@ -251,30 +275,44 @@ Probabilistic failure analysis using FailureManager.
 **Purpose:** Execute Monte Carlo failure scenarios and aggregate results across multiple iterations.
 
 ```python
-from ngraph import Network, FailureManager
+from ngraph import Network, Node, Link, FailureManager
+from ngraph.model.failure.policy import FailurePolicy, FailureMode, FailureRule
 from ngraph.model.failure.policy_set import FailurePolicySet
+
+# Build a simple network
+network = Network()
+for name in ["A", "B", "C"]:
+    network.add_node(Node(name=name))
+network.add_link(Link("A", "B", capacity=100.0))
+network.add_link(Link("B", "C", capacity=100.0))
+
+# Define failure policy: randomly choose 1 link to fail
+rule = FailureRule(entity_scope="link", rule_type="choice", count=1)  # scope can be "node", "link", or "risk_group"
+mode = FailureMode(weight=1.0, rules=[rule])
+policy = FailurePolicy(modes=[mode])
+policy_set = FailurePolicySet(policies={"single_link": policy})
 
 # Create failure manager
 fm = FailureManager(
     network=network,
-    failure_policy_set=failure_policy_set,
-    policy_name="single_link_failure"
+    failure_policy_set=policy_set,
+    policy_name="single_link"
 )
 
 # Run max-flow Monte Carlo analysis
 results = fm.run_max_flow_monte_carlo(
-    source_path="^dc/.*",
-    sink_path="^edge/.*",
+    source_path="^A$",
+    sink_path="^C$",
     mode="combine",
-    iterations=1000,
-    parallelism="auto",
+    iterations=100,
+    parallelism=1,
     baseline=True,  # Include no-failure baseline
-    seed=42  # For reproducibility
+    seed=42         # For reproducibility
 )
 
 # Access results
 for iter_result in results["results"]:
-    print(f"Flow: {iter_result.summary.total_placed}")
+    print(f"Flow: {iter_result.summary.total_placed:.1f}")
 ```
 
 **Key Methods:**
@@ -283,7 +321,7 @@ for iter_result in results["results"]:
 - `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
 - `run_monte_carlo_analysis(analysis_func, ...)` - Generic Monte Carlo with custom function
 
-## 4. Workflow Steps
+## 5. Workflow Steps
 
 Pre-built analysis steps for YAML-driven workflows.
 
@@ -324,11 +362,33 @@ workflow:
   - step_type: MaximumSupportedDemand
     name: "find_alpha_star"
     matrix_name: "peak_traffic"
-    search_strategy: "bisection"
-    precision: 0.01
+    alpha_start: 1.0
+    growth_factor: 2.0
+    resolution: 0.01
+    seeds_per_alpha: 1
 ```
 
-## 5. Types Reference
+### NetworkStats Step
+
+```yaml
+workflow:
+  - step_type: NetworkStats
+    name: "baseline_stats"
+    include_disabled: false
+    excluded_nodes: ["n1"]
+```
+
+### CostPower Step
+
+```yaml
+workflow:
+  - step_type: CostPower
+    name: "cost_power_analysis"
+    include_disabled: false
+    aggregation_level: 2
+```
+
+## 6. Types Reference
 
 ### Enums
 
@@ -375,10 +435,10 @@ iter_result.flows    # List[FlowEntry]
 iter_result.summary  # FlowSummary
 ```
 
-## 6. Complete Example
+## 7. Complete Example
 
 ```python
-from ngraph import Network, Node, Link, analyze, Mode, FlowPlacement
+from ngraph import Network, Node, Link, analyze, Mode
 
 # Build network
 network = Network()
@@ -419,3 +479,15 @@ for pair, impacts in sensitivity.items():
     for edge, impact in sorted(impacts.items(), key=lambda x: -x[1])[:3]:
         print(f"  {edge}: {impact:.1f}")
 ```
+
+## 8. Performance Notes
+
+NetGraph uses a hybrid Python+C++ architecture:
+
+- **High-level APIs** (Network, Scenario, Workflow) are pure Python
+- **Core algorithms** (shortest paths, max-flow, K-shortest paths) execute in optimized C++ via NetGraph-Core
+- **GIL released** during algorithm execution for parallel processing
+- **Transparent integration**: You work with Python objects; Core acceleration is automatic
+
+All public APIs accept and return Python types (Network, Node, Link, FlowSummary, etc.).
+The C++ layer is an implementation detail you generally don't interact with directly.

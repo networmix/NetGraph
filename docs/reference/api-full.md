@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 05, 2025 at 01:15 UTC
+Generated from source code on: December 06, 2025 at 12:38 UTC
 
-Modules auto-discovered: 43
+Modules auto-discovered: 42
 
 ---
 
@@ -2448,37 +2448,6 @@ Returns:
 
 ---
 
-## ngraph.exec.analysis.types
-
-Typed protocols for analysis IPC payloads.
-
-Defines lightweight, serializable structures used across worker boundaries
-during parallel analysis execution.
-
-### FlowResult
-
-Normalized result record for a flow pair in one iteration.
-
-Keys:
-    src: Source label
-    dst: Destination label
-    metric: Name of metric ('capacity' or 'placement_ratio')
-    value: Numeric value for the metric
-    stats: Optional FlowStats with compact details
-    priority: Optional demand priority (only for placement results)
-
-### FlowStats
-
-Compact per-flow statistics for aggregation.
-
-Keys:
-    cost_distribution: Mapping of path cost to flow volume.
-    edges: List of edge identifiers (string form).
-    edges_kind: Meaning of edges list: 'min_cut' for capacity analysis,
-        'used' for demand placement edge usage.
-
----
-
 ## ngraph.exec.demand.builder
 
 Builders for traffic matrices.
@@ -2592,8 +2561,8 @@ all iterations.
 
 Parallelism: The C++ Core backend releases the GIL during computation,
 enabling true parallelism with Python threads. With graph caching, most
-per-iteration work happens in GIL-free C++ code, achieving near-linear
-scaling with thread count.
+per-iteration work runs in GIL-free C++ code; speedup depends on workload
+and parallelism level.
 
 ### AnalysisFunction
 

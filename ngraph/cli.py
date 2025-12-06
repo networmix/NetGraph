@@ -357,9 +357,9 @@ def _print_network_structure(
                     print("\n".join(f"       {ln}" for ln in tbl3.split("\n")))
                     if not detail and len(link_issues) > len(issues):
                         print(f"       ... and {len(link_issues) - len(issues)} more")
-        except Exception:
+        except Exception as exc:
             # Non-fatal
-            pass
+            logger.debug("Failed to display hardware utilization: %s", exc)
 
     # Show complete node and link tables in detail mode
     if detail:
@@ -696,8 +696,8 @@ def _print_traffic_matrices(
                     print(
                         "\n".join(f"         {line}" for line in top_table.split("\n"))
                     )
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to display top demands: %s", exc)
 
             if demands:
                 for i, demand in enumerate(demands[:3]):  # Show first 3 demands
@@ -943,9 +943,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             ]
             overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
             print(overview_table)
-        except Exception:
+        except Exception as exc:
             # Non-fatal; proceed with normal sections
-            pass
+            logger.debug("Failed to display overview section: %s", exc)
 
         print("\n1. SCENARIO METADATA")
         print("-" * 30)
@@ -982,170 +982,8 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             network, scenario.traffic_matrix_set, detail, total_enabled_link_capacity
         )
 
-        # Helper: collect step path-like fields and summarize node matches
-        def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
-            fields: list[tuple[str, str]] = []
-            for key, value in step.__dict__.items():
-                if key.startswith("_"):
-                    continue
-                if not isinstance(value, str):
-                    continue
-                if not value.strip():
-                    continue
-                if key.endswith("_path") or key.endswith("_regex"):
-                    fields.append((key, value))
-            return fields
-
-        def _summarize_node_matches(
-            step: Any,
-            net: Any,
-        ) -> Dict[str, Dict[str, Any]]:
-            summary: Dict[str, Dict[str, Any]] = {}
-            fields = _collect_step_path_fields(step)
-            if not fields:
-                return summary
-            for name, pattern in fields:
-                try:
-                    groups = net.select_node_groups_by_path(pattern)
-                except Exception as exc:  # pragma: no cover (defensive)
-                    summary[name] = {
-                        "pattern": pattern,
-                        "error": f"{type(exc).__name__}: {exc}",
-                    }
-                    continue
-
-                group_labels = list(groups.keys())
-                total_nodes = sum(len(nodes) for nodes in groups.values())
-                enabled_nodes = sum(
-                    1 for nodes in groups.values() for nd in nodes if not nd.disabled
-                )
-                summary[name] = {
-                    "pattern": pattern,
-                    "groups": len(group_labels),
-                    "nodes": total_nodes,
-                    "enabled_nodes": enabled_nodes,
-                    "labels": group_labels[:5],  # preview up to 5 labels
-                }
-            return summary
-
-        # Workflow Analysis as table
-        print("\n7. WORKFLOW STEPS")
-        print("-" * 30)
-        step_count = len(scenario.workflow)
-        print(f"   Total: {step_count}")
-        if scenario.workflow:
-            if not detail:
-                # Simple table format for basic view
-                workflow_rows = []
-                for i, step in enumerate(scenario.workflow):
-                    step_name = step.name or f"step_{i + 1}"
-                    step_type = step.__class__.__name__
-                    determinism = (
-                        "deterministic" if scenario.seed is not None else "random"
-                    )
-                    workflow_rows.append(
-                        [str(i + 1), step_name, step_type, determinism]
-                    )
-
-                # Column shows determinism (scenario-level), not the numeric step seed
-                workflow_table = _format_table(
-                    ["#", "Name", "Type", "Determinism"], workflow_rows
-                )
-                print(workflow_table)
-
-                # Node selection preview for steps with path-like fields
-                print("\n   Node selection preview:")
-                any_preview = False
-                for i, step in enumerate(scenario.workflow):
-                    match_info = _summarize_node_matches(step, network)
-                    if not match_info:
-                        continue
-                    any_preview = True
-                    parts: list[str] = []
-                    for field_name, info in match_info.items():
-                        if "error" in info:
-                            parts.append(f"{field_name}: ERROR {info['error']}")
-                        else:
-                            parts.append(
-                                f"{field_name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
-                            )
-                    label = step.name or step.__class__.__name__
-                    print(f"     {i + 1}. {label}: " + "; ".join(parts))
-                if not any_preview:
-                    print("     (no node selection fields in workflow steps)")
-            else:
-                # Detailed view with parameters
-                for i, step in enumerate(scenario.workflow):
-                    step_name = step.name or f"step_{i + 1}"
-                    step_type = step.__class__.__name__
-                    determinism = (
-                        "deterministic" if scenario.seed is not None else "random"
-                    )
-                    seed_info = (
-                        f" (seed: {step.seed}, {determinism})"
-                        if step.seed is not None
-                        else f" ({determinism})"
-                    )
-                    print(f"     {i + 1}. {step_name} ({step_type}){seed_info}")
-
-                    # Show step-specific parameters if detail mode
-                    step_dict = step.__dict__
-                    param_rows = []
-                    for key, value in step_dict.items():
-                        if key not in ["name", "seed"] and not key.startswith("_"):
-                            param_rows.append([key, str(value)])
-
-                    if param_rows:
-                        param_table = _format_table(["Parameter", "Value"], param_rows)
-                        # Indent the table
-                        indented_table = "\n".join(
-                            f"        {line}" for line in param_table.split("\n")
-                        )
-                        print(indented_table)
-
-                    # Show node selection matches for path-like fields
-                    match_info = _summarize_node_matches(step, network)
-                    if match_info:
-                        rows: list[List[str]] = []
-                        for field_name, info in match_info.items():
-                            if "error" in info:
-                                rows.append(
-                                    [
-                                        field_name,
-                                        info["pattern"],
-                                        "ERROR",
-                                        info["error"],
-                                    ]
-                                )
-                            else:
-                                label_preview = (
-                                    ", ".join(info["labels"]) if info["labels"] else "-"
-                                )
-                                rows.append(
-                                    [
-                                        field_name,
-                                        info["pattern"],
-                                        f"{info['groups']} groups / {info['nodes']} nodes",
-                                        f"{info['enabled_nodes']} enabled; labels: {label_preview}",
-                                    ]
-                                )
-                        if rows:
-                            print("        Node matches:")
-                            match_table = _format_table(
-                                ["Field", "Pattern", "Matches", "Details"], rows
-                            )
-                            indented = "\n".join(
-                                f"        {line}" for line in match_table.split("\n")
-                            )
-                            print(indented)
-                        # Emphasize empty matches
-                        if all(
-                            (info.get("nodes", 0) == 0) and ("error" not in info)
-                            for info in match_info.values()
-                        ):
-                            print(
-                                "        WARNING: No nodes matched for the given patterns"
-                            )
+        # Workflow Analysis
+        _print_workflow_steps(scenario, detail, network)
 
         print("\n" + "=" * 60)
         print("INSPECTION COMPLETE")
@@ -1251,15 +1089,15 @@ def _run_scenario(
                     for f in remaining_files:
                         try:
                             f.unlink()
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.debug("Failed to remove profile file %s: %s", f, exc)
                 # Keep the profiles directory when an explicit output dir is used
                 # to make artifact paths consistent and discoverable.
                 if output_dir is None:
                     try:
                         child_profile_dir.rmdir()  # Remove dir if empty
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Failed to remove profiles dir: %s", exc)
 
             # Generate and display performance report
             reporter = PerformanceReporter(profiler.results)

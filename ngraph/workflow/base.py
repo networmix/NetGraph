@@ -23,7 +23,8 @@ logger = get_logger(__name__)
 # Registry for workflow step classes
 WORKFLOW_STEP_REGISTRY: Dict[str, Type["WorkflowStep"]] = {}
 
-# Global execution counter for tracking step order
+# Per-process execution counter for tracking step order.
+# Reset to zero at the start of each scenario run to keep ordering local.
 _execution_counter = 0
 
 

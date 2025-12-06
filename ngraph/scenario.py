@@ -128,9 +128,9 @@ class Scenario:
                     len(getattr(network_obj, "nodes", {})),
                     len(getattr(network_obj, "links", {})),
                 )
-            except Exception:
+            except Exception as exc:
                 # Defensive: network object may not be fully initialised in some error paths
-                pass
+                Scenario._logger.debug("Failed to log network stats: %s", exc)
 
         # 2) Build the failure policy set
         seed_manager = SeedManager(seed)
@@ -148,8 +148,8 @@ class Scenario:
                     ", ".join(policy_names[:5])
                     + ("..." if len(policy_names) > 5 else ""),
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                Scenario._logger.debug("Failed to log policy set stats: %s", exc)
 
         # 3) Build traffic matrix set
         raw = data.get("traffic_matrix_set", {})
@@ -169,8 +169,8 @@ class Scenario:
                     else ""
                 ),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            Scenario._logger.debug("Failed to log traffic matrix stats: %s", exc)
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
@@ -192,8 +192,8 @@ class Scenario:
                     else ""
                 ),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            Scenario._logger.debug("Failed to log workflow stats: %s", exc)
 
         # 5) Build/merge components library
         scenario_comps_data = data.get("components", {})
@@ -221,8 +221,8 @@ class Scenario:
                     "Attached risk groups: %d",
                     len(getattr(network_obj, "risk_groups", {})),
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                Scenario._logger.debug("Failed to log risk group stats: %s", exc)
 
         scenario_obj = Scenario(
             network=network_obj,
@@ -242,9 +242,9 @@ class Scenario:
                     traffic_matrix_set=tms,
                 )
             )
-        except Exception:
+        except Exception as exc:
             # Snapshot should never block scenario construction
-            pass
+            Scenario._logger.debug("Failed to attach scenario snapshot: %s", exc)
 
         try:
             Scenario._logger.debug(
@@ -255,7 +255,7 @@ class Scenario:
                 len(getattr(tms, "matrices", {})),
                 len(workflow_steps),
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            Scenario._logger.debug("Failed to log scenario construction stats: %s", exc)
 
         return scenario_obj

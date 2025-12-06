@@ -16,8 +16,8 @@ all iterations.
 
 Parallelism: The C++ Core backend releases the GIL during computation,
 enabling true parallelism with Python threads. With graph caching, most
-per-iteration work happens in GIL-free C++ code, achieving near-linear
-scaling with thread count.
+per-iteration work runs in GIL-free C++ code; speedup depends on workload
+and parallelism level.
 """
 
 from __future__ import annotations
@@ -155,9 +155,6 @@ def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
     return parallelism
 
 
-# Global shared state for worker threads
-_shared_network: "Network | None" = None
-
 T = TypeVar("T")
 
 
@@ -179,27 +176,6 @@ class AnalysisFunction(Protocol):
         ...
 
 
-def _worker_init(network: "Network") -> None:
-    """Initialize worker thread with shared network reference.
-
-    Called once per worker thread lifetime via ThreadPoolExecutor's
-    initializer mechanism. Network is shared by reference (zero-copy)
-    across all threads, which is safe since the network is read-only
-    during analysis.
-
-    Args:
-        network: Network object to share by reference across threads.
-    """
-    global _shared_network
-
-    # In threading, globals are shared across threads
-    # We set this once to make it available to all worker threads
-    _shared_network = network
-
-    worker_logger = get_logger(f"{__name__}.worker")
-    worker_logger.debug("Worker thread initialized with network reference")
-
-
 def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], set[str]]:
     """Execute analysis function with caching.
 
@@ -208,21 +184,17 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
     Analysis computation is deterministic for identical inputs, making caching safe.
 
     Args:
-        args: Tuple containing (excluded_nodes, excluded_links, analysis_func,
+        args: Tuple containing (network, excluded_nodes, excluded_links, analysis_func,
               analysis_kwargs, iteration_index, is_baseline, analysis_name).
 
     Returns:
         Tuple of (analysis_result, iteration_index, is_baseline,
                  excluded_nodes, excluded_links).
     """
-    global _shared_network
-
-    if _shared_network is None:
-        raise RuntimeError("Worker not initialized with network data")
-
     worker_logger = get_logger(f"{__name__}.worker")
 
     (
+        network,
         excluded_nodes,
         excluded_links,
         analysis_func,
@@ -259,9 +231,7 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 
     # Execute analysis function with network and exclusion sets
     worker_logger.debug(f"Worker {worker_id} executing {analysis_name}")
-    result = analysis_func(
-        _shared_network, excluded_nodes, excluded_links, **analysis_kwargs
-    )
+    result = analysis_func(network, excluded_nodes, excluded_links, **analysis_kwargs)
     worker_logger.debug(f"Worker {worker_id} completed analysis")
 
     # Dump profile if enabled (for performance analysis)
@@ -462,7 +432,7 @@ class FailureManager:
             analysis_func: Function that takes (network, excluded_nodes, excluded_links, **kwargs)
                           and returns results. Must be serializable for parallel execution.
             iterations: Number of Monte Carlo iterations to run.
-            parallelism: Number of parallel worker processes to use.
+            parallelism: Number of parallel worker threads to use.
             baseline: If True, first iteration runs without failures as baseline.
             seed: Optional seed for reproducible results across runs.
             store_failure_patterns: If True, store detailed failure patterns in results.
@@ -570,6 +540,7 @@ class FailureManager:
                 )
 
             arg = (
+                self.network,
                 excluded_nodes,
                 excluded_links,
                 analysis_func,
@@ -640,8 +611,8 @@ class FailureManager:
             for key, members in key_to_members.items():
                 # Use exclusions from the representative arg
                 rep_arg = key_to_first_arg[key]
-                exc_nodes: set[str] = rep_arg[0]
-                exc_links: set[str] = rep_arg[1]
+                exc_nodes: set[str] = rep_arg[1]
+                exc_links: set[str] = rep_arg[2]
                 for idx in members:
                     failure_patterns.append(
                         {
@@ -657,8 +628,8 @@ class FailureManager:
         # Precompute failure_id per unique pattern key (not including baseline override)
         pattern_key_to_failure_id: dict[tuple, str] = {}
         for key, rep_arg in key_to_first_arg.items():
-            exc_nodes: set[str] = rep_arg[0]
-            exc_links: set[str] = rep_arg[1]
+            exc_nodes: set[str] = rep_arg[1]
+            exc_links: set[str] = rep_arg[2]
             if not exc_nodes and not exc_links:
                 pattern_key_to_failure_id[key] = ""
                 continue
@@ -671,8 +642,8 @@ class FailureManager:
         dedup_key_to_state: dict[tuple, dict[str, list[str]]] = {}
         if store_failure_patterns:
             for key, rep_arg in key_to_first_arg.items():
-                exc_nodes: set[str] = rep_arg[0]
-                exc_links: set[str] = rep_arg[1]
+                exc_nodes: set[str] = rep_arg[1]
+                exc_links: set[str] = rep_arg[2]
                 dedup_key_to_state[key] = {
                     "excluded_nodes": list(exc_nodes),
                     "excluded_links": list(exc_links),
@@ -762,8 +733,6 @@ class FailureManager:
 
         with ThreadPoolExecutor(
             max_workers=workers,
-            initializer=_worker_init,
-            initargs=(self.network,),
         ) as pool:
             logger.debug(
                 f"ThreadPoolExecutor created with {workers} workers and shared network"
@@ -832,10 +801,6 @@ class FailureManager:
         logger.info("Running serial analysis")
         start_time = time.time()
 
-        # For serial execution, we need to initialize the global network
-        global _shared_network
-        _shared_network = self.network
-
         results = []
         failure_patterns = []
 
@@ -855,7 +820,7 @@ class FailureManager:
         for i, args in enumerate(worker_args):
             iter_start = time.time()
 
-            is_baseline = len(args) > 5 and args[5]  # is_baseline flag
+            is_baseline = len(args) > 6 and args[6]  # is_baseline flag
             baseline_msg = " (baseline)" if is_baseline else ""
             logger.debug(f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}")
 
@@ -892,8 +857,6 @@ class FailureManager:
                     f"Serial analysis progress: {i + 1}/{len(worker_args)} iterations completed"
                 )
 
-        # Clean up global network reference
-        _shared_network = None
         # Restore worker profiling env var if we changed it
         if _restore_profile_env:
             os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir or ""
