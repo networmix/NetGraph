@@ -7,6 +7,8 @@ Primary API:
     analyze() - Create an analysis context for network queries
     AnalysisContext - Prepared state for efficient repeated analysis
     Network, Node, Link - Network topology model
+    from_networkx() - Convert NetworkX graph to internal format
+    to_networkx() - Convert internal format back to NetworkX
 
 Example:
     from ngraph import Network, Node, Link, analyze
@@ -28,29 +30,22 @@ Example:
 
 from __future__ import annotations
 
-# Utilities
 from ngraph import cli, logging
-
-# Analysis (primary API)
+from ngraph._version import __version__
 from ngraph.analysis import AnalysisContext, analyze
-
-# Execution
 from ngraph.exec.failure.manager import FailureManager
+from ngraph.lib.nx import EdgeMap, NodeMap, from_networkx, to_networkx
 from ngraph.model.demand.matrix import TrafficMatrixSet
-
-# Model
 from ngraph.model.network import Link, Network, Node, RiskGroup
 from ngraph.model.path import Path
 from ngraph.results.artifacts import CapacityEnvelope
-
-# Results
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
-
-# Types
 from ngraph.types.base import EdgeSelect, FlowPlacement, Mode
 from ngraph.types.dto import EdgeRef, MaxFlowResult
 
 __all__ = [
+    # Version
+    "__version__",
     # Model
     "Network",
     "Node",
@@ -74,6 +69,11 @@ __all__ = [
     "CapacityEnvelope",
     # Execution
     "FailureManager",
+    # Library integrations (NetworkX)
+    "EdgeMap",
+    "NodeMap",
+    "from_networkx",
+    "to_networkx",
     # Utilities
     "cli",
     "logging",

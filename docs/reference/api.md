@@ -132,7 +132,74 @@ print(list(all_data["steps"].keys()))
 
 **Integration:** Used by all workflow steps for result storage. Provides consistent access pattern for analysis outputs.
 
-## 3. Basic Analysis
+## 3. NetworkX Integration
+
+Convert between NetworkX graphs and the internal graph format for algorithm execution.
+
+### Converting from NetworkX
+
+```python
+import networkx as nx
+from ngraph import from_networkx, to_networkx
+import netgraph_core
+
+# Create or load a NetworkX graph
+G = nx.DiGraph()
+G.add_edge("A", "B", capacity=100.0, cost=10)
+G.add_edge("B", "C", capacity=50.0, cost=5)
+G.add_edge("A", "C", capacity=30.0, cost=25)
+
+# Convert to internal format
+graph, node_map, edge_map = from_networkx(G)
+
+# Use with Core algorithms
+backend = netgraph_core.Backend.cpu()
+algorithms = netgraph_core.Algorithms(backend)
+handle = algorithms.build_graph(graph)
+
+# Run shortest path
+src_idx = node_map.to_index["A"]
+dst_idx = node_map.to_index["C"]
+dists, _ = algorithms.spf(handle, src=src_idx, dst=dst_idx)
+print(f"Shortest path cost A->C: {dists[dst_idx]}")  # 15 (via B)
+```
+
+**Key Functions:**
+
+- `from_networkx(G, *, capacity_attr, cost_attr, default_capacity, default_cost, bidirectional)` - Convert NetworkX graph to internal format
+- `to_networkx(graph, node_map, *, capacity_attr, cost_attr)` - Convert back to NetworkX MultiDiGraph
+
+**Mapping Classes:**
+
+- `NodeMap` - Bidirectional mapping between node names and integer indices
+  - `to_index[name]` - Get integer index for node name
+  - `to_name[idx]` - Get node name for integer index
+- `EdgeMap` - Bidirectional mapping between edge IDs and original edge references
+  - `to_ref[edge_id]` - Get (source, target, key) tuple for edge ID
+  - `from_ref[(u, v, key)]` - Get list of edge IDs for original edge
+
+**Options:**
+
+- `bidirectional=True` - Add reverse edge for each edge (for undirected analysis)
+- `capacity_attr` / `cost_attr` - Custom attribute names for capacity and cost
+- `default_capacity` / `default_cost` - Default values when attributes missing
+
+### Writing Results Back
+
+```python
+# After algorithm execution, map results back to original graph
+flow_state = netgraph_core.FlowState(graph)
+# ... place flow ...
+
+# Use edge_map to update original NetworkX graph
+edge_flows = flow_state.edge_flow_view()
+for edge_id, flow in enumerate(edge_flows):
+    if flow > 0:
+        u, v, key = edge_map.to_ref[edge_id]
+        G.edges[u, v, key]["flow"] = float(flow)
+```
+
+## 4. Basic Analysis
 
 Essential analysis capabilities for network evaluation.
 
@@ -266,7 +333,7 @@ for pair, edge_impacts in sensitivity.items():
         print(f"  {edge_key}: -{flow_reduction:.2f}")
 ```
 
-## 4. Monte Carlo Analysis
+## 5. Monte Carlo Analysis
 
 Probabilistic failure analysis using FailureManager.
 
@@ -321,7 +388,7 @@ for iter_result in results["results"]:
 - `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
 - `run_monte_carlo_analysis(analysis_func, ...)` - Generic Monte Carlo with custom function
 
-## 5. Workflow Steps
+## 6. Workflow Steps
 
 Pre-built analysis steps for YAML-driven workflows.
 
@@ -388,7 +455,7 @@ workflow:
     aggregation_level: 2
 ```
 
-## 6. Types Reference
+## 7. Types Reference
 
 ### Enums
 
@@ -435,7 +502,7 @@ iter_result.flows    # List[FlowEntry]
 iter_result.summary  # FlowSummary
 ```
 
-## 7. Complete Example
+## 8. Complete Example
 
 ```python
 from ngraph import Network, Node, Link, analyze, Mode
@@ -480,7 +547,7 @@ for pair, impacts in sensitivity.items():
         print(f"  {edge}: {impact:.1f}")
 ```
 
-## 8. Performance Notes
+## 9. Performance Notes
 
 NetGraph uses a hybrid Python+C++ architecture:
 

@@ -12,9 +12,15 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 06, 2025 at 12:38 UTC
+Generated from source code on: December 06, 2025 at 18:54 UTC
 
-Modules auto-discovered: 42
+Modules auto-discovered: 44
+
+---
+
+## ngraph._version
+
+ngraph version metadata.
 
 ---
 
@@ -2597,6 +2603,152 @@ Attributes:
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
 - `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
+
+---
+
+## ngraph.lib.nx
+
+NetworkX graph conversion utilities.
+
+This module provides functions to convert between NetworkX graphs and the
+internal graph representation used by ngraph for high-performance algorithms.
+
+Example:
+    >>> import networkx as nx
+    >>> from ngraph.lib.nx import from_networkx, to_networkx
+    >>>
+    >>> # Create a NetworkX graph
+    >>> G = nx.DiGraph()
+    >>> G.add_edge("A", "B", capacity=100.0, cost=10)
+    >>> G.add_edge("B", "C", capacity=50.0, cost=5)
+    >>>
+    >>> # Convert to ngraph format for analysis
+    >>> graph, node_map, edge_map = from_networkx(G)
+    >>>
+    >>> # Use with ngraph algorithms...
+    >>>
+    >>> # Convert back to NetworkX
+    >>> G_out = to_networkx(graph, node_map)
+
+### EdgeMap
+
+Bidirectional mapping between internal edge IDs and original edge references.
+
+When converting a NetworkX graph, each edge is assigned an internal integer ID
+(ext_edge_id). This class preserves the mapping for interpreting algorithm
+results and updating the original graph.
+
+Attributes:
+    to_ref: Maps internal edge ID to original (source, target, key) tuple
+    from_ref: Maps original (source, target, key) to list of internal edge IDs
+        (list because bidirectional=True creates two IDs per edge)
+
+Example:
+    >>> graph, node_map, edge_map = from_networkx(G)
+    >>> # After running algorithms, map flow results back to original edges
+    >>> for ext_id, flow in enumerate(flow_state.edge_flow_view()):
+    ...     if flow > 0:
+    ...         u, v, key = edge_map.to_ref[ext_id]
+    ...         G.edges[u, v, key]["flow"] = flow
+
+**Attributes:**
+
+- `to_ref` (Dict[int, EdgeRef]) = {}
+- `from_ref` (Dict[EdgeRef, List[int]]) = {}
+
+### NodeMap
+
+Bidirectional mapping between node names and integer indices.
+
+When converting a NetworkX graph to the internal representation, node names
+(which can be any hashable type) are mapped to contiguous integer indices
+starting from 0. This class preserves the mapping for result interpretation
+and back-conversion.
+
+Attributes:
+    to_index: Maps original node names to integer indices
+    to_name: Maps integer indices back to original node names
+
+Example:
+    >>> node_map = NodeMap.from_names(["A", "B", "C"])
+    >>> node_map.to_index["A"]
+    0
+    >>> node_map.to_name[1]
+    'B'
+
+**Attributes:**
+
+- `to_index` (Dict[Hashable, int]) = {}
+- `to_name` (Dict[int, Hashable]) = {}
+
+**Methods:**
+
+- `from_names(names: 'List[Hashable]') -> "'NodeMap'"` - Create a NodeMap from a list of node names.
+
+### from_networkx(G: 'NxGraph', *, capacity_attr: 'str' = 'capacity', cost_attr: 'str' = 'cost', default_capacity: 'float' = 1.0, default_cost: 'int' = 1, bidirectional: 'bool' = False) -> 'Tuple[netgraph_core.StrictMultiDiGraph, NodeMap, EdgeMap]'
+
+Convert a NetworkX graph to ngraph's internal graph format.
+
+Converts any NetworkX graph (DiGraph, MultiDiGraph, Graph, MultiGraph) to
+netgraph_core.StrictMultiDiGraph. Node names are mapped to integer indices;
+the returned NodeMap and EdgeMap preserve mappings for result interpretation.
+
+Args:
+    G: NetworkX graph (DiGraph, MultiDiGraph, Graph, or MultiGraph)
+    capacity_attr: Edge attribute name for capacity (default: "capacity")
+    cost_attr: Edge attribute name for cost (default: "cost")
+    default_capacity: Capacity value when attribute is missing (default: 1.0)
+    default_cost: Cost value when attribute is missing (default: 1)
+    bidirectional: If True, add reverse edge for each edge. Useful for
+        undirected connectivity analysis. (default: False)
+
+Returns:
+    Tuple of (graph, node_map, edge_map) where:
+
+- graph: netgraph_core.StrictMultiDiGraph ready for algorithms
+- node_map: NodeMap for converting node indices back to names
+- edge_map: EdgeMap for converting edge IDs back to (u, v, key) refs
+
+Raises:
+    TypeError: If G is not a NetworkX graph
+    ValueError: If graph has no nodes
+
+Example:
+    >>> import networkx as nx
+    >>> G = nx.DiGraph()
+    >>> G.add_edge("src", "dst", capacity=100.0, cost=10)
+    >>> graph, node_map, edge_map = from_networkx(G)
+    >>> graph.num_nodes()
+    2
+    >>> node_map.to_index["src"]
+    0
+    >>> edge_map.to_ref[0]  # First edge
+    ('dst', 'src', 0)  # sorted node order: dst < src
+
+### to_networkx(graph: 'netgraph_core.StrictMultiDiGraph', node_map: 'Optional[NodeMap]' = None, *, capacity_attr: 'str' = 'capacity', cost_attr: 'str' = 'cost') -> "'nx.MultiDiGraph'"
+
+Convert ngraph's internal graph format back to NetworkX MultiDiGraph.
+
+Reconstructs a NetworkX graph from the internal representation. If a
+NodeMap is provided, original node names are restored; otherwise, nodes
+are labeled with integer indices.
+
+Args:
+    graph: netgraph_core.StrictMultiDiGraph to convert
+    node_map: Optional NodeMap to restore original node names.
+        If None, nodes are labeled 0, 1, 2, ...
+    capacity_attr: Edge attribute name for capacity (default: "capacity")
+    cost_attr: Edge attribute name for cost (default: "cost")
+
+Returns:
+    nx.MultiDiGraph with edges and attributes from the internal graph
+
+Example:
+    >>> graph, node_map, edge_map = from_networkx(G)
+    >>> # ... run algorithms ...
+    >>> G_out = to_networkx(graph, node_map)
+    >>> list(G_out.nodes())
+    ['A', 'B', 'C']
 
 ---
 
