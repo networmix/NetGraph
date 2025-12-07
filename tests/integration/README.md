@@ -314,7 +314,7 @@ The integration tests framework follows a **hybrid approach** for template usage
 ### Template Selection Guide
 
 | Test Type | Recommended Approach | Example |
-|-----------|---------------------|---------|
+| ----------- | --------------------- | --------- |
 | Basic Integration | YAML files + template variants | `test_scenario_1.py` |
 | Error Cases | Template builders | `ErrorInjectionTemplates.missing_nodes_builder()` |
 | Edge Cases | Template builders | `EdgeCaseTemplates.empty_network_builder()` |

@@ -262,7 +262,7 @@ Typical usage example:
 - `workflow` (List[WorkflowStep])
 - `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
-- `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
+- `results` (Results) = Results(\_store={}, \_metadata={}, \_active_step=None, \_scenario={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
 

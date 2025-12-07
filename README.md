@@ -153,7 +153,7 @@ workflow:
 
 ## Repository Structure
 
-```
+```text
 ngraph/             # Python package source
   dsl/              # Scenario parsing and blueprint expansion
   model/            # Network and flow domain models

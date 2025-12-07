@@ -73,16 +73,16 @@ network:
   links:
     - source: SEA
       target: SFO
-       link_params:
-         capacity: 200
-         cost: 6846
-         risk_groups: ["RiskGroup1", "RiskGroup2"]
-         attrs:
-           distance_km: 1369.13
-           media_type: "fiber"
-           hardware:
-             source: {component: "800G-ZR+", count: 1}
-             target: {component: "1600G-2xDR4", count: 1}
+      link_params:
+        capacity: 200
+        cost: 6846
+        risk_groups: ["RiskGroup1", "RiskGroup2"]
+        attrs:
+          distance_km: 1369.13
+          media_type: "fiber"
+          hardware:
+            source: {component: "800G-ZR+", count: 1}
+            target: {component: "1600G-2xDR4", count: 1}
 ```
 
 Recognized keys for each link entry:

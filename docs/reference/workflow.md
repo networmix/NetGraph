@@ -21,12 +21,12 @@ workflow:
   - step_type: MaximumSupportedDemand
     name: msd_baseline
     matrix_name: baseline_traffic_matrix
-- step_type: TrafficMatrixPlacement
-  name: tm_placement
-  matrix_name: baseline_traffic_matrix
-  failure_policy: random_failures
-  iterations: 1000
-  baseline: true
+  - step_type: TrafficMatrixPlacement
+    name: tm_placement
+    matrix_name: baseline_traffic_matrix
+    failure_policy: random_failures
+    iterations: 1000
+    baseline: true
 ```
 
 ## Execution Model
