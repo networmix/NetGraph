@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 06, 2025 at 18:54 UTC
+Generated from source code on: December 07, 2025 at 00:13 UTC
 
 Modules auto-discovered: 44
 
@@ -262,7 +262,7 @@ Typical usage example:
 - `workflow` (List[WorkflowStep])
 - `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
 - `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
-- `results` (Results) = Results(\_store={}, \_metadata={}, \_active_step=None, \_scenario={})
+- `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
 

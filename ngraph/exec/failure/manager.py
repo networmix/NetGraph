@@ -85,9 +85,10 @@ def _create_cache_key(
         if _is_hashable((key, value)):
             hashable_kwargs.append((key, value))
         else:
-            # For non-hashable values, use type name and a digest of a stable string
-            value_hash = hashlib.md5(str(value).encode()).hexdigest()[:8]
-            hashable_kwargs.append((key, f"{type(value).__name__}_{value_hash}"))
+            # Use object id for non-hashable values. Avoid str() which triggers
+            # deep __repr__ traversals on large objects (e.g., graphs with thousands
+            # of edges). id() works here because these objects persist across calls.
+            hashable_kwargs.append((key, f"{type(value).__name__}_{id(value)}"))
 
     return base_key + (tuple(hashable_kwargs),)
 
