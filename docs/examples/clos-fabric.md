@@ -206,7 +206,7 @@ print("Uneven WCMP:", wcmp)
 
 Example output:
 
-```
+```text
 Baseline ECMP: {('b1|b2', 'b1|b2'): 256.0}
 Baseline WCMP: {('b1|b2', 'b1|b2'): 256.0}
 Uneven ECMP: {('b1|b2', 'b1|b2'): 64.0}

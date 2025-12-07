@@ -546,7 +546,7 @@ These configurations enable realistic modeling of diverse forwarding behaviors: 
 For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that bundle the routing semantics described above into convenient configurations. These presets map to real-world network behaviors:
 
 | Preset | Behavior | Use Case |
-|--------|----------|----------|
+| -------- | ---------- | ---------- |
 | `SHORTEST_PATHS_ECMP` | IP/IGP with hash-based ECMP | Traditional routers (OSPF/IS-IS), equal splits across equal-cost paths |
 | `SHORTEST_PATHS_WCMP` | IP/IGP with weighted ECMP | Routers with WCMP support, proportional splits based on link capacity |
 | `TE_WCMP_UNLIM` | MPLS-TE / SDN with WCMP | Capacity-aware TE with unlimited tunnels, iterative placement |
@@ -556,7 +556,7 @@ For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that b
 **Detailed Configuration Mapping (preset internals):**
 
 | Preset | `require_capacity` | `multi_edge` | `max_flow_count` | `flow_placement` |
-|--------|--------------------|--------------|------------------|------------------|
+| -------- | -------------------- | -------------- | ------------------ | ------------------ |
 | `SHORTEST_PATHS_ECMP` | `false` | `true` | `1` | `EQUAL_BALANCED` |
 | `SHORTEST_PATHS_WCMP` | `false` | `true` | `1` | `PROPORTIONAL` |
 | `TE_WCMP_UNLIM` | `true` | `true` | unlimited | `PROPORTIONAL` |

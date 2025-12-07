@@ -20,7 +20,7 @@ make docs-serve    # Serve docs locally
 
 ## Key Development Files
 
-```
+```text
 pyproject.toml              # Package config, dependencies, tool settings
 Makefile                    # Development commands
 .pre-commit-config.yaml     # Code quality hooks
@@ -29,7 +29,7 @@ dev/run-checks.sh           # Manual code quality checks
 
 ## Git Workflows
 
-```
+```text
 .github/workflows/
 ├── python-test.yml         # CI: tests, linting, type checking
 ├── docs.yml                # Auto-deploy documentation
