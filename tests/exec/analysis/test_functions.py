@@ -200,6 +200,137 @@ class TestDemandPlacementAnalysis:
         assert summary.overall_ratio == 1.0
 
 
+class TestDemandPlacementWithContextCaching:
+    """Test demand_placement_analysis with pre-built context caching."""
+
+    @pytest.fixture
+    def diamond_network(self) -> Network:
+        """Create a diamond network for testing."""
+        network = Network()
+        for node in ["A", "B", "C", "D"]:
+            network.add_node(Node(node))
+        network.add_link(Link("A", "B", capacity=60.0, cost=1.0))
+        network.add_link(Link("A", "C", capacity=60.0, cost=1.0))
+        network.add_link(Link("B", "D", capacity=60.0, cost=1.0))
+        network.add_link(Link("C", "D", capacity=60.0, cost=1.0))
+        return network
+
+    def test_context_caching_pairwise_mode(self, diamond_network: Network) -> None:
+        """Context caching works with pairwise mode."""
+        from ngraph.exec.analysis.flow import build_demand_context
+
+        demands_config = [
+            {
+                "id": "stable-pairwise-id",
+                "source_path": "A",
+                "sink_path": "D",
+                "demand": 50.0,
+                "mode": "pairwise",
+            },
+        ]
+
+        # Build context once
+        ctx = build_demand_context(diamond_network, demands_config)
+
+        # Use context for analysis
+        result = demand_placement_analysis(
+            network=diamond_network,
+            excluded_nodes=set(),
+            excluded_links=set(),
+            demands_config=demands_config,
+            context=ctx,
+        )
+
+        assert result.summary.total_placed == 50.0
+        assert result.summary.overall_ratio == 1.0
+
+    def test_context_caching_combine_mode(self, diamond_network: Network) -> None:
+        """Context caching works with combine mode (uses pseudo nodes)."""
+        from ngraph.exec.analysis.flow import build_demand_context
+
+        demands_config = [
+            {
+                "id": "stable-combine-id",
+                "source_path": "[AB]",
+                "sink_path": "[CD]",
+                "demand": 50.0,
+                "mode": "combine",
+            },
+        ]
+
+        # Build context once
+        ctx = build_demand_context(diamond_network, demands_config)
+
+        # Use context for analysis - this is where the bug manifested
+        result = demand_placement_analysis(
+            network=diamond_network,
+            excluded_nodes=set(),
+            excluded_links=set(),
+            demands_config=demands_config,
+            context=ctx,
+        )
+
+        assert result.summary.total_placed == 50.0
+        assert result.summary.overall_ratio == 1.0
+
+    def test_context_caching_combine_multiple_iterations(
+        self, diamond_network: Network
+    ) -> None:
+        """Context can be reused for multiple analysis iterations."""
+        from ngraph.exec.analysis.flow import build_demand_context
+
+        demands_config = [
+            {
+                "id": "reusable-id",
+                "source_path": "[AB]",
+                "sink_path": "[CD]",
+                "demand": 50.0,
+                "mode": "combine",
+            },
+        ]
+
+        ctx = build_demand_context(diamond_network, demands_config)
+
+        # Run multiple iterations with different exclusions
+        for excluded in [set(), {"B"}, {"C"}]:
+            result = demand_placement_analysis(
+                network=diamond_network,
+                excluded_nodes=excluded,
+                excluded_links=set(),
+                demands_config=demands_config,
+                context=ctx,
+            )
+            assert isinstance(result, FlowIterationResult)
+
+    def test_context_caching_without_id_raises(self, diamond_network: Network) -> None:
+        """Context caching without stable ID raises KeyError for combine mode."""
+        from ngraph.exec.analysis.flow import build_demand_context
+
+        # Config without explicit ID - each reconstruction generates new ID
+        demands_config = [
+            {
+                "source_path": "[AB]",
+                "sink_path": "[CD]",
+                "demand": 50.0,
+                "mode": "combine",
+            },
+        ]
+
+        # Build context - creates pseudo nodes with auto-generated ID (uuid1)
+        ctx = build_demand_context(diamond_network, demands_config)
+
+        # Analysis reconstructs TrafficDemand without ID → generates new ID (uuid2)
+        # Tries to find pseudo nodes _src_...|uuid2 which don't exist → KeyError
+        with pytest.raises(KeyError):
+            demand_placement_analysis(
+                network=diamond_network,
+                excluded_nodes=set(),
+                excluded_links=set(),
+                demands_config=demands_config,
+                context=ctx,
+            )
+
+
 class TestSensitivityAnalysis:
     """Test sensitivity_analysis function."""
 

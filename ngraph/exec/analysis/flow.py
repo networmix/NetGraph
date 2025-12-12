@@ -30,6 +30,32 @@ from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.types.base import FlowPlacement, Mode
 
+
+def _reconstruct_traffic_demands(
+    demands_config: list[dict[str, Any]],
+) -> list[TrafficDemand]:
+    """Reconstruct TrafficDemand objects from serialized config.
+
+    Args:
+        demands_config: List of demand configurations.
+
+    Returns:
+        List of TrafficDemand objects with preserved IDs.
+    """
+    return [
+        TrafficDemand(
+            id=config.get("id") or "",
+            source_path=config["source_path"],
+            sink_path=config["sink_path"],
+            demand=config["demand"],
+            mode=config.get("mode", "pairwise"),
+            flow_policy_config=config.get("flow_policy_config"),
+            priority=config.get("priority", 0),
+        )
+        for config in demands_config
+    ]
+
+
 if TYPE_CHECKING:
     from ngraph.model.network import Network
 
@@ -445,18 +471,7 @@ def demand_placement_analysis(
     Returns:
         FlowIterationResult describing this iteration.
     """
-    # Reconstruct TrafficDemand objects from config
-    traffic_demands = []
-    for config in demands_config:
-        demand = TrafficDemand(
-            source_path=config["source_path"],
-            sink_path=config["sink_path"],
-            demand=config["demand"],
-            mode=config.get("mode", "pairwise"),
-            flow_policy_config=config.get("flow_policy_config"),
-            priority=config.get("priority", 0),
-        )
-        traffic_demands.append(demand)
+    traffic_demands = _reconstruct_traffic_demands(demands_config)
 
     # Phase 1: Expand demands (pure logic, returns names + augmentations)
     expansion = expand_demands(
@@ -714,18 +729,7 @@ def build_demand_context(
     Returns:
         AnalysisContext ready for use with demand_placement_analysis.
     """
-    # Reconstruct TrafficDemand objects
-    traffic_demands = []
-    for config in demands_config:
-        demand = TrafficDemand(
-            source_path=config["source_path"],
-            sink_path=config["sink_path"],
-            demand=config["demand"],
-            mode=config.get("mode", "pairwise"),
-            flow_policy_config=config.get("flow_policy_config"),
-            priority=config.get("priority", 0),
-        )
-        traffic_demands.append(demand)
+    traffic_demands = _reconstruct_traffic_demands(demands_config)
 
     # Expand demands to get augmentations
     expansion = expand_demands(

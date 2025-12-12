@@ -942,14 +942,7 @@ class FailureManager:
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
-            try:
-                flow_placement = FlowPlacement[flow_placement.upper()]
-            except KeyError as exc:
-                valid_values = ", ".join([e.name for e in FlowPlacement])
-                raise ValueError(
-                    f"Invalid flow_placement '{flow_placement}'. "
-                    f"Valid values are: {valid_values}"
-                ) from exc
+            flow_placement = FlowPlacement.from_string(flow_placement)
 
         # Run Monte Carlo analysis
         raw_results = self.run_monte_carlo_analysis(
@@ -1069,6 +1062,7 @@ class FailureManager:
             for demand in td_iter:  # type: ignore[assignment]
                 serializable_demands.append(
                     {
+                        "id": getattr(demand, "id", None),
                         "source_path": getattr(demand, "source_path", ""),
                         "sink_path": getattr(demand, "sink_path", ""),
                         "demand": float(getattr(demand, "demand", 0.0)),
@@ -1140,14 +1134,7 @@ class FailureManager:
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
-            try:
-                flow_placement = FlowPlacement[flow_placement.upper()]
-            except KeyError as exc:
-                valid_values = ", ".join([e.name for e in FlowPlacement])
-                raise ValueError(
-                    f"Invalid flow_placement '{flow_placement}'. "
-                    f"Valid values are: {valid_values}"
-                ) from exc
+            flow_placement = FlowPlacement.from_string(flow_placement)
 
         raw_results = self.run_monte_carlo_analysis(
             analysis_func=sensitivity_analysis,

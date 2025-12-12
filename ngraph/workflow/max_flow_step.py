@@ -26,7 +26,6 @@ YAML Configuration Example:
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -35,7 +34,11 @@ from ngraph.exec.failure.manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.results.flow import FlowIterationResult
 from ngraph.types.base import FlowPlacement
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.workflow.base import (
+    WorkflowStep,
+    register_workflow_step,
+    resolve_parallelism,
+)
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -97,20 +100,7 @@ class MaxFlow(WorkflowStep):
                 "(first iteration is baseline, remaining are with failures)"
             )
         if isinstance(self.flow_placement, str):
-            try:
-                self.flow_placement = FlowPlacement[self.flow_placement.upper()]
-            except KeyError:
-                valid_values = ", ".join([e.name for e in FlowPlacement])
-                raise ValueError(
-                    f"Invalid flow_placement '{self.flow_placement}'. "
-                    f"Valid values are: {valid_values}"
-                ) from None
-
-    @staticmethod
-    def _resolve_parallelism(parallelism: int | str) -> int:
-        if isinstance(parallelism, str):
-            return max(1, int(os.cpu_count() or 1))
-        return max(1, int(parallelism))
+            self.flow_placement = FlowPlacement.from_string(self.flow_placement)
 
     def run(self, scenario: "Scenario") -> None:
         t0 = time.perf_counter()
@@ -134,7 +124,7 @@ class MaxFlow(WorkflowStep):
             failure_policy_set=scenario.failure_policy_set,
             policy_name=self.failure_policy,
         )
-        effective_parallelism = self._resolve_parallelism(self.parallelism)
+        effective_parallelism = resolve_parallelism(self.parallelism)
         raw = fm.run_max_flow_monte_carlo(
             source_path=self.source_path,
             sink_path=self.sink_path,

@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 11, 2025 at 22:53 UTC
+Generated from source code on: December 11, 2025 at 23:43 UTC
 
 Modules auto-discovered: 44
 
@@ -460,12 +460,12 @@ Attributes:
     demand: Total demand volume.
     demand_placed: Portion of this demand placed so far.
     flow_policy_config: Policy preset (FlowPolicyPreset enum) used to build
-        a `FlowPolicy` if ``flow_policy`` is not provided.
+        a `FlowPolicy`` if ``flow_policy`` is not provided.
     flow_policy: Concrete policy instance. If set, it overrides
         ``flow_policy_config``.
     mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
     attrs: Arbitrary user metadata.
-    id: Unique identifier assigned at initialization.
+    id: Unique identifier. Auto-generated if empty or not provided.
 
 **Attributes:**
 
@@ -1237,6 +1237,9 @@ placeable for a given matrix. Stores results under `data` as:
 - `context`: parameters used for the search
 - `base_demands`: serialized base demand specs
 - `probes`: bracket/bisect evaluations with feasibility
+
+Performance: AnalysisContext is built once at search start and reused across
+all binary search probes. Only demand volumes change per probe.
 
 ### MaximumSupportedDemand
 
@@ -2520,7 +2523,7 @@ Attributes:
     volume: Traffic volume to place.
     priority: Priority class (lower is higher priority).
     policy_preset: FlowPolicy configuration preset.
-    demand_id: Parent TrafficDemand ID (for tracking).
+    demand_id: Parent TrafficDemand ID for tracking.
 
 **Attributes:**
 

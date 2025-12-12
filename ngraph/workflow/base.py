@@ -7,10 +7,11 @@ via `execute()` which records metadata and re-raises failures.
 
 from __future__ import annotations
 
+import os
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Optional, Type
+from typing import TYPE_CHECKING, Dict, Optional, Type, Union
 
 from ngraph.logging import get_logger
 
@@ -43,6 +44,20 @@ def register_workflow_step(step_type: str):
         return cls
 
     return decorator
+
+
+def resolve_parallelism(parallelism: Union[int, str]) -> int:
+    """Resolve parallelism setting to a concrete worker count.
+
+    Args:
+        parallelism: Either an integer worker count or "auto" for CPU count.
+
+    Returns:
+        Positive integer worker count (minimum 1).
+    """
+    if isinstance(parallelism, str):
+        return max(1, int(os.cpu_count() or 1))
+    return max(1, int(parallelism))
 
 
 @dataclass

@@ -21,12 +21,16 @@ def _mock_scenario_with_matrix() -> MagicMock:
     return mock_scenario
 
 
-@patch(
-    "ngraph.workflow.maximum_supported_demand_step.MaximumSupportedDemand._evaluate_alpha"
-)
-def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
+@patch.object(MaximumSupportedDemand, "_evaluate_alpha")
+@patch.object(MaximumSupportedDemand, "_build_cache")
+def test_msd_basic_bracket_and_bisect(
+    mock_build_cache: MagicMock, mock_eval: MagicMock
+) -> None:
+    """Test binary search logic with mocked evaluation."""
+    mock_build_cache.return_value = MagicMock()
+
     # Feasible if alpha <= 1.3, infeasible otherwise
-    def _eval(*, alpha, scenario, matrix_name, placement_rounds, seeds):  # type: ignore[no-redef]
+    def _eval(cache, alpha, seeds):
         feasible = alpha <= 1.3
         return feasible, {
             "seeds": 1,
@@ -37,7 +41,6 @@ def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
     mock_eval.side_effect = _eval
 
     scenario = _mock_scenario_with_matrix()
-
     step = MaximumSupportedDemand(
         name="msd_step",
         matrix_name="default",
@@ -60,18 +63,21 @@ def test_msd_basic_bracket_and_bisect(mock_eval: MagicMock) -> None:
     assert base and base[0]["source_path"] == "A"
 
 
-@patch(
-    "ngraph.workflow.maximum_supported_demand_step.MaximumSupportedDemand._evaluate_alpha"
-)
-def test_msd_no_feasible_raises(mock_eval: MagicMock) -> None:
+@patch.object(MaximumSupportedDemand, "_evaluate_alpha")
+@patch.object(MaximumSupportedDemand, "_build_cache")
+def test_msd_no_feasible_raises(
+    mock_build_cache: MagicMock, mock_eval: MagicMock
+) -> None:
+    """Test that MSD raises when no feasible alpha is found."""
+    mock_build_cache.return_value = MagicMock()
+
     # Always infeasible
-    def _eval(*, alpha, scenario, matrix_name, placement_rounds, seeds):  # type: ignore[no-redef]
+    def _eval(cache, alpha, seeds):
         return False, {"seeds": 1, "feasible_seeds": 0, "min_placement_ratio": 0.0}
 
     mock_eval.side_effect = _eval
 
     scenario = _mock_scenario_with_matrix()
-
     step = MaximumSupportedDemand(
         name="msd_step",
         matrix_name="default",
@@ -124,10 +130,11 @@ def test_msd_end_to_end_single_link() -> None:
     base_demands = data.get("base_demands")
     assert isinstance(base_demands, list) and base_demands
 
-    # Verify feasibility at alpha* using new Core-based API
+    # Verify feasibility at alpha* using demand_placement_analysis
     scaled_demands = MSD._build_scaled_demands(base_demands, float(alpha_star))
     demands_config = [
         {
+            "id": d.id,
             "source_path": d.source_path,
             "sink_path": d.sink_path,
             "demand": d.demand,
@@ -154,6 +161,7 @@ def test_msd_end_to_end_single_link() -> None:
     scaled_demands_above = MSD._build_scaled_demands(base_demands, alpha_above)
     demands_config_above = [
         {
+            "id": d.id,
             "source_path": d.source_path,
             "sink_path": d.sink_path,
             "demand": d.demand,

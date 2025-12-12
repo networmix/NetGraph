@@ -30,12 +30,12 @@ class TrafficDemand:
         demand: Total demand volume.
         demand_placed: Portion of this demand placed so far.
         flow_policy_config: Policy preset (FlowPolicyPreset enum) used to build
-            a `FlowPolicy` if ``flow_policy`` is not provided.
+            a `FlowPolicy`` if ``flow_policy`` is not provided.
         flow_policy: Concrete policy instance. If set, it overrides
             ``flow_policy_config``.
         mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
         attrs: Arbitrary user metadata.
-        id: Unique identifier assigned at initialization.
+        id: Unique identifier. Auto-generated if empty or not provided.
     """
 
     source_path: str = ""
@@ -47,8 +47,9 @@ class TrafficDemand:
     flow_policy: Optional["FlowPolicy"] = None  # type: ignore[valid-type]
     mode: str = "combine"
     attrs: Dict[str, Any] = field(default_factory=dict)
-    id: str = field(init=False)
+    id: str = ""
 
     def __post_init__(self) -> None:
-        """Assign a unique id from source, sink, and a Base64 UUID."""
-        self.id = f"{self.source_path}|{self.sink_path}|{new_base64_uuid()}"
+        """Generate id if not provided."""
+        if not self.id:
+            self.id = f"{self.source_path}|{self.sink_path}|{new_base64_uuid()}"
