@@ -24,6 +24,45 @@ def test_defaults_and_id_generation() -> None:
     assert demand2.id != demand.id
 
 
+def test_explicit_id_preserved() -> None:
+    """TrafficDemand with explicit ID preserves it unchanged."""
+    demand = TrafficDemand(
+        id="my-explicit-id",
+        source_path="Src",
+        sink_path="Dst",
+        demand=100.0,
+    )
+    assert demand.id == "my-explicit-id"
+
+
+def test_explicit_id_round_trip() -> None:
+    """TrafficDemand ID survives serialization to dict and reconstruction."""
+    original = TrafficDemand(source_path="A", sink_path="B", demand=50.0)
+    original_id = original.id
+
+    # Simulate serialization (as done in workflow steps)
+    config = {
+        "id": original.id,
+        "source_path": original.source_path,
+        "sink_path": original.sink_path,
+        "demand": original.demand,
+        "mode": original.mode,
+        "priority": original.priority,
+    }
+
+    # Simulate reconstruction (as done in flow.py)
+    reconstructed = TrafficDemand(
+        id=config.get("id"),
+        source_path=config["source_path"],
+        sink_path=config["sink_path"],
+        demand=config["demand"],
+        mode=config.get("mode", "pairwise"),
+        priority=config.get("priority", 0),
+    )
+
+    assert reconstructed.id == original_id
+
+
 def test_attrs_isolation_between_instances() -> None:
     """Each instance gets its own attrs dict; mutating one does not affect others."""
     d1 = TrafficDemand(source_path="A", sink_path="B")

@@ -54,6 +54,7 @@ def build_scenario_snapshot(
         for d in demands:
             entries.append(
                 {
+                    "id": getattr(d, "id", None),
                     "source_path": getattr(d, "source_path", ""),
                     "sink_path": getattr(d, "sink_path", ""),
                     "demand": float(getattr(d, "demand", 0.0)),

@@ -34,6 +34,27 @@ class FlowPlacement(IntEnum):
     PROPORTIONAL = 1  # Flow is split proportional to capacity (Dinic-like approach)
     EQUAL_BALANCED = 2  # Flow is equally divided among parallel paths of equal cost
 
+    @classmethod
+    def from_string(cls, value: str) -> "FlowPlacement":
+        """Parse a string into a FlowPlacement enum value.
+
+        Args:
+            value: Case-insensitive string name (e.g., "proportional", "EQUAL_BALANCED").
+
+        Returns:
+            The corresponding FlowPlacement enum member.
+
+        Raises:
+            ValueError: If the string doesn't match any enum member.
+        """
+        try:
+            return cls[value.upper()]
+        except KeyError:
+            valid = ", ".join(e.name for e in cls)
+            raise ValueError(
+                f"Invalid flow_placement '{value}'. Valid values are: {valid}"
+            ) from None
+
 
 class Mode(IntEnum):
     """Analysis mode for source/sink group handling.

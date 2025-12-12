@@ -6,7 +6,6 @@ unified `flow_results` per iteration under `data.flow_results`.
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -14,7 +13,11 @@ from typing import TYPE_CHECKING, Any
 from ngraph.exec.failure.manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.results.flow import FlowIterationResult
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.workflow.base import (
+    WorkflowStep,
+    register_workflow_step,
+    resolve_parallelism,
+)
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
@@ -68,12 +71,6 @@ class TrafficMatrixPlacement(WorkflowStep):
         if not (float(self.alpha) > 0.0):
             raise ValueError("alpha must be > 0.0")
 
-    @staticmethod
-    def _resolve_parallelism(parallelism: int | str) -> int:
-        if isinstance(parallelism, str):
-            return max(1, int(os.cpu_count() or 1))
-        return max(1, int(parallelism))
-
     def run(self, scenario: "Scenario") -> None:
         if not self.matrix_name:
             raise ValueError("'matrix_name' is required for TrafficMatrixPlacement")
@@ -105,20 +102,6 @@ class TrafficMatrixPlacement(WorkflowStep):
 
         from ngraph.model.flow.policy_config import serialize_policy_preset
 
-        base_demands: list[dict[str, Any]] = [
-            {
-                "source_path": getattr(td, "source_path", ""),
-                "sink_path": getattr(td, "sink_path", ""),
-                "demand": float(getattr(td, "demand", 0.0)),
-                "mode": getattr(td, "mode", "pairwise"),
-                "priority": int(getattr(td, "priority", 0)),
-                "flow_policy_config": serialize_policy_preset(
-                    getattr(td, "flow_policy_config", None)
-                ),
-            }
-            for td in td_list
-        ]
-
         # Resolve alpha
         effective_alpha = self._resolve_alpha(scenario)
         alpha_src = getattr(self, "_alpha_source", None) or "explicit"
@@ -128,16 +111,33 @@ class TrafficMatrixPlacement(WorkflowStep):
             str(alpha_src),
         )
 
+        # Build demands_config with scaled demands (used for analysis)
+        # Also build base_demands for output (with serialized policy, unscaled)
         demands_config: list[dict[str, Any]] = []
+        base_demands: list[dict[str, Any]] = []
         for td in td_list:
             demands_config.append(
                 {
+                    "id": td.id,
                     "source_path": td.source_path,
                     "sink_path": td.sink_path,
                     "demand": float(td.demand) * float(effective_alpha),
                     "mode": getattr(td, "mode", "pairwise"),
                     "flow_policy_config": getattr(td, "flow_policy_config", None),
                     "priority": getattr(td, "priority", 0),
+                }
+            )
+            base_demands.append(
+                {
+                    "id": td.id,
+                    "source_path": getattr(td, "source_path", ""),
+                    "sink_path": getattr(td, "sink_path", ""),
+                    "demand": float(getattr(td, "demand", 0.0)),
+                    "mode": getattr(td, "mode", "pairwise"),
+                    "priority": int(getattr(td, "priority", 0)),
+                    "flow_policy_config": serialize_policy_preset(
+                        getattr(td, "flow_policy_config", None)
+                    ),
                 }
             )
 
@@ -147,7 +147,7 @@ class TrafficMatrixPlacement(WorkflowStep):
             failure_policy_set=scenario.failure_policy_set,
             policy_name=self.failure_policy,
         )
-        effective_parallelism = self._resolve_parallelism(self.parallelism)
+        effective_parallelism = resolve_parallelism(self.parallelism)
 
         raw = fm.run_demand_placement_monte_carlo(
             demands_config=demands_config,
@@ -219,9 +219,7 @@ class TrafficMatrixPlacement(WorkflowStep):
         baseline_str = str(step_metadata.get("baseline", self.baseline))
         iterations = int(step_metadata.get("iterations", self.iterations))
         workers = int(
-            step_metadata.get(
-                "parallelism", self._resolve_parallelism(self.parallelism)
-            )
+            step_metadata.get("parallelism", resolve_parallelism(self.parallelism))
         )
         logger.info(
             (

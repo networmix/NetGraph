@@ -31,7 +31,7 @@ class ExpandedDemand:
         volume: Traffic volume to place.
         priority: Priority class (lower is higher priority).
         policy_preset: FlowPolicy configuration preset.
-        demand_id: Parent TrafficDemand ID (for tracking).
+        demand_id: Parent TrafficDemand ID for tracking.
     """
 
     src_name: str

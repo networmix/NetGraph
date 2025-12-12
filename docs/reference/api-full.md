@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 07, 2025 at 00:13 UTC
+Generated from source code on: December 11, 2025 at 23:43 UTC
 
 Modules auto-discovered: 44
 
@@ -460,12 +460,12 @@ Attributes:
     demand: Total demand volume.
     demand_placed: Portion of this demand placed so far.
     flow_policy_config: Policy preset (FlowPolicyPreset enum) used to build
-        a `FlowPolicy` if ``flow_policy`` is not provided.
+        a `FlowPolicy`` if ``flow_policy`` is not provided.
     flow_policy: Concrete policy instance. If set, it overrides
         ``flow_policy_config``.
     mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
     attrs: Arbitrary user metadata.
-    id: Unique identifier assigned at initialization.
+    id: Unique identifier. Auto-generated if empty or not provided.
 
 **Attributes:**
 
@@ -1237,6 +1237,9 @@ placeable for a given matrix. Stores results under `data` as:
 - `context`: parameters used for the search
 - `base_demands`: serialized base demand specs
 - `probes`: bracket/bisect evaluations with feasibility
+
+Performance: AnalysisContext is built once at search start and reused across
+all binary search probes. Only demand volumes change per probe.
 
 ### MaximumSupportedDemand
 
@@ -2345,6 +2348,10 @@ with FailureManager's caching and multiprocessing systems.
 Graph caching enables efficient repeated analysis with different exclusion
 sets by building the graph once and using O(|excluded|) masks for exclusions.
 
+SPF caching enables efficient demand placement by computing shortest paths once
+per unique source node rather than once per demand. For networks with many demands
+sharing the same sources, this can reduce SPF computations by an order of magnitude.
+
 ### build_demand_context(network: "'Network'", demands_config: 'list[dict[str, Any]]') -> 'AnalysisContext'
 
 Build an AnalysisContext for repeated demand placement analysis.
@@ -2383,8 +2390,15 @@ This function:
 
 1. Builds Core infrastructure (graph, algorithms, flow_graph) or uses cached
 2. Expands demands into concrete (src, dst, volume) tuples
-3. Places each demand using Core's FlowPolicy with exclusion masks
-4. Aggregates results into FlowIterationResult
+3. Places each demand using SPF caching for cacheable policies
+4. Falls back to FlowPolicy for complex multi-flow policies
+5. Aggregates results into FlowIterationResult
+
+SPF Caching Optimization:
+    For cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are
+    cached by source node. This reduces SPF computations from O(demands)
+    to O(unique_sources), typically a 5-10x reduction for workloads with
+    many demands sharing the same sources.
 
 Args:
     network: Network instance.
@@ -2509,7 +2523,7 @@ Attributes:
     volume: Traffic volume to place.
     priority: Priority class (lower is higher priority).
     policy_preset: FlowPolicy configuration preset.
-    demand_id: Parent TrafficDemand ID (for tracking).
+    demand_id: Parent TrafficDemand ID for tracking.
 
 **Attributes:**
 

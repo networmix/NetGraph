@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
 from .conditions import FailureCondition as EvalCondition
-from .conditions import evaluate_condition as _shared_evaluate_condition
 from .conditions import evaluate_conditions as _shared_evaluate_conditions
 
 
@@ -595,8 +594,3 @@ class FailurePolicy:
                 for mode in self.modes
             ]
         return data
-
-
-def _evaluate_condition(entity_attrs: Dict[str, Any], cond: FailureCondition) -> bool:
-    """Wrapper using the shared evaluator."""
-    return _shared_evaluate_condition(entity_attrs, cond)

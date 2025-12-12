@@ -654,7 +654,7 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Deterministic expansion: source/sink node lists sorted alphabetically; no randomization
 - Supports `combine` mode (aggregate via pseudo nodes) and `pairwise` mode (individual (src,dst) pairs with volume split)
 - Demands sorted by ascending priority before placement (lower value = higher priority)
-- Placement handled by Core's FlowPolicy with configurable presets (ECMP, WCMP, TE modes)
+- Placement uses SPF caching for simple policies (ECMP, WCMP, TE_WCMP_UNLIM), FlowPolicy for complex multi-flow policies
 - Non-mutating: operates on Core flow graphs with exclusions; Network remains unmodified
 
 **Failure Manager** (`ngraph.exec.failure.manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
@@ -736,6 +736,16 @@ For Monte Carlo analysis with many failure iterations, graph construction is amo
 - FailureManager automatically pre-builds the `Graph` before parallel execution
 
 This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Building the graph once eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
+
+**SPF Caching for Demand Placement:**
+
+For demand placement with cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are cached by (source_node, policy_preset):
+
+- Initial SPF computed once per unique source; subsequent demands from the same source reuse the cached DAG
+- For TE policies, DAG is recomputed when capacity constraints require alternate paths
+- Complex multi-flow policies (TE_ECMP_16_LSP, TE_ECMP_UP_TO_256_LSP) use FlowPolicy directly
+
+This reduces SPF computations from O(demands) to O(unique_sources) for workloads where many demands share the same source nodes.
 
 **Monte Carlo Deduplication:**
 
