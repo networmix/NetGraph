@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 07, 2025 at 00:13 UTC
+Generated from source code on: December 11, 2025 at 22:53 UTC
 
 Modules auto-discovered: 44
 
@@ -2345,6 +2345,10 @@ with FailureManager's caching and multiprocessing systems.
 Graph caching enables efficient repeated analysis with different exclusion
 sets by building the graph once and using O(|excluded|) masks for exclusions.
 
+SPF caching enables efficient demand placement by computing shortest paths once
+per unique source node rather than once per demand. For networks with many demands
+sharing the same sources, this can reduce SPF computations by an order of magnitude.
+
 ### build_demand_context(network: "'Network'", demands_config: 'list[dict[str, Any]]') -> 'AnalysisContext'
 
 Build an AnalysisContext for repeated demand placement analysis.
@@ -2383,8 +2387,15 @@ This function:
 
 1. Builds Core infrastructure (graph, algorithms, flow_graph) or uses cached
 2. Expands demands into concrete (src, dst, volume) tuples
-3. Places each demand using Core's FlowPolicy with exclusion masks
-4. Aggregates results into FlowIterationResult
+3. Places each demand using SPF caching for cacheable policies
+4. Falls back to FlowPolicy for complex multi-flow policies
+5. Aggregates results into FlowIterationResult
+
+SPF Caching Optimization:
+    For cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are
+    cached by source node. This reduces SPF computations from O(demands)
+    to O(unique_sources), typically a 5-10x reduction for workloads with
+    many demands sharing the same sources.
 
 Args:
     network: Network instance.
