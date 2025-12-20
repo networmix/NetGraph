@@ -18,7 +18,7 @@ class _ScenarioStub:
 
 
 def test_tm_basic_behavior_unchanged(monkeypatch):
-    # Small sanity test that the step runs end-to-end and stores new outputs
+    # Small sanity test that the step runs end-to-end and stores outputs
     from ngraph.model.demand.matrix import TrafficMatrixSet
     from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.network import Link, Network, Node
@@ -64,7 +64,6 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
     step = TrafficMatrixPlacement(
         matrix_name="default",
         iterations=2,
-        baseline=True,
         placement_rounds="auto",
         include_flow_details=False,
     )

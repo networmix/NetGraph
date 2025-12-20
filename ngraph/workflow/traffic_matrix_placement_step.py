@@ -2,6 +2,9 @@
 
 Runs Monte Carlo demand placement using a named traffic matrix and produces
 unified `flow_results` per iteration under `data.flow_results`.
+
+Baseline (no failures) is always run first as a separate reference. The `iterations`
+parameter specifies how many failure scenarios to run.
 """
 
 from __future__ import annotations
@@ -29,13 +32,17 @@ logger = get_logger(__name__)
 class TrafficMatrixPlacement(WorkflowStep):
     """Monte Carlo demand placement using a named traffic matrix.
 
+    Baseline (no failures) is always run first as a separate reference. Results are
+    returned with baseline in a separate field. The flow_results list contains unique
+    failure patterns (deduplicated); each result has occurrence_count indicating how
+    many iterations matched that pattern.
+
     Attributes:
         matrix_name: Name of the traffic matrix to analyze.
         failure_policy: Optional policy name in scenario.failure_policy_set.
-        iterations: Number of Monte Carlo iterations.
+        iterations: Number of failure iterations to run.
         parallelism: Number of parallel worker processes.
         placement_rounds: Placement optimization rounds (int or "auto").
-        baseline: Include baseline iteration without failures first.
         seed: Optional seed for reproducibility.
         store_failure_patterns: Whether to store failure pattern results.
         include_flow_details: When True, include cost_distribution per flow.
@@ -50,7 +57,6 @@ class TrafficMatrixPlacement(WorkflowStep):
     iterations: int = 1
     parallelism: int | str = "auto"
     placement_rounds: int | str = "auto"
-    baseline: bool = False
     seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
@@ -60,8 +66,8 @@ class TrafficMatrixPlacement(WorkflowStep):
     alpha_from_field: str = "data.alpha_star"
 
     def __post_init__(self) -> None:
-        if self.iterations < 1:
-            raise ValueError("iterations must be >= 1")
+        if self.iterations < 0:
+            raise ValueError("iterations must be >= 0")
         if isinstance(self.parallelism, str):
             if self.parallelism != "auto":
                 raise ValueError("parallelism must be an integer or 'auto'")
@@ -76,20 +82,16 @@ class TrafficMatrixPlacement(WorkflowStep):
             raise ValueError("'matrix_name' is required for TrafficMatrixPlacement")
 
         t0 = time.perf_counter()
-        logger.info(
-            f"Starting traffic-matrix placement: {self.name or self.__class__.__name__}"
-        )
+        logger.info("Starting TrafficMatrixPlacement: name=%s", self.name)
         logger.debug(
-            "Parameters: matrix_name=%s, iterations=%d, parallelism=%s, placement_rounds=%s, baseline=%s, include_flow_details=%s, include_used_edges=%s, failure_policy=%s, alpha=%s",
+            "TrafficMatrixPlacement params: matrix_name=%s failure_iters=%d "
+            "parallelism=%s placement_rounds=%s failure_policy=%s alpha=%s",
             self.matrix_name,
             self.iterations,
-            str(self.parallelism),
-            str(self.placement_rounds),
-            str(self.baseline),
-            str(self.include_flow_details),
-            str(self.include_used_edges),
-            str(self.failure_policy),
-            str(self.alpha),
+            self.parallelism,
+            self.placement_rounds,
+            self.failure_policy,
+            self.alpha,
         )
 
         # Extract and serialize traffic matrix
@@ -160,7 +162,6 @@ class TrafficMatrixPlacement(WorkflowStep):
             iterations=self.iterations,
             parallelism=effective_parallelism,
             placement_rounds=self.placement_rounds,
-            baseline=self.baseline,
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
             include_flow_details=self.include_flow_details,
@@ -168,15 +169,24 @@ class TrafficMatrixPlacement(WorkflowStep):
         )
 
         logger.debug(
-            "Placement MC completed: iterations=%s, parallelism=%s, baseline=%s",
-            str(raw.get("metadata", {}).get("iterations", 0)),
-            str(raw.get("metadata", {}).get("parallelism", 0)),
-            str(raw.get("metadata", {}).get("baseline", False)),
+            "TrafficMatrixPlacement MC done: failure_iters=%d unique_patterns=%d",
+            raw.get("metadata", {}).get("iterations", 0),
+            raw.get("metadata", {}).get("unique_patterns", 0),
         )
 
         # Store outputs
-        step_metadata = raw.get("metadata", {})
-        scenario.results.put("metadata", step_metadata)
+        scenario.results.put("metadata", raw.get("metadata", {}))
+
+        # Handle baseline (separate from failure results)
+        baseline_result = raw.get("baseline")
+        baseline_dict = None
+        if baseline_result is not None:
+            if hasattr(baseline_result, "to_dict"):
+                baseline_dict = baseline_result.to_dict()
+            else:
+                baseline_dict = baseline_result
+
+        # Handle failure results
         flow_results: list[dict] = []
         for item in raw.get("results", []):
             if isinstance(item, FlowIterationResult):
@@ -192,6 +202,7 @@ class TrafficMatrixPlacement(WorkflowStep):
         scenario.results.put(
             "data",
             {
+                "baseline": baseline_dict,
                 "flow_results": flow_results,
                 "context": {
                     "matrix_name": self.matrix_name,
@@ -205,47 +216,16 @@ class TrafficMatrixPlacement(WorkflowStep):
             },
         )
 
-        # Log summary
-        totals = []
-        for item in raw.get("results", []):
-            if isinstance(item, FlowIterationResult):
-                totals.append(float(item.summary.total_placed))
-            else:
-                summary = getattr(item, "summary", None)
-                if summary and hasattr(summary, "get"):
-                    totals.append(float(summary.get("total_placed", 0.0)))
-                else:
-                    totals.append(0.0)
-        from statistics import mean
-
-        mean_v = float(mean(totals)) if totals else 0.0
-        duration_sec = time.perf_counter() - t0
-        rounds_str = str(self.placement_rounds)
-        seed_str = str(self.seed) if self.seed is not None else "-"
-        baseline_str = str(step_metadata.get("baseline", self.baseline))
-        iterations = int(step_metadata.get("iterations", self.iterations))
-        workers = int(
-            step_metadata.get("parallelism", resolve_parallelism(self.parallelism))
-        )
+        metadata = raw.get("metadata", {})
         logger.info(
-            (
-                "Placement summary: name=%s alpha=%.6g source=%s "
-                "iters=%d workers=%d rounds=%s baseline=%s seed=%s delivered_mean=%.4f duration=%.3fs"
-            ),
+            "TrafficMatrixPlacement completed: name=%s alpha=%.6g failure_iters=%d "
+            "unique_patterns=%d workers=%d duration=%.3fs",
             self.name,
             alpha_value,
-            str(alpha_source_value or "explicit"),
-            iterations,
-            workers,
-            rounds_str,
-            baseline_str,
-            seed_str,
-            mean_v,
-            duration_sec,
-        )
-
-        logger.info(
-            f"Traffic-matrix placement completed: {self.name or self.__class__.__name__}"
+            metadata.get("iterations", self.iterations),
+            metadata.get("unique_patterns", 0),
+            metadata.get("parallelism", effective_parallelism),
+            time.perf_counter() - t0,
         )
 
     def _resolve_alpha(self, scenario: "Scenario") -> float:

@@ -26,129 +26,647 @@ network:
   version: 1.1
   nodes:
     # ----- CNSS core POPs --------------------------------------------------------
-    Seattle:          {attrs: {site_type: core}}
-    PaloAlto:         {attrs: {site_type: core}}
-    LosAngeles:       {attrs: {site_type: core}}
-    SaltLakeCity:     {attrs: {site_type: core}}
-    Denver:           {attrs: {site_type: core}}
-    Lincoln:          {attrs: {site_type: core}}
-    StLouis:          {attrs: {site_type: core}}
-    Chicago:          {attrs: {site_type: core}}
-    Cleveland:        {attrs: {site_type: core}}
-    NewYork:          {attrs: {site_type: core}}
-    WashingtonDC:     {attrs: {site_type: core}}
-    Greensboro:       {attrs: {site_type: core}}
-    Atlanta:          {attrs: {site_type: core}}
-    Houston:          {attrs: {site_type: core}}
-    AnnArbor:         {attrs: {site_type: core}}
-    Hartford:         {attrs: {site_type: core}}
+    Seattle: { attrs: { site_type: core } }
+    PaloAlto: { attrs: { site_type: core } }
+    LosAngeles: { attrs: { site_type: core } }
+    SaltLakeCity: { attrs: { site_type: core } }
+    Denver: { attrs: { site_type: core } }
+    Lincoln: { attrs: { site_type: core } }
+    StLouis: { attrs: { site_type: core } }
+    Chicago: { attrs: { site_type: core } }
+    Cleveland: { attrs: { site_type: core } }
+    NewYork: { attrs: { site_type: core } }
+    WashingtonDC: { attrs: { site_type: core } }
+    Greensboro: { attrs: { site_type: core } }
+    Atlanta: { attrs: { site_type: core } }
+    Houston: { attrs: { site_type: core } }
+    AnnArbor: { attrs: { site_type: core } }
+    Hartford: { attrs: { site_type: core } }
     # ----- ENSS / super-computer & "additional" sites -----------------------
-    Cambridge:        {attrs: {site_type: edge}}   # NEARnet - additional site
-    Argonne:          {attrs: {site_type: edge}}   # additional site
-    SanDiego:         {attrs: {site_type: edge}}
-    Boulder:          {attrs: {site_type: edge}}
-    Princeton:        {attrs: {site_type: edge}}
-    Ithaca:           {attrs: {site_type: edge}}
-    CollegePark:      {attrs: {site_type: edge}}
-    Pittsburgh:       {attrs: {site_type: edge}}
-    UrbanaChampaign:  {attrs: {site_type: edge}}
-    MoffettField:     {attrs: {site_type: edge}}   # NASA Ames additional site
+    Cambridge: { attrs: { site_type: edge } } # NEARnet - additional site
+    Argonne: { attrs: { site_type: edge } } # additional site
+    SanDiego: { attrs: { site_type: edge } }
+    Boulder: { attrs: { site_type: edge } }
+    Princeton: { attrs: { site_type: edge } }
+    Ithaca: { attrs: { site_type: edge } }
+    CollegePark: { attrs: { site_type: edge } }
+    Pittsburgh: { attrs: { site_type: edge } }
+    UrbanaChampaign: { attrs: { site_type: edge } }
+    MoffettField: { attrs: { site_type: edge } } # NASA Ames additional site
 
   links:
     # Northern arc
-    - {source: NewYork,  target: Cleveland,  link_params: {capacity: 45000.0, cost: 4,  risk_groups: [RG_Cleveland_NewYork],  attrs: {circuit: A}}}
-    - {source: NewYork,  target: Cleveland,  link_params: {capacity: 45000.0, cost: 4,  risk_groups: [RG_Cleveland_NewYork],  attrs: {circuit: B}}}
-    - {source: Cleveland,target: Chicago,    link_params: {capacity: 45000.0, cost: 6,  risk_groups: [RG_Cleveland_Chicago],   attrs: {circuit: A}}}
-    - {source: Cleveland,target: Chicago,    link_params: {capacity: 45000.0, cost: 6,  risk_groups: [RG_Cleveland_Chicago],   attrs: {circuit: B}}}
-    - {source: Chicago,  target: PaloAlto,   link_params: {capacity: 45000.0, cost: 12, risk_groups: [RG_Chicago_PaloAlto],   attrs: {circuit: A}}}
-    - {source: Chicago,  target: PaloAlto,   link_params: {capacity: 45000.0, cost: 12, risk_groups: [RG_Chicago_PaloAlto],   attrs: {circuit: B}}}
+    - {
+        source: NewYork,
+        target: Cleveland,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 4,
+            risk_groups: [RG_Cleveland_NewYork],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: NewYork,
+        target: Cleveland,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 4,
+            risk_groups: [RG_Cleveland_NewYork],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Cleveland,
+        target: Chicago,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 6,
+            risk_groups: [RG_Cleveland_Chicago],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Cleveland,
+        target: Chicago,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 6,
+            risk_groups: [RG_Cleveland_Chicago],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Chicago,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 12,
+            risk_groups: [RG_Chicago_PaloAlto],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Chicago,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 12,
+            risk_groups: [RG_Chicago_PaloAlto],
+            attrs: { circuit: B },
+          },
+      }
 
     # Southern arc
-    - {source: NewYork,      target: WashingtonDC, link_params: {capacity: 45000.0, cost: 4,  risk_groups: [RG_NewYork_WashingtonDC],    attrs: {circuit: A}}}
-    - {source: NewYork,      target: WashingtonDC, link_params: {capacity: 45000.0, cost: 4,  risk_groups: [RG_NewYork_WashingtonDC],    attrs: {circuit: B}}}
-    - {source: WashingtonDC, target: Greensboro,   link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_WashingtonDC_Greensboro], attrs: {circuit: A}}}
-    - {source: WashingtonDC, target: Greensboro,   link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_WashingtonDC_Greensboro], attrs: {circuit: B}}}
-    - {source: Greensboro,   target: Atlanta,      link_params: {capacity: 45000.0, cost: 7,  risk_groups: [RG_Greensboro_Atlanta],       attrs: {circuit: A}}}
-    - {source: Greensboro,   target: Atlanta,      link_params: {capacity: 45000.0, cost: 7,  risk_groups: [RG_Greensboro_Atlanta],       attrs: {circuit: B}}}
-    - {source: Atlanta,      target: Houston,      link_params: {capacity: 45000.0, cost: 10, risk_groups: [RG_Atlanta_Houston],          attrs: {circuit: A}}}
-    - {source: Atlanta,      target: Houston,      link_params: {capacity: 45000.0, cost: 10, risk_groups: [RG_Atlanta_Houston],          attrs: {circuit: B}}}
-    - {source: Houston,      target: LosAngeles,   link_params: {capacity: 45000.0, cost: 14, risk_groups: [RG_Houston_LosAngeles],       attrs: {circuit: A}}}
-    - {source: Houston,      target: LosAngeles,   link_params: {capacity: 45000.0, cost: 14, risk_groups: [RG_Houston_LosAngeles],       attrs: {circuit: B}}}
-    - {source: LosAngeles,   target: PaloAlto,     link_params: {capacity: 45000.0, cost: 8,  risk_groups: [RG_LosAngeles_PaloAlto],      attrs: {circuit: A}}}
-    - {source: LosAngeles,   target: PaloAlto,     link_params: {capacity: 45000.0, cost: 8,  risk_groups: [RG_LosAngeles_PaloAlto],      attrs: {circuit: B}}}
+    - {
+        source: NewYork,
+        target: WashingtonDC,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 4,
+            risk_groups: [RG_NewYork_WashingtonDC],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: NewYork,
+        target: WashingtonDC,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 4,
+            risk_groups: [RG_NewYork_WashingtonDC],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: WashingtonDC,
+        target: Greensboro,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_WashingtonDC_Greensboro],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: WashingtonDC,
+        target: Greensboro,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_WashingtonDC_Greensboro],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Greensboro,
+        target: Atlanta,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 7,
+            risk_groups: [RG_Greensboro_Atlanta],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Greensboro,
+        target: Atlanta,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 7,
+            risk_groups: [RG_Greensboro_Atlanta],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Atlanta,
+        target: Houston,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 10,
+            risk_groups: [RG_Atlanta_Houston],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Atlanta,
+        target: Houston,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 10,
+            risk_groups: [RG_Atlanta_Houston],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Houston,
+        target: LosAngeles,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 14,
+            risk_groups: [RG_Houston_LosAngeles],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Houston,
+        target: LosAngeles,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 14,
+            risk_groups: [RG_Houston_LosAngeles],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: LosAngeles,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 8,
+            risk_groups: [RG_LosAngeles_PaloAlto],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: LosAngeles,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 8,
+            risk_groups: [RG_LosAngeles_PaloAlto],
+            attrs: { circuit: B },
+          },
+      }
 
     # Pacific NW & Rockies
-    - {source: Seattle,      target: PaloAlto,     link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_PaloAlto_Seattle],         attrs: {circuit: A}}}
-    - {source: Seattle,      target: PaloAlto,     link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_PaloAlto_Seattle],         attrs: {circuit: B}}}
-    - {source: Seattle,      target: SaltLakeCity, link_params: {capacity: 45000.0, cost: 10, risk_groups: [RG_Seattle_SaltLakeCity],     attrs: {circuit: A}}}
-    - {source: Seattle,      target: SaltLakeCity, link_params: {capacity: 45000.0, cost: 10, risk_groups: [RG_Seattle_SaltLakeCity],     attrs: {circuit: B}}}
-    - {source: SaltLakeCity, target: Denver,       link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_SaltLakeCity_Denver],      attrs: {circuit: A}}}
-    - {source: SaltLakeCity, target: Denver,       link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_SaltLakeCity_Denver],      attrs: {circuit: B}}}
-    - {source: Denver,       target: Lincoln,      link_params: {capacity: 45000.0, cost: 8,  risk_groups: [RG_Denver_Lincoln],           attrs: {circuit: A}}}
-    - {source: Denver,       target: Lincoln,      link_params: {capacity: 45000.0, cost: 8,  risk_groups: [RG_Denver_Lincoln],           attrs: {circuit: B}}}
-    - {source: Lincoln,      target: StLouis,      link_params: {capacity: 45000.0, cost: 6,  risk_groups: [RG_Lincoln_StLouis],          attrs: {circuit: A}}}
-    - {source: Lincoln,      target: StLouis,      link_params: {capacity: 45000.0, cost: 6,  risk_groups: [RG_Lincoln_StLouis],          attrs: {circuit: B}}}
-    - {source: StLouis,      target: Chicago,      link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_StLouis_Chicago],         attrs: {circuit: A}}}
-    - {source: StLouis,      target: Chicago,      link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_StLouis_Chicago],         attrs: {circuit: B}}}
+    - {
+        source: Seattle,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_PaloAlto_Seattle],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Seattle,
+        target: PaloAlto,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_PaloAlto_Seattle],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Seattle,
+        target: SaltLakeCity,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 10,
+            risk_groups: [RG_Seattle_SaltLakeCity],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Seattle,
+        target: SaltLakeCity,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 10,
+            risk_groups: [RG_Seattle_SaltLakeCity],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: SaltLakeCity,
+        target: Denver,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_SaltLakeCity_Denver],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: SaltLakeCity,
+        target: Denver,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_SaltLakeCity_Denver],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Denver,
+        target: Lincoln,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 8,
+            risk_groups: [RG_Denver_Lincoln],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Denver,
+        target: Lincoln,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 8,
+            risk_groups: [RG_Denver_Lincoln],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Lincoln,
+        target: StLouis,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 6,
+            risk_groups: [RG_Lincoln_StLouis],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Lincoln,
+        target: StLouis,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 6,
+            risk_groups: [RG_Lincoln_StLouis],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: StLouis,
+        target: Chicago,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_StLouis_Chicago],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: StLouis,
+        target: Chicago,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_StLouis_Chicago],
+            attrs: { circuit: B },
+          },
+      }
 
     # Midwest shortcuts
-    - {source: Cleveland,    target: StLouis,      link_params: {capacity: 45000.0, cost: 7,  risk_groups: [RG_Cleveland_StLouis],        attrs: {circuit: A}}}
-    - {source: Cleveland,    target: StLouis,      link_params: {capacity: 45000.0, cost: 7,  risk_groups: [RG_Cleveland_StLouis],        attrs: {circuit: B}}}
-    - {source: Denver,       target: SaltLakeCity, link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_Denver_SaltLakeCity],      attrs: {circuit: A}}}
-    - {source: Denver,       target: SaltLakeCity, link_params: {capacity: 45000.0, cost: 9,  risk_groups: [RG_Denver_SaltLakeCity],      attrs: {circuit: B}}}
+    - {
+        source: Cleveland,
+        target: StLouis,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 7,
+            risk_groups: [RG_Cleveland_StLouis],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Cleveland,
+        target: StLouis,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 7,
+            risk_groups: [RG_Cleveland_StLouis],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Denver,
+        target: SaltLakeCity,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_Denver_SaltLakeCity],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Denver,
+        target: SaltLakeCity,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 9,
+            risk_groups: [RG_Denver_SaltLakeCity],
+            attrs: { circuit: B },
+          },
+      }
 
     # Great-Lakes loop
-    - {source: Chicago,      target: AnnArbor,     link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Chicago_AnnArbor],        attrs: {circuit: A}}}
-    - {source: Chicago,      target: AnnArbor,     link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Chicago_AnnArbor],        attrs: {circuit: B}}}
-    - {source: AnnArbor,     target: Cleveland,    link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_AnnArbor_Cleveland],      attrs: {circuit: A}}}
-    - {source: AnnArbor,     target: Cleveland,    link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_AnnArbor_Cleveland],      attrs: {circuit: B}}}
+    - {
+        source: Chicago,
+        target: AnnArbor,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Chicago_AnnArbor],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Chicago,
+        target: AnnArbor,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Chicago_AnnArbor],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: AnnArbor,
+        target: Cleveland,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_AnnArbor_Cleveland],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: AnnArbor,
+        target: Cleveland,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_AnnArbor_Cleveland],
+            attrs: { circuit: B },
+          },
+      }
 
     # Hartford hub
-    - {source: Hartford,     target: NewYork,      link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Hartford_NewYork],        attrs: {circuit: A}}}
-    - {source: Hartford,     target: NewYork,      link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Hartford_NewYork],        attrs: {circuit: B}}}
-    - {source: Hartford,     target: WashingtonDC, link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Hartford_WashingtonDC],   attrs: {circuit: A}}}
-    - {source: Hartford,     target: WashingtonDC, link_params: {capacity: 45000.0, cost: 5,  risk_groups: [RG_Hartford_WashingtonDC],   attrs: {circuit: B}}}
+    - {
+        source: Hartford,
+        target: NewYork,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Hartford_NewYork],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Hartford,
+        target: NewYork,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Hartford_NewYork],
+            attrs: { circuit: B },
+          },
+      }
+    - {
+        source: Hartford,
+        target: WashingtonDC,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Hartford_WashingtonDC],
+            attrs: { circuit: A },
+          },
+      }
+    - {
+        source: Hartford,
+        target: WashingtonDC,
+        link_params:
+          {
+            capacity: 45000.0,
+            cost: 5,
+            risk_groups: [RG_Hartford_WashingtonDC],
+            attrs: { circuit: B },
+          },
+      }
 
     # Northeast spur - single circuits (no SRLG needed)
-    - {source: Princeton,       target: Ithaca,          link_params: {capacity: 45000.0, cost: 5, attrs: {circuit: A}}}
-    - {source: Princeton,       target: WashingtonDC,    link_params: {capacity: 45000.0, cost: 4, attrs: {circuit: A}}}
-    - {source: CollegePark,     target: WashingtonDC,    link_params: {capacity: 45000.0, cost: 3, attrs: {circuit: A}}}
-    - {source: CollegePark,     target: NewYork,         link_params: {capacity: 45000.0, cost: 6, attrs: {circuit: A}}}
-    - {source: Cambridge,       target: NewYork,         link_params: {capacity: 45000.0, cost: 6, attrs: {circuit: A}}}
+    - {
+        source: Princeton,
+        target: Ithaca,
+        link_params: { capacity: 45000.0, cost: 5, attrs: { circuit: A } },
+      }
+    - {
+        source: Princeton,
+        target: WashingtonDC,
+        link_params: { capacity: 45000.0, cost: 4, attrs: { circuit: A } },
+      }
+    - {
+        source: CollegePark,
+        target: WashingtonDC,
+        link_params: { capacity: 45000.0, cost: 3, attrs: { circuit: A } },
+      }
+    - {
+        source: CollegePark,
+        target: NewYork,
+        link_params: { capacity: 45000.0, cost: 6, attrs: { circuit: A } },
+      }
+    - {
+        source: Cambridge,
+        target: NewYork,
+        link_params: { capacity: 45000.0, cost: 6, attrs: { circuit: A } },
+      }
 
     # ENSS & "additional site" spurs - single circuits
-    - {source: Argonne,         target: Chicago,         link_params: {capacity: 45000.0, cost: 4, attrs: {circuit: A}}}
-    - {source: SanDiego,        target: LosAngeles,      link_params: {capacity: 45000.0, cost: 6, attrs: {circuit: A}}}
-    - {source: Boulder,         target: Denver,          link_params: {capacity: 45000.0, cost: 4, attrs: {circuit: A}}}
-    - {source: Pittsburgh,      target: Cleveland,       link_params: {capacity: 45000.0, cost: 4, attrs: {circuit: A}}}
-    - {source: UrbanaChampaign, target: Chicago,         link_params: {capacity: 45000.0, cost: 4, attrs: {circuit: A}}}
-    - {source: MoffettField,    target: PaloAlto,        link_params: {capacity: 45000.0, cost: 6, attrs: {circuit: A}}}
+    - {
+        source: Argonne,
+        target: Chicago,
+        link_params: { capacity: 45000.0, cost: 4, attrs: { circuit: A } },
+      }
+    - {
+        source: SanDiego,
+        target: LosAngeles,
+        link_params: { capacity: 45000.0, cost: 6, attrs: { circuit: A } },
+      }
+    - {
+        source: Boulder,
+        target: Denver,
+        link_params: { capacity: 45000.0, cost: 4, attrs: { circuit: A } },
+      }
+    - {
+        source: Pittsburgh,
+        target: Cleveland,
+        link_params: { capacity: 45000.0, cost: 4, attrs: { circuit: A } },
+      }
+    - {
+        source: UrbanaChampaign,
+        target: Chicago,
+        link_params: { capacity: 45000.0, cost: 4, attrs: { circuit: A } },
+      }
+    - {
+        source: MoffettField,
+        target: PaloAlto,
+        link_params: { capacity: 45000.0, cost: 6, attrs: { circuit: A } },
+      }
 
 ###############################################################################
 # Shared-risk groups - one per span that carried parallel A- and B-circuits
 ###############################################################################
 risk_groups:
-  - {name: RG_AnnArbor_Cleveland,       attrs: {description: "Great-Lakes loop DS-3 pair"}}
-  - {name: RG_Atlanta_Houston,          attrs: {description: "Southern arc DS-3 pair"}}
-  - {name: RG_Cleveland_Chicago,        attrs: {description: "Northern arc DS-3 pair"}}
-  - {name: RG_Cleveland_NewYork,        attrs: {description: "Northern arc DS-3 pair"}}
-  - {name: RG_Cleveland_StLouis,        attrs: {description: "Mid-west shortcut DS-3 pair"}}
-  - {name: RG_Chicago_AnnArbor,         attrs: {description: "Great-Lakes loop DS-3 pair"}}
-  - {name: RG_Chicago_PaloAlto,         attrs: {description: "Trans-continental northern DS-3 pair"}}
-  - {name: RG_Denver_Lincoln,           attrs: {description: "Rockies DS-3 pair"}}
-  - {name: RG_Denver_SaltLakeCity,      attrs: {description: "Rockies DS-3 pair"}}
-  - {name: RG_Greensboro_Atlanta,       attrs: {description: "Southern arc DS-3 pair"}}
-  - {name: RG_Hartford_NewYork,         attrs: {description: "Hartford hub DS-3 pair"}}
-  - {name: RG_Hartford_WashingtonDC,    attrs: {description: "Hartford hub DS-3 pair"}}
-  - {name: RG_Houston_LosAngeles,       attrs: {description: "Southern arc DS-3 pair"}}
-  - {name: RG_Lincoln_StLouis,          attrs: {description: "Rockies DS-3 pair"}}
-  - {name: RG_LosAngeles_PaloAlto,      attrs: {description: "California DS-3 pair"}}
-  - {name: RG_NewYork_WashingtonDC,     attrs: {description: "Southern arc DS-3 pair"}}
-  - {name: RG_PaloAlto_Seattle,         attrs: {description: "Pacific-Northwest DS-3 pair"}}
-  - {name: RG_Seattle_SaltLakeCity,     attrs: {description: "Pacific-Northwest DS-3 pair"}}
-  - {name: RG_SaltLakeCity_Denver,      attrs: {description: "Rockies DS-3 pair"}}
-  - {name: RG_StLouis_Chicago,          attrs: {description: "Rockies DS-3 pair"}}
-  - {name: RG_WashingtonDC_Greensboro,  attrs: {description: "Southern arc DS-3 pair"}}
+  - {
+      name: RG_AnnArbor_Cleveland,
+      attrs: { description: "Great-Lakes loop DS-3 pair" },
+    }
+  - {
+      name: RG_Atlanta_Houston,
+      attrs: { description: "Southern arc DS-3 pair" },
+    }
+  - {
+      name: RG_Cleveland_Chicago,
+      attrs: { description: "Northern arc DS-3 pair" },
+    }
+  - {
+      name: RG_Cleveland_NewYork,
+      attrs: { description: "Northern arc DS-3 pair" },
+    }
+  - {
+      name: RG_Cleveland_StLouis,
+      attrs: { description: "Mid-west shortcut DS-3 pair" },
+    }
+  - {
+      name: RG_Chicago_AnnArbor,
+      attrs: { description: "Great-Lakes loop DS-3 pair" },
+    }
+  - {
+      name: RG_Chicago_PaloAlto,
+      attrs: { description: "Trans-continental northern DS-3 pair" },
+    }
+  - { name: RG_Denver_Lincoln, attrs: { description: "Rockies DS-3 pair" } }
+  - {
+      name: RG_Denver_SaltLakeCity,
+      attrs: { description: "Rockies DS-3 pair" },
+    }
+  - {
+      name: RG_Greensboro_Atlanta,
+      attrs: { description: "Southern arc DS-3 pair" },
+    }
+  - {
+      name: RG_Hartford_NewYork,
+      attrs: { description: "Hartford hub DS-3 pair" },
+    }
+  - {
+      name: RG_Hartford_WashingtonDC,
+      attrs: { description: "Hartford hub DS-3 pair" },
+    }
+  - {
+      name: RG_Houston_LosAngeles,
+      attrs: { description: "Southern arc DS-3 pair" },
+    }
+  - { name: RG_Lincoln_StLouis, attrs: { description: "Rockies DS-3 pair" } }
+  - {
+      name: RG_LosAngeles_PaloAlto,
+      attrs: { description: "California DS-3 pair" },
+    }
+  - {
+      name: RG_NewYork_WashingtonDC,
+      attrs: { description: "Southern arc DS-3 pair" },
+    }
+  - {
+      name: RG_PaloAlto_Seattle,
+      attrs: { description: "Pacific-Northwest DS-3 pair" },
+    }
+  - {
+      name: RG_Seattle_SaltLakeCity,
+      attrs: { description: "Pacific-Northwest DS-3 pair" },
+    }
+  - {
+      name: RG_SaltLakeCity_Denver,
+      attrs: { description: "Rockies DS-3 pair" },
+    }
+  - { name: RG_StLouis_Chicago, attrs: { description: "Rockies DS-3 pair" } }
+  - {
+      name: RG_WashingtonDC_Greensboro,
+      attrs: { description: "Southern arc DS-3 pair" },
+    }
 
 ###############################################################################
 # Failure policies
@@ -163,16 +681,16 @@ failure_policy_set:
     fail_risk_groups: false
     fail_risk_group_children: false
     modes:
-        - weight: 1.0
-          rules:
-            # link reliability - random independent failures
-            - entity_scope: link
-              rule_type: random
-              probability: 0.001      # 0.1 % chance a given circuit is down
-            # node reliability - random independent router failures
-            - entity_scope: node
-              rule_type: random
-              probability: 0.0005     # 0.05 % chance a given node is down
+      - weight: 1.0
+        rules:
+          # link reliability - random independent failures
+          - entity_scope: link
+            rule_type: random
+            probability: 0.001 # 0.1 % chance a given circuit is down
+          # node reliability - random independent router failures
+          - entity_scope: node
+            rule_type: random
+            probability: 0.0005 # 0.05 % chance a given node is down
 
   single_link_failure:
     attrs:
@@ -199,7 +717,6 @@ workflow:
     parallelism: 8
     shortest_path: false
     flow_placement: PROPORTIONAL
-    baseline: true
     seed: 42
     store_failure_patterns: true
     include_flow_details: true
@@ -215,7 +732,6 @@ workflow:
     parallelism: 8
     shortest_path: false
     flow_placement: PROPORTIONAL
-    baseline: true
     seed: 42
     store_failure_patterns: true
     include_flow_details: true

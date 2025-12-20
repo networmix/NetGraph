@@ -26,7 +26,7 @@ import hashlib
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Dict, Protocol, Set, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set, TypeVar
 
 from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
 from ngraph.logging import get_logger
@@ -92,46 +92,6 @@ def _create_cache_key(
             hashable_kwargs.append((key, f"{type(value).__name__}_{id(value)}"))
 
     return base_key + (tuple(hashable_kwargs),)
-
-
-def _shallow_copy_result(value: Any) -> Any:
-    """Create a shallow copy of a result object for deduplication expansion.
-
-    For FlowIterationResult-like objects, creates a new instance that shares
-    the expensive flows list and summary but has its own identity fields
-    (failure_id, failure_state) that can be set independently.
-
-    This avoids the overhead of deepcopy while preventing aliasing issues
-    when we later mutate failure_id and failure_state per iteration.
-
-    Args:
-        value: Result object to copy (typically FlowIterationResult).
-
-    Returns:
-        A shallow copy suitable for independent mutation of identity fields.
-    """
-    # Import here to avoid circular imports
-    from ngraph.results.flow import FlowIterationResult
-
-    if isinstance(value, FlowIterationResult):
-        # Create new instance sharing flows and summary (read-only after creation)
-        # but with fresh identity fields for per-iteration mutation
-        return FlowIterationResult(
-            failure_id=value.failure_id,
-            failure_state=value.failure_state,
-            flows=value.flows,  # Share reference - never mutated after creation
-            summary=value.summary,  # Share reference - never mutated after creation
-            data=dict(value.data) if value.data else {},  # Shallow copy of data dict
-        )
-
-    # For dict-like objects with known structure, shallow copy
-    if isinstance(value, dict):
-        return dict(value)
-
-    # Fallback: use copy.copy for shallow copy (faster than deepcopy)
-    from copy import copy
-
-    return copy(value)
 
 
 def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
@@ -317,6 +277,7 @@ class FailureManager:
         self,
         policy: "FailurePolicy | None" = None,
         seed_offset: int | None = None,
+        failure_trace: Optional[Dict[str, Any]] = None,
     ) -> tuple[set[str], set[str]]:
         """Compute set of nodes and links to exclude for a failure iteration.
 
@@ -327,6 +288,7 @@ class FailureManager:
         Args:
             policy: Failure policy to apply. If None, uses instance policy.
             seed_offset: Optional seed for deterministic failures.
+            failure_trace: Optional dict to populate with trace data from policy.
 
         Returns:
             Tuple of (excluded_nodes, excluded_links) containing entity IDs to exclude.
@@ -358,7 +320,11 @@ class FailureManager:
 
         # Apply failure policy with optional deterministic seed override
         failed_ids = policy.apply_failures(
-            node_map, link_map, self.network.risk_groups, seed=seed_offset
+            node_map,
+            link_map,
+            self.network.risk_groups,
+            seed=seed_offset,
+            failure_trace=failure_trace,
         )
 
         # Separate entity types for exclusion sets
@@ -390,7 +356,6 @@ class FailureManager:
         analysis_func: AnalysisFunction,
         iterations: int = 1,
         parallelism: int = 1,
-        baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
         **analysis_kwargs,
@@ -401,54 +366,44 @@ class FailureManager:
         parallel processing, worker caching, and failure policy
         application, while allowing flexibility in the analysis function.
 
+        Baseline is always run first as a separate reference iteration (no failures).
+        The ``iterations`` parameter specifies the number of failure iterations to run.
+
         Args:
             analysis_func: Function that takes (network, excluded_nodes, excluded_links, **kwargs)
                           and returns results. Must be serializable for parallel execution.
-            iterations: Number of Monte Carlo iterations to run.
+            iterations: Number of failure iterations to run (baseline is always run separately).
             parallelism: Number of parallel worker threads to use.
-            baseline: If True, first iteration runs without failures as baseline.
             seed: Optional seed for reproducible results across runs.
-            store_failure_patterns: If True, store detailed failure patterns in results.
+            store_failure_patterns: If True, populate failure_trace on each result.
             **analysis_kwargs: Additional arguments passed to analysis_func.
 
         Returns:
             Dictionary containing:
-            - 'results': List of results from each iteration
-            - 'failure_patterns': List of failure pattern details (if store_failure_patterns=True)
-            - 'metadata': Execution metadata (iterations, timing, etc.)
-
-        Raises:
-            ValueError: If iterations > 1 without a failure policy and baseline=False.
+            - 'baseline': FlowIterationResult for the baseline (no failures)
+            - 'results': List of unique FlowIterationResult objects (deduplicated patterns).
+              Each result has occurrence_count indicating how many iterations matched.
+            - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         policy = self.get_failure_policy()
 
-        # Validate iterations parameter based on failure policy (modes-only policies)
+        # Check if policy has effective rules
         has_effective_rules = bool(
             policy and any(len(m.rules) > 0 for m in policy.modes)
         )
-        if (not has_effective_rules) and iterations > 1 and not baseline:
-            raise ValueError(
-                f"iterations={iterations} has no effect without a failure policy. "
-                "Without failures, all iterations produce the same results. "
-                "Either set iterations=1, provide a failure_policy with rules, or set baseline=True."
-            )
 
-        if baseline and iterations < 2:
-            raise ValueError(
-                "baseline=True requires iterations >= 2 "
-                "(first iteration is baseline, remaining are with failures)"
-            )
+        # Without effective rules, only baseline makes sense (no failure iterations)
+        if not has_effective_rules:
+            iterations = 0
 
         # Auto-adjust parallelism based on function characteristics
         parallelism = _auto_adjust_parallelism(parallelism, analysis_func)
 
-        # Determine actual number of iterations to run
-        if not has_effective_rules:
-            mc_iters = 1  # No failures => single iteration
-        else:
-            mc_iters = iterations
-
-        logger.info(f"Running {mc_iters} Monte-Carlo iterations")
+        logger.info(
+            f"Running baseline + {iterations} failure iterations"
+            if iterations > 0
+            else "Running baseline only (no failure policy)"
+        )
 
         # Pre-build context for analysis functions
         # This amortizes expensive graph construction across all iterations
@@ -483,34 +438,39 @@ class FailureManager:
         func_name = getattr(analysis_func, "__name__", "analysis_function")
         logger.debug(
             f"Analysis parameters: function={func_name}, "
-            f"parallelism={parallelism}, baseline={baseline}, policy={self.policy_name}"
+            f"parallelism={parallelism}, policy={self.policy_name}"
         )
 
         # Pre-compute worker arguments for all iterations
         logger.debug("Pre-computing failure exclusions for all iterations")
         pre_compute_start = time.time()
 
+        # Baseline is always run first (no failures, separate from failure iterations)
+        baseline_arg = (
+            self.network,
+            set(),  # No excluded nodes
+            set(),  # No excluded links
+            analysis_func,
+            analysis_kwargs,
+            -1,  # Special index for baseline
+            True,  # is_baseline
+            func_name,
+        )
+
+        # Build failure iteration arguments (indexed 0..iterations-1)
         worker_args: list[tuple] = []
-        iteration_index_to_key: dict[int, tuple] = {}
         key_to_first_arg: dict[tuple, tuple] = {}
-        key_to_members: dict[tuple, list[int]] = {}
+        key_to_count: dict[tuple, int] = {}
+        key_to_trace: dict[tuple, dict[str, Any]] = {}
 
-        for i in range(mc_iters):
-            seed_offset = None
-            if seed is not None:
-                seed_offset = seed + i
+        for i in range(iterations):
+            seed_offset = seed + i if seed is not None else None
 
-            # First iteration is baseline if baseline=True (no failures)
-            is_baseline = baseline and i == 0
-
-            if is_baseline:
-                # For baseline iteration, use empty exclusion sets
-                excluded_nodes, excluded_links = set(), set()
-            else:
-                # Pre-compute exclusions for this iteration
-                excluded_nodes, excluded_links = self.compute_exclusions(
-                    policy, seed_offset
-                )
+            # Pre-compute exclusions for this failure iteration
+            trace = {} if store_failure_patterns else None
+            excluded_nodes, excluded_links = self.compute_exclusions(
+                policy, seed_offset, failure_trace=trace
+            )
 
             arg = (
                 self.network,
@@ -518,8 +478,8 @@ class FailureManager:
                 excluded_links,
                 analysis_func,
                 analysis_kwargs,
-                i,  # iteration_index
-                is_baseline,
+                i,  # iteration_index (0-based for failures)
+                False,  # is_baseline
                 func_name,
             )
             worker_args.append(arg)
@@ -528,135 +488,102 @@ class FailureManager:
             dedup_key = _create_cache_key(
                 excluded_nodes, excluded_links, func_name, analysis_kwargs
             )
-            iteration_index_to_key[i] = dedup_key
             if dedup_key not in key_to_first_arg:
                 key_to_first_arg[dedup_key] = arg
-            key_to_members.setdefault(dedup_key, []).append(i)
+                key_to_count[dedup_key] = 1
+                # Store trace for first occurrence
+                if trace is not None:
+                    key_to_trace[dedup_key] = trace
+            else:
+                key_to_count[dedup_key] += 1
 
         pre_compute_time = time.time() - pre_compute_start
         logger.debug(
-            f"Pre-computed {len(worker_args)} exclusion sets in {pre_compute_time:.2f}s"
+            f"Pre-computed {len(worker_args)} failure exclusion sets in {pre_compute_time:.2f}s"
         )
 
         # Prepare unique tasks (deduplicated by failure pattern + analysis params)
         unique_worker_args: list[tuple] = list(key_to_first_arg.values())
         num_unique_tasks: int = len(unique_worker_args)
-        logger.info(
-            f"Monte-Carlo deduplication: {num_unique_tasks} unique patterns from {mc_iters} iterations"
-        )
-
-        # Determine if we should run in parallel
-        use_parallel = parallelism > 1 and num_unique_tasks > 1
+        if iterations > 0:
+            logger.info(
+                f"Monte-Carlo deduplication: {num_unique_tasks} unique patterns from {iterations} failure iterations"
+            )
 
         start_time = time.time()
 
-        # Execute only unique tasks, then replicate results to original indices
-        if use_parallel:
-            unique_result_values, _ = self._run_parallel(
-                unique_worker_args, num_unique_tasks, False, parallelism
-            )
+        # Always run baseline first (separate from failure iterations)
+        baseline_result_raw = self._run_serial([baseline_arg])
+        baseline_result = baseline_result_raw[0] if baseline_result_raw else None
+
+        # Enrich baseline result with failure metadata
+        if baseline_result is not None and hasattr(baseline_result, "failure_id"):
+            baseline_result.failure_id = ""
+            baseline_result.failure_state = {"excluded_nodes": [], "excluded_links": []}
+            baseline_result.failure_trace = None  # No policy applied for baseline
+
+        # Execute failure iterations (deduplicated)
+        if iterations > 0:
+            use_parallel = parallelism > 1 and num_unique_tasks > 1
+            if use_parallel:
+                unique_result_values = self._run_parallel(
+                    unique_worker_args, num_unique_tasks, parallelism
+                )
+            else:
+                unique_result_values = self._run_serial(unique_worker_args)
+
+            # Map unique task results back to their dedup keys
+            key_to_result: dict[tuple, Any] = {}
+            for (dedup_key, _arg), value in zip(
+                key_to_first_arg.items(), unique_result_values, strict=False
+            ):
+                key_to_result[dedup_key] = value
         else:
-            unique_result_values, _ = self._run_serial(unique_worker_args, False)
-
-        # Map unique task results back to their groups preserving insertion order
-        key_to_result: dict[tuple, Any] = {}
-        for (dedup_key, _arg), value in zip(
-            key_to_first_arg.items(), unique_result_values, strict=False
-        ):
-            key_to_result[dedup_key] = value
-
-        # Build full results list in original order. Create shallow copies that share
-        # the expensive flows/summary data but have their own mutable identity fields.
-        # This avoids deepcopy overhead while preventing aliasing issues when we later
-        # set failure_id and failure_state per iteration.
-        results: list[Any] = [None] * mc_iters  # type: ignore[var-annotated]
-        for key, members in key_to_members.items():
-            if key not in key_to_result:
-                # Defensive: should not happen unless parallel map returned fewer tasks
-                continue
-            value = key_to_result[key]
-            for idx in members:
-                results[idx] = _shallow_copy_result(value)
-
-        # Reconstruct failure patterns per original iteration if requested
-        failure_patterns: list[dict[str, Any]] = []
-        if store_failure_patterns:
-            for key, members in key_to_members.items():
-                # Use exclusions from the representative arg
-                rep_arg = key_to_first_arg[key]
-                exc_nodes: set[str] = rep_arg[1]
-                exc_links: set[str] = rep_arg[2]
-                for idx in members:
-                    failure_patterns.append(
-                        {
-                            "iteration_index": idx,
-                            "is_baseline": bool(baseline and idx == 0),
-                            "excluded_nodes": list(exc_nodes),
-                            "excluded_links": list(exc_links),
-                        }
-                    )
+            key_to_result = {}
 
         elapsed_time = time.time() - start_time
 
-        # Precompute failure_id per unique pattern key (not including baseline override)
-        pattern_key_to_failure_id: dict[tuple, str] = {}
-        for key, rep_arg in key_to_first_arg.items():
+        # Enrich unique failure results with metadata and occurrence_count
+        results: list[Any] = []
+        for dedup_key, rep_arg in key_to_first_arg.items():
+            result = key_to_result.get(dedup_key)
+            if result is None:
+                continue
+
             exc_nodes: set[str] = rep_arg[1]
             exc_links: set[str] = rep_arg[2]
-            if not exc_nodes and not exc_links:
-                pattern_key_to_failure_id[key] = ""
-                continue
-            payload = ",".join(sorted(exc_nodes)) + "|" + ",".join(sorted(exc_links))
-            pattern_key_to_failure_id[key] = hashlib.blake2s(
-                payload.encode("utf-8"), digest_size=8
-            ).hexdigest()
 
-        # Optionally precompute failure_state per unique pattern when storing patterns
-        dedup_key_to_state: dict[tuple, dict[str, list[str]]] = {}
-        if store_failure_patterns:
-            for key, rep_arg in key_to_first_arg.items():
-                exc_nodes: set[str] = rep_arg[1]
-                exc_links: set[str] = rep_arg[2]
-                dedup_key_to_state[key] = {
+            # Compute failure_id (hash of exclusions, or "" for empty)
+            if not exc_nodes and not exc_links:
+                fid = ""
+            else:
+                payload = (
+                    ",".join(sorted(exc_nodes)) + "|" + ",".join(sorted(exc_links))
+                )
+                fid = hashlib.blake2s(
+                    payload.encode("utf-8"), digest_size=8
+                ).hexdigest()
+
+            # Enrich FlowIterationResult-like objects
+            if hasattr(result, "failure_id") and hasattr(result, "summary"):
+                result.failure_id = fid
+                result.failure_state = {
                     "excluded_nodes": list(exc_nodes),
                     "excluded_links": list(exc_links),
                 }
+                result.failure_trace = (
+                    key_to_trace.get(dedup_key) if store_failure_patterns else None
+                )
+                result.occurrence_count = key_to_count[dedup_key]
 
-        # Mutate dict-like results that expose to_dict to embed failure info
-        enriched: list[Any] = []
-        for i, iter_res in enumerate(results):
-            dedup_key = iteration_index_to_key[i]
-            is_baseline_iter = bool(baseline and i == 0)
-            # baseline takes precedence regardless of pattern content
-            fid = (
-                "baseline"
-                if is_baseline_iter
-                else pattern_key_to_failure_id.get(dedup_key, "")
-            )
-
-            # ngraph.results.flow.FlowIterationResult like object
-            if hasattr(iter_res, "failure_id") and hasattr(iter_res, "summary"):
-                iter_res.failure_id = fid
-                # Only populate failure_state when storing patterns; otherwise keep None
-                if store_failure_patterns:
-                    iter_res.failure_state = dedup_key_to_state.get(dedup_key)
-                else:
-                    iter_res.failure_state = None
-                enriched.append(iter_res)
-                continue
-
-            # Unknown type: keep as-is
-            enriched.append(iter_res)
-
-        results = enriched
+            results.append(result)
 
         return {
+            "baseline": baseline_result,
             "results": results,
-            "failure_patterns": failure_patterns if store_failure_patterns else [],
             "metadata": {
-                "iterations": mc_iters,
+                "iterations": iterations,
                 "parallelism": parallelism,
-                "baseline": baseline,
                 "analysis_function": func_name,
                 "policy_name": self.policy_name,
                 "execution_time": elapsed_time,
@@ -668,9 +595,8 @@ class FailureManager:
         self,
         worker_args: list[tuple],
         total_tasks: int,
-        store_failure_patterns: bool,
         parallelism: int,
-    ) -> tuple[list[Any], list[dict[str, Any]]]:
+    ) -> list[Any]:
         """Run analysis in parallel using shared network approach.
 
         Network is shared by reference across all threads (zero-copy), which is
@@ -681,11 +607,10 @@ class FailureManager:
         Args:
             worker_args: Pre-computed worker arguments for all iterations.
             total_tasks: Number of tasks to run.
-            store_failure_patterns: Whether to collect failure pattern details.
             parallelism: Number of parallel worker threads to use.
 
         Returns:
-            Tuple of (results_list, failure_patterns_list).
+            List of analysis results.
         """
         workers = min(parallelism, total_tasks)
         logger.info(
@@ -702,7 +627,6 @@ class FailureManager:
         start_time = time.time()
         completed_tasks = 0
         results = []
-        failure_patterns = []
 
         with ThreadPoolExecutor(
             max_workers=workers,
@@ -714,26 +638,13 @@ class FailureManager:
 
             for (
                 result,
-                iteration_index,
-                is_baseline,
-                excluded_nodes,
-                excluded_links,
+                _iteration_index,
+                _is_baseline,
+                _excluded_nodes,
+                _excluded_links,
             ) in pool.map(_generic_worker, worker_args, chunksize=chunksize):
                 completed_tasks += 1
-
-                # Collect results
                 results.append(result)
-
-                # Add failure pattern if requested
-                if store_failure_patterns:
-                    failure_patterns.append(
-                        {
-                            "iteration_index": iteration_index,
-                            "is_baseline": is_baseline,
-                            "excluded_nodes": list(excluded_nodes),
-                            "excluded_links": list(excluded_links),
-                        }
-                    )
 
                 # Progress logging (throttle for small N at INFO)
                 if total_tasks >= 20:
@@ -750,32 +661,24 @@ class FailureManager:
             f"Average time per iteration: {elapsed_time / total_tasks:.3f} seconds"
         )
 
-        # Note: Task deduplication was performed earlier across
-        # (exclusions + analysis parameters), so worker-level caches
-        # see only unique work items. Additional cache efficiency
-        # metrics here would not be meaningful and are intentionally omitted.
-
-        return results, failure_patterns
+        return results
 
     def _run_serial(
         self,
         worker_args: list[tuple],
-        store_failure_patterns: bool,
-    ) -> tuple[list[Any], list[dict[str, Any]]]:
+    ) -> list[Any]:
         """Run analysis serially for single process execution.
 
         Args:
             worker_args: Pre-computed worker arguments for all iterations.
-            store_failure_patterns: Whether to collect failure pattern details.
 
         Returns:
-            Tuple of (results_list, failure_patterns_list).
+            List of analysis results.
         """
         logger.info("Running serial analysis")
         start_time = time.time()
 
         results = []
-        failure_patterns = []
 
         # In serial mode, disable worker-level profiling in the current process
         # to avoid nesting profilers when the CLI has already enabled step-level
@@ -793,31 +696,19 @@ class FailureManager:
         for i, args in enumerate(worker_args):
             iter_start = time.time()
 
-            is_baseline = len(args) > 6 and args[6]  # is_baseline flag
-            baseline_msg = " (baseline)" if is_baseline else ""
+            is_baseline_arg = len(args) > 6 and args[6]  # is_baseline flag
+            baseline_msg = " (baseline)" if is_baseline_arg else ""
             logger.debug(f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}")
 
             (
                 result,
-                iteration_index,
-                is_baseline,
-                excluded_nodes,
-                excluded_links,
+                _iteration_index,
+                _is_baseline,
+                _excluded_nodes,
+                _excluded_links,
             ) = _generic_worker(args)
 
-            # Collect results
             results.append(result)
-
-            # Add failure pattern if requested
-            if store_failure_patterns:
-                failure_patterns.append(
-                    {
-                        "iteration_index": iteration_index,
-                        "is_baseline": is_baseline,
-                        "excluded_nodes": list(excluded_nodes),
-                        "excluded_links": list(excluded_links),
-                    }
-                )
 
             iter_time = time.time() - iter_start
             if len(worker_args) <= 10:
@@ -841,7 +732,7 @@ class FailureManager:
                 f"Average time per iteration: {elapsed_time / len(worker_args):.3f} seconds"
             )
 
-        return results, failure_patterns
+        return results
 
     def run_single_failure_scenario(
         self, analysis_func: AnalysisFunction, **kwargs
@@ -858,12 +749,16 @@ class FailureManager:
             **kwargs: Additional arguments passed to analysis_func.
 
         Returns:
-            Result from the analysis function.
+            Result from the analysis function. Returns the first failure result if
+            available, otherwise the baseline result.
         """
         result = self.run_monte_carlo_analysis(
             analysis_func=analysis_func, iterations=1, parallelism=1, **kwargs
         )
-        return result["results"][0]
+        # Return first failure result if available, otherwise baseline
+        if result["results"]:
+            return result["results"][0]
+        return result["baseline"]
 
     # Convenience methods for common analysis patterns
 
@@ -877,7 +772,6 @@ class FailureManager:
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
-        baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_summary: bool = False,
@@ -889,6 +783,8 @@ class FailureManager:
         source and sink node groups across Monte Carlo failure scenarios. Results include
         frequency-based capacity envelopes and optional failure pattern analysis.
 
+        Baseline (no failures) is always run first as a separate reference.
+
         Args:
             source: Source node selector (string path or selector dict).
             sink: Sink node selector (string path or selector dict).
@@ -899,16 +795,16 @@ class FailureManager:
             require_capacity: If True (default), path selection considers available
                 capacity. If False, path selection is cost-only (true IP/IGP semantics).
             flow_placement: Flow placement strategy.
-            baseline: Whether to include baseline (no failures) iteration.
             seed: Optional seed for reproducible results.
-            store_failure_patterns: Whether to store failure patterns in results.
+            store_failure_patterns: Whether to store failure trace on results.
             include_flow_summary: Whether to collect detailed flow summary data.
 
         Returns:
             Dictionary with keys:
-            - 'results': list[FlowIterationResult] for each iteration
-            - 'failure_patterns': list of failure pattern dicts (if store_failure_patterns=True)
-            - 'metadata': execution metadata (iterations, timing, etc.)
+            - 'baseline': FlowIterationResult for baseline (no failures)
+            - 'results': List of unique FlowIterationResult objects (deduplicated patterns).
+              Each result has occurrence_count indicating how many iterations matched.
+            - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.exec.analysis.flow import max_flow_analysis
 
@@ -921,7 +817,6 @@ class FailureManager:
             analysis_func=max_flow_analysis,
             iterations=iterations,
             parallelism=parallelism,
-            baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             source=source,
@@ -933,7 +828,6 @@ class FailureManager:
             include_flow_details=include_flow_summary,
             **kwargs,
         )
-        # New contract: return the raw dict with list[FlowIterationResult]
         return raw_results
 
     def _process_sensitivity_results(
@@ -942,7 +836,9 @@ class FailureManager:
         """Process sensitivity results to aggregate component impact scores.
 
         Args:
-            results: List of FlowIterationResult from each iteration.
+            results: List of unique FlowIterationResult objects (deduplicated).
+                Each result has occurrence_count indicating how many iterations
+                produced that pattern.
 
         Returns:
             Dictionary mapping flow keys to component impact aggregations.
@@ -951,31 +847,38 @@ class FailureManager:
 
         from ngraph.results.flow import FlowIterationResult
 
-        # Aggregate component scores across all iterations
+        # Aggregate component scores weighted by occurrence_count
+        # Store (weighted_sum, total_count, min, max) per component
         flow_aggregates: dict[str, dict[str, list[float]]] = defaultdict(
-            lambda: defaultdict(list)
+            lambda: defaultdict(lambda: [0.0, 0, float("inf"), float("-inf")])
         )
 
         for result in results:
             if not isinstance(result, FlowIterationResult):
                 continue
+            count = getattr(result, "occurrence_count", 1)
             for entry in result.flows:
                 flow_key = f"{entry.source}->{entry.destination}"
                 sensitivity = entry.data.get("sensitivity", {})
                 for component_key, score in sensitivity.items():
-                    flow_aggregates[flow_key][component_key].append(score)
+                    agg = flow_aggregates[flow_key][component_key]
+                    agg[0] += score * count  # weighted sum
+                    agg[1] += count  # total count
+                    agg[2] = min(agg[2], score)  # min
+                    agg[3] = max(agg[3], score)  # max
 
         # Calculate statistics for each component
         processed_scores: dict[str, dict[str, dict[str, float]]] = {}
         for flow_key, components in flow_aggregates.items():
             flow_stats: dict[str, dict[str, float]] = {}
-            for component_key, scores in components.items():
-                if scores:
+            for component_key, agg in components.items():
+                weighted_sum, total_count, min_val, max_val = agg
+                if total_count > 0:
                     flow_stats[component_key] = {
-                        "mean": sum(scores) / len(scores),
-                        "max": max(scores),
-                        "min": min(scores),
-                        "count": float(len(scores)),
+                        "mean": weighted_sum / total_count,
+                        "max": max_val,
+                        "min": min_val,
+                        "count": float(total_count),
                     }
             processed_scores[flow_key] = flow_stats
 
@@ -991,7 +894,6 @@ class FailureManager:
         iterations: int = 100,
         parallelism: int = 1,
         placement_rounds: int | str = "auto",
-        baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
@@ -1003,20 +905,22 @@ class FailureManager:
         Attempts to place traffic demands on the network across
         Monte Carlo failure scenarios and measures success rates.
 
+        Baseline (no failures) is always run first as a separate reference.
+
         Args:
             demands_config: List of demand configs or TrafficMatrixSet object.
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
             placement_rounds: Optimization rounds for demand placement.
-            baseline: Whether to include baseline (no failures) iteration.
             seed: Optional seed for reproducible results.
-            store_failure_patterns: Whether to store failure patterns in results.
+            store_failure_patterns: Whether to store failure trace on results.
 
         Returns:
             Dictionary with keys:
-            - 'results': list[FlowIterationResult] for each iteration
-            - 'failure_patterns': list of failure pattern dicts (if store_failure_patterns=True)
-            - 'metadata': execution metadata (iterations, timing, etc.)
+            - 'baseline': FlowIterationResult for baseline (no failures)
+            - 'results': List of unique FlowIterationResult objects (deduplicated patterns).
+              Each result has occurrence_count indicating how many iterations matched.
+            - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.exec.analysis.flow import demand_placement_analysis
 
@@ -1056,7 +960,6 @@ class FailureManager:
             analysis_func=demand_placement_analysis,
             iterations=iterations,
             parallelism=parallelism,
-            baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             demands_config=demands_config,
@@ -1065,7 +968,6 @@ class FailureManager:
             include_used_edges=include_used_edges,
             **kwargs,
         )
-        # New contract: return the raw dict with list[FlowIterationResult]
         return raw_results
 
     def run_sensitivity_monte_carlo(
@@ -1077,7 +979,6 @@ class FailureManager:
         parallelism: int = 1,
         shortest_path: bool = False,
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
-        baseline: bool = False,
         seed: int | None = None,
         store_failure_patterns: bool = False,
         **kwargs,
@@ -1088,6 +989,8 @@ class FailureManager:
         capacity across Monte Carlo failure scenarios. Returns aggregated sensitivity
         scores showing which components have the greatest effect on network capacity.
 
+        Baseline (no failures) is always run first as a separate reference.
+
         Args:
             source: Source node selector (string path or selector dict).
             sink: Sink node selector (string path or selector dict).
@@ -1096,16 +999,16 @@ class FailureManager:
             parallelism: Number of parallel workers (auto-adjusted if needed).
             shortest_path: Whether to use shortest paths only.
             flow_placement: Flow placement strategy.
-            baseline: Whether to include baseline (no failures) iteration.
             seed: Optional seed for reproducible results.
-            store_failure_patterns: Whether to store failure patterns in results.
+            store_failure_patterns: Whether to store failure trace on results.
 
         Returns:
             Dictionary with keys:
-            - 'results': list of per-iteration sensitivity dicts mapping flow keys to component scores
+            - 'baseline': Baseline result (no failures)
+            - 'results': List of unique per-iteration sensitivity dicts (deduplicated patterns).
+              Each result has occurrence_count indicating how many iterations matched.
             - 'component_scores': aggregated statistics (mean, max, min, count) per component per flow
-            - 'failure_patterns': list of failure pattern dicts (if store_failure_patterns=True)
-            - 'metadata': execution metadata (iterations, timing, source/sink patterns, etc.)
+            - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.exec.analysis.flow import sensitivity_analysis
 
@@ -1117,7 +1020,6 @@ class FailureManager:
             analysis_func=sensitivity_analysis,
             iterations=iterations,
             parallelism=parallelism,
-            baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             source=source,

@@ -73,7 +73,7 @@ def test_execute_records_metadata_including_seed_fields() -> None:
     assert md.step_type == "Dummy"
     assert md.step_name == "d1"
     assert isinstance(md.execution_order, int) and md.execution_order >= 0
-    # New fields
+    # Seed fields
     assert hasattr(md, "scenario_seed") and md.scenario_seed == 1010
     assert hasattr(md, "step_seed")
     assert hasattr(md, "seed_source")

@@ -117,7 +117,6 @@ workflow:
     shortest_path: true
     flow_placement: PROPORTIONAL
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Reverse direction analysis - equivalent to capacity_probe with probe_reverse
@@ -129,7 +128,6 @@ workflow:
     shortest_path: true
     flow_placement: PROPORTIONAL
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Forward direction with EQUAL_BALANCED - equivalent to capacity_probe2
@@ -141,7 +139,6 @@ workflow:
     shortest_path: true
     flow_placement: EQUAL_BALANCED
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Reverse direction with EQUAL_BALANCED - equivalent to capacity_probe2 with probe_reverse
@@ -153,5 +150,4 @@ workflow:
     shortest_path: true
     flow_placement: EQUAL_BALANCED
     iterations: 1
-    baseline: false
     failure_policy: null

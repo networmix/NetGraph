@@ -126,12 +126,20 @@ class TestFailureManagerCore:
 
         assert "results" in results
         assert "metadata" in results
-        assert len(results["results"]) == 5
+
+        # Results contain K unique patterns (not N iterations)
+        unique_results = results["results"]
+        unique_patterns = results["metadata"]["unique_patterns"]
+        assert len(unique_results) == unique_patterns
+
+        # Total occurrence_count should equal iterations
+        total_occurrences = sum(r.occurrence_count for r in unique_results)
+        assert total_occurrences == 5
 
         # Each item is a FlowIterationResult; compute placed capacity
         capacities = [
             float(iter_res.summary.total_placed)
-            for iter_res in results["results"]
+            for iter_res in unique_results
             if isinstance(iter_res, FlowIterationResult)
         ]
         # With the network topology (A->B->C and A->C), max flow is 15.0 without failures
@@ -139,7 +147,6 @@ class TestFailureManagerCore:
         # With single link failures (policy always fails 1 link):
         # - Exclude A->B or B->C: capacity is 5.0 (only direct path)
         # - Exclude A->C: capacity is 10.0 (only via B)
-        # The test runs 5 iterations with failures, so we see a mix of 5.0 and 10.0
         assert max(capacities) == 10.0  # Best case with 1 failure
         assert min(capacities) == 5.0  # Worst case with 1 failure
         assert 5.0 in capacities  # Should see some 5.0 results
@@ -160,8 +167,14 @@ class TestFailureManagerCore:
             mode="combine",
         )
 
-        assert len(results["results"]) == 4
+        # Results contain K unique patterns
         assert "metadata" in results
+        unique_patterns = results["metadata"]["unique_patterns"]
+        assert len(results["results"]) == unique_patterns
+
+        # Total occurrence_count should equal iterations
+        total_occurrences = sum(r.occurrence_count for r in results["results"])
+        assert total_occurrences == 4
 
     def test_baseline_iteration_handling(self, simple_network, failure_policy_set):
         """Test baseline iteration (no failures) behavior."""
@@ -171,23 +184,27 @@ class TestFailureManagerCore:
             analysis_func=max_flow_analysis,
             iterations=3,
             parallelism=1,
-            baseline=True,  # Include baseline
             seed=42,
             source="A",
             sink="C",
             mode="combine",
         )
 
-        # Should have results from baseline + regular iterations
-        assert len(results["results"]) == 3
+        # Baseline is always run first and stored separately
+        assert "baseline" in results
+        baseline = results["baseline"]
+        assert baseline is not None
+        assert baseline.failure_id == ""  # Empty string for baseline
+
+        # Results contain K unique patterns (total occurrence_count == 3)
         assert "metadata" in results
+        unique_patterns = results["metadata"]["unique_patterns"]
+        assert len(results["results"]) == unique_patterns
+        total_occurrences = sum(r.occurrence_count for r in results["results"])
+        assert total_occurrences == 3
 
-        # Baseline should be included (enabled with baseline=True)
-        metadata = results["metadata"]
-        assert metadata["baseline"]
-
-    def test_failure_pattern_storage(self, simple_network, failure_policy_set):
-        """Test storage of failure patterns in results."""
+    def test_failure_trace_fields_present(self, simple_network, failure_policy_set):
+        """Test that trace fields are present on results when store_failure_patterns=True."""
         manager = FailureManager(simple_network, failure_policy_set, "single_failures")
 
         results = manager.run_monte_carlo_analysis(
@@ -201,11 +218,109 @@ class TestFailureManagerCore:
             mode="combine",
         )
 
-        assert "failure_patterns" in results
-        failure_patterns = results["failure_patterns"]
+        # All unique failure results should have trace fields
+        for result in results["results"]:
+            assert isinstance(result, FlowIterationResult)
+            assert result.failure_id != ""  # All failures have non-empty ID
+            assert result.failure_state is not None
+            assert "excluded_nodes" in result.failure_state
+            assert "excluded_links" in result.failure_state
+            assert result.occurrence_count >= 1
 
-        # Should have recorded failure patterns (may be empty list in this simple case)
-        assert isinstance(failure_patterns, list)
+            # Trace fields should be present when store_failure_patterns=True
+            trace = result.failure_trace
+            assert trace is not None, "Trace should be present"
+            assert "mode_index" in trace, "Trace field 'mode_index' missing"
+            assert "mode_attrs" in trace, "Trace field 'mode_attrs' missing"
+            assert "selections" in trace, "Trace field 'selections' missing"
+            assert "expansion" in trace, "Trace field 'expansion' missing"
+
+            # Verify selections structure
+            assert isinstance(trace["selections"], list)
+            if trace["selections"]:
+                sel = trace["selections"][0]
+                assert "rule_index" in sel
+                assert "entity_scope" in sel
+                assert "rule_type" in sel
+                assert "matched_count" in sel
+                assert "selected_ids" in sel
+
+            # Verify expansion structure
+            assert "nodes" in trace["expansion"]
+            assert "links" in trace["expansion"]
+            assert "risk_groups" in trace["expansion"]
+
+    def test_failure_trace_not_present_when_disabled(
+        self, simple_network, failure_policy_set
+    ):
+        """Test that trace fields are NOT present when store_failure_patterns=False."""
+        manager = FailureManager(simple_network, failure_policy_set, "single_failures")
+
+        results = manager.run_monte_carlo_analysis(
+            analysis_func=max_flow_analysis,
+            iterations=5,
+            parallelism=1,
+            store_failure_patterns=False,  # Disabled
+            seed=42,
+            source="A",
+            sink="C",
+            mode="combine",
+        )
+
+        # Results should have failure_state but no trace
+        for result in results["results"]:
+            assert isinstance(result, FlowIterationResult)
+            assert result.failure_trace is None  # No trace when disabled
+
+    def test_baseline_has_no_trace_fields(self, simple_network, failure_policy_set):
+        """Test that baseline result doesn't have trace fields."""
+        manager = FailureManager(simple_network, failure_policy_set, "single_failures")
+
+        results = manager.run_monte_carlo_analysis(
+            analysis_func=max_flow_analysis,
+            iterations=5,
+            parallelism=1,
+            store_failure_patterns=True,
+            seed=42,
+            source="A",
+            sink="C",
+            mode="combine",
+        )
+
+        # Baseline is a separate result with no trace
+        baseline = results["baseline"]
+        assert baseline is not None
+        assert baseline.failure_trace is None  # No trace for baseline
+        assert baseline.failure_id == ""
+
+    def test_failure_trace_deterministic(self, simple_network, failure_policy_set):
+        """Test that trace is deterministic with fixed seed."""
+        manager = FailureManager(simple_network, failure_policy_set, "single_failures")
+
+        def run():
+            return manager.run_monte_carlo_analysis(
+                analysis_func=max_flow_analysis,
+                iterations=5,
+                parallelism=1,
+                store_failure_patterns=True,
+                seed=42,
+                source="A",
+                sink="C",
+                mode="combine",
+            )
+
+        result1 = run()
+        result2 = run()
+
+        # Results should have same failure patterns
+        assert len(result1["results"]) == len(result2["results"])
+        for r1, r2 in zip(result1["results"], result2["results"], strict=True):
+            assert r1.failure_id == r2.failure_id
+            assert r1.failure_state == r2.failure_state
+            assert r1.occurrence_count == r2.occurrence_count
+            if r1.failure_trace:
+                assert r1.failure_trace["mode_index"] == r2.failure_trace["mode_index"]
+                assert r1.failure_trace["selections"] == r2.failure_trace["selections"]
 
 
 class TestFailureManagerIntegration:
@@ -262,14 +377,18 @@ class TestFailureManagerIntegration:
         assert "results" in results
         assert "metadata" in results
 
-        # Should have results for each iteration
-        assert len(results["results"]) == 10
+        # Results contain K unique patterns (occurrence_count sum == 10)
+        unique_patterns = results["metadata"]["unique_patterns"]
+        assert len(results["results"]) == unique_patterns
+        total_occurrences = sum(r.occurrence_count for r in results["results"])
+        assert total_occurrences == 10
 
         # Each result is a FlowIterationResult; ensure flows present
         for iter_res in results["results"]:
             assert isinstance(iter_res, FlowIterationResult)
             assert hasattr(iter_res, "summary")
             assert isinstance(iter_res.flows, list)
+            assert iter_res.occurrence_count >= 1
 
     def test_error_handling_in_analysis(self):
         """Test error handling during analysis execution."""

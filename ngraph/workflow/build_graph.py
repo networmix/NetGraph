@@ -29,10 +29,13 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
+from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -59,6 +62,7 @@ class BuildGraph(WorkflowStep):
         Returns:
             None
         """
+        logger.info("Starting BuildGraph: name=%s", self.name)
         network = scenario.network
 
         # Build NetworkX MultiDiGraph from Network
@@ -116,6 +120,13 @@ class BuildGraph(WorkflowStep):
                 "graph": graph_dict,
                 "context": {"add_reverse": self.add_reverse},
             },
+        )
+
+        logger.info(
+            "BuildGraph completed: name=%s nodes=%d edges=%d",
+            self.name,
+            len(graph.nodes),
+            len(graph.edges),
         )
 
 

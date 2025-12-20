@@ -1,8 +1,7 @@
 """High-value tests for `FailureManager` public behavior and APIs.
 
-Focus on functional outcomes and API semantics using the new FailureManager
-that works with NetGraph-Core. Tests core functionality, policy management,
-exclusion computation, and convenience methods.
+Focus on functional outcomes and API semantics. Tests core functionality,
+policy management, exclusion computation, and convenience methods.
 """
 
 from typing import Any
@@ -233,10 +232,10 @@ class TestFailureManagerTopLevelMatching:
 class TestFailureManagerMonteCarloValidation:
     """Test validation logic for Monte Carlo parameters."""
 
-    def test_validation_iterations_without_policy(
+    def test_iterations_without_policy_runs_baseline_only(
         self, simple_network: Network, failure_policy_set: FailurePolicySet
     ) -> None:
-        """Test that iterations > 1 without policy raises error."""
+        """Test that iterations > 0 without policy runs baseline only."""
         fm = FailureManager(
             network=simple_network,
             failure_policy_set=failure_policy_set,
@@ -247,26 +246,28 @@ class TestFailureManagerMonteCarloValidation:
         def mock_analysis_func(*args: Any, **kwargs: Any) -> dict[str, Any]:
             return {"result": "mock"}
 
-        with pytest.raises(
-            ValueError, match="iterations=2 has no effect without a failure policy"
-        ):
-            fm.run_monte_carlo_analysis(
-                analysis_func=mock_analysis_func, iterations=2, baseline=False
-            )
+        # Without policy, iterations are ignored and only baseline runs
+        result = fm.run_monte_carlo_analysis(
+            analysis_func=mock_analysis_func, iterations=10
+        )
+        # Baseline is always run
+        assert "baseline" in result
+        # No failure iterations without a policy
+        assert len(result["results"]) == 0
 
-    def test_validation_baseline_requires_multiple_iterations(
-        self, failure_manager: FailureManager
-    ) -> None:
-        """Test that baseline=True requires iterations >= 2."""
+    def test_baseline_always_present(self, failure_manager: FailureManager) -> None:
+        """Test that baseline is always present in results."""
 
         # Mock analysis function
         def mock_analysis_func(*args: Any, **kwargs: Any) -> dict[str, Any]:
             return {"result": "mock"}
 
-        with pytest.raises(ValueError, match="baseline=True requires iterations >= 2"):
-            failure_manager.run_monte_carlo_analysis(
-                analysis_func=mock_analysis_func, iterations=1, baseline=True
-            )
+        result = failure_manager.run_monte_carlo_analysis(
+            analysis_func=mock_analysis_func, iterations=3
+        )
+        # Baseline should always be present as separate field
+        assert "baseline" in result
+        assert result["baseline"] is not None
 
 
 class TestFailureManagerConvenienceMethods:
@@ -279,7 +280,6 @@ class TestFailureManagerConvenienceMethods:
         """Test run_max_flow_monte_carlo delegates to run_monte_carlo_analysis."""
         mock_mc_analysis.return_value = {
             "results": [],
-            "failure_patterns": [],
             "metadata": {"iterations": 2},
         }
 
@@ -301,7 +301,6 @@ class TestFailureManagerConvenienceMethods:
         """Test run_demand_placement_monte_carlo delegates correctly."""
         mock_mc_analysis.return_value = {
             "results": [],
-            "failure_patterns": [],
             "metadata": {"iterations": 1},
         }
 
@@ -394,3 +393,101 @@ class TestFailureManagerErrorHandling:
                 failure_manager.run_monte_carlo_analysis(
                     analysis_func=mock_analysis_func, iterations=2, parallelism=2
                 )
+
+
+class TestSensitivityResultsProcessing:
+    """Test sensitivity results processing with occurrence_count weighting."""
+
+    def test_process_sensitivity_results_weights_by_occurrence_count(
+        self, failure_manager: FailureManager
+    ) -> None:
+        """Verify weighted statistics calculation uses occurrence_count correctly."""
+        from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
+
+        # Pattern A: score=0.8, occurred 5 times
+        # Pattern B: score=0.2, occurred 1 time
+        # Correct weighted mean = (0.8*5 + 0.2*1) / 6 = 4.2/6 = 0.7
+        # Incorrect unweighted mean = (0.8 + 0.2) / 2 = 0.5
+
+        summary = FlowSummary(
+            total_demand=100.0,
+            total_placed=100.0,
+            overall_ratio=1.0,
+            dropped_flows=0,
+            num_flows=1,
+        )
+
+        entry_a = FlowEntry(
+            source="A",
+            destination="B",
+            priority=0,
+            demand=100.0,
+            placed=100.0,
+            dropped=0.0,
+            data={"sensitivity": {"link1": 0.8}},
+        )
+        result_a = FlowIterationResult(
+            flows=[entry_a],
+            summary=summary,
+            occurrence_count=5,
+        )
+
+        entry_b = FlowEntry(
+            source="A",
+            destination="B",
+            priority=0,
+            demand=100.0,
+            placed=100.0,
+            dropped=0.0,
+            data={"sensitivity": {"link1": 0.2}},
+        )
+        result_b = FlowIterationResult(
+            flows=[entry_b],
+            summary=summary,
+            occurrence_count=1,
+        )
+
+        processed = failure_manager._process_sensitivity_results([result_a, result_b])
+
+        stats = processed["A->B"]["link1"]
+        assert stats["count"] == 6.0  # 5 + 1
+        assert stats["mean"] == pytest.approx(0.7)  # weighted mean
+        assert stats["min"] == 0.2
+        assert stats["max"] == 0.8
+
+    def test_process_sensitivity_results_single_pattern(
+        self, failure_manager: FailureManager
+    ) -> None:
+        """Single pattern with occurrence_count > 1 should have correct count."""
+        from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
+
+        summary = FlowSummary(
+            total_demand=50.0,
+            total_placed=50.0,
+            overall_ratio=1.0,
+            dropped_flows=0,
+            num_flows=1,
+        )
+
+        entry = FlowEntry(
+            source="X",
+            destination="Y",
+            priority=0,
+            demand=50.0,
+            placed=50.0,
+            dropped=0.0,
+            data={"sensitivity": {"node1": 0.5}},
+        )
+        result = FlowIterationResult(
+            flows=[entry],
+            summary=summary,
+            occurrence_count=10,
+        )
+
+        processed = failure_manager._process_sensitivity_results([result])
+
+        stats = processed["X->Y"]["node1"]
+        assert stats["count"] == 10.0
+        assert stats["mean"] == 0.5
+        assert stats["min"] == 0.5
+        assert stats["max"] == 0.5

@@ -752,10 +752,14 @@ workflow:
 ```yaml
 - step_type: NetworkStats
   name: stats
-  include_disabled: false   # Include disabled nodes/links in stats
+  include_disabled: false           # Include disabled nodes/links in stats
+  excluded_nodes: []                # Optional: temporary node exclusions
+  excluded_links: []                # Optional: temporary link exclusions
 ```
 
 ### MaxFlow Parameters
+
+Baseline (no failures) is always run first as a reference. The `iterations` parameter specifies how many failure scenarios to run.
 
 ```yaml
 - step_type: MaxFlow
@@ -766,7 +770,7 @@ workflow:
   failure_policy: policy_name
   iterations: 1000
   parallelism: auto          # or integer
-  baseline: true             # Include baseline (no failures) iteration
+  seed: 42                   # Optional: for reproducibility
   shortest_path: false       # Restrict to shortest paths only
   require_capacity: true     # Path selection considers capacity
   flow_placement: PROPORTIONAL  # PROPORTIONAL | EQUAL_BALANCED
@@ -777,6 +781,8 @@ workflow:
 
 ### TrafficMatrixPlacement Parameters
 
+Baseline (no failures) is always run first as a reference. The `iterations` parameter specifies how many failure scenarios to run.
+
 ```yaml
 - step_type: TrafficMatrixPlacement
   name: tm_placement
@@ -785,7 +791,7 @@ workflow:
   iterations: 100
   parallelism: auto
   placement_rounds: auto     # or integer
-  baseline: false
+  seed: 42                   # Optional: for reproducibility
   include_flow_details: true
   include_used_edges: false
   store_failure_patterns: false

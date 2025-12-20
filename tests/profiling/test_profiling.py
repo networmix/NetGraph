@@ -36,7 +36,7 @@ class TestPerformanceProfiler:
         assert profile.step_name == "test_step"
         assert profile.step_type == "TestStep"
         assert profile.wall_time > 0
-        assert profile.cpu_time >= 0.0  # Always has CPU profiling now
+        assert profile.cpu_time >= 0.0  # CPU profiling is always enabled
         assert profile.function_calls >= 0
 
     def test_step_profiling_with_memory(self):

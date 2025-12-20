@@ -331,7 +331,6 @@ workflow:
     shortest_path: false
     flow_placement: "PROPORTIONAL"
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Reverse intra-DC capacity analysis
@@ -343,7 +342,6 @@ workflow:
     shortest_path: false
     flow_placement: "PROPORTIONAL"
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Forward inter-DC capacity analysis
@@ -355,7 +353,6 @@ workflow:
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Reverse inter-DC capacity analysis
@@ -367,7 +364,6 @@ workflow:
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
     iterations: 1
-    baseline: false
     failure_policy: null
 
   # Failure analysis with different policies

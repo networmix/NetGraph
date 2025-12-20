@@ -39,7 +39,7 @@ class TestScenario1:
     @pytest.fixture
     def helper(self, scenario_1_executed):
         """Create test helper for scenario 1."""
-        # create_scenario_helper now handles graph conversion using nx.node_link_graph
+        # create_scenario_helper handles graph conversion using nx.node_link_graph
         helper = create_scenario_helper(scenario_1_executed)
         return helper
 
