@@ -670,7 +670,6 @@ workflow:
     matrix_name: baseline_traffic_matrix
     failure_policy: weighted_modes
     iterations: 1000
-    baseline: true
 ```
 
 **Common Steps:**

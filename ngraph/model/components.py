@@ -409,5 +409,5 @@ def resolve_link_end_components(
         dst_map = hw_struct.get("target", {})
         return _from_mapping(src_map), _from_mapping(dst_map), True
 
-    # No legacy or flattened formats supported.
+    # Only structured source/target format is supported.
     return (None, 1.0, False), (None, 1.0, False), False

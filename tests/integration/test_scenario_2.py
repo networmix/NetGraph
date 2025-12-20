@@ -40,7 +40,7 @@ class TestScenario2:
     @pytest.fixture
     def helper(self, scenario_2_executed):
         """Create test helper for scenario 2."""
-        # create_scenario_helper now handles graph conversion using nx.node_link_graph
+        # create_scenario_helper handles graph conversion using nx.node_link_graph
         helper = create_scenario_helper(scenario_2_executed)
         return helper
 
@@ -79,7 +79,7 @@ class TestScenario2:
         """Test that hierarchical node naming from blueprints works correctly."""
         # Test specific expanded node names from the blueprint hierarchy
         expected_nodes = {
-            "SEA/clos_instance/spine/myspine-6",  # Overridden spine with new naming
+            "SEA/clos_instance/spine/myspine-6",  # Overridden spine with custom naming
             "SFO/single/single-1",  # Single node blueprint
             "SEA/edge_nodes/edge-1",  # Edge nodes from city_cloud blueprint
             "SEA/clos_instance/leaf/leaf-1",  # Leaf nodes from nested clos_2tier

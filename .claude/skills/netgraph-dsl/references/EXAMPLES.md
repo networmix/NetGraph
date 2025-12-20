@@ -256,7 +256,7 @@ workflow:
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000
-    baseline: true
+    seed: 42
 ```
 
 ## Example 6: Attribute-Based Selectors
@@ -455,7 +455,7 @@ workflow:
     failure_policy: single_link
     iterations: 1000
     parallelism: 7
-    baseline: true
+    include_flow_details: true
     alpha_from_step: msd_baseline
     alpha_from_field: data.alpha_star
 ```

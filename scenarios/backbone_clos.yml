@@ -1205,7 +1205,6 @@ workflow:
     iterations: 1000
     parallelism: 7
     placement_rounds: auto
-    baseline: true
     store_failure_patterns: false
     include_flow_details: true
     include_used_edges: false

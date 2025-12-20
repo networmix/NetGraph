@@ -26,7 +26,6 @@ workflow:
     matrix_name: baseline_traffic_matrix
     failure_policy: random_failures
     iterations: 1000
-    baseline: true
 ```
 
 ## Execution Model
@@ -71,7 +70,7 @@ Parameters:
 
 ### MaxFlow
 
-Monte Carlo maximum flow analysis between node groups.
+Monte Carlo maximum flow analysis between node groups. Baseline (no failures) is always run first as a separate reference.
 
 ```yaml
 - step_type: MaxFlow
@@ -80,9 +79,8 @@ Monte Carlo maximum flow analysis between node groups.
   sink: "^storage/.*"
   mode: "combine"              # combine | pairwise
   failure_policy: random_failures
-  iterations: 1000
+  iterations: 1000             # Number of failure iterations
   parallelism: auto             # or an integer
-  baseline: true
   shortest_path: false
   require_capacity: true        # false for true IP/IGP semantics
   flow_placement: PROPORTIONAL  # or EQUAL_BALANCED
@@ -93,17 +91,16 @@ Monte Carlo maximum flow analysis between node groups.
 
 ### TrafficMatrixPlacement
 
-Monte Carlo placement of a named traffic matrix with optional alpha scaling.
+Monte Carlo placement of a named traffic matrix with optional alpha scaling. Baseline (no failures) is always run first as a separate reference.
 
 ```yaml
 - step_type: TrafficMatrixPlacement
   name: tm_placement
   matrix_name: default
   failure_policy: random_failures  # Optional: policy name in failure_policy_set
-  iterations: 100
+  iterations: 100                  # Number of failure iterations
   parallelism: auto
   placement_rounds: auto           # or an integer
-  baseline: false
   include_flow_details: true       # cost_distribution per flow
   include_used_edges: false        # include per-demand used edge lists
   store_failure_patterns: false
@@ -115,7 +112,7 @@ Monte Carlo placement of a named traffic matrix with optional alpha scaling.
 
 Outputs:
 
-- metadata: iterations, parallelism, baseline, analysis_function, policy_name,
+- metadata: iterations, parallelism, analysis_function, policy_name,
   execution_time, unique_patterns
 - data.context: matrix_name, placement_rounds, include_flow_details,
   include_used_edges, base_demands, alpha, alpha_source
@@ -266,9 +263,8 @@ source:
 
 ```yaml
 mode: combine                    # combine | pairwise (default: combine)
-iterations: 1000                 # Monte Carlo trials (default: 1)
+iterations: 1000                 # Failure iterations to run (default: 1)
 failure_policy: policy_name      # Name in failure_policy_set (default: null)
-baseline: true                   # Include baseline iteration first (default: false)
 parallelism: auto                # Worker processes (default: auto)
 shortest_path: false             # Restrict to shortest paths (default: false)
 require_capacity: true           # Path selection considers capacity (default: true)
@@ -278,6 +274,8 @@ store_failure_patterns: false    # Store failure patterns in results
 include_flow_details: false      # Emit cost_distribution per flow
 include_min_cut: false           # Emit min-cut edge list per flow
 ```
+
+Note: Baseline (no failures) is always run first as a separate reference. The `iterations` parameter specifies the number of failure scenarios to run.
 
 ## Results Export Shape
 
@@ -328,31 +326,27 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
 }
 ```
 
-- `MaxFlow` and `TrafficMatrixPlacement` write per-iteration entries under `data.flow_results`:
+- `MaxFlow` and `TrafficMatrixPlacement` write results with baseline separate from failure iterations:
 
 ```json
 {
+  "baseline": {
+    "failure_id": "",
+    "failure_state": { "excluded_nodes": [], "excluded_links": [] },
+    "failure_trace": null,
+    "occurrence_count": 1,
+    "flows": [ ... ],
+    "summary": { "total_demand": 10.0, "total_placed": 10.0, "overall_ratio": 1.0 }
+  },
   "flow_results": [
     {
-      "failure_id": "baseline",
-      "failure_state": null,
-      "flows": [
-        {
-          "source": "A", "destination": "B", "priority": 0,
-          "demand": 10.0, "placed": 10.0, "dropped": 0.0,
-          "cost_distribution": { "2": 6.0, "4": 4.0 },
-          "data": { "edges": ["(u,v,k)"] }
-        }
-      ],
-      "summary": {
-        "total_demand": 10.0, "total_placed": 10.0,
-        "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 1
-      },
-      "data": { }
-    },
-    { "failure_id": "d0eea3f4d06413a2", "failure_state": null, "flows": [],
-      "summary": { "total_demand": 0.0, "total_placed": 0.0, "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 0 },
-      "data": {} }
+      "failure_id": "d0eea3f4d06413a2",
+      "failure_state": { "excluded_nodes": ["nodeA"], "excluded_links": [] },
+      "failure_trace": { "mode_index": 0, "selections": [...], ... },
+      "occurrence_count": 5,
+      "flows": [ ... ],
+      "summary": { "total_demand": 10.0, "total_placed": 8.0, "overall_ratio": 0.8 }
+    }
   ],
   "context": { ... }
 }
@@ -360,9 +354,11 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
 
 Notes:
 
-- Baseline: when `baseline: true`, the first entry has `failure_id: "baseline"`.
-- `failure_state` may be `null` or an object with `excluded_nodes` and `excluded_links` lists.
-- Per-iteration `data` can include instrumentation (e.g., `iteration_metrics`).
-- Per-flow `data` can include instrumentation (e.g., `policy_metrics`).
+- Baseline is always returned separately in the `baseline` field.
+- `flow_results` contains K unique failure patterns (deduplicated), not N iterations.
+- `occurrence_count` indicates how many iterations produced each unique failure pattern.
+- `failure_id` is a hash of exclusions (empty string for no exclusions).
+- `failure_trace` contains policy selection details when `store_failure_patterns: true`.
+- `failure_state` contains `excluded_nodes` and `excluded_links` lists.
 - `cost_distribution` uses string keys for JSON stability; values are numeric.
 - Effective `parallelism` and other execution fields are recorded in step metadata.

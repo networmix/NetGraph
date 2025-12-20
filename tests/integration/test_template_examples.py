@@ -604,7 +604,6 @@ class TestMainScenarioVariants:
                 "shortest_path": True,
                 "flow_placement": "PROPORTIONAL",
                 "iterations": 1,
-                "baseline": False,
                 "failure_policy": None,
             },
             {
@@ -616,7 +615,6 @@ class TestMainScenarioVariants:
                 "shortest_path": True,
                 "flow_placement": "EQUAL_BALANCED",
                 "iterations": 1,
-                "baseline": False,
                 "failure_policy": None,
             },
         ]

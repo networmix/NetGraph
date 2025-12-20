@@ -501,7 +501,7 @@ class NetworkExplorer:
             src = link.source
             dst = link.target
 
-            # Resolve per-end link hardware (no legacy support)
+            # Resolve per-end link hardware
             (src_end, dst_end, per_end) = resolve_link_end_components(
                 link.attrs, self.components_library
             )

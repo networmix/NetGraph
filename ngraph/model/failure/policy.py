@@ -166,6 +166,7 @@ class FailurePolicy:
         network_risk_groups: Dict[str, Any] | None = None,
         *,
         seed: Optional[int] = None,
+        failure_trace: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """Identify which entities fail for this iteration.
 
@@ -177,6 +178,8 @@ class FailurePolicy:
             network_links: Mapping of link_id -> flattened attribute dict.
             network_risk_groups: Mapping of risk_group_name -> RiskGroup or dict.
             seed: Optional deterministic seed for selection.
+            failure_trace: Optional dict to populate with trace data (mode selection,
+                rule selections, expansion). If provided, will be mutated in-place.
 
         Returns:
             Sorted list of failed entity IDs (nodes, links, and/or risk group names).
@@ -188,12 +191,26 @@ class FailurePolicy:
         failed_links: Set[str] = set()
         failed_risk_groups: Set[str] = set()
 
+        # Initialize trace structure if requested
+        if failure_trace is not None:
+            failure_trace.update(
+                {
+                    "mode_index": None,
+                    "mode_attrs": {},
+                    "selections": [],
+                    "expansion": {"nodes": [], "links": [], "risk_groups": []},
+                }
+            )
+
         # Determine rules from a selected mode (or none if no modes)
         rules_to_apply: Sequence[FailureRule] = []
         if self.modes:
             effective_seed = seed if seed is not None else self.seed
             mode_index = self._select_mode_index(self.modes, effective_seed)
             rules_to_apply = self.modes[mode_index].rules
+            if failure_trace is not None:
+                failure_trace["mode_index"] = mode_index
+                failure_trace["mode_attrs"] = dict(self.modes[mode_index].attrs)
 
         # Collect matched from each rule, then select
         for idx, rule in enumerate(rules_to_apply):
@@ -218,6 +235,18 @@ class FailurePolicy:
                 ),
             )
 
+            # Record selection in trace if non-empty
+            if failure_trace is not None and selected:
+                failure_trace["selections"].append(
+                    {
+                        "rule_index": idx,
+                        "entity_scope": rule.entity_scope,
+                        "rule_type": rule.rule_type,
+                        "matched_count": len(matched_ids),
+                        "selected_ids": sorted(selected),
+                    }
+                )
+
             # Add them to the respective fail sets
             if rule.entity_scope == "node":
                 failed_nodes |= set(selected)
@@ -225,6 +254,15 @@ class FailurePolicy:
                 failed_links |= set(selected)
             elif rule.entity_scope == "risk_group":
                 failed_risk_groups |= set(selected)
+
+        # Snapshot before expansion for trace
+        pre_nodes: Set[str] = set()
+        pre_links: Set[str] = set()
+        pre_rgs: Set[str] = set()
+        if failure_trace is not None:
+            pre_nodes = set(failed_nodes)
+            pre_links = set(failed_links)
+            pre_rgs = set(failed_risk_groups)
 
         # Optionally expand by risk groups
         if self.fail_risk_groups:
@@ -237,6 +275,14 @@ class FailurePolicy:
             self._expand_failed_risk_group_children(
                 failed_risk_groups, network_risk_groups
             )
+
+        # Capture expansion in trace
+        if failure_trace is not None:
+            failure_trace["expansion"] = {
+                "nodes": sorted(failed_nodes - pre_nodes),
+                "links": sorted(failed_links - pre_links),
+                "risk_groups": sorted(failed_risk_groups - pre_rgs),
+            }
 
         all_failed = set(failed_nodes) | set(failed_links) | set(failed_risk_groups)
         return sorted(all_failed)

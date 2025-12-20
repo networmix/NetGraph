@@ -33,6 +33,8 @@ from ngraph.workflow.base import WorkflowStep, register_workflow_step
 if TYPE_CHECKING:
     from ngraph.scenario import Scenario
 
+logger = get_logger(__name__)
+
 
 @dataclass
 class NetworkStats(WorkflowStep):
@@ -63,6 +65,8 @@ class NetworkStats(WorkflowStep):
         Returns:
             None
         """
+        logger.info("Starting NetworkStats: name=%s", self.name)
+
         # Convert exclusion iterables to sets for efficient lookup
         excluded_nodes_set = set(self.excluded_nodes) if self.excluded_nodes else set()
         excluded_links_set = set(self.excluded_links) if self.excluded_links else set()
@@ -142,20 +146,7 @@ class NetworkStats(WorkflowStep):
             min_degree_val = min(degree_values)
             max_degree_val = max(degree_values)
 
-        # INFO summary for workflow users (avoid expensive work unless needed)
-        total_capacity = 0.0
-        if links:
-            total_capacity = float(sum(link.capacity for link in links.values()))
-        mean_deg = float(mean(degree_values)) if degree_values else 0.0
-        get_logger(__name__).info(
-            "NetworkStats summary: name=%s nodes=%d links=%d total_capacity=%.1f mean_degree=%.2f",
-            self.name,
-            node_count,
-            link_count,
-            total_capacity,
-            mean_deg,
-        )
-        # Store results in new schema
+        # Store results
         scenario.results.put("metadata", {})
         # Ensure locals exist even when sets are empty
         if not links:
@@ -184,6 +175,14 @@ class NetworkStats(WorkflowStep):
                 "min_degree": float(min_degree_val) if nodes else 0.0,
                 "max_degree": float(max_degree_val) if nodes else 0.0,
             },
+        )
+
+        logger.info(
+            "NetworkStats completed: name=%s nodes=%d links=%d total_capacity=%.1f",
+            self.name,
+            node_count,
+            link_count,
+            float(total_capacity_val) if links else 0.0,
         )
 
 

@@ -41,7 +41,7 @@ class TestScenario3:
     @pytest.fixture
     def helper(self, scenario_3_executed):
         """Create test helper for scenario 3."""
-        # create_scenario_helper now handles graph conversion using nx.node_link_graph
+        # create_scenario_helper handles graph conversion using nx.node_link_graph
         helper = create_scenario_helper(scenario_3_executed)
         return helper
 
@@ -177,7 +177,7 @@ class TestScenario3:
             )
 
         # Test general spine-spine link overrides
-        # Now only risk_groups remain validated at link-level; per-end HW moved under attrs.hardware
+        # Only risk_groups are validated at link-level; per-end HW is under attrs.hardware
         helper.validate_link_attributes(
             source_pattern=r"my_clos1/spine/t3-2$",
             target_pattern=r"my_clos2/spine/t3-2$",
@@ -216,21 +216,26 @@ class TestScenario3:
 
     def test_capacity_envelope_proportional_flow_results(self, helper):
         """Test capacity envelope results with PROPORTIONAL flow placement."""
-        # Test forward direction (MaxFlow now returns flow_results with summary)
+        # Test forward direction (MaxFlow returns baseline separately, flow_results for failures)
         exported = helper.scenario.results.to_dict()
         fwd = exported["steps"].get("capacity_analysis_forward", {}).get("data", {})
-        fwd_results = fwd.get("flow_results", [])
-        assert fwd_results, "Forward capacity analysis should have flow_results"
-        fwd_total = float(fwd_results[0].get("summary", {}).get("total_placed", 0.0))
+        # Without failure policy, use baseline; otherwise check flow_results
+        fwd_result = fwd.get("baseline") or (fwd.get("flow_results", []) or [None])[0]
+        assert fwd_result, (
+            "Forward capacity analysis should have baseline or flow_results"
+        )
+        fwd_total = float(fwd_result.get("summary", {}).get("total_placed", 0.0))
         assert abs(fwd_total - 3200.0) < 0.1, (
             f"Expected forward flow ~3200.0, got {fwd_total}"
         )
 
         # Test reverse direction
         rev = exported["steps"].get("capacity_analysis_reverse", {}).get("data", {})
-        rev_results = rev.get("flow_results", [])
-        assert rev_results, "Reverse capacity analysis should have flow_results"
-        rev_total = float(rev_results[0].get("summary", {}).get("total_placed", 0.0))
+        rev_result = rev.get("baseline") or (rev.get("flow_results", []) or [None])[0]
+        assert rev_result, (
+            "Reverse capacity analysis should have baseline or flow_results"
+        )
+        rev_total = float(rev_result.get("summary", {}).get("total_placed", 0.0))
         assert abs(rev_total - 3200.0) < 0.1, (
             f"Expected reverse flow ~3200.0, got {rev_total}"
         )
@@ -243,11 +248,12 @@ class TestScenario3:
             .get("capacity_analysis_forward_balanced", {})
             .get("data", {})
         )
-        fwd_results = fwd.get("flow_results", [])
-        assert fwd_results, (
-            "Forward balanced capacity analysis should have flow_results"
+        # Without failure policy, use baseline; otherwise check flow_results
+        fwd_result = fwd.get("baseline") or (fwd.get("flow_results", []) or [None])[0]
+        assert fwd_result, (
+            "Forward balanced capacity analysis should have baseline or flow_results"
         )
-        fwd_total = float(fwd_results[0].get("summary", {}).get("total_placed", 0.0))
+        fwd_total = float(fwd_result.get("summary", {}).get("total_placed", 0.0))
         assert abs(fwd_total - 3200.0) < 0.1
 
         rev = (
@@ -255,11 +261,11 @@ class TestScenario3:
             .get("capacity_analysis_reverse_balanced", {})
             .get("data", {})
         )
-        rev_results = rev.get("flow_results", [])
-        assert rev_results, (
-            "Reverse balanced capacity analysis should have flow_results"
+        rev_result = rev.get("baseline") or (rev.get("flow_results", []) or [None])[0]
+        assert rev_result, (
+            "Reverse balanced capacity analysis should have baseline or flow_results"
         )
-        rev_total = float(rev_results[0].get("summary", {}).get("total_placed", 0.0))
+        rev_total = float(rev_result.get("summary", {}).get("total_placed", 0.0))
         assert abs(rev_total - 3200.0) < 0.1
 
     def test_flow_conservation_properties(self, helper):
@@ -270,10 +276,11 @@ class TestScenario3:
 
         def total_placed(step: str) -> float | None:
             data = exported["steps"].get(step, {}).get("data", {})
-            res = data.get("flow_results", [])
-            if not res:
+            # Check baseline first (no failure policy), then flow_results
+            result = data.get("baseline") or (data.get("flow_results", []) or [None])[0]
+            if not result:
                 return None
-            return float(res[0].get("summary", {}).get("total_placed", 0.0))
+            return float(result.get("summary", {}).get("total_placed", 0.0))
 
         fp = total_placed("capacity_analysis_forward")
         if fp is not None:

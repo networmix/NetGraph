@@ -91,11 +91,11 @@ class CostPower(WorkflowStep):
             scenario: Scenario with network, components_library, and results store.
         """
         t0 = time.perf_counter()
-        logger.info(
-            "Starting CostPower: name=%s include_disabled=%s levels=0..%d",
-            self.name or self.__class__.__name__,
-            str(self.include_disabled),
-            int(self.aggregation_level),
+        logger.info("Starting CostPower: name=%s", self.name)
+        logger.debug(
+            "CostPower params: include_disabled=%s aggregation_level=%d",
+            self.include_disabled,
+            self.aggregation_level,
         )
 
         network = scenario.network
@@ -225,12 +225,10 @@ class CostPower(WorkflowStep):
         root_items = levels_payload.get(0, [])
         root = root_items[0] if root_items else {}
         logger.info(
-            "CostPower complete: name=%s capex=%.3f power=%.3f platform_capex=%.3f optics_capex=%.3f duration=%.3fs",
-            self.name or self.__class__.__name__,
+            "CostPower completed: name=%s capex_total=%.2f power_total=%.2f duration=%.3fs",
+            self.name,
             float(root.get("capex_total", 0.0)),
             float(root.get("power_total_watts", 0.0)),
-            float(root.get("platform_capex", 0.0)),
-            float(root.get("optics_capex", 0.0)),
             time.perf_counter() - t0,
         )
 

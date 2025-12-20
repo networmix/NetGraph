@@ -156,11 +156,11 @@ def test_components_library_merge_override_true() -> None:
     )
 
     lib1.merge(lib2, override=True)
-    # The "Overlap" component should now be the one from lib2 (cost=200).
+    # The "Overlap" component is replaced by lib2's version (cost=200).
     assert lib1.get("Overlap") is new_comp
-    # The new library should also include the previously missing component.
+    # The merged library includes components from lib2.
     assert "UniqueLib2" in lib1.components
-    # The old unique component remains.
+    # The original unique component remains.
     assert "UniqueLib1" in lib1.components
 
 
@@ -186,9 +186,9 @@ def test_components_library_merge_override_false() -> None:
     )
 
     lib1.merge(lib2, override=False)
-    # The "Overlap" component should remain the original_comp (cost=100).
+    # The "Overlap" component remains the original (cost=100).
     assert lib1.get("Overlap") is original_comp
-    # The new library should also include the previously missing component.
+    # The merged library includes components from lib2.
     assert "UniqueLib2" in lib1.components
 
 

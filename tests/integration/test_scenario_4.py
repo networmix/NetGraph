@@ -51,7 +51,7 @@ class TestScenario4:
     @pytest.fixture(scope="module")
     def helper(self, scenario_4_executed):
         """Create test helper for scenario 4."""
-        # create_scenario_helper now handles graph conversion using nx.node_link_graph
+        # create_scenario_helper handles graph conversion using nx.node_link_graph
         helper = create_scenario_helper(scenario_4_executed)
         return helper
 
@@ -339,30 +339,37 @@ class TestScenario4:
         # assert graph is not None
         # Skipping graph check - node_link_to_graph removed after NetGraph-Core migration
 
-        # Test MaxFlow results - using flow_results key and summary totals
+        # Test MaxFlow results - check baseline (no failure policy) or flow_results
         intra_dc = (
             exported["steps"].get("intra_dc_capacity_forward", {}).get("data", {})
         )
-        intra_results = intra_dc.get("flow_results", [])
-        assert intra_results, (
-            "Intra-DC forward capacity analysis should have flow_results"
+        intra_result = (
+            intra_dc.get("baseline") or (intra_dc.get("flow_results", []) or [None])[0]
         )
-        assert float(intra_results[0]["summary"].get("total_placed", 0.0)) >= 0.0
+        assert intra_result, (
+            "Intra-DC forward capacity analysis should have baseline or flow_results"
+        )
+        assert float(intra_result["summary"].get("total_placed", 0.0)) >= 0.0
 
         inter_dc = (
             exported["steps"].get("inter_dc_capacity_forward", {}).get("data", {})
         )
-        inter_results = inter_dc.get("flow_results", [])
-        assert inter_results, (
-            "Inter-DC forward capacity analysis should have flow_results"
+        inter_result = (
+            inter_dc.get("baseline") or (inter_dc.get("flow_results", []) or [None])[0]
         )
-        assert float(inter_results[0]["summary"].get("total_placed", 0.0)) >= 0.0
+        assert inter_result, (
+            "Inter-DC forward capacity analysis should have baseline or flow_results"
+        )
+        assert float(inter_result["summary"].get("total_placed", 0.0)) >= 0.0
 
         rack_failure = (
             exported["steps"].get("rack_failure_analysis", {}).get("data", {})
         )
-        rack_results = rack_failure.get("flow_results", [])
-        assert rack_results, "Rack failure analysis should have flow_results"
+        rack_result = (
+            rack_failure.get("baseline")
+            or (rack_failure.get("flow_results", []) or [None])[0]
+        )
+        assert rack_result, "Rack failure analysis should have baseline or flow_results"
 
     def test_network_explorer_integration(self, helper):
         """Test NetworkExplorer functionality with complex hierarchy."""

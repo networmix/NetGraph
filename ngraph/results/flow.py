@@ -278,8 +278,14 @@ class FlowIterationResult:
     """Container for per-iteration analysis results.
 
     Args:
-        failure_id: Stable identifier for the failure scenario (e.g., "baseline" or a hash).
+        failure_id: Stable identifier for the failure scenario (hash of excluded
+            components, or "" for no exclusions).
         failure_state: Optional excluded components for the iteration.
+        failure_trace: Optional trace info (mode_index, selections, expansion) when
+            store_failure_patterns=True. None for baseline or when tracing disabled.
+        occurrence_count: Number of Monte Carlo iterations that produced this exact
+            failure pattern. Used with deduplication to avoid re-running identical
+            analyses. Defaults to 1.
         flows: List of flow entries for this iteration.
         summary: Aggregated summary across ``flows``.
         data: Optional per-iteration extras.
@@ -287,6 +293,8 @@ class FlowIterationResult:
 
     failure_id: str = ""
     failure_state: Optional[Dict[str, List[str]]] = None
+    failure_trace: Optional[Dict[str, Any]] = None
+    occurrence_count: int = 1
     flows: List[FlowEntry] = field(default_factory=list)
     summary: FlowSummary = field(
         default_factory=lambda: FlowSummary(
@@ -305,6 +313,14 @@ class FlowIterationResult:
         Raises:
             ValueError: If summary/flow counts mismatch or failure_state invalid.
         """
+        # Validate occurrence_count
+        if not isinstance(self.occurrence_count, int) or self.occurrence_count < 1:
+            logger.error(
+                "FlowIterationResult.occurrence_count must be a positive int: %r",
+                self.occurrence_count,
+            )
+            raise ValueError("occurrence_count must be a positive int")
+
         # Validate failure_state structure if present
         if self.failure_state is not None:
             if not isinstance(self.failure_state, dict):
@@ -342,6 +358,10 @@ class FlowIterationResult:
             "failure_state": self.failure_state
             if self.failure_state is not None
             else None,
+            "failure_trace": self.failure_trace
+            if self.failure_trace is not None
+            else None,
+            "occurrence_count": self.occurrence_count,
             "flows": [f.to_dict() for f in self.flows],
             "summary": self.summary.to_dict(),
             "data": _ensure_json_safe(self.data),

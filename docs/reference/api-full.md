@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 20, 2025 at 00:19 UTC
+Generated from source code on: December 20, 2025 at 04:32 UTC
 
 Modules auto-discovered: 49
 
@@ -635,7 +635,7 @@ Attributes:
 
 **Methods:**
 
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None) -> 'List[str]'` - Identify which entities fail for this iteration.
+- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'List[str]'` - Identify which entities fail for this iteration.
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ### FailureRule
@@ -1114,6 +1114,9 @@ MaxFlow workflow step.
 Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
 Produces unified `flow_results` per iteration under `data.flow_results`.
 
+Baseline (no failures) is always run first as a separate reference. The `iterations`
+parameter specifies how many failure scenarios to run.
+
 YAML Configuration Example:
 
     workflow:
@@ -1130,7 +1133,6 @@ YAML Configuration Example:
         shortest_path: false
         require_capacity: true           # false for true IP/IGP semantics
         flow_placement: "PROPORTIONAL"
-        baseline: false
         seed: 42
         store_failure_patterns: false
         include_flow_details: false      # cost_distribution
@@ -1140,18 +1142,21 @@ YAML Configuration Example:
 
 Maximum flow Monte Carlo workflow step.
 
+Baseline (no failures) is always run first as a separate reference. Results are
+returned with baseline in a separate field, and failure iterations in a 0-indexed
+list that corresponds 1:1 with failure_patterns.
+
 Attributes:
     source: Source node selector (string path or selector dict).
     sink: Sink node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     failure_policy: Name of failure policy in scenario.failure_policy_set.
-    iterations: Number of Monte Carlo trials.
+    iterations: Number of failure iterations to run.
     parallelism: Number of parallel worker processes.
     shortest_path: Whether to use shortest paths only.
     require_capacity: If True (default), path selection considers capacity.
         If False, path selection is cost-only (true IP/IGP semantics).
     flow_placement: Flow placement strategy.
-    baseline: Whether to run first iteration without failures as baseline.
     seed: Optional seed for reproducible results.
     store_failure_patterns: Whether to store failure patterns in results.
     include_flow_details: Whether to collect cost distribution per flow.
@@ -1171,7 +1176,6 @@ Attributes:
 - `shortest_path` (bool) = False
 - `require_capacity` (bool) = True
 - `flow_placement` (FlowPlacement | str) = 1
-- `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
 - `include_min_cut` (bool) = False
@@ -1309,17 +1313,23 @@ TrafficMatrixPlacement workflow step.
 Runs Monte Carlo demand placement using a named traffic matrix and produces
 unified `flow_results` per iteration under `data.flow_results`.
 
+Baseline (no failures) is always run first as a separate reference. The `iterations`
+parameter specifies how many failure scenarios to run.
+
 ### TrafficMatrixPlacement
 
 Monte Carlo demand placement using a named traffic matrix.
 
+Baseline (no failures) is always run first as a separate reference. Results are
+returned with baseline in a separate field, and failure iterations in a 0-indexed
+list that corresponds 1:1 with failure_patterns.
+
 Attributes:
     matrix_name: Name of the traffic matrix to analyze.
     failure_policy: Optional policy name in scenario.failure_policy_set.
-    iterations: Number of Monte Carlo iterations.
+    iterations: Number of failure iterations to run.
     parallelism: Number of parallel worker processes.
     placement_rounds: Placement optimization rounds (int or "auto").
-    baseline: Include baseline iteration without failures first.
     seed: Optional seed for reproducibility.
     store_failure_patterns: Whether to store failure pattern results.
     include_flow_details: When True, include cost_distribution per flow.
@@ -1338,7 +1348,6 @@ Attributes:
 - `iterations` (int) = 1
 - `parallelism` (int | str) = auto
 - `placement_rounds` (int | str) = auto
-- `baseline` (bool) = False
 - `store_failure_patterns` (bool) = False
 - `include_flow_details` (bool) = False
 - `include_used_edges` (bool) = False
@@ -1968,8 +1977,14 @@ Args:
 Container for per-iteration analysis results.
 
 Args:
-    failure_id: Stable identifier for the failure scenario (e.g., "baseline" or a hash).
+    failure_id: Stable identifier for the failure scenario (hash of excluded
+        components, or "" for no exclusions).
     failure_state: Optional excluded components for the iteration.
+    failure_trace: Optional trace info (mode_index, selections, expansion) when
+        store_failure_patterns=True. None for baseline or when tracing disabled.
+    occurrence_count: Number of Monte Carlo iterations that produced this exact
+        failure pattern. Used with deduplication to avoid re-running identical
+        analyses. Defaults to 1.
     flows: List of flow entries for this iteration.
     summary: Aggregated summary across ``flows``.
     data: Optional per-iteration extras.
@@ -1978,6 +1993,8 @@ Args:
 
 - `failure_id` (str)
 - `failure_state` (Optional[Dict[str, List[str]]])
+- `failure_trace` (Optional[Dict[str, Any]])
+- `occurrence_count` (int) = 1
 - `flows` (List[FlowEntry]) = []
 - `summary` (FlowSummary) = FlowSummary(total_demand=0.0, total_placed=0.0, overall_ratio=1.0, dropped_flows=0, num_flows=0)
 - `data` (Dict[str, Any]) = {}
@@ -2801,12 +2818,12 @@ Attributes:
 
 **Methods:**
 
-- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
+- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
-- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---

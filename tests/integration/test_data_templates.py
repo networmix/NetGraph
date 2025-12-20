@@ -480,7 +480,6 @@ class WorkflowTemplates:
                     "sink": sink_pattern,
                     "mode": mode,
                     "iterations": 1,
-                    "baseline": False,
                     "failure_policy": None,
                     "shortest_path": True,
                 }
@@ -519,7 +518,6 @@ class WorkflowTemplates:
                 "sink": sink_pattern,
                 "mode": "combine",
                 "iterations": 1,
-                "baseline": True,
             },
             {
                 "step_type": "MaxFlow",
@@ -529,7 +527,6 @@ class WorkflowTemplates:
                 "mode": "pairwise",
                 "shortest_path": True,
                 "iterations": 1,
-                "baseline": True,
             },
             {
                 "step_type": "MaxFlow",

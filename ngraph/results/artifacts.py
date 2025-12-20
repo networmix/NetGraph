@@ -307,15 +307,18 @@ class FailurePatternResult:
     def pattern_key(self) -> str:
         """Generate a deterministic key for this failure pattern.
 
-        Uses a stable SHA1 hash of the sorted excluded entity list to avoid
+        Uses a stable BLAKE2s hash of the sorted excluded entity list to avoid
         Python's randomized hash() variability across processes.
-        """
-        if self.is_baseline:
-            return "baseline"
 
+        Returns empty string for patterns with no exclusions (including baseline).
+        """
         # Cache to avoid recomputation when accessed repeatedly
         if self._pattern_key_cache:
             return self._pattern_key_cache
+
+        # Empty exclusions (no failures) return empty string
+        if not self.excluded_nodes and not self.excluded_links:
+            return ""
 
         # Create deterministic key from excluded entities using fast BLAKE2s
         excluded_str = ",".join(sorted(self.excluded_nodes + self.excluded_links))

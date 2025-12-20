@@ -250,7 +250,7 @@ workflow:
     mode: pairwise
     failure_policy: single_link
     iterations: 1000
-    baseline: true                # Include no-failure baseline
+    seed: 42                      # Optional: for reproducibility
 ```
 
 **Step types**: `BuildGraph`, `NetworkStats`, `MaxFlow`, `TrafficMatrixPlacement`, `MaximumSupportedDemand`, `CostPower`
@@ -345,4 +345,4 @@ Overrides only affect entities that exist at their processing stage.
 ## More Information
 
 - [Full DSL Reference](references/REFERENCE.md) - Complete field documentation, all operators, workflow steps
-- [Working Examples](references/EXAMPLES.md) - 11 complete scenarios from simple to advanced
+- [Working Examples](references/EXAMPLES.md) - 17 complete scenarios from simple to advanced

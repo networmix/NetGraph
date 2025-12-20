@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2025-12-20
+
+### Changed
+
+- **BREAKING**: Monte Carlo results restructured: `baseline` returned separately; `results` contains deduplicated failure patterns with `occurrence_count`
+- **BREAKING**: `baseline` parameter removed from Monte Carlo APIs; baseline always runs implicitly
+
+### Added
+
+- `FlowIterationResult.occurrence_count`: how many iterations produced this failure pattern
+- `FlowIterationResult.failure_trace`: mode/rule selection details when `store_failure_patterns=True`
+
 ## [0.13.0] - 2025-12-19
 
 ### Changed

@@ -88,9 +88,10 @@ class MaximumSupportedDemand(WorkflowStep):
             raise ValueError("Only 'hard' acceptance_rule is implemented")
 
         t0 = time.perf_counter()
-        logger.info(
-            "Starting MSD: name=%s matrix=%s alpha_start=%.6g growth=%.3f seeds=%d resolution=%.6g",
-            self.name or self.__class__.__name__,
+        logger.info("Starting MaximumSupportedDemand: name=%s", self.name)
+        logger.debug(
+            "MaximumSupportedDemand params: matrix=%s alpha_start=%.6g "
+            "growth=%.3f seeds=%d resolution=%.6g",
             self.matrix_name,
             float(self.alpha_start),
             float(self.growth_factor),
@@ -165,9 +166,8 @@ class MaximumSupportedDemand(WorkflowStep):
             },
         )
         logger.info(
-            "MSD completed: name=%s matrix=%s alpha_star=%.6g probes=%d duration=%.3fs",
-            self.name or self.__class__.__name__,
-            self.matrix_name,
+            "MaximumSupportedDemand completed: name=%s alpha_star=%.6g probes=%d duration=%.3fs",
+            self.name,
             float(alpha_star),
             len(probes),
             time.perf_counter() - t0,

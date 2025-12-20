@@ -171,14 +171,12 @@ class TestRiskGroups:
         # Disable group2 - affects A and B
         net.disable_risk_group("group2")
         assert net.nodes["A"].disabled is True  # A still disabled (group1)
-        assert net.nodes["B"].disabled is True  # B now disabled (group2)
+        assert net.nodes["B"].disabled is True  # B disabled (group2)
         assert net.links[link.id].disabled is True  # link still disabled (group1)
 
         # Enable group1 - A should be enabled because it has group1, link should be enabled
         net.enable_risk_group("group1")
-        assert (
-            net.nodes["A"].disabled is False
-        )  # A enabled (has group1 which is now enabled)
+        assert net.nodes["A"].disabled is False  # A enabled (group1 is enabled)
         assert net.nodes["B"].disabled is True  # B still disabled (group2)
         assert (
             net.links[link.id].disabled is False

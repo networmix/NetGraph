@@ -97,7 +97,6 @@ class TestNodeSelection:
         # Should have groups for each combination found
         assert len(node_groups) >= 2
 
-    # Note: The legacy attr:<name> syntax has been removed.
     # For attribute-based grouping, use the unified selector system with
     # {"group_by": "attr_name"} dict selectors via normalize_selector/select_nodes.
 
