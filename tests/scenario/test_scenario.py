@@ -110,11 +110,11 @@ failure_policy_set:
             rule_type: "all"
 traffic_matrix_set:
   default:
-    - source_path: NodeA
-      sink_path: NodeB
+    - source: NodeA
+      sink: NodeB
       demand: 15
-    - source_path: NodeA
-      sink_path: NodeC
+    - source: NodeA
+      sink: NodeC
       demand: 5
 workflow:
   - step_type: DoSmth
@@ -149,8 +149,8 @@ failure_policy_set:
         rules: []
 traffic_matrix_set:
   default:
-    - source_path: NodeA
-      sink_path: NodeB
+    - source: NodeA
+      sink: NodeB
       demand: 10
 workflow:
   - name: StepWithoutType
@@ -181,8 +181,8 @@ failure_policy_set:
         rules: []
 traffic_matrix_set:
   default:
-    - source_path: NodeA
-      sink_path: NodeB
+    - source: NodeA
+      sink: NodeB
       demand: 10
 workflow:
   - step_type: NonExistentStep
@@ -311,11 +311,11 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert len(default_demands) == 2
     d1 = default_demands[0]
     d2 = default_demands[1]
-    assert d1.source_path == "NodeA"
-    assert d1.sink_path == "NodeB"
+    assert d1.source == "NodeA"
+    assert d1.sink == "NodeB"
     assert d1.demand == 15
-    assert d2.source_path == "NodeA"
-    assert d2.sink_path == "NodeC"
+    assert d2.source == "NodeA"
+    assert d2.sink == "NodeC"
     assert d2.demand == 5
 
     # Check workflow

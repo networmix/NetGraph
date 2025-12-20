@@ -19,17 +19,47 @@ _logger = get_logger(__name__)
 
 
 def build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
+    """Build RiskGroup objects from raw config data.
+
+    Supports bracket expansion in risk group names. For example:
+    - `{name: "DC[1-3]_Power"}` creates DC1_Power, DC2_Power, DC3_Power
+    - Children are also expanded recursively
+
+    Args:
+        rg_data: List of risk group definition dicts.
+
+    Returns:
+        List of RiskGroup objects with names expanded.
+    """
+    from ngraph.dsl.expansion import expand_name_patterns
+
     def build_one(d: Dict[str, Any]) -> RiskGroup:
+        """Build a single RiskGroup (name already expanded)."""
         name = d.get("name")
         if not name:
             raise ValueError("RiskGroup entry missing 'name' field.")
         disabled = d.get("disabled", False)
+        # Recursively expand and build children
         children_list = d.get("children", [])
-        child_objs = [build_one(cd) for cd in children_list]
+        child_objs = expand_and_build(children_list)
         attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
         return RiskGroup(name=name, disabled=disabled, children=child_objs, attrs=attrs)
 
-    return [build_one(entry) for entry in rg_data]
+    def expand_and_build(entries: List[Dict[str, Any]]) -> List[RiskGroup]:
+        """Expand names and build RiskGroups for a list of entries."""
+        result: List[RiskGroup] = []
+        for entry in entries:
+            name = entry.get("name", "")
+            if not name:
+                raise ValueError("RiskGroup entry missing 'name' field.")
+            expanded_names = expand_name_patterns(name)
+            for exp_name in expanded_names:
+                modified = dict(entry)
+                modified["name"] = exp_name
+                result.append(build_one(modified))
+        return result
+
+    return expand_and_build(rg_data)
 
 
 def build_failure_policy(

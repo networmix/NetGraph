@@ -284,8 +284,8 @@ class TestFailureManagerConvenienceMethods:
         }
 
         result = failure_manager.run_max_flow_monte_carlo(
-            source_path="datacenter.*",
-            sink_path="edge.*",
+            source="datacenter.*",
+            sink="edge.*",
             mode="combine",
             iterations=2,
             parallelism=1,
@@ -323,8 +323,8 @@ class TestFailureManagerConvenienceMethods:
             mock_mc.return_value = {"results": [], "metadata": {}}
 
             failure_manager.run_max_flow_monte_carlo(
-                source_path="src.*",
-                sink_path="dst.*",
+                source="src.*",
+                sink="dst.*",
                 flow_placement="EQUAL_BALANCED",
                 iterations=1,
             )
@@ -338,8 +338,8 @@ class TestFailureManagerConvenienceMethods:
         """Test that invalid flow_placement string raises clear error."""
         with pytest.raises(ValueError) as exc_info:
             failure_manager.run_max_flow_monte_carlo(
-                source_path="src.*",
-                sink_path="dst.*",
+                source="src.*",
+                sink="dst.*",
                 flow_placement="INVALID_OPTION",
                 iterations=1,
             )
@@ -358,8 +358,8 @@ class TestFailureManagerConvenienceMethods:
             mock_mc.return_value = {"results": [], "metadata": {}}
 
             failure_manager.run_max_flow_monte_carlo(
-                source_path="src.*",
-                sink_path="dst.*",
+                source="src.*",
+                sink="dst.*",
                 flow_placement="proportional",  # lowercase
                 iterations=1,
             )

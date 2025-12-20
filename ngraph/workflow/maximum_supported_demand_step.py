@@ -105,8 +105,8 @@ class MaximumSupportedDemand(WorkflowStep):
         base_demands: list[dict[str, Any]] = [
             {
                 "id": getattr(td, "id", None),
-                "source_path": getattr(td, "source_path", ""),
-                "sink_path": getattr(td, "sink_path", ""),
+                "source": getattr(td, "source", ""),
+                "sink": getattr(td, "sink", ""),
                 "demand": float(getattr(td, "demand", 0.0)),
                 "mode": getattr(td, "mode", "pairwise"),
                 "priority": int(getattr(td, "priority", 0)),
@@ -241,12 +241,15 @@ class MaximumSupportedDemand(WorkflowStep):
         stable_demands: list[TrafficDemand] = [
             TrafficDemand(
                 id=getattr(td, "id", "") or "",
-                source_path=str(getattr(td, "source_path", "")),
-                sink_path=str(getattr(td, "sink_path", "")),
+                source=getattr(td, "source", ""),
+                sink=getattr(td, "sink", ""),
                 priority=int(getattr(td, "priority", 0)),
                 demand=float(getattr(td, "demand", 0.0)),
                 flow_policy_config=getattr(td, "flow_policy_config", None),
                 mode=str(getattr(td, "mode", "pairwise")),
+                group_mode=str(getattr(td, "group_mode", "flatten")),
+                expand_vars=getattr(td, "expand_vars", None) or {},
+                expansion_mode=str(getattr(td, "expansion_mode", "cartesian")),
             )
             for td in base_tds
         ]
@@ -354,12 +357,15 @@ class MaximumSupportedDemand(WorkflowStep):
         return [
             TrafficDemand(
                 id=d.get("id") or "",
-                source_path=str(d["source_path"]),
-                sink_path=str(d["sink_path"]),
+                source=d["source"],
+                sink=d["sink"],
                 priority=int(d["priority"]),
                 demand=float(d["demand"]) * alpha,
                 flow_policy_config=d.get("flow_policy_config"),
                 mode=str(d.get("mode", "pairwise")),
+                group_mode=str(d.get("group_mode", "flatten")),
+                expand_vars=d.get("expand_vars") or {},
+                expansion_mode=str(d.get("expansion_mode", "cartesian")),
             )
             for d in base_demands
         ]

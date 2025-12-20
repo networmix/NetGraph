@@ -244,7 +244,7 @@ class ScenarioTestHelper:
 
         assert actual_count == expected_count, (
             f"Traffic demand count mismatch: expected {expected_count}, found {actual_count}. "
-            f"Demands: {[(d.source_path, d.sink_path, d.demand) for d in default_demands[:5]]}"
+            f"Demands: {[(d.source, d.sink, d.demand) for d in default_demands[:5]]}"
             f"{'...' if actual_count > 5 else ''}"
         )
 
@@ -628,7 +628,7 @@ class ScenarioDataBuilder:
             self.data["traffic_matrix_set"][matrix_name] = []
 
         self.data["traffic_matrix_set"][matrix_name].append(
-            {"source_path": source, "sink_path": sink, "demand": demand}
+            {"source": source, "sink": sink, "demand": demand}
         )
         return self
 

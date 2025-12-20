@@ -124,17 +124,17 @@ failure_policy_set:
 
 traffic_matrix_set:
   default:
-    - source_path: SEA
-      sink_path: JFK
+    - source: SEA
+      sink: JFK
       demand: 50
-    - source_path: SFO
-      sink_path: DCA
+    - source: SFO
+      sink: DCA
       demand: 50
-    - source_path: SEA
-      sink_path: DCA
+    - source: SEA
+      sink: DCA
       demand: 50
-    - source_path: SFO
-      sink_path: JFK
+    - source: SFO
+      sink: JFK
       demand: 50
 
 workflow:

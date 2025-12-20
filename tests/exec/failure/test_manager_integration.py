@@ -119,8 +119,8 @@ class TestFailureManagerCore:
             parallelism=1,  # Serial execution for deterministic testing
             seed=42,
             # Pass analysis parameters directly as kwargs
-            source_path="A",
-            sink_path="C",
+            source="A",
+            sink="C",
             mode="combine",
         )
 
@@ -155,8 +155,8 @@ class TestFailureManagerCore:
             iterations=4,
             parallelism=2,  # Multiple workers
             seed=42,
-            source_path="A",
-            sink_path="C",
+            source="A",
+            sink="C",
             mode="combine",
         )
 
@@ -173,8 +173,8 @@ class TestFailureManagerCore:
             parallelism=1,
             baseline=True,  # Include baseline
             seed=42,
-            source_path="A",
-            sink_path="C",
+            source="A",
+            sink="C",
             mode="combine",
         )
 
@@ -196,8 +196,8 @@ class TestFailureManagerCore:
             parallelism=1,
             store_failure_patterns=True,
             seed=42,
-            source_path="A",
-            sink_path="C",
+            source="A",
+            sink="C",
             mode="combine",
         )
 
@@ -253,8 +253,8 @@ class TestFailureManagerIntegration:
             iterations=10,
             parallelism=1,
             seed=123,
-            source_path="spine.*",
-            sink_path="leaf.*",
+            source="spine.*",
+            sink="leaf.*",
             mode="pairwise",
         )
 

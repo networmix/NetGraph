@@ -8,8 +8,8 @@ YAML Configuration Example:
     workflow:
       - step_type: MaxFlow
         name: "maxflow_dc_to_edge"
-        source_path: "^datacenter/.*"
-        sink_path: "^edge/.*"
+        source: "^datacenter/.*"
+        sink: "^edge/.*"
         mode: "combine"
         failure_policy: "random_failures"
         iterations: 100
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Union
 
 from ngraph.exec.failure.manager import FailureManager
 from ngraph.logging import get_logger
@@ -51,8 +51,8 @@ class MaxFlow(WorkflowStep):
     """Maximum flow Monte Carlo workflow step.
 
     Attributes:
-        source_path: Regex pattern for source node groups.
-        sink_path: Regex pattern for sink node groups.
+        source: Source node selector (string path or selector dict).
+        sink: Sink node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         failure_policy: Name of failure policy in scenario.failure_policy_set.
         iterations: Number of Monte Carlo trials.
@@ -68,8 +68,8 @@ class MaxFlow(WorkflowStep):
         include_min_cut: Whether to include min-cut edges per flow.
     """
 
-    source_path: str = ""
-    sink_path: str = ""
+    source: Union[str, Dict[str, Any]] = ""
+    sink: Union[str, Dict[str, Any]] = ""
     mode: str = "combine"
     failure_policy: str | None = None
     iterations: int = 1
@@ -106,10 +106,10 @@ class MaxFlow(WorkflowStep):
         t0 = time.perf_counter()
         logger.info(f"Starting max-flow: {self.name}")
         logger.debug(
-            "Parameters: source_path=%s, sink_path=%s, mode=%s, iterations=%s, parallelism=%s, "
+            "Parameters: source=%s, sink=%s, mode=%s, iterations=%s, parallelism=%s, "
             "failure_policy=%s, baseline=%s, include_flow_details=%s, include_min_cut=%s",
-            self.source_path,
-            self.sink_path,
+            self.source,
+            self.sink,
             self.mode,
             str(self.iterations),
             str(self.parallelism),
@@ -126,8 +126,8 @@ class MaxFlow(WorkflowStep):
         )
         effective_parallelism = resolve_parallelism(self.parallelism)
         raw = fm.run_max_flow_monte_carlo(
-            source_path=self.source_path,
-            sink_path=self.sink_path,
+            source=self.source,
+            sink=self.sink,
             mode=self.mode,
             iterations=self.iterations,
             parallelism=effective_parallelism,
@@ -152,8 +152,8 @@ class MaxFlow(WorkflowStep):
                 flow_results.append(item)
 
         context = {
-            "source_path": self.source_path,
-            "sink_path": self.sink_path,
+            "source": self.source,
+            "sink": self.sink,
             "mode": self.mode,
             "shortest_path": bool(self.shortest_path),
             "require_capacity": bool(self.require_capacity),

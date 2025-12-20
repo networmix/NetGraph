@@ -97,47 +97,9 @@ class TestNodeSelection:
         # Should have groups for each combination found
         assert len(node_groups) >= 2
 
-    def test_select_node_groups_by_attribute_basic(self):
-        """Group nodes by attribute using strict attr:<name> directive."""
-        net = Network()
-        a1 = Node("A1", attrs={"role": "compute"})
-        a2 = Node("A2", attrs={"role": "compute"})
-        b1 = Node("B1", attrs={"role": "network"})
-        c1 = Node("C1")  # missing attribute -> omitted
-        for n in [a1, a2, b1, c1]:
-            net.add_node(n)
-
-        groups = net.select_node_groups_by_path("attr:role")
-        assert set(groups.keys()) == {"compute", "network"}
-        assert {n.name for n in groups["compute"]} == {"A1", "A2"}
-        assert {n.name for n in groups["network"]} == {"B1"}
-
-    def test_select_node_groups_by_attribute_non_string_labels(self):
-        """Non-string attribute values should label groups via str()."""
-        net = Network()
-        net.add_node(Node("S1", attrs={"dc_site_id": 1}))
-        net.add_node(Node("S2", attrs={"dc_site_id": 1}))
-        net.add_node(Node("S3", attrs={"dc_site_id": 2}))
-        net.add_node(Node("S4"))  # missing attribute
-
-        groups = net.select_node_groups_by_path("attr:dc_site_id")
-        assert set(groups.keys()) == {"1", "2"}
-        assert {n.name for n in groups["1"]} == {"S1", "S2"}
-        assert {n.name for n in groups["2"]} == {"S3"}
-
-    def test_select_node_groups_by_attribute_strict_detection(self):
-        """Only full match attr:<name> triggers attribute grouping."""
-        net = Network()
-        net.add_node(Node("node1", attrs={"role": "edge"}))
-        net.add_node(Node("node2", attrs={"role": "core"}))
-
-        # Pattern that looks like it references attr but is a regex should not trigger attr mode
-        groups_regex = net.select_node_groups_by_path(r"^attr:.*")
-        assert groups_regex == {}  # No node names start with 'attr:'
-
-        # Missing attribute name -> no groups
-        missing = net.select_node_groups_by_path("attr:missing")
-        assert missing == {}
+    # Note: The legacy attr:<name> syntax has been removed.
+    # For attribute-based grouping, use the unified selector system with
+    # {"group_by": "attr_name"} dict selectors via normalize_selector/select_nodes.
 
 
 class TestLinkUtilities:

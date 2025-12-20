@@ -11,8 +11,8 @@ from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 def _mock_scenario_with_matrix() -> MagicMock:
     mock_scenario = MagicMock()
     td = MagicMock()
-    td.source_path = "A"
-    td.sink_path = "B"
+    td.source = "A"
+    td.sink = "B"
     td.demand = 10.0
     td.mode = "pairwise"
     td.priority = 0
@@ -60,7 +60,7 @@ def test_msd_basic_bracket_and_bisect(
     ctx = exported["steps"]["msd_step"]["data"].get("context", {})
     assert ctx.get("acceptance_rule") == "hard"
     base = exported["steps"]["msd_step"]["data"].get("base_demands", [])
-    assert base and base[0]["source_path"] == "A"
+    assert base and base[0]["source"] == "A"
 
 
 @patch.object(MaximumSupportedDemand, "_evaluate_alpha")
@@ -135,8 +135,8 @@ def test_msd_end_to_end_single_link() -> None:
     demands_config = [
         {
             "id": d.id,
-            "source_path": d.source_path,
-            "sink_path": d.sink_path,
+            "source": d.source,
+            "sink": d.sink,
             "demand": d.demand,
             "mode": d.mode,
             "priority": d.priority,
@@ -162,8 +162,8 @@ def test_msd_end_to_end_single_link() -> None:
     demands_config_above = [
         {
             "id": d.id,
-            "source_path": d.source_path,
-            "sink_path": d.sink_path,
+            "source": d.source,
+            "sink": d.sink,
             "demand": d.demand,
             "mode": d.mode,
             "priority": d.priority,

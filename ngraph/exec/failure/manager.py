@@ -28,6 +28,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, Protocol, Set, TypeVar
 
+from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
 from ngraph.logging import get_logger
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.types.base import FlowPlacement
@@ -340,49 +341,20 @@ class FailureManager:
             return excluded_nodes, excluded_links
 
         # Build merged views of nodes and links including top-level fields required by
-        # policy matching and risk-group expansion. This ensures attributes like
-        # 'risk_groups' are available to the policy engine.
-        def _merge_node_attrs() -> dict[str, dict[str, Any]]:
-            if self._merged_node_attrs is not None:
-                return self._merged_node_attrs
+        # policy matching and risk-group expansion. Results are cached for reuse.
+        if self._merged_node_attrs is None:
+            self._merged_node_attrs = {
+                node_name: flatten_node_attrs(node)
+                for node_name, node in self.network.nodes.items()
+            }
+        if self._merged_link_attrs is None:
+            self._merged_link_attrs = {
+                link_id: flatten_link_attrs(link, link_id)
+                for link_id, link in self.network.links.items()
+            }
 
-            merged: dict[str, dict[str, Any]] = {}
-            for node_name, node in self.network.nodes.items():
-                attrs: dict[str, Any] = {
-                    "name": node.name,
-                    "disabled": node.disabled,
-                    "risk_groups": node.risk_groups,
-                }
-                # Top-level fields take precedence over attrs on conflict
-                attrs.update({k: v for k, v in node.attrs.items() if k not in attrs})
-                merged[node_name] = attrs
-
-            self._merged_node_attrs = merged
-            return merged
-
-        def _merge_link_attrs() -> dict[str, dict[str, Any]]:
-            if self._merged_link_attrs is not None:
-                return self._merged_link_attrs
-
-            merged: dict[str, dict[str, Any]] = {}
-            for link_id, link in self.network.links.items():
-                attrs: dict[str, Any] = {
-                    "id": link_id,
-                    "source": link.source,
-                    "target": link.target,
-                    "capacity": link.capacity,
-                    "cost": link.cost,
-                    "disabled": link.disabled,
-                    "risk_groups": link.risk_groups,
-                }
-                attrs.update({k: v for k, v in link.attrs.items() if k not in attrs})
-                merged[link_id] = attrs
-
-            self._merged_link_attrs = merged
-            return merged
-
-        node_map = _merge_node_attrs()
-        link_map = _merge_link_attrs()
+        node_map = self._merged_node_attrs
+        link_map = self._merged_link_attrs
 
         # Apply failure policy with optional deterministic seed override
         failed_ids = policy.apply_failures(
@@ -494,15 +466,15 @@ class FailureManager:
                 )
                 logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
 
-            elif "source_path" in analysis_kwargs and "sink_path" in analysis_kwargs:
+            elif "source" in analysis_kwargs and "sink" in analysis_kwargs:
                 # Max-flow analysis or sensitivity analysis
                 from ngraph.exec.analysis.flow import build_maxflow_context
 
                 logger.debug("Pre-building context for max-flow analysis")
                 analysis_kwargs["context"] = build_maxflow_context(
                     self.network,
-                    analysis_kwargs["source_path"],
-                    analysis_kwargs["sink_path"],
+                    analysis_kwargs["source"],
+                    analysis_kwargs["sink"],
                     mode=analysis_kwargs.get("mode", "combine"),
                 )
                 logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
@@ -897,8 +869,8 @@ class FailureManager:
 
     def run_max_flow_monte_carlo(
         self,
-        source_path: str,
-        sink_path: str,
+        source: str | dict[str, Any],
+        sink: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
         parallelism: int = 1,
@@ -918,8 +890,8 @@ class FailureManager:
         frequency-based capacity envelopes and optional failure pattern analysis.
 
         Args:
-            source_path: Regex pattern for source node groups.
-            sink_path: Regex pattern for sink node groups.
+            source: Source node selector (string path or selector dict).
+            sink: Sink node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
@@ -952,8 +924,8 @@ class FailureManager:
             baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
-            source_path=source_path,
-            sink_path=sink_path,
+            source=source,
+            sink=sink,
             mode=mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
@@ -1063,10 +1035,15 @@ class FailureManager:
                 serializable_demands.append(
                     {
                         "id": getattr(demand, "id", None),
-                        "source_path": getattr(demand, "source_path", ""),
-                        "sink_path": getattr(demand, "sink_path", ""),
+                        "source": getattr(demand, "source", ""),
+                        "sink": getattr(demand, "sink", ""),
                         "demand": float(getattr(demand, "demand", 0.0)),
                         "mode": getattr(demand, "mode", "pairwise"),
+                        "group_mode": getattr(demand, "group_mode", "flatten"),
+                        "expand_vars": getattr(demand, "expand_vars", {}),
+                        "expansion_mode": getattr(
+                            demand, "expansion_mode", "cartesian"
+                        ),
                         "flow_policy_config": getattr(
                             demand, "flow_policy_config", None
                         ),
@@ -1093,8 +1070,8 @@ class FailureManager:
 
     def run_sensitivity_monte_carlo(
         self,
-        source_path: str,
-        sink_path: str,
+        source: str | dict[str, Any],
+        sink: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
         parallelism: int = 1,
@@ -1112,8 +1089,8 @@ class FailureManager:
         scores showing which components have the greatest effect on network capacity.
 
         Args:
-            source_path: Regex pattern for source node groups.
-            sink_path: Regex pattern for sink node groups.
+            source: Source node selector (string path or selector dict).
+            sink: Sink node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
@@ -1143,8 +1120,8 @@ class FailureManager:
             baseline=baseline,
             seed=seed,
             store_failure_patterns=store_failure_patterns,
-            source_path=source_path,
-            sink_path=sink_path,
+            source=source,
+            sink=sink,
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,
@@ -1157,8 +1134,8 @@ class FailureManager:
         )
 
         # Augment metadata with analysis-specific context
-        raw_results["metadata"]["source_pattern"] = source_path
-        raw_results["metadata"]["sink_pattern"] = sink_path
+        raw_results["metadata"]["source"] = source
+        raw_results["metadata"]["sink"] = sink
         raw_results["metadata"]["mode"] = mode
 
         return raw_results

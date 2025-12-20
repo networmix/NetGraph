@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from itertools import product, zip_longest
 from typing import Any, Dict, List, Set
 
 from ngraph.dsl.blueprints import parser as _bp_parse
-from ngraph.model.failure.conditions import FailureCondition as _Cond
-from ngraph.model.failure.conditions import evaluate_conditions as _eval_conditions
+from ngraph.dsl.expansion import ExpansionSpec, expand_risk_group_refs, expand_templates
+from ngraph.dsl.selectors import normalize_selector, select_nodes
 from ngraph.model.network import Link, Network, Node
 
 
@@ -244,7 +243,7 @@ def _expand_group(
                 raise ValueError(
                     f"'risk_groups' must be list or set in group '{group_name}'."
                 )
-            parent_risk_groups |= set(rg_val)
+            parent_risk_groups |= expand_risk_group_refs(rg_val)
 
         param_overrides: Dict[str, Any] = group_def.get("parameters", {})
         if not isinstance(param_overrides, dict):
@@ -269,7 +268,7 @@ def _expand_group(
             merged_def["attrs"] = {**parent_attrs, **child_attrs}
 
             # Merge parent's risk_groups with child's
-            child_rgs = set(merged_def.get("risk_groups", []))
+            child_rgs = expand_risk_group_refs(merged_def.get("risk_groups", []))
             merged_def["risk_groups"] = parent_risk_groups | child_rgs
 
             # Recursively expand
@@ -306,7 +305,7 @@ def _expand_group(
 
         # Merge parent's risk groups
         parent_risk_groups = set(inherited_risk_groups)
-        child_rgs = set(group_def.get("risk_groups", []))
+        child_rgs = expand_risk_group_refs(group_def.get("risk_groups", []))
         final_risk_groups = parent_risk_groups | child_rgs
 
         for i in range(1, node_count + 1):
@@ -321,6 +320,41 @@ def _expand_group(
             node.attrs.setdefault("type", "node")
             node.risk_groups = final_risk_groups.copy()
             ctx.network.add_node(node)
+
+
+def _normalize_adjacency_selector(sel: Any, base: str) -> Dict[str, Any]:
+    """Normalize a source/target selector for adjacency expansion.
+
+    Args:
+        sel: String path or dict with 'path', 'group_by', and/or 'match'.
+        base: Parent path to prepend.
+
+    Returns:
+        Normalized selector dict.
+    """
+    if isinstance(sel, str):
+        return {"path": _bp_parse.join_paths(base, sel)}
+    if isinstance(sel, dict):
+        path = sel.get("path")
+        group_by = sel.get("group_by")
+        match = sel.get("match")
+
+        # Validate: must have path, group_by, or match
+        if path is None and group_by is None and match is None:
+            raise ValueError(
+                "Selector object must contain 'path', 'group_by', or 'match'."
+            )
+
+        out = dict(sel)
+        if path is not None:
+            if not isinstance(path, str):
+                raise ValueError("Selector 'path' must be a string.")
+            out["path"] = _bp_parse.join_paths(base, path)
+        return out
+    raise ValueError(
+        "Adjacency 'source'/'target' must be string or object with "
+        "'path', 'group_by', or 'match'."
+    )
 
 
 def _expand_blueprint_adjacency(
@@ -353,28 +387,8 @@ def _expand_blueprint_adjacency(
     _bp_parse.check_link_params(link_params, context="blueprint adjacency")
     link_count = adj_def.get("link_count", 1)
 
-    def _normalize_selector(sel: Any, base: str) -> Dict[str, Any]:
-        if isinstance(sel, str):
-            # Attribute directives must not be prefixed by parent_path
-            if sel.startswith("attr:"):
-                return {"path": sel}
-            return {"path": _bp_parse.join_paths(base, sel)}
-        if isinstance(sel, dict):
-            path = sel.get("path")
-            if not isinstance(path, str):
-                raise ValueError("Selector object must contain string 'path'.")
-            out = dict(sel)
-            if path.startswith("attr:"):
-                out["path"] = path
-            else:
-                out["path"] = _bp_parse.join_paths(base, path)
-            return out
-        raise ValueError(
-            "Adjacency 'source'/'target' must be string or object with 'path'."
-        )
-
-    src_sel = _normalize_selector(source_rel, parent_path)
-    tgt_sel = _normalize_selector(target_rel, parent_path)
+    src_sel = _normalize_adjacency_selector(source_rel, parent_path)
+    tgt_sel = _normalize_adjacency_selector(target_rel, parent_path)
 
     _expand_adjacency_pattern(ctx, src_sel, tgt_sel, pattern, link_params, link_count)
 
@@ -397,29 +411,15 @@ def _expand_adjacency(ctx: DSLExpansionContext, adj_def: Dict[str, Any]) -> None
         _expand_adjacency_with_variables(ctx, adj_def, parent_path="")
         return
 
-    source_path_raw = adj_def["source"]
-    target_path_raw = adj_def["target"]
+    source_raw = adj_def["source"]
+    target_raw = adj_def["target"]
     pattern = adj_def.get("pattern", "mesh")
     link_count = adj_def.get("link_count", 1)
     link_params = adj_def.get("link_params", {})
     _bp_parse.check_link_params(link_params, context="top-level adjacency")
 
-    def _normalize_selector(sel: Any, base: str) -> Dict[str, Any]:
-        if isinstance(sel, str):
-            return {"path": _bp_parse.join_paths(base, sel)}
-        if isinstance(sel, dict):
-            path = sel.get("path")
-            if not isinstance(path, str):
-                raise ValueError("Selector object must contain string 'path'.")
-            out = dict(sel)
-            out["path"] = _bp_parse.join_paths(base, path)
-            return out
-        raise ValueError(
-            "Adjacency 'source'/'target' must be string or object with 'path'."
-        )
-
-    src_sel = _normalize_selector(source_path_raw, "")
-    tgt_sel = _normalize_selector(target_path_raw, "")
+    src_sel = _normalize_adjacency_selector(source_raw, "")
+    tgt_sel = _normalize_adjacency_selector(target_raw, "")
 
     _expand_adjacency_pattern(ctx, src_sel, tgt_sel, pattern, link_params, link_count)
 
@@ -428,13 +428,15 @@ def _expand_adjacency_with_variables(
     ctx: DSLExpansionContext, adj_def: Dict[str, Any], parent_path: str
 ) -> None:
     """Handles adjacency expansions when 'expand_vars' is provided.
-    We substitute variables into the 'source' and 'target' templates to produce
-    multiple adjacency expansions. Then each expansion is passed to _expand_adjacency_pattern.
+
+    Substitutes variables into 'source' and 'target' templates using $var or ${var}
+    syntax to produce multiple adjacency expansions. Supports both string paths
+    and dict selectors (with path/group_by).
 
     Args:
-        ctx (DSLExpansionContext): The DSL expansion context.
-        adj_def (Dict[str, Any]): The adjacency definition including expand_vars, source, target, etc.
-        parent_path (str): Prepended to source/target if they do not start with '/'.
+        ctx: The DSL expansion context.
+        adj_def: The adjacency definition including expand_vars, source, target, etc.
+        parent_path: Prepended to source/target paths.
     """
     source_template = adj_def["source"]
     target_template = adj_def["target"]
@@ -445,50 +447,65 @@ def _expand_adjacency_with_variables(
     expand_vars = adj_def["expand_vars"]
     expansion_mode = adj_def.get("expansion_mode", "cartesian")
 
-    var_names = sorted(expand_vars.keys())
-    lists_of_values = [expand_vars[var] for var in var_names]
+    # Build expansion spec
+    spec = ExpansionSpec(expand_vars=expand_vars, expansion_mode=expansion_mode)
 
-    if expansion_mode == "zip":
-        lengths = [len(lst) for lst in lists_of_values]
-        if len(set(lengths)) != 1:
-            raise ValueError(
-                f"zip expansion requires all lists be the same length; got {lengths}"
-            )
+    # Collect all string fields that need variable substitution
+    templates = _extract_selector_templates(source_template, "source")
+    templates.update(_extract_selector_templates(target_template, "target"))
 
-        for combo_tuple in zip_longest(*lists_of_values, fillvalue=None):
-            combo_dict = dict(zip(var_names, combo_tuple, strict=False))
-            expanded_src = _bp_parse.join_paths(
-                parent_path, source_template.format(**combo_dict)
+    if not templates:
+        # No variables to expand - just process once
+        src_sel = _normalize_adjacency_selector(source_template, parent_path)
+        tgt_sel = _normalize_adjacency_selector(target_template, parent_path)
+        _expand_adjacency_pattern(
+            ctx, src_sel, tgt_sel, pattern, link_params, link_count
+        )
+        return
+
+    # Expand templates and rebuild selectors
+    for substituted in expand_templates(templates, spec):
+        src_sel = _rebuild_selector(source_template, substituted, "source", parent_path)
+        tgt_sel = _rebuild_selector(target_template, substituted, "target", parent_path)
+        _expand_adjacency_pattern(
+            ctx, src_sel, tgt_sel, pattern, link_params, link_count
+        )
+
+
+def _extract_selector_templates(selector: Any, prefix: str) -> Dict[str, str]:
+    """Extract string fields from a selector that may contain variables."""
+    templates: Dict[str, str] = {}
+    if isinstance(selector, str):
+        templates[prefix] = selector
+    elif isinstance(selector, dict):
+        if "path" in selector and isinstance(selector["path"], str):
+            templates[f"{prefix}.path"] = selector["path"]
+        if "group_by" in selector and isinstance(selector["group_by"], str):
+            templates[f"{prefix}.group_by"] = selector["group_by"]
+    return templates
+
+
+def _rebuild_selector(
+    original: Any, substituted: Dict[str, str], prefix: str, parent_path: str
+) -> Dict[str, Any]:
+    """Rebuild a selector with substituted values."""
+    if isinstance(original, str):
+        path = substituted.get(prefix, original)
+        return {"path": _bp_parse.join_paths(parent_path, path)}
+
+    if isinstance(original, dict):
+        result = dict(original)
+        if f"{prefix}.path" in substituted:
+            result["path"] = _bp_parse.join_paths(
+                parent_path, substituted[f"{prefix}.path"]
             )
-            expanded_tgt = _bp_parse.join_paths(
-                parent_path, target_template.format(**combo_dict)
-            )
-            _expand_adjacency_pattern(
-                ctx,
-                {"path": expanded_src},
-                {"path": expanded_tgt},
-                pattern,
-                link_params,
-                link_count,
-            )
-    else:
-        # "cartesian" default
-        for combo_tuple in product(*lists_of_values):
-            combo_dict = dict(zip(var_names, combo_tuple, strict=False))
-            expanded_src = _bp_parse.join_paths(
-                parent_path, source_template.format(**combo_dict)
-            )
-            expanded_tgt = _bp_parse.join_paths(
-                parent_path, target_template.format(**combo_dict)
-            )
-            _expand_adjacency_pattern(
-                ctx,
-                {"path": expanded_src},
-                {"path": expanded_tgt},
-                pattern,
-                link_params,
-                link_count,
-            )
+        elif "path" in result:
+            result["path"] = _bp_parse.join_paths(parent_path, result["path"])
+        if f"{prefix}.group_by" in substituted:
+            result["group_by"] = substituted[f"{prefix}.group_by"]
+        return result
+
+    raise ValueError(f"Selector must be string or dict, got {type(original)}")
 
 
 def _expand_adjacency_pattern(
@@ -512,88 +529,27 @@ def _expand_adjacency_pattern(
     risk_groups, attrs.
 
     Args:
-        ctx (DSLExpansionContext): The context with the target network.
-        source_selector (str|dict): Path string or selector object {path, match}.
-        target_selector (str|dict): Path string or selector object {path, match}.
-        pattern (str): "mesh" or "one_to_one".
-        link_params (Dict[str, Any]): Additional link parameters (capacity, cost, disabled, risk_groups, attrs).
-        link_count (int): Number of parallel links to create for each adjacency.
+        ctx: The context with the target network.
+        source_selector: Path string or selector object {path, group_by, match}.
+        target_selector: Path string or selector object {path, group_by, match}.
+        pattern: "mesh" or "one_to_one".
+        link_params: Additional link parameters.
+        link_count: Number of parallel links to create for each adjacency.
     """
-
-    def _normalize(sel: Any) -> tuple[str, Dict[str, Any] | None]:
-        if isinstance(sel, str):
-            return sel, None
-        if isinstance(sel, dict):
-            path = sel.get("path")
-            if not isinstance(path, str):
-                raise ValueError("Selector object must contain string 'path'.")
-            match = sel.get("match")
-            if match is not None and not isinstance(match, dict):
-                raise ValueError("'match' must be a dictionary if provided.")
-            return path, match
-        raise ValueError("source/target must be string or selector object with 'path'.")
-
-    source_path, source_match = _normalize(source_selector)
-    target_path, target_match = _normalize(target_selector)
-
-    source_node_groups = ctx.network.select_node_groups_by_path(source_path)
-    target_node_groups = ctx.network.select_node_groups_by_path(target_path)
-
-    def _flatten_node(node: Node) -> Dict[str, Any]:
-        return {
-            "name": node.name,
-            "disabled": node.disabled,
-            "risk_groups": node.risk_groups,
-            **{
-                k: v
-                for k, v in node.attrs.items()
-                if k not in {"name", "disabled", "risk_groups"}
-            },
-        }
-
-    def _apply_match(nodes: List[Node], match: Dict[str, Any] | None) -> List[Node]:
-        if not match:
-            return nodes
-        logic = match.get("logic", "or")
-        cond_dicts = match.get("conditions", [])
-        if not isinstance(cond_dicts, list):
-            raise ValueError("match.conditions must be a list if provided.")
-        conditions: List[_Cond] = []
-        for cd in cond_dicts:
-            if not isinstance(cd, dict) or "attr" not in cd or "operator" not in cd:
-                raise ValueError(
-                    "Each condition must be a dict with 'attr' and 'operator'."
-                )
-            conditions.append(
-                _Cond(attr=cd["attr"], operator=cd["operator"], value=cd.get("value"))
-            )
-        filtered: List[Node] = []
-        for n in nodes:
-            attrs = _flatten_node(n)
-            if _eval_conditions(attrs, conditions, logic):
-                filtered.append(n)
-        return filtered
-
-    source_nodes = _apply_match(
-        [node for _, nodes in source_node_groups.items() for node in nodes],
-        source_match,
-    )
-    target_nodes = _apply_match(
-        [node for _, nodes in target_node_groups.items() for node in nodes],
-        target_match,
-    )
+    source_nodes = _select_adjacency_nodes(ctx.network, source_selector)
+    target_nodes = _select_adjacency_nodes(ctx.network, target_selector)
 
     if not source_nodes or not target_nodes:
         return
 
-    dedup_pairs = set()
+    dedup_pairs: Set[tuple[str, str]] = set()
 
     if pattern == "mesh":
         for sn in source_nodes:
             for tn in target_nodes:
                 if sn.name == tn.name:
                     continue
-                pair = tuple(sorted((sn.name, tn.name)))
+                pair = (min(sn.name, tn.name), max(sn.name, tn.name))
                 if pair not in dedup_pairs:
                     dedup_pairs.add(pair)
                     _create_link(ctx.network, sn.name, tn.name, link_params, link_count)
@@ -612,21 +568,39 @@ def _expand_adjacency_pattern(
 
         for i in range(bigger_count):
             if s_count >= t_count:
-                sn = source_nodes[i].name
-                tn = target_nodes[i % t_count].name
+                src_name = source_nodes[i].name
+                tgt_name = target_nodes[i % t_count].name
             else:
-                sn = source_nodes[i % s_count].name
-                tn = target_nodes[i].name
+                src_name = source_nodes[i % s_count].name
+                tgt_name = target_nodes[i].name
 
-            if sn == tn:
+            if src_name == tgt_name:
                 continue
 
-            pair = tuple(sorted((sn, tn)))
+            pair = (min(src_name, tgt_name), max(src_name, tgt_name))
             if pair not in dedup_pairs:
                 dedup_pairs.add(pair)
-                _create_link(ctx.network, sn, tn, link_params, link_count)
+                _create_link(ctx.network, src_name, tgt_name, link_params, link_count)
     else:
         raise ValueError(f"Unknown adjacency pattern: {pattern}")
+
+
+def _select_adjacency_nodes(network: Network, selector: Any) -> List[Node]:
+    """Select nodes for adjacency based on selector.
+
+    Uses the unified selector system. For adjacency, active_only defaults
+    to False (links to disabled nodes are created).
+
+    Args:
+        network: The network to select from.
+        selector: String path or dict with path/group_by/match.
+
+    Returns:
+        List of matching nodes (flattened from all groups).
+    """
+    normalized = normalize_selector(selector, context="adjacency")
+    groups = select_nodes(network, normalized, default_active_only=False)
+    return [node for nodes in groups.values() for node in nodes]
 
 
 def _create_link(
@@ -657,7 +631,7 @@ def _create_link(
         attrs = copy.deepcopy(link_params.get("attrs", {}))
         disabled_flag = bool(link_params.get("disabled", False))
         # If link_params has risk_groups, we set them (replace).
-        link_rgs = set(link_params.get("risk_groups", []))
+        link_rgs = expand_risk_group_refs(link_params.get("risk_groups", []))
 
         link = Link(
             source=source,
@@ -700,8 +674,8 @@ def _process_direct_nodes(net: Network, network_data: Dict[str, Any]) -> None:
             attrs_dict = raw_def.get("attrs", {})
             if not isinstance(attrs_dict, dict):
                 raise ValueError(f"'attrs' must be a dict in node '{node_name}'.")
-            # risk_groups => set them if provided
-            rgs = set(raw_def.get("risk_groups", []))
+            # risk_groups => set them if provided (with bracket expansion)
+            rgs = expand_risk_group_refs(raw_def.get("risk_groups", []))
 
             new_node = Node(
                 name=node_name,
@@ -894,7 +868,7 @@ def _update_links(
             if new_disabled_val is not None:
                 link.disabled = bool(new_disabled_val)
             if new_risk_groups is not None:
-                link.risk_groups = set(new_risk_groups)
+                link.risk_groups = expand_risk_group_refs(new_risk_groups)
             if new_attrs:
                 link.attrs.update(new_attrs)
 
@@ -929,7 +903,7 @@ def _update_nodes(
                     raise ValueError(
                         f"risk_groups override must be list or set, got {type(risk_groups_val)}."
                     )
-                node.risk_groups = set(risk_groups_val)
+                node.risk_groups = expand_risk_group_refs(risk_groups_val)
             node.attrs.update(attrs)
 
 

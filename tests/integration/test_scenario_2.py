@@ -205,8 +205,7 @@ class TestScenario2:
         # Same traffic demands as scenario 1
         default_demands = helper.scenario.traffic_matrix_set.get_default_matrix()
         demands_dict = {
-            (demand.source_path, demand.sink_path): demand.demand
-            for demand in default_demands
+            (demand.source, demand.sink): demand.demand for demand in default_demands
         }
 
         expected_demands = {

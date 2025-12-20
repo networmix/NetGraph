@@ -45,10 +45,13 @@ def _reconstruct_traffic_demands(
     return [
         TrafficDemand(
             id=config.get("id") or "",
-            source_path=config["source_path"],
-            sink_path=config["sink_path"],
+            source=config["source"],
+            sink=config["sink"],
             demand=config["demand"],
             mode=config.get("mode", "pairwise"),
+            group_mode=config.get("group_mode", "flatten"),
+            expand_vars=config.get("expand_vars", {}),
+            expansion_mode=config.get("expansion_mode", "cartesian"),
             flow_policy_config=config.get("flow_policy_config"),
             priority=config.get("priority", 0),
         )
@@ -315,8 +318,8 @@ def max_flow_analysis(
     network: "Network",
     excluded_nodes: Set[str],
     excluded_links: Set[str],
-    source_path: str,
-    sink_path: str,
+    source: str | dict[str, Any],
+    sink: str | dict[str, Any],
     mode: str = "combine",
     shortest_path: bool = False,
     require_capacity: bool = True,
@@ -332,8 +335,8 @@ def max_flow_analysis(
         network: Network instance.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
-        source_path: Selection expression for source node groups.
-        sink_path: Selection expression for sink node groups.
+        source: Source node selector (string path or selector dict).
+        sink: Sink node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: Whether to use shortest paths only.
         require_capacity: If True (default), path selection considers available
@@ -354,7 +357,7 @@ def max_flow_analysis(
     if context is not None:
         ctx = context
     else:
-        ctx = analyze(network, source=source_path, sink=sink_path, mode=mode_enum)
+        ctx = analyze(network, source=source, sink=sink, mode=mode_enum)
 
     flow_entries: list[FlowEntry] = []
     total_demand = 0.0
@@ -624,8 +627,8 @@ def sensitivity_analysis(
     network: "Network",
     excluded_nodes: Set[str],
     excluded_links: Set[str],
-    source_path: str,
-    sink_path: str,
+    source: str | dict[str, Any],
+    sink: str | dict[str, Any],
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -645,8 +648,8 @@ def sensitivity_analysis(
         network: Network instance.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
-        source_path: Selection expression for source node groups.
-        sink_path: Selection expression for sink node groups.
+        source: Source node selector (string path or selector dict).
+        sink: Sink node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
             Reports only edges used under ECMP routing. If False (default), use
@@ -665,7 +668,7 @@ def sensitivity_analysis(
     if context is not None:
         ctx = context
     else:
-        ctx = analyze(network, source=source_path, sink=sink_path, mode=mode_enum)
+        ctx = analyze(network, source=source, sink=sink, mode=mode_enum)
 
     # Get max flow values for each pair
     flow_values = ctx.max_flow(
@@ -744,8 +747,8 @@ def build_demand_context(
 
 def build_maxflow_context(
     network: "Network",
-    source_path: str,
-    sink_path: str,
+    source: str | dict[str, Any],
+    sink: str | dict[str, Any],
     mode: str = "combine",
 ) -> AnalysisContext:
     """Build an AnalysisContext for repeated max-flow analysis.
@@ -755,12 +758,12 @@ def build_maxflow_context(
 
     Args:
         network: Network instance.
-        source_path: Selection expression for source node groups.
-        sink_path: Selection expression for sink node groups.
+        source: Source node selector (string path or selector dict).
+        sink: Sink node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
 
     Returns:
         AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
     """
     mode_enum = Mode.COMBINE if mode == "combine" else Mode.PAIRWISE
-    return analyze(network, source=source_path, sink=sink_path, mode=mode_enum)
+    return analyze(network, source=source, sink=sink, mode=mode_enum)

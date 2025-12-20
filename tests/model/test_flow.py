@@ -73,7 +73,7 @@ class TestMaxFlow:
         net.add_link(Link("S2", "T1", capacity=3.0))
 
         flow = analyze(net).max_flow(
-            "attr:src_group", "attr:dst_group", mode=Mode.COMBINE
+            {"group_by": "src_group"}, {"group_by": "dst_group"}, mode=Mode.COMBINE
         )
         assert flow == {("src", "dst"): 8.0}
 
@@ -88,9 +88,9 @@ class TestMaxFlow:
         net.add_link(Link("S1", "T1", capacity=2.0))
         net.add_link(Link("S2", "T2", capacity=3.0))
 
-        flow = analyze(net).max_flow("attr:role", r"^T\d$", mode=Mode.PAIRWISE)
+        flow = analyze(net).max_flow({"group_by": "role"}, r"^T\d$", mode=Mode.PAIRWISE)
         # Groups: sources -> {"edge": [S1, S2]}, sinks -> {"T1": [T1], "T2": [T2]}
-        # In pairwise mode with attr:role, we get (edge, T1), (edge, T2)
+        # In pairwise mode with group_by: role, we get (edge, T1), (edge, T2)
         # The sink pattern r"^T\d$" creates individual labels per node
         assert len(flow) >= 1
         # Total flow for pairwise is computed per pair entries
@@ -127,9 +127,9 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=10))
         net.add_link(Link("B", "C", capacity=10))
 
-        # Source A is disabled, so no flow should be possible
-        flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-        assert flow[("^A$", "^C$")] == 0.0
+        # Source A is disabled, so no active source nodes match - should raise
+        with pytest.raises(ValueError, match="No source nodes found"):
+            analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
 
     def test_max_flow_disabled_link_coverage(self):
         """Test max_flow with disabled links for coverage."""

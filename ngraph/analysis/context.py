@@ -18,7 +18,18 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, FrozenSet, List, Mapping, Optional, Set, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    FrozenSet,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import netgraph_core
 import numpy as np
@@ -56,6 +67,21 @@ class AugmentationEdge:
         self.target = target
         self.capacity = capacity
         self.cost = cost
+
+
+def _get_active_node_names(
+    nodes: List[Any],
+    excluded_nodes: Optional[Set[str]] = None,
+) -> List[str]:
+    """Extract names of active (non-disabled) nodes, optionally excluding some.
+
+    This is a local helper to replace utils.nodes.get_active_node_names.
+    """
+    if excluded_nodes:
+        return [
+            n.name for n in nodes if not n.disabled and n.name not in excluded_nodes
+        ]
+    return [n.name for n in nodes if not n.disabled]
 
 
 class _NodeMapper:
@@ -111,8 +137,8 @@ class _EdgeMapper:
 class _PseudoNodeContext:
     """Context for pseudo nodes created during graph construction."""
 
-    source_path: str
-    sink_path: str
+    source: Union[str, Dict[str, Any]]
+    sink: Union[str, Dict[str, Any]]
     mode: Mode
     pairs: Dict[Tuple[str, str], Tuple[int, int]]
 
@@ -162,8 +188,8 @@ class AnalysisContext:
     _link_id_to_edge_indices: Mapping[str, Tuple[int, ...]] = field(repr=False)
 
     # Binding state (None if unbound)
-    _source_path: Optional[str] = None
-    _sink_path: Optional[str] = None
+    _source: Optional[Union[str, Dict[str, Any]]] = None
+    _sink: Optional[Union[str, Dict[str, Any]]] = None
     _mode: Optional[Mode] = None
     _pseudo_context: Optional[_PseudoNodeContext] = field(default=None, repr=False)
 
@@ -175,17 +201,17 @@ class AnalysisContext:
     @property
     def is_bound(self) -> bool:
         """True if source/sink groups are pre-configured."""
-        return self._source_path is not None
+        return self._source is not None
 
     @property
-    def bound_source(self) -> Optional[str]:
-        """Source pattern if bound, None otherwise."""
-        return self._source_path
+    def bound_source(self) -> Optional[Union[str, Dict[str, Any]]]:
+        """Source selector if bound, None otherwise."""
+        return self._source
 
     @property
-    def bound_sink(self) -> Optional[str]:
-        """Sink pattern if bound, None otherwise."""
-        return self._sink_path
+    def bound_sink(self) -> Optional[Union[str, Dict[str, Any]]]:
+        """Sink selector if bound, None otherwise."""
+        return self._sink
 
     @property
     def bound_mode(self) -> Optional[Mode]:
@@ -259,8 +285,8 @@ class AnalysisContext:
         cls,
         network: "Network",
         *,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         mode: Mode = Mode.COMBINE,
         augmentations: Optional[List[AugmentationEdge]] = None,
     ) -> "AnalysisContext":
@@ -268,9 +294,9 @@ class AnalysisContext:
 
         Args:
             network: Network topology to analyze.
-            source: Optional source group pattern. If provided with sink,
-                    creates bound context with pre-built pseudo-nodes.
-            sink: Optional sink group pattern.
+            source: Optional source node selector (string path or selector dict).
+                    If provided with sink, creates bound context with pre-built pseudo-nodes.
+            sink: Optional sink node selector (string path or selector dict).
             mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
             augmentations: Optional custom augmentation edges.
 
@@ -318,8 +344,8 @@ class AnalysisContext:
                     resolved_pairs[pair_key] = (pseudo_src_id, pseudo_snk_id)
 
             pseudo_context = _PseudoNodeContext(
-                source_path=source,
-                sink_path=sink,
+                source=source,
+                sink=sink,
                 mode=mode,
                 pairs=resolved_pairs,
             )
@@ -334,8 +360,8 @@ class AnalysisContext:
             _disabled_node_ids=ctx._disabled_node_ids,
             _disabled_link_ids=ctx._disabled_link_ids,
             _link_id_to_edge_indices=ctx._link_id_to_edge_indices,
-            _source_path=source,
-            _sink_path=sink,
+            _source=source,
+            _sink=sink,
             _mode=mode if source is not None else None,
             _pseudo_context=pseudo_context,
         )
@@ -346,8 +372,8 @@ class AnalysisContext:
 
     def max_flow(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.COMBINE,
         shortest_path: bool = False,
@@ -362,8 +388,10 @@ class AnalysisContext:
         pseudo-nodes for efficiency. Otherwise builds them per-call.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: COMBINE or PAIRWISE (ignored if bound).
             shortest_path: If True, use only shortest paths (IP/IGP mode).
             require_capacity: If True (default), path selection considers
@@ -411,8 +439,8 @@ class AnalysisContext:
 
     def max_flow_detailed(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.COMBINE,
         shortest_path: bool = False,
@@ -425,8 +453,10 @@ class AnalysisContext:
         """Compute max flow with detailed results including cost distribution.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: COMBINE or PAIRWISE (ignored if bound).
             shortest_path: If True, restricts flow to shortest paths.
             require_capacity: If True (default), path selection considers
@@ -467,8 +497,8 @@ class AnalysisContext:
 
     def sensitivity(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.COMBINE,
         shortest_path: bool = False,
@@ -483,8 +513,10 @@ class AnalysisContext:
         removing each one.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: COMBINE or PAIRWISE (ignored if bound).
             shortest_path: If True, use shortest-path-only flow (IP/IGP mode).
             require_capacity: If True (default), path selection considers
@@ -526,8 +558,8 @@ class AnalysisContext:
 
     def shortest_path_cost(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.COMBINE,
         edge_select: EdgeSelect = EdgeSelect.ALL_MIN_COST,
@@ -540,8 +572,10 @@ class AnalysisContext:
         groups. Otherwise source and sink arguments are required.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: COMBINE or PAIRWISE (ignored if bound).
             edge_select: SPF edge selection strategy.
             excluded_nodes: Nodes to exclude from this analysis.
@@ -570,8 +604,8 @@ class AnalysisContext:
 
     def shortest_paths(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.COMBINE,
         edge_select: EdgeSelect = EdgeSelect.ALL_MIN_COST,
@@ -585,8 +619,10 @@ class AnalysisContext:
         groups. Otherwise source and sink arguments are required.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: COMBINE or PAIRWISE (ignored if bound).
             edge_select: SPF edge selection strategy.
             split_parallel_edges: Expand parallel edges into distinct paths.
@@ -615,8 +651,8 @@ class AnalysisContext:
 
     def k_shortest_paths(
         self,
-        source: Optional[str] = None,
-        sink: Optional[str] = None,
+        source: Optional[Union[str, Dict[str, Any]]] = None,
+        sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
         mode: Mode = Mode.PAIRWISE,
         max_k: int = 3,
@@ -633,8 +669,10 @@ class AnalysisContext:
         groups. Otherwise source and sink arguments are required.
 
         Args:
-            source: Source group pattern (required if unbound).
-            sink: Sink group pattern (required if unbound).
+            source: Source node selector (required if unbound). Can be a
+                string pattern or a selector dict with path/group_by/match.
+            sink: Sink node selector (required if unbound). Can be a string
+                pattern or a selector dict with path/group_by/match.
             mode: PAIRWISE (default) or COMBINE (ignored if bound).
             max_k: Maximum paths per pair.
             edge_select: SPF/KSP edge selection strategy.
@@ -673,19 +711,20 @@ class AnalysisContext:
 
     def _resolve_source_sink(
         self,
-        source: Optional[str],
-        sink: Optional[str],
+        source: Optional[Union[str, Dict[str, Any]]],
+        sink: Optional[Union[str, Dict[str, Any]]],
         mode: Mode,
-    ) -> Tuple[str, str, Mode]:
+    ) -> Tuple[Union[str, Dict[str, Any]], Union[str, Dict[str, Any]], Mode]:
         """Resolve source/sink from arguments or bound context.
 
         Args:
-            source: Source pattern from method call (or None).
-            sink: Sink pattern from method call (or None).
+            source: Source selector from method call (or None).
+            sink: Sink selector from method call (or None).
             mode: Mode from method call.
 
         Returns:
             Tuple of (resolved_source, resolved_sink, resolved_mode).
+            Selectors can be string patterns or dict selectors.
 
         Raises:
             ValueError: If unbound and source/sink not provided.
@@ -697,8 +736,8 @@ class AnalysisContext:
                     "Bound context: source/sink already configured. "
                     "Create new context for different groups."
                 )
-            # Use bound values
-            return self._source_path, self._sink_path, self._mode  # type: ignore[return-value]
+            # Use bound values (can be str or dict)
+            return self._source, self._sink, self._mode  # type: ignore[return-value]
         else:
             if source is None or sink is None:
                 raise ValueError("Unbound context: source and sink are required.")
@@ -800,8 +839,8 @@ class AnalysisContext:
     def _max_flow_unbound(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         shortest_path: bool,
         require_capacity: bool,
@@ -884,8 +923,8 @@ class AnalysisContext:
     def _max_flow_detailed_unbound(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         shortest_path: bool,
         require_capacity: bool,
@@ -953,8 +992,8 @@ class AnalysisContext:
     def _sensitivity_unbound(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         shortest_path: bool,
         require_capacity: bool,
@@ -979,8 +1018,13 @@ class AnalysisContext:
         if not self._pseudo_context:
             return
 
-        src_groups = self._network.select_node_groups_by_path(self._source_path or "")
-        snk_groups = self._network.select_node_groups_by_path(self._sink_path or "")
+        from ngraph.dsl.selectors import normalize_selector, select_nodes
+
+        src_selector = normalize_selector(self._source or "", "workflow")
+        snk_selector = normalize_selector(self._sink or "", "workflow")
+
+        src_groups = select_nodes(self._network, src_selector, default_active_only=True)
+        snk_groups = select_nodes(self._network, snk_selector, default_active_only=True)
 
         if self._mode == Mode.COMBINE:
             combined_src_label = "|".join(sorted(src_groups.keys()))
@@ -996,18 +1040,20 @@ class AnalysisContext:
     def _shortest_path_costs_impl(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         edge_select: EdgeSelect,
         excluded_nodes: Optional[Set[str]],
         excluded_links: Optional[Set[str]],
     ) -> Dict[Tuple[str, str], float]:
         """Implementation of shortest_path_cost."""
-        from ngraph.utils.nodes import get_active_node_names
+        from ngraph.dsl.selectors import normalize_selector, select_nodes
 
-        src_groups = self._network.select_node_groups_by_path(source)
-        snk_groups = self._network.select_node_groups_by_path(sink)
+        src_selector = normalize_selector(source, "workflow")
+        snk_selector = normalize_selector(sink, "workflow")
+        src_groups = select_nodes(self._network, src_selector, default_active_only=True)
+        snk_groups = select_nodes(self._network, snk_selector, default_active_only=True)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source}'.")
@@ -1025,12 +1071,12 @@ class AnalysisContext:
             combined_src_names = []
             for group_nodes in src_groups.values():
                 combined_src_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
             combined_snk_names = []
             for group_nodes in snk_groups.values():
                 combined_snk_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
 
             if not combined_src_names or not combined_snk_names:
@@ -1059,8 +1105,8 @@ class AnalysisContext:
             results: Dict[Tuple[str, str], float] = {}
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
-                    active_src_names = get_active_node_names(src_nodes, excluded_nodes)
-                    active_snk_names = get_active_node_names(snk_nodes, excluded_nodes)
+                    active_src_names = _get_active_node_names(src_nodes, excluded_nodes)
+                    active_snk_names = _get_active_node_names(snk_nodes, excluded_nodes)
                     if not active_src_names or not active_snk_names:
                         results[(src_label, snk_label)] = float("inf")
                         continue
@@ -1091,8 +1137,8 @@ class AnalysisContext:
     def _shortest_paths_impl(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         edge_select: EdgeSelect,
         split_parallel_edges: bool,
@@ -1100,10 +1146,12 @@ class AnalysisContext:
         excluded_links: Optional[Set[str]],
     ) -> Dict[Tuple[str, str], List[Path]]:
         """Implementation of shortest_paths."""
-        from ngraph.utils.nodes import get_active_node_names
+        from ngraph.dsl.selectors import normalize_selector, select_nodes
 
-        src_groups = self._network.select_node_groups_by_path(source)
-        snk_groups = self._network.select_node_groups_by_path(sink)
+        src_selector = normalize_selector(source, "workflow")
+        snk_selector = normalize_selector(sink, "workflow")
+        src_groups = select_nodes(self._network, src_selector, default_active_only=True)
+        snk_groups = select_nodes(self._network, snk_selector, default_active_only=True)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source}'.")
@@ -1176,12 +1224,12 @@ class AnalysisContext:
             combined_src_names = []
             for group_nodes in src_groups.values():
                 combined_src_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
             combined_snk_names = []
             for group_nodes in snk_groups.values():
                 combined_snk_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
 
             paths_list = _best_paths_for_groups(combined_src_names, combined_snk_names)
@@ -1191,8 +1239,8 @@ class AnalysisContext:
             results: Dict[Tuple[str, str], List[Path]] = {}
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
-                    active_src_names = get_active_node_names(src_nodes, excluded_nodes)
-                    active_snk_names = get_active_node_names(snk_nodes, excluded_nodes)
+                    active_src_names = _get_active_node_names(src_nodes, excluded_nodes)
+                    active_snk_names = _get_active_node_names(snk_nodes, excluded_nodes)
                     results[(src_label, snk_label)] = _best_paths_for_groups(
                         active_src_names, active_snk_names
                     )
@@ -1203,8 +1251,8 @@ class AnalysisContext:
     def _k_shortest_paths_impl(
         self,
         *,
-        source: str,
-        sink: str,
+        source: Union[str, Dict[str, Any]],
+        sink: Union[str, Dict[str, Any]],
         mode: Mode,
         max_k: int,
         edge_select: EdgeSelect,
@@ -1215,10 +1263,12 @@ class AnalysisContext:
         excluded_links: Optional[Set[str]],
     ) -> Dict[Tuple[str, str], List[Path]]:
         """Implementation of k_shortest_paths."""
-        from ngraph.utils.nodes import get_active_node_names
+        from ngraph.dsl.selectors import normalize_selector, select_nodes
 
-        src_groups = self._network.select_node_groups_by_path(source)
-        snk_groups = self._network.select_node_groups_by_path(sink)
+        src_selector = normalize_selector(source, "workflow")
+        snk_selector = normalize_selector(sink, "workflow")
+        src_groups = select_nodes(self._network, src_selector, default_active_only=True)
+        snk_groups = select_nodes(self._network, snk_selector, default_active_only=True)
 
         if not src_groups:
             raise ValueError(f"No source nodes found matching '{source}'.")
@@ -1304,12 +1354,12 @@ class AnalysisContext:
             combined_src_names = []
             for group_nodes in src_groups.values():
                 combined_src_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
             combined_snk_names = []
             for group_nodes in snk_groups.values():
                 combined_snk_names.extend(
-                    get_active_node_names(group_nodes, excluded_nodes)
+                    _get_active_node_names(group_nodes, excluded_nodes)
                 )
 
             return {
@@ -1322,8 +1372,8 @@ class AnalysisContext:
             results: Dict[Tuple[str, str], List[Path]] = {}
             for src_label, src_nodes in src_groups.items():
                 for snk_label, snk_nodes in snk_groups.items():
-                    active_src_names = get_active_node_names(src_nodes, excluded_nodes)
-                    active_snk_names = get_active_node_names(snk_nodes, excluded_nodes)
+                    active_src_names = _get_active_node_names(src_nodes, excluded_nodes)
+                    active_snk_names = _get_active_node_names(snk_nodes, excluded_nodes)
                     results[(src_label, snk_label)] = _ksp_for_groups(
                         active_src_names, active_snk_names
                     )
@@ -1339,23 +1389,33 @@ class AnalysisContext:
 
 def _build_pseudo_node_augmentations(
     network: "Network",
-    source_path: str,
-    sink_path: str,
+    source: Union[str, Dict[str, Any]],
+    sink: Union[str, Dict[str, Any]],
     mode: Mode,
 ) -> Tuple[List[AugmentationEdge], Dict[Tuple[str, str], Tuple[str, str]]]:
     """Build augmentation edges for pseudo source/sink nodes."""
-    from ngraph.utils.nodes import (
-        collect_active_node_names_from_groups,
-        get_active_node_names,
-    )
+    from ngraph.dsl.selectors import normalize_selector, select_nodes
 
-    src_groups = network.select_node_groups_by_path(source_path)
-    snk_groups = network.select_node_groups_by_path(sink_path)
+    # Normalize selectors and select nodes
+    src_selector = normalize_selector(source, "workflow")
+    snk_selector = normalize_selector(sink, "workflow")
+
+    # select_nodes returns Dict[str, List[Node]] with active_only=True by context
+    src_groups = select_nodes(network, src_selector, default_active_only=True)
+    snk_groups = select_nodes(network, snk_selector, default_active_only=True)
 
     if not src_groups:
-        raise ValueError(f"No source nodes found matching '{source_path}'.")
+        raise ValueError(f"No source nodes found matching '{source}'.")
     if not snk_groups:
-        raise ValueError(f"No sink nodes found matching '{sink_path}'.")
+        raise ValueError(f"No sink nodes found matching '{sink}'.")
+
+    # Helper to get node names from groups
+    def _get_names(groups: Dict[str, List[Any]]) -> List[str]:
+        names: List[str] = []
+        for nodes in groups.values():
+            for node in nodes:
+                names.append(node.name)
+        return names
 
     augmentations: List[AugmentationEdge] = []
     pair_to_pseudo_names: Dict[Tuple[str, str], Tuple[str, str]] = {}
@@ -1364,8 +1424,8 @@ def _build_pseudo_node_augmentations(
         combined_src_label = "|".join(sorted(src_groups.keys()))
         combined_snk_label = "|".join(sorted(snk_groups.keys()))
 
-        combined_src_names = collect_active_node_names_from_groups(src_groups)
-        combined_snk_names = collect_active_node_names_from_groups(snk_groups)
+        combined_src_names = _get_names(src_groups)
+        combined_snk_names = _get_names(snk_groups)
 
         has_overlap = bool(set(combined_src_names) & set(combined_snk_names))
 
@@ -1390,8 +1450,8 @@ def _build_pseudo_node_augmentations(
     elif mode == Mode.PAIRWISE:
         for src_label, src_nodes in src_groups.items():
             for snk_label, snk_nodes in snk_groups.items():
-                active_src_names = get_active_node_names(src_nodes)
-                active_snk_names = get_active_node_names(snk_nodes)
+                active_src_names = [n.name for n in src_nodes]
+                active_snk_names = [n.name for n in snk_nodes]
 
                 if set(active_src_names) & set(active_snk_names):
                     continue

@@ -27,7 +27,7 @@ def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
     tmset = TrafficMatrixSet()
     tmset.add(
         "default",
-        [TrafficDemand(source_path="A", sink_path="C", demand=2.0, mode="pairwise")],
+        [TrafficDemand(source="A", sink="C", demand=2.0, mode="pairwise")],
     )
 
     from ngraph.results.store import Results

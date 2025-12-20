@@ -281,10 +281,12 @@ class TestPairwiseMode:
     """Tests for AnalysisContext in pairwise mode with disabled topology."""
 
     def test_disabled_node_pairwise_mode(self) -> None:
-        """Disabled node should be respected in pairwise mode."""
+        """Disabled node should be excluded from pairwise mode results."""
         net = Network()
         net.add_node(Node("S1"))
-        net.add_node(Node("S2", disabled=True))  # Disabled source
+        net.add_node(
+            Node("S2", disabled=True)
+        )  # Disabled source - excluded from selection
         net.add_node(Node("M"))
         net.add_node(Node("T1"))
         net.add_node(Node("T2"))
@@ -297,13 +299,14 @@ class TestPairwiseMode:
         ctx = analyze(net, source=r"^(S\d)$", sink=r"^(T\d)$", mode=Mode.PAIRWISE)
         result = ctx.max_flow()
 
-        # S1 -> T1 and S1 -> T2 should have flow
+        # Only S1 is active, so only S1 -> T1 and S1 -> T2 pairs exist
+        assert len(result) == 2
         assert result[("S1", "T1")] == 5.0
         assert result[("S1", "T2")] == 5.0
 
-        # S2 -> anything should be 0 (S2 is disabled)
-        assert result[("S2", "T1")] == 0.0
-        assert result[("S2", "T2")] == 0.0
+        # S2 pairs are not in result (S2 is disabled and excluded from selection)
+        assert ("S2", "T1") not in result
+        assert ("S2", "T2") not in result
 
 
 class TestContextReuse:

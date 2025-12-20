@@ -14,8 +14,8 @@ def test_build_traffic_matrix_set_basic():
     raw = {
         "tm1": [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 100.0,
             }
         ]
@@ -25,16 +25,16 @@ def test_build_traffic_matrix_set_basic():
     assert "tm1" in tms.matrices
     demands = tms.get_matrix("tm1")
     assert len(demands) == 1
-    assert demands[0].source_path == "A"
-    assert demands[0].sink_path == "B"
+    assert demands[0].source == "A"
+    assert demands[0].sink == "B"
     assert demands[0].demand == 100.0
 
 
 def test_build_traffic_matrix_set_multiple_matrices():
     """Test building multiple traffic matrices."""
     raw = {
-        "tm1": [{"source_path": "A", "sink_path": "B", "demand": 100.0}],
-        "tm2": [{"source_path": "C", "sink_path": "D", "demand": 200.0}],
+        "tm1": [{"source": "A", "sink": "B", "demand": 100.0}],
+        "tm2": [{"source": "C", "sink": "D", "demand": 200.0}],
     }
 
     tms = build_traffic_matrix_set(raw)
@@ -48,8 +48,8 @@ def test_build_traffic_matrix_set_multiple_demands():
     """Test building traffic matrix with multiple demands."""
     raw = {
         "tm1": [
-            {"source_path": "A", "sink_path": "B", "demand": 100.0},
-            {"source_path": "C", "sink_path": "D", "demand": 200.0},
+            {"source": "A", "sink": "B", "demand": 100.0},
+            {"source": "C", "sink": "D", "demand": 200.0},
         ]
     }
 
@@ -65,8 +65,8 @@ def test_build_traffic_matrix_set_with_flow_policy_enum():
     raw = {
         "tm1": [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 100.0,
                 "flow_policy_config": FlowPolicyPreset.SHORTEST_PATHS_ECMP,
             }
@@ -83,8 +83,8 @@ def test_build_traffic_matrix_set_with_flow_policy_string():
     raw = {
         "tm1": [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 100.0,
                 "flow_policy_config": "SHORTEST_PATHS_ECMP",
             }
@@ -101,8 +101,8 @@ def test_build_traffic_matrix_set_with_flow_policy_int():
     raw = {
         "tm1": [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 100.0,
                 "flow_policy_config": 1,
             }

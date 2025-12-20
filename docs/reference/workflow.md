@@ -76,8 +76,8 @@ Monte Carlo maximum flow analysis between node groups.
 ```yaml
 - step_type: MaxFlow
   name: capacity_analysis
-  source_path: "^servers/.*"
-  sink_path: "^storage/.*"
+  source: "^servers/.*"
+  sink: "^storage/.*"
   mode: "combine"              # combine | pairwise
   failure_policy: random_failures
   iterations: 1000
@@ -180,19 +180,41 @@ Outputs:
 
 ## Node Selection Mechanism
 
-Select nodes by regex on `node.name` (anchored at start via Python `re.match`) or by attribute directive `attr:<name>` which groups nodes by `node.attrs[<name>]`.
+Workflow steps use a unified selector system for node selection. Selectors can be specified as string patterns or selector objects.
 
-### Basic Pattern Matching
+### String Pattern Matching
 
 ```yaml
 # Exact match
-source_path: "spine-1"
+source: "spine-1"
 
 # Prefix match
-source_path: "datacenter/servers/"
+source: "datacenter/servers/"
 
 # Pattern match
-source_path: "^pod[1-3]/leaf/.*$"
+source: "^pod[1-3]/leaf/.*$"
+```
+
+### Selector Objects
+
+```yaml
+# Attribute-based grouping
+source:
+  group_by: "dc"
+
+# Combined path and grouping
+source:
+  path: "^datacenter/.*"
+  group_by: "role"
+
+# With attribute filtering
+source:
+  path: "^pod[1-3]/.*"
+  match:
+    conditions:
+      - attr: "tier"
+        operator: "=="
+        value: "leaf"
 ```
 
 ### Capturing Groups for Node Grouping
@@ -200,14 +222,14 @@ source_path: "^pod[1-3]/leaf/.*$"
 **No Capturing Groups**: All matching nodes form one group labeled by the pattern.
 
 ```yaml
-source_path: "edge/.*"
+source: "edge/.*"
 # Creates one group: "edge/.*" containing all matching nodes
 ```
 
 **Single Capturing Group**: Each unique captured value creates a separate group.
 
 ```yaml
-source_path: "(dc[1-3])/servers/.*"
+source: "(dc[1-3])/servers/.*"
 # Creates groups: "dc1", "dc2", "dc3"
 # Each group contains servers from that datacenter
 ```
@@ -215,15 +237,16 @@ source_path: "(dc[1-3])/servers/.*"
 **Multiple Capturing Groups**: Group labels join captured values with `|`.
 
 ```yaml
-source_path: "(dc[1-3])/(spine|leaf)/switch-(\d+)"
+source: "(dc[1-3])/(spine|leaf)/switch-(\d+)"
 # Creates groups: "dc1|spine|1", "dc1|leaf|2", "dc2|spine|1", etc.
 ```
 
 ### Attribute-based Grouping
 
 ```yaml
-# Group by node attribute value (e.g., node.attrs["dc"]) — groups labeled by attribute value
-source_path: "attr:dc"
+# Group by node attribute value (e.g., node.attrs["dc"])
+source:
+  group_by: "dc"
 ```
 
 ### Flow Analysis Modes
@@ -236,8 +259,8 @@ source_path: "attr:dc"
 
 ### Required Parameters
 
-- `source_path`: Regex pattern for source node selection
-- `sink_path`: Regex pattern for sink node selection
+- `source`: Node selector for source nodes (string pattern or selector object)
+- `sink`: Node selector for sink nodes (string pattern or selector object)
 
 ### Analysis Configuration
 

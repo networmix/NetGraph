@@ -90,10 +90,10 @@ class TestShortestPathCosts:
         net = _multi_source_sink_network()
 
         results = analyze(net).shortest_path_cost(
-            "attr:group", "attr:group", mode=Mode.PAIRWISE
+            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
         )
 
-        # With attr:group, nodes are grouped by their group attribute value
+        # With group_by, nodes are grouped by their group attribute value
         # Sources: src (A, B), Sinks: dst (C, D)
         # The only non-self pair is src -> dst
         assert ("src", "dst") in results
@@ -155,7 +155,7 @@ class TestShortestPaths:
         net = _group_network()
 
         results = analyze(net).shortest_paths(
-            "attr:group", "attr:group", mode=Mode.COMBINE
+            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.COMBINE
         )
 
         # Should have one result with combined labels
@@ -171,7 +171,7 @@ class TestShortestPaths:
         net = _multi_source_sink_network()
 
         results = analyze(net).shortest_paths(
-            "attr:group", "attr:group", mode=Mode.PAIRWISE
+            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
         )
 
         # Should have a result for src->dst pair
@@ -225,7 +225,7 @@ class TestKShortestPaths:
         net = _group_network()
 
         results = analyze(net).k_shortest_paths(
-            "attr:group", "attr:group", max_k=3, mode=Mode.COMBINE
+            {"group_by": "group"}, {"group_by": "group"}, max_k=3, mode=Mode.COMBINE
         )
 
         # Should have one combined result
@@ -256,6 +256,59 @@ class TestKShortestPaths:
         paths = results[("A", "C")]
         # Both paths (cost 2 and 3) should be included since 3 <= 3.0
         assert len(paths) == 2
+
+
+class TestDictSelectorsWithShortestPaths:
+    """Tests for dict-based selectors with shortest path methods.
+
+    Verifies that shortest_path_cost, shortest_paths, and k_shortest_paths
+    correctly handle dict selectors (group_by, match) in both unbound and
+    bound context modes.
+    """
+
+    def test_shortest_path_cost_with_dict_selector(self) -> None:
+        """shortest_path_cost works with dict selectors."""
+        net = _multi_source_sink_network()
+
+        results = analyze(net).shortest_path_cost(
+            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
+        )
+
+        assert ("src", "dst") in results
+        assert pytest.approx(results[("src", "dst")], abs=1e-9) == 2.0
+
+    def test_shortest_paths_with_match_selector(self) -> None:
+        """shortest_paths works with match conditions in selectors."""
+        net = _multi_source_sink_network()
+
+        results = analyze(net).shortest_paths(
+            {
+                "path": ".*",
+                "match": {
+                    "conditions": [{"attr": "group", "operator": "==", "value": "src"}]
+                },
+            },
+            {
+                "path": ".*",
+                "match": {
+                    "conditions": [{"attr": "group", "operator": "==", "value": "dst"}]
+                },
+            },
+            mode=Mode.COMBINE,
+        )
+
+        # Should find paths from src group to dst group
+        assert len(results) == 1
+
+    def test_k_shortest_paths_with_dict_selector(self) -> None:
+        """k_shortest_paths works with dict selectors."""
+        net = _group_network()
+
+        results = analyze(net).k_shortest_paths(
+            {"group_by": "group"}, {"group_by": "group"}, max_k=3, mode=Mode.COMBINE
+        )
+
+        assert len(results) == 1
 
     def test_empty_result_when_no_path(self) -> None:
         """Test that no paths are returned when unreachable."""

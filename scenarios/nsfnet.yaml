@@ -191,8 +191,8 @@ workflow:
   # MaxFlow capacity matrix between all node pairs
   - step_type: MaxFlow
     name: node_to_node_capacity_matrix_1
-    source_path: "^(.+)$"
-    sink_path: "^(.+)$"
+    source: "^(.+)$"
+    sink: "^(.+)$"
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000
@@ -207,8 +207,8 @@ workflow:
 
   - step_type: MaxFlow
     name: node_to_node_capacity_matrix_2
-    source_path: "^(.+)$"
-    sink_path: "^(.+)$"
+    source: "^(.+)$"
+    sink: "^(.+)$"
     mode: pairwise
     failure_policy: availability_1992
     iterations: 1000

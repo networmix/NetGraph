@@ -70,8 +70,8 @@ workflow:
     name: build_graph
   - step_type: CapacityEnvelopeAnalysis
     name: capacity_test
-    source_path: "A"
-    sink_path: "C"
+    source: "A"
+    sink: "C"
     iterations: 1
     baseline: false
     failure_policy: null
@@ -375,16 +375,16 @@ workflow:
         traffic_scenario = """
 traffic_matrix_set:
   default:
-    - source_path: "^spine.*"
-      sink_path: "^leaf.*"
+    - source: "^spine.*"
+      sink: "^leaf.*"
       demand: 1000.0
       mode: "combine"
       priority: 1
       attrs:
         traffic_type: "north_south"
   hpc_workload:
-    - source_path: "compute.*"
-      sink_path: "storage.*"
+    - source: "compute.*"
+      sink: "storage.*"
       demand: 5000.0
       mode: "pairwise"
       flow_policy_config:
@@ -404,8 +404,8 @@ workflow:
     name: build_graph
   - step_type: CapacityEnvelopeAnalysis
     name: capacity_test
-    source_path: "spine1"
-    sink_path: "leaf1"
+    source: "spine1"
+    sink: "leaf1"
     iterations: 1
     baseline: false
     failure_policy: null

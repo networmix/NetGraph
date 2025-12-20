@@ -345,10 +345,10 @@ class TestMainScenarioVariants:
 
         # Add traffic demands matching scenario 1
         demands = [
-            {"source_path": "SEA", "sink_path": "JFK", "demand": 50},
-            {"source_path": "SFO", "sink_path": "DCA", "demand": 50},
-            {"source_path": "SEA", "sink_path": "DCA", "demand": 50},
-            {"source_path": "SFO", "sink_path": "JFK", "demand": 50},
+            {"source": "SEA", "sink": "JFK", "demand": 50},
+            {"source": "SFO", "sink": "DCA", "demand": 50},
+            {"source": "SEA", "sink": "DCA", "demand": 50},
+            {"source": "SFO", "sink": "JFK", "demand": 50},
         ]
         builder.builder.data["traffic_matrix_set"] = {"default": demands}
 
@@ -499,10 +499,10 @@ class TestMainScenarioVariants:
 
         # Add traffic and failure policy same as scenario 1
         demands = [
-            {"source_path": "SEA", "sink_path": "JFK", "demand": 50},
-            {"source_path": "SFO", "sink_path": "DCA", "demand": 50},
-            {"source_path": "SEA", "sink_path": "DCA", "demand": 50},
-            {"source_path": "SFO", "sink_path": "JFK", "demand": 50},
+            {"source": "SEA", "sink": "JFK", "demand": 50},
+            {"source": "SFO", "sink": "DCA", "demand": 50},
+            {"source": "SEA", "sink": "DCA", "demand": 50},
+            {"source": "SFO", "sink": "JFK", "demand": 50},
         ]
         builder.builder.data["traffic_matrix_set"] = {"default": demands}
 
@@ -598,8 +598,8 @@ class TestMainScenarioVariants:
             {
                 "step_type": "MaxFlow",
                 "name": "capacity_analysis",
-                "source_path": "my_clos1/b.*/t1",
-                "sink_path": "my_clos2/b.*/t1",
+                "source": "my_clos1/b.*/t1",
+                "sink": "my_clos2/b.*/t1",
                 "mode": "combine",
                 "shortest_path": True,
                 "flow_placement": "PROPORTIONAL",
@@ -610,8 +610,8 @@ class TestMainScenarioVariants:
             {
                 "step_type": "MaxFlow",
                 "name": "capacity_analysis2",
-                "source_path": "my_clos1/b.*/t1",
-                "sink_path": "my_clos2/b.*/t1",
+                "source": "my_clos1/b.*/t1",
+                "sink": "my_clos2/b.*/t1",
                 "mode": "combine",
                 "shortest_path": True,
                 "flow_placement": "EQUAL_BALANCED",

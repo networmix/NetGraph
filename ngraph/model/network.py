@@ -142,22 +142,17 @@ class Network:
         self.links[link.id] = link
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
-        r"""Select and group nodes by regex on name or by attribute directive.
+        r"""Select and group nodes by regex pattern on node name.
 
-        There are two selection modes:
+        Uses re.match() (anchored at start of string). Grouping behavior:
+        - With capturing groups: label is "|"-joined non-None captures.
+        - Without captures: label is the original pattern string.
 
-        1) Regex on node.name (default): Uses re.match(), anchored at start.
-           - With capturing groups: label is "|"-joined non-None captures.
-           - Without captures: label is the original pattern string.
-
-        2) Attribute directive: If ``path`` fully matches ``attr:<name>`` where
-           ``<name>`` matches ``[A-Za-z_]\w*``, nodes are grouped by the value of
-           ``node.attrs[<name>]``. Nodes missing the attribute are omitted. Group
-           labels are ``str(value)`` for readability. If no nodes have the
-           attribute, an empty mapping is returned and a debug log entry is made.
+        Note: For attribute-based grouping, use the unified selector system
+        with ``{"group_by": "attr_name"}`` dict selectors.
 
         Args:
-            path: Regex for node name, or strict attribute directive ``attr:<name>``.
+            path: Regex pattern for node name.
 
         Returns:
             Mapping from group label to list of nodes.
@@ -166,25 +161,6 @@ class Network:
         if path in self._selection_cache:
             return self._selection_cache[path]
 
-        # Strict attribute directive detection: attr:<name>
-        attr_match = re.fullmatch(r"attr:([A-Za-z_]\w*)", path)
-        if attr_match:
-            attr_name = attr_match.group(1)
-            groups_by_attr: Dict[str, List[Node]] = {}
-            for node in self.nodes.values():
-                if attr_name in node.attrs:
-                    value = node.attrs[attr_name]
-                    label = str(value)
-                    groups_by_attr.setdefault(label, []).append(node)
-            if not groups_by_attr:
-                LOGGER.debug(
-                    "Attribute directive '%s' matched no nodes (attribute missing)",
-                    path,
-                )
-            self._selection_cache[path] = groups_by_attr
-            return groups_by_attr
-
-        # Fallback: regex over node.name
         pattern = re.compile(path)
         groups_map: Dict[str, List[Node]] = {}
 

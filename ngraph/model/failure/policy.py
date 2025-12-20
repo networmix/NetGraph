@@ -15,17 +15,11 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
-from .conditions import FailureCondition as EvalCondition
-from .conditions import evaluate_conditions as _shared_evaluate_conditions
+from ngraph.dsl.selectors import Condition
+from ngraph.dsl.selectors import evaluate_conditions as _shared_evaluate_conditions
 
-
-@dataclass
-class FailureCondition(EvalCondition):
-    """Alias to the shared condition dataclass.
-
-    This maintains a consistent import path within the failure policy module.
-    """
-
+# Alias for clarity in failure policy context
+FailureCondition = Condition
 
 # Supported entity scopes for a rule
 EntityScope = Literal["node", "link", "risk_group"]

@@ -17,8 +17,8 @@ def test_traffic_matrix_placement_stores_core_outputs(
     # Prepare mock scenario with traffic matrix and results store
     mock_scenario = MagicMock()
     mock_td = MagicMock()
-    mock_td.source_path = "A"
-    mock_td.sink_path = "B"
+    mock_td.source = "A"
+    mock_td.sink = "B"
     mock_td.demand = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
@@ -95,8 +95,8 @@ def test_traffic_matrix_placement_flow_details_edges(
     # Prepare mock scenario with traffic matrix and results store
     mock_scenario = MagicMock()
     mock_td = MagicMock()
-    mock_td.source_path = "A"
-    mock_td.sink_path = "B"
+    mock_td.source = "A"
+    mock_td.sink = "B"
     mock_td.demand = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
@@ -187,8 +187,8 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     # Prepare mock scenario with a single traffic demand
     mock_scenario = MagicMock()
     mock_td = MagicMock()
-    mock_td.source_path = "S"
-    mock_td.sink_path = "T"
+    mock_td.source = "S"
+    mock_td.sink = "T"
     mock_td.demand = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
@@ -229,8 +229,8 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
     dcfg = kwargs.get("demands_config")
     assert isinstance(dcfg, list) and len(dcfg) == 1
-    assert dcfg[0]["source_path"] == "S"
-    assert dcfg[0]["sink_path"] == "T"
+    assert dcfg[0]["source"] == "S"
+    assert dcfg[0]["sink"] == "T"
     assert abs(float(dcfg[0]["demand"]) - 25.0) < 1e-12
 
 
@@ -240,8 +240,8 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
 ) -> None:
     mock_scenario = MagicMock()
     mock_td = MagicMock()
-    mock_td.source_path = "A"
-    mock_td.sink_path = "B"
+    mock_td.source = "A"
+    mock_td.sink = "B"
     mock_td.demand = 1.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
@@ -288,8 +288,8 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
     # Scenario with one TD
     mock_scenario = MagicMock()
     td = MagicMock()
-    td.source_path = "S"
-    td.sink_path = "T"
+    td.source = "S"
+    td.sink = "T"
     td.demand = 4.0
     td.mode = "pairwise"
     td.priority = 0
@@ -308,8 +308,8 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
             "context": {"matrix_name": "default", "placement_rounds": "auto"},
             "base_demands": [
                 {
-                    "source_path": "S",
-                    "sink_path": "T",
+                    "source": "S",
+                    "sink": "T",
                     "demand": 4.0,
                     "mode": "pairwise",
                     "priority": 0,
@@ -362,8 +362,8 @@ def test_traffic_matrix_placement_alpha_auto_missing_msd_raises(
 ) -> None:
     mock_scenario = MagicMock()
     td = MagicMock()
-    td.source_path = "S"
-    td.sink_path = "T"
+    td.source = "S"
+    td.sink = "T"
     td.demand = 4.0
     td.mode = "pairwise"
     td.priority = 0

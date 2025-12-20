@@ -145,8 +145,8 @@ class TestSPFCachingBasic:
         """Test that single demand with ECMP works correctly with caching."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 50.0,
                 "mode": "pairwise",
                 "priority": 0,
@@ -175,15 +175,15 @@ class TestSPFCachingBasic:
         # Multiple demands from S1 to different destinations
         demands_config = [
             {
-                "source_path": "S1",
-                "sink_path": "D1",
+                "source": "S1",
+                "sink": "D1",
                 "demand": 30.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
             {
-                "source_path": "S1",
-                "sink_path": "D2",
+                "source": "S1",
+                "sink": "D2",
                 "demand": 30.0,
                 "mode": "pairwise",
                 "priority": 0,
@@ -206,20 +206,20 @@ class TestSPFCachingBasic:
         """Test that demands from multiple sources each get their own cache entry."""
         demands_config = [
             {
-                "source_path": "S1",
-                "sink_path": "D1",
+                "source": "S1",
+                "sink": "D1",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
             {
-                "source_path": "S2",
-                "sink_path": "D1",
+                "source": "S2",
+                "sink": "D1",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
             {
-                "source_path": "S3",
-                "sink_path": "D2",
+                "source": "S3",
+                "sink": "D2",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -289,8 +289,8 @@ class TestSPFCachingEquivalence:
         traffic_demands = []
         for config in demands_config:
             demand = TrafficDemand(
-                source_path=config["source_path"],
-                sink_path=config["sink_path"],
+                source=config["source"],
+                sink=config["sink"],
                 demand=config["demand"],
                 mode=config.get("mode", "pairwise"),
                 flow_policy_config=config.get("flow_policy_config"),
@@ -410,8 +410,8 @@ class TestSPFCachingEquivalence:
         """Test that ECMP placement is equivalent with and without caching."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 80.0,
                 "mode": "pairwise",
             },
@@ -446,10 +446,10 @@ class TestSPFCachingEquivalence:
     def test_equivalence_ecmp_multiple_demands(self, mesh_network: Network) -> None:
         """Test ECMP placement equivalence with multiple demands."""
         demands_config = [
-            {"source_path": "A", "sink_path": "B", "demand": 30.0, "mode": "pairwise"},
-            {"source_path": "A", "sink_path": "D", "demand": 40.0, "mode": "pairwise"},
-            {"source_path": "C", "sink_path": "B", "demand": 25.0, "mode": "pairwise"},
-            {"source_path": "C", "sink_path": "D", "demand": 35.0, "mode": "pairwise"},
+            {"source": "A", "sink": "B", "demand": 30.0, "mode": "pairwise"},
+            {"source": "A", "sink": "D", "demand": 40.0, "mode": "pairwise"},
+            {"source": "C", "sink": "B", "demand": 25.0, "mode": "pairwise"},
+            {"source": "C", "sink": "D", "demand": 35.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -484,7 +484,7 @@ class TestSPFCachingEquivalence:
     def test_equivalence_with_flow_details(self, mesh_network: Network) -> None:
         """Test equivalence when include_flow_details is True."""
         demands_config = [
-            {"source_path": "A", "sink_path": "D", "demand": 50.0, "mode": "pairwise"},
+            {"source": "A", "sink": "D", "demand": 50.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -516,7 +516,7 @@ class TestSPFCachingEquivalence:
     def test_equivalence_with_used_edges(self, mesh_network: Network) -> None:
         """Test equivalence when include_used_edges is True."""
         demands_config = [
-            {"source_path": "A", "sink_path": "D", "demand": 50.0, "mode": "pairwise"},
+            {"source": "A", "sink": "D", "demand": 50.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -573,8 +573,8 @@ class TestSPFCachingTEPolicy:
         """Test TE_WCMP_UNLIM basic placement without fallback."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 40.0,
                 "mode": "pairwise",
                 "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
@@ -598,8 +598,8 @@ class TestSPFCachingTEPolicy:
         """Test TE_WCMP_UNLIM fallback when primary path saturates."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 80.0,  # Exceeds primary path capacity
                 "mode": "pairwise",
                 "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
@@ -632,15 +632,15 @@ class TestSPFCachingTEPolicy:
         """Test TE_WCMP_UNLIM with multiple demands sharing source."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 30.0,
                 "mode": "pairwise",
                 "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 30.0,
                 "mode": "pairwise",
                 "priority": 1,  # Different priority = different demand
@@ -687,8 +687,8 @@ class TestSPFCachingEdgeCases:
         """Test placement to unreachable destination returns zero."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",  # Unreachable from A
+                "source": "A",
+                "sink": "D",  # Unreachable from A
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -715,8 +715,8 @@ class TestSPFCachingEdgeCases:
 
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 0.0,
                 "mode": "pairwise",
             },
@@ -743,8 +743,8 @@ class TestSPFCachingEdgeCases:
 
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -772,8 +772,8 @@ class TestSPFCachingEdgeCases:
 
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -799,8 +799,8 @@ class TestSPFCachingEdgeCases:
 
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -838,8 +838,8 @@ class TestSPFCachingWithExclusions:
         """Test that excluded links are respected in cached placement."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "C",
+                "source": "A",
+                "sink": "C",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -866,8 +866,8 @@ class TestSPFCachingWithExclusions:
         """Test that excluded nodes are respected in cached placement."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "C",
+                "source": "A",
+                "sink": "C",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -918,8 +918,8 @@ class TestSPFCachingCostDistribution:
         """Test cost distribution when only one tier is used."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 25.0,  # Fits in tier 1
                 "mode": "pairwise",
             },
@@ -944,8 +944,8 @@ class TestSPFCachingCostDistribution:
         """Test cost distribution with TE policy using multiple tiers."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 50.0,  # Exceeds tier 1 capacity
                 "mode": "pairwise",
                 "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,

@@ -138,8 +138,7 @@ class TestScenario1:
 
         # Convert to a more testable format
         demands_dict = {
-            (demand.source_path, demand.sink_path): demand.demand
-            for demand in default_demands
+            (demand.source, demand.sink): demand.demand for demand in default_demands
         }
 
         expected_demands = {

@@ -88,34 +88,34 @@ def test_yaml_boolean_keys_converted_to_strings():
     traffic_matrix_set:
       # Regular string key
       peak:
-        - source_path: "^A$"
-          sink_path: "^B$"
+        - source: "^A$"
+          sink: "^B$"
           demand: 100
 
       # YAML 1.1 boolean keys - these get parsed as Python booleans
       true:
-        - source_path: "^C$"
-          sink_path: "^D$"
+        - source: "^C$"
+          sink: "^D$"
           demand: 200
       false:
-        - source_path: "^E$"
-          sink_path: "^F$"
+        - source: "^E$"
+          sink: "^F$"
           demand: 50
       yes:
-        - source_path: "^G$"
-          sink_path: "^H$"
+        - source: "^G$"
+          sink: "^H$"
           demand: 25
       no:
-        - source_path: "^I$"
-          sink_path: "^J$"
+        - source: "^I$"
+          sink: "^J$"
           demand: 75
       on:
-        - source_path: "^K$"
-          sink_path: "^L$"
+        - source: "^K$"
+          sink: "^L$"
           demand: 150
       off:
-        - source_path: "^M$"
-          sink_path: "^N$"
+        - source: "^M$"
+          sink: "^N$"
           demand: 125
     """)
 
@@ -146,16 +146,16 @@ def test_quoted_boolean_keys_remain_strings():
       name: test
     traffic_matrix_set:
       "true":
-        - source_path: "^A$"
-          sink_path: "^B$"
+        - source: "^A$"
+          sink: "^B$"
           demand: 100
       "false":
-        - source_path: "^C$"
-          sink_path: "^D$"
+        - source: "^C$"
+          sink: "^D$"
           demand: 200
       "off":
-        - source_path: "^E$"
-          sink_path: "^F$"
+        - source: "^E$"
+          sink: "^F$"
           demand: 300
     """)
 
