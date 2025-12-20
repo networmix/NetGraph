@@ -133,9 +133,11 @@ def _plural(n: int, singular: str, plural: Optional[str] = None) -> str:
 
 
 def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
-    """Return (field, pattern) pairs for string fields that look like node patterns.
+    """Return (field, pattern) pairs for fields that represent node selectors.
 
-    Fields considered: names ending with "_path" or "_regex" with non-empty string values.
+    Fields considered:
+    - `source` and `sink` selector fields with string values
+    - names ending with "_path" or "_regex" with non-empty string values
     """
     fields: list[tuple[str, str]] = []
     for key, value in step.__dict__.items():
@@ -145,7 +147,8 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
             continue
         if not value.strip():
             continue
-        if key.endswith("_path") or key.endswith("_regex"):
+        # Selector fields or pattern fields
+        if key in ("source", "sink") or key.endswith("_path") or key.endswith("_regex"):
             fields.append((key, value))
     return fields
 
@@ -614,9 +617,12 @@ def _print_traffic_matrices(
         snk_counts: Dict[str, int] = {}
         pair_counts: Dict[tuple[str, str], Dict[str, float | int]] = {}
         for d in demands:
-            src_counts[d.source_path] = src_counts.get(d.source_path, 0) + 1
-            snk_counts[d.sink_path] = snk_counts.get(d.sink_path, 0) + 1
-            key = (d.source_path, d.sink_path)
+            # Handle both string and dict selectors
+            src_key = d.source if isinstance(d.source, str) else str(d.source)
+            snk_key = d.sink if isinstance(d.sink, str) else str(d.sink)
+            src_counts[src_key] = src_counts.get(src_key, 0) + 1
+            snk_counts[snk_key] = snk_counts.get(snk_key, 0) + 1
+            key = (src_key, snk_key)
             stats = pair_counts.setdefault(key, {"count": 0, "volume": 0.0})
             stats["count"] = int(stats["count"]) + 1
             stats["volume"] = float(stats["volume"]) + float(getattr(d, "demand", 0.0))
@@ -681,16 +687,18 @@ def _print_traffic_matrices(
                     print("       Top demands (by offered volume):")
                     top_rows: list[list[str]] = []
                     for d in sorted_demands:
+                        src = d.source if isinstance(d.source, str) else str(d.source)
+                        snk = d.sink if isinstance(d.sink, str) else str(d.sink)
                         top_rows.append(
                             [
-                                getattr(d, "source_path", ""),
-                                getattr(d, "sink_path", ""),
+                                src,
+                                snk,
                                 f"{float(getattr(d, 'demand', 0.0)):,.1f}",
                                 str(getattr(d, "priority", 0)),
                             ]
                         )
                     top_table = _format_table(
-                        ["Source Pattern", "Sink Pattern", "Offered", "Priority"],
+                        ["Source", "Sink", "Offered", "Priority"],
                         top_rows,
                     )
                     print(
@@ -701,9 +709,17 @@ def _print_traffic_matrices(
 
             if demands:
                 for i, demand in enumerate(demands[:3]):  # Show first 3 demands
-                    print(
-                        f"       {i + 1}. {demand.source_path} → {demand.sink_path} ({demand.demand})"
+                    src = (
+                        demand.source
+                        if isinstance(demand.source, str)
+                        else str(demand.source)
                     )
+                    snk = (
+                        demand.sink
+                        if isinstance(demand.sink, str)
+                        else str(demand.sink)
+                    )
+                    print(f"       {i + 1}. {src} -> {snk} ({demand.demand})")
                 if demand_count > 3:
                     print(f"       ... and {demand_count - 3} more demands")
         else:

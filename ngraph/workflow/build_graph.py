@@ -45,7 +45,7 @@ class BuildGraph(WorkflowStep):
 
     Attributes:
         add_reverse: If True, adds reverse edges for bidirectional connectivity.
-                     Defaults to True for backward compatibility.
+                     Defaults to True.
     """
 
     add_reverse: bool = True

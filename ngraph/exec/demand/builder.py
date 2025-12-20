@@ -1,7 +1,6 @@
 """Builders for traffic matrices.
 
 Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
-This logic was previously embedded in `Scenario.from_yaml`.
 """
 
 from __future__ import annotations
@@ -25,7 +24,8 @@ def build_traffic_matrix_set(raw: Dict[str, List[dict]]) -> TrafficMatrixSet:
         Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
 
     Raises:
-        ValueError: If ``raw`` is not a mapping of name -> list[dict].
+        ValueError: If ``raw`` is not a mapping of name -> list[dict],
+            or if required fields are missing.
     """
     if not isinstance(raw, dict):
         raise ValueError(
@@ -46,14 +46,36 @@ def build_traffic_matrix_set(raw: Dict[str, List[dict]]) -> TrafficMatrixSet:
                     f"Entries in matrix '{name}' must be dicts, got {type(d).__name__}"
                 )
 
-            # Coerce flow_policy_config into FlowPolicyPreset enum when provided
-            if "flow_policy_config" in d:
-                d = dict(d)  # shallow copy to avoid mutating caller data
-                d["flow_policy_config"] = _coerce_flow_policy_config(
-                    d.get("flow_policy_config")
+            # Validate required fields
+            if "source" not in d or "sink" not in d:
+                raise ValueError(
+                    f"Each demand in matrix '{name}' requires 'source' and 'sink' fields"
                 )
 
-            coerced.append(TrafficDemand(**d))
+            # Build normalized dict for TrafficDemand constructor
+            td_kwargs: Dict[str, Any] = {
+                "source": d["source"],
+                "sink": d["sink"],
+                "demand": d.get("demand", 0.0),
+                "priority": d.get("priority", 0),
+                "mode": d.get("mode", "combine"),
+                "group_mode": d.get("group_mode", "flatten"),
+                "expand_vars": d.get("expand_vars", {}),
+                "expansion_mode": d.get("expansion_mode", "cartesian"),
+                "attrs": d.get("attrs", {}),
+            }
+
+            # Optional id
+            if "id" in d:
+                td_kwargs["id"] = d["id"]
+
+            # Coerce flow_policy_config into FlowPolicyPreset enum when provided
+            if "flow_policy_config" in d:
+                td_kwargs["flow_policy_config"] = _coerce_flow_policy_config(
+                    d["flow_policy_config"]
+                )
+
+            coerced.append(TrafficDemand(**td_kwargs))
 
         tms.add(name, coerced)
 
@@ -69,8 +91,8 @@ def _coerce_flow_policy_config(value: Any) -> Optional[FlowPolicyPreset]:
       - int: mapped by value (e.g., 1 -> SHORTEST_PATHS_ECMP)
       - str: name of enum (case-insensitive); numeric strings are allowed
 
-    Any other type is returned unchanged to preserve backwards-compat behavior
-    for advanced usages (e.g., dict configs handled elsewhere).
+    Any other type is returned unchanged for advanced usages
+    (e.g., dict configs handled elsewhere).
     """
     if value is None:
         return None

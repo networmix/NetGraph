@@ -16,7 +16,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 # Internal helpers - importable but not part of public API.
 # Redundant aliases silence F401 while keeping them accessible.
@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 def analyze(
     network: "Network",
     *,
-    source: Optional[str] = None,
-    sink: Optional[str] = None,
+    source: Optional[Union[str, Dict[str, Any]]] = None,
+    sink: Optional[Union[str, Dict[str, Any]]] = None,
     mode: Mode = Mode.COMBINE,
     augmentations: Optional[List[AugmentationEdge]] = None,
 ) -> AnalysisContext:
@@ -47,10 +47,10 @@ def analyze(
 
     Args:
         network: Network topology to analyze.
-        source: Optional source group pattern. If provided with sink,
-                creates bound context with pre-built pseudo-nodes for
-                efficient repeated flow analysis.
-        sink: Optional sink group pattern.
+        source: Optional source node selector (string path or selector dict).
+                If provided with sink, creates bound context with pre-built
+                pseudo-nodes for efficient repeated flow analysis.
+        sink: Optional sink node selector (string path or selector dict).
         mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
         augmentations: Optional custom augmentation edges.
 

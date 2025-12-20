@@ -366,8 +366,8 @@ class TrafficDemandTemplates:
                 if source != sink:  # Skip self-demands
                     demands.append(
                         {
-                            "source_path": source,
-                            "sink_path": sink,
+                            "source": source,
+                            "sink": sink,
                             "demand": demand_value,
                         }
                     )
@@ -383,13 +383,13 @@ class TrafficDemandTemplates:
         # Traffic from leaves to center
         for leaf in leaf_nodes:
             demands.append(
-                {"source_path": leaf, "sink_path": center_node, "demand": demand_value}
+                {"source": leaf, "sink": center_node, "demand": demand_value}
             )
 
         # Traffic from center to leaves
         for leaf in leaf_nodes:
             demands.append(
-                {"source_path": center_node, "sink_path": leaf, "demand": demand_value}
+                {"source": center_node, "sink": leaf, "demand": demand_value}
             )
 
         return demands
@@ -413,9 +413,7 @@ class TrafficDemandTemplates:
             sink = random.choice([n for n in node_names if n != source])
             demand_value = random.uniform(min_demand, max_demand)
 
-            demands.append(
-                {"source_path": source, "sink_path": sink, "demand": demand_value}
-            )
+            demands.append({"source": source, "sink": sink, "demand": demand_value})
 
         return demands
 
@@ -434,8 +432,8 @@ class TrafficDemandTemplates:
             for hotspot in hotspot_nodes:
                 demands.append(
                     {
-                        "source_path": source,
-                        "sink_path": hotspot,
+                        "source": source,
+                        "sink": hotspot,
                         "demand": hotspot_demand,
                     }
                 )
@@ -446,8 +444,8 @@ class TrafficDemandTemplates:
                 if source != sink:
                     demands.append(
                         {
-                            "source_path": source,
-                            "sink_path": sink,
+                            "source": source,
+                            "sink": sink,
                             "demand": normal_demand,
                         }
                     )
@@ -478,8 +476,8 @@ class WorkflowTemplates:
                 {
                     "step_type": "MaxFlow",
                     "name": f"capacity_analysis_{i}",
-                    "source_path": source_pattern,
-                    "sink_path": sink_pattern,
+                    "source": source_pattern,
+                    "sink": sink_pattern,
                     "mode": mode,
                     "iterations": 1,
                     "baseline": False,
@@ -500,8 +498,8 @@ class WorkflowTemplates:
             {
                 "step_type": "MaxFlow",
                 "name": "failure_analysis",
-                "source_path": source_pattern,
-                "sink_path": sink_pattern,
+                "source": source_pattern,
+                "sink": sink_pattern,
                 "iterations": 100,
                 "parallelism": 4,
             },
@@ -517,8 +515,8 @@ class WorkflowTemplates:
             {
                 "step_type": "MaxFlow",
                 "name": "capacity_analysis_combine",
-                "source_path": source_pattern,
-                "sink_path": sink_pattern,
+                "source": source_pattern,
+                "sink": sink_pattern,
                 "mode": "combine",
                 "iterations": 1,
                 "baseline": True,
@@ -526,8 +524,8 @@ class WorkflowTemplates:
             {
                 "step_type": "MaxFlow",
                 "name": "capacity_analysis_pairwise",
-                "source_path": source_pattern,
-                "sink_path": sink_pattern,
+                "source": source_pattern,
+                "sink": sink_pattern,
                 "mode": "pairwise",
                 "shortest_path": True,
                 "iterations": 1,
@@ -536,8 +534,8 @@ class WorkflowTemplates:
             {
                 "step_type": "MaxFlow",
                 "name": "envelope_analysis",
-                "source_path": source_pattern,
-                "sink_path": sink_pattern,
+                "source": source_pattern,
+                "sink": sink_pattern,
                 "iterations": 50,
             },
         ]
@@ -620,8 +618,8 @@ class ScenarioTemplateBuilder:
                 if source_pattern != sink_pattern:
                     demands.append(
                         {
-                            "source_path": source_pattern,
-                            "sink_path": sink_pattern,
+                            "source": source_pattern,
+                            "sink": sink_pattern,
                             "demand": demand_value,
                         }
                     )
@@ -803,7 +801,7 @@ class ErrorInjectionTemplates:
             {
                 "step_type": "CapacityEnvelopeAnalysis",
                 "name": "incomplete_analysis",
-                # Missing source_path and sink_path
+                # Missing source and sink
             }
         ]
         return builder

@@ -20,6 +20,18 @@ A scenario file defines a complete network simulation including:
 
 The DSL enables both simple direct definitions and complex hierarchical structures with templates and parameters.
 
+## Template Syntaxes
+
+The DSL uses three distinct template syntaxes in different contexts:
+
+| Syntax | Example | Context | Purpose |
+|--------|---------|---------|---------|
+| `[1-3]` | `dc[1-3]/rack[a,b]` | Group names | Generate multiple groups |
+| `$var` / `${var}` | `pod${p}/leaf` | Adjacency, demands | Template expansion with `expand_vars` |
+| `{node_num}` | `srv-{node_num}` | `name_template` | Node naming (1-indexed) |
+
+**These syntaxes are not interchangeable.** Each works only in its designated context.
+
 ## Top-Level Keys
 
 ```yaml
@@ -136,7 +148,6 @@ network:
           hardware:
             source: {component: "800G-DR4", count: 2}
             target: {component: "800G-DR4", count: 2}
-    # Tip: In selector objects, 'path' also supports 'attr:<name>' (see Node Selection)
 ```
 
 ### Attribute-filtered Adjacency (selector objects)
@@ -169,17 +180,20 @@ network:
 
 Notes:
 
-- `path` uses the same semantics as runtime: regex on node name or `attr:<name>` directive grouping (see Node Selection).
-- `match.conditions` uses the shared condition operators implemented in code: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
+- `path` is a regex pattern matched against node names (anchored at start via Python `re.match`).
+- `match.conditions` uses the shared condition operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `any_value`, `no_value`.
 - Conditions evaluate over a flat view of node attributes combining top-level fields (`name`, `disabled`, `risk_groups`) and `node.attrs`.
 - `logic` in the `match` block accepts "and" or "or" (default "or").
 - Selectors filter node candidates before the adjacency `pattern` is applied.
 - Cross-endpoint predicates (e.g., comparing a source attribute to a target attribute) are not supported.
 - Node overrides run before adjacency expansion; link overrides run after adjacency expansion.
 
-Path semantics inside blueprints:
+Path semantics:
 
-- Within a blueprint's `adjacency`, a leading `/` is treated as relative to the blueprint instantiation path, not a global root. For example, if a blueprint is used under group `pod1`, then `source: /leaf` resolves to `pod1/leaf`.
+- All paths are relative to the current scope. There is no concept of absolute paths.
+- Leading `/` is stripped and has no functional effect - `/leaf` and `leaf` are equivalent.
+- Within a blueprint, paths resolve relative to the instantiation path. For example, if a blueprint is used under group `pod1`, then `source: /leaf` resolves to `pod1/leaf`.
+- At top-level `network.adjacency`, the parent path is empty, so patterns match against full node names.
 
 Example with OR logic to match multiple roles:
 
@@ -229,12 +243,36 @@ network:
 - Numeric ranges: `[1-4]` → 1, 2, 3, 4
 - Explicit lists: `[red,blue,green]` → red, blue, green
 
+**Scope:** Bracket expansion applies to:
+
+- **Group names** under `network.groups` and `blueprints.*.groups`
+- **Risk group names** in top-level `risk_groups` definitions (including children)
+- **Risk group membership arrays** on nodes, links, and groups
+
+Component names, direct node names (`network.nodes`), and other string fields treat brackets as literal characters.
+
+**Risk Group Expansion Examples:**
+
+```yaml
+# Definition expansion - creates DC1_Power, DC2_Power, DC3_Power
+risk_groups:
+  - name: "DC[1-3]_Power"
+
+# Membership expansion - assigns to RG1, RG2, RG3
+network:
+  nodes:
+    Server:
+      risk_groups: ["RG[1-3]"]
+```
+
 ### Variable Expansion in Adjacency
+
+Use `$var` or `${var}` syntax for template substitution:
 
 ```yaml
 adjacency:
-  - source: "plane{p}/rack{r}"
-    target: "spine{s}"
+  - source: "plane${p}/rack${r}"
+    target: "spine${s}"
     expand_vars:
       p: [1, 2]
       r: ["a", "b"]
@@ -242,8 +280,8 @@ adjacency:
     expansion_mode: "cartesian"  # All combinations
     pattern: "mesh"
 
-  - source: "server{idx}"
-    target: "switch{idx}"
+  - source: "server${idx}"
+    target: "switch${idx}"
     expand_vars:
       idx: [1, 2, 3, 4]
     expansion_mode: "zip"        # Paired by index
@@ -332,8 +370,10 @@ Define hardware components with attributes for cost and power modeling:
 components:
   SpineRouter:
     component_type: "chassis"
-    cost: 50000.0
+    description: "64-port spine router"
+    capex: 50000.0
     power_watts: 2500.0
+    power_watts_max: 3000.0
     capacity: 64000.0           # Gbps
     ports: 64
     attrs:
@@ -342,7 +382,7 @@ components:
     children:
       LineCard400G:
         component_type: "linecard"
-        cost: 8000.0
+        capex: 8000.0
         power_watts: 400.0
         capacity: 12800.0
         ports: 32
@@ -350,7 +390,8 @@ components:
 
   Optic400G:
     component_type: "optic"
-    cost: 2500.0
+    description: "400G pluggable optic"
+    capex: 2500.0
     power_watts: 12.0
     capacity: 400.0
     attrs:
@@ -449,28 +490,85 @@ Define traffic demand patterns for capacity analysis:
 ```yaml
 traffic_matrix_set:
   production:
-    - name: "server_to_storage"
-      source_path: "^servers/.*"
-      sink_path: "^storage/.*"
-      demand: 1000               # Traffic volume
-      mode: "combine"            # Aggregate demand
+    # Simple string pattern selectors
+    - source: "^servers/.*"
+      sink: "^storage/.*"
+      demand: 1000
+      mode: "combine"
       priority: 1
       flow_policy_config: "SHORTEST_PATHS_ECMP"
 
-    - name: "inter_dc_backup"
-      source_path: "^dc1/.*"
-      sink_path: "^dc2/.*"
+    # Dict selectors with attribute-based grouping
+    - source:
+        group_by: "dc"           # Group nodes by datacenter attribute
+      sink:
+        group_by: "dc"
       demand: 500
-      mode: "pairwise"           # Distributed demand
+      mode: "pairwise"
       priority: 2
+
+    # Dict selectors with filtering
+    - source:
+        path: "^dc1/.*"
+        match:
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "leaf"
+      sink:
+        path: "^dc2/.*"
+        match:
+          conditions:
+            - attr: "role"
+              operator: "=="
+              value: "spine"
+      demand: 200
+      mode: "combine"
 ```
 
-**Traffic Modes:**
+### Variable Expansion in Demands
+
+Use `expand_vars` to generate multiple demands from a template:
+
+```yaml
+traffic_matrix_set:
+  inter_dc:
+    - source: "^${src_dc}/.*"
+      sink: "^${dst_dc}/.*"
+      demand: 100
+      mode: "combine"
+      expand_vars:
+        src_dc: ["dc1", "dc2"]
+        dst_dc: ["dc2", "dc3"]
+      expansion_mode: "cartesian"  # All combinations (default)
+
+    - source: "^${dc}/leaf/.*"
+      sink: "^${dc}/spine/.*"
+      demand: 50
+      mode: "pairwise"
+      expand_vars:
+        dc: ["dc1", "dc2", "dc3"]
+      expansion_mode: "zip"        # Paired by index
+```
+
+**Expansion Modes:**
+
+- `cartesian`: All combinations of variable values (default)
+- `zip`: Pair values by index (lists must have equal length)
+
+### Selector Fields
+
+The `source` and `sink` fields accept either:
+
+- A string regex pattern matched against node names
+- A selector object with `path`, `group_by`, and/or `match` fields
+
+### Traffic Modes
 
 - `combine`: Single aggregate flow between source and sink groups
 - `pairwise`: Individual flows between all source-sink node pairs
 
-**Flow Policies:**
+### Flow Policies
 
 - `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths
 - `SHORTEST_PATHS_WCMP`: IP/IGP routing with weighted ECMP; proportional split by link capacity
@@ -575,8 +673,6 @@ workflow:
     baseline: true
 ```
 
-Note: Workflow `source_path` and `sink_path` accept either regex on node names or `attr:<name>` directive to group by node attributes (see Node Selection).
-
 **Common Steps:**
 
 - `BuildGraph`: Export graph to JSON (node-link) for external analysis
@@ -589,38 +685,37 @@ See [Workflow Reference](workflow.md) for detailed configuration.
 
 ## Node Selection
 
-NetGraph supports two ways to select and group nodes:
+NetGraph provides a unified selector system for selecting and grouping nodes across adjacency, demands, and workflow steps.
 
-1. Regex on node name (anchored at the start using `re.match()`)
-2. Attribute directive `attr:<name>` to group by a node attribute
+### Selector Forms
 
-Note: The attribute directive is node-only. It applies only in contexts that select nodes:
+Selectors can be specified as:
 
-- Workflow paths: `source_path` and `sink_path`
-- Adjacency selectors: the `path` field in `source`/`target` selector objects
+1. **String pattern**: A regex matched against node names (anchored at start via `re.match()`)
+2. **Selector object**: A dict with `path`, `group_by`, and/or `match` fields
 
-For links, risk groups, and failure policies, use `conditions` with an `attr` field in rules (see Failure Simulation) rather than `attr:<name>`.
+At least one of `path`, `group_by`, or `match` must be specified in a selector object.
 
-**Regex Examples:**
+### String Pattern Examples
 
 ```yaml
 # Exact match
-path: "spine-1"
+source: "spine-1"
 
 # Prefix match
-path: "dc1/spine/"
+source: "dc1/spine/"
 
 # Wildcard patterns
-path: "dc1/leaf.*"
+source: "dc1/leaf.*"
 
 # Anchored patterns
-path: "^dc1/spine/switch-[1-3]$"
+source: "^dc1/spine/switch-[1-3]$"
 
 # Alternation
-path: "^dc1/(spine|leaf)/.*$"
+source: "^dc1/(spine|leaf)/.*$"
 ```
 
-**Regex Capturing Groups:**
+### Capturing Groups for Node Grouping
 
 Regex capturing groups create node groupings for analysis:
 
@@ -638,43 +733,71 @@ Regex capturing groups create node groupings for analysis:
 - Multiple capturing groups: Join with `|` separator
 - No capturing groups: Group by original pattern string
 
-### Attribute Directive For Node Selection
+### Attribute-based Grouping
 
-Write `attr:<name>` to group nodes by the value of `node.attrs[<name>]`.
-Supported contexts in the DSL:
+Use the `group_by` field to group nodes by an attribute value:
 
-- Workflow: `source_path` and `sink_path`
-- Adjacency selectors: the `path` in `source`/`target` selector objects
+```yaml
+# Group by metro attribute
+source:
+  group_by: "metro"
+
+# Combine with path filtering
+source:
+  path: "^dc1/.*"
+  group_by: "role"
+```
 
 Notes:
 
-- Blueprint scoping: In blueprints, `attr:` paths are global and are not
-  prefixed by the parent blueprint path.
-- Attribute name: `name` must be a simple identifier (`[A-Za-z_]\w*`), and it
-  refers to a key in `node.attrs`. Nested keys are not supported here.
-- Non-node entities: For links and risk groups (e.g., in failure policies), use
-  rule `conditions` with an `attr` field instead of `attr:<name>`.
+- `group_by` refers to a key in `node.attrs`. Nested keys are not supported.
+- Nodes without the specified attribute are omitted.
+- Group labels are the string form of the attribute value.
 
-- Strict detection: Only a full match of `attr:<name>` (where `<name>` matches `[A-Za-z_]\w*`) triggers attribute grouping. Everything else is treated as a normal regex.
-- Missing attributes: Nodes without the attribute are omitted.
-- Labels: Group labels are the string form of the attribute value.
+### Attribute-based Filtering
 
-Examples:
+Use the `match` field to filter nodes by attribute conditions:
+
+```yaml
+source:
+  path: "^dc1/.*"
+  match:
+    logic: "and"           # "and" or "or" (default: "or")
+    conditions:
+      - attr: "role"
+        operator: "=="
+        value: "leaf"
+      - attr: "tier"
+        operator: ">="
+        value: 2
+```
+
+**Supported operators:** `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `any_value`, `no_value`
+
+### Workflow Examples
 
 ```yaml
 workflow:
   - step_type: MaxFlow
-    source_path: "attr:metro"  # groups by metro attribute
-    sink_path:   "^metro2/.*"
+    source:
+      group_by: "metro"      # Group by metro attribute
+    sink: "^metro2/.*"       # String pattern
     mode: "pairwise"
 ```
 
-Adjacency example using `attr:`:
+### Adjacency Examples
 
 ```yaml
 network:
   adjacency:
-    - source: { path: "attr:role" }
-      target: { path: "^dc2/leaf/.*" }
+    - source:
+        group_by: "role"
+      target:
+        path: "^dc2/leaf/.*"
       pattern: mesh
 ```
+
+### Notes
+
+- For links, risk groups, and failure policies, use `conditions` with an `attr` field in rules (see Failure Simulation).
+- Blueprint scoping: In blueprints, paths are relative to the blueprint instantiation path.

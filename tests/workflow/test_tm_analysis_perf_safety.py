@@ -32,7 +32,7 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
     tmset = TrafficMatrixSet()
     tmset.add(
         "default",
-        [TrafficDemand(source_path="A", sink_path="C", demand=2.0, mode="pairwise")],
+        [TrafficDemand(source="A", sink="C", demand=2.0, mode="pairwise")],
     )
 
     class _ResultsStore:

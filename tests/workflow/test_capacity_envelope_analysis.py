@@ -62,10 +62,10 @@ class TestMaxFlowStep:
 
     def test_initialization_defaults(self):
         """Test MaxFlow initialization with defaults."""
-        step = MaxFlow(source_path="^A", sink_path="^C")
+        step = MaxFlow(source="^A", sink="^C")
 
-        assert step.source_path == "^A"
-        assert step.sink_path == "^C"
+        assert step.source == "^A"
+        assert step.sink == "^C"
         assert step.mode == "combine"
         assert step.failure_policy is None
         assert step.iterations == 1
@@ -80,8 +80,8 @@ class TestMaxFlowStep:
     def test_initialization_custom_values(self):
         """Test MaxFlow initialization with custom values."""
         step = MaxFlow(
-            source_path="^src",
-            sink_path="^dst",
+            source="^src",
+            sink="^dst",
             mode="pairwise",
             failure_policy="test_policy",
             iterations=100,
@@ -94,8 +94,8 @@ class TestMaxFlowStep:
             include_flow_details=True,
         )
 
-        assert step.source_path == "^src"
-        assert step.sink_path == "^dst"
+        assert step.source == "^src"
+        assert step.sink == "^dst"
         assert step.mode == "pairwise"
         assert step.failure_policy == "test_policy"
         assert step.iterations == 100
@@ -110,21 +110,21 @@ class TestMaxFlowStep:
     def test_validation_errors(self):
         """Test parameter validation."""
         with pytest.raises(ValueError, match="iterations must be >= 1"):
-            MaxFlow(source_path="^A", sink_path="^C", iterations=0)
+            MaxFlow(source="^A", sink="^C", iterations=0)
 
         with pytest.raises(ValueError, match="parallelism must be >= 1"):
-            MaxFlow(source_path="^A", sink_path="^C", parallelism=0)
+            MaxFlow(source="^A", sink="^C", parallelism=0)
 
         with pytest.raises(ValueError, match="mode must be 'combine' or 'pairwise'"):
-            MaxFlow(source_path="^A", sink_path="^C", mode="invalid")
+            MaxFlow(source="^A", sink="^C", mode="invalid")
 
         with pytest.raises(ValueError, match="baseline=True requires iterations >= 2"):
-            MaxFlow(source_path="^A", sink_path="^C", baseline=True, iterations=1)
+            MaxFlow(source="^A", sink="^C", baseline=True, iterations=1)
 
     def test_flow_placement_enum_usage(self):
         """Test that FlowPlacement enum is used correctly."""
         step = MaxFlow(
-            source_path="^A", sink_path="^C", flow_placement=FlowPlacement.PROPORTIONAL
+            source="^A", sink="^C", flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert step.flow_placement == FlowPlacement.PROPORTIONAL
 
@@ -170,8 +170,8 @@ class TestMaxFlowStep:
 
         # Create and run the step
         step = MaxFlow(
-            source_path="^A",
-            sink_path="^C",
+            source="^A",
+            sink="^C",
             failure_policy="test_policy",
             iterations=1,
             parallelism=1,
@@ -188,8 +188,8 @@ class TestMaxFlowStep:
 
         # Verify convenience method was called with correct parameters
         _, kwargs = mock_failure_manager.run_max_flow_monte_carlo.call_args
-        assert kwargs["source_path"] == "^A"
-        assert kwargs["sink_path"] == "^C"
+        assert kwargs["source"] == "^A"
+        assert kwargs["sink"] == "^C"
         assert kwargs["mode"] == "combine"
         assert kwargs["iterations"] == 1
         assert kwargs["parallelism"] == 1
@@ -247,8 +247,8 @@ class TestMaxFlowStep:
 
         # Create and run the step with failure pattern storage
         step = MaxFlow(
-            source_path="^A",
-            sink_path="^C",
+            source="^A",
+            sink="^C",
             iterations=2,
             store_failure_patterns=True,
             parallelism=1,
@@ -263,8 +263,8 @@ class TestMaxFlowStep:
     def test_capacity_envelope_with_failures_mocked(self):
         """Test capacity envelope step with mocked FailureManager."""
         step = MaxFlow(
-            source_path="^A",
-            sink_path="^C",
+            source="^A",
+            sink="^C",
             mode="combine",
             iterations=2,
             parallelism=1,
@@ -356,8 +356,8 @@ class TestMaxFlowStep:
 
         # Test with include_flow_details=True
         step = MaxFlow(
-            source_path="^A",
-            sink_path="^C",
+            source="^A",
+            sink="^C",
             iterations=1,
             include_flow_details=True,
             parallelism=1,

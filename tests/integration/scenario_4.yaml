@@ -143,9 +143,9 @@ blueprints:
           role: "spine"
         risk_groups: ["Spine_Fabric_SRG"]
     adjacency:
-      # Variable expansion for leaf-spine connectivity
-      - source: "leaf-{leaf_id}"
-        target: "spine-{spine_id}"
+      # Variable expansion for leaf-spine connectivity using $var syntax
+      - source: "leaf-${leaf_id}"
+        target: "spine-${spine_id}"
         expand_vars:
           leaf_id: [1, 2]
           spine_id: [1, 2]
@@ -180,11 +180,11 @@ network:
         datacenter: "dc1"
       risk_groups: ["DC1_NetworkUplink"]
 
-  # Top-level adjacency with variable expansion
+  # Top-level adjacency with variable expansion using $var syntax
   adjacency:
     # Connect racks to fabric using variable expansion
-    - source: "dc{dc}_pod{pod}_rack{rack}/tor"
-      target: "dc{dc}_fabric/leaf"
+    - source: "dc${dc}_pod${pod}_rack${rack}/tor"
+      target: "dc${dc}_fabric/leaf"
       expand_vars:
         dc: [1, 2]
         pod: ["a", "b"]
@@ -260,16 +260,16 @@ network:
 traffic_matrix_set:
   default:
     # East-west traffic within DC
-    - source_path: "dc1_pod[ab]_rack.*/servers/.*"
-      sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    - source: "dc1_pod[ab]_rack.*/servers/.*"
+      sink: "dc1_pod[ab]_rack.*/servers/.*"
       demand: 5.0 # 5 Gb/s east-west traffic
       mode: "pairwise"
       attrs:
         traffic_type: "east_west"
 
     # North-south traffic to external
-    - source_path: "dc1_.*servers/.*"
-      sink_path: "dc2_.*servers/.*"
+    - source: "dc1_.*servers/.*"
+      sink: "dc2_.*servers/.*"
       demand: 10.0 # 10 Gb/s inter-DC traffic
       mode: "combine"
       attrs:
@@ -277,8 +277,8 @@ traffic_matrix_set:
 
   # High-performance computing workload
   hpc_workload:
-    - source_path: "dc1_poda_rack1/servers/srv-[1-4]"
-      sink_path: "dc1_poda_rack1/servers/srv-[1-4]"
+    - source: "dc1_poda_rack1/servers/srv-[1-4]"
+      sink: "dc1_poda_rack1/servers/srv-[1-4]"
       demand: 20.0 # 20 Gb/s HPC collective communication
       mode: "pairwise"
       attrs:
@@ -321,16 +321,12 @@ workflow:
   - step_type: BuildGraph
     name: build_graph
 
-
-
-
-
   # Capacity analysis with different traffic patterns
   # Forward intra-DC capacity analysis
   - step_type: MaxFlow
     name: intra_dc_capacity_forward
-    source_path: "dc1_pod[ab]_rack.*/servers/.*"
-    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_pod[ab]_rack.*/servers/.*"
+    sink: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
@@ -341,8 +337,8 @@ workflow:
   # Reverse intra-DC capacity analysis
   - step_type: MaxFlow
     name: intra_dc_capacity_reverse
-    source_path: "dc1_pod[ab]_rack.*/servers/.*"
-    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_pod[ab]_rack.*/servers/.*"
+    sink: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
@@ -353,8 +349,8 @@ workflow:
   # Forward inter-DC capacity analysis
   - step_type: MaxFlow
     name: inter_dc_capacity_forward
-    source_path: "dc1_.*servers/.*"
-    sink_path: "dc2_.*servers/.*"
+    source: "dc1_.*servers/.*"
+    sink: "dc2_.*servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
@@ -365,8 +361,8 @@ workflow:
   # Reverse inter-DC capacity analysis
   - step_type: MaxFlow
     name: inter_dc_capacity_reverse
-    source_path: "dc2_.*servers/.*"
-    sink_path: "dc1_.*servers/.*"
+    source: "dc2_.*servers/.*"
+    sink: "dc1_.*servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
@@ -377,8 +373,8 @@ workflow:
   # Failure analysis with different policies
   - step_type: MaxFlow
     name: rack_failure_analysis
-    source_path: "dc1_pod[ab]_rack.*/servers/.*"
-    sink_path: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_pod[ab]_rack.*/servers/.*"
+    sink: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     failure_policy: "single_link_failure"
     iterations: 10 # 10 iterations for test efficiency
@@ -388,8 +384,8 @@ workflow:
 
   - step_type: MaxFlow
     name: spine_failure_analysis
-    source_path: "dc1_.*servers/.*"
-    sink_path: "dc2_.*servers/.*"
+    source: "dc1_.*servers/.*"
+    sink: "dc2_.*servers/.*"
     mode: "combine"
     failure_policy: "single_node_failure"
     iterations: 20 # 20 iterations for test efficiency

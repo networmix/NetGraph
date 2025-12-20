@@ -4,10 +4,12 @@ seed: 2002
 
 # Hierarchical DSL describing sub-topologies and multi-node expansions.
 #
-# Paths and Scopes:
-# - Within a blueprint, a leading '/' (e.g., '/leaf') means "blueprint local root".
-# - In the main network definition, a leading '/' (e.g., '/SFO') means "global root".
-# - Omitting '/' means a relative path within the current scope (blueprint or network).
+# Path Conventions:
+# - All paths are relative to the current scope (blueprint instantiation path or network root).
+# - Leading '/' is stripped and has no functional effect - '/leaf' and 'leaf' are equivalent.
+# - In blueprints, paths resolve relative to the instantiation path (e.g., '/leaf' in a
+#   blueprint instantiated as 'pod1' becomes 'pod1/leaf').
+# - At top-level network, parent path is empty so '/SFO' and 'SFO' both become 'SFO'.
 #
 # Adjacency Patterns:
 # - "mesh" cross-connects all nodes from source to all nodes from target, skipping self-loops.
@@ -196,17 +198,17 @@ failure_policy_set:
 
 traffic_matrix_set:
   default:
-    - source_path: SEA
-      sink_path: JFK
+    - source: SEA
+      sink: JFK
       demand: 50
-    - source_path: SFO
-      sink_path: DCA
+    - source: SFO
+      sink: DCA
       demand: 50
-    - source_path: SEA
-      sink_path: DCA
+    - source: SEA
+      sink: DCA
       demand: 50
-    - source_path: SFO
-      sink_path: JFK
+    - source: SFO
+      sink: JFK
       demand: 50
 
 workflow:

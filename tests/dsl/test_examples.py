@@ -272,8 +272,8 @@ network:
 
 traffic_matrix_set:
   default:
-    - source_path: "source.*"
-      sink_path: "sink.*"
+    - source: "source.*"
+      sink: "sink.*"
       demand: 100
       mode: "combine"
       priority: 1
@@ -285,8 +285,8 @@ traffic_matrix_set:
     default_demands = scenario.traffic_matrix_set.get_default_matrix()
     assert len(default_demands) == 1
     demand = default_demands[0]
-    assert demand.source_path == "source.*"
-    assert demand.sink_path == "sink.*"
+    assert demand.source == "source.*"
+    assert demand.sink == "sink.*"
     assert demand.demand == 100
     assert demand.mode == "combine"
 
@@ -437,7 +437,7 @@ network:
 
 
 def test_variable_expansion():
-    """Test variable expansion in adjacency."""
+    """Test variable expansion in adjacency using $var syntax."""
     yaml_content = """
 blueprints:
   test_expansion:
@@ -452,7 +452,7 @@ blueprints:
         node_count: 2
         name_template: "spine-{node_num}"
     adjacency:
-      - source: "plane{p}_rack"
+      - source: "plane${p}_rack"
         target: "spine"
         expand_vars:
           p: [1, 2]
@@ -586,8 +586,8 @@ network:
     RackC:
       node_count: 1
   adjacency:
-    - source: /Rack{rack_id}
-      target: /Rack{other_rack_id}
+    - source: /Rack${rack_id}
+      target: /Rack${other_rack_id}
       expand_vars:
         rack_id: [A, B]
         other_rack_id: [C, A, B]
@@ -596,7 +596,7 @@ network:
 
     with pytest.raises(ValueError) as exc:
         Scenario.from_yaml(yaml_content)
-    assert "zip expansion requires all lists be the same length" in str(exc.value)
+    assert "zip expansion requires equal-length lists" in str(exc.value)
 
 
 def test_direct_link_unknown_node_raises():
@@ -615,17 +615,17 @@ network:
     assert "Link references unknown node(s)" in str(exc.value)
 
 
-def test_attr_selector_inside_blueprint_paths():
-    """Attribute directive paths inside blueprint adjacency should not be prefixed.
+def test_group_by_selector_inside_blueprint():
+    """Test group_by selector in blueprint adjacency.
 
-    When a blueprint adjacency uses a selector with path "attr:<name>", the
-    attribute directive must be treated as global, not joined with the blueprint
-    instantiation path. This test ensures the expansion connects leaf->spine
-    using attribute-based selectors inside the blueprint.
+    When a blueprint adjacency uses a selector with group_by, nodes are
+    grouped by that attribute value regardless of path prefix. This test
+    ensures the expansion connects leaf->spine using attribute-based
+    selectors inside the blueprint.
     """
     yaml_content = """
 blueprints:
-  bp_attr:
+  bp_group:
     groups:
       leaf:
         node_count: 2
@@ -639,14 +639,14 @@ blueprints:
           role: "spine"
     adjacency:
       - source:
-          path: "attr:role"
+          group_by: "role"
           match:
             conditions:
               - attr: "role"
                 operator: "=="
                 value: "leaf"
         target:
-          path: "attr:role"
+          group_by: "role"
           match:
             conditions:
               - attr: "role"
@@ -659,7 +659,7 @@ blueprints:
 network:
   groups:
     pod1:
-      use_blueprint: bp_attr
+      use_blueprint: bp_group
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -669,16 +669,15 @@ network:
     assert len(scenario.network.links) == 2
 
 
-def test_attr_selector_with_expand_vars_inside_blueprint_paths():
-    """Attribute directive with expand_vars inside blueprint adjacency should not be prefixed.
+def test_group_by_with_variable_expansion():
+    """Test group_by selector combined with variable expansion.
 
-    Use different attribute names for source and target to avoid cross-connections and
-    validate that at least some edges are created when using attr: paths generated via
-    expand_vars within a blueprint adjacency.
+    Validates that group_by selectors work correctly when the attribute
+    name is generated via variable expansion using $var syntax.
     """
     yaml_content = """
 blueprints:
-  bp_attr_vars:
+  bp_group_vars:
     groups:
       leaf:
         node_count: 2
@@ -691,11 +690,13 @@ blueprints:
         attrs:
           dst_role: "spine"
     adjacency:
-      - source: "attr:{src_key}"
-        target: "attr:{dst_key}"
+      - source:
+          group_by: "${src_attr}"
+        target:
+          group_by: "${dst_attr}"
         expand_vars:
-          src_key: ["src_role"]
-          dst_key: ["dst_role"]
+          src_attr: ["src_role"]
+          dst_attr: ["dst_role"]
         pattern: "mesh"
         link_params:
           capacity: 10
@@ -703,14 +704,14 @@ blueprints:
 network:
   groups:
     pod1:
-      use_blueprint: bp_attr_vars
+      use_blueprint: bp_group_vars
 """
 
     scenario = Scenario.from_yaml(yaml_content)
     # Expect 3 nodes total (2 leaf, 1 spine)
     assert len(scenario.network.nodes) == 3
-    # Without the fix, zero links would be created due to prefixed attr: paths.
-    assert len(scenario.network.links) > 0
+    # Mesh between 2 leaf and 1 spine = 2 links
+    assert len(scenario.network.links) == 2
 
 
 def test_invalid_nodes_type_raises():

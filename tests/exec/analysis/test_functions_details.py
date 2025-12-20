@@ -22,8 +22,8 @@ def test_demand_placement_analysis_includes_flow_details_costs_and_edges() -> No
 
     demands_config = [
         {
-            "source_path": "A",
-            "sink_path": "D",
+            "source": "A",
+            "sink": "D",
             "demand": 150.0,  # Exceeds single path capacity, will use both paths
             "mode": "pairwise",
             "priority": 0,

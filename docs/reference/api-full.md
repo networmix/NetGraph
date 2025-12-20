@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 11, 2025 at 23:43 UTC
+Generated from source code on: December 20, 2025 at 00:19 UTC
 
-Modules auto-discovered: 44
+Modules auto-discovered: 49
 
 ---
 
@@ -451,91 +451,39 @@ and placement. It can carry either a concrete `FlowPolicy` instance or a
 
 ### TrafficDemand
 
-Single traffic demand input.
+Traffic demand specification using unified selectors.
 
 Attributes:
-    source_path: Regex string selecting source nodes.
-    sink_path: Regex string selecting sink nodes.
-    priority: Priority class for this demand (lower value = higher priority).
+    source: Source node selector (string path or selector dict).
+    sink: Sink node selector (string path or selector dict).
     demand: Total demand volume.
     demand_placed: Portion of this demand placed so far.
-    flow_policy_config: Policy preset (FlowPolicyPreset enum) used to build
-        a `FlowPolicy`` if ``flow_policy`` is not provided.
-    flow_policy: Concrete policy instance. If set, it overrides
-        ``flow_policy_config``.
-    mode: Expansion mode, ``"combine"`` or ``"pairwise"``.
+    priority: Priority class (lower = higher priority).
+    mode: Node pairing mode ("combine" or "pairwise").
+    group_mode: How grouped nodes produce demands
+        ("flatten", "per_group", "group_pairwise").
+    expand_vars: Variable substitutions using $var syntax.
+    expansion_mode: How to combine expand_vars ("cartesian" or "zip").
+    flow_policy_config: Policy preset for routing.
+    flow_policy: Concrete policy instance (overrides flow_policy_config).
     attrs: Arbitrary user metadata.
-    id: Unique identifier. Auto-generated if empty or not provided.
+    id: Unique identifier. Auto-generated if empty.
 
 **Attributes:**
 
-- `source_path` (str)
-- `sink_path` (str)
-- `priority` (int) = 0
+- `source` (Union)
+- `sink` (Union)
 - `demand` (float) = 0.0
 - `demand_placed` (float) = 0.0
+- `priority` (int) = 0
+- `mode` (str) = combine
+- `group_mode` (str) = flatten
+- `expand_vars` (Dict) = {}
+- `expansion_mode` (str) = cartesian
 - `flow_policy_config` (Optional)
 - `flow_policy` (Optional)
-- `mode` (str) = combine
 - `attrs` (Dict) = {}
 - `id` (str)
-
----
-
-## ngraph.model.failure.conditions
-
-Shared condition primitives and evaluators.
-
-This module provides a small, dependency-free condition evaluation utility
-that can be reused by failure policies and DSL selection filters.
-
-Operators supported:
-
-- ==, !=, <, <=, >, >=
-- contains, not_contains
-- any_value, no_value
-
-The evaluator operates on a flat attribute mapping for an entity. Callers are
-responsible for constructing that mapping (e.g. merging top-level fields with
-``attrs`` and ensuring appropriate precedence rules).
-
-### FailureCondition
-
-A single condition for matching an entity attribute.
-
-Args:
-    attr: Attribute name to inspect in the entity mapping.
-    operator: Comparison operator. See module docstring for the list.
-    value: Right-hand operand for the comparison (unused for any_value/no_value).
-
-**Attributes:**
-
-- `attr` (str)
-- `operator` (str)
-- `value` (Any | None)
-
-### evaluate_condition(entity_attrs: 'dict[str, Any]', cond: 'FailureCondition') -> 'bool'
-
-Evaluate a single condition against an entity attribute mapping.
-
-Args:
-    entity_attrs: Flat mapping of attributes for the entity.
-    cond: Condition to evaluate.
-
-Returns:
-    True if the condition passes, False otherwise.
-
-### evaluate_conditions(entity_attrs: 'dict[str, Any]', conditions: 'Iterable[FailureCondition]', logic: 'str') -> 'bool'
-
-Evaluate multiple conditions with AND/OR logic.
-
-Args:
-    entity_attrs: Flat mapping of attributes for the entity.
-    conditions: Iterable of conditions to evaluate.
-    logic: "and" or "or".
-
-Returns:
-    True if the combined predicate passes, False otherwise.
 
 ---
 
@@ -563,7 +511,18 @@ Raises:
 
 ### build_risk_groups(rg_data: 'List[Dict[str, Any]]') -> 'List[RiskGroup]'
 
-No documentation available.
+Build RiskGroup objects from raw config data.
+
+Supports bracket expansion in risk group names. For example:
+
+- `{name: "DC[1-3]_Power"}` creates DC1_Power, DC2_Power, DC3_Power
+- Children are also expanded recursively
+
+Args:
+    rg_data: List of risk group definition dicts.
+
+Returns:
+    List of RiskGroup objects with names expanded.
 
 ---
 
@@ -577,18 +536,6 @@ top-level attributes with simple operators; rules select matches using
 "all", probabilistic "random" (with `probability`), or fixed-size "choice"
 (with `count`). Policies can optionally expand failures by shared risk groups
 or by risk-group children.
-
-### FailureCondition
-
-Alias to the shared condition dataclass.
-
-This maintains a consistent import path within the failure policy module.
-
-**Attributes:**
-
-- `attr` (str)
-- `operator` (str)
-- `value` (Any | None)
 
 ### FailureMode
 
@@ -884,7 +831,7 @@ Attributes:
 - `enable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Enable all nodes/links that have 'name' in their risk_groups.
 - `find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -> 'List[Link]'` - Search for links using optional regex patterns for source or target node names.
 - `get_links_between(self, source: 'str', target: 'str') -> 'List[str]'` - Retrieve all link IDs that connect the specified source node
-- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'` - Select and group nodes by regex on name or by attribute directive.
+- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'` - Select and group nodes by regex pattern on node name.
 
 ### Node
 
@@ -1019,6 +966,16 @@ Args:
 Returns:
     A class decorator that adds the class to `WORKFLOW_STEP_REGISTRY`.
 
+### resolve_parallelism(parallelism: 'Union[int, str]') -> 'int'
+
+Resolve parallelism setting to a concrete worker count.
+
+Args:
+    parallelism: Either an integer worker count or "auto" for CPU count.
+
+Returns:
+    Positive integer worker count (minimum 1).
+
 ---
 
 ## ngraph.workflow.build_graph
@@ -1058,7 +1015,7 @@ Actual Core graph building happens in analysis functions as needed.
 
 Attributes:
     add_reverse: If True, adds reverse edges for bidirectional connectivity.
-                 Defaults to True for backward compatibility.
+                 Defaults to True.
 
 **Attributes:**
 
@@ -1164,8 +1121,8 @@ YAML Configuration Example:
 - step_type: MaxFlow
 
         name: "maxflow_dc_to_edge"
-        source_path: "^datacenter/.*"
-        sink_path: "^edge/.*"
+        source: "^datacenter/.*"
+        sink: "^edge/.*"
         mode: "combine"
         failure_policy: "random_failures"
         iterations: 100
@@ -1184,8 +1141,8 @@ YAML Configuration Example:
 Maximum flow Monte Carlo workflow step.
 
 Attributes:
-    source_path: Regex pattern for source node groups.
-    sink_path: Regex pattern for sink node groups.
+    source: Source node selector (string path or selector dict).
+    sink: Sink node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     failure_policy: Name of failure policy in scenario.failure_policy_set.
     iterations: Number of Monte Carlo trials.
@@ -1205,8 +1162,8 @@ Attributes:
 - `name` (str)
 - `seed` (int | None)
 - `_seed_source` (str)
-- `source_path` (str)
-- `sink_path` (str)
+- `source` (Union[str, Dict[str, Any]])
+- `sink` (Union[str, Dict[str, Any]])
 - `mode` (str) = combine
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
@@ -1514,19 +1471,161 @@ Args:
     allowed: Set of recognized keys.
     context: Short description used in error messages.
 
+### join_paths(parent_path: 'str', rel_path: 'str') -> 'str'
+
+Join two path segments according to DSL conventions.
+
+The DSL has no concept of absolute paths. All paths are relative to the
+current context (parent_path). A leading "/" on rel_path is stripped and
+has no functional effect - it serves only as a visual indicator that the
+path starts from the current scope's root.
+
+Behavior:
+
+- Leading "/" on rel_path is stripped (not treated as filesystem root)
+- Result is always: "{parent_path}/{stripped_rel_path}" if parent_path is non-empty
+- Examples:
+
+    join_paths("", "/leaf") -> "leaf"
+    join_paths("pod1", "/leaf") -> "pod1/leaf"
+    join_paths("pod1", "leaf") -> "pod1/leaf"  (same result)
+
+Args:
+    parent_path: Parent path prefix (e.g., "pod1" when expanding a blueprint).
+    rel_path: Path to join. Leading "/" is stripped if present.
+
+Returns:
+    Combined path string.
+
+---
+
+## ngraph.dsl.expansion.brackets
+
+Bracket expansion for name patterns.
+
+Provides expand_name_patterns() for expanding bracket expressions
+like "fa[1-3]" into ["fa1", "fa2", "fa3"].
+
 ### expand_name_patterns(name: 'str') -> 'List[str]'
 
 Expand bracket expressions in a group name.
 
+Supports:
+
+- Ranges: [1-3] -> 1, 2, 3
+- Lists: [a,b,c] -> a, b, c
+- Mixed: [1,3,5-7] -> 1, 3, 5, 6, 7
+- Multiple brackets: Cartesian product
+
+Args:
+    name: Name pattern with optional bracket expressions.
+
+Returns:
+    List of expanded names.
+
 Examples:
+    >>> expand_name_patterns("fa[1-3]")
+    ["fa1", "fa2", "fa3"]
+    >>> expand_name_patterns("dc[1,3,5-6]")
+    ["dc1", "dc3", "dc5", "dc6"]
+    >>> expand_name_patterns("fa[1-2]_plane[5-6]")
+    ["fa1_plane5", "fa1_plane6", "fa2_plane5", "fa2_plane6"]
 
-- "fa[1-3]" -> ["fa1", "fa2", "fa3"]
-- "dc[1,3,5-6]" -> ["dc1", "dc3", "dc5", "dc6"]
-- "fa[1-2]_plane[5-6]" -> ["fa1_plane5", "fa1_plane6", "fa2_plane5", "fa2_plane6"]
+### expand_risk_group_refs(rg_list: 'Iterable[str]') -> 'Set[str]'
 
-### join_paths(parent_path: 'str', rel_path: 'str') -> 'str'
+Expand bracket patterns in a list of risk group references.
 
-Join two path segments according to the DSL conventions.
+Takes an iterable of risk group names (possibly containing bracket
+expressions) and returns a set of all expanded names.
+
+Args:
+    rg_list: Iterable of risk group name patterns.
+
+Returns:
+    Set of expanded risk group names.
+
+Examples:
+    >>> expand_risk_group_refs(["RG1"])
+    {"RG1"}
+    >>> expand_risk_group_refs(["RG[1-3]"])
+    {"RG1", "RG2", "RG3"}
+    >>> expand_risk_group_refs(["A[1-2]", "B[a,b]"])
+    {"A1", "A2", "Ba", "Bb"}
+
+---
+
+## ngraph.dsl.expansion.schema
+
+Schema definitions for variable expansion.
+
+Provides dataclasses for template expansion configuration.
+
+### ExpansionSpec
+
+Specification for variable-based expansion.
+
+Attributes:
+    expand_vars: Mapping of variable names to lists of values.
+    expansion_mode: How to combine variable values.
+
+- "cartesian": All combinations (default)
+- "zip": Pair values by position
+
+**Attributes:**
+
+- `expand_vars` (Dict[str, List[Any]]) = {}
+- `expansion_mode` (Literal['cartesian', 'zip']) = cartesian
+
+**Methods:**
+
+- `is_empty(self) -> 'bool'` - Check if no variables are defined.
+
+---
+
+## ngraph.dsl.expansion.variables
+
+Variable expansion for templates.
+
+Provides expand_templates() function for substituting $var and ${var}
+placeholders in template strings.
+
+### expand_templates(templates: 'Dict[str, str]', spec: "'ExpansionSpec'") -> 'Iterator[Dict[str, str]]'
+
+Expand template strings with variable substitution.
+
+Uses $var or ${var} syntax only.
+
+Args:
+    templates: Dict of template strings, e.g. {"source": "dc${dc}/...", "sink": "..."}.
+    spec: Expansion specification with variables and mode.
+
+Yields:
+    Dicts with same keys as templates, values substituted.
+
+Raises:
+    ValueError: If zip mode has mismatched list lengths or expansion exceeds limit.
+    KeyError: If a template references an undefined variable.
+
+Example:
+    >>> spec = ExpansionSpec(expand_vars={"dc": [1, 2]})
+    >>> list(expand_templates({"src": "dc${dc}"}, spec))
+    [{"src": "dc1"}, {"src": "dc2"}]
+
+### substitute_vars(template: 'str', var_dict: 'Dict[str, Any]') -> 'str'
+
+Substitute $var and ${var} placeholders in a template string.
+
+Uses $ prefix to avoid collision with regex {m,n} quantifiers.
+
+Args:
+    template: String containing $var or ${var} placeholders.
+    var_dict: Mapping of variable names to values.
+
+Returns:
+    Template with variables substituted.
+
+Raises:
+    KeyError: If a referenced variable is not in var_dict.
 
 ---
 
@@ -1548,6 +1647,192 @@ keys) and with schema shape already enforced.
 
 ---
 
+## ngraph.dsl.selectors.conditions
+
+Condition evaluation for node/entity filtering.
+
+Provides evaluation logic for attribute conditions used in selectors
+and failure policies. Supports operators: ==, !=, <, <=, >, >=,
+contains, not_contains, in, not_in, any_value, no_value.
+
+### evaluate_condition(attrs: 'Dict[str, Any]', cond: "'Condition'") -> 'bool'
+
+Evaluate a single condition against an attribute dict.
+
+Args:
+    attrs: Flat mapping of entity attributes.
+    cond: Condition to evaluate.
+
+Returns:
+    True if condition passes, False otherwise.
+
+Raises:
+    ValueError: If operator is unknown or value type is invalid.
+
+### evaluate_conditions(attrs: 'Dict[str, Any]', conditions: "Iterable['Condition']", logic: 'str' = 'or') -> 'bool'
+
+Evaluate multiple conditions with AND/OR logic.
+
+Args:
+    attrs: Flat mapping of entity attributes.
+    conditions: Iterable of Condition objects.
+    logic: "and" (all must match) or "or" (any must match).
+
+Returns:
+    True if combined predicate passes.
+
+Raises:
+    ValueError: If logic is not "and" or "or".
+
+---
+
+## ngraph.dsl.selectors.normalize
+
+Selector parsing and normalization.
+
+Provides the single entry point for converting raw selector values
+(strings or dicts) into NodeSelector objects.
+
+### normalize_selector(raw: 'Union[str, Dict[str, Any], NodeSelector]', context: 'str') -> 'NodeSelector'
+
+Normalize a raw selector (string or dict) to a NodeSelector.
+
+This is the single entry point for all selector parsing. All downstream
+code works with NodeSelector objects only.
+
+Args:
+    raw: Either a regex string, selector dict, or existing NodeSelector.
+    context: Usage context ("adjacency", "demand", "override", "workflow").
+        Determines the default for active_only.
+
+Returns:
+    Normalized NodeSelector instance.
+
+Raises:
+    ValueError: If selector format is invalid or context is unknown.
+
+---
+
+## ngraph.dsl.selectors.schema
+
+Schema definitions for unified node selection.
+
+Provides dataclasses for node selection configuration used across
+adjacency, demands, overrides, and workflow steps.
+
+### Condition
+
+A single attribute condition for filtering.
+
+Attributes:
+    attr: Attribute name to match.
+    operator: Comparison operator.
+    value: Right-hand operand (unused for any_value/no_value).
+
+**Attributes:**
+
+- `attr` (str)
+- `operator` (Literal['==', '!=', '<', '<=', '>', '>=', 'contains', 'not_contains', 'in', 'not_in', 'any_value', 'no_value'])
+- `value` (Any)
+
+### MatchSpec
+
+Specification for filtering nodes by attribute conditions.
+
+Attributes:
+    conditions: List of conditions to evaluate.
+    logic: How to combine conditions ("and" = all, "or" = any).
+
+**Attributes:**
+
+- `conditions` (List[Condition]) = []
+- `logic` (Literal['and', 'or']) = or
+
+### NodeSelector
+
+Unified node selection specification.
+
+Evaluation order:
+
+1. Select nodes matching `path` regex (default ".*" if omitted)
+2. Filter by `match` conditions
+3. Filter by `active_only` flag
+4. Group by `group_by` attribute (if specified)
+
+At least one of path, group_by, or match must be specified.
+
+Attributes:
+    path: Regex pattern on node.name.
+    group_by: Attribute name to group nodes by.
+    match: Attribute-based filtering conditions.
+    active_only: Whether to exclude disabled nodes. None uses context default.
+
+**Attributes:**
+
+- `path` (Optional[str])
+- `group_by` (Optional[str])
+- `match` (Optional[MatchSpec])
+- `active_only` (Optional[bool])
+
+---
+
+## ngraph.dsl.selectors.select
+
+Node selection and evaluation.
+
+Provides the unified select_nodes() function that handles regex matching,
+attribute filtering, active-only filtering, and grouping.
+
+### flatten_link_attrs(link: "'Link'", link_id: 'str') -> 'Dict[str, Any]'
+
+Build flat attribute dict for condition evaluation on links.
+
+Merges link's top-level fields with link.attrs. Top-level fields
+take precedence on key conflicts.
+
+Args:
+    link: Link object to flatten.
+    link_id: The link's ID in the network.
+
+Returns:
+    Flat dict suitable for condition evaluation.
+
+### flatten_node_attrs(node: "'Node'") -> 'Dict[str, Any]'
+
+Build flat attribute dict for condition evaluation.
+
+Merges node's top-level fields (name, disabled, risk_groups) with
+node.attrs. Top-level fields take precedence on key conflicts.
+
+Args:
+    node: Node object to flatten.
+
+Returns:
+    Flat dict suitable for condition evaluation.
+
+### select_nodes(network: "'Network'", selector: 'NodeSelector', default_active_only: 'bool', excluded_nodes: 'Optional[Set[str]]' = None) -> "Dict[str, List['Node']]"
+
+Unified entry point for node selection.
+
+Evaluation order:
+
+1. Select nodes matching `path` regex (or all nodes if path is None)
+2. Filter by `match` conditions
+3. Filter by `active_only` flag and excluded_nodes
+4. Group by `group_by` attribute (overrides regex capture grouping)
+
+Args:
+    network: The network graph.
+    selector: Node selection specification.
+    default_active_only: Context-aware default for active_only flag.
+        Required parameter to prevent silent bugs.
+    excluded_nodes: Additional node names to exclude.
+
+Returns:
+    Dict mapping group labels to lists of nodes.
+
+---
+
 ## ngraph.results.artifacts
 
 Serializable result artifacts for analysis workflows.
@@ -1560,7 +1845,6 @@ simulations in a JSON-serializable form:
   aggregated flow statistics
 
 - `FailurePatternResult`: capacity results for specific failure patterns
-- `PlacementEnvelope`: per-demand placement envelopes
 
 ### CapacityEnvelope
 
@@ -1627,44 +1911,6 @@ Attributes:
 
 - `from_dict(data: 'Dict[str, Any]') -> "'FailurePatternResult'"` - Construct FailurePatternResult from a dictionary.
 - `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
-### PlacementEnvelope
-
-Per-demand placement envelope keyed like capacity envelopes.
-
-Each envelope captures frequency distribution of placement ratio for a
-specific demand definition across Monte Carlo iterations.
-
-Attributes:
-    source: Source selection regex or node label.
-    sink: Sink selection regex or node label.
-    mode: Demand expansion mode ("combine" or "pairwise").
-    priority: Demand priority class.
-    frequencies: Mapping of placement ratio to occurrence count.
-    min: Minimum observed placement ratio.
-    max: Maximum observed placement ratio.
-    mean: Mean placement ratio.
-    stdev: Standard deviation of placement ratio.
-    total_samples: Number of iterations represented.
-
-**Attributes:**
-
-- `source` (str)
-- `sink` (str)
-- `mode` (str)
-- `priority` (int)
-- `frequencies` (Dict[float, int])
-- `min` (float)
-- `max` (float)
-- `mean` (float)
-- `stdev` (float)
-- `total_samples` (int)
-
-**Methods:**
-
-- `from_dict(data: 'Dict[str, Any]') -> "'PlacementEnvelope'"` - Construct a PlacementEnvelope from a dictionary.
-- `from_values(source: 'str', sink: 'str', mode: 'str', priority: 'int', ratios: 'List[float]', rounding_decimals: 'int' = 4) -> "'PlacementEnvelope'"`
-- `to_dict(self) -> 'Dict[str, Any]'`
 
 ---
 
@@ -2020,63 +2266,6 @@ Returns:
 
 ---
 
-## ngraph.utils.nodes
-
-Node utility functions for filtering and selection.
-
-Provides centralized helpers for filtering active (non-disabled) nodes,
-used across analysis, workflows, and demand expansion.
-
-### collect_active_node_names_from_groups(groups: "Dict[str, List['Node']]", excluded_nodes: 'Optional[Set[str]]' = None) -> 'List[str]'
-
-Extract active (non-disabled) node names from selection groups dict.
-
-Flattens all group values and filters to active nodes.
-
-Args:
-    groups: Dictionary mapping group labels to lists of Node objects.
-    excluded_nodes: Optional set of node names to exclude.
-
-Returns:
-    List of node names from all groups that are active.
-
-### collect_active_nodes_from_groups(groups: "Dict[str, List['Node']]", excluded_nodes: 'Optional[Set[str]]' = None) -> "List['Node']"
-
-Extract active (non-disabled) nodes from selection groups dict.
-
-Flattens all group values and filters to active nodes.
-
-Args:
-    groups: Dictionary mapping group labels to lists of Node objects.
-    excluded_nodes: Optional set of node names to exclude.
-
-Returns:
-    List of Node objects from all groups that are active.
-
-### get_active_node_names(nodes: "Iterable['Node']", excluded_nodes: 'Optional[Set[str]]' = None) -> 'List[str]'
-
-Extract names of active (non-disabled) nodes, optionally excluding some.
-
-Args:
-    nodes: Iterable of Node objects to filter.
-    excluded_nodes: Optional set of node names to exclude.
-
-Returns:
-    List of node names that are not disabled and not in excluded_nodes.
-
-### get_active_nodes(nodes: "Iterable['Node']", excluded_nodes: 'Optional[Set[str]]' = None) -> "List['Node']"
-
-Extract active (non-disabled) nodes, optionally excluding some.
-
-Args:
-    nodes: Iterable of Node objects to filter.
-    excluded_nodes: Optional set of node names to exclude.
-
-Returns:
-    List of Node objects that are not disabled and not in excluded_nodes.
-
----
-
 ## ngraph.utils.output_paths
 
 Utilities for building CLI artifact output paths.
@@ -2275,20 +2464,20 @@ Attributes:
 - `_disabled_node_ids` (FrozenSet[int])
 - `_disabled_link_ids` (FrozenSet[str])
 - `_link_id_to_edge_indices` (Mapping[str, Tuple[int, ...]])
-- `_source_path` (Optional[str])
-- `_sink_path` (Optional[str])
+- `_source` (Optional[Union[str, Dict[str, Any]]])
+- `_sink` (Optional[Union[str, Dict[str, Any]]])
 - `_mode` (Optional[Mode])
 - `_pseudo_context` (Optional[_PseudoNodeContext])
 
 **Methods:**
 
-- `from_network(network: "'Network'", *, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, mode: 'Mode' = <Mode.COMBINE: 1>, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> "'AnalysisContext'"` - Create analysis context from network.
-- `k_shortest_paths(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.PAIRWISE: 2>, max_k: 'int' = 3, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, max_path_cost: 'float' = inf, max_path_cost_factor: 'Optional[float]' = None, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute up to K shortest paths per group pair.
-- `max_flow(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between node groups.
-- `max_flow_detailed(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, include_min_cut: 'bool' = False) -> 'Dict[Tuple[str, str], MaxFlowResult]'` - Compute max flow with detailed results including cost distribution.
-- `sensitivity(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], Dict[str, float]]'` - Analyze sensitivity of max flow to edge failures.
-- `shortest_path_cost(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute shortest path costs between node groups.
-- `shortest_paths(self, source: 'Optional[str]' = None, sink: 'Optional[str]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute concrete shortest paths between node groups.
+- `from_network(network: "'Network'", *, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, mode: 'Mode' = <Mode.COMBINE: 1>, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> "'AnalysisContext'"` - Create analysis context from network.
+- `k_shortest_paths(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.PAIRWISE: 2>, max_k: 'int' = 3, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, max_path_cost: 'float' = inf, max_path_cost_factor: 'Optional[float]' = None, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute up to K shortest paths per group pair.
+- `max_flow(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between node groups.
+- `max_flow_detailed(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, include_min_cut: 'bool' = False) -> 'Dict[Tuple[str, str], MaxFlowResult]'` - Compute max flow with detailed results including cost distribution.
+- `sensitivity(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], Dict[str, float]]'` - Analyze sensitivity of max flow to edge failures.
+- `shortest_path_cost(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute shortest path costs between node groups.
+- `shortest_paths(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Mode' = <Mode.COMBINE: 1>, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute concrete shortest paths between node groups.
 
 ### AugmentationEdge
 
@@ -2366,7 +2555,7 @@ Args:
 Returns:
     AnalysisContext ready for use with demand_placement_analysis.
 
-### build_maxflow_context(network: "'Network'", source_path: 'str', sink_path: 'str', mode: 'str' = 'combine') -> 'AnalysisContext'
+### build_maxflow_context(network: "'Network'", source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine') -> 'AnalysisContext'
 
 Build an AnalysisContext for repeated max-flow analysis.
 
@@ -2375,8 +2564,8 @@ pairs, enabling O(|excluded|) mask building per iteration.
 
 Args:
     network: Network instance.
-    source_path: Selection expression for source node groups.
-    sink_path: Selection expression for sink node groups.
+    source: Source node selector (string path or selector dict).
+    sink: Sink node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
 
 Returns:
@@ -2414,7 +2603,7 @@ Args:
 Returns:
     FlowIterationResult describing this iteration.
 
-### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze maximum flow capacity between node groups.
 
@@ -2422,8 +2611,8 @@ Args:
     network: Network instance.
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
-    source_path: Selection expression for source node groups.
-    sink_path: Selection expression for sink node groups.
+    source: Source node selector (string path or selector dict).
+    sink: Sink node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: Whether to use shortest paths only.
     require_capacity: If True (default), path selection considers available
@@ -2437,7 +2626,7 @@ Args:
 Returns:
     FlowIterationResult describing this iteration.
 
-### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze component sensitivity to failures.
 
@@ -2453,8 +2642,8 @@ Args:
     network: Network instance.
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
-    source_path: Selection expression for source node groups.
-    sink_path: Selection expression for sink node groups.
+    source: Source node selector (string path or selector dict).
+    sink: Sink node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
         Reports only edges used under ECMP routing. If False (default), use
@@ -2473,7 +2662,6 @@ Returns:
 Builders for traffic matrices.
 
 Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
-This logic was previously embedded in `Scenario.from_yaml`.
 
 ### build_traffic_matrix_set(raw: 'Dict[str, List[dict]]') -> 'TrafficMatrixSet'
 
@@ -2487,7 +2675,8 @@ Returns:
     Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
 
 Raises:
-    ValueError: If ``raw`` is not a mapping of name -> list[dict].
+    ValueError: If ``raw`` is not a mapping of name -> list[dict],
+        or if required fields are missing.
 
 ---
 
@@ -2496,6 +2685,7 @@ Raises:
 Demand expansion: converts TrafficDemand specs into concrete placement demands.
 
 Supports both pairwise and combine modes through augmentation-based pseudo nodes.
+Uses unified selectors for node selection.
 
 ### DemandExpansion
 
@@ -2540,10 +2730,11 @@ Expand TrafficDemand specifications into concrete demands with augmentations.
 
 Pure function that:
 
-1. Selects node groups using Network's selection API
-2. Distributes volume based on mode (combine/pairwise)
-3. Generates augmentation edges for combine mode (pseudo nodes)
-4. Returns demands (node names) + augmentations
+1. Expands variables in selectors using expand_vars
+2. Normalizes and evaluates selectors to get node groups
+3. Distributes volume based on mode (combine/pairwise) and group_mode
+4. Generates augmentation edges for combine mode (pseudo nodes)
+5. Returns demands (node names) + augmentations
 
 Node names are used (not IDs) so expansion happens BEFORE graph building.
 IDs are resolved after graph is built with augmentations.
@@ -2613,9 +2804,9 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
 - `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source_path: 'str', sink_path: 'str', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, baseline: 'bool' = False, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---

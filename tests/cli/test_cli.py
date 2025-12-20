@@ -319,8 +319,8 @@ network:
 workflow:
   - step_type: MaxFlow
     name: cap
-    source_path: "^src"
-    sink_path: "^dst"
+    source: "^src"
+    sink: "^dst"
 """
     )
 
@@ -329,7 +329,7 @@ workflow:
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
     assert "Node selection preview:" in out
-    assert "source_path:" in out and "sink_path:" in out
+    assert "source:" in out and "sink:" in out
     assert "groups" in out and "nodes" in out
 
 
@@ -344,8 +344,8 @@ network:
 workflow:
   - step_type: MaxFlow
     name: cap2
-    source_path: "^none"
-    sink_path: "^none"
+    source: "^none"
+    sink: "^none"
 """
     )
 
@@ -374,8 +374,8 @@ network:
         capacity: 100
 traffic_matrix_set:
   default:
-    - source_path: "^A$"
-      sink_path: "^B$"
+    - source: "^A$"
+      sink: "^B$"
       demand: 50
 workflow:
   - step_type: BuildGraph

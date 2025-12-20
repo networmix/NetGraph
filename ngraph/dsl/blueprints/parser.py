@@ -6,9 +6,18 @@ module so they can be tested independently and reused.
 
 from __future__ import annotations
 
-import re
-from itertools import product
-from typing import Any, Dict, List
+from typing import Any, Dict
+
+# Re-export expand_name_patterns from its canonical location
+from ngraph.dsl.expansion import expand_name_patterns
+
+__all__ = [
+    "check_no_extra_keys",
+    "check_adjacency_keys",
+    "check_link_params",
+    "expand_name_patterns",
+    "join_paths",
+]
 
 
 def check_no_extra_keys(
@@ -63,62 +72,29 @@ def check_link_params(link_params: Dict[str, Any], context: str) -> None:
         )
 
 
-_RANGE_REGEX = re.compile(r"\[([^\]]+)\]")
-
-
-def expand_name_patterns(name: str) -> List[str]:
-    """Expand bracket expressions in a group name.
-
-    Examples:
-        - "fa[1-3]" -> ["fa1", "fa2", "fa3"]
-        - "dc[1,3,5-6]" -> ["dc1", "dc3", "dc5", "dc6"]
-        - "fa[1-2]_plane[5-6]" -> ["fa1_plane5", "fa1_plane6", "fa2_plane5", "fa2_plane6"]
-    """
-    matches = list(_RANGE_REGEX.finditer(name))
-    if not matches:
-        return [name]
-
-    expansions_list = []
-    for match in matches:
-        range_expr = match.group(1)
-        expansions_list.append(_parse_range_expr(range_expr))
-
-    expanded_names = []
-    for combo in product(*expansions_list):
-        result_str = ""
-        last_end = 0
-        for m_idx, match in enumerate(matches):
-            start, end = match.span()
-            result_str += name[last_end:start]
-            result_str += combo[m_idx]
-            last_end = end
-        result_str += name[last_end:]
-        expanded_names.append(result_str)
-
-    return expanded_names
-
-
-def _parse_range_expr(expr: str) -> List[str]:
-    values: List[str] = []
-    parts = [x.strip() for x in expr.split(",")]
-    for part in parts:
-        if "-" in part:
-            start_str, end_str = part.split("-", 1)
-            start = int(start_str)
-            end = int(end_str)
-            for val in range(start, end + 1):
-                values.append(str(val))
-        else:
-            values.append(part)
-    return values
-
-
 def join_paths(parent_path: str, rel_path: str) -> str:
-    """Join two path segments according to the DSL conventions."""
-    # Attribute directive paths are global selectors and must not be prefixed
-    # by any parent blueprint path.
-    if rel_path.startswith("attr:"):
-        return rel_path
+    """Join two path segments according to DSL conventions.
+
+    The DSL has no concept of absolute paths. All paths are relative to the
+    current context (parent_path). A leading "/" on rel_path is stripped and
+    has no functional effect - it serves only as a visual indicator that the
+    path starts from the current scope's root.
+
+    Behavior:
+    - Leading "/" on rel_path is stripped (not treated as filesystem root)
+    - Result is always: "{parent_path}/{stripped_rel_path}" if parent_path is non-empty
+    - Examples:
+        join_paths("", "/leaf") -> "leaf"
+        join_paths("pod1", "/leaf") -> "pod1/leaf"
+        join_paths("pod1", "leaf") -> "pod1/leaf"  (same result)
+
+    Args:
+        parent_path: Parent path prefix (e.g., "pod1" when expanding a blueprint).
+        rel_path: Path to join. Leading "/" is stripped if present.
+
+    Returns:
+        Combined path string.
+    """
     if rel_path.startswith("/"):
         rel_path = rel_path[1:]
         if parent_path:

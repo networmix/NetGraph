@@ -55,8 +55,8 @@ failure_policy_set:
 
 traffic_matrix_set:
   baseline_traffic_matrix:
-    - source_path: "^N([1-4])$"
-      sink_path: "^N([1-4])$"
+    - source: "^N([1-4])$"
+      sink: "^N([1-4])$"
       demand: 12.0
       mode: "pairwise"
       attrs:
@@ -96,8 +96,8 @@ workflow:
   # 3) MaxFlow capacity matrix between all node pairs
   - step_type: MaxFlow
     name: node_to_node_capacity_matrix
-    source_path: "^(N[1-4])$"
-    sink_path: "^(N[1-4])$"
+    source: "^(N[1-4])$"
+    sink: "^(N[1-4])$"
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000

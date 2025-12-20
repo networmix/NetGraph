@@ -2,11 +2,10 @@ from typing import Any
 
 import pytest
 
-from ngraph.model.failure.conditions import (
-    FailureCondition,
-    evaluate_condition,
-    evaluate_conditions,
-)
+from ngraph.dsl.selectors import Condition, evaluate_condition, evaluate_conditions
+
+# Use Condition directly (FailureCondition is just an alias)
+FailureCondition = Condition
 
 
 class TestEvaluateCondition:
@@ -36,12 +35,12 @@ class TestEvaluateCondition:
             evaluate_condition(attrs, FailureCondition("s", "not_contains", "xyz"))
             is True
         )
-        # None yields False for contains and True for not_contains
+        # None yields False for both contains and not_contains (can't evaluate on None)
         assert evaluate_condition(attrs, FailureCondition("n", "contains", 1)) is False
         assert (
-            evaluate_condition(attrs, FailureCondition("n", "not_contains", 1)) is True
+            evaluate_condition(attrs, FailureCondition("n", "not_contains", 1)) is False
         )
-        # Non-iterable must not raise
+        # Non-iterable: contains returns False, not_contains returns True
         assert evaluate_condition(attrs, FailureCondition("i", "contains", 1)) is False
         assert (
             evaluate_condition(attrs, FailureCondition("i", "not_contains", 1)) is True
@@ -50,7 +49,8 @@ class TestEvaluateCondition:
     def test_any_value_and_no_value(self) -> None:
         attrs: dict[str, Any] = {"p": 0, "q": None}
         assert evaluate_condition(attrs, FailureCondition("p", "any_value")) is True
-        assert evaluate_condition(attrs, FailureCondition("q", "any_value")) is True
+        # any_value with None returns False (attr must have non-None value)
+        assert evaluate_condition(attrs, FailureCondition("q", "any_value")) is False
         assert (
             evaluate_condition(attrs, FailureCondition("missing", "any_value")) is False
         )
@@ -61,8 +61,8 @@ class TestEvaluateCondition:
         assert evaluate_condition(attrs, FailureCondition("p", "no_value")) is False
 
     def test_unsupported_operator_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unsupported operator"):
-            evaluate_condition({}, FailureCondition("x", "bad"))
+        with pytest.raises(ValueError, match="Unknown operator"):
+            evaluate_condition({"x": 1}, FailureCondition("x", "bad"))
 
 
 class TestEvaluateConditions:
@@ -77,5 +77,7 @@ class TestEvaluateConditions:
         assert evaluate_conditions(attrs, conds2, "or") is False
 
     def test_unsupported_logic(self) -> None:
+        # Need non-empty conditions to trigger logic check
+        conds = [FailureCondition("x", "==", 1)]
         with pytest.raises(ValueError, match="Unsupported logic"):
-            evaluate_conditions({}, [], "xor")
+            evaluate_conditions({}, conds, "xor")

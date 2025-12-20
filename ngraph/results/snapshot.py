@@ -55,11 +55,12 @@ def build_scenario_snapshot(
             entries.append(
                 {
                     "id": getattr(d, "id", None),
-                    "source_path": getattr(d, "source_path", ""),
-                    "sink_path": getattr(d, "sink_path", ""),
+                    "source": getattr(d, "source", ""),
+                    "sink": getattr(d, "sink", ""),
                     "demand": float(getattr(d, "demand", 0.0)),
                     "priority": int(getattr(d, "priority", 0)),
                     "mode": getattr(d, "mode", "pairwise"),
+                    "group_mode": getattr(d, "group_mode", "flatten"),
                     "flow_policy_config": getattr(d, "flow_policy_config", None),
                     "attrs": dict(getattr(d, "attrs", {}) or {}),
                 }

@@ -45,10 +45,10 @@ class TestNetworkIntegration:
         flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
         assert flow[("^A$", "^D$")] == 1.0
 
-        # Flow should be 0 when critical nodes are disabled
+        # No flow possible when all nodes are disabled - raises error
         net.disable_risk_group("critical")
-        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
-        assert flow[("^A$", "^D$")] == 0.0
+        with pytest.raises(ValueError, match="No source nodes found"):
+            analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
 
         # Flow should resume when risk group is re-enabled
         net.enable_risk_group("critical")

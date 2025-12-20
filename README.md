@@ -130,8 +130,8 @@ network:
 # Define traffic matrix
 traffic_matrix_set:
   global_traffic:
-    - source_path: ^site1/leaf/
-      sink_path: ^site2/leaf/
+    - source: ^site1/leaf/
+      sink: ^site2/leaf/
       demand: 100.0
       mode: combine
       flow_policy_config: SHORTEST_PATHS_ECMP
@@ -142,8 +142,8 @@ workflow:
   name: stats
 - step_type: MaxFlow
   name: site_capacity
-  source_path: ^site1/leaf/
-  sink_path: ^site2/leaf/
+  source: ^site1/leaf/
+  sink: ^site2/leaf/
   mode: combine
   shortest_path: false
 - step_type: MaximumSupportedDemand

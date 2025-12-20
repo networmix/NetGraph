@@ -119,25 +119,31 @@ class TrafficMatrixPlacement(WorkflowStep):
             demands_config.append(
                 {
                     "id": td.id,
-                    "source_path": td.source_path,
-                    "sink_path": td.sink_path,
+                    "source": td.source,
+                    "sink": td.sink,
                     "demand": float(td.demand) * float(effective_alpha),
                     "mode": getattr(td, "mode", "pairwise"),
                     "flow_policy_config": getattr(td, "flow_policy_config", None),
                     "priority": getattr(td, "priority", 0),
+                    "group_mode": getattr(td, "group_mode", "flatten"),
+                    "expand_vars": getattr(td, "expand_vars", None) or {},
+                    "expansion_mode": getattr(td, "expansion_mode", "cartesian"),
                 }
             )
             base_demands.append(
                 {
                     "id": td.id,
-                    "source_path": getattr(td, "source_path", ""),
-                    "sink_path": getattr(td, "sink_path", ""),
+                    "source": getattr(td, "source", ""),
+                    "sink": getattr(td, "sink", ""),
                     "demand": float(getattr(td, "demand", 0.0)),
                     "mode": getattr(td, "mode", "pairwise"),
                     "priority": int(getattr(td, "priority", 0)),
                     "flow_policy_config": serialize_policy_preset(
                         getattr(td, "flow_policy_config", None)
                     ),
+                    "group_mode": getattr(td, "group_mode", "flatten"),
+                    "expand_vars": getattr(td, "expand_vars", None) or {},
+                    "expansion_mode": getattr(td, "expansion_mode", "cartesian"),
                 }
             )
 

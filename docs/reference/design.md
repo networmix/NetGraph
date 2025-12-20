@@ -151,11 +151,43 @@ Network is the container for scenario topology. It enforces invariants during co
 
 ### Node and Link Selection
 
-The model supports selecting groups of nodes by pattern, which is used by algorithms to choose source/sink sets matching on their structured names or attributes. Network.select_node_groups_by_path(pattern) accepts either a regex or an attribute query:
+The model supports selecting groups of nodes via a unified selector system used by algorithms to choose source/sink sets matching on structured names or attributes.
 
-If the pattern is of the form `attr:<name>`, it groups nodes by the value of the given attribute name. For example, `attr:role` might group nodes by their role attribute (like "core", "leaf", etc.), returning a dict mapping each distinct value to the list of nodes with that value. Nodes missing the attribute are excluded.
+**Selector Forms:**
 
-Otherwise, the pattern is treated as an anchored regular expression on the node's name. If the regex contains capturing groups, the concatenated capture groups form the group label; otherwise, the entire pattern string is used as the label. For instance, the pattern `r"(\w+)-(\d+)"` on node names could produce group labels like "metroA-1" etc. If no nodes match, an empty mapping is returned (with a debug log) instead of an error, so higher-level logic can handle it.
+Selectors can be specified as:
+
+1. **String pattern**: A regex matched against node names (anchored at start via `re.match()`)
+2. **Selector object**: A dict with `path`, `group_by`, and/or `match` fields
+
+**String Pattern Behavior:**
+
+When using a regex pattern, if the regex contains capturing groups, the concatenated capture groups form the group label; otherwise, the entire pattern string is used as the label. For instance, the pattern `r"(\w+)-(\d+)"` on node names could produce group labels like "metroA-1" etc.
+
+**Attribute-based Grouping:**
+
+Use `group_by` in a selector object to group nodes by an attribute value:
+
+```yaml
+source:
+  group_by: "role"
+```
+
+This groups nodes by the value of `node.attrs["role"]` (e.g., "core", "leaf"), returning a dict mapping each distinct value to the list of nodes with that value. Nodes missing the attribute are excluded.
+
+**Attribute-based Filtering:**
+
+Use `match` in a selector object to filter nodes by attribute conditions:
+
+```yaml
+source:
+  path: "^dc1/.*"
+  match:
+    conditions:
+      - attr: "tier"
+        operator: "=="
+        value: "leaf"
+```
 
 This selection mechanism allows workflow steps and API calls to refer to nodes flexibly (using human-readable patterns instead of explicit lists), which is particularly useful in large topologies.
 
@@ -576,16 +608,16 @@ For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that b
 # IP network with traditional ECMP (e.g., data center leaf-spine)
 traffic_matrix_set:
   dc_traffic:
-    - source_path: ^rack1/
-      sink_path: ^rack2/
+    - source: ^rack1/
+      sink: ^rack2/
       demand: 1000.0
       flow_policy_config: SHORTEST_PATHS_ECMP
 
 # MPLS-TE network with capacity-aware tunnel placement
 traffic_matrix_set:
   backbone_traffic:
-    - source_path: ^metro1/
-      sink_path: ^metro2/
+    - source: ^metro1/
+      sink: ^metro2/
       demand: 5000.0
       flow_policy_config: TE_WCMP_UNLIM
 ```

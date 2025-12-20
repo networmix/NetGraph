@@ -37,8 +37,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_path="datacenter.*",
-            sink_path="edge.*",
+            source="datacenter.*",
+            sink="edge.*",
             mode="combine",
         )
 
@@ -58,8 +58,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_path="datacenter.*",
-            sink_path="edge.*",
+            source="datacenter.*",
+            sink="edge.*",
             include_flow_details=True,
             include_min_cut=True,
         )
@@ -84,8 +84,8 @@ class TestMaxFlowAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_path="datacenter.*",
-            sink_path="edge.*",
+            source="datacenter.*",
+            sink="edge.*",
             mode="pairwise",
             shortest_path=True,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
@@ -108,8 +108,8 @@ class TestMaxFlowAnalysis:
                 network=simple_network,
                 excluded_nodes=set(),
                 excluded_links=set(),
-                source_path="nonexistent.*",
-                sink_path="also_nonexistent.*",
+                source="nonexistent.*",
+                sink="also_nonexistent.*",
             )
 
 
@@ -137,8 +137,8 @@ class TestDemandPlacementAnalysis:
         # Use a smaller demand that should definitely fit
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 50.0,
                 "mode": "pairwise",
                 "priority": 0,
@@ -177,8 +177,8 @@ class TestDemandPlacementAnalysis:
         """Handles zero total demand without division by zero."""
         demands_config = [
             {
-                "source_path": "A",
-                "sink_path": "B",
+                "source": "A",
+                "sink": "B",
                 "demand": 0.0,
             }
         ]
@@ -222,8 +222,8 @@ class TestDemandPlacementWithContextCaching:
         demands_config = [
             {
                 "id": "stable-pairwise-id",
-                "source_path": "A",
-                "sink_path": "D",
+                "source": "A",
+                "sink": "D",
                 "demand": 50.0,
                 "mode": "pairwise",
             },
@@ -251,8 +251,8 @@ class TestDemandPlacementWithContextCaching:
         demands_config = [
             {
                 "id": "stable-combine-id",
-                "source_path": "[AB]",
-                "sink_path": "[CD]",
+                "source": "[AB]",
+                "sink": "[CD]",
                 "demand": 50.0,
                 "mode": "combine",
             },
@@ -282,8 +282,8 @@ class TestDemandPlacementWithContextCaching:
         demands_config = [
             {
                 "id": "reusable-id",
-                "source_path": "[AB]",
-                "sink_path": "[CD]",
+                "source": "[AB]",
+                "sink": "[CD]",
                 "demand": 50.0,
                 "mode": "combine",
             },
@@ -309,8 +309,8 @@ class TestDemandPlacementWithContextCaching:
         # Config without explicit ID - each reconstruction generates new ID
         demands_config = [
             {
-                "source_path": "[AB]",
-                "sink_path": "[CD]",
+                "source": "[AB]",
+                "sink": "[CD]",
                 "demand": 50.0,
                 "mode": "combine",
             },
@@ -350,8 +350,8 @@ class TestSensitivityAnalysis:
             network=simple_network,
             excluded_nodes=set(),
             excluded_links=set(),
-            source_path="A",
-            sink_path="C",
+            source="A",
+            sink="C",
             mode="combine",
         )
 
@@ -380,6 +380,6 @@ class TestSensitivityAnalysis:
                 network=simple_network,
                 excluded_nodes=set(),
                 excluded_links=set(),
-                source_path="nonexistent.*",
-                sink_path="also_nonexistent.*",
+                source="nonexistent.*",
+                sink="also_nonexistent.*",
             )
