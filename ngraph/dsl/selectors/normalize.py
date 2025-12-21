@@ -7,12 +7,13 @@ Provides the single entry point for converting raw selector values
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Dict, Union
+from typing import Any, Dict, Literal, Union
 
 from .schema import Condition, MatchSpec, NodeSelector
 
 __all__ = [
     "normalize_selector",
+    "parse_match_spec",
 ]
 
 # Context-aware defaults for active_only
@@ -89,16 +90,48 @@ def _parse_dict(raw: Dict[str, Any], default_active_only: bool) -> NodeSelector:
     )
 
 
-def _parse_match(raw: Dict[str, Any]) -> MatchSpec:
-    """Parse a match specification dict."""
+def parse_match_spec(
+    raw: Dict[str, Any],
+    *,
+    default_logic: Literal["and", "or"] = "or",
+    require_conditions: bool = False,
+    context: str = "match",
+) -> MatchSpec:
+    """Parse a match specification from raw dict.
+
+    Unified match specification parser for use across adjacency, demands,
+    membership rules, and failure policies.
+
+    Args:
+        raw: Dict with 'conditions' list and optional 'logic'.
+        default_logic: Default when 'logic' not specified.
+        require_conditions: If True, raise when conditions list is empty.
+        context: Used in error messages.
+
+    Returns:
+        Parsed MatchSpec.
+
+    Raises:
+        ValueError: If validation fails.
+    """
+    logic = raw.get("logic", default_logic)
+    if logic not in ("and", "or"):
+        raise ValueError(
+            f"Invalid logic '{logic}' in {context}. Must be 'and' or 'or'."
+        )
+
+    conditions_raw = raw.get("conditions", [])
+    if require_conditions and not conditions_raw:
+        raise ValueError(f"{context} requires at least one condition")
+
     conditions = []
-    for cond_dict in raw.get("conditions", []):
+    for cond_dict in conditions_raw:
         if not isinstance(cond_dict, dict):
             raise ValueError(
-                f"Each condition must be a dict, got {type(cond_dict).__name__}"
+                f"Condition in {context} must be a dict, got {type(cond_dict).__name__}"
             )
         if "attr" not in cond_dict or "operator" not in cond_dict:
-            raise ValueError("Each condition must have 'attr' and 'operator'")
+            raise ValueError(f"Condition in {context} must have 'attr' and 'operator'")
 
         conditions.append(
             Condition(
@@ -108,7 +141,12 @@ def _parse_match(raw: Dict[str, Any]) -> MatchSpec:
             )
         )
 
-    return MatchSpec(
-        conditions=conditions,
-        logic=raw.get("logic", "or"),
-    )
+    return MatchSpec(conditions=conditions, logic=logic)
+
+
+def _parse_match(raw: Dict[str, Any]) -> MatchSpec:
+    """Parse a match specification dict (internal helper).
+
+    Uses parse_match_spec with selector defaults (logic="or", conditions optional).
+    """
+    return parse_match_spec(raw, default_logic="or", require_conditions=False)

@@ -207,8 +207,20 @@ SCENARIO_4_COMPONENT_EXPECTATIONS = {
 }
 
 # Risk group expectations for scenario 4
+# Uses fiber/facility domain model for risk groups
+# Note: Only top-level risk groups are listed; children are nested inside parents
 SCENARIO_4_RISK_GROUP_EXPECTATIONS = {
-    "risk_groups": ["DC1_PowerSupply_A", "DC1_NetworkUplink", "Spine_Fabric_SRG"],
+    "risk_groups": [
+        "Building_DC1",
+        "Building_DC2",
+        "Room_DC1_Spine",
+        "Room_DC2_Spine",
+        "CoolingZone_DC1_R1_CZA",
+        "PowerZone_DC1_Leaf",
+        "PowerZone_DC2_Leaf",
+        "Conduit_DC1_DC2_C1",
+        "Path_DC1_DC2",
+    ],
     "hierarchical_groups": True,  # Has nested risk group structure
 }
 

@@ -744,8 +744,7 @@ def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
         exported.get("steps", {}).get("build_graph", {}).get("data", {}).get("graph")
     )
     if isinstance(graph_dict, dict):
-        # Use NetworkX's built-in function to convert node-link data back to graph
-        # This replaces the removed node_link_to_graph function
+        # Convert node-link dict format to NetworkX graph using built-in function
         graph = nx.node_link_graph(graph_dict, edges="edges")
     else:
         graph = graph_dict

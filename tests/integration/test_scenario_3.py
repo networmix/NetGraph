@@ -147,20 +147,21 @@ class TestScenario3:
     def test_node_overrides_application(self, helper):
         """Test that node overrides are correctly applied."""
         # Test specific node override from YAML
+        # Uses facility domain model for risk groups
         helper.validate_node_attributes(
             "my_clos1/b1/t1/t1-1",
-            {"risk_groups": {"clos1-b1t1-SRG"}, "hw_component": "LeafHW-A"},
+            {"risk_groups": {"PowerZone_Clos1_B1_PZA"}, "hw_component": "LeafHW-A"},
         )
 
         helper.validate_node_attributes(
             "my_clos2/b2/t1/t1-1",
-            {"risk_groups": {"clos2-b2t1-SRG"}, "hw_component": "LeafHW-B"},
+            {"risk_groups": {"PowerZone_Clos2_B2_PZA"}, "hw_component": "LeafHW-B"},
         )
 
         # Test spine node overrides with regex pattern
         helper.validate_node_attributes(
             "my_clos1/spine/t3-1",
-            {"risk_groups": {"clos1-spine-SRG"}, "hw_component": "SpineHW"},
+            {"risk_groups": {"Room_Clos1_Spine"}, "hw_component": "SpineHW"},
         )
 
     def test_link_overrides_application(self, helper):
@@ -178,10 +179,11 @@ class TestScenario3:
 
         # Test general spine-spine link overrides
         # Only risk_groups are validated at link-level; per-end HW is under attrs.hardware
+        # Uses fiber domain model for link risk groups
         helper.validate_link_attributes(
             source_pattern=r"my_clos1/spine/t3-2$",
             target_pattern=r"my_clos2/spine/t3-2$",
-            expected_attrs={"risk_groups": {"SpineSRG"}},
+            expected_attrs={"risk_groups": {"Conduit_InterClos_C1"}},
         )
 
     def test_link_capacity_configuration(self, helper):
@@ -336,10 +338,11 @@ class TestScenario3:
         ]
 
         # All should have the same risk group from the override
+        # Uses facility domain model for risk groups
         for node_name in spine_nodes_clos1[:3]:  # Check first few
             node = helper.network.nodes[node_name]
-            assert node.risk_groups == {"clos1-spine-SRG"}, (
-                f"Spine node {node_name} should have clos1-spine-SRG risk group"
+            assert node.risk_groups == {"Room_Clos1_Spine"}, (
+                f"Spine node {node_name} should have Room_Clos1_Spine risk group"
             )
 
     def test_workflow_step_execution_order(self, scenario_3_executed):

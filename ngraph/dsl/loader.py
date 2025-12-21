@@ -68,8 +68,17 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
 
     if isinstance(data.get("risk_groups"), list):
         for rg in data["risk_groups"]:
+            # String shorthand is allowed: "GroupName" == {name: "GroupName"}
+            if isinstance(rg, str):
+                continue
+            # Generate block is allowed: {generate: {...}}
+            if isinstance(rg, dict) and "generate" in rg:
+                continue
             if not isinstance(rg, dict) or "name" not in rg:
-                raise ValueError("RiskGroup entry missing 'name' field")
+                raise ValueError(
+                    "RiskGroup entry must be a string, dict with 'name' field, "
+                    "or dict with 'generate' field"
+                )
 
     # JSON Schema validation
     try:

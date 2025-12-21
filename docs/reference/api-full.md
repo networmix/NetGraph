@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 20, 2025 at 04:32 UTC
+Generated from source code on: December 21, 2025 at 01:24 UTC
 
-Modules auto-discovered: 49
+Modules auto-discovered: 52
 
 ---
 
@@ -487,6 +487,107 @@ Attributes:
 
 ---
 
+## ngraph.model.failure.generate
+
+Dynamic risk group generation from entity attributes.
+
+Provides functionality to auto-generate risk groups based on unique
+attribute values from nodes or links.
+
+### GenerateSpec
+
+Parsed generate block specification.
+
+Attributes:
+    entity_scope: Type of entities to group ("node" or "link").
+    group_by: Attribute name to group by (supports dot-notation).
+    name_template: Template for generated group names. Use ${value}
+        as placeholder for the attribute value.
+    attrs: Optional static attributes for generated groups.
+
+**Attributes:**
+
+- `entity_scope` (Literal['node', 'link'])
+- `group_by` (str)
+- `name_template` (str)
+- `attrs` (Dict[str, Any]) = {}
+
+### generate_risk_groups(network: "'Network'", spec: 'GenerateSpec') -> 'List[RiskGroup]'
+
+Generate risk groups from unique attribute values.
+
+For each unique value of the specified attribute, creates a new risk
+group and adds all matching entities to it.
+
+Args:
+    network: Network with nodes and links populated.
+    spec: Generation specification.
+
+Returns:
+    List of newly created RiskGroup objects.
+
+Note:
+    This function modifies entity risk_groups sets in place.
+
+### parse_generate_spec(raw: 'Dict[str, Any]') -> 'GenerateSpec'
+
+Parse raw generate dict into a GenerateSpec.
+
+Args:
+    raw: Raw generate dict from YAML.
+
+Returns:
+    Parsed GenerateSpec.
+
+Raises:
+    ValueError: If required fields are missing or invalid.
+
+---
+
+## ngraph.model.failure.membership
+
+Risk group membership rule resolution.
+
+Provides functionality to resolve policy-based membership rules that
+auto-assign entities (nodes, links, risk groups) to risk groups based
+on attribute conditions.
+
+### MembershipSpec
+
+Parsed membership rule specification.
+
+Attributes:
+    entity_scope: Type of entities to match ("node", "link", or "risk_group").
+    match: Match specification with conditions.
+
+**Attributes:**
+
+- `entity_scope` (EntityScope)
+- `match` (MatchSpec)
+
+### resolve_membership_rules(network: "'Network'") -> 'None'
+
+Apply membership rules to populate entity risk_groups sets.
+
+For each risk group with a `_membership_raw` specification:
+
+- If entity_scope is "node" or "link": adds the risk group name to each
+
+  matched entity's risk_groups set.
+
+- If entity_scope is "risk_group": adds matched risk groups as children
+
+  of this risk group (hierarchical membership).
+
+Args:
+    network: Network with risk_groups, nodes, and links populated.
+
+Note:
+    This function modifies entities in place. It should be called after
+    all risk groups are registered but before validation.
+
+---
+
 ## ngraph.model.failure.parser
 
 Parsers for FailurePolicySet and related failure modeling structures.
@@ -509,20 +610,25 @@ Returns:
 Raises:
     ValueError: If raw is not a dict or contains invalid policy definitions.
 
-### build_risk_groups(rg_data: 'List[Dict[str, Any]]') -> 'List[RiskGroup]'
+### build_risk_groups(rg_data: 'List[Any]') -> 'tuple[List[RiskGroup], List[Dict[str, Any]]]'
 
 Build RiskGroup objects from raw config data.
 
-Supports bracket expansion in risk group names. For example:
+Supports:
 
-- `{name: "DC[1-3]_Power"}` creates DC1_Power, DC2_Power, DC3_Power
+- String shorthand: "GroupName" is equivalent to {name: "GroupName"}
+- Bracket expansion: {name: "DC[1-3]_Power"} creates DC1_Power, DC2_Power, DC3_Power
 - Children are also expanded recursively
+- Generate blocks: {generate: {...}} for dynamic group creation
 
 Args:
-    rg_data: List of risk group definition dicts.
+    rg_data: List of risk group definitions (strings or dicts).
 
 Returns:
-    List of RiskGroup objects with names expanded.
+    Tuple of (explicit_risk_groups, generate_specs_raw):
+
+- explicit_risk_groups: List of RiskGroup objects with names expanded.
+- generate_specs_raw: List of raw generate block dicts for deferred processing.
 
 ---
 
@@ -705,6 +811,47 @@ Attributes:
 
 ---
 
+## ngraph.model.failure.validation
+
+Risk group reference validation.
+
+Validates that all risk group references in nodes and links resolve to
+defined risk groups. Catches typos and missing definitions early.
+
+Also provides cycle detection for risk group hierarchies.
+
+### validate_risk_group_hierarchy(network: "'Network'") -> 'None'
+
+Detect circular references in risk group parent-child relationships.
+
+Uses DFS-based cycle detection to find any risk group that is part of
+a cycle in the children hierarchy. This can happen when membership rules
+with entity_scope='risk_group' create mutual parent-child relationships.
+
+Args:
+    network: Network with risk_groups populated (after membership resolution).
+
+Raises:
+    ValueError: If a cycle is detected, with details about the cycle path.
+
+### validate_risk_group_references(network: "'Network'") -> 'None'
+
+Ensure all risk group references resolve to defined groups.
+
+Checks that every risk group name referenced by nodes and links
+exists in network.risk_groups. This catches typos and missing
+definitions that would otherwise cause silent failures in simulations.
+
+Args:
+    network: Network with nodes, links, and risk_groups populated.
+
+Raises:
+    ValueError: If any node or link references an undefined risk group.
+        The error message lists up to 10 violations with entity names
+        and the undefined group names.
+
+---
+
 ## ngraph.model.flow.policy_config
 
 Flow policy preset configurations for NetGraph.
@@ -857,11 +1004,23 @@ Attributes:
 
 Represents a shared-risk or failure domain, which may have nested children.
 
+Risk groups model correlated failures: when a risk group fails, all entities
+(nodes, links) in that group fail together. Hierarchical children enable
+cascading failures (parent failure implies all descendants fail).
+
+Risk groups can be created three ways:
+
+1. Direct definition: Explicitly named in YAML risk_groups section
+2. Membership rules: Auto-assign entities based on attribute matching
+3. Generate blocks: Auto-create groups from unique attribute values
+
 Attributes:
     name (str): Unique name of this risk group.
     children (List[RiskGroup]): Subdomains in a nested structure.
     disabled (bool): Whether this group was declared disabled on load.
     attrs (Dict[str, Any]): Additional metadata for the risk group.
+    _membership_raw (Optional[Dict[str, Any]]): Raw membership rule for
+        deferred resolution. Internal use only.
 
 **Attributes:**
 
@@ -869,6 +1028,7 @@ Attributes:
 - `children` (List[RiskGroup]) = []
 - `disabled` (bool) = False
 - `attrs` (Dict[str, Any]) = {}
+- `_membership_raw` (Optional[Dict[str, Any]])
 
 ---
 
@@ -1143,8 +1303,9 @@ YAML Configuration Example:
 Maximum flow Monte Carlo workflow step.
 
 Baseline (no failures) is always run first as a separate reference. Results are
-returned with baseline in a separate field, and failure iterations in a 0-indexed
-list that corresponds 1:1 with failure_patterns.
+returned with baseline in a separate field. The flow_results list contains unique
+failure patterns (deduplicated); each result has occurrence_count indicating how
+many iterations matched that pattern.
 
 Attributes:
     source: Source node selector (string path or selector dict).
@@ -1321,8 +1482,9 @@ parameter specifies how many failure scenarios to run.
 Monte Carlo demand placement using a named traffic matrix.
 
 Baseline (no failures) is always run first as a separate reference. Results are
-returned with baseline in a separate field, and failure iterations in a 0-indexed
-list that corresponds 1:1 with failure_patterns.
+returned with baseline in a separate field. The flow_results list contains unique
+failure patterns (deduplicated); each result has occurrence_count indicating how
+many iterations matched that pattern.
 
 Attributes:
     matrix_name: Name of the traffic matrix to analyze.
@@ -1412,7 +1574,7 @@ Expands a combined blueprint + network DSL into a complete Network object.
 
 Overall flow:
   1) Parse "blueprints" into Blueprint objects.
-  2) Build a new Network from "network" metadata (e.g. name, version).
+  2) Build a Network from "network" metadata (e.g. name, version).
   3) Expand 'network["groups"]' (collect blueprint adjacencies for later).
 
 - If a group references a blueprint, incorporate that blueprint's subgroups
@@ -1429,7 +1591,7 @@ Overall flow:
   8) Process any direct link definitions (network["links"]).
   9) Process link overrides (in order if multiple overrides match).
 
-Under the new rules:
+Field validation rules:
 
 - Only certain top-level fields are permitted in each structure. Any extra
 
@@ -1664,12 +1826,16 @@ Provides evaluation logic for attribute conditions used in selectors
 and failure policies. Supports operators: ==, !=, <, <=, >, >=,
 contains, not_contains, in, not_in, any_value, no_value.
 
+Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
+
 ### evaluate_condition(attrs: 'Dict[str, Any]', cond: "'Condition'") -> 'bool'
 
 Evaluate a single condition against an attribute dict.
 
+Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
+
 Args:
-    attrs: Flat mapping of entity attributes.
+    attrs: Mapping of entity attributes (may contain nested dicts).
     cond: Condition to evaluate.
 
 Returns:
@@ -1692,6 +1858,28 @@ Returns:
 
 Raises:
     ValueError: If logic is not "and" or "or".
+
+### resolve_attr_path(attrs: 'Dict[str, Any]', path: 'str') -> 'Tuple[bool, Any]'
+
+Resolve a dot-notation attribute path.
+
+Supports nested attribute access like "hardware.vendor" which resolves
+to attrs["hardware"]["vendor"].
+
+Args:
+    attrs: Attribute dict (may contain nested dicts).
+    path: Attribute path, optionally with dots for nesting.
+
+Returns:
+    Tuple of (found, value). If found is False, value is None.
+
+Examples:
+    >>> resolve_attr_path({"role": "spine"}, "role")
+    (True, "spine")
+    >>> resolve_attr_path({"hardware": {"vendor": "Acme"}}, "hardware.vendor")
+    (True, "Acme")
+    >>> resolve_attr_path({"role": "spine"}, "missing")
+    (False, None)
 
 ---
 
@@ -1720,6 +1908,25 @@ Returns:
 Raises:
     ValueError: If selector format is invalid or context is unknown.
 
+### parse_match_spec(raw: 'Dict[str, Any]', *, default_logic: "Literal['and', 'or']" = 'or', require_conditions: 'bool' = False, context: 'str' = 'match') -> 'MatchSpec'
+
+Parse a match specification from raw dict.
+
+Unified match specification parser for use across adjacency, demands,
+membership rules, and failure policies.
+
+Args:
+    raw: Dict with 'conditions' list and optional 'logic'.
+    default_logic: Default when 'logic' not specified.
+    require_conditions: If True, raise when conditions list is empty.
+    context: Used in error messages.
+
+Returns:
+    Parsed MatchSpec.
+
+Raises:
+    ValueError: If validation fails.
+
 ---
 
 ## ngraph.dsl.selectors.schema
@@ -1733,8 +1940,11 @@ adjacency, demands, overrides, and workflow steps.
 
 A single attribute condition for filtering.
 
+Supports dot-notation for nested attribute access (e.g., "hardware.vendor"
+resolves to attrs["hardware"]["vendor"]).
+
 Attributes:
-    attr: Attribute name to match.
+    attr: Attribute name to match (supports dot-notation for nested attrs).
     operator: Comparison operator.
     value: Right-hand operand (unused for any_value/no_value).
 
@@ -1818,6 +2028,37 @@ Args:
 
 Returns:
     Flat dict suitable for condition evaluation.
+
+### flatten_risk_group_attrs(rg: "Union['RiskGroup', Dict[str, Any]]") -> 'Dict[str, Any]'
+
+Build flat attribute dict for condition evaluation on risk groups.
+
+Merges risk group's top-level fields (name, disabled, children) with
+rg.attrs. Top-level fields take precedence on key conflicts.
+
+Supports both RiskGroup objects and dict representations (for flexibility
+in failure policy matching).
+
+Args:
+    rg: RiskGroup object or dict representation.
+
+Returns:
+    Flat dict suitable for condition evaluation.
+
+### match_entity_ids(entity_attrs: 'Dict[str, Dict[str, Any]]', conditions: 'List[Condition]', logic: 'str' = 'or') -> 'Set[str]'
+
+Match entity IDs by attribute conditions.
+
+General primitive for condition-based entity selection. Works with
+any entity type as long as attributes are pre-flattened.
+
+Args:
+    entity_attrs: Mapping of {entity_id: flattened_attrs_dict}
+    conditions: List of conditions to evaluate
+    logic: "and" (all must match) or "or" (any must match)
+
+Returns:
+    Set of matching entity IDs. Returns all IDs if conditions is empty.
 
 ### select_nodes(network: "'Network'", selector: 'NodeSelector', default_active_only: 'bool', excluded_nodes: 'Optional[Set[str]]' = None) -> "Dict[str, List['Node']]"
 
@@ -2236,8 +2477,8 @@ Defines immutable summary containers and aliases for algorithm outputs.
 
 Reference to a directed edge via scenario link_id and direction.
 
-Replaces the old Edge = Tuple[str, str, Hashable] to provide stable,
-scenario-native edge identification across Core reorderings.
+Provides stable, scenario-native edge identification across Core reorderings
+using the link's unique ID rather than node name tuples.
 
 Attributes:
     link_id: Scenario link identifier (matches Network.links keys)

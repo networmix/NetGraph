@@ -9,13 +9,29 @@ description: >
 license: MIT
 metadata:
   author: "netgraph"
-  version: "1.0"
+  version: "1.1"
   repo: "https://github.com/networmix/NetGraph"
 ---
 
 # NetGraph DSL
 
 Define network simulation scenarios in YAML format.
+
+> **Quick Start**: See [Minimal Example](#minimal-example) below.
+> **Complete Reference**: See [references/REFERENCE.md](references/REFERENCE.md) for full documentation.
+
+## Instructions
+
+When working with NetGraph scenarios:
+
+1. **Creating new scenarios**: Start with the [Minimal Example](#minimal-example), then add sections as needed
+2. **Editing existing scenarios**: Identify the relevant section (network, traffic_matrix_set, failure_policy_set, etc.)
+3. **Understanding selection**: Review [Selection Models](#selection-models) to understand path-based vs condition-based selection
+4. **Debugging issues**: Check [Common Pitfalls](#common-pitfalls) and [Validation Checklist](#validation-checklist)
+5. **Complex topologies**: Use [Blueprints](#blueprints) for reusable patterns
+6. **Failure simulation**: Define [Risk Groups](#risk-groups) before creating failure policies
+
+Refer to specific sections below for detailed syntax and examples.
 
 ## Quick Reference
 
@@ -47,6 +63,28 @@ network:
 ```
 
 ## Core Patterns
+
+### Selection Models
+
+The DSL implements two distinct selection patterns:
+
+**1. Path-based Node Selection** (adjacency rules, traffic demands, workflow steps)
+
+- Uses regex patterns on hierarchical node names
+- Supports capture group-based grouping
+- Supports attribute-based grouping (`group_by`)
+- Supports attribute filtering (`match` conditions)
+- Supports `active_only` filtering
+
+**2. Condition-based Entity Selection** (failure rules, membership rules, risk group generation)
+
+- Works on nodes, links, or risk_groups (`entity_scope`)
+- Uses only attribute-based filtering (`conditions`)
+- No path/regex patterns (operates on all entities of specified type)
+
+These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
+
+> **For comprehensive details** on entity creation flows, processing steps, and comparison tables, see the [Entity Creation Architecture](references/REFERENCE.md#entity-creation-architecture) section in the full reference.
 
 ### Nodes and Links
 
@@ -134,7 +172,7 @@ adjacency:
   - source:
       path: "/datacenter"
       match:
-        logic: and         # "and" or "or" (default)
+        logic: and         # "and" or "or"; defaults vary by context (see below)
         conditions:
           - attr: role
             operator: "=="
@@ -144,6 +182,15 @@ adjacency:
 ```
 
 **Operators**: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `any_value`, `no_value`
+
+**Logic defaults by context**:
+
+| Context | Default `logic` | Rationale |
+|---------|-----------------|-----------|
+| Adjacency `match` | `"or"` | Inclusive: match any condition |
+| Demand `match` | `"or"` | Inclusive: match any condition |
+| Membership rules | `"and"` | Precise: must match all conditions |
+| Failure rules | `"or"` | Inclusive: match any condition |
 
 ### Capturing Groups for Grouping
 
@@ -225,6 +272,47 @@ failure_policy_set:
 ```
 
 **Rule types**: `all` (select all matches), `choice` (sample `count`), `random` (each with `probability`)
+
+### Risk Groups
+
+Risk groups model failure correlation (shared infrastructure, geographic regions, vendor dependencies, or any custom domain). Three methods:
+
+**Direct definition:**
+
+```yaml
+risk_groups:
+  - name: "RG1"              # Full form
+  - "RG2"                    # String shorthand (equivalent to {name: "RG2"})
+```
+
+**Membership rules** (assign entities by attribute matching):
+
+```yaml
+risk_groups:
+  - name: HighCapacityLinks
+    membership:
+      entity_scope: link     # node, link, or risk_group
+      match:
+        logic: and           # "and" or "or" (default: "and" for membership)
+        conditions:
+          - attr: capacity
+            operator: ">="
+            value: 1000
+```
+
+**Generate blocks** (create groups from unique attribute values):
+
+```yaml
+risk_groups:
+  - generate:
+      entity_scope: node     # node or link only
+      group_by: region       # Any attribute to group by
+      name_template: "Region_${value}"
+```
+
+**Validation:** Risk group references are validated at load time (undefined references and circular hierarchies detected).
+
+See [REFERENCE.md](references/REFERENCE.md) for complete details.
 
 ### Workflow
 

@@ -15,14 +15,10 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
-from ngraph.dsl.selectors import Condition
-from ngraph.dsl.selectors import evaluate_conditions as _shared_evaluate_conditions
+from ngraph.dsl.selectors import Condition, EntityScope, match_entity_ids
 
 # Alias for clarity in failure policy context
 FailureCondition = Condition
-
-# Supported entity scopes for a rule
-EntityScope = Literal["node", "link", "risk_group"]
 
 
 @dataclass
@@ -295,57 +291,17 @@ class FailurePolicy:
         network_links: Dict[str, Any],
         network_risk_groups: Dict[str, Any],
     ) -> Set[str]:
-        """Get the set of IDs matched by the given rule, either from cache
-        or by performing a fresh match over the relevant entity type.
+        """Get the set of IDs matched by the given rule.
+
+        Uses the shared match_entity_ids() function from selectors.
         """
         # Decide which mapping to iterate
         if rule.entity_scope == "node":
-            matched = self._match_entities(network_nodes, rule.conditions, rule.logic)
+            return match_entity_ids(network_nodes, rule.conditions, rule.logic)
         elif rule.entity_scope == "link":
-            matched = self._match_entities(network_links, rule.conditions, rule.logic)
+            return match_entity_ids(network_links, rule.conditions, rule.logic)
         else:  # risk_group
-            matched = self._match_entities(
-                network_risk_groups, rule.conditions, rule.logic
-            )
-        return matched
-
-    def _match_entities(
-        self,
-        entity_map: Dict[str, Any],
-        conditions: List[FailureCondition],
-        logic: str,
-    ) -> Set[str]:
-        """Return all entity IDs that match the given conditions based on 'and'/'or' logic.
-
-        entity_map is either nodes, links, or risk_groups:
-          {entity_id -> {top_level_attr: value, ...}}
-
-        If no conditions, return everything (no restrictions means all match).
-
-        Returns:
-            A set of matching entity IDs.
-        """
-        if not conditions:
-            # No conditions means match all entities regardless of logic
-            return set(entity_map.keys())
-
-        matched = set()
-        for entity_id, attrs in entity_map.items():
-            if self._evaluate_conditions(attrs, conditions, logic):
-                matched.add(entity_id)
-
-        return matched
-
-    @staticmethod
-    def _evaluate_conditions(
-        attrs: Dict[str, Any],
-        conditions: List[FailureCondition],
-        logic: str,
-    ) -> bool:
-        """Evaluate multiple conditions on a single entity. All or any condition(s)
-        must pass, depending on 'logic'.
-        """
-        return _shared_evaluate_conditions(attrs, conditions, logic)
+            return match_entity_ids(network_risk_groups, rule.conditions, rule.logic)
 
     @staticmethod
     def _select_entities(

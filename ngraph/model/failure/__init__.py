@@ -10,4 +10,21 @@ Public entry points:
 
 - `ngraph.failure.policy` - failure selection rules and policy application
 - `ngraph.failure.manager` - `FailureManager` for running analyses
+- `ngraph.failure.validation` - risk group reference validation
+- `ngraph.failure.membership` - risk group membership rule resolution
+- `ngraph.failure.generate` - dynamic risk group generation
 """
+
+from .generate import GenerateSpec, generate_risk_groups, parse_generate_spec
+from .membership import MembershipSpec, resolve_membership_rules
+from .validation import validate_risk_group_hierarchy, validate_risk_group_references
+
+__all__ = [
+    "GenerateSpec",
+    "generate_risk_groups",
+    "parse_generate_spec",
+    "MembershipSpec",
+    "resolve_membership_rules",
+    "validate_risk_group_hierarchy",
+    "validate_risk_group_references",
+]

@@ -71,38 +71,96 @@ network:
         capacity: 200.0 # Override capacity to 200 Gb/s
         cost: 1
 
-    # Set risk groups and hw_component on all spine to spine links
+    # Set fiber conduit risk groups and hw_component on all spine to spine links
+    # These inter-clos links traverse a fiber conduit between buildings
     - source: .*/spine/.*
       target: .*/spine/.*
       any_direction: True
       link_params:
-        risk_groups: ["SpineSRG"]
+        risk_groups: ["Conduit_InterClos_C1"]
         attrs:
+          fiber:
+            conduit_id: "InterClos-C1"
+            path_id: "Clos1-Clos2"
           hardware:
             source: {component: "400G-LR4", count: 1}
             target: {component: "400G-LR4", count: 1}
 
-  # Node overrides for risk groups and hardware types
+  # Node overrides for facility-based risk groups
   node_overrides:
     - path: my_clos1/b1/t1
-      risk_groups: ["clos1-b1t1-SRG"]
+      risk_groups: ["PowerZone_Clos1_B1_PZA"]
       attrs:
+        facility:
+          building_id: "Clos1"
+          room_id: "B1"
+          power_zone: "Clos1-B1-PZ-A"
         hw_component: "LeafHW-A"
 
     - path: my_clos2/b2/t1
-      risk_groups: ["clos2-b2t1-SRG"]
+      risk_groups: ["PowerZone_Clos2_B2_PZA"]
       attrs:
+        facility:
+          building_id: "Clos2"
+          room_id: "B2"
+          power_zone: "Clos2-B2-PZ-A"
         hw_component: "LeafHW-B"
 
     - path: my_clos1/spine/t3.*
-      risk_groups: ["clos1-spine-SRG"]
+      risk_groups: ["Room_Clos1_Spine"]
       attrs:
+        facility:
+          building_id: "Clos1"
+          room_id: "Spine"
         hw_component: "SpineHW"
 
     - path: my_clos2/spine/t3.*
-      risk_groups: ["clos2-spine-SRG"]
+      risk_groups: ["Room_Clos2_Spine"]
       attrs:
+        facility:
+          building_id: "Clos2"
+          room_id: "Spine"
         hw_component: "SpineHW"
+
+# Risk groups using fiber and facility domain models
+risk_groups:
+  # Fiber domain: Inter-clos fiber conduit (physical fiber cut affects all spine-spine links)
+  - name: "Conduit_InterClos_C1"
+    attrs:
+      type: fiber_conduit
+      fiber:
+        path_id: "Clos1-Clos2"
+        conduit_id: "InterClos-C1"
+      distance_km: 5
+
+  # Facility domain: Power zones and rooms in each Clos fabric
+  - name: "PowerZone_Clos1_B1_PZA"
+    attrs:
+      type: power_zone
+      facility:
+        building_id: "Clos1"
+        power_zone: "Clos1-B1-PZ-A"
+
+  - name: "PowerZone_Clos2_B2_PZA"
+    attrs:
+      type: power_zone
+      facility:
+        building_id: "Clos2"
+        power_zone: "Clos2-B2-PZ-A"
+
+  - name: "Room_Clos1_Spine"
+    attrs:
+      type: room
+      facility:
+        building_id: "Clos1"
+        room_id: "Spine"
+
+  - name: "Room_Clos2_Spine"
+    attrs:
+      type: room
+      facility:
+        building_id: "Clos2"
+        room_id: "Spine"
 
 workflow:
   - step_type: BuildGraph

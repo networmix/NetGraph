@@ -57,7 +57,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
 
     Overall flow:
       1) Parse "blueprints" into Blueprint objects.
-      2) Build a new Network from "network" metadata (e.g. name, version).
+      2) Build a Network from "network" metadata (e.g. name, version).
       3) Expand 'network["groups"]' (collect blueprint adjacencies for later).
          - If a group references a blueprint, incorporate that blueprint's subgroups
            while merging parent's attrs + disabled + risk_groups into subgroups.
@@ -70,7 +70,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
       8) Process any direct link definitions (network["links"]).
       9) Process link overrides (in order if multiple overrides match).
 
-    Under the new rules:
+    Field validation rules:
       - Only certain top-level fields are permitted in each structure. Any extra
         keys raise a ValueError. "attrs" is where arbitrary user fields go.
       - For link_params, recognized fields are "capacity", "cost", "disabled",

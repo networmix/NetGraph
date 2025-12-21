@@ -173,6 +173,10 @@ network:
       use_blueprint: my_blueprint_name
       attrs:
         location: "rack1"
+
+risk_groups:
+  - "RG1"
+  - "RG2"
 """
 
     scenario = Scenario.from_yaml(yaml_content)

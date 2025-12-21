@@ -92,14 +92,50 @@ def expand_risk_group_refs(rg_list: Iterable[str]) -> Set[str]:
 
 
 def _parse_range_expr(expr: str) -> List[str]:
-    """Parse a bracket range expression like '1-3' or 'a,b,1-2'."""
+    """Parse a bracket range expression like '1-3' or 'a,b,1-2'.
+
+    Supports:
+    - Numeric ranges: 1-3 expands to 1, 2, 3
+    - Literal lists: a,b,c expands to a, b, c
+    - Mixed: 1,3,5-7 expands to 1, 3, 5, 6, 7
+
+    Args:
+        expr: The content inside brackets (without the brackets).
+
+    Returns:
+        List of expanded string values.
+
+    Raises:
+        ValueError: If a range uses non-numeric values or is inverted (start > end).
+    """
     values: List[str] = []
     parts = [x.strip() for x in expr.split(",")]
     for part in parts:
         if "-" in part:
             start_str, end_str = part.split("-", 1)
-            start = int(start_str)
-            end = int(end_str)
+            # Validate that both endpoints are numeric
+            try:
+                start = int(start_str)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid range '{part}': start value '{start_str}' is not numeric. "
+                    f"Ranges only support integers (e.g., [1-3]). "
+                    f"For alphabetic values, use comma-separated lists (e.g., [a,b,c])."
+                ) from None
+            try:
+                end = int(end_str)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid range '{part}': end value '{end_str}' is not numeric. "
+                    f"Ranges only support integers (e.g., [1-3]). "
+                    f"For alphabetic values, use comma-separated lists (e.g., [a,b,c])."
+                ) from None
+            # Validate that range is not inverted
+            if start > end:
+                raise ValueError(
+                    f"Invalid range '{part}': start ({start}) is greater than end ({end}). "
+                    f"Ranges must be ascending (e.g., [1-3], not [3-1])."
+                )
             for val in range(start, end + 1):
                 values.append(str(val))
         else:

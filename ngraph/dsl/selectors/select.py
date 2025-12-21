@@ -6,18 +6,20 @@ attribute filtering, active-only filtering, and grouping.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 from .conditions import evaluate_conditions
-from .schema import MatchSpec, NodeSelector
+from .schema import Condition, MatchSpec, NodeSelector
 
 if TYPE_CHECKING:
-    from ngraph.model.network import Link, Network, Node
+    from ngraph.model.network import Link, Network, Node, RiskGroup
 
 __all__ = [
     "select_nodes",
     "flatten_node_attrs",
     "flatten_link_attrs",
+    "flatten_risk_group_attrs",
+    "match_entity_ids",
 ]
 
 
@@ -148,6 +150,75 @@ def flatten_link_attrs(link: "Link", link_id: str) -> Dict[str, Any]:
     }
     attrs.update({k: v for k, v in link.attrs.items() if k not in attrs})
     return attrs
+
+
+def flatten_risk_group_attrs(
+    rg: Union["RiskGroup", Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build flat attribute dict for condition evaluation on risk groups.
+
+    Merges risk group's top-level fields (name, disabled, children) with
+    rg.attrs. Top-level fields take precedence on key conflicts.
+
+    Supports both RiskGroup objects and dict representations (for flexibility
+    in failure policy matching).
+
+    Args:
+        rg: RiskGroup object or dict representation.
+
+    Returns:
+        Flat dict suitable for condition evaluation.
+    """
+    if isinstance(rg, dict):
+        # Dict representation
+        children_raw = rg.get("children", [])
+        child_names = [
+            c.get("name") if isinstance(c, dict) else c.name for c in children_raw
+        ]
+        attrs: Dict[str, Any] = {
+            "name": rg.get("name", ""),
+            "disabled": rg.get("disabled", False),
+            "children": child_names,
+        }
+        attrs.update({k: v for k, v in rg.get("attrs", {}).items() if k not in attrs})
+    else:
+        # RiskGroup object
+        attrs = {
+            "name": rg.name,
+            "disabled": rg.disabled,
+            "children": [c.name for c in rg.children],
+        }
+        attrs.update({k: v for k, v in rg.attrs.items() if k not in attrs})
+
+    return attrs
+
+
+def match_entity_ids(
+    entity_attrs: Dict[str, Dict[str, Any]],
+    conditions: List[Condition],
+    logic: str = "or",
+) -> Set[str]:
+    """Match entity IDs by attribute conditions.
+
+    General primitive for condition-based entity selection. Works with
+    any entity type as long as attributes are pre-flattened.
+
+    Args:
+        entity_attrs: Mapping of {entity_id: flattened_attrs_dict}
+        conditions: List of conditions to evaluate
+        logic: "and" (all must match) or "or" (any must match)
+
+    Returns:
+        Set of matching entity IDs. Returns all IDs if conditions is empty.
+    """
+    if not conditions:
+        return set(entity_attrs.keys())
+
+    return {
+        entity_id
+        for entity_id, attrs in entity_attrs.items()
+        if evaluate_conditions(attrs, conditions, logic)
+    }
 
 
 def _filter_active_and_excluded(

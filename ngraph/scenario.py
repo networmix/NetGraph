@@ -11,8 +11,14 @@ from ngraph.exec.demand.builder import build_traffic_matrix_set
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.demand.matrix import TrafficMatrixSet
+from ngraph.model.failure.generate import generate_risk_groups, parse_generate_spec
+from ngraph.model.failure.membership import resolve_membership_rules
 from ngraph.model.failure.parser import build_failure_policy_set, build_risk_groups
 from ngraph.model.failure.policy_set import FailurePolicySet
+from ngraph.model.failure.validation import (
+    validate_risk_group_hierarchy,
+    validate_risk_group_references,
+)
 from ngraph.model.network import Network
 from ngraph.results import Results
 from ngraph.results.snapshot import build_scenario_snapshot
@@ -80,15 +86,21 @@ class Scenario:
         with a default ComponentsLibrary if provided.
 
         Top-level YAML keys can include:
-          - vars
-          - blueprints
-          - network
-          - failure_policy_set
-          - traffic_matrix_set
-          - workflow
-          - components
-          - risk_groups
-          - seed
+          - vars: YAML anchors for value reuse
+          - blueprints: Reusable topology templates
+          - network: Nodes, links, groups, adjacency
+          - risk_groups: Failure correlation groups (direct, membership rules, generate blocks)
+          - failure_policy_set: Failure simulation policies
+          - traffic_matrix_set: Traffic demand definitions
+          - workflow: Analysis execution steps
+          - components: Hardware component library
+          - seed: Master seed for reproducible randomness
+
+        Risk group processing:
+        1. Direct definitions and membership rules are registered
+        2. Generate blocks create groups from unique attribute values
+        3. Membership rules auto-assign entities to groups
+        4. References are validated (undefined groups and circular hierarchies detected)
 
         If no 'workflow' key is provided, the scenario has no steps to run.
         If 'failure_policy_set' is omitted, scenario.failure_policy_set is empty.
@@ -210,8 +222,9 @@ class Scenario:
 
         # 6) Parse optional risk_groups, then attach them to the network
         rg_data = data.get("risk_groups", [])
+        generate_specs_raw: list = []
         if rg_data:
-            risk_groups = build_risk_groups(rg_data)
+            risk_groups, generate_specs_raw = build_risk_groups(rg_data)
             for rg in risk_groups:
                 network_obj.risk_groups[rg.name] = rg
                 if rg.disabled:
@@ -223,6 +236,43 @@ class Scenario:
                 )
             except Exception as exc:
                 Scenario._logger.debug("Failed to log risk group stats: %s", exc)
+
+        # 7) Resolve membership rules (adds entities to risk groups based on conditions)
+        resolve_membership_rules(network_obj)
+
+        # 8) Validate risk group hierarchy (detect cycles from membership rules)
+        validate_risk_group_hierarchy(network_obj)
+
+        # 9) Process generate blocks (creates risk groups from entity attributes)
+        for gen_raw in generate_specs_raw:
+            try:
+                spec = parse_generate_spec(gen_raw)
+                generated_rgs = generate_risk_groups(network_obj, spec)
+                for rg in generated_rgs:
+                    if rg.name in network_obj.risk_groups:
+                        raise ValueError(
+                            f"Generated risk group '{rg.name}' conflicts with existing "
+                            f"risk group. The generate block with group_by='{spec.group_by}' "
+                            f"and name_template='{spec.name_template}' produced a name that "
+                            f"already exists. Either rename the existing group or adjust "
+                            f"the name_template to avoid collisions."
+                        )
+                    network_obj.risk_groups[rg.name] = rg
+            except ValueError as e:
+                raise ValueError(f"Invalid generate block: {e}") from e
+
+        try:
+            if generate_specs_raw:
+                Scenario._logger.debug(
+                    "Generated risk groups: total now %d",
+                    len(getattr(network_obj, "risk_groups", {})),
+                )
+        except Exception as exc:
+            Scenario._logger.debug("Failed to log generate stats: %s", exc)
+
+        # 10) Validate risk group references
+        # Ensures all risk group names referenced by nodes/links are defined
+        validate_risk_group_references(network_obj)
 
         scenario_obj = Scenario(
             network=network_obj,

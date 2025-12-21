@@ -74,17 +74,29 @@ class Link:
 class RiskGroup:
     """Represents a shared-risk or failure domain, which may have nested children.
 
+    Risk groups model correlated failures: when a risk group fails, all entities
+    (nodes, links) in that group fail together. Hierarchical children enable
+    cascading failures (parent failure implies all descendants fail).
+
+    Risk groups can be created three ways:
+    1. Direct definition: Explicitly named in YAML risk_groups section
+    2. Membership rules: Auto-assign entities based on attribute matching
+    3. Generate blocks: Auto-create groups from unique attribute values
+
     Attributes:
         name (str): Unique name of this risk group.
         children (List[RiskGroup]): Subdomains in a nested structure.
         disabled (bool): Whether this group was declared disabled on load.
         attrs (Dict[str, Any]): Additional metadata for the risk group.
+        _membership_raw (Optional[Dict[str, Any]]): Raw membership rule for
+            deferred resolution. Internal use only.
     """
 
     name: str
     children: List[RiskGroup] = field(default_factory=list)
     disabled: bool = False
     attrs: Dict[str, Any] = field(default_factory=dict)
+    _membership_raw: Optional[Dict[str, Any]] = field(default=None, repr=False)
 
 
 @dataclass

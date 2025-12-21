@@ -466,7 +466,8 @@ risk_groups:
 """
     with pytest.raises(ValueError) as excinfo:
         Scenario.from_yaml(scenario_yaml)
-    assert "RiskGroup entry missing 'name' field" in str(excinfo.value)
+    # The loader now validates for string, dict with 'name', or dict with 'generate'
+    assert "RiskGroup entry must be" in str(excinfo.value)
 
 
 ## Removed two tests that depended on docstring-extracted YAML and a private

@@ -9,13 +9,39 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional
 
+# Type alias for entity scope used in condition-based selection
+EntityScope = Literal["node", "link", "risk_group"]
+"""Type of network entity for condition-based selection."""
+
+
+# Valid operators for conditions
+VALID_OPERATORS: frozenset[str] = frozenset(
+    {
+        "==",
+        "!=",
+        "<",
+        "<=",
+        ">",
+        ">=",
+        "contains",
+        "not_contains",
+        "in",
+        "not_in",
+        "any_value",
+        "no_value",
+    }
+)
+
 
 @dataclass
 class Condition:
     """A single attribute condition for filtering.
 
+    Supports dot-notation for nested attribute access (e.g., "hardware.vendor"
+    resolves to attrs["hardware"]["vendor"]).
+
     Attributes:
-        attr: Attribute name to match.
+        attr: Attribute name to match (supports dot-notation for nested attrs).
         operator: Comparison operator.
         value: Right-hand operand (unused for any_value/no_value).
     """
@@ -36,6 +62,13 @@ class Condition:
         "no_value",
     ]
     value: Any = None
+
+    def __post_init__(self) -> None:
+        if self.operator not in VALID_OPERATORS:
+            raise ValueError(
+                f"Invalid operator '{self.operator}'. "
+                f"Valid operators: {sorted(VALID_OPERATORS)}"
+            )
 
 
 @dataclass

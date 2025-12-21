@@ -68,26 +68,87 @@ components:
       memory_gb: 512
       storage_tb: 4
 
-# Risk groups for realistic failure modeling
+# Risk groups using fiber and facility domain models
 risk_groups:
-  - name: "DC1_PowerSupply_A"
+  # Facility domain: Building-level power zone hierarchy
+  - name: "Building_DC1"
     attrs:
-      location: "DC1_Row1_PSU_A"
-      criticality: "high"
+      type: building
+      facility:
+        building_id: "DC1"
+      location: "Ashburn, VA"
     children:
-      - name: "DC1_R1_Rack[1-2]_PSU_A"
+      - name: "PowerZone_DC1_R1_PZ[A,B]"
         attrs:
-          location: "DC1_Row1"
+          type: power_zone
+          facility:
+            building_id: "DC1"
+            room_id: "R1"
 
-  - name: "DC1_NetworkUplink"
+  - name: "Building_DC2"
     attrs:
-      location: "DC1_Core_Network"
-      criticality: "critical"
+      type: building
+      facility:
+        building_id: "DC2"
+      location: "Ashburn, VA"
 
-  - name: "Spine_Fabric_SRG"
+  # Facility domain: Room-level groups for spine fabric equipment
+  - name: "Room_DC1_Spine"
     attrs:
-      description: "Spine fabric shared risk group"
-      criticality: "high"
+      type: room
+      facility:
+        building_id: "DC1"
+        room_id: "SpineRoom"
+
+  - name: "Room_DC2_Spine"
+    attrs:
+      type: room
+      facility:
+        building_id: "DC2"
+        room_id: "SpineRoom"
+
+  # Facility domain: Cooling zones for racks
+  - name: "CoolingZone_DC1_R1_CZA"
+    attrs:
+      type: cooling_zone
+      facility:
+        building_id: "DC1"
+        room_id: "R1"
+        cooling_zone: "DC1-R1-CZ-A"
+
+  # Facility domain: Leaf switch power zone
+  - name: "PowerZone_DC1_Leaf"
+    attrs:
+      type: power_zone
+      facility:
+        building_id: "DC1"
+        power_zone: "DC1-Leaf-PZ-A"
+
+  - name: "PowerZone_DC2_Leaf"
+    attrs:
+      type: power_zone
+      facility:
+        building_id: "DC2"
+        power_zone: "DC2-Leaf-PZ-A"
+
+  # Fiber domain: Inter-DC fiber conduit (physical cut affects all inter-DC links)
+  - name: "Conduit_DC1_DC2_C1"
+    attrs:
+      type: fiber_conduit
+      fiber:
+        path_id: "DC1-DC2"
+        conduit_id: "DC1-DC2-C1"
+      distance_km: 50
+
+  # Fiber domain: Path-level group (all conduits between DC1 and DC2)
+  - name: "Path_DC1_DC2"
+    attrs:
+      type: fiber_path
+      fiber:
+        path_id: "DC1-DC2"
+      distance_km: 50
+    children:
+      - name: "Conduit_DC1_DC2_C1"
 
 blueprints:
   # Basic server rack with ToR switch
@@ -101,7 +162,7 @@ blueprints:
             component: "ToRSwitch48p"
             count: 1
           role: "top_of_rack"
-        risk_groups: ["RackSRG"]
+        risk_groups: ["CoolingZone_DC1_R1_CZA"]
       servers:
         node_count: 8 # 8 servers per rack for test efficiency
         name_template: "srv-{node_num}"
@@ -110,7 +171,7 @@ blueprints:
             component: "ServerNode"
             count: 1
           role: "compute"
-        risk_groups: ["RackSRG"]
+        risk_groups: ["CoolingZone_DC1_R1_CZA"]
     adjacency:
       - source: /servers
         target: /tor
@@ -132,7 +193,7 @@ blueprints:
             component: "ToRSwitch48p"
             count: 1
           role: "leaf"
-        risk_groups: ["LeafSRG"]
+        # Leaf switches in DC1 and DC2 have their own power zones
       spine:
         node_count: 2 # 2 spine switches per fabric
         name_template: "spine-{node_num}"
@@ -141,7 +202,7 @@ blueprints:
             component: "SpineSwitch32p"
             count: 1
           role: "spine"
-        risk_groups: ["Spine_Fabric_SRG"]
+        # Spine switches share room-level risk (cooling/power in spine room)
     adjacency:
       # Variable expansion for leaf-spine connectivity using $var syntax
       - source: "leaf-${leaf_id}"
@@ -154,7 +215,6 @@ blueprints:
         link_params:
           capacity: 400.0 # 400 Gb/s leaf-spine links
           cost: 1
-          risk_groups: ["Spine_Fabric_SRG"]
           attrs:
             media_type: "fiber"
             link_type: "leaf_spine"
@@ -165,20 +225,22 @@ network:
 
   groups:
     # Multi-datacenter pod and rack expansion
+    # Each rack group inherits building-level power zone risk
     dc[1-2]_pod[a,b]_rack[1-2]:
       use_blueprint: server_rack
       attrs:
         datacenter: "dc1"
         pod: "poda"
         rack: "rack1"
-      risk_groups: ["DC1_PowerSupply_A"]
+      risk_groups: ["Building_DC1"]
 
     # Fabric per DC using bracket expansion
+    # Fabric equipment shares building-level risk
     dc[1-2]_fabric:
       use_blueprint: leaf_spine_fabric
       attrs:
         datacenter: "dc1"
-      risk_groups: ["DC1_NetworkUplink"]
+      risk_groups: ["Building_DC1"]
 
   # Top-level adjacency with variable expansion using $var syntax
   adjacency:
@@ -197,28 +259,54 @@ network:
         attrs:
           connection_type: "rack_to_fabric"
 
-    # Inter-DC spine connectivity
+    # Inter-DC spine connectivity - links traverse fiber conduit between buildings
     - source: "dc1_fabric/spine"
       target: "dc2_fabric/spine"
       pattern: "mesh"
       link_params:
         capacity: 400.0 # 400 Gb/s inter-DC links
         cost: 10
-        risk_groups: ["InterDC_Links"]
+        risk_groups: ["Conduit_DC1_DC2_C1"]
         attrs:
           connection_type: "inter_dc"
+          fiber:
+            path_id: "DC1-DC2"
+            conduit_id: "DC1-DC2-C1"
           distance_km: 50
 
   # Complex node overrides with regex patterns
   node_overrides:
-    # Override all spine switches with specific hardware model
-    - path: ".*/fabric/spine/spine-[1-2]"
+    # Override DC1 spine switches - assign to DC1 spine room
+    - path: "dc1_fabric/spine/spine-[1-2]"
       attrs:
         hardware:
           component: "SpineSwitch32p"
           count: 1
         role: "spine"
-      risk_groups: ["Spine_Fabric_SRG"]
+        facility:
+          building_id: "DC1"
+          room_id: "SpineRoom"
+      risk_groups: ["Room_DC1_Spine"]
+
+    # Override DC2 spine switches - assign to DC2 spine room
+    - path: "dc2_fabric/spine/spine-[1-2]"
+      attrs:
+        hardware:
+          component: "SpineSwitch32p"
+          count: 1
+        role: "spine"
+        facility:
+          building_id: "DC2"
+          room_id: "SpineRoom"
+      risk_groups: ["Room_DC2_Spine"]
+
+    # Override DC1 leaf switches - assign to DC1 leaf power zone
+    - path: "dc1_fabric/leaf/leaf-[1-2]"
+      risk_groups: ["PowerZone_DC1_Leaf"]
+
+    # Override DC2 leaf switches - assign to DC2 leaf power zone
+    - path: "dc2_fabric/leaf/leaf-[1-2]"
+      risk_groups: ["PowerZone_DC2_Leaf"]
 
     # Override servers in specific pods for GPU workloads
     - path: "dc1_pod[ab]_rack[12]/servers/srv-[1-4]"
@@ -237,17 +325,20 @@ network:
 
   # Complex link overrides
   link_overrides:
-    # Higher capacity for inter-DC links
+    # Higher capacity for inter-DC links - both conduit and path level risk
     - source: "dc1_fabric/spine/.*"
       target: "dc2_fabric/spine/.*"
       any_direction: true
       link_params:
         capacity: 800.0 # 800 Gb/s inter-DC links
         cost: 5
-        risk_groups: ["InterDC_Links", "WAN_SRG"]
+        risk_groups: ["Conduit_DC1_DC2_C1", "Path_DC1_DC2"]
         attrs:
           link_class: "inter_dc"
           encryption: "enabled"
+          fiber:
+            path_id: "DC1-DC2"
+            conduit_id: "DC1-DC2-C1"
 
     # Higher capacity uplinks for specific racks
     - source: "dc1_pod[ab]_rack1/tor/.*"

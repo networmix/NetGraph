@@ -3,11 +3,13 @@
 Provides evaluation logic for attribute conditions used in selectors
 and failure policies. Supports operators: ==, !=, <, <=, >, >=,
 contains, not_contains, in, not_in, any_value, no_value.
+
+Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Iterable
+from typing import TYPE_CHECKING, Any, Dict, Iterable, Tuple
 
 if TYPE_CHECKING:
     from .schema import Condition
@@ -15,14 +17,50 @@ if TYPE_CHECKING:
 __all__ = [
     "evaluate_condition",
     "evaluate_conditions",
+    "resolve_attr_path",
 ]
+
+
+def resolve_attr_path(attrs: Dict[str, Any], path: str) -> Tuple[bool, Any]:
+    """Resolve a dot-notation attribute path.
+
+    Supports nested attribute access like "hardware.vendor" which resolves
+    to attrs["hardware"]["vendor"].
+
+    Args:
+        attrs: Attribute dict (may contain nested dicts).
+        path: Attribute path, optionally with dots for nesting.
+
+    Returns:
+        Tuple of (found, value). If found is False, value is None.
+
+    Examples:
+        >>> resolve_attr_path({"role": "spine"}, "role")
+        (True, "spine")
+        >>> resolve_attr_path({"hardware": {"vendor": "Acme"}}, "hardware.vendor")
+        (True, "Acme")
+        >>> resolve_attr_path({"role": "spine"}, "missing")
+        (False, None)
+    """
+    parts = path.split(".")
+    current: Any = attrs
+
+    for part in parts:
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return (False, None)
+
+    return (True, current)
 
 
 def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
     """Evaluate a single condition against an attribute dict.
 
+    Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
+
     Args:
-        attrs: Flat mapping of entity attributes.
+        attrs: Mapping of entity attributes (may contain nested dicts).
         cond: Condition to evaluate.
 
     Returns:
@@ -31,8 +69,7 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
     Raises:
         ValueError: If operator is unknown or value type is invalid.
     """
-    has_attr = cond.attr in attrs
-    attr_value = attrs.get(cond.attr)
+    has_attr, attr_value = resolve_attr_path(attrs, cond.attr)
     op = cond.operator
     expected = cond.value
 

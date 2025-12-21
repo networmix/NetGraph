@@ -268,17 +268,22 @@ class TestScenario4:
                 f"Expected risk group '{expected_group}' not found"
             )
 
-        # Test hierarchical risk group structure
-        power_supply_group = risk_groups.get("DC1_PowerSupply_A")
-        assert power_supply_group is not None
-        assert len(power_supply_group.children) > 0, "Should have nested risk groups"
-        assert power_supply_group.attrs.get("criticality") == "high"
+        # Test hierarchical risk group structure using facility domain model
+        building_group = risk_groups.get("Building_DC1")
+        assert building_group is not None
+        assert len(building_group.children) > 0, "Should have nested risk groups"
+        assert building_group.attrs.get("type") == "building"
 
-        # Test risk group assignments on nodes
+        # Verify nested children (expanded from bracket pattern)
+        child_names = {child.name for child in building_group.children}
+        assert "PowerZone_DC1_R1_PZA" in child_names
+        assert "PowerZone_DC1_R1_PZB" in child_names
+
+        # Test risk group assignments on nodes - using Room_DC1_Spine from facility domain
         spine_nodes_with_srg = [
             node
             for node in helper.network.nodes.values()
-            if "Spine_Fabric_SRG" in node.risk_groups
+            if "Room_DC1_Spine" in node.risk_groups
         ]
         assert len(spine_nodes_with_srg) > 0, (
             "Spine nodes should have risk group assignments"

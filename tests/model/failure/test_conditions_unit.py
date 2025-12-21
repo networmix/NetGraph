@@ -61,8 +61,8 @@ class TestEvaluateCondition:
         assert evaluate_condition(attrs, FailureCondition("p", "no_value")) is False
 
     def test_unsupported_operator_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown operator"):
-            evaluate_condition({"x": 1}, FailureCondition("x", "bad"))
+        with pytest.raises(ValueError, match="Invalid operator"):
+            FailureCondition("x", "bad")  # type: ignore
 
 
 class TestEvaluateConditions:

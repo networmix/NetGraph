@@ -44,6 +44,198 @@ Traffic demands have three expansion-related fields:
 
 See detailed sections below for each mechanism.
 
+## Entity Creation Architecture
+
+The DSL implements two fundamentally different selection patterns optimized for different use cases. Understanding these patterns is essential for effective scenario authoring.
+
+### Two Selection Models
+
+The DSL uses distinct selection strategies depending on the operation:
+
+**1. Path-Based Node Selection** (adjacency rules, traffic demands, workflow steps)
+
+- Uses regex patterns on hierarchical node names
+- Supports capture group-based grouping
+- Supports attribute-based grouping (`group_by`)
+- Supports attribute filtering (`match` conditions)
+- Supports `active_only` filtering
+
+**2. Condition-Based Entity Selection** (failure rules, membership rules, risk group generation)
+
+- Works on nodes, links, or risk_groups (`entity_scope`)
+- Uses only attribute-based filtering (`conditions`)
+- No path/regex patterns (operates on all entities of specified type)
+
+These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
+
+### Adjacency Creation Flow
+
+Adjacency rules create links between nodes using path-based selection with optional filtering:
+
+```mermaid
+flowchart TD
+    Start[Adjacency Definition] --> VarExpand{Has expand_vars?}
+    VarExpand -->|Yes| VarSubst[Variable Substitution]
+    VarSubst --> PathFilter
+    VarExpand -->|No| PathFilter[1. Path-Based Selection]
+    PathFilter --> PathDesc[Select nodes via regex pattern<br/>Groups by capture groups]
+    PathDesc --> MatchFilter{Has match conditions?}
+    MatchFilter -->|Yes| AttrFilter[2. Attribute Filtering]
+    MatchFilter -->|No| ActiveFilter
+    AttrFilter --> AttrDesc[Filter by attribute conditions<br/>using logic and/or]
+    AttrDesc --> ActiveFilter[3. Active/Excluded Filtering]
+    ActiveFilter --> GroupBy{Has group_by?}
+    GroupBy -->|Yes| Regroup[4. Re-group by Attribute]
+    GroupBy -->|No| Pattern
+    Regroup --> Pattern[5. Apply Pattern]
+    Pattern --> PatternDesc[mesh or one_to_one<br/>Creates links between groups]
+```
+
+**Processing Steps:**
+
+1. **Path Selection**: Regex pattern matches nodes by hierarchical name
+   - Capture groups create initial grouping
+   - If no path specified, selects all nodes
+2. **Attribute Filtering**: Optional `match` conditions filter nodes
+   - Uses `logic: "and"` or `"or"` (default: `"or"`)
+   - Supports operators: `==`, `!=`, `<`, `>`, `contains`, `in`, etc.
+3. **Active Filtering**: Filters disabled nodes based on context
+   - Adjacency default: `active_only=false` (creates links to disabled nodes)
+4. **Attribute Grouping**: Optional `group_by` overrides regex capture grouping
+5. **Pattern Application**: Creates links between selected node groups
+   - `mesh`: Every source to every target
+   - `one_to_one`: Pairwise with wrap-around
+
+**Key Characteristics:**
+
+- `default_active_only=False` (links are created to disabled nodes)
+- `match.logic` defaults to `"or"` (inclusive matching)
+- Supports variable expansion via `expand_vars`
+
+### Traffic Demand Creation Flow
+
+Traffic demands follow a similar pattern but with important differences:
+
+```mermaid
+flowchart TD
+    Start[Traffic Demand Spec] --> VarExpand{Has expand_vars?}
+    VarExpand -->|Yes| VarSubst[Variable Substitution<br/>Creates multiple demand specs]
+    VarSubst --> Process
+    VarExpand -->|No| Process[Process Single Demand]
+    Process --> SrcSelect[1. Select Source Nodes]
+    SrcSelect --> SinkSelect[2. Select Sink Nodes]
+    SinkSelect --> SrcDesc[Uses same path + match + group_by<br/>selection as adjacency]
+    SrcDesc --> Mode{Demand Mode?}
+    Mode -->|pairwise| Pairwise[3a. Pairwise Expansion]
+    Mode -->|combine| Combine[3b. Combine Expansion]
+    Pairwise --> PairDesc[Create demand for each src-dst pair<br/>Volume distributed evenly<br/>No pseudo nodes]
+    Combine --> CombDesc[Create pseudo-source and pseudo-sink<br/>Single aggregated demand<br/>Augmentation edges connect real nodes]
+```
+
+**Key Differences from Adjacency:**
+
+1. **Active-only default**: `default_active_only=True` (only active nodes participate)
+2. **Two selection phases**: Source nodes first, then sink nodes (both use same selector logic)
+3. **Expansion modes**:
+   - **Pairwise**: Creates individual demands for each (source, sink) pair
+   - **Combine**: Creates pseudo nodes and a single aggregated demand
+4. **Group modes**: Additional layer (`flatten`, `per_group`, `group_pairwise`) for handling grouped selections
+
+**Processing Steps:**
+
+1. Select source nodes using unified selector (path + match + group_by)
+2. Select sink nodes using unified selector
+3. Apply mode-specific expansion:
+   - **Pairwise**: Volume evenly distributed across all pairs
+   - **Combine**: Single demand with pseudo nodes for aggregation
+
+### Risk Group Creation Flow
+
+Risk groups use the condition-based selection model:
+
+```mermaid
+flowchart TD
+    Start[Risk Groups Definition] --> Three[Three Creation Methods]
+    Three --> Direct[1. Direct Definition]
+    Three --> Member[2. Membership Rules]
+    Three --> Generate[3. Generate Blocks]
+
+    Direct --> DirectDesc[Simply name the risk group<br/>Entities reference it explicitly]
+
+    Member --> MemberScope[Specify entity_scope<br/>node, link, or risk_group]
+    MemberScope --> MemberCond[Define match conditions<br/>logic defaults to and]
+    MemberCond --> MemberExec[Scan ALL entities of that scope<br/>Add matching entities to risk group]
+
+    Generate --> GenScope[Specify entity_scope<br/>node or link only]
+    GenScope --> GenGroupBy[Specify group_by attribute]
+    GenGroupBy --> GenExec[Collect unique values<br/>Create risk group for each value<br/>Add entities with that value]
+```
+
+**Creation Methods:**
+
+1. **Direct Definition**: Explicitly name risk groups, entities reference them
+2. **Membership Rules**: Auto-assign entities based on attribute matching
+3. **Generate Blocks**: Auto-create risk groups from unique attribute values
+
+**Key Characteristics:**
+
+- **No path patterns**: Operates on ALL entities of specified scope
+- **Only attribute-based**: Uses `conditions` exclusively
+- **Logic defaults to "and"** for membership (stricter matching)
+- **Hierarchical support**: Risk groups can contain other risk groups as children
+
+### Comparison Table
+
+| Feature | Adjacency | Traffic Demands | Risk Groups |
+|---------|-----------|----------------|-------------|
+| Selection Type | Path-based | Path-based | Condition-based |
+| Regex Patterns | Yes | Yes | No |
+| Capture Groups | Yes | Yes | No |
+| `group_by` | Yes | Yes | Yes (generate only) |
+| `match` Conditions | Yes | Yes | Yes (membership/generate) |
+| `active_only` Default | False | True | N/A |
+| `match.logic` Default | "or" | "or" | "and" (membership) |
+| Variable Expansion | Yes | Yes | No |
+| Entity Scope | Nodes only | Nodes only | Nodes, links, risk_groups |
+
+### Shared Evaluation Primitives
+
+All selection mechanisms share common evaluation primitives:
+
+1. **Condition evaluation**: `evaluate_condition()` handles all operators
+   - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
+   - String/collection: `contains`, `not_contains`, `in`, `not_in`
+   - Existence: `any_value`, `no_value`
+
+2. **Condition combining**: `evaluate_conditions()` applies `"and"`/`"or"` logic
+
+3. **Attribute flattening**: Unified access to entity attributes
+   - `flatten_node_attrs()`: Merges node.attrs with top-level fields
+   - `flatten_link_attrs()`: Merges link.attrs with top-level fields
+   - `flatten_risk_group_attrs()`: Merges risk_group.attrs with top-level fields
+
+4. **Dot-notation support**: `resolve_attr_path()` handles nested attributes
+   - Example: `hardware.vendor` resolves to `attrs["hardware"]["vendor"]`
+
+5. **Variable expansion**: `expand_templates()` handles `$var` and `${var}` substitution
+   - Supports `cartesian` and `zip` expansion modes
+
+### Context-Aware Defaults
+
+The DSL uses context-aware defaults to optimize for common use cases:
+
+| Context | Selection Type | Active Only | Match Logic | Rationale |
+|---------|---------------|-------------|-------------|-----------|
+| Adjacency | Path-based | False | "or" | Create links to all nodes, including disabled |
+| Demands | Path-based | True | "or" | Only route traffic through active nodes |
+| Node Overrides | Path-based | False | "or" | Modify all matching nodes |
+| Workflow Steps | Path-based | True | "or" | Analyze only active topology |
+| Membership Rules | Condition-based | N/A | "and" | Precise matching for risk assignment |
+| Failure Rules | Condition-based | N/A | "or" | Inclusive matching for failure scenarios |
+| Generate Blocks | Condition-based | N/A | N/A | No conditions, groups by values |
+
+These defaults ensure intuitive behavior while remaining overridable when needed.
+
 ## Top-Level Keys
 
 | Key | Required | Purpose |
@@ -236,7 +428,7 @@ network:
     - source:
         path: "/datacenter"
         match:
-          logic: and           # "and" or "or" (default: "or")
+          logic: and           # "and" or "or" (default varies by context)
           conditions:
             - attr: role
               operator: "=="
@@ -455,25 +647,123 @@ network:
 
 ## Risk Groups
 
-Define hierarchical failure correlation:
+Risk groups define hierarchical failure correlation using three methods: direct definition, membership rules, and dynamic generation. Groups can model any failure domain: physical infrastructure, geographic regions, vendor dependencies, or custom correlation patterns.
+
+### Direct Definition
 
 ```yaml
 risk_groups:
-  - name: "Rack1"
+  # Full object form with hierarchy
+  - name: "Region_West"
     disabled: false             # Optional: disable on load
     attrs:
-      location: "DC1_Floor2"
+      type: geographic
     children:
-      - name: "Card1.1"
+      - name: "Site_Seattle"
         children:
-          - name: "PortGroup1.1.1"
-      - name: "Card1.2"
-  - name: "PowerSupplyA"
-    attrs:
-      type: "power_infrastructure"
+          - name: "Cluster_SEA_01"
+      - name: "Site_Portland"
+
+  # String shorthand (equivalent to {name: "CustomGroup"})
+  - "CustomGroup"
 ```
 
-**Risk group fields**: `name` (required), `disabled`, `attrs`, `children`
+**Risk group fields**: `name` (required), `disabled`, `attrs`, `children`, `membership`, `generate`
+
+### Membership Rules
+
+Dynamically assign entities to risk groups based on attribute conditions:
+
+```yaml
+risk_groups:
+  - name: HighCapacityLinks
+    membership:
+      entity_scope: link      # node, link, or risk_group
+      match:
+        logic: and            # "and" or "or" (default: "and")
+        conditions:
+          - attr: capacity
+            operator: ">="
+            value: 1000
+
+  - name: CoreNodes
+    membership:
+      entity_scope: node
+      match:
+        logic: and
+        conditions:
+          - attr: role
+            operator: "=="
+            value: core
+          - attr: tier
+            operator: ">="
+            value: 2
+```
+
+**Key points:**
+
+- `entity_scope`: Type of entities to match (`node`, `link`, or `risk_group`)
+- `match.logic`: Defaults to `"and"` (stricter than other contexts)
+- `match.conditions`: Uses same operators as selectors
+- Entities are added to risk group during network build
+- Supports dot-notation for nested attributes (e.g., `hardware.vendor`)
+
+### Generate Blocks
+
+Automatically create risk groups from unique attribute values:
+
+```yaml
+risk_groups:
+  - generate:
+      entity_scope: link      # node or link (not risk_group)
+      group_by: connection_type # Attribute to group by (supports dot-notation)
+      name_template: "LinkType_${value}"
+      attrs:                  # Optional: static attrs for generated groups
+        generated: true
+
+  - generate:
+      entity_scope: node
+      group_by: region
+      name_template: "Region_${value}"
+```
+
+**Key points:**
+
+- `entity_scope`: `node` or `link` only (cannot generate from risk_groups)
+- `group_by`: Attribute name (supports dot-notation)
+- `name_template`: Use `${value}` as placeholder for attribute value
+- Creates one risk group per unique attribute value
+- Entities with null/missing attribute are skipped
+- Generated groups are created during network build
+
+### Validation
+
+Risk group references are validated at scenario load time:
+
+**Undefined References:** All risk group names referenced by nodes and links must exist in the `risk_groups` section. Validation errors list affected entities and undefined groups:
+
+```yaml
+# This will fail validation
+network:
+  nodes:
+    Router1:
+      risk_groups: ["PowerZone_A"]  # References undefined risk group
+
+risk_groups:
+  - name: "PowerZone_B"  # Only PowerZone_B is defined
+```
+
+**Circular Hierarchies:** Parent-child relationships cannot form cycles:
+
+```yaml
+# This will fail validation
+risk_groups:
+  - name: "GroupA"
+    children:
+      - name: "GroupB"
+        children:
+          - name: "GroupA"  # Error: circular reference
+```
 
 ## Traffic Demands
 
@@ -608,10 +898,19 @@ When multiple conditions are specified:
 
 | Logic | Behavior |
 |-------|----------|
-| `or` (default) | Entity matches if **any** condition is true |
+| `or` | Entity matches if **any** condition is true |
 | `and` | Entity matches if **all** conditions are true |
 
 If no conditions are specified, all entities of the given scope match.
+
+**Context-specific defaults**:
+
+| Context | Default `logic` | Rationale |
+|---------|-----------------|-----------|
+| Adjacency `match` | `"or"` | Inclusive: match any condition |
+| Demand `match` | `"or"` | Inclusive: match any condition |
+| Membership rules | `"and"` | Precise: must match all conditions |
+| Failure rules | `"or"` | Inclusive: match any condition |
 
 ### Weighted Sampling (choice mode)
 
@@ -832,6 +1131,26 @@ Baseline (no failures) is always run first as a reference. The `iterations` para
 ## Selector Reference
 
 Selectors work across adjacency, demands, and workflows.
+
+### Selection Patterns
+
+The DSL uses two distinct selection patterns:
+
+**Path-based Node Selection** (adjacency, demands, workflows):
+
+- Works on node entities
+- Uses regex patterns on hierarchical node names (`path`)
+- Supports capture group-based grouping
+- Supports attribute-based grouping (`group_by`)
+- Supports attribute filtering (`match` conditions)
+- Supports `active_only` filtering
+
+**Condition-based Entity Selection** (failure rules, membership rules):
+
+- Works on nodes, links, or risk_groups (`entity_scope`)
+- Uses only attribute-based filtering (`conditions`)
+- No path/regex patterns (operates on all entities of specified type)
+- See Failure Policies section for details
 
 ### String Pattern (Regex)
 

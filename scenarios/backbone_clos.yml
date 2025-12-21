@@ -303,9 +303,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id005
-          - corridor_risk_columbus_new-york-jersey-city-newark
-          - corridor_risk_new-york-jersey-city-newark_washington-arlington
     - source:
         path: metro1/pop1
         match: &id004
@@ -339,11 +336,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id006
-          - corridor_risk_chicago_washington-arlington
-          - corridor_risk_columbus_new-york-jersey-city-newark
-          - corridor_risk_columbus_washington-arlington
-          - corridor_risk_new-york-jersey-city-newark_washington-arlington
     - source:
         path: metro1/pop2
         match: *id002
@@ -395,7 +387,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id005
     - source:
         path: metro1/pop2
         match: *id004
@@ -421,7 +412,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id006
     - source:
         path: metro2/pop1
         match: &id007
@@ -523,10 +513,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id012
-          - corridor_risk_chicago_washington-arlington
-          - corridor_risk_columbus_new-york-jersey-city-newark
-          - corridor_risk_columbus_washington-arlington
     - source:
         path: metro2/pop1
         match: &id010
@@ -560,8 +546,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id013
-          - corridor_risk_atlanta_washington-arlington
     - source:
         path: metro2/pop1
         match: &id011
@@ -595,10 +579,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id014
-          - corridor_risk_chicago_washington-arlington
-          - corridor_risk_columbus_new-york-jersey-city-newark
-          - corridor_risk_columbus_washington-arlington
     - source:
         path: metro2/pop2
         match: *id008
@@ -649,7 +629,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id012
     - source:
         path: metro2/pop2
         match: *id010
@@ -675,7 +654,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id013
     - source:
         path: metro2/pop2
         match: *id011
@@ -701,7 +679,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id014
     - source:
         path: metro3/pop1
         match: &id015
@@ -767,9 +744,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id018
-          - corridor_risk_atlanta_chicago
-          - corridor_risk_chicago_columbus
     - source:
         path: metro3/pop1
         match: &id017
@@ -803,10 +777,6 @@ network:
             target:
               component: 800G-ZR+
               count: 4.0
-        risk_groups: &id019
-          - corridor_risk_atlanta_chicago
-          - corridor_risk_atlanta_columbus
-          - corridor_risk_chicago_columbus
     - source:
         path: metro3/pop2
         match: *id016
@@ -832,7 +802,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id018
     - source:
         path: metro3/pop2
         match: *id017
@@ -858,7 +827,6 @@ network:
             target:
               component: 800G-ZR+
               count: 4.0
-        risk_groups: *id019
     - source:
         path: metro4/pop1
         match: &id020
@@ -924,9 +892,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: &id022
-          - corridor_risk_atlanta_chicago
-          - corridor_risk_atlanta_columbus
     - source:
         path: metro4/pop2
         match: *id021
@@ -952,7 +917,6 @@ network:
             target:
               component: 800G-ZR+
               count: 1.0
-        risk_groups: *id022
     - source:
         path: metro5/pop1
         match: &id023
@@ -1047,38 +1011,15 @@ network:
               component: 800G-ZR+
               count: 3.0
 risk_groups:
-  - name: corridor_risk_atlanta_chicago
-    attrs:
-      type: corridor_risk
-      distance_km: 1302
-  - name: corridor_risk_atlanta_columbus
-    attrs:
-      type: corridor_risk
-      distance_km: 1028
-  - name: corridor_risk_atlanta_washington-arlington
-    attrs:
-      type: corridor_risk
-      distance_km: 1216
-  - name: corridor_risk_chicago_columbus
-    attrs:
-      type: corridor_risk
-      distance_km: 658
-  - name: corridor_risk_chicago_washington-arlington
-    attrs:
-      type: corridor_risk
-      distance_km: 1261
-  - name: corridor_risk_columbus_new-york-jersey-city-newark
-    attrs:
-      type: corridor_risk
-      distance_km: 977
-  - name: corridor_risk_columbus_washington-arlington
-    attrs:
-      type: corridor_risk
-      distance_km: 733
-  - name: corridor_risk_new-york-jersey-city-newark_washington-arlington
-    attrs:
-      type: corridor_risk
-      distance_km: 412
+  # Auto-generate corridor risk groups from link adjacency_id attribute
+  # Creates one group per unique adjacency_id value (inter_metro, intra_metro, dc_to_pop)
+  - generate:
+      entity_scope: link
+      group_by: adjacency_id
+      name_template: "corridor_risk_${value}"
+      attrs:
+        type: corridor_risk
+        generated: true
 failure_policy_set:
   weighted_modes:
     attrs:

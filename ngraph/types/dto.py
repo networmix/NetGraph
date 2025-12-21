@@ -18,8 +18,8 @@ EdgeDir = Literal["fwd", "rev"]
 class EdgeRef:
     """Reference to a directed edge via scenario link_id and direction.
 
-    Replaces the old Edge = Tuple[str, str, Hashable] to provide stable,
-    scenario-native edge identification across Core reorderings.
+    Provides stable, scenario-native edge identification across Core reorderings
+    using the link's unique ID rather than node name tuples.
 
     Attributes:
         link_id: Scenario link identifier (matches Network.links keys)

@@ -18,20 +18,36 @@ from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
 _logger = get_logger(__name__)
 
 
-def build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
+def build_risk_groups(
+    rg_data: List[Any],
+) -> tuple[List[RiskGroup], List[Dict[str, Any]]]:
     """Build RiskGroup objects from raw config data.
 
-    Supports bracket expansion in risk group names. For example:
-    - `{name: "DC[1-3]_Power"}` creates DC1_Power, DC2_Power, DC3_Power
+    Supports:
+    - String shorthand: "GroupName" is equivalent to {name: "GroupName"}
+    - Bracket expansion: {name: "DC[1-3]_Power"} creates DC1_Power, DC2_Power, DC3_Power
     - Children are also expanded recursively
+    - Generate blocks: {generate: {...}} for dynamic group creation
 
     Args:
-        rg_data: List of risk group definition dicts.
+        rg_data: List of risk group definitions (strings or dicts).
 
     Returns:
-        List of RiskGroup objects with names expanded.
+        Tuple of (explicit_risk_groups, generate_specs_raw):
+        - explicit_risk_groups: List of RiskGroup objects with names expanded.
+        - generate_specs_raw: List of raw generate block dicts for deferred processing.
     """
     from ngraph.dsl.expansion import expand_name_patterns
+
+    def normalize_entry(entry: Any) -> Dict[str, Any]:
+        """Normalize entry to dict format, handling string shorthand."""
+        if isinstance(entry, str):
+            return {"name": entry}
+        if isinstance(entry, dict):
+            return entry
+        raise ValueError(
+            f"RiskGroup entry must be a string or dict, got {type(entry).__name__}"
+        )
 
     def build_one(d: Dict[str, Any]) -> RiskGroup:
         """Build a single RiskGroup (name already expanded)."""
@@ -43,23 +59,45 @@ def build_risk_groups(rg_data: List[Dict[str, Any]]) -> List[RiskGroup]:
         children_list = d.get("children", [])
         child_objs = expand_and_build(children_list)
         attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
-        return RiskGroup(name=name, disabled=disabled, children=child_objs, attrs=attrs)
+        # Extract membership rule for deferred resolution
+        membership_raw = d.get("membership")
+        return RiskGroup(
+            name=name,
+            disabled=disabled,
+            children=child_objs,
+            attrs=attrs,
+            _membership_raw=membership_raw,
+        )
 
-    def expand_and_build(entries: List[Dict[str, Any]]) -> List[RiskGroup]:
+    def expand_and_build(entries: List[Any]) -> List[RiskGroup]:
         """Expand names and build RiskGroups for a list of entries."""
         result: List[RiskGroup] = []
         for entry in entries:
-            name = entry.get("name", "")
+            normalized = normalize_entry(entry)
+            # Skip generate blocks in children (not supported)
+            if "generate" in normalized:
+                raise ValueError("'generate' blocks not allowed in children")
+            name = normalized.get("name", "")
             if not name:
                 raise ValueError("RiskGroup entry missing 'name' field.")
             expanded_names = expand_name_patterns(name)
             for exp_name in expanded_names:
-                modified = dict(entry)
+                modified = dict(normalized)
                 modified["name"] = exp_name
                 result.append(build_one(modified))
         return result
 
-    return expand_and_build(rg_data)
+    # Separate generate blocks from explicit risk groups
+    explicit_entries: List[Any] = []
+    generate_specs: List[Dict[str, Any]] = []
+
+    for entry in rg_data:
+        if isinstance(entry, dict) and "generate" in entry:
+            generate_specs.append(entry["generate"])
+        else:
+            explicit_entries.append(entry)
+
+    return expand_and_build(explicit_entries), generate_specs
 
 
 def build_failure_policy(

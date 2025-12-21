@@ -242,6 +242,70 @@ class TestExpandNamePatterns:
         assert expand_name_patterns("node[x]") == ["nodex"]
 
 
+class TestExpandNamePatternsEdgeCases:
+    """Edge case tests for bracket expansion validation."""
+
+    def test_alphabetic_range_raises_clear_error(self) -> None:
+        """Alphabetic range [a-c] raises ValueError with helpful message."""
+        with pytest.raises(ValueError) as exc_info:
+            expand_name_patterns("node[a-c]")
+
+        error_msg = str(exc_info.value)
+        assert "not numeric" in error_msg
+        assert "a" in error_msg  # Shows the problematic value
+        assert "comma-separated" in error_msg.lower()  # Suggests alternative
+
+    def test_alphabetic_range_end_raises_clear_error(self) -> None:
+        """Range with numeric start but alphabetic end raises clear error."""
+        with pytest.raises(ValueError) as exc_info:
+            expand_name_patterns("node[1-z]")
+
+        error_msg = str(exc_info.value)
+        assert "not numeric" in error_msg
+        assert "z" in error_msg
+
+    def test_inverted_range_raises_clear_error(self) -> None:
+        """Inverted range [5-3] raises ValueError with helpful message."""
+        with pytest.raises(ValueError) as exc_info:
+            expand_name_patterns("node[5-3]")
+
+        error_msg = str(exc_info.value)
+        assert "5" in error_msg and "3" in error_msg
+        assert "greater" in error_msg.lower()
+        assert "ascending" in error_msg.lower()
+
+    def test_inverted_range_single_step(self) -> None:
+        """Inverted range [2-1] raises error even for single step."""
+        with pytest.raises(ValueError) as exc_info:
+            expand_name_patterns("dc[2-1]")
+
+        assert "greater" in str(exc_info.value).lower()
+
+    def test_mixed_valid_and_invalid_range(self) -> None:
+        """Mixed valid list and invalid range raises error on the range."""
+        with pytest.raises(ValueError) as exc_info:
+            expand_name_patterns("node[1,2,a-c]")
+
+        error_msg = str(exc_info.value)
+        assert "a-c" in error_msg
+
+    def test_alphabetic_list_still_works(self) -> None:
+        """Comma-separated alphabetic values still work correctly."""
+        # This should work (list syntax, not range syntax)
+        result = expand_name_patterns("node[a,b,c]")
+        assert result == ["nodea", "nodeb", "nodec"]
+
+    def test_zero_start_range_works(self) -> None:
+        """Range starting at zero works correctly."""
+        result = expand_name_patterns("node[0-2]")
+        assert result == ["node0", "node1", "node2"]
+
+    def test_leading_zeros_preserved(self) -> None:
+        """Leading zeros in list values are preserved."""
+        result = expand_name_patterns("port[01,02,03]")
+        assert result == ["port01", "port02", "port03"]
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # expand_risk_group_refs Tests
 # ──────────────────────────────────────────────────────────────────────────────

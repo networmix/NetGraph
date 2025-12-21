@@ -838,7 +838,118 @@ failure_policy_set:
 
 **Result**: Hierarchical risk groups with recursive child failure expansion
 
-## Example 17: Additional Selector Operators
+## Example 17: Risk Group Membership Rules
+
+Dynamically assign entities based on attributes.
+
+```yaml
+network:
+  nodes:
+    core1: {attrs: {role: core, tier: 3, datacenter: dc1}}
+    core2: {attrs: {role: core, tier: 3, datacenter: dc2}}
+    edge1: {attrs: {role: edge, tier: 1, datacenter: dc1}}
+    edge2: {attrs: {role: edge, tier: 1, datacenter: dc2}}
+  links:
+    - source: core1
+      target: core2
+      link_params:
+        capacity: 1000
+        attrs:
+          route_type: backbone
+          path_id: primary
+    - source: core1
+      target: edge1
+      link_params: {capacity: 400}
+
+risk_groups:
+  # Assign all core tier-3 nodes
+  - name: CoreTier3
+    membership:
+      entity_scope: node
+      match:
+        logic: and              # Must match ALL conditions
+        conditions:
+          - attr: role
+            operator: "=="
+            value: core
+          - attr: tier
+            operator: "=="
+            value: 3
+
+  # Assign links by route type
+  - name: BackboneLinks
+    membership:
+      entity_scope: link
+      match:
+        logic: and
+        conditions:
+          - attr: route_type      # Dot-notation for nested attrs
+            operator: "=="
+            value: backbone
+
+  # String shorthand for simple groups
+  - "ManualGroup1"
+```
+
+**Result**: Nodes and links automatically assigned to risk groups based on attributes
+
+## Example 18: Generated Risk Groups
+
+Create risk groups from unique attribute values.
+
+```yaml
+network:
+  nodes:
+    srv1: {attrs: {datacenter: dc1, rack: r1}}
+    srv2: {attrs: {datacenter: dc1, rack: r2}}
+    srv3: {attrs: {datacenter: dc2, rack: r1}}
+  links:
+    - source: srv1
+      target: srv2
+      link_params:
+        capacity: 100
+        attrs:
+          connection_type: intra_dc
+    - source: srv2
+      target: srv3
+      link_params:
+        capacity: 100
+        attrs:
+          connection_type: inter_dc
+
+risk_groups:
+  # Generate risk group per datacenter (from nodes)
+  - generate:
+      entity_scope: node
+      group_by: datacenter
+      name_template: "DC_${value}"
+      attrs:
+        generated: true
+        type: location
+
+  # Generate risk group per rack (from nodes)
+  - generate:
+      entity_scope: node
+      group_by: rack
+      name_template: "Rack_${value}"
+
+  # Generate risk group per connection type (from links)
+  - generate:
+      entity_scope: link
+      group_by: connection_type
+      name_template: "Links_${value}"
+```
+
+**Result**: Creates 6 risk groups:
+
+- `DC_dc1` (srv1, srv2)
+- `DC_dc2` (srv3)
+- `Rack_r1` (srv1, srv3)
+- `Rack_r2` (srv2)
+- `Links_intra_dc` (link srv1→srv2)
+- `Links_inter_dc` (link srv2→srv3)
+
+## Example 19: Additional Selector Operators
 
 Demonstrating all condition operators.
 

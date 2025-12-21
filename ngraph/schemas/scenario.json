@@ -7,9 +7,11 @@
   "$defs": {
     "condition": {
       "type": "object",
+      "description": "A single attribute condition for entity filtering",
       "properties": {
         "attr": {
-          "type": "string"
+          "type": "string",
+          "description": "Attribute name to evaluate (supports dot-notation for nested attributes, e.g., 'hardware.vendor')"
         },
         "operator": {
           "type": "string",
@@ -26,9 +28,12 @@
             "not_in",
             "any_value",
             "no_value"
-          ]
+          ],
+          "description": "Comparison operator"
         },
-        "value": {}
+        "value": {
+          "description": "Value to compare against (not required for any_value/no_value operators)"
+        }
       },
       "required": [
         "attr",
@@ -38,21 +43,27 @@
     },
     "matchSpec": {
       "type": "object",
+      "description": "Match specification for filtering entities by attribute conditions",
       "properties": {
         "logic": {
           "type": "string",
           "enum": [
             "and",
             "or"
-          ]
+          ],
+          "description": "How to combine conditions (defaults vary by context: 'or' for adjacency/demands, 'and' for membership rules)"
         },
         "conditions": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/condition"
-          }
+          },
+          "description": "List of conditions to evaluate"
         }
       },
+      "required": [
+        "conditions"
+      ],
       "additionalProperties": false
     },
     "nodeSelector": {
@@ -558,34 +569,157 @@
     },
     "risk_groups": {
       "type": "array",
-      "description": "Risk group definitions for failure modeling",
+      "description": "Risk group definitions for failure modeling. Supports string shorthand: 'GroupName' is equivalent to {name: 'GroupName'}",
       "items": {
-        "type": "object",
-        "properties": {
-          "name": {
+        "oneOf": [
+          {
             "type": "string",
-            "description": "Unique risk group name"
+            "description": "String shorthand for simple risk group (equivalent to {name: 'GroupName'})"
           },
-          "disabled": {
-            "type": "boolean",
-            "description": "Whether this risk group is disabled on load"
-          },
-          "attrs": {
+          {
             "type": "object",
-            "description": "Additional metadata for the risk group"
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique risk group name"
+              },
+              "disabled": {
+                "type": "boolean",
+                "description": "Whether this risk group is disabled on load"
+              },
+              "attrs": {
+                "type": "object",
+                "description": "Additional metadata for the risk group"
+              },
+              "children": {
+                "type": "array",
+                "description": "Nested child risk groups",
+                "items": {
+                  "$ref": "#/properties/risk_groups/items"
+                }
+              },
+              "membership": {
+                "type": "object",
+                "description": "Policy-based membership rule for auto-assigning entities to this risk group",
+                "properties": {
+                  "entity_scope": {
+                    "type": "string",
+                    "enum": [
+                      "node",
+                      "link",
+                      "risk_group"
+                    ],
+                    "description": "Type of entities to match"
+                  },
+                  "match": {
+                    "type": "object",
+                    "description": "Match specification",
+                    "properties": {
+                      "logic": {
+                        "type": "string",
+                        "enum": [
+                          "and",
+                          "or"
+                        ],
+                        "description": "How to combine conditions (defaults to 'and' for membership rules)"
+                      },
+                      "conditions": {
+                        "type": "array",
+                        "description": "List of conditions to match",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "attr": {
+                              "type": "string",
+                              "description": "Attribute name (supports dot-notation for nested attrs)"
+                            },
+                            "operator": {
+                              "type": "string",
+                              "enum": [
+                                "==",
+                                "!=",
+                                ">",
+                                "<",
+                                ">=",
+                                "<=",
+                                "contains",
+                                "not_contains",
+                                "in",
+                                "not_in",
+                                "any_value",
+                                "no_value"
+                              ],
+                              "description": "Comparison operator"
+                            },
+                            "value": {
+                              "description": "Value to compare against"
+                            }
+                          },
+                          "required": [
+                            "attr",
+                            "operator"
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "conditions"
+                    ]
+                  }
+                },
+                "required": [
+                  "entity_scope",
+                  "match"
+                ]
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
           },
-          "children": {
-            "type": "array",
-            "description": "Nested child risk groups",
-            "items": {
-              "$ref": "#/properties/risk_groups/items"
-            }
+          {
+            "type": "object",
+            "description": "Dynamic risk group generation block",
+            "properties": {
+              "generate": {
+                "type": "object",
+                "description": "Generate risk groups from unique attribute values",
+                "properties": {
+                  "entity_scope": {
+                    "type": "string",
+                    "enum": [
+                      "node",
+                      "link"
+                    ],
+                    "description": "Type of entities to group (node or link only, not risk_group)"
+                  },
+                  "group_by": {
+                    "type": "string",
+                    "description": "Attribute name to group by (supports dot-notation)"
+                  },
+                  "name_template": {
+                    "type": "string",
+                    "description": "Template for generated group names. Use ${value} as placeholder"
+                  },
+                  "attrs": {
+                    "type": "object",
+                    "description": "Static attributes for generated groups"
+                  }
+                },
+                "required": [
+                  "entity_scope",
+                  "group_by",
+                  "name_template"
+                ]
+              }
+            },
+            "required": [
+              "generate"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "name"
-        ],
-        "additionalProperties": false
+        ]
       }
     },
     "failure_policy_set": {

@@ -520,10 +520,9 @@ class TestConditionOperators:
         assert evaluate_condition(attrs, Condition("x", ">", 0)) is False
 
     def test_invalid_operator_raises(self) -> None:
-        """Invalid operator raises ValueError."""
-        # Provide an attribute that exists so we don't return early
-        with pytest.raises(ValueError, match="Unknown operator"):
-            evaluate_condition({"x": 5}, Condition("x", "invalid_op", 5))  # type: ignore
+        """Invalid operator raises ValueError at construction time."""
+        with pytest.raises(ValueError, match="Invalid operator"):
+            Condition("x", "invalid_op", 5)  # type: ignore
 
     def test_in_operator_requires_list(self) -> None:
         """in operator requires list value."""

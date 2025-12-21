@@ -32,6 +32,208 @@ The DSL uses three distinct template syntaxes in different contexts:
 
 **These syntaxes are not interchangeable.** Each works only in its designated context.
 
+**Why different syntaxes?** Each serves a distinct purpose:
+
+| Syntax | Operation | Key Difference |
+|--------|-----------|----------------|
+| `[1-3]` | Static generation | Creates multiple definitions at parse time |
+| `${var}` | Template substitution | Requires explicit `expand_vars` mapping |
+| `{node_num}` | Sequential counter | Auto-increments based on `node_count` |
+
+Bracket expansion generates structure; variable expansion parameterizes rules; node naming indexes instances.
+
+## Entity Creation Architecture
+
+The DSL implements two fundamentally different selection patterns optimized for different use cases. Understanding these patterns is essential for effective scenario authoring.
+
+### Two Selection Models
+
+The DSL uses distinct selection strategies depending on the operation:
+
+**1. Path-Based Node Selection** (adjacency rules, traffic demands, workflow steps)
+
+- Uses regex patterns on hierarchical node names
+- Supports capture group-based grouping
+- Supports attribute-based grouping (`group_by`)
+- Supports attribute filtering (`match` conditions)
+- Supports `active_only` filtering
+
+**2. Condition-Based Entity Selection** (failure rules, membership rules, risk group generation)
+
+- Works on nodes, links, or risk_groups (`entity_scope`)
+- Uses only attribute-based filtering (`conditions`)
+- No path/regex patterns (operates on all entities of specified type)
+
+These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
+
+### Adjacency Creation Flow
+
+Adjacency rules create links between nodes using path-based selection with optional filtering:
+
+```mermaid
+flowchart TD
+    Start[Adjacency Definition] --> VarExpand{Has expand_vars?}
+    VarExpand -->|Yes| VarSubst[Variable Substitution]
+    VarSubst --> PathFilter
+    VarExpand -->|No| PathFilter[1. Path-Based Selection]
+    PathFilter --> PathDesc[Select nodes via regex pattern<br/>Groups by capture groups]
+    PathDesc --> MatchFilter{Has match conditions?}
+    MatchFilter -->|Yes| AttrFilter[2. Attribute Filtering]
+    MatchFilter -->|No| ActiveFilter
+    AttrFilter --> AttrDesc[Filter by attribute conditions<br/>using logic and/or]
+    AttrDesc --> ActiveFilter[3. Active/Excluded Filtering]
+    ActiveFilter --> GroupBy{Has group_by?}
+    GroupBy -->|Yes| Regroup[4. Re-group by Attribute]
+    GroupBy -->|No| Pattern
+    Regroup --> Pattern[5. Apply Pattern]
+    Pattern --> PatternDesc[mesh or one_to_one<br/>Creates links between groups]
+```
+
+**Processing Steps:**
+
+1. **Path Selection**: Regex pattern matches nodes by hierarchical name
+   - Capture groups create initial grouping
+   - If no path specified, selects all nodes
+2. **Attribute Filtering**: Optional `match` conditions filter nodes
+   - Uses `logic: "and"` or `"or"` (default: `"or"`)
+   - Supports operators: `==`, `!=`, `<`, `>`, `contains`, `in`, etc.
+3. **Active Filtering**: Filters disabled nodes based on context
+   - Adjacency default: `active_only=false` (creates links to disabled nodes)
+4. **Attribute Grouping**: Optional `group_by` overrides regex capture grouping
+5. **Pattern Application**: Creates links between selected node groups
+   - `mesh`: Every source to every target
+   - `one_to_one`: Pairwise with wrap-around
+
+**Key Characteristics:**
+
+- `default_active_only=False` (links are created to disabled nodes)
+- `match.logic` defaults to `"or"` (inclusive matching)
+- Supports variable expansion via `expand_vars`
+
+### Traffic Demand Creation Flow
+
+Traffic demands follow a similar pattern but with important differences:
+
+```mermaid
+flowchart TD
+    Start[Traffic Demand Spec] --> VarExpand{Has expand_vars?}
+    VarExpand -->|Yes| VarSubst[Variable Substitution<br/>Creates multiple demand specs]
+    VarSubst --> Process
+    VarExpand -->|No| Process[Process Single Demand]
+    Process --> SrcSelect[1. Select Source Nodes]
+    SrcSelect --> SinkSelect[2. Select Sink Nodes]
+    SinkSelect --> SrcDesc[Uses same path + match + group_by<br/>selection as adjacency]
+    SrcDesc --> Mode{Demand Mode?}
+    Mode -->|pairwise| Pairwise[3a. Pairwise Expansion]
+    Mode -->|combine| Combine[3b. Combine Expansion]
+    Pairwise --> PairDesc[Create demand for each src-dst pair<br/>Volume distributed evenly<br/>No pseudo nodes]
+    Combine --> CombDesc[Create pseudo-source and pseudo-sink<br/>Single aggregated demand<br/>Augmentation edges connect real nodes]
+```
+
+**Key Differences from Adjacency:**
+
+1. **Active-only default**: `default_active_only=True` (only active nodes participate)
+2. **Two selection phases**: Source nodes first, then sink nodes (both use same selector logic)
+3. **Expansion modes**:
+   - **Pairwise**: Creates individual demands for each (source, sink) pair
+   - **Combine**: Creates pseudo nodes and a single aggregated demand
+4. **Group modes**: Additional layer (`flatten`, `per_group`, `group_pairwise`) for handling grouped selections
+
+**Processing Steps:**
+
+1. Select source nodes using unified selector (path + match + group_by)
+2. Select sink nodes using unified selector
+3. Apply mode-specific expansion:
+   - **Pairwise**: Volume evenly distributed across all pairs
+   - **Combine**: Single demand with pseudo nodes for aggregation
+
+### Risk Group Creation Flow
+
+Risk groups use the condition-based selection model:
+
+```mermaid
+flowchart TD
+    Start[Risk Groups Definition] --> Three[Three Creation Methods]
+    Three --> Direct[1. Direct Definition]
+    Three --> Member[2. Membership Rules]
+    Three --> Generate[3. Generate Blocks]
+
+    Direct --> DirectDesc[Simply name the risk group<br/>Entities reference it explicitly]
+
+    Member --> MemberScope[Specify entity_scope<br/>node, link, or risk_group]
+    MemberScope --> MemberCond[Define match conditions<br/>logic defaults to and]
+    MemberCond --> MemberExec[Scan ALL entities of that scope<br/>Add matching entities to risk group]
+
+    Generate --> GenScope[Specify entity_scope<br/>node or link only]
+    GenScope --> GenGroupBy[Specify group_by attribute]
+    GenGroupBy --> GenExec[Collect unique values<br/>Create risk group for each value<br/>Add entities with that value]
+```
+
+**Creation Methods:**
+
+1. **Direct Definition**: Explicitly name risk groups, entities reference them
+2. **Membership Rules**: Auto-assign entities based on attribute matching
+3. **Generate Blocks**: Auto-create risk groups from unique attribute values
+
+**Key Characteristics:**
+
+- **No path patterns**: Operates on ALL entities of specified scope
+- **Only attribute-based**: Uses `conditions` exclusively
+- **Logic defaults to "and"** for membership (stricter matching)
+- **Hierarchical support**: Risk groups can contain other risk groups as children
+
+### Comparison Table
+
+| Feature | Adjacency | Traffic Demands | Risk Groups |
+|---------|-----------|----------------|-------------|
+| Selection Type | Path-based | Path-based | Condition-based |
+| Regex Patterns | Yes | Yes | No |
+| Capture Groups | Yes | Yes | No |
+| `group_by` | Yes | Yes | Yes (generate only) |
+| `match` Conditions | Yes | Yes | Yes (membership/generate) |
+| `active_only` Default | False | True | N/A |
+| `match.logic` Default | "or" | "or" | "and" (membership) |
+| Variable Expansion | Yes | Yes | No |
+| Entity Scope | Nodes only | Nodes only | Nodes, links, risk_groups |
+
+### Shared Evaluation Primitives
+
+All selection mechanisms share common evaluation primitives:
+
+1. **Condition evaluation**: `evaluate_condition()` handles all operators
+   - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
+   - String/collection: `contains`, `not_contains`, `in`, `not_in`
+   - Existence: `any_value`, `no_value`
+
+2. **Condition combining**: `evaluate_conditions()` applies `"and"`/`"or"` logic
+
+3. **Attribute flattening**: Unified access to entity attributes
+   - `flatten_node_attrs()`: Merges node.attrs with top-level fields
+   - `flatten_link_attrs()`: Merges link.attrs with top-level fields
+   - `flatten_risk_group_attrs()`: Merges risk_group.attrs with top-level fields
+
+4. **Dot-notation support**: `resolve_attr_path()` handles nested attributes
+   - Example: `hardware.vendor` resolves to `attrs["hardware"]["vendor"]`
+
+5. **Variable expansion**: `expand_templates()` handles `$var` and `${var}` substitution
+   - Supports `cartesian` and `zip` expansion modes
+
+### Context-Aware Defaults
+
+The DSL uses context-aware defaults to optimize for common use cases:
+
+| Context | Selection Type | Active Only | Match Logic | Rationale |
+|---------|---------------|-------------|-------------|-----------|
+| Adjacency | Path-based | False | "or" | Create links to all nodes, including disabled |
+| Demands | Path-based | True | "or" | Only route traffic through active nodes |
+| Node Overrides | Path-based | False | "or" | Modify all matching nodes |
+| Workflow Steps | Path-based | True | "or" | Analyze only active topology |
+| Membership Rules | Condition-based | N/A | "and" | Precise matching for risk assignment |
+| Failure Rules | Condition-based | N/A | "or" | Inclusive matching for failure scenarios |
+| Generate Blocks | Condition-based | N/A | N/A | No conditions, groups by values |
+
+These defaults ensure intuitive behavior while remaining overridable when needed.
+
 ## Top-Level Keys
 
 ```yaml
@@ -58,7 +260,6 @@ network:
   nodes:
     SEA:
       disabled: true
-      risk_groups: ["RiskGroup1", "RiskGroup2"]
       attrs:
         coords: [47.6062, -122.3321]
         hardware:
@@ -88,7 +289,6 @@ network:
       link_params:
         capacity: 200
         cost: 6846
-        risk_groups: ["RiskGroup1", "RiskGroup2"]
         attrs:
           distance_km: 1369.13
           media_type: "fiber"
@@ -113,13 +313,11 @@ network:
     leaf:
       node_count: 4
       name_template: "leaf-{node_num}"
-      risk_groups: ["RG-Leaf"]
       attrs:
         role: "leaf"
     spine:
       node_count: 2
       name_template: "spine-{node_num}"
-      risk_groups: ["RG-Spine"]
       attrs:
         role: "spine"
 ```
@@ -264,6 +462,16 @@ network:
     Server:
       risk_groups: ["RG[1-3]"]
 ```
+
+**Limitations and Workarounds:**
+
+| Pattern | Behavior | Workaround |
+|---------|----------|------------|
+| `[01-03]` | Produces `1, 2, 3` (no leading zeros) | Use explicit list: `[01,02,03]` |
+| `[A-C]` | Error (letter ranges not supported) | Use explicit list: `[A,B,C]` |
+| `[1-10]` | Produces `1, 2, ..., 10` | Works correctly |
+
+The range syntax `[start-end]` only supports integers. For letters, mixed sequences, or zero-padded numbers, use comma-separated explicit lists.
 
 ### Variable Expansion in Adjacency
 
@@ -421,34 +629,238 @@ network:
 
 ## `risk_groups` - Risk Modeling
 
-Define hierarchical failure correlation groups:
+Define hierarchical failure correlation groups for modeling correlated failures. Risk groups can represent any failure correlation pattern: physical infrastructure, geographic regions, vendor dependencies, or custom domains.
+
+### Understanding Hierarchy
+
+Risk groups form parent-child trees that model **cascading failures**:
 
 ```yaml
 risk_groups:
-  - name: "Rack1"
-    attrs:
-      location: "DC1_Floor2"
+  - name: "Region_West"
     children:
-      - name: "Card1.1"
-        children:
-          - name: "PortGroup1.1.1"
-      - name: "Card1.2"
-  - name: "PowerSupplyA"
-    attrs:
-      type: "power_infrastructure"
+      - name: "Site_Seattle"
+      - name: "Site_Portland"
 ```
 
-Nodes and links reference risk groups via `risk_groups` attribute:
+**Cascading semantics:** When a parent fails, all descendants also fail. This models real-world correlations where a regional outage affects all sites in that region.
+
+**Storage model:** Children are nested within parents, not in the top-level dictionary:
+
+```python
+# Top-level only
+scenario.network.risk_groups.keys()  # {'Region_West'}
+
+# Access children via parent
+region = scenario.network.risk_groups["Region_West"]
+for child in region.children:
+    print(child.name)  # Site_Seattle, Site_Portland
+```
+
+**Entity references:** Nodes and links reference risk groups by name. To reference a group, it must be defined at top level (children alone are not sufficient):
 
 ```yaml
+risk_groups:
+  - name: "Site_Seattle"      # Top-level definition enables references
+  - name: "Region_West"
+    children:
+      - name: "Site_Seattle"  # Also a child for hierarchy
+
 network:
   nodes:
-    server-1:
-      risk_groups: ["Rack1"]
-      attrs:
-        hardware:
-          component: "ServerChassis"
+    Router_SEA:
+      risk_groups: ["Site_Seattle"]
 ```
+
+### Common Use Cases
+
+Risk groups can model any failure correlation pattern. Below are some common examples:
+
+**Physical Infrastructure** (fiber paths, power zones, cooling systems)
+**Geographic/Administrative** (regions, availability zones, maintenance windows)
+**Vendor/Software Dependencies** (shared components, software versions)
+**Logical Grouping** (service tiers, customer segments, custom domains)
+
+### Example 1: Physical Infrastructure (Fiber Links)
+
+One common use case is modeling physical infrastructure. For fiber links, you might use a hierarchy like Path → Conduit → Fiber Pair.
+
+```yaml
+risk_groups:
+  # Top-level definitions for referenceable groups
+  - name: "Conduit_NYC_CHI_C[1-2]"
+    attrs:
+      type: fiber_conduit
+
+  # Hierarchy defines cascading relationships
+  - name: "Path_NYC_CHI"
+    attrs:
+      type: fiber_path
+      distance_km: 1200
+    children:
+      - name: "Conduit_NYC_CHI_C[1-2]"
+
+network:
+  nodes:
+    NYC: {}
+    CHI: {}
+  links:
+    - source: NYC
+      target: CHI
+      link_params:
+        risk_groups: ["Conduit_NYC_CHI_C1"]
+        attrs:
+          fiber:
+            path_id: "NYC-CHI"
+            conduit_id: "NYC-CHI-C1"
+```
+
+**Cascading behavior:**
+
+- Fiber pair failure affects only that pair
+- Conduit failure affects all pairs in that conduit
+- Path failure affects all conduits in that path
+
+### Example 2: Physical Infrastructure (Data Center Nodes)
+
+For data center nodes, you might model facility infrastructure with a hierarchy like Building → Room → Power Zone.
+
+```yaml
+risk_groups:
+  # Top-level definitions for referenceable groups
+  - name: "PowerZone_DC1_R1_PZ[A,B]"
+    attrs:
+      type: power_zone
+
+  # Hierarchy defines cascading relationships
+  - name: "Building_DC1"
+    attrs:
+      type: building
+      location: "Ashburn, VA"
+    children:
+      - name: "Room_DC1_R[1-3]"
+        attrs:
+          type: room
+        children:
+          - name: "PowerZone_DC1_R1_PZ[A,B]"
+
+network:
+  nodes:
+    Router_DC1_R1_RK01:
+      risk_groups: ["PowerZone_DC1_R1_PZA"]
+      attrs:
+        facility:
+          building_id: "DC1"
+          room_id: "DC1-R1"
+          power_zone: "DC1-R1-PZ-A"
+```
+
+**Cascading behavior:**
+
+- Power zone failure affects equipment in that zone
+- Room failure affects all zones in that room
+- Building failure affects entire site
+
+### Example 3: Geographic/Administrative Grouping
+
+For geographic or administrative modeling:
+
+```yaml
+risk_groups:
+  - name: "Region_West"
+    attrs:
+      type: geographic
+    children:
+      - name: "AZ_US_West_1a"
+      - name: "AZ_US_West_1b"
+  - name: "MaintenanceWindow_Weekend"
+    attrs:
+      type: operational
+      schedule: "Sat-Sun 02:00-06:00 UTC"
+```
+
+### Membership Rules
+
+Dynamically assign entities to risk groups based on attributes:
+
+```yaml
+risk_groups:
+  - name: Conduit_NYC_CHI_C1
+    membership:
+      entity_scope: link
+      match:
+        logic: and           # "and" or "or" (default: "and")
+        conditions:
+          - attr: fiber.conduit_id
+            operator: "=="
+            value: "NYC-CHI-C1"
+
+  - name: PowerZone_DC1_R1_PZA
+    membership:
+      entity_scope: node
+      match:
+        logic: and
+        conditions:
+          - attr: facility.power_zone
+            operator: "=="
+            value: "DC1-R1-PZ-A"
+```
+
+**Note:** Membership rules default to `logic: "and"` (stricter than adjacency/demand selectors which default to `"or"`). This ensures precise entity matching for failure correlation.
+
+### Generated Risk Groups
+
+Automatically create risk groups from entity attributes:
+
+```yaml
+risk_groups:
+  # Generate risk groups from fiber path attributes on links
+  - generate:
+      entity_scope: link
+      group_by: fiber.path_id
+      name_template: Path_${value}
+      attrs:
+        type: fiber_path
+
+  # Generate risk groups from facility attributes on nodes
+  - generate:
+      entity_scope: node
+      group_by: facility.building_id
+      name_template: Building_${value}
+      attrs:
+        type: building
+```
+
+### Validation
+
+Risk group references are validated at scenario load time:
+
+**Undefined Reference Detection:** All risk group names referenced by nodes and links must exist in the `risk_groups` section. This catches typos and missing definitions early:
+
+```yaml
+# This will fail validation
+network:
+  nodes:
+    Router1:
+      risk_groups: ["PowerZone_A"]  # References undefined risk group
+
+risk_groups:
+  - name: "PowerZone_B"  # Only PowerZone_B is defined
+```
+
+**Circular Hierarchy Detection:** Parent-child relationships cannot form cycles:
+
+```yaml
+# This will fail validation
+risk_groups:
+  - name: "GroupA"
+    children:
+      - name: "GroupB"
+        children:
+          - name: "GroupA"  # Error: circular reference
+```
+
+Validation errors list affected entities and undefined groups to aid debugging.
 
 ## `vars` - YAML Anchors
 

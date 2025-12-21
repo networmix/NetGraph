@@ -39,7 +39,9 @@ def test_failure_rule_invalid_probability():
 
 
 def test_failure_policy_evaluate_conditions_or_logic():
-    """Test FailurePolicy._evaluate_conditions with 'or' logic."""
+    """Test condition evaluation with 'or' logic via shared evaluate_conditions."""
+    from ngraph.dsl.selectors import evaluate_conditions
+
     conditions = [
         FailureCondition(attr="vendor", operator="==", value="cisco"),
         FailureCondition(attr="location", operator="==", value="dallas"),
@@ -47,25 +49,27 @@ def test_failure_policy_evaluate_conditions_or_logic():
 
     # Should pass if either condition is true
     attrs1 = {"vendor": "cisco", "location": "houston"}  # First condition true
-    assert FailurePolicy._evaluate_conditions(attrs1, conditions, "or") is True
+    assert evaluate_conditions(attrs1, conditions, "or") is True
 
     attrs2 = {"vendor": "juniper", "location": "dallas"}  # Second condition true
-    assert FailurePolicy._evaluate_conditions(attrs2, conditions, "or") is True
+    assert evaluate_conditions(attrs2, conditions, "or") is True
 
     attrs3 = {"vendor": "cisco", "location": "dallas"}  # Both conditions true
-    assert FailurePolicy._evaluate_conditions(attrs3, conditions, "or") is True
+    assert evaluate_conditions(attrs3, conditions, "or") is True
 
     attrs4 = {"vendor": "juniper", "location": "houston"}  # Neither condition true
-    assert FailurePolicy._evaluate_conditions(attrs4, conditions, "or") is False
+    assert evaluate_conditions(attrs4, conditions, "or") is False
 
 
 def test_failure_policy_evaluate_conditions_invalid_logic():
-    """Test FailurePolicy._evaluate_conditions with invalid logic."""
+    """Test condition evaluation with invalid logic via shared evaluate_conditions."""
+    from ngraph.dsl.selectors import evaluate_conditions
+
     conditions = [FailureCondition(attr="vendor", operator="==", value="cisco")]
     attrs = {"vendor": "cisco"}
 
     with pytest.raises(ValueError, match="Unsupported logic: invalid"):
-        FailurePolicy._evaluate_conditions(attrs, conditions, "invalid")
+        evaluate_conditions(attrs, conditions, "invalid")
 
 
 def test_node_scope_all():
