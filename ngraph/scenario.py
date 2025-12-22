@@ -54,6 +54,8 @@ class Scenario:
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
     seed: Optional[int] = None
+    # Per-instance execution counter for thread-safe step ordering
+    _execution_counter: int = field(default=0, init=False, repr=False)
 
     # Module-level logger
     _logger = get_logger(__name__)
@@ -73,10 +75,8 @@ class Scenario:
         Each step may modify scenario data or store outputs
         in scenario.results.
         """
-        # Reset execution counter to ensure step ordering is local to this run
-        import ngraph.workflow.base as workflow_base
-
-        workflow_base._execution_counter = 0
+        # Reset instance execution counter for this run
+        self._execution_counter = 0
         for step in self.workflow:
             step.execute(self)
 

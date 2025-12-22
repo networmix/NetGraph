@@ -65,6 +65,7 @@ def test_execute_records_metadata_including_seed_fields() -> None:
     scen = MagicMock(spec=Scenario)
     scen.results = Results()
     scen.seed = 1010
+    scen._execution_counter = 0
     step = Dummy(name="d1")
     step.execute(scen)
 

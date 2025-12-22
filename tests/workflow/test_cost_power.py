@@ -66,6 +66,7 @@ def test_cost_power_basic_aggregation_active() -> None:
         network = net
         components_library = comps
         results = Results()
+        _execution_counter = 0
 
     scenario = _Scenario()
 
@@ -124,6 +125,7 @@ def test_cost_power_include_disabled_filters_active_view() -> None:
         network = net
         components_library = comps
         results = Results()
+        _execution_counter = 0
 
     scenario = _Scenario()
 
@@ -160,6 +162,7 @@ def test_cost_power_optics_ignored_when_endpoint_has_no_hw() -> None:
         network = net
         components_library = comps
         results = Results()
+        _execution_counter = 0
 
     scenario = _Scenario()
     step = CostPower(name="cp3", include_disabled=False, aggregation_level=0)

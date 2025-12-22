@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 22, 2025 at 00:44 UTC
+Generated from source code on: December 22, 2025 at 01:21 UTC
 
 Modules auto-discovered: 53
 
@@ -265,6 +265,7 @@ Typical usage example:
 - `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
+- `_execution_counter` (int) = 0
 
 **Methods:**
 

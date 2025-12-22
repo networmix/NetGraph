@@ -15,6 +15,7 @@ class _ScenarioStub:
         self.traffic_matrix_set = tmset
         self.results = results
         self.failure_policy_set = failure_policy_set
+        self._execution_counter = 0
 
 
 def test_tm_basic_behavior_unchanged(monkeypatch):
