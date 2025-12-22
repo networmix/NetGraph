@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 21, 2025 at 01:24 UTC
+Generated from source code on: December 22, 2025 at 00:44 UTC
 
-Modules auto-discovered: 52
+Modules auto-discovered: 53
 
 ---
 
@@ -406,6 +406,29 @@ Args:
 
 Returns:
     Tuple of total capex, total power (typical), and total capacity as floats.
+
+---
+
+## ngraph.model.demand.builder
+
+Builders for traffic matrices.
+
+Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
+
+### build_traffic_matrix_set(raw: 'Dict[str, List[dict]]') -> 'TrafficMatrixSet'
+
+Build a `TrafficMatrixSet` from a mapping of name -> list of dicts.
+
+Args:
+    raw: Mapping where each key is a matrix name and each value is a list of
+        dictionaries with `TrafficDemand` constructor fields.
+
+Returns:
+    Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
+
+Raises:
+    ValueError: If ``raw`` is not a mapping of name -> list[dict],
+        or if required fields are missing.
 
 ---
 
@@ -2751,6 +2774,42 @@ Attributes:
     capacity: Edge capacity
     cost: Edge cost (converted to int64 for Core)
 
+### analyze(network: "'Network'", *, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, mode: 'Mode' = <Mode.COMBINE: 1>, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> 'AnalysisContext'
+
+Create an analysis context for the network.
+
+This is THE primary entry point for network analysis in NetGraph.
+
+Args:
+    network: Network topology to analyze.
+    source: Optional source node selector (string path or selector dict).
+            If provided with sink, creates bound context with pre-built
+            pseudo-nodes for efficient repeated flow analysis.
+    sink: Optional sink node selector (string path or selector dict).
+    mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
+    augmentations: Optional custom augmentation edges.
+
+Returns:
+    AnalysisContext ready for analysis calls.
+
+Examples:
+    One-off analysis (unbound context):
+
+        flow = analyze(network).max_flow("^A$", "^B$")
+        paths = analyze(network).shortest_paths("^A$", "^B$")
+
+    Efficient repeated analysis (bound context):
+
+        ctx = analyze(network, source="^dc/", sink="^edge/")
+        baseline = ctx.max_flow()
+        degraded = ctx.max_flow(excluded_links=failed_links)
+
+    Multiple exclusion scenarios:
+
+        ctx = analyze(network, source="^A$", sink="^B$")
+        for scenario in failure_scenarios:
+            result = ctx.max_flow(excluded_links=scenario)
+
 ### build_edge_mask(ctx: 'AnalysisContext', excluded_links: 'Optional[Set[str]]' = None) -> 'np.ndarray'
 
 Build an edge mask array for Core algorithms.
@@ -2781,7 +2840,138 @@ Returns:
 
 ---
 
-## ngraph.exec.analysis.flow
+## ngraph.analysis.demand
+
+Demand expansion: converts TrafficDemand specs into concrete placement demands.
+
+Supports both pairwise and combine modes through augmentation-based pseudo nodes.
+Uses unified selectors for node selection.
+
+### DemandExpansion
+
+Demand expansion result.
+
+Attributes:
+    demands: Concrete demands ready for placement (sorted by priority).
+    augmentations: Augmentation edges for pseudo nodes (empty for pairwise).
+
+**Attributes:**
+
+- `demands` (List[ExpandedDemand])
+- `augmentations` (List[AugmentationEdge])
+
+### ExpandedDemand
+
+Concrete demand ready for placement.
+
+Uses node names (not IDs) so expansion happens before graph building.
+Node IDs are resolved after the graph is built with pseudo nodes.
+
+Attributes:
+    src_name: Source node name (real or pseudo).
+    dst_name: Destination node name (real or pseudo).
+    volume: Traffic volume to place.
+    priority: Priority class (lower is higher priority).
+    policy_preset: FlowPolicy configuration preset.
+    demand_id: Parent TrafficDemand ID for tracking.
+
+**Attributes:**
+
+- `src_name` (str)
+- `dst_name` (str)
+- `volume` (float)
+- `priority` (int)
+- `policy_preset` (FlowPolicyPreset)
+- `demand_id` (str)
+
+### expand_demands(network: 'Network', traffic_demands: 'List[TrafficDemand]', default_policy_preset: 'FlowPolicyPreset' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 1>) -> 'DemandExpansion'
+
+Expand TrafficDemand specifications into concrete demands with augmentations.
+
+Pure function that:
+
+1. Expands variables in selectors using expand_vars
+2. Normalizes and evaluates selectors to get node groups
+3. Distributes volume based on mode (combine/pairwise) and group_mode
+4. Generates augmentation edges for combine mode (pseudo nodes)
+5. Returns demands (node names) + augmentations
+
+Node names are used (not IDs) so expansion happens BEFORE graph building.
+IDs are resolved after graph is built with augmentations.
+
+Args:
+    network: Network for node selection.
+    traffic_demands: High-level demand specifications.
+    default_policy_preset: Default policy if demand doesn't specify one.
+
+Returns:
+    DemandExpansion with demands and augmentations.
+
+Raises:
+    ValueError: If no demands could be expanded or unsupported mode.
+
+---
+
+## ngraph.analysis.failure_manager
+
+FailureManager for Monte Carlo failure analysis.
+
+Provides the failure analysis engine for NetGraph. Supports parallel
+processing, graph caching, and failure policy handling for workflow steps
+and direct programmatic use.
+
+Performance characteristics:
+Time complexity: O(S + I * A / P), where S is one-time graph setup cost,
+I is iteration count, A is per-iteration analysis cost, and P is parallelism.
+Graph caching amortizes expensive graph construction across all iterations,
+and O(|excluded|) mask building replaces O(V+E) iteration.
+
+Space complexity: O(V + E + I * R), where V and E are node and link counts,
+and R is result size per iteration. The pre-built graph is shared across
+all iterations.
+
+Parallelism: The C++ Core backend releases the GIL during computation,
+enabling true parallelism with Python threads. With graph caching, most
+per-iteration work runs in GIL-free C++ code; speedup depends on workload
+and parallelism level.
+
+### AnalysisFunction
+
+Protocol for analysis functions used with FailureManager.
+
+Analysis functions should take a Network, exclusion sets, and any additional
+keyword arguments, returning analysis results of any type.
+
+### FailureManager
+
+Failure analysis engine with Monte Carlo capabilities.
+
+This is the component for failure analysis in NetGraph.
+Provides parallel processing, worker caching, and failure
+policy handling for workflow steps and direct notebook usage.
+
+The FailureManager can execute any analysis function that takes a Network
+with exclusion sets and returns results, making it generic for different
+types of failure analysis (capacity, traffic, connectivity, etc.).
+
+Attributes:
+    network: The underlying network (not modified during analysis).
+    failure_policy_set: Set of named failure policies.
+    policy_name: Name of specific failure policy to use.
+
+**Methods:**
+
+- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
+- `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
+
+---
+
+## ngraph.analysis.functions
 
 Flow analysis functions for network evaluation.
 
@@ -2915,157 +3105,60 @@ Returns:
 
 ---
 
-## ngraph.exec.demand.builder
+## ngraph.analysis.placement
 
-Builders for traffic matrices.
+Core demand placement with SPF caching.
 
-Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
+### PlacementEntry
 
-### build_traffic_matrix_set(raw: 'Dict[str, List[dict]]') -> 'TrafficMatrixSet'
-
-Build a `TrafficMatrixSet` from a mapping of name -> list of dicts.
-
-Args:
-    raw: Mapping where each key is a matrix name and each value is a list of
-        dictionaries with `TrafficDemand` constructor fields.
-
-Returns:
-    Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
-
-Raises:
-    ValueError: If ``raw`` is not a mapping of name -> list[dict],
-        or if required fields are missing.
-
----
-
-## ngraph.exec.demand.expand
-
-Demand expansion: converts TrafficDemand specs into concrete placement demands.
-
-Supports both pairwise and combine modes through augmentation-based pseudo nodes.
-Uses unified selectors for node selection.
-
-### DemandExpansion
-
-Demand expansion result.
-
-Attributes:
-    demands: Concrete demands ready for placement (sorted by priority).
-    augmentations: Augmentation edges for pseudo nodes (empty for pairwise).
-
-**Attributes:**
-
-- `demands` (List[ExpandedDemand])
-- `augmentations` (List[AugmentationEdge])
-
-### ExpandedDemand
-
-Concrete demand ready for placement.
-
-Uses node names (not IDs) so expansion happens before graph building.
-Node IDs are resolved after the graph is built with pseudo nodes.
-
-Attributes:
-    src_name: Source node name (real or pseudo).
-    dst_name: Destination node name (real or pseudo).
-    volume: Traffic volume to place.
-    priority: Priority class (lower is higher priority).
-    policy_preset: FlowPolicy configuration preset.
-    demand_id: Parent TrafficDemand ID for tracking.
+Single demand placement result.
 
 **Attributes:**
 
 - `src_name` (str)
 - `dst_name` (str)
-- `volume` (float)
 - `priority` (int)
-- `policy_preset` (FlowPolicyPreset)
-- `demand_id` (str)
+- `volume` (float)
+- `placed` (float)
+- `cost_distribution` (dict[float, float]) = {}
+- `used_edges` (set[str]) = set()
 
-### expand_demands(network: 'Network', traffic_demands: 'List[TrafficDemand]', default_policy_preset: 'FlowPolicyPreset' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 1>) -> 'DemandExpansion'
+### PlacementResult
 
-Expand TrafficDemand specifications into concrete demands with augmentations.
+Complete placement result.
 
-Pure function that:
+**Attributes:**
 
-1. Expands variables in selectors using expand_vars
-2. Normalizes and evaluates selectors to get node groups
-3. Distributes volume based on mode (combine/pairwise) and group_mode
-4. Generates augmentation edges for combine mode (pseudo nodes)
-5. Returns demands (node names) + augmentations
+- `summary` (PlacementSummary)
+- `entries` (list[PlacementEntry] | None)
 
-Node names are used (not IDs) so expansion happens BEFORE graph building.
-IDs are resolved after graph is built with augmentations.
+### PlacementSummary
+
+Aggregated placement totals.
+
+**Attributes:**
+
+- `total_demand` (float)
+- `total_placed` (float)
+
+### place_demands(demands: "Sequence['ExpandedDemand']", volumes: 'Sequence[float]', flow_graph: 'netgraph_core.FlowGraph', ctx: "'AnalysisContext'", node_mask: 'np.ndarray', edge_mask: 'np.ndarray', *, resolved_ids: 'Sequence[tuple[int, int]] | None' = None, collect_entries: 'bool' = False, include_cost_distribution: 'bool' = False, include_used_edges: 'bool' = False) -> 'PlacementResult'
+
+Place demands on a flow graph with SPF caching.
 
 Args:
-    network: Network for node selection.
-    traffic_demands: High-level demand specifications.
-    default_policy_preset: Default policy if demand doesn't specify one.
+    demands: Expanded demands (policy_preset, priority, names).
+    volumes: Demand volumes (allows scaling without modifying demands).
+    flow_graph: Target FlowGraph.
+    ctx: AnalysisContext with graph infrastructure.
+    node_mask: Node inclusion mask.
+    edge_mask: Edge inclusion mask.
+    resolved_ids: Pre-resolved (src_id, dst_id) pairs. Computed if None.
+    collect_entries: If True, populate result.entries.
+    include_cost_distribution: Include cost distribution in entries.
+    include_used_edges: Include used edges in entries.
 
 Returns:
-    DemandExpansion with demands and augmentations.
-
-Raises:
-    ValueError: If no demands could be expanded or unsupported mode.
-
----
-
-## ngraph.exec.failure.manager
-
-FailureManager for Monte Carlo failure analysis.
-
-Provides the failure analysis engine for NetGraph. Supports parallel
-processing, graph caching, and failure policy handling for workflow steps
-and direct programmatic use.
-
-Performance characteristics:
-Time complexity: O(S + I × A / P), where S is one-time graph setup cost,
-I is iteration count, A is per-iteration analysis cost, and P is parallelism.
-Graph caching amortizes expensive graph construction across all iterations,
-and O(|excluded|) mask building replaces O(V+E) iteration.
-
-Space complexity: O(V + E + I × R), where V and E are node and link counts,
-and R is result size per iteration. The pre-built graph is shared across
-all iterations.
-
-Parallelism: The C++ Core backend releases the GIL during computation,
-enabling true parallelism with Python threads. With graph caching, most
-per-iteration work runs in GIL-free C++ code; speedup depends on workload
-and parallelism level.
-
-### AnalysisFunction
-
-Protocol for analysis functions used with FailureManager.
-
-Analysis functions should take a Network, exclusion sets, and any additional
-keyword arguments, returning analysis results of any type.
-
-### FailureManager
-
-Failure analysis engine with Monte Carlo capabilities.
-
-This is the component for failure analysis in NetGraph.
-Provides parallel processing, worker caching, and failure
-policy handling for workflow steps and direct notebook usage.
-
-The FailureManager can execute any analysis function that takes a Network
-with exclusion sets and returns results, making it generic for different
-types of failure analysis (capacity, traffic, connectivity, etc.).
-
-Attributes:
-    network: The underlying network (not modified during analysis).
-    failure_policy_set: Set of named failure policies.
-    policy_name: Name of specific failure policy to use.
-
-**Methods:**
-
-- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
-- `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
-- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
-- `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
+    PlacementResult with summary and optional entries.
 
 ---
 
@@ -3116,8 +3209,8 @@ Example:
 
 **Attributes:**
 
-- `to_ref` (Dict[int, EdgeRef]) = {}
-- `from_ref` (Dict[EdgeRef, List[int]]) = {}
+- `to_ref` (Dict[int, NxEdgeTuple]) = {}
+- `from_ref` (Dict[NxEdgeTuple, List[int]]) = {}
 
 ### NodeMap
 

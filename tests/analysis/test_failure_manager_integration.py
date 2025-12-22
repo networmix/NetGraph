@@ -2,8 +2,8 @@
 
 import pytest
 
-from ngraph.exec.analysis.flow import max_flow_analysis
-from ngraph.exec.failure.manager import FailureManager
+from ngraph.analysis.failure_manager import FailureManager
+from ngraph.analysis.functions import max_flow_analysis
 from ngraph.model.failure.policy import FailurePolicy, FailureRule
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network

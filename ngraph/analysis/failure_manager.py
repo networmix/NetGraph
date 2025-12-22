@@ -5,12 +5,12 @@ processing, graph caching, and failure policy handling for workflow steps
 and direct programmatic use.
 
 Performance characteristics:
-Time complexity: O(S + I × A / P), where S is one-time graph setup cost,
+Time complexity: O(S + I * A / P), where S is one-time graph setup cost,
 I is iteration count, A is per-iteration analysis cost, and P is parallelism.
 Graph caching amortizes expensive graph construction across all iterations,
 and O(|excluded|) mask building replaces O(V+E) iteration.
 
-Space complexity: O(V + E + I × R), where V and E are node and link counts,
+Space complexity: O(V + E + I * R), where V and E are node and link counts,
 and R is result size per iteration. The pre-built graph is shared across
 all iterations.
 
@@ -413,7 +413,7 @@ class FailureManager:
 
             if "demands_config" in analysis_kwargs:
                 # Demand placement analysis
-                from ngraph.exec.analysis.flow import build_demand_context
+                from ngraph.analysis.functions import build_demand_context
 
                 logger.debug("Pre-building context for demand placement analysis")
                 analysis_kwargs["context"] = build_demand_context(
@@ -423,7 +423,7 @@ class FailureManager:
 
             elif "source" in analysis_kwargs and "sink" in analysis_kwargs:
                 # Max-flow analysis or sensitivity analysis
-                from ngraph.exec.analysis.flow import build_maxflow_context
+                from ngraph.analysis.functions import build_maxflow_context
 
                 logger.debug("Pre-building context for max-flow analysis")
                 analysis_kwargs["context"] = build_maxflow_context(
@@ -806,7 +806,7 @@ class FailureManager:
               Each result has occurrence_count indicating how many iterations matched.
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.exec.analysis.flow import max_flow_analysis
+        from ngraph.analysis.functions import max_flow_analysis
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
@@ -922,7 +922,7 @@ class FailureManager:
               Each result has occurrence_count indicating how many iterations matched.
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.exec.analysis.flow import demand_placement_analysis
+        from ngraph.analysis.functions import demand_placement_analysis
 
         # If caller passed a sequence of TrafficDemand objects, convert to dicts
         if not isinstance(demands_config, list):
@@ -1010,7 +1010,7 @@ class FailureManager:
             - 'component_scores': aggregated statistics (mean, max, min, count) per component per flow
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.exec.analysis.flow import sensitivity_analysis
+        from ngraph.analysis.functions import sensitivity_analysis
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):

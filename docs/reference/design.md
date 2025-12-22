@@ -17,6 +17,7 @@ NetGraph is a network scenario analysis engine using a **hybrid Python+C++ archi
 - Workflow Engine: Composes steps into end-to-end analyses, storing outputs in a results store
 - Results Store: Collects outputs and metadata from each step, enabling structured JSON export
 - Analysis bridge: `AnalysisContext` builds Core graphs from the model, manages name/ID mapping, and executes Core algorithms
+- NetworkExplorer: Network hierarchy traversal and hardware cost/power aggregation
 
 **C++ Layer (NetGraph-Core):**
 
@@ -25,6 +26,24 @@ NetGraph is a network scenario analysis engine using a **hybrid Python+C++ archi
 - K-Shortest Paths: Yen's algorithm for finding k-shortest simple paths
 - Max-Flow: Successive shortest paths with blocking flow augmentation and configurable flow placement policies
 - Backend Interface: Abstraction for algorithm execution (CPU backend provided)
+
+### Package Structure
+
+```text
+ngraph/
+├── analysis/       # AnalysisContext, FailureManager, placement
+├── model/          # Network, Node, Link, demand/, failure/, flow/
+├── dsl/            # YAML parsing (blueprints/, selectors/, expansion/)
+├── workflow/       # WorkflowStep implementations
+├── results/        # Results store and flow result types
+├── types/          # Enums, DTOs, type aliases
+├── profiling/      # Performance profiling
+├── lib/            # NetworkX integration
+├── utils/          # Utilities (ids, yaml, seeds)
+├── scenario.py     # Scenario orchestrator
+├── explorer.py     # NetworkExplorer
+└── cli.py          # Command-line interface
+```
 
 ### Integration Points
 
@@ -681,7 +700,7 @@ Practical performance is significantly better than worst-case bounds due to earl
 
 Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 
-**Demand Expansion** (`ngraph.exec.demand.builder`): Builds traffic matrix sets from DSL definitions, expanding source/sink patterns into concrete node groups.
+**Demand Expansion** (`ngraph.model.demand.builder`): Builds traffic matrix sets from DSL definitions, expanding source/sink patterns into concrete node groups.
 
 - Deterministic expansion: source/sink node lists sorted alphabetically; no randomization
 - Supports `combine` mode (aggregate via pseudo nodes) and `pairwise` mode (individual (src,dst) pairs with volume split)
@@ -689,7 +708,7 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Placement uses SPF caching for simple policies (ECMP, WCMP, TE_WCMP_UNLIM), FlowPolicy for complex multi-flow policies
 - Non-mutating: operates on Core flow graphs with exclusions; Network remains unmodified
 
-**Failure Manager** (`ngraph.exec.failure.manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
+**Failure Manager** (`ngraph.analysis.failure_manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
 
 - Parallel execution via `ThreadPoolExecutor` with zero-copy network sharing across worker threads
 - Deterministic results when seed is provided (each iteration derives `seed + iteration_index`)
@@ -771,13 +790,14 @@ This optimization is critical for performance: graph construction involves Pytho
 
 **SPF Caching for Demand Placement:**
 
-For demand placement with cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are cached by (source_node, policy_preset):
+Both TrafficMatrixPlacement and MaximumSupportedDemand (MSD) use a unified placement function (`place_demands()` in `ngraph.analysis.placement`) with SPF caching for cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM):
 
 - Initial SPF computed once per unique source; subsequent demands from the same source reuse the cached DAG
 - For TE policies, DAG is recomputed when capacity constraints require alternate paths
 - Complex multi-flow policies (TE_ECMP_16_LSP, TE_ECMP_UP_TO_256_LSP) use FlowPolicy directly
+- MSD additionally pre-resolves node IDs once at cache build time and reuses them across all alpha probes
 
-This reduces SPF computations from O(demands) to O(unique_sources) for workloads where many demands share the same source nodes.
+This reduces SPF computations from O(demands) to O(unique_sources) for workloads where many demands share the same source nodes. For MSD, the optimization is particularly significant since it evaluates many alpha values during binary search.
 
 **Monte Carlo Deduplication:**
 

@@ -1,8 +1,8 @@
-"""Tests for analysis.flow module."""
+"""Tests for analysis.functions module."""
 
 import pytest
 
-from ngraph.exec.analysis.flow import (
+from ngraph.analysis.functions import (
     demand_placement_analysis,
     max_flow_analysis,
     sensitivity_analysis,
@@ -217,7 +217,7 @@ class TestDemandPlacementWithContextCaching:
 
     def test_context_caching_pairwise_mode(self, diamond_network: Network) -> None:
         """Context caching works with pairwise mode."""
-        from ngraph.exec.analysis.flow import build_demand_context
+        from ngraph.analysis.functions import build_demand_context
 
         demands_config = [
             {
@@ -246,7 +246,7 @@ class TestDemandPlacementWithContextCaching:
 
     def test_context_caching_combine_mode(self, diamond_network: Network) -> None:
         """Context caching works with combine mode (uses pseudo nodes)."""
-        from ngraph.exec.analysis.flow import build_demand_context
+        from ngraph.analysis.functions import build_demand_context
 
         demands_config = [
             {
@@ -277,7 +277,7 @@ class TestDemandPlacementWithContextCaching:
         self, diamond_network: Network
     ) -> None:
         """Context can be reused for multiple analysis iterations."""
-        from ngraph.exec.analysis.flow import build_demand_context
+        from ngraph.analysis.functions import build_demand_context
 
         demands_config = [
             {
@@ -304,7 +304,7 @@ class TestDemandPlacementWithContextCaching:
 
     def test_context_caching_without_id_raises(self, diamond_network: Network) -> None:
         """Context caching without stable ID raises KeyError for combine mode."""
-        from ngraph.exec.analysis.flow import build_demand_context
+        from ngraph.analysis.functions import build_demand_context
 
         # Config without explicit ID - each reconstruction generates new ID
         demands_config = [
@@ -319,8 +319,8 @@ class TestDemandPlacementWithContextCaching:
         # Build context - creates pseudo nodes with auto-generated ID (uuid1)
         ctx = build_demand_context(diamond_network, demands_config)
 
-        # Analysis reconstructs TrafficDemand without ID → generates new ID (uuid2)
-        # Tries to find pseudo nodes _src_...|uuid2 which don't exist → KeyError
+        # Analysis reconstructs TrafficDemand without ID -> generates new ID (uuid2)
+        # Tries to find pseudo nodes _src_...|uuid2 which don't exist -> KeyError
         with pytest.raises(KeyError):
             demand_placement_analysis(
                 network=diamond_network,

@@ -80,8 +80,9 @@ class NodeMap:
         return len(self.to_index)
 
 
-# Type alias for edge references: (source_node, target_node, edge_key)
-EdgeRef = Tuple[Hashable, Hashable, Any]
+# Type alias for NetworkX edge references: (source_node, target_node, edge_key)
+# Named NxEdgeTuple to avoid confusion with ngraph.types.dto.EdgeRef dataclass
+NxEdgeTuple = Tuple[Hashable, Hashable, Any]
 
 
 @dataclass
@@ -106,8 +107,8 @@ class EdgeMap:
         ...         G.edges[u, v, key]["flow"] = flow
     """
 
-    to_ref: Dict[int, EdgeRef] = field(default_factory=dict)
-    from_ref: Dict[EdgeRef, List[int]] = field(default_factory=dict)
+    to_ref: Dict[int, NxEdgeTuple] = field(default_factory=dict)
+    from_ref: Dict[NxEdgeTuple, List[int]] = field(default_factory=dict)
 
     def __len__(self) -> int:
         """Return the number of edge mappings."""
@@ -183,8 +184,8 @@ def from_networkx(
     cost_list: List[int] = []
     ext_id_list: List[int] = []
 
-    edge_to_ref: Dict[int, EdgeRef] = {}
-    ref_to_edges: Dict[EdgeRef, List[int]] = {}
+    edge_to_ref: Dict[int, NxEdgeTuple] = {}
+    ref_to_edges: Dict[NxEdgeTuple, List[int]] = {}
 
     edge_id = 0
     is_multigraph = isinstance(G, (nx.MultiDiGraph, nx.MultiGraph))
@@ -200,7 +201,7 @@ def from_networkx(
         dst_idx = node_map.to_index[v]
         cap = float(data.get(capacity_attr, default_capacity))
         cst = int(data.get(cost_attr, default_cost))
-        edge_ref: EdgeRef = (u, v, key)
+        edge_ref: NxEdgeTuple = (u, v, key)
 
         # Forward edge
         src_list.append(src_idx)

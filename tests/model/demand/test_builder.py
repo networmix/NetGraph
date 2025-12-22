@@ -2,7 +2,7 @@
 
 import pytest
 
-from ngraph.exec.demand.builder import (
+from ngraph.model.demand.builder import (
     _coerce_flow_policy_config,
     build_traffic_matrix_set,
 )

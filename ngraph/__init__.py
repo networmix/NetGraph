@@ -33,13 +33,17 @@ from __future__ import annotations
 from ngraph import cli, logging
 from ngraph._version import __version__
 from ngraph.analysis import AnalysisContext, analyze
-from ngraph.exec.failure.manager import FailureManager
+from ngraph.analysis.failure_manager import FailureManager
+from ngraph.explorer import NetworkExplorer
 from ngraph.lib.nx import EdgeMap, NodeMap, from_networkx, to_networkx
 from ngraph.model.demand.matrix import TrafficMatrixSet
+from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node, RiskGroup
 from ngraph.model.path import Path
 from ngraph.results.artifacts import CapacityEnvelope
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
+from ngraph.scenario import Scenario
 from ngraph.types.base import EdgeSelect, FlowPlacement, Mode
 from ngraph.types.dto import EdgeRef, MaxFlowResult
 
@@ -53,6 +57,9 @@ __all__ = [
     "RiskGroup",
     "Path",
     "TrafficMatrixSet",
+    "TrafficDemand",
+    "FlowPolicyPreset",
+    "Scenario",
     # Analysis (primary API)
     "analyze",
     "AnalysisContext",
@@ -69,6 +76,7 @@ __all__ = [
     "CapacityEnvelope",
     # Execution
     "FailureManager",
+    "NetworkExplorer",
     # Library integrations (NetworkX)
     "EdgeMap",
     "NodeMap",

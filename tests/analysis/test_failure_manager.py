@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ngraph.exec.failure.manager import FailureManager
+from ngraph.analysis.failure_manager import FailureManager
 from ngraph.model.failure.policy import (
     FailureCondition,
     FailureMode,
@@ -273,7 +273,7 @@ class TestFailureManagerMonteCarloValidation:
 class TestFailureManagerConvenienceMethods:
     """Test convenience methods for specific analysis types."""
 
-    @patch("ngraph.exec.failure.manager.FailureManager.run_monte_carlo_analysis")
+    @patch("ngraph.analysis.failure_manager.FailureManager.run_monte_carlo_analysis")
     def test_run_max_flow_monte_carlo_delegates(
         self, mock_mc_analysis: MagicMock, failure_manager: FailureManager
     ) -> None:
@@ -294,7 +294,7 @@ class TestFailureManagerConvenienceMethods:
         assert mock_mc_analysis.called
         assert result == mock_mc_analysis.return_value
 
-    @patch("ngraph.exec.failure.manager.FailureManager.run_monte_carlo_analysis")
+    @patch("ngraph.analysis.failure_manager.FailureManager.run_monte_carlo_analysis")
     def test_run_demand_placement_monte_carlo_delegates(
         self, mock_mc_analysis: MagicMock, failure_manager: FailureManager
     ) -> None:
@@ -370,7 +370,7 @@ class TestFailureManagerConvenienceMethods:
 class TestFailureManagerErrorHandling:
     """Test error handling and edge cases."""
 
-    @patch("ngraph.exec.failure.manager.ThreadPoolExecutor")
+    @patch("ngraph.analysis.failure_manager.ThreadPoolExecutor")
     def test_parallel_execution_error_propagation(
         self, mock_pool_executor: MagicMock, failure_manager: FailureManager
     ) -> None:

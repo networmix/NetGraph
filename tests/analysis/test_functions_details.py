@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ngraph.exec.analysis.flow import demand_placement_analysis
+from ngraph.analysis.functions import demand_placement_analysis
 from ngraph.model.network import Link, Network, Node
 
 

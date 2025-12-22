@@ -2,7 +2,7 @@
 
 import pytest
 
-from ngraph.exec.demand.expand import expand_demands
+from ngraph.analysis.demand import expand_demands
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.network import Link, Network, Node
 

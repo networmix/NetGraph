@@ -1,4 +1,4 @@
-"""Tests for SPF caching in demand_placement_analysis.
+"""Tests for SPF caching in demand placement.
 
 This module tests the SPF caching optimization that reduces redundant shortest
 path computations when placing demands from the same source nodes.
@@ -10,13 +10,11 @@ from typing import Any
 
 import pytest
 
-from ngraph.exec.analysis.flow import (
-    _CACHEABLE_PRESETS,
-    _CACHEABLE_SIMPLE,
-    _CACHEABLE_TE,
-    _get_placement_for_preset,
-    _get_selection_for_preset,
-    demand_placement_analysis,
+from ngraph.analysis.functions import demand_placement_analysis
+from ngraph.analysis.placement import (
+    CACHEABLE_PRESETS,
+    _get_edge_selection,
+    _get_flow_placement,
 )
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node
@@ -28,73 +26,57 @@ class TestHelperFunctions:
 
     def test_get_selection_for_ecmp(self) -> None:
         """Test EdgeSelection for ECMP preset."""
-        selection = _get_selection_for_preset(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+        selection = _get_edge_selection(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
         assert selection.multi_edge is True
         assert selection.require_capacity is False
 
     def test_get_selection_for_wcmp(self) -> None:
         """Test EdgeSelection for WCMP preset."""
-        selection = _get_selection_for_preset(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
+        selection = _get_edge_selection(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
         assert selection.multi_edge is True
         assert selection.require_capacity is False
 
     def test_get_selection_for_te_wcmp_unlim(self) -> None:
         """Test EdgeSelection for TE_WCMP_UNLIM preset."""
-        selection = _get_selection_for_preset(FlowPolicyPreset.TE_WCMP_UNLIM)
+        selection = _get_edge_selection(FlowPolicyPreset.TE_WCMP_UNLIM)
         assert selection.multi_edge is True
         assert selection.require_capacity is True
-
-    def test_get_selection_for_invalid_preset(self) -> None:
-        """Test that invalid preset raises ValueError."""
-        with pytest.raises(ValueError, match="not cacheable"):
-            _get_selection_for_preset(FlowPolicyPreset.TE_ECMP_16_LSP)
 
     def test_get_placement_for_ecmp(self) -> None:
         """Test FlowPlacement for ECMP preset."""
         import netgraph_core
 
-        placement = _get_placement_for_preset(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+        placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
         assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED
 
     def test_get_placement_for_wcmp(self) -> None:
         """Test FlowPlacement for WCMP preset."""
         import netgraph_core
 
-        placement = _get_placement_for_preset(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
+        placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
         assert placement == netgraph_core.FlowPlacement.PROPORTIONAL
 
     def test_get_placement_for_te_wcmp_unlim(self) -> None:
         """Test FlowPlacement for TE_WCMP_UNLIM preset."""
         import netgraph_core
 
-        placement = _get_placement_for_preset(FlowPolicyPreset.TE_WCMP_UNLIM)
+        placement = _get_flow_placement(FlowPolicyPreset.TE_WCMP_UNLIM)
         assert placement == netgraph_core.FlowPlacement.PROPORTIONAL
 
 
 class TestCacheablePresets:
     """Test that cacheable preset sets are correctly defined."""
 
-    def test_cacheable_simple_presets(self) -> None:
-        """Test that simple cacheable presets are defined correctly."""
-        assert FlowPolicyPreset.SHORTEST_PATHS_ECMP in _CACHEABLE_SIMPLE
-        assert FlowPolicyPreset.SHORTEST_PATHS_WCMP in _CACHEABLE_SIMPLE
-        # TE policies should not be in simple set
-        assert FlowPolicyPreset.TE_WCMP_UNLIM not in _CACHEABLE_SIMPLE
-
-    def test_cacheable_te_presets(self) -> None:
-        """Test that TE cacheable presets are defined correctly."""
-        assert FlowPolicyPreset.TE_WCMP_UNLIM in _CACHEABLE_TE
-        # Simple policies should not be in TE set
-        assert FlowPolicyPreset.SHORTEST_PATHS_ECMP not in _CACHEABLE_TE
-
-    def test_cacheable_presets_is_union(self) -> None:
-        """Test that _CACHEABLE_PRESETS is the union of simple and TE."""
-        assert _CACHEABLE_PRESETS == _CACHEABLE_SIMPLE | _CACHEABLE_TE
+    def test_cacheable_presets_contains_expected(self) -> None:
+        """Test that cacheable presets contain expected policies."""
+        assert FlowPolicyPreset.SHORTEST_PATHS_ECMP in CACHEABLE_PRESETS
+        assert FlowPolicyPreset.SHORTEST_PATHS_WCMP in CACHEABLE_PRESETS
+        assert FlowPolicyPreset.TE_WCMP_UNLIM in CACHEABLE_PRESETS
 
     def test_lsp_policies_not_cacheable(self) -> None:
         """Test that LSP policies are not in cacheable set."""
-        assert FlowPolicyPreset.TE_ECMP_16_LSP not in _CACHEABLE_PRESETS
-        assert FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP not in _CACHEABLE_PRESETS
+        assert FlowPolicyPreset.TE_ECMP_16_LSP not in CACHEABLE_PRESETS
+        assert FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP not in CACHEABLE_PRESETS
 
 
 class TestSPFCachingBasic:
@@ -277,7 +259,7 @@ class TestSPFCachingEquivalence:
         import netgraph_core
 
         from ngraph.analysis import AnalysisContext
-        from ngraph.exec.demand.expand import expand_demands
+        from ngraph.analysis.demand import expand_demands
         from ngraph.model.demand.spec import TrafficDemand
         from ngraph.model.flow.policy_config import (
             FlowPolicyPreset,

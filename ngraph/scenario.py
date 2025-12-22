@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.loader import load_scenario_yaml
-from ngraph.exec.demand.builder import build_traffic_matrix_set
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
+from ngraph.model.demand.builder import build_traffic_matrix_set
 from ngraph.model.demand.matrix import TrafficMatrixSet
 from ngraph.model.failure.generate import generate_risk_groups, parse_generate_spec
 from ngraph.model.failure.membership import resolve_membership_rules
@@ -73,6 +73,10 @@ class Scenario:
         Each step may modify scenario data or store outputs
         in scenario.results.
         """
+        # Reset execution counter to ensure step ordering is local to this run
+        import ngraph.workflow.base as workflow_base
+
+        workflow_base._execution_counter = 0
         for step in self.workflow:
             step.execute(self)
 

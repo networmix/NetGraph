@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ngraph.exec.failure.manager import FailureManager
+from ngraph.analysis.failure_manager import FailureManager
 from ngraph.logging import get_logger
 from ngraph.results.flow import FlowIterationResult
 from ngraph.workflow.base import (

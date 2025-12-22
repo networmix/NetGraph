@@ -55,7 +55,7 @@ The core components that form the foundation of most NetGraph programs.
 
 ```python
 from pathlib import Path
-from ngraph.scenario import Scenario
+from ngraph import Scenario
 
 # Load complete scenario from YAML text
 yaml_text = Path("scenarios/square_mesh.yaml").read_text()
