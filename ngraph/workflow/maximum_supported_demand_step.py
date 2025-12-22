@@ -21,10 +21,11 @@ from typing import TYPE_CHECKING, Any
 import netgraph_core
 import numpy as np
 
-from ngraph.exec.demand.expand import ExpandedDemand, expand_demands
+from ngraph.analysis.demand import ExpandedDemand, expand_demands
+from ngraph.analysis.placement import place_demands
 from ngraph.logging import get_logger
 from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -42,12 +43,14 @@ class _MSDCache:
         node_mask: Pre-built node mask (no exclusions during MSD).
         edge_mask: Pre-built edge mask (no exclusions during MSD).
         base_expanded: Expanded demands with base volumes.
+        resolved_ids: Pre-resolved (src_id, dst_id) pairs.
     """
 
     ctx: "AnalysisContext"
     node_mask: np.ndarray
     edge_mask: np.ndarray
     base_expanded: list[ExpandedDemand]
+    resolved_ids: list[tuple[int, int]]
 
 
 @dataclass
@@ -271,11 +274,18 @@ class MaximumSupportedDemand(WorkflowStep):
         node_mask = ctx._build_node_mask(excluded_nodes=None)
         edge_mask = ctx._build_edge_mask(excluded_links=None)
 
+        # Pre-resolve node IDs once
+        resolved_ids = [
+            (ctx.node_mapper.to_id(d.src_name), ctx.node_mapper.to_id(d.dst_name))
+            for d in expansion.demands
+        ]
+
         return _MSDCache(
             ctx=ctx,
             node_mask=node_mask,
             edge_mask=edge_mask,
             base_expanded=expansion.demands,
+            resolved_ids=resolved_ids,
         )
 
     @staticmethod
@@ -289,51 +299,34 @@ class MaximumSupportedDemand(WorkflowStep):
         Uses pre-built cache; only scales demand volumes by alpha.
         """
         ctx = cache.ctx
-        node_mask = cache.node_mask
-        edge_mask = cache.edge_mask
-
         decisions: list[bool] = []
         min_ratios: list[float] = []
 
+        # Pre-compute scaled volumes once per alpha
+        volumes = [d.volume * alpha for d in cache.base_expanded]
+
         for _ in range(max(1, int(seeds))):
             flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
-            total_demand = 0.0
-            total_placed = 0.0
 
-            for base_demand in cache.base_expanded:
-                scaled_volume = base_demand.volume * alpha
-                src_id = ctx.node_mapper.to_id(base_demand.src_name)
-                dst_id = ctx.node_mapper.to_id(base_demand.dst_name)
+            result = place_demands(
+                cache.base_expanded,
+                volumes,
+                flow_graph,
+                ctx,
+                cache.node_mask,
+                cache.edge_mask,
+                resolved_ids=cache.resolved_ids,
+                collect_entries=False,
+            )
 
-                policy = create_flow_policy(
-                    ctx.algorithms,
-                    ctx.handle,
-                    base_demand.policy_preset,
-                    node_mask=node_mask,
-                    edge_mask=edge_mask,
-                )
-
-                placed, _ = policy.place_demand(
-                    flow_graph,
-                    src_id,
-                    dst_id,
-                    base_demand.priority,
-                    scaled_volume,
-                )
-
-                total_demand += scaled_volume
-                total_placed += placed
-
-            if total_demand == 0.0:
+            if result.summary.total_demand == 0.0:
                 raise ValueError(
                     f"Cannot evaluate feasibility for alpha={alpha:.6g}: "
                     "total demand is zero."
                 )
 
-            ratio = total_placed / total_demand
-            is_feasible = ratio >= 1.0 - 1e-12
-            decisions.append(is_feasible)
-            min_ratios.append(ratio)
+            decisions.append(result.summary.is_feasible)
+            min_ratios.append(result.summary.ratio)
 
         yes = sum(1 for d in decisions if d)
         required = (len(decisions) // 2) + 1

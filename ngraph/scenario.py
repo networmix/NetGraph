@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.loader import load_scenario_yaml
-from ngraph.exec.demand.builder import build_traffic_matrix_set
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
+from ngraph.model.demand.builder import build_traffic_matrix_set
 from ngraph.model.demand.matrix import TrafficMatrixSet
 from ngraph.model.failure.generate import generate_risk_groups, parse_generate_spec
 from ngraph.model.failure.membership import resolve_membership_rules
@@ -54,6 +54,8 @@ class Scenario:
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
     seed: Optional[int] = None
+    # Per-instance execution counter for thread-safe step ordering
+    _execution_counter: int = field(default=0, init=False, repr=False)
 
     # Module-level logger
     _logger = get_logger(__name__)
@@ -73,6 +75,8 @@ class Scenario:
         Each step may modify scenario data or store outputs
         in scenario.results.
         """
+        # Reset instance execution counter for this run
+        self._execution_counter = 0
         for step in self.workflow:
             step.execute(self)
 

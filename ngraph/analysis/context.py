@@ -1719,3 +1719,54 @@ def build_edge_mask(
         Boolean numpy array of shape (num_edges,) where True means included.
     """
     return ctx._build_edge_mask(excluded_links)
+
+
+def analyze(
+    network: "Network",
+    *,
+    source: Optional[Union[str, Dict[str, Any]]] = None,
+    sink: Optional[Union[str, Dict[str, Any]]] = None,
+    mode: Mode = Mode.COMBINE,
+    augmentations: Optional[List[AugmentationEdge]] = None,
+) -> AnalysisContext:
+    """Create an analysis context for the network.
+
+    This is THE primary entry point for network analysis in NetGraph.
+
+    Args:
+        network: Network topology to analyze.
+        source: Optional source node selector (string path or selector dict).
+                If provided with sink, creates bound context with pre-built
+                pseudo-nodes for efficient repeated flow analysis.
+        sink: Optional sink node selector (string path or selector dict).
+        mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
+        augmentations: Optional custom augmentation edges.
+
+    Returns:
+        AnalysisContext ready for analysis calls.
+
+    Examples:
+        One-off analysis (unbound context):
+
+            flow = analyze(network).max_flow("^A$", "^B$")
+            paths = analyze(network).shortest_paths("^A$", "^B$")
+
+        Efficient repeated analysis (bound context):
+
+            ctx = analyze(network, source="^dc/", sink="^edge/")
+            baseline = ctx.max_flow()
+            degraded = ctx.max_flow(excluded_links=failed_links)
+
+        Multiple exclusion scenarios:
+
+            ctx = analyze(network, source="^A$", sink="^B$")
+            for scenario in failure_scenarios:
+                result = ctx.max_flow(excluded_links=scenario)
+    """
+    return AnalysisContext.from_network(
+        network,
+        source=source,
+        sink=sink,
+        mode=mode,
+        augmentations=augmentations,
+    )

@@ -2,7 +2,7 @@
 
 import pytest
 
-from ngraph.exec.failure.manager import FailureManager
+from ngraph.analysis.failure_manager import FailureManager
 from ngraph.model.failure.policy import (
     FailureCondition,
     FailureMode,

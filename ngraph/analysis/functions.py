@@ -17,16 +17,15 @@ sharing the same sources, this can reduce SPF computations by an order of magnit
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional, Set
 
 import netgraph_core
-import numpy as np
 
-from ngraph.analysis import AnalysisContext, analyze
-from ngraph.exec.demand.expand import ExpandedDemand, expand_demands
+from ngraph.analysis.context import AnalysisContext, analyze
+from ngraph.analysis.demand import expand_demands
+from ngraph.analysis.placement import place_demands
 from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.types.base import FlowPlacement, Mode
 
@@ -61,257 +60,6 @@ def _reconstruct_traffic_demands(
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
-
-# Minimum flow threshold for placement decisions
-_MIN_FLOW = 1e-9
-
-# Policies that support SPF caching with simple single-flow placement
-_CACHEABLE_SIMPLE: frozenset[FlowPolicyPreset] = frozenset(
-    {
-        FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-        FlowPolicyPreset.SHORTEST_PATHS_WCMP,
-    }
-)
-
-# Policies that support SPF caching with fallback for capacity-aware routing
-_CACHEABLE_TE: frozenset[FlowPolicyPreset] = frozenset(
-    {
-        FlowPolicyPreset.TE_WCMP_UNLIM,
-    }
-)
-
-# All cacheable policies
-_CACHEABLE_PRESETS: frozenset[FlowPolicyPreset] = _CACHEABLE_SIMPLE | _CACHEABLE_TE
-
-
-def _get_selection_for_preset(
-    preset: FlowPolicyPreset,
-) -> netgraph_core.EdgeSelection:
-    """Get EdgeSelection configuration for a cacheable policy preset.
-
-    Args:
-        preset: Flow policy preset.
-
-    Returns:
-        EdgeSelection configured for the preset.
-
-    Raises:
-        ValueError: If preset is not cacheable.
-    """
-    if preset in _CACHEABLE_SIMPLE:
-        return netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=False,
-            tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
-        )
-    elif preset == FlowPolicyPreset.TE_WCMP_UNLIM:
-        return netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-    raise ValueError(f"Preset {preset} is not cacheable")
-
-
-def _get_placement_for_preset(preset: FlowPolicyPreset) -> netgraph_core.FlowPlacement:
-    """Get FlowPlacement strategy for a cacheable policy preset.
-
-    Args:
-        preset: Flow policy preset.
-
-    Returns:
-        FlowPlacement strategy for the preset.
-    """
-    if preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP:
-        return netgraph_core.FlowPlacement.EQUAL_BALANCED
-    # WCMP and TE policies use PROPORTIONAL
-    return netgraph_core.FlowPlacement.PROPORTIONAL
-
-
-@dataclass
-class _CachedPlacementResult:
-    """Result of placing a demand using cached SPF."""
-
-    total_placed: float
-    next_flow_idx: int
-    cost_distribution: dict[float, float]
-    used_edges: set[str]
-    flow_indices: list[netgraph_core.FlowIndex] = field(default_factory=list)
-
-
-def _place_demand_cached(
-    demand: ExpandedDemand,
-    src_id: int,
-    dst_id: int,
-    dag_cache: dict[tuple[int, FlowPolicyPreset], tuple[np.ndarray, Any]],
-    algorithms: netgraph_core.Algorithms,
-    handle: netgraph_core.Graph,
-    flow_graph: netgraph_core.FlowGraph,
-    node_mask: np.ndarray,
-    edge_mask: np.ndarray,
-    flow_idx_start: int,
-    include_flow_details: bool,
-    include_used_edges: bool,
-    edge_mapper: Any,
-    multidigraph: netgraph_core.StrictMultiDiGraph,
-) -> _CachedPlacementResult:
-    """Place a demand using cached SPF DAG with fallback for TE policies.
-
-    This function implements SPF caching to reduce redundant shortest path
-    computations. For demands sharing the same source node and policy preset,
-    the SPF result is computed once and reused.
-
-    For simple policies (ECMP/WCMP), the cached DAG is always valid.
-    For TE policies, the DAG may become stale as edges saturate. In this case,
-    a fallback loop recomputes SPF with current residuals until the demand is
-    placed or no more progress can be made.
-
-    Args:
-        demand: Expanded demand to place.
-        src_id: Source node ID.
-        dst_id: Destination node ID.
-        dag_cache: Cache mapping (src_id, preset) to (distances, DAG).
-        algorithms: Core Algorithms instance.
-        handle: Core Graph handle.
-        flow_graph: FlowGraph for placement.
-        node_mask: Node inclusion mask.
-        edge_mask: Edge inclusion mask.
-        flow_idx_start: Starting flow index counter.
-        include_flow_details: Whether to collect cost distribution.
-        include_used_edges: Whether to collect used edges.
-        edge_mapper: Edge ID mapper for edge name resolution.
-        multidigraph: Graph for edge lookup.
-
-    Returns:
-        _CachedPlacementResult with placement details.
-    """
-    cache_key = (src_id, demand.policy_preset)
-    selection = _get_selection_for_preset(demand.policy_preset)
-    placement = _get_placement_for_preset(demand.policy_preset)
-    is_te = demand.policy_preset in _CACHEABLE_TE
-
-    flow_indices: list[netgraph_core.FlowIndex] = []
-    flow_costs: list[tuple[float, float]] = []  # (cost, placed_amount)
-    flow_idx_counter = flow_idx_start
-    demand_placed = 0.0
-    remaining = demand.volume
-
-    # Get or compute initial DAG
-    if cache_key not in dag_cache:
-        # Initial computation without residual - on a fresh graph all edges
-        # have full capacity, so residual-aware selection is not needed yet
-        dists, dag = algorithms.spf(
-            handle,
-            src=src_id,
-            dst=None,  # Full DAG to all destinations
-            selection=selection,
-            node_mask=node_mask,
-            edge_mask=edge_mask,
-            multipath=True,
-            dtype="float64",
-        )
-        dag_cache[cache_key] = (dists, dag)
-
-    dists, dag = dag_cache[cache_key]
-
-    # Check if destination is reachable
-    if dists[dst_id] == float("inf"):
-        # Destination unreachable - return zero placement
-        return _CachedPlacementResult(
-            total_placed=0.0,
-            next_flow_idx=flow_idx_counter,
-            cost_distribution={},
-            used_edges=set(),
-            flow_indices=[],
-        )
-
-    cost = float(dists[dst_id])
-
-    # First placement attempt with cached DAG
-    flow_idx = netgraph_core.FlowIndex(
-        src_id, dst_id, demand.priority, flow_idx_counter
-    )
-    flow_idx_counter += 1
-    placed = flow_graph.place(flow_idx, src_id, dst_id, dag, remaining, placement)
-
-    if placed > _MIN_FLOW:
-        flow_indices.append(flow_idx)
-        flow_costs.append((cost, placed))
-        demand_placed += placed
-        remaining -= placed
-
-    # For TE policies, use fallback loop if partial placement
-    if is_te and remaining > _MIN_FLOW:
-        max_fallback_iterations = 100
-        iterations = 0
-
-        while remaining > _MIN_FLOW and iterations < max_fallback_iterations:
-            iterations += 1
-
-            # Recompute DAG with current residuals
-            residual = np.ascontiguousarray(
-                flow_graph.residual_view(), dtype=np.float64
-            )
-            fresh_dists, fresh_dag = algorithms.spf(
-                handle,
-                src=src_id,
-                dst=None,
-                selection=selection,
-                residual=residual,
-                node_mask=node_mask,
-                edge_mask=edge_mask,
-                multipath=True,
-                dtype="float64",
-            )
-
-            # Update cache with fresh DAG
-            dag_cache[cache_key] = (fresh_dists, fresh_dag)
-
-            # Check if destination still reachable
-            if fresh_dists[dst_id] == float("inf"):
-                break  # No more paths available
-
-            fresh_cost = float(fresh_dists[dst_id])
-
-            flow_idx = netgraph_core.FlowIndex(
-                src_id, dst_id, demand.priority, flow_idx_counter
-            )
-            flow_idx_counter += 1
-            additional = flow_graph.place(
-                flow_idx, src_id, dst_id, fresh_dag, remaining, placement
-            )
-
-            if additional < _MIN_FLOW:
-                break  # No progress, stop
-
-            flow_indices.append(flow_idx)
-            flow_costs.append((fresh_cost, additional))
-            demand_placed += additional
-            remaining -= additional
-
-    # Collect cost distribution if requested
-    cost_distribution: dict[float, float] = {}
-    if include_flow_details:
-        for c, amount in flow_costs:
-            cost_distribution[c] = cost_distribution.get(c, 0.0) + amount
-
-    # Collect used edges if requested
-    used_edges: set[str] = set()
-    if include_used_edges:
-        for fidx in flow_indices:
-            edges = flow_graph.get_flow_edges(fidx)
-            for edge_id, _ in edges:
-                edge_ref = edge_mapper.to_ref(edge_id, multidigraph)
-                if edge_ref is not None:
-                    used_edges.add(f"{edge_ref.link_id}:{edge_ref.direction}")
-
-    return _CachedPlacementResult(
-        total_placed=demand_placed,
-        next_flow_idx=flow_idx_counter,
-        cost_distribution=cost_distribution,
-        used_edges=used_edges,
-        flow_indices=flow_indices,
-    )
 
 
 def max_flow_analysis(
@@ -492,135 +240,52 @@ def demand_placement_analysis(
             network, augmentations=expansion.augmentations
         )
 
-    # Extract infrastructure from context
-    handle = ctx.handle
-    multidigraph = ctx.multidigraph
-    node_mapper = ctx.node_mapper
-    edge_mapper = ctx.edge_mapper
-    algorithms = ctx.algorithms
     node_mask = ctx._build_node_mask(excluded_nodes)
     edge_mask = ctx._build_edge_mask(excluded_links)
+    flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
 
-    flow_graph = netgraph_core.FlowGraph(multidigraph)
+    # Phase 3: Place demands using unified placement module
+    result = place_demands(
+        expansion.demands,
+        [d.volume for d in expansion.demands],
+        flow_graph,
+        ctx,
+        node_mask,
+        edge_mask,
+        collect_entries=True,
+        include_cost_distribution=include_flow_details,
+        include_used_edges=include_used_edges,
+    )
 
-    # Phase 3: Place demands with SPF caching for cacheable policies
-    flow_entries: list[FlowEntry] = []
-    total_demand = 0.0
-    total_placed = 0.0
-
-    # SPF cache: (src_id, policy_preset) -> (distances, DAG)
-    dag_cache: dict[tuple[int, FlowPolicyPreset], tuple[np.ndarray, Any]] = {}
-    flow_idx_counter = 0
-
-    for demand in expansion.demands:
-        # Resolve node names to IDs (includes pseudo nodes from augmentations)
-        src_id = node_mapper.to_id(demand.src_name)
-        dst_id = node_mapper.to_id(demand.dst_name)
-
-        # Use cached placement for cacheable policies, FlowPolicy for others
-        if demand.policy_preset in _CACHEABLE_PRESETS:
-            result = _place_demand_cached(
-                demand=demand,
-                src_id=src_id,
-                dst_id=dst_id,
-                dag_cache=dag_cache,
-                algorithms=algorithms,
-                handle=handle,
-                flow_graph=flow_graph,
-                node_mask=node_mask,
-                edge_mask=edge_mask,
-                flow_idx_start=flow_idx_counter,
-                include_flow_details=include_flow_details,
-                include_used_edges=include_used_edges,
-                edge_mapper=edge_mapper,
-                multidigraph=multidigraph,
-            )
-            flow_idx_counter = result.next_flow_idx
-            placed = result.total_placed
-            cost_distribution = result.cost_distribution
-            used_edges = result.used_edges
-        else:
-            # Complex policies (multi-flow LSP variants): use FlowPolicy
-            policy = create_flow_policy(
-                algorithms,
-                handle,
-                demand.policy_preset,
-                node_mask=node_mask,
-                edge_mask=edge_mask,
-            )
-
-            placed, flow_count = policy.place_demand(
-                flow_graph,
-                src_id,
-                dst_id,
-                demand.priority,
-                demand.volume,
-            )
-
-            # Collect flow details if requested
-            cost_distribution = {}
-            used_edges = set()
-
-            if include_flow_details or include_used_edges:
-                flows_dict = policy.flows
-                for flow_key, flow_data in flows_dict.items():
-                    if include_flow_details:
-                        cost = float(flow_data[2])
-                        flow_vol = float(flow_data[3])
-                        if flow_vol > 0:
-                            cost_distribution[cost] = (
-                                cost_distribution.get(cost, 0.0) + flow_vol
-                            )
-
-                    if include_used_edges:
-                        flow_idx = netgraph_core.FlowIndex(
-                            flow_key[0], flow_key[1], flow_key[2], flow_key[3]
-                        )
-                        edges = flow_graph.get_flow_edges(flow_idx)
-                        for edge_id, _ in edges:
-                            edge_ref = edge_mapper.to_ref(edge_id, multidigraph)
-                            if edge_ref is not None:
-                                used_edges.add(
-                                    f"{edge_ref.link_id}:{edge_ref.direction}"
-                                )
-
-        # Build entry data
-        entry_data: dict[str, Any] = {}
-        if include_used_edges and used_edges:
-            entry_data["edges"] = sorted(used_edges)
-            entry_data["edges_kind"] = "used"
-
-        # Create flow entry
-        entry = FlowEntry(
-            source=demand.src_name,
-            destination=demand.dst_name,
-            priority=demand.priority,
-            demand=demand.volume,
-            placed=placed,
-            dropped=demand.volume - placed,
-            cost_distribution=cost_distribution if include_flow_details else {},
-            data=entry_data,
+    # Phase 4: Convert to FlowEntry format
+    flow_entries = [
+        FlowEntry(
+            source=e.src_name,
+            destination=e.dst_name,
+            priority=e.priority,
+            demand=e.volume,
+            placed=e.placed,
+            dropped=e.volume - e.placed,
+            cost_distribution=e.cost_distribution,
+            data=(
+                {"edges": sorted(e.used_edges), "edges_kind": "used"}
+                if e.used_edges
+                else {}
+            ),
         )
-        flow_entries.append(entry)
-        total_demand += demand.volume
-        total_placed += placed
+        for e in result.entries or []
+    ]
 
-    # Build summary
-    overall_ratio = (total_placed / total_demand) if total_demand > 0 else 1.0
     dropped_flows = sum(1 for e in flow_entries if e.dropped > 0.0)
     summary = FlowSummary(
-        total_demand=total_demand,
-        total_placed=total_placed,
-        overall_ratio=overall_ratio,
+        total_demand=result.summary.total_demand,
+        total_placed=result.summary.total_placed,
+        overall_ratio=result.summary.ratio,
         dropped_flows=dropped_flows,
         num_flows=len(flow_entries),
     )
 
-    return FlowIterationResult(
-        flows=flow_entries,
-        summary=summary,
-        data={},
-    )
+    return FlowIterationResult(flows=flow_entries, summary=summary, data={})
 
 
 def sensitivity_analysis(

@@ -10,6 +10,7 @@ class _ScenarioStub:
         self.network = network
         self.traffic_matrix_set = tmset
         self.results = results
+        self._execution_counter = 0
 
 
 def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):

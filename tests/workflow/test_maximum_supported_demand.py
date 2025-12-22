@@ -94,7 +94,7 @@ def test_msd_no_feasible_raises(
 
 def test_msd_end_to_end_single_link() -> None:
     """Test MSD end-to-end with a simple single-link scenario."""
-    from ngraph.exec.analysis.flow import demand_placement_analysis
+    from ngraph.analysis.functions import demand_placement_analysis
     from ngraph.workflow.maximum_supported_demand_step import (
         MaximumSupportedDemand as MSD,
     )

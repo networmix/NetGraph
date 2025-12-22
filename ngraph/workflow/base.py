@@ -24,10 +24,6 @@ logger = get_logger(__name__)
 # Registry for workflow step classes
 WORKFLOW_STEP_REGISTRY: Dict[str, Type["WorkflowStep"]] = {}
 
-# Per-process execution counter for tracking step order.
-# Reset to zero at the start of each scenario run to keep ordering local.
-_execution_counter = 0
-
 
 def register_workflow_step(step_type: str):
     """Return a decorator that registers a `WorkflowStep` subclass.
@@ -105,8 +101,6 @@ class WorkflowStep(ABC):
             Exception: Re-raises any exception raised by `run()` after logging
                 duration and context.
         """
-        global _execution_counter
-
         step_type = self.__class__.__name__
         # Guarantee a stable results namespace even when name is not provided
         step_name = self.name or step_type
@@ -133,18 +127,21 @@ class WorkflowStep(ABC):
             seed_source = "none"
             active_seed = None
 
+        # Get execution order from scenario instance (thread-safe)
+        execution_order = scenario._execution_counter
+        scenario._execution_counter += 1
+
         # Enter step scope and store workflow metadata
         scenario.results.enter_step(step_name)
         scenario.results.put_step_metadata(
             step_name=step_name,
             step_type=step_type,
-            execution_order=_execution_counter,
+            execution_order=execution_order,
             scenario_seed=scenario_seed,
             step_seed=step_seed,
             seed_source=seed_source,
             active_seed=active_seed,
         )
-        _execution_counter += 1
 
         if self.seed is not None:
             logger.debug(

@@ -6,6 +6,18 @@ artifact dataclasses live in ``ngraph.results.artifacts``.
 
 from __future__ import annotations
 
+from .artifacts import CapacityEnvelope
+from .flow import FlowEntry, FlowIterationResult, FlowSummary
 from .store import Results, WorkflowStepMetadata
 
-__all__ = ["Results", "WorkflowStepMetadata"]
+__all__ = [
+    # Store
+    "Results",
+    "WorkflowStepMetadata",
+    # Flow results
+    "FlowEntry",
+    "FlowIterationResult",
+    "FlowSummary",
+    # Artifacts
+    "CapacityEnvelope",
+]

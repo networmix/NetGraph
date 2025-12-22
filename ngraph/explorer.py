@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 from ngraph.logging import get_logger
 from ngraph.model.components import (
@@ -13,6 +13,9 @@ from ngraph.model.components import (
     totals_with_multiplier,
 )
 from ngraph.model.network import Link, Network, Node
+
+if TYPE_CHECKING:
+    from ngraph.model.components import Component
 
 logger = get_logger(__name__)
 
@@ -324,9 +327,15 @@ class NetworkExplorer:
         - node.stats (all, ignoring disabled)
         - node.active_stats (only enabled nodes/links)
         """
+        self._reset_all_stats()
+        self._compute_node_counts()
+        node_has_hw = self._compute_node_costs_and_utilization()
+        self._compute_link_stats(node_has_hw)
 
-        # First, zero them out
-        def reset_stats(n: TreeNode):
+    def _reset_all_stats(self) -> None:
+        """Zero out stats on all tree nodes."""
+
+        def reset_stats(n: TreeNode) -> None:
             n.stats = TreeStats()
             n.active_stats = TreeStats()
             for c in n.children.values():
@@ -335,8 +344,10 @@ class NetworkExplorer:
         if self.root_node:
             reset_stats(self.root_node)
 
-        # 1) Node counts from subtree sets
-        def set_node_counts(n: TreeNode):
+    def _compute_node_counts(self) -> None:
+        """Set node counts from subtree sets."""
+
+        def set_node_counts(n: TreeNode) -> None:
             n.stats.node_count = len(n.subtree_nodes)
             n.active_stats.node_count = len(n.active_subtree_nodes)
             for c in n.children.values():
@@ -345,12 +356,16 @@ class NetworkExplorer:
         if self.root_node:
             set_node_counts(self.root_node)
 
-        # 2) Accumulate node capex/power and validate hardware capacity vs attached links
-        #    Also validate that sum of endpoint optics usage does not exceed node port count
-        #    Track which nodes actually have chassis/hardware assigned; optics at a link
-        #    endpoint should contribute cost/power only when the endpoint node has
-        #    hardware. Without node hardware, optics cannot be installed and should be
-        #    ignored in aggregation and capacity validation.
+    def _compute_node_costs_and_utilization(self) -> Dict[str, bool]:
+        """Accumulate node capex/power and validate hardware capacity.
+
+        Also validates that sum of endpoint optics usage does not exceed node port count.
+        Tracks which nodes have chassis/hardware assigned; optics at a link endpoint
+        contribute cost/power only when the endpoint node has hardware.
+
+        Returns:
+            Mapping from node name to whether it has hardware assigned.
+        """
         node_has_hw: Dict[str, bool] = {}
         for nd in self.network.nodes.values():
             comp, hw_count = resolve_node_hardware(nd.attrs, self.components_library)
@@ -398,105 +413,113 @@ class NetworkExplorer:
                 and node_comp_capacity > 0.0
                 and not _node_is_disabled(nd)
             ):
-                # Sum capacities of all enabled links attached to this node
-                attached_capacity = 0.0
-                # Track optics usage in "equivalent optics" and ports tally
-                used_optics_equiv = 0.0
-                used_ports = 0.0
-                for lk in self.network.links.values():
-                    if _link_is_disabled(lk):
-                        continue
-                    if lk.source == nd.name or lk.target == nd.name:
-                        # If the opposite endpoint is disabled, skip in active view
-                        other = lk.target if lk.source == nd.name else lk.source
-                        other_node = self.network.nodes.get(other, Node(name=other))
-                        if _node_is_disabled(other_node):
-                            continue
-                        attached_capacity += float(lk.capacity)
+                self._validate_node_utilization(nd, comp, hw_count, node_comp_capacity)
 
-                        # Compute optics usage for this endpoint if per-end hardware is set
-                        (src_end, dst_end, per_end) = resolve_link_end_components(
-                            lk.attrs, self.components_library
-                        )
-                        if per_end:
-                            end = src_end if lk.source == nd.name else dst_end
-                            end_comp, end_cnt, end_excl = end
-                            if end_comp is not None:
-                                # Count optics-equivalents by component count
-                                used_optics_equiv += end_cnt
-                                # Ports used equals count * ports per optic (fractional allowed)
-                                ports_per_optic = float(
-                                    getattr(end_comp, "ports", 0) or 0
-                                )
-                                if ports_per_optic > 0:
-                                    used_ports += end_cnt * ports_per_optic
+        return node_has_hw
 
-                # Compute ports availability and violations
-                total_ports_available = float(getattr(comp, "ports", 0) or 0) * float(
-                    hw_count
+    def _validate_node_utilization(
+        self,
+        nd: Node,
+        comp: "Component",
+        hw_count: float,
+        node_comp_capacity: float,
+    ) -> None:
+        """Validate and record node hardware utilization.
+
+        Checks attached link capacity and port usage against node hardware limits.
+        Records utilization snapshot and raises if strict_validation is enabled.
+        """
+        # Sum capacities of all enabled links attached to this node
+        attached_capacity = 0.0
+        # Track optics usage in "equivalent optics" and ports tally
+        used_ports = 0.0
+        for lk in self.network.links.values():
+            if _link_is_disabled(lk):
+                continue
+            if lk.source == nd.name or lk.target == nd.name:
+                # If the opposite endpoint is disabled, skip in active view
+                other = lk.target if lk.source == nd.name else lk.source
+                other_node = self.network.nodes.get(other, Node(name=other))
+                if _node_is_disabled(other_node):
+                    continue
+                attached_capacity += float(lk.capacity)
+
+                # Compute optics usage for this endpoint if per-end hardware is set
+                (src_end, dst_end, per_end) = resolve_link_end_components(
+                    lk.attrs, self.components_library
                 )
-                capacity_violation = attached_capacity > node_comp_capacity
-                ports_violation = False
-                if getattr(comp, "ports", 0) and comp.ports > 0:
-                    ports_violation = used_ports > total_ports_available + 1e-9
+                if per_end:
+                    end = src_end if lk.source == nd.name else dst_end
+                    end_comp, end_cnt, _end_excl = end
+                    if end_comp is not None:
+                        # Ports used equals count * ports per optic (fractional allowed)
+                        ports_per_optic = float(getattr(end_comp, "ports", 0) or 0)
+                        if ports_per_optic > 0:
+                            used_ports += end_cnt * ports_per_optic
 
-                # Record per-node utilization snapshot for active topology
-                capacity_utilization = (
-                    (attached_capacity / node_comp_capacity)
-                    if node_comp_capacity > 0.0
-                    else 0.0
-                )
-                ports_utilization = (
-                    (used_ports / total_ports_available)
-                    if total_ports_available > 0.0
-                    else 0.0
-                )
-                self._node_utilization[nd.name] = NodeUtilization(
-                    node_name=nd.name,
-                    component_name=comp.name,
-                    hw_count=float(hw_count),
-                    capacity_supported=float(node_comp_capacity),
-                    attached_capacity_active=float(attached_capacity),
-                    capacity_utilization=float(capacity_utilization),
-                    ports_available=float(total_ports_available),
-                    ports_used=float(used_ports),
-                    ports_utilization=float(ports_utilization),
-                    capacity_violation=bool(capacity_violation),
-                    ports_violation=bool(ports_violation),
-                    disabled=_node_is_disabled(nd),
-                )
+        # Compute ports availability and violations
+        total_ports_available = float(getattr(comp, "ports", 0) or 0) * float(hw_count)
+        capacity_violation = attached_capacity > node_comp_capacity
+        ports_violation = False
+        if getattr(comp, "ports", 0) and comp.ports > 0:
+            ports_violation = used_ports > total_ports_available + 1e-9
 
-                # Enforce strict behavior after recording
-                if capacity_violation and self.strict_validation:
-                    raise ValueError(
-                        (
-                            "Node '%s' total attached capacity %.6g exceeds hardware "
-                            "capacity %.6g from component '%s' (hw_count=%.6g)."
-                        )
-                        % (
-                            nd.name,
-                            attached_capacity,
-                            node_comp_capacity,
-                            comp.name,
-                            hw_count,
-                        )
-                    )
-                if ports_violation and self.strict_validation:
-                    raise ValueError(
-                        (
-                            "Node '%s' requires %.6g ports for link optics but only %.6g ports "
-                            "are available on '%s' (count=%.6g)."
-                        )
-                        % (
-                            nd.name,
-                            used_ports,
-                            total_ports_available,
-                            comp.name,
-                            hw_count,
-                        )
-                    )
+        # Record per-node utilization snapshot for active topology
+        capacity_utilization = (
+            (attached_capacity / node_comp_capacity)
+            if node_comp_capacity > 0.0
+            else 0.0
+        )
+        ports_utilization = (
+            (used_ports / total_ports_available) if total_ports_available > 0.0 else 0.0
+        )
+        self._node_utilization[nd.name] = NodeUtilization(
+            node_name=nd.name,
+            component_name=comp.name,
+            hw_count=float(hw_count),
+            capacity_supported=float(node_comp_capacity),
+            attached_capacity_active=float(attached_capacity),
+            capacity_utilization=float(capacity_utilization),
+            ports_available=float(total_ports_available),
+            ports_used=float(used_ports),
+            ports_utilization=float(ports_utilization),
+            capacity_violation=bool(capacity_violation),
+            ports_violation=bool(ports_violation),
+            disabled=_node_is_disabled(nd),
+        )
 
-        # 3) Accumulate link stats (internal/external + capex/power) and validate
+        # Enforce strict behavior after recording
+        if capacity_violation and self.strict_validation:
+            raise ValueError(
+                (
+                    "Node '%s' total attached capacity %.6g exceeds hardware "
+                    "capacity %.6g from component '%s' (hw_count=%.6g)."
+                )
+                % (
+                    nd.name,
+                    attached_capacity,
+                    node_comp_capacity,
+                    comp.name,
+                    hw_count,
+                )
+            )
+        if ports_violation and self.strict_validation:
+            raise ValueError(
+                (
+                    "Node '%s' requires %.6g ports for link optics but only %.6g ports "
+                    "are available on '%s' (count=%.6g)."
+                )
+                % (
+                    nd.name,
+                    used_ports,
+                    total_ports_available,
+                    comp.name,
+                    hw_count,
+                )
+            )
+
+    def _compute_link_stats(self, node_has_hw: Dict[str, bool]) -> None:
+        """Accumulate link stats (internal/external + capex/power) and validate."""
         for link in self.network.links.values():
             src = link.source
             dst = link.target
@@ -514,6 +537,10 @@ class NetworkExplorer:
             src_power = 0.0
             dst_cost = 0.0
             dst_power = 0.0
+            src_comp = None
+            dst_comp = None
+            src_cnt_bom = 0.0
+            dst_cnt_bom = 0.0
 
             if per_end:
                 src_comp, src_cnt, src_exclusive = src_end
@@ -583,13 +610,6 @@ class NetworkExplorer:
 
             inter_anc = A_src & A_dst  # sees link as "internal"
             xor_anc = A_src ^ A_dst  # sees link as "external"
-
-            # Initialize defaults for BOM variables if per_end is False
-            # Establish defaults to satisfy type checker; will be overwritten when per_end
-            src_comp = None
-            dst_comp = None
-            src_cnt_bom = 0.0
-            dst_cnt_bom = 0.0
 
             # ----- "ALL" stats -----
             for an in inter_anc:
