@@ -294,12 +294,12 @@ class TestScenario4:
         traffic_expectations = SCENARIO_4_TRAFFIC_EXPECTATIONS
 
         # Test default matrix
-        default_matrix = helper.scenario.traffic_matrix_set.matrices.get("default")
+        default_matrix = helper.scenario.demand_set.sets.get("default")
         assert default_matrix is not None, "Default traffic matrix should exist"
         assert len(default_matrix) == traffic_expectations["default_matrix"]
 
         # Test HPC workload matrix
-        hpc_matrix = helper.scenario.traffic_matrix_set.matrices.get("hpc_workload")
+        hpc_matrix = helper.scenario.demand_set.sets.get("hpc_workload")
         assert hpc_matrix is not None, "HPC workload matrix should exist"
         assert len(hpc_matrix) == traffic_expectations["hpc_workload_matrix"]
 
@@ -342,7 +342,6 @@ class TestScenario4:
         #     exported["steps"]["build_graph"]["data"].get("graph")
         # )
         # assert graph is not None
-        # Skipping graph check - node_link_to_graph removed after NetGraph-Core migration
 
         # Test MaxFlow results - check baseline (no failure policy) or flow_results
         intra_dc = (

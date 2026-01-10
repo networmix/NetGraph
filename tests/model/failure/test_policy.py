@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
+from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
-    FailureCondition,
     FailurePolicy,
     FailureRule,
 )
@@ -20,20 +20,20 @@ def test_failure_rule_invalid_probability():
     # Test probability > 1.0
     with pytest.raises(ValueError, match="probability=1.5 must be within \\[0,1\\]"):
         FailureRule(
-            entity_scope="node",
-            conditions=[FailureCondition(attr="type", operator="==", value="router")],
+            scope="node",
+            conditions=[Condition(attr="type", op="==", value="router")],
             logic="and",
-            rule_type="random",
+            mode="random",
             probability=1.5,
         )
 
     # Test probability < 0.0
     with pytest.raises(ValueError, match="probability=-0.1 must be within \\[0,1\\]"):
         FailureRule(
-            entity_scope="node",
-            conditions=[FailureCondition(attr="type", operator="==", value="router")],
+            scope="node",
+            conditions=[Condition(attr="type", op="==", value="router")],
             logic="and",
-            rule_type="random",
+            mode="random",
             probability=-0.1,
         )
 
@@ -43,8 +43,8 @@ def test_failure_policy_evaluate_conditions_or_logic():
     from ngraph.dsl.selectors import evaluate_conditions
 
     conditions = [
-        FailureCondition(attr="vendor", operator="==", value="cisco"),
-        FailureCondition(attr="location", operator="==", value="dallas"),
+        Condition(attr="vendor", op="==", value="cisco"),
+        Condition(attr="location", op="==", value="dallas"),
     ]
 
     # Should pass if either condition is true
@@ -65,7 +65,7 @@ def test_failure_policy_evaluate_conditions_invalid_logic():
     """Test condition evaluation with invalid logic via shared evaluate_conditions."""
     from ngraph.dsl.selectors import evaluate_conditions
 
-    conditions = [FailureCondition(attr="vendor", operator="==", value="cisco")]
+    conditions = [Condition(attr="vendor", op="==", value="cisco")]
     attrs = {"vendor": "cisco"}
 
     with pytest.raises(ValueError, match="Unsupported logic: invalid"):
@@ -73,14 +73,12 @@ def test_failure_policy_evaluate_conditions_invalid_logic():
 
 
 def test_node_scope_all():
-    """Rule with entity_scope='node' and rule_type='all' => fails all matched nodes."""
+    """Rule with scope='node' and mode='all' => fails all matched nodes."""
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 
@@ -99,14 +97,12 @@ def test_node_scope_all():
 
 
 def test_node_scope_random():
-    """Rule with entity_scope='node' and rule_type='random' => random node failure."""
+    """Rule with scope='node' and mode='random' => random node failure."""
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
         logic="and",
-        rule_type="random",
+        mode="random",
         probability=0.5,
     )
     policy = _single_mode_policy(rule)
@@ -129,14 +125,12 @@ def test_node_scope_random():
 
 
 def test_node_scope_choice():
-    """Rule with entity_scope='node' and rule_type='choice' => limited node failures."""
+    """Rule with scope='node' and mode='choice' => limited node failures."""
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
         logic="and",
-        rule_type="choice",
+        mode="choice",
         count=1,
     )
     policy = _single_mode_policy(rule)
@@ -156,12 +150,12 @@ def test_node_scope_choice():
 
 
 def test_link_scope_all():
-    """Rule with entity_scope='link' and rule_type='all' => fails all matched links."""
+    """Rule with scope='link' and mode='all' => fails all matched links."""
     rule = FailureRule(
-        entity_scope="link",
-        conditions=[FailureCondition(attr="link_type", operator="==", value="fiber")],
+        scope="link",
+        conditions=[Condition(attr="link_type", op="==", value="fiber")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 
@@ -177,12 +171,12 @@ def test_link_scope_all():
 
 
 def test_link_scope_random():
-    """Rule with entity_scope='link' and rule_type='random' => random link failure."""
+    """Rule with scope='link' and mode='random' => random link failure."""
     rule = FailureRule(
-        entity_scope="link",
-        conditions=[FailureCondition(attr="link_type", operator="==", value="fiber")],
+        scope="link",
+        conditions=[Condition(attr="link_type", op="==", value="fiber")],
         logic="and",
-        rule_type="random",
+        mode="random",
         probability=0.4,
     )
     policy = _single_mode_policy(rule)
@@ -205,12 +199,12 @@ def test_link_scope_random():
 
 
 def test_link_scope_choice():
-    """Rule with entity_scope='link' and rule_type='choice' => limited link failures."""
+    """Rule with scope='link' and mode='choice' => limited link failures."""
     rule = FailureRule(
-        entity_scope="link",
-        conditions=[FailureCondition(attr="link_type", operator="==", value="fiber")],
+        scope="link",
+        conditions=[Condition(attr="link_type", op="==", value="fiber")],
         logic="and",
-        rule_type="choice",
+        mode="choice",
         count=1,
     )
     policy = _single_mode_policy(rule)
@@ -232,13 +226,13 @@ def test_link_scope_choice():
 def test_complex_conditions_and_logic():
     """Multiple conditions with 'and' logic."""
     rule = FailureRule(
-        entity_scope="node",
+        scope="node",
         conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco"),
-            FailureCondition(attr="location", operator="==", value="dallas"),
+            Condition(attr="equipment_vendor", op="==", value="cisco"),
+            Condition(attr="location", op="==", value="dallas"),
         ],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 
@@ -257,13 +251,13 @@ def test_complex_conditions_and_logic():
 def test_complex_conditions_or_logic():
     """Multiple conditions with 'or' logic."""
     rule = FailureRule(
-        entity_scope="node",
+        scope="node",
         conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco"),
-            FailureCondition(attr="location", operator="==", value="critical_site"),
+            Condition(attr="equipment_vendor", op="==", value="cisco"),
+            Condition(attr="location", op="==", value="critical_site"),
         ],
         logic="or",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 
@@ -285,18 +279,16 @@ def test_complex_conditions_or_logic():
 def test_multiple_rules():
     """Policy with multiple rules affecting different entities."""
     node_rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     link_rule = FailureRule(
-        entity_scope="link",
-        conditions=[FailureCondition(attr="link_type", operator="==", value="fiber")],
+        scope="link",
+        conditions=[Condition(attr="link_type", op="==", value="fiber")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     from ngraph.model.failure.policy import FailureMode
 
@@ -321,12 +313,10 @@ def test_condition_operators():
     """Test various condition operators."""
     # Test '!=' operator
     rule_neq = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="!=", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="!=", value="cisco")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy_neq = _single_mode_policy(rule_neq)
 
@@ -341,12 +331,10 @@ def test_condition_operators():
 
     # Test missing attribute
     rule_missing = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="missing_attr", operator="==", value="some_value")
-        ],
+        scope="node",
+        conditions=[Condition(attr="missing_attr", op="==", value="some_value")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy_missing = _single_mode_policy(rule_missing)
 
@@ -361,12 +349,12 @@ def test_condition_operators():
 
 def test_serialization():
     """Test policy serialization."""
-    condition = FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
+    condition = Condition(attr="equipment_vendor", op="==", value="cisco")
     rule = FailureRule(
-        entity_scope="node",
+        scope="node",
         conditions=[condition],
         logic="and",
-        rule_type="random",
+        mode="random",
         probability=0.2,
         count=3,
     )
@@ -380,28 +368,26 @@ def test_serialization():
     assert len(mode_dict["rules"]) == 1
 
     rule_dict = mode_dict["rules"][0]
-    assert rule_dict["entity_scope"] == "node"
+    assert rule_dict["scope"] == "node"
     assert rule_dict["logic"] == "and"
-    assert rule_dict["rule_type"] == "random"
+    assert rule_dict["mode"] == "random"
     assert rule_dict["probability"] == 0.2
     assert rule_dict["count"] == 3
     assert len(rule_dict["conditions"]) == 1
 
     condition_dict = rule_dict["conditions"][0]
     assert condition_dict["attr"] == "equipment_vendor"
-    assert condition_dict["operator"] == "=="
+    assert condition_dict["op"] == "=="
     assert condition_dict["value"] == "cisco"
 
 
 def test_missing_attributes():
     """Test behavior when entities don't have required attributes."""
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="nonexistent_attr", operator="==", value="some_value")
-        ],
+        scope="node",
+        conditions=[Condition(attr="nonexistent_attr", op="==", value="some_value")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 
@@ -430,12 +416,10 @@ def test_empty_policy():
 def test_empty_entities():
     """Test policy applied to empty node/link sets."""
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="equipment_vendor", operator="==", value="cisco")
-        ],
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     policy = _single_mode_policy(rule)
 

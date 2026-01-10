@@ -6,9 +6,10 @@ attribute values from nodes or links.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Literal
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from ngraph.dsl.selectors import (
     flatten_link_attrs,
@@ -29,16 +30,18 @@ class GenerateSpec:
     """Parsed generate block specification.
 
     Attributes:
-        entity_scope: Type of entities to group ("node" or "link").
+        scope: Type of entities to group ("node" or "link").
+        path: Optional regex pattern to filter entities by name.
         group_by: Attribute name to group by (supports dot-notation).
-        name_template: Template for generated group names. Use ${value}
+        name: Template for generated group names. Use ${value}
             as placeholder for the attribute value.
         attrs: Optional static attributes for generated groups.
     """
 
-    entity_scope: Literal["node", "link"]
+    scope: Literal["node", "link"]
     group_by: str
-    name_template: str
+    name: str
+    path: Optional[str] = None
     attrs: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -58,8 +61,10 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     Note:
         This function modifies entity risk_groups sets in place.
     """
+    path_pattern = re.compile(spec.path) if spec.path else None
+
     # Collect entities and flatten function
-    if spec.entity_scope == "node":
+    if spec.scope == "node":
         entities = [
             (node.name, node, flatten_node_attrs(node))
             for node in network.nodes.values()
@@ -68,6 +73,14 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
         entities = [
             (link_id, link, flatten_link_attrs(link, link_id))
             for link_id, link in network.links.items()
+        ]
+
+    # Apply path filter if specified
+    if path_pattern:
+        entities = [
+            (eid, entity, attrs)
+            for eid, entity, attrs in entities
+            if path_pattern.match(eid)
         ]
 
     # Group by attribute value
@@ -81,7 +94,7 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     result: List[RiskGroup] = []
     for value, members in groups.items():
         # Generate group name from template
-        name = spec.name_template.replace("${value}", str(value))
+        name = spec.name.replace("${value}", str(value))
 
         # Create risk group with specified attrs
         rg = RiskGroup(name=name, attrs=dict(spec.attrs))
@@ -95,7 +108,7 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     _logger.debug(
         "Generated %d risk groups from %s.%s",
         len(result),
-        spec.entity_scope,
+        spec.scope,
         spec.group_by,
     )
 
@@ -114,28 +127,29 @@ def parse_generate_spec(raw: Dict[str, Any]) -> GenerateSpec:
     Raises:
         ValueError: If required fields are missing or invalid.
     """
-    entity_scope = raw.get("entity_scope", "node")
-    if entity_scope not in ("node", "link"):
-        raise ValueError(
-            f"generate entity_scope must be 'node' or 'link', got '{entity_scope}'"
-        )
+    scope = raw.get("scope", "node")
+    if scope not in ("node", "link"):
+        raise ValueError(f"generate scope must be 'node' or 'link', got '{scope}'")
+
+    path = raw.get("path")
 
     group_by = raw.get("group_by")
     if not group_by:
         raise ValueError("generate requires 'group_by' field")
 
-    name_template = raw.get("name_template")
-    if not name_template:
-        raise ValueError("generate requires 'name_template' field")
+    name = raw.get("name")
+    if not name:
+        raise ValueError("generate requires 'name' field")
 
-    if "${value}" not in name_template:
-        raise ValueError("generate name_template must contain '${value}' placeholder")
+    if "${value}" not in name:
+        raise ValueError("generate name must contain '${value}' placeholder")
 
     attrs = raw.get("attrs", {})
 
     return GenerateSpec(
-        entity_scope=entity_scope,
+        scope=scope,
         group_by=group_by,
-        name_template=name_template,
+        name=name,
+        path=path,
         attrs=attrs,
     )

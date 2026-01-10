@@ -68,63 +68,61 @@ class TestEvaluateConditionWithDotNotation:
     def test_equality_nested(self):
         """Equality operator works with nested attributes."""
         attrs = {"hardware": {"vendor": "Acme"}}
-        cond = Condition(attr="hardware.vendor", operator="==", value="Acme")
+        cond = Condition(attr="hardware.vendor", op="==", value="Acme")
         assert evaluate_condition(attrs, cond) is True
 
     def test_inequality_nested(self):
         """Inequality operator works with nested attributes."""
         attrs = {"hardware": {"vendor": "Acme"}}
-        cond = Condition(attr="hardware.vendor", operator="!=", value="Other")
+        cond = Condition(attr="hardware.vendor", op="!=", value="Other")
         assert evaluate_condition(attrs, cond) is True
 
     def test_numeric_comparison_nested(self):
         """Numeric comparison works with nested attributes."""
         attrs = {"metrics": {"latency": 50}}
-        cond = Condition(attr="metrics.latency", operator="<", value=100)
+        cond = Condition(attr="metrics.latency", op="<", value=100)
         assert evaluate_condition(attrs, cond) is True
 
     def test_contains_nested(self):
         """Contains operator works with nested attributes."""
         attrs = {"config": {"tags": ["prod", "web"]}}
-        cond = Condition(attr="config.tags", operator="contains", value="prod")
+        cond = Condition(attr="config.tags", op="contains", value="prod")
         assert evaluate_condition(attrs, cond) is True
 
-    def test_any_value_nested_present(self):
-        """any_value operator with present nested attribute."""
+    def test_exists_nested_present(self):
+        """exists operator with present nested attribute."""
         attrs = {"hardware": {"vendor": "Acme"}}
-        cond = Condition(attr="hardware.vendor", operator="any_value")
+        cond = Condition(attr="hardware.vendor", op="exists")
         assert evaluate_condition(attrs, cond) is True
 
-    def test_any_value_nested_missing(self):
-        """any_value operator with missing nested attribute."""
+    def test_exists_nested_missing(self):
+        """exists operator with missing nested attribute."""
         attrs = {"hardware": {}}
-        cond = Condition(attr="hardware.vendor", operator="any_value")
+        cond = Condition(attr="hardware.vendor", op="exists")
         assert evaluate_condition(attrs, cond) is False
 
-    def test_no_value_nested_missing(self):
-        """no_value operator with missing nested attribute."""
+    def test_not_exists_nested_missing(self):
+        """not_exists operator with missing nested attribute."""
         attrs = {"hardware": {}}
-        cond = Condition(attr="hardware.vendor", operator="no_value")
+        cond = Condition(attr="hardware.vendor", op="not_exists")
         assert evaluate_condition(attrs, cond) is True
 
-    def test_no_value_nested_none(self):
-        """no_value operator with None nested attribute."""
+    def test_not_exists_nested_none(self):
+        """not_exists operator with None nested attribute."""
         attrs = {"hardware": {"vendor": None}}
-        cond = Condition(attr="hardware.vendor", operator="no_value")
+        cond = Condition(attr="hardware.vendor", op="not_exists")
         assert evaluate_condition(attrs, cond) is True
 
-    def test_backward_compatibility_simple(self):
-        """Simple (non-dotted) paths still work."""
+    def test_simple_attribute_path(self):
+        """Simple (non-dotted) attribute paths work correctly."""
         attrs = {"role": "spine", "tier": 2}
-        cond = Condition(attr="role", operator="==", value="spine")
+        cond = Condition(attr="role", op="==", value="spine")
         assert evaluate_condition(attrs, cond) is True
 
     def test_in_operator_nested(self):
         """in operator works with nested attributes."""
         attrs = {"location": {"region": "us-west"}}
-        cond = Condition(
-            attr="location.region", operator="in", value=["us-west", "us-east"]
-        )
+        cond = Condition(attr="location.region", op="in", value=["us-west", "us-east"])
         assert evaluate_condition(attrs, cond) is True
 
 
@@ -153,7 +151,7 @@ class TestDeeplyNestedDotNotation:
         """Condition evaluation works with deeply nested paths."""
         attrs = {"facility": {"datacenter": {"room": {"rack": {"pdu_zone": "A"}}}}}
         cond = Condition(
-            attr="facility.datacenter.room.rack.pdu_zone", operator="==", value="A"
+            attr="facility.datacenter.room.rack.pdu_zone", op="==", value="A"
         )
         assert evaluate_condition(attrs, cond) is True
 
@@ -175,12 +173,10 @@ class TestDeeplyNestedDotNotation:
     def test_deep_nesting_with_list_at_leaf(self):
         """Deeply nested path ending in a list works with contains operator."""
         attrs = {"network": {"fabric": {"tier": {"roles": ["spine", "border"]}}}}
-        cond = Condition(
-            attr="network.fabric.tier.roles", operator="contains", value="spine"
-        )
+        cond = Condition(attr="network.fabric.tier.roles", op="contains", value="spine")
         assert evaluate_condition(attrs, cond) is True
 
         cond_miss = Condition(
-            attr="network.fabric.tier.roles", operator="contains", value="leaf"
+            attr="network.fabric.tier.roles", op="contains", value="leaf"
         )
         assert evaluate_condition(attrs, cond_miss) is False

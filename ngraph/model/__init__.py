@@ -5,7 +5,7 @@ nodes, links, risk groups, and the scenario-level `Network`. Temporary exclusion
 for analysis are handled via node_mask and edge_mask parameters in Core algorithms.
 """
 
-from ngraph.model.demand import TrafficDemand, TrafficMatrixSet
+from ngraph.model.demand import TrafficDemand
 from ngraph.model.flow import FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node, RiskGroup
 from ngraph.model.path import Path
@@ -19,7 +19,6 @@ __all__ = [
     "Path",
     # Traffic demands
     "TrafficDemand",
-    "TrafficMatrixSet",
     # Flow configuration
     "FlowPolicyPreset",
 ]

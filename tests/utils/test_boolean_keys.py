@@ -85,57 +85,57 @@ def test_yaml_boolean_keys_converted_to_strings():
     yml = textwrap.dedent("""
     network:
       name: test
-    traffic_matrix_set:
+    demands:
       # Regular string key
       peak:
         - source: "^A$"
-          sink: "^B$"
-          demand: 100
+          target: "^B$"
+          volume: 100
 
       # YAML 1.1 boolean keys - these get parsed as Python booleans
       true:
         - source: "^C$"
-          sink: "^D$"
-          demand: 200
+          target: "^D$"
+          volume: 200
       false:
         - source: "^E$"
-          sink: "^F$"
-          demand: 50
+          target: "^F$"
+          volume: 50
       yes:
         - source: "^G$"
-          sink: "^H$"
-          demand: 25
+          target: "^H$"
+          volume: 25
       no:
         - source: "^I$"
-          sink: "^J$"
-          demand: 75
+          target: "^J$"
+          volume: 75
       on:
         - source: "^K$"
-          sink: "^L$"
-          demand: 150
+          target: "^L$"
+          volume: 150
       off:
         - source: "^M$"
-          sink: "^N$"
-          demand: 125
+          target: "^N$"
+          volume: 125
     """)
 
     scenario = Scenario.from_yaml(yml)
-    matrices = scenario.traffic_matrix_set.matrices
+    matrices = scenario.demand_set.sets
 
     # All YAML boolean values collapse to just True/False, then converted to strings
     assert set(matrices.keys()) == {"peak", "True", "False"}
 
     # Regular string key
-    assert matrices["peak"][0].demand == 100
+    assert matrices["peak"][0].volume == 100
 
     # All true-like YAML values become "True" matrix
     # NOTE: When multiple YAML keys collapse to the same boolean value,
     # only the last one wins (standard YAML/dict behavior)
-    true_demands = {d.demand for d in matrices["True"]}
+    true_demands = {d.volume for d in matrices["True"]}
     assert true_demands == {150}  # from 'on:', the last true-like key
 
     # All false-like YAML values become "False" matrix
-    false_demands = {d.demand for d in matrices["False"]}
+    false_demands = {d.volume for d in matrices["False"]}
     assert false_demands == {125}  # from 'off:', the last false-like key
 
 
@@ -144,26 +144,26 @@ def test_quoted_boolean_keys_remain_strings():
     yml = textwrap.dedent("""
     network:
       name: test
-    traffic_matrix_set:
+    demands:
       "true":
         - source: "^A$"
-          sink: "^B$"
-          demand: 100
+          target: "^B$"
+          volume: 100
       "false":
         - source: "^C$"
-          sink: "^D$"
-          demand: 200
+          target: "^D$"
+          volume: 200
       "off":
         - source: "^E$"
-          sink: "^F$"
-          demand: 300
+          target: "^F$"
+          volume: 300
     """)
 
     scenario = Scenario.from_yaml(yml)
-    matrices = scenario.traffic_matrix_set.matrices
+    matrices = scenario.demand_set.sets
 
     # Quoted keys should remain as strings, not be converted to booleans
     assert set(matrices.keys()) == {"true", "false", "off"}
-    assert matrices["true"][0].demand == 100
-    assert matrices["false"][0].demand == 200
-    assert matrices["off"][0].demand == 300
+    assert matrices["true"][0].volume == 100
+    assert matrices["false"][0].volume == 200
+    assert matrices["off"][0].volume == 300

@@ -2,7 +2,7 @@
 
 Provides evaluation logic for attribute conditions used in selectors
 and failure policies. Supports operators: ==, !=, <, <=, >, >=,
-contains, not_contains, in, not_in, any_value, no_value.
+contains, not_contains, in, not_in, exists, not_exists.
 
 Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
 """
@@ -70,13 +70,13 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
         ValueError: If operator is unknown or value type is invalid.
     """
     has_attr, attr_value = resolve_attr_path(attrs, cond.attr)
-    op = cond.operator
+    op = cond.op
     expected = cond.value
 
     # Existence operators
-    if op == "any_value":
+    if op == "exists":
         return has_attr and attr_value is not None
-    if op == "no_value":
+    if op == "not_exists":
         return (not has_attr) or (attr_value is None)
 
     # For all other operators, missing/None attribute means no match

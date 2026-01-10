@@ -36,7 +36,6 @@ from ngraph.analysis import AnalysisContext, analyze
 from ngraph.analysis.failure_manager import FailureManager
 from ngraph.explorer import NetworkExplorer
 from ngraph.lib.nx import EdgeMap, NodeMap, from_networkx, to_networkx
-from ngraph.model.demand.matrix import TrafficMatrixSet
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node, RiskGroup
@@ -56,7 +55,6 @@ __all__ = [
     "Link",
     "RiskGroup",
     "Path",
-    "TrafficMatrixSet",
     "TrafficDemand",
     "FlowPolicyPreset",
     "Scenario",

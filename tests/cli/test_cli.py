@@ -160,10 +160,9 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 1
+      capacity: 1
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: stats
 """
     )
@@ -190,7 +189,7 @@ network:
   nodes:
     A: {}
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
     )
     monkeypatch.chdir(tmp_path)
@@ -229,10 +228,9 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 100
+      capacity: 100
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build
 """
     )
@@ -259,14 +257,12 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 10
+      capacity: 10
     - source: B
       target: C
-      link_params:
-        capacity: 20
+      capacity: 20
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
     )
 
@@ -290,11 +286,10 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 10
-        cost: 0.1
+      capacity: 10
+      cost: 0.1
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
     )
 
@@ -317,10 +312,10 @@ network:
     src-2: {}
     dst-1: {}
 workflow:
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: cap
     source: "^src"
-    sink: "^dst"
+    target: "^dst"
 """
     )
 
@@ -329,7 +324,7 @@ workflow:
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
     assert "Node selection preview:" in out
-    assert "source:" in out and "sink:" in out
+    assert "source:" in out and "target:" in out
     assert "groups" in out and "nodes" in out
 
 
@@ -342,10 +337,10 @@ network:
   nodes:
     A: {}
 workflow:
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: cap2
     source: "^none"
-    sink: "^none"
+    target: "^none"
 """
     )
 
@@ -370,15 +365,14 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 100
-traffic_matrix_set:
+      capacity: 100
+demands:
   default:
     - source: "^A$"
-      sink: "^B$"
-      demand: 50
+      target: "^B$"
+      volume: 50
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
     )
 
@@ -388,7 +382,7 @@ workflow:
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
     assert "Capacity vs Demand:" in out
     assert "enabled link capacity: 100.0" in out
-    assert "total demand (all matrices): 50.0" in out
+    assert "total demand (all sets): 50.0" in out
     assert "capacity/demand: 2.00x" in out
     assert "demand/capacity: 50.00%" in out
 
@@ -406,10 +400,9 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 1
+      capacity: 1
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: stats
 """
     )

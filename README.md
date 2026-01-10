@@ -103,52 +103,55 @@ seed: 42
 # Define reusable topology templates
 blueprints:
   Clos_Fabric:
-    groups:
-      spine: {node_count: 2, name_template: "spine{node_num}"}
-      leaf:  {node_count: 4, name_template: "leaf{node_num}"}
-    adjacency:
+    nodes:
+      spine: {count: 2, template: "spine{n}"}
+      leaf:  {count: 4, template: "leaf{n}"}
+    links:
     - source: /leaf
       target: /spine
       pattern: mesh
-      link_params: {capacity: 100, cost: 1}
+      capacity: 100
+      cost: 1
     - source: /spine
       target: /leaf
       pattern: mesh
-      link_params: {capacity: 100, cost: 1}
+      capacity: 100
+      cost: 1
 
 # Instantiate network from templates
 network:
-  groups:
-    site1: {use_blueprint: Clos_Fabric}
-    site2: {use_blueprint: Clos_Fabric}
-  adjacency:
+  nodes:
+    site1: {blueprint: Clos_Fabric}
+    site2: {blueprint: Clos_Fabric}
+  links:
   - source: {path: site1/spine}
     target: {path: site2/spine}
     pattern: one_to_one
-    link_params: {capacity: 50, cost: 10}
+    capacity: 50
+    cost: 10
 
-# Define traffic matrix
-traffic_matrix_set:
+# Define traffic demands
+demands:
   global_traffic:
     - source: ^site1/leaf/
-      sink: ^site2/leaf/
-      demand: 100.0
+      target: ^site2/leaf/
+      volume: 100.0
       mode: combine
-      flow_policy_config: SHORTEST_PATHS_ECMP
+      flow_policy: SHORTEST_PATHS_ECMP
 
 # Define analysis workflow
 workflow:
-- step_type: NetworkStats
+- type: NetworkStats
   name: stats
-- step_type: MaxFlow
+- type: MaxFlow
   name: site_capacity
   source: ^site1/leaf/
-  sink: ^site2/leaf/
+  target: ^site2/leaf/
   mode: combine
   shortest_path: false
-- step_type: MaximumSupportedDemand
+- type: MaximumSupportedDemand
   name: max_demand
-  matrix_name: global_traffic
+  demand_set: global_traffic
 ```
 
 ## Repository Structure

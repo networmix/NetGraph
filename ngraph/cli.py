@@ -136,7 +136,7 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
     """Return (field, pattern) pairs for fields that represent node selectors.
 
     Fields considered:
-    - `source` and `sink` selector fields with string values
+    - `source` and `target` selector fields with string values
     - names ending with "_path" or "_regex" with non-empty string values
     """
     fields: list[tuple[str, str]] = []
@@ -148,7 +148,11 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
         if not value.strip():
             continue
         # Selector fields or pattern fields
-        if key in ("source", "sink") or key.endswith("_path") or key.endswith("_regex"):
+        if (
+            key in ("source", "target")
+            or key.endswith("_path")
+            or key.endswith("_regex")
+        ):
             fields.append((key, value))
     return fields
 
@@ -546,16 +550,14 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
                     for ri, rule in enumerate(mode.rules[:3]):
                         extra = (
                             f" count={getattr(rule, 'count', '')}"
-                            if rule.rule_type == "choice"
+                            if rule.mode == "choice"
                             else (
                                 f" p={getattr(rule, 'probability', '')}"
-                                if rule.rule_type == "random"
+                                if rule.mode == "random"
                                 else ""
                             )
                         )
-                        print(
-                            f"           - {ri + 1}. {rule.entity_scope} {rule.rule_type}{extra}"
-                        )
+                        print(f"           - {ri + 1}. {rule.scope} {rule.mode}{extra}")
                     if rule_count > 3:
                         print(f"           ... and {rule_count - 3} more rules")
         if policy_count > 5:
@@ -563,37 +565,37 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
             print(f"     ... and {remaining} more")
 
 
-def _print_traffic_matrices(
-    network: Any, tms: Any, detail: bool, total_enabled_link_capacity: float
+def _print_demand_sets(
+    network: Any, ds: Any, detail: bool, total_enabled_link_capacity: float
 ) -> None:
-    """Print traffic matrices summary and capacity-vs-demand ratio if available.
+    """Print demand sets summary and capacity-vs-demand ratio if available.
 
     Args:
         network: Network instance for node pattern summarization.
-        tms: TrafficMatrixSet with defined matrices.
+        ds: DemandSet with defined sets.
         detail: Whether to print detailed tables.
         total_enabled_link_capacity: Sum of capacities of enabled links.
     """
-    print("\n6. TRAFFIC MATRICES")
+    print("\n6. DEMAND SETS")
     print("-" * 30)
-    matrix_count = len(tms.matrices)
-    print(f"   Total: {matrix_count}")
-    if not tms.matrices:
+    set_count = len(ds.sets)
+    print(f"   Total: {set_count}")
+    if not ds.sets:
         return
 
-    # Capacity vs Demand summary across all matrices (shown first for visibility)
+    # Capacity vs Demand summary across all sets (shown first for visibility)
     try:
         grand_total_demand = 0.0
         grand_demand_count = 0
-        for demands in tms.matrices.values():
+        for demands in ds.sets.values():
             grand_demand_count += len(demands)
             for d in demands:
-                grand_total_demand += float(getattr(d, "demand", 0.0))
+                grand_total_demand += float(getattr(d, "volume", 0.0))
 
         print("\n   Capacity vs Demand:")
         print(f"     enabled link capacity: {total_enabled_link_capacity:,.1f}")
         print(
-            f"     total demand (all matrices): {grand_total_demand:,.1f} ({grand_demand_count:,} demands)"
+            f"     total demand (all sets): {grand_total_demand:,.1f} ({grand_demand_count:,} demands)"
         )
         if total_enabled_link_capacity > 0.0 and grand_total_demand > 0.0:
             cap_per_demand = total_enabled_link_capacity / grand_total_demand
@@ -605,57 +607,57 @@ def _print_traffic_matrices(
     except Exception as exc:  # pragma: no cover (defensive)
         print(f"   Capacity vs Demand: unable to compute ({type(exc).__name__}: {exc})")
 
-    matrix_items = list(tms.matrices.items())[:5]
-    for matrix_name, demands in matrix_items:
+    set_items = list(ds.sets.items())[:5]
+    for set_name, demands in set_items:
         demand_count = len(demands)
-        total_volume = sum(getattr(d, "demand", 0.0) for d in demands)
+        total_volume = sum(getattr(d, "volume", 0.0) for d in demands)
         print(
-            f"     {matrix_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
+            f"     {set_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
         )
 
         src_counts: Dict[str, int] = {}
-        snk_counts: Dict[str, int] = {}
+        tgt_counts: Dict[str, int] = {}
         pair_counts: Dict[tuple[str, str], Dict[str, float | int]] = {}
         for d in demands:
             # Handle both string and dict selectors
             src_key = d.source if isinstance(d.source, str) else str(d.source)
-            snk_key = d.sink if isinstance(d.sink, str) else str(d.sink)
+            tgt_key = d.target if isinstance(d.target, str) else str(d.target)
             src_counts[src_key] = src_counts.get(src_key, 0) + 1
-            snk_counts[snk_key] = snk_counts.get(snk_key, 0) + 1
-            key = (src_key, snk_key)
+            tgt_counts[tgt_key] = tgt_counts.get(tgt_key, 0) + 1
+            key = (src_key, tgt_key)
             stats = pair_counts.setdefault(key, {"count": 0, "volume": 0.0})
             stats["count"] = int(stats["count"]) + 1
-            stats["volume"] = float(stats["volume"]) + float(getattr(d, "demand", 0.0))
+            stats["volume"] = float(stats["volume"]) + float(getattr(d, "volume", 0.0))
 
         if detail:
             print(f"       total demand: {total_volume:,.0f}")
             print(
-                f"       unique source patterns: {len(src_counts)}; unique sink patterns: {len(snk_counts)}"
+                f"       unique source patterns: {len(src_counts)}; unique target patterns: {len(tgt_counts)}"
             )
 
             rows: list[list[str]] = []
-            for (src_pat, snk_pat), stats in list(pair_counts.items())[:10]:
+            for (src_pat, tgt_pat), stats in list(pair_counts.items())[:10]:
                 src_info = _summarize_pattern(src_pat, network)
-                snk_info = _summarize_pattern(snk_pat, network)
+                tgt_info = _summarize_pattern(tgt_pat, network)
                 src_match = (
                     f"{src_info['groups']}g/{src_info['nodes']}n ({src_info['enabled_nodes']}e)"
                     if "error" not in src_info
                     else f"ERROR {src_info['error']}"
                 )
-                snk_match = (
-                    f"{snk_info['groups']}g/{snk_info['nodes']}n ({snk_info['enabled_nodes']}e)"
-                    if "error" not in snk_info
-                    else f"ERROR {snk_info['error']}"
+                tgt_match = (
+                    f"{tgt_info['groups']}g/{tgt_info['nodes']}n ({tgt_info['enabled_nodes']}e)"
+                    if "error" not in tgt_info
+                    else f"ERROR {tgt_info['error']}"
                 )
                 label_preview = ", ".join(src_info.get("labels", [])) or "-"
                 rows.append(
                     [
                         src_pat,
-                        snk_pat,
+                        tgt_pat,
                         str(int(stats["count"])),
                         f"{float(stats['volume']):,.0f}",
                         src_match,
-                        snk_match,
+                        tgt_match,
                         label_preview,
                     ]
                 )
@@ -664,11 +666,11 @@ def _print_traffic_matrices(
                 table = _format_table(
                     [
                         "Source Pattern",
-                        "Sink Pattern",
+                        "Target Pattern",
                         "Demands",
                         "Total",
                         "Src Match",
-                        "Snk Match",
+                        "Tgt Match",
                         "Src Labels",
                     ],
                     rows,
@@ -688,17 +690,17 @@ def _print_traffic_matrices(
                     top_rows: list[list[str]] = []
                     for d in sorted_demands:
                         src = d.source if isinstance(d.source, str) else str(d.source)
-                        snk = d.sink if isinstance(d.sink, str) else str(d.sink)
+                        tgt = d.target if isinstance(d.target, str) else str(d.target)
                         top_rows.append(
                             [
                                 src,
-                                snk,
-                                f"{float(getattr(d, 'demand', 0.0)):,.1f}",
+                                tgt,
+                                f"{float(getattr(d, 'volume', 0.0)):,.1f}",
                                 str(getattr(d, "priority", 0)),
                             ]
                         )
                     top_table = _format_table(
-                        ["Source", "Sink", "Offered", "Priority"],
+                        ["Source", "Target", "Offered", "Priority"],
                         top_rows,
                     )
                     print(
@@ -714,19 +716,19 @@ def _print_traffic_matrices(
                         if isinstance(demand.source, str)
                         else str(demand.source)
                     )
-                    snk = (
-                        demand.sink
-                        if isinstance(demand.sink, str)
-                        else str(demand.sink)
+                    tgt = (
+                        demand.target
+                        if isinstance(demand.target, str)
+                        else str(demand.target)
                     )
-                    print(f"       {i + 1}. {src} -> {snk} ({demand.demand})")
+                    print(f"       {i + 1}. {src} -> {tgt} ({demand.volume})")
                 if demand_count > 3:
                     print(f"       ... and {demand_count - 3} more demands")
         else:
             print(f"       total demand: {total_volume:,.0f}")
             print("       Node selection preview:")
             top_src = sorted(src_counts.items(), key=lambda kv: -kv[1])[:2]
-            top_snk = sorted(snk_counts.items(), key=lambda kv: -kv[1])[:2]
+            top_tgt = sorted(tgt_counts.items(), key=lambda kv: -kv[1])[:2]
             for name, _ in top_src:
                 info = _summarize_pattern(name, network)
                 if "error" in info:
@@ -735,17 +737,17 @@ def _print_traffic_matrices(
                     print(
                         f"         source {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
                     )
-            for name, _ in top_snk:
+            for name, _ in top_tgt:
                 info = _summarize_pattern(name, network)
                 if "error" in info:
-                    print(f"         sink {name}: ERROR {info['error']}")
+                    print(f"         target {name}: ERROR {info['error']}")
                 else:
                     print(
-                        f"         sink {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
+                        f"         target {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
                     )
 
-    if matrix_count > 5:
-        remaining = matrix_count - 5
+    if set_count > 5:
+        remaining = set_count - 5
         print(f"     ... and {remaining} more")
 
 
@@ -879,7 +881,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
 
         scenario = Scenario.from_yaml(yaml_text)
         logger.debug(
-            "Scenario loaded: nodes=%d, links=%d, steps=%d, policies=%d, matrices=%d",
+            "Scenario loaded: nodes=%d, links=%d, steps=%d, policies=%d, demand_sets=%d",
             len(getattr(scenario.network, "nodes", {})),
             len(getattr(scenario.network, "links", {})),
             len(
@@ -888,7 +890,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 or []
             ),
             len(getattr(scenario.failure_policy_set, "policies", {})),
-            len(getattr(scenario.traffic_matrix_set, "matrices", {})),
+            len(getattr(scenario.demand_set, "sets", {})),
         )
         logger.info("✓ Scenario validated and loaded successfully")
 
@@ -910,15 +912,15 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 sum(float(lk.capacity) for lk in enabled_links)
             )
 
-            # Traffic matrices
-            tms = scenario.traffic_matrix_set
-            matrix_count = len(tms.matrices)
+            # Demand sets
+            ds = scenario.demand_set
+            set_count = len(ds.sets)
             total_demands = 0
             total_demand_volume = 0.0
-            for demands in tms.matrices.values():
+            for demands in ds.sets.values():
                 total_demands += len(demands)
                 for d in demands:
-                    total_demand_volume += float(getattr(d, "demand", 0.0))
+                    total_demand_volume += float(getattr(d, "volume", 0.0))
 
             util = (
                 (total_demand_volume / total_enabled_capacity)
@@ -950,8 +952,8 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 ],
                 ["Capacity (enabled)", f"{total_enabled_capacity:,.1f}"],
                 [
-                    "Demand (all matrices)",
-                    f"{total_demand_volume:,.1f} ({total_demands:,} demands across {matrix_count} matrices)",
+                    "Demand (all sets)",
+                    f"{total_demand_volume:,.1f} ({total_demands:,} demands across {set_count} sets)",
                 ],
                 ["Utilization", f"{util:,.2%}"],
                 ["Risk groups", f"{rg_total} total; {rg_disabled} disabled"],
@@ -993,9 +995,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         # Failure Policies Analysis
         _print_failure_policies(scenario.failure_policy_set, detail)
 
-        # Traffic Matrices Analysis
-        _print_traffic_matrices(
-            network, scenario.traffic_matrix_set, detail, total_enabled_link_capacity
+        # Demand Sets Analysis
+        _print_demand_sets(
+            network, scenario.demand_set, detail, total_enabled_link_capacity
         )
 
         # Workflow Analysis

@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from ngraph.dsl.blueprints.parser import (
-    check_adjacency_keys,
-    check_link_params,
+    check_link_keys,
     check_no_extra_keys,
     expand_name_patterns,
     join_paths,
@@ -40,51 +39,34 @@ def test_check_no_extra_keys_allows_only_expected() -> None:
     assert "Unrecognized key(s) in ctx" in str(exc.value)
 
 
-def test_check_adjacency_keys_valid_and_missing_required() -> None:
-    # Valid
-    check_adjacency_keys(
+def test_check_link_keys_valid_and_missing_required() -> None:
+    """Test check_link_keys with valid and invalid link definitions."""
+    # Valid with flat properties
+    check_link_keys(
         {
             "source": "A",
             "target": "B",
             "pattern": "mesh",
-            "link_count": 1,
-            "link_params": {},
+            "count": 1,
+            "capacity": 100,
+            "cost": 10,
         },
-        context="top-level adjacency",
+        context="top-level link",
     )
 
     # Missing required keys
     with pytest.raises(ValueError) as exc:
-        check_adjacency_keys({"pattern": "mesh"}, context="adj")
+        check_link_keys({"pattern": "mesh"}, context="link")
     assert "must have 'source' and 'target'" in str(exc.value)
 
     # Extra key
     with pytest.raises(ValueError) as exc2:
-        check_adjacency_keys(
+        check_link_keys(
             {
                 "source": "A",
                 "target": "B",
                 "unexpected": True,
             },
-            context="adj",
+            context="link",
         )
-    assert "Unrecognized key(s) in adj" in str(exc2.value)
-
-
-def test_check_link_params_valid_and_extra_key() -> None:
-    # Valid set of keys
-    check_link_params(
-        {
-            "capacity": 1,
-            "cost": 2,
-            "disabled": False,
-            "risk_groups": ["RG"],
-            "attrs": {"k": "v"},
-        },
-        context="ctx",
-    )
-
-    # Extra key should raise
-    with pytest.raises(ValueError) as exc:
-        check_link_params({"capacity": 1, "extra": 0}, context="ctx")
-    assert "Unrecognized link_params key(s) in ctx" in str(exc.value)
+    assert "Unrecognized key(s) in link" in str(exc2.value)

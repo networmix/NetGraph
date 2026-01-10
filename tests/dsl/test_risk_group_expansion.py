@@ -185,9 +185,9 @@ risk_groups:
         """Group risk_groups array expands and inherits to all nodes."""
         yaml_content = """
 network:
-  groups:
+  nodes:
     rack_DC1_R1:
-      node_count: 2
+      count: 2
       risk_groups: ["CoolingZone_DC1_R1_CZ[A,B]"]
 
 risk_groups:
@@ -202,20 +202,19 @@ risk_groups:
             }
 
     def test_adjacency_link_risk_groups_expansion(self) -> None:
-        """Adjacency link_params risk_groups expands for conduit groups."""
+        """Link risk_groups expands for conduit groups."""
         yaml_content = """
 network:
-  groups:
+  nodes:
     leaf:
-      node_count: 2
+      count: 2
     spine:
-      node_count: 2
-  adjacency:
+      count: 2
+  links:
     - source: /leaf
       target: /spine
       pattern: mesh
-      link_params:
-        risk_groups: ["Conduit_DC1_C[1-2]"]
+      risk_groups: ["Conduit_DC1_C[1-2]"]
 
 risk_groups:
   - name: "Conduit_DC1_C[1-2]"
@@ -234,8 +233,7 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        risk_groups: ["FiberPair_NYC_CHI_FP[01,02,03]"]
+      risk_groups: ["FiberPair_NYC_CHI_FP[01,02,03]"]
 
 risk_groups:
   - name: "FiberPair_NYC_CHI_FP[01,02,03]"
@@ -253,10 +251,10 @@ risk_groups:
         """Node override risk_groups expands for building groups."""
         yaml_content = """
 network:
-  groups:
+  nodes:
     routers:
-      node_count: 2
-  node_overrides:
+      count: 2
+  node_rules:
     - path: routers
       risk_groups: ["Building_DC[1-2]"]
 
@@ -272,20 +270,19 @@ risk_groups:
         """Link override risk_groups expands for path groups."""
         yaml_content = """
 network:
-  groups:
+  nodes:
     leaf:
-      node_count: 2
+      count: 2
     spine:
-      node_count: 1
-  adjacency:
+      count: 1
+  links:
     - source: leaf
       target: spine
       pattern: mesh
-  link_overrides:
+  link_rules:
     - source: leaf
       target: spine
-      link_params:
-        risk_groups: ["Path_DC1_P[1-3]"]
+      risk_groups: ["Path_DC1_P[1-3]"]
 
 risk_groups:
   - name: "Path_DC1_P[1-3]"
@@ -356,15 +353,15 @@ risk_groups:
         yaml_content = """
 blueprints:
   rack:
-    groups:
+    nodes:
       servers:
-        node_count: 2
+        count: 2
         risk_groups: ["CoolingZone_CZ[A,B]"]
 
 network:
-  groups:
+  nodes:
     dc1_rack1:
-      use_blueprint: rack
+      blueprint: rack
       risk_groups: ["Building_DC1"]
 
 risk_groups:
@@ -382,19 +379,19 @@ risk_groups:
             }
 
     def test_blueprint_risk_groups_expansion(self) -> None:
-        """Risk groups in blueprint groups expand correctly."""
+        """Risk groups in blueprint nodes expand correctly."""
         yaml_content = """
 blueprints:
   fabric:
-    groups:
+    nodes:
       leaf:
-        node_count: 2
+        count: 2
         risk_groups: ["PowerZone_PZ[A,B]"]
 
 network:
-  groups:
+  nodes:
     dc1_fabric:
-      use_blueprint: fabric
+      blueprint: fabric
 
 risk_groups:
   - name: "PowerZone_PZ[A,B]"
@@ -408,9 +405,9 @@ risk_groups:
         """Expanded definitions and memberships reference same groups."""
         yaml_content = """
 network:
-  groups:
+  nodes:
     routers:
-      node_count: 3
+      count: 3
       risk_groups: ["Conduit_NYC_CHI_C[1-3]"]
 
 risk_groups:

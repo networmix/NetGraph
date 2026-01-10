@@ -1,7 +1,7 @@
-"""Maximum Supported Demand (MSD) workflow step.
+"""MaximumSupportedDemand workflow step.
 
 Searches for the maximum uniform traffic multiplier `alpha_star` that is fully
-placeable for a given matrix. Stores results under `data` as:
+placeable for a given demand set. Stores results under `data` as:
 
 - `alpha_star`: float
 - `context`: parameters used for the search
@@ -55,7 +55,26 @@ class _MSDCache:
 
 @dataclass
 class MaximumSupportedDemand(WorkflowStep):
-    matrix_name: str = "default"
+    """Finds the maximum uniform traffic multiplier that is fully placeable.
+
+    Uses binary search to find alpha_star, the maximum multiplier for all
+    demands in the set that can still be fully placed on the network.
+
+    Attributes:
+        demand_set: Name of the demand set to analyze.
+        acceptance_rule: Currently only "hard" is implemented.
+        alpha_start: Starting multiplier for binary search.
+        growth_factor: Factor for bracket expansion.
+        alpha_min: Minimum allowed alpha value.
+        alpha_max: Maximum allowed alpha value.
+        resolution: Convergence threshold for binary search.
+        max_bracket_iters: Maximum iterations for bracketing phase.
+        max_bisect_iters: Maximum iterations for bisection phase.
+        seeds_per_alpha: Number of placement attempts per alpha probe.
+        placement_rounds: Placement optimization rounds.
+    """
+
+    demand_set: str = "default"
     acceptance_rule: str = "hard"
     alpha_start: float = 1.0
     growth_factor: float = 2.0
@@ -93,9 +112,9 @@ class MaximumSupportedDemand(WorkflowStep):
         t0 = time.perf_counter()
         logger.info("Starting MaximumSupportedDemand: name=%s", self.name)
         logger.debug(
-            "MaximumSupportedDemand params: matrix=%s alpha_start=%.6g "
+            "MaximumSupportedDemand params: demand_set=%s alpha_start=%.6g "
             "growth=%.3f seeds=%d resolution=%.6g",
-            self.matrix_name,
+            self.demand_set,
             float(self.alpha_start),
             float(self.growth_factor),
             int(self.seeds_per_alpha),
@@ -105,17 +124,17 @@ class MaximumSupportedDemand(WorkflowStep):
         # Serialize base demands for result output
         from ngraph.model.flow.policy_config import serialize_policy_preset
 
-        base_tds = scenario.traffic_matrix_set.get_matrix(self.matrix_name)
+        base_tds = scenario.demand_set.get_set(self.demand_set)
         base_demands: list[dict[str, Any]] = [
             {
                 "id": getattr(td, "id", None),
                 "source": getattr(td, "source", ""),
-                "sink": getattr(td, "sink", ""),
-                "demand": float(getattr(td, "demand", 0.0)),
+                "target": getattr(td, "target", ""),
+                "volume": float(getattr(td, "volume", 0.0)),
                 "mode": getattr(td, "mode", "pairwise"),
                 "priority": int(getattr(td, "priority", 0)),
-                "flow_policy_config": serialize_policy_preset(
-                    getattr(td, "flow_policy_config", None)
+                "flow_policy": serialize_policy_preset(
+                    getattr(td, "flow_policy", None)
                 ),
             }
             for td in base_tds
@@ -123,12 +142,12 @@ class MaximumSupportedDemand(WorkflowStep):
 
         if not base_demands:
             raise ValueError(
-                f"Traffic matrix '{self.matrix_name}' contains no demands. "
+                f"Demand set '{self.demand_set}' contains no demands. "
                 "Cannot compute maximum supported demand without traffic specifications."
             )
 
         # Build cache once for all probes
-        cache = self._build_cache(scenario, self.matrix_name)
+        cache = self._build_cache(scenario, self.demand_set)
         logger.debug(
             "MSD cache built: %d expanded demands",
             len(cache.base_expanded),
@@ -155,7 +174,7 @@ class MaximumSupportedDemand(WorkflowStep):
             "max_bracket_iters": self.max_bracket_iters,
             "max_bisect_iters": self.max_bisect_iters,
             "seeds_per_alpha": self.seeds_per_alpha,
-            "matrix_name": self.matrix_name,
+            "demand_set": self.demand_set,
             "placement_rounds": self.placement_rounds,
         }
         scenario.results.put("metadata", {})
@@ -230,7 +249,7 @@ class MaximumSupportedDemand(WorkflowStep):
         return left
 
     @staticmethod
-    def _build_cache(scenario: Any, matrix_name: str) -> _MSDCache:
+    def _build_cache(scenario: Any, demand_set_name: str) -> _MSDCache:
         """Build cache for MSD binary search.
 
         Creates stable TrafficDemand objects, expands them once, and builds
@@ -238,21 +257,19 @@ class MaximumSupportedDemand(WorkflowStep):
         """
         from ngraph.analysis import AnalysisContext
 
-        base_tds = scenario.traffic_matrix_set.get_matrix(matrix_name)
+        base_tds = scenario.demand_set.get_set(demand_set_name)
 
         # Create stable TrafficDemand objects (same IDs for all probes)
         stable_demands: list[TrafficDemand] = [
             TrafficDemand(
                 id=getattr(td, "id", "") or "",
                 source=getattr(td, "source", ""),
-                sink=getattr(td, "sink", ""),
+                target=getattr(td, "target", ""),
                 priority=int(getattr(td, "priority", 0)),
-                demand=float(getattr(td, "demand", 0.0)),
-                flow_policy_config=getattr(td, "flow_policy_config", None),
+                volume=float(getattr(td, "volume", 0.0)),
+                flow_policy=getattr(td, "flow_policy", None),
                 mode=str(getattr(td, "mode", "pairwise")),
                 group_mode=str(getattr(td, "group_mode", "flatten")),
-                expand_vars=getattr(td, "expand_vars", None) or {},
-                expansion_mode=str(getattr(td, "expansion_mode", "cartesian")),
             )
             for td in base_tds
         ]
@@ -351,14 +368,12 @@ class MaximumSupportedDemand(WorkflowStep):
             TrafficDemand(
                 id=d.get("id") or "",
                 source=d["source"],
-                sink=d["sink"],
+                target=d["target"],
                 priority=int(d["priority"]),
-                demand=float(d["demand"]) * alpha,
-                flow_policy_config=d.get("flow_policy_config"),
+                volume=float(d["volume"]) * alpha,
+                flow_policy=d.get("flow_policy"),
                 mode=str(d.get("mode", "pairwise")),
                 group_mode=str(d.get("group_mode", "flatten")),
-                expand_vars=d.get("expand_vars") or {},
-                expansion_mode=str(d.get("expansion_mode", "cartesian")),
             )
             for d in base_demands
         ]

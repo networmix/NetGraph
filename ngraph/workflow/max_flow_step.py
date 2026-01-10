@@ -9,10 +9,10 @@ parameter specifies how many failure scenarios to run.
 YAML Configuration Example:
 
     workflow:
-      - step_type: MaxFlow
+      - type: MaxFlow
         name: "maxflow_dc_to_edge"
         source: "^datacenter/.*"
-        sink: "^edge/.*"
+        target: "^edge/.*"
         mode: "combine"
         failure_policy: "random_failures"
         iterations: 100
@@ -59,7 +59,7 @@ class MaxFlow(WorkflowStep):
 
     Attributes:
         source: Source node selector (string path or selector dict).
-        sink: Sink node selector (string path or selector dict).
+        target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         failure_policy: Name of failure policy in scenario.failure_policy_set.
         iterations: Number of failure iterations to run.
@@ -75,7 +75,7 @@ class MaxFlow(WorkflowStep):
     """
 
     source: Union[str, Dict[str, Any]] = ""
-    sink: Union[str, Dict[str, Any]] = ""
+    target: Union[str, Dict[str, Any]] = ""
     mode: str = "combine"
     failure_policy: str | None = None
     iterations: int = 1
@@ -106,10 +106,10 @@ class MaxFlow(WorkflowStep):
         t0 = time.perf_counter()
         logger.info("Starting MaxFlow: name=%s", self.name)
         logger.debug(
-            "MaxFlow params: source=%s sink=%s mode=%s failure_iters=%d parallelism=%s "
+            "MaxFlow params: source=%s target=%s mode=%s failure_iters=%d parallelism=%s "
             "failure_policy=%s include_flow_details=%s include_min_cut=%s",
             self.source,
-            self.sink,
+            self.target,
             self.mode,
             self.iterations,
             self.parallelism,
@@ -126,7 +126,7 @@ class MaxFlow(WorkflowStep):
         effective_parallelism = resolve_parallelism(self.parallelism)
         raw = fm.run_max_flow_monte_carlo(
             source=self.source,
-            sink=self.sink,
+            target=self.target,
             mode=self.mode,
             iterations=self.iterations,
             parallelism=effective_parallelism,
@@ -162,7 +162,7 @@ class MaxFlow(WorkflowStep):
 
         context = {
             "source": self.source,
-            "sink": self.sink,
+            "target": self.target,
             "mode": self.mode,
             "shortest_path": bool(self.shortest_path),
             "require_capacity": bool(self.require_capacity),

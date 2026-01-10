@@ -4,9 +4,6 @@ The ``Path`` dataclass stores a node-and-parallel-edges sequence and a numeric
 cost. Cached properties expose derived sequences for nodes and edges, and
 helpers provide equality, ordering by cost, and sub-path extraction with cost
 recalculation.
-
-Breaking change from v1.x: Edge references now use EdgeRef (link_id + direction)
-instead of integer edge keys for stable scenario-level edge identification.
 """
 
 from __future__ import annotations
@@ -25,9 +22,6 @@ if TYPE_CHECKING:
 @dataclass
 class Path:
     """Represents a single path in the network.
-
-    Breaking change from v1.x: path field now uses EdgeRef (link_id + direction)
-    instead of integer edge keys for stable scenario-level edge identification.
 
     Attributes:
         path: Sequence of (node_name, (edge_refs...)) tuples representing the path.

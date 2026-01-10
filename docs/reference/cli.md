@@ -167,13 +167,13 @@ The `--keys` option filters by the `name` field of workflow steps defined in you
 
 ```yaml
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: network_statistics
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd_baseline
 ```
 
-Then `--keys build_graph` will include only the results from the BuildGraph step, and `--keys capacity_analysis` will include only the MaxFlow results.
+Then `--keys network_statistics` will include only the results from the NetworkStats step, and `--keys msd_baseline` will include only the MaximumSupportedDemand results.
 
 ### Performance Profiling
 
@@ -210,13 +210,13 @@ The CLI outputs results as JSON with a fixed top-level shape:
 
 ```json
 {
-  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, "step_name": "..." } },
+  "workflow": { "<step>": { "type": "...", "execution_order": 0, "step_name": "..." } },
   "steps": {
     "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
-    "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "matrix_name": "baseline_traffic_matrix" } } },
-    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "flow_results": [ { "flows": [], "summary": {} } ], "context": { "matrix_name": "baseline_traffic_matrix" } } }
+    "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "demand_set": "baseline_traffic_matrix" } } },
+    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "flow_results": [ { "flows": [], "summary": {} } ], "context": { "demand_set": "baseline_traffic_matrix" } } }
   },
-  "scenario": { "seed": 42, "failure_policy_set": { }, "traffic_matrices": { } }
+  "scenario": { "seed": 42, "failures": { }, "demands": { } }
 }
 ```
 

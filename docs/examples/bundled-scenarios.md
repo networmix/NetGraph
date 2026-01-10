@@ -7,7 +7,7 @@ NetGraph ships with ready-to-run scenarios that demonstrate the DSL, workflow st
 Inspect first, then run:
 
 ```bash
-# Inspect (structure, steps, matrices, failure policies)
+# Inspect (structure, steps, demands, failure policies)
 ngraph inspect scenarios/backbone_clos.yml --detail
 
 # Run and write JSON results next to the scenario (or under --output)
@@ -21,8 +21,8 @@ You can filter output by workflow step names with `--keys` (see each scenario se
 - **Purpose**: Toy 4-node full mesh to exercise MSD search, TM placement, and pairwise MaxFlow.
 - **Highlights**:
 
-  - Failure policy: single link choice (`failure_policy_set.single_link_failure`)
-  - Traffic matrix: pairwise demands across all nodes (`baseline_traffic_matrix`)
+  - Failure policy: single link choice (`failures.single_link_failure`)
+  - Demand set: pairwise demands across all nodes (`baseline_traffic_matrix`)
   - Workflow steps: `msd_baseline`, `tm_placement`, `node_to_node_capacity_matrix`
 
 Run:
@@ -40,9 +40,9 @@ ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
 - **Purpose**: Small Clos/metro fabric with components, SRLG-like risk groups, and multi-step workflow.
 - **Highlights**:
 
-  - Uses `blueprints`, attribute-based adjacency selectors, and hardware component attrs
-  - Failure policy: weighted multi-mode (`failure_policy_set.weighted_modes`)
-  - Traffic matrix: inter-metro DC flows with TE/WCMP policy
+  - Uses `blueprints`, attribute-based link selectors, and hardware component attrs
+  - Failure policy: weighted multi-mode (`failures.weighted_modes`)
+  - Demand set: inter-metro DC flows with TE/WCMP policy
   - Workflow steps: `network_statistics`, `msd_baseline`, `tm_placement`, `cost_power`
 
 Run:
@@ -76,4 +76,4 @@ ngraph run scenarios/nsfnet.yaml --keys node_to_node_capacity_matrix_1 --stdout
 
 ## Notes on results
 
-All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store per-iteration lists under `data.flow_results` with `summary` and optional `cost_distribution` or `min_cut` fields. See Reference → Workflow for the exact schema.
+All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store per-iteration lists under `data.flow_results` with `summary` and optional `cost_distribution` or `min_cut` fields. See Reference -> Workflow for the exact schema.

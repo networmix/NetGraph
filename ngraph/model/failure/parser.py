@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
+from ngraph.dsl.selectors import Condition
 from ngraph.logging import get_logger
 from ngraph.model.failure.policy import (
-    FailureCondition,
     FailureMode,
     FailurePolicy,
     FailureRule,
@@ -109,34 +109,40 @@ def build_failure_policy(
     def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
         out: List[FailureRule] = []
         for rule_dict in rule_dicts:
-            entity_scope = rule_dict.get("entity_scope", "node")
-            conditions_data = rule_dict.get("conditions", [])
+            scope = rule_dict.get("scope", "node")
+
+            # Get conditions from match block
+            match_block = rule_dict.get("match", {})
+            conditions_data = match_block.get("conditions", [])
+            logic = match_block.get("logic", "or")
+
             if not isinstance(conditions_data, list):
                 raise ValueError("Each rule's 'conditions' must be a list if present.")
-            conditions: List[FailureCondition] = []
+            conditions: List[Condition] = []
             for cond_dict in conditions_data:
                 conditions.append(
-                    FailureCondition(
+                    Condition(
                         attr=cond_dict["attr"],
-                        operator=cond_dict["operator"],
-                        value=cond_dict["value"],
+                        op=cond_dict["op"],
+                        value=cond_dict.get("value"),
                     )
                 )
             out.append(
                 FailureRule(
-                    entity_scope=entity_scope,
+                    scope=scope,
                     conditions=conditions,
-                    logic=rule_dict.get("logic", "or"),
-                    rule_type=rule_dict.get("rule_type", "all"),
+                    logic=logic,
+                    mode=rule_dict.get("mode", "all"),
                     probability=rule_dict.get("probability", 1.0),
                     count=rule_dict.get("count", 1),
                     weight_by=rule_dict.get("weight_by"),
+                    path=rule_dict.get("path"),
                 )
             )
         return out
 
-    fail_srg = fp_data.get("fail_risk_groups", False)
-    fail_rg_children = fp_data.get("fail_risk_group_children", False)
+    expand_groups = fp_data.get("expand_groups", False)
+    expand_children = fp_data.get("expand_children", False)
     attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
 
     modes: List[FailureMode] = []
@@ -158,8 +164,8 @@ def build_failure_policy(
 
     return FailurePolicy(
         attrs=attrs,
-        fail_risk_groups=fail_srg,
-        fail_risk_group_children=fail_rg_children,
+        expand_groups=expand_groups,
+        expand_children=expand_children,
         seed=policy_seed,
         modes=modes,
     )

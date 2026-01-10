@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ngraph.analysis.failure_manager import FailureManager
+from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
-    FailureCondition,
     FailureMode,
     FailurePolicy,
     FailureRule,
@@ -36,7 +36,7 @@ def simple_network() -> Network:
 @pytest.fixture
 def failure_policy() -> FailurePolicy:
     """Create a simple failure policy for testing."""
-    rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+    rule = FailureRule(scope="node", mode="choice", count=1)
     return FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
 
@@ -184,10 +184,10 @@ class TestFailureManagerTopLevelMatching:
         simple_network.nodes["node1"].disabled = True
 
         rule = FailureRule(
-            entity_scope="node",
-            conditions=[FailureCondition(attr="disabled", operator="==", value=True)],
+            scope="node",
+            conditions=[Condition(attr="disabled", op="==", value=True)],
             logic="and",
-            rule_type="all",
+            mode="all",
         )
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
@@ -209,10 +209,10 @@ class TestFailureManagerTopLevelMatching:
     ) -> None:
         """Test link matching on capacity attribute."""
         rule = FailureRule(
-            entity_scope="link",
-            conditions=[FailureCondition(attr="capacity", operator=">", value=150.0)],
+            scope="link",
+            conditions=[Condition(attr="capacity", op=">", value=150.0)],
             logic="and",
-            rule_type="all",
+            mode="all",
         )
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
@@ -285,7 +285,7 @@ class TestFailureManagerConvenienceMethods:
 
         result = failure_manager.run_max_flow_monte_carlo(
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             mode="combine",
             iterations=2,
             parallelism=1,
@@ -323,7 +323,7 @@ class TestFailureManagerConvenienceMethods:
 
             failure_manager.run_max_flow_monte_carlo(
                 source="src.*",
-                sink="dst.*",
+                target="dst.*",
                 flow_placement="EQUAL_BALANCED",
                 iterations=1,
             )
@@ -338,7 +338,7 @@ class TestFailureManagerConvenienceMethods:
         with pytest.raises(ValueError) as exc_info:
             failure_manager.run_max_flow_monte_carlo(
                 source="src.*",
-                sink="dst.*",
+                target="dst.*",
                 flow_placement="INVALID_OPTION",
                 iterations=1,
             )
@@ -358,7 +358,7 @@ class TestFailureManagerConvenienceMethods:
 
             failure_manager.run_max_flow_monte_carlo(
                 source="src.*",
-                sink="dst.*",
+                target="dst.*",
                 flow_placement="proportional",  # lowercase
                 iterations=1,
             )

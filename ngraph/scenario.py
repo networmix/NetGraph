@@ -9,8 +9,8 @@ from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.loader import load_scenario_yaml
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
-from ngraph.model.demand.builder import build_traffic_matrix_set
-from ngraph.model.demand.matrix import TrafficMatrixSet
+from ngraph.model.demand.builder import build_demand_set
+from ngraph.model.demand.matrix import DemandSet
 from ngraph.model.failure.generate import generate_risk_groups, parse_generate_spec
 from ngraph.model.failure.membership import resolve_membership_rules
 from ngraph.model.failure.parser import build_failure_policy_set, build_risk_groups
@@ -50,7 +50,7 @@ class Scenario:
     network: Network
     workflow: List[WorkflowStep]
     failure_policy_set: FailurePolicySet = field(default_factory=FailurePolicySet)
-    traffic_matrix_set: TrafficMatrixSet = field(default_factory=TrafficMatrixSet)
+    demand_set: DemandSet = field(default_factory=DemandSet)
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
     seed: Optional[int] = None
@@ -92,12 +92,12 @@ class Scenario:
         Top-level YAML keys can include:
           - vars: YAML anchors for value reuse
           - blueprints: Reusable topology templates
-          - network: Nodes, links, groups, adjacency
-          - risk_groups: Failure correlation groups (direct, membership rules, generate blocks)
-          - failure_policy_set: Failure simulation policies
-          - traffic_matrix_set: Traffic demand definitions
-          - workflow: Analysis execution steps
           - components: Hardware component library
+          - network: Nodes, links, node_rules, link_rules
+          - risk_groups: Failure correlation groups (direct, membership rules, generate blocks)
+          - demands: Traffic demand definitions (named sets)
+          - failures: Failure simulation policies
+          - workflow: Analysis execution steps
           - seed: Master seed for reproducible randomness
 
         Risk group processing:
@@ -107,7 +107,7 @@ class Scenario:
         4. References are validated (undefined groups and circular hierarchies detected)
 
         If no 'workflow' key is provided, the scenario has no steps to run.
-        If 'failure_policy_set' is omitted, scenario.failure_policy_set is empty.
+        If 'failures' is omitted, scenario.failure_policy_set is empty.
         If 'components' is provided, it is merged with default_components.
         If 'seed' is provided, it enables reproducible random operations.
         If 'vars' is provided, it can contain YAML anchors and aliases for reuse.
@@ -151,7 +151,7 @@ class Scenario:
         # 2) Build the failure policy set
         seed_manager = SeedManager(seed)
         failure_policy_set = build_failure_policy_set(
-            data.get("failure_policy_set", {}),
+            data.get("failures", {}),
             derive_seed=lambda n: seed_manager.derive_seed("failure_policy", n),
         )
 
@@ -167,26 +167,26 @@ class Scenario:
             except Exception as exc:
                 Scenario._logger.debug("Failed to log policy set stats: %s", exc)
 
-        # 3) Build traffic matrix set
-        raw = data.get("traffic_matrix_set", {})
-        tms = build_traffic_matrix_set(raw)
+        # 3) Build demand sets
+        raw = data.get("demands", {})
+        ds = build_demand_set(raw)
         try:
-            matrix_names = sorted(list(getattr(tms, "matrices", {}).keys()))
+            set_names = sorted(list(getattr(ds, "sets", {}).keys()))
             total_demands = 0
-            for _mname, demands in getattr(tms, "matrices", {}).items():
+            for _sname, demands in getattr(ds, "sets", {}).items():
                 total_demands += len(demands)
             Scenario._logger.debug(
-                "Constructed TrafficMatrixSet: matrices=%d, total_demands=%d%s",
-                len(matrix_names),
+                "Constructed DemandSet: sets=%d, total_demands=%d%s",
+                len(set_names),
                 total_demands,
                 (
-                    f" ({', '.join(matrix_names[:5])}{'...' if len(matrix_names) > 5 else ''})"
-                    if matrix_names
+                    f" ({', '.join(set_names[:5])}{'...' if len(set_names) > 5 else ''})"
+                    if set_names
                     else ""
                 ),
             )
         except Exception as exc:
-            Scenario._logger.debug("Failed to log traffic matrix stats: %s", exc)
+            Scenario._logger.debug("Failed to log demand set stats: %s", exc)
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
@@ -257,9 +257,9 @@ class Scenario:
                         raise ValueError(
                             f"Generated risk group '{rg.name}' conflicts with existing "
                             f"risk group. The generate block with group_by='{spec.group_by}' "
-                            f"and name_template='{spec.name_template}' produced a name that "
+                            f"and name='{spec.name}' produced a name that "
                             f"already exists. Either rename the existing group or adjust "
-                            f"the name_template to avoid collisions."
+                            f"the name to avoid collisions."
                         )
                     network_obj.risk_groups[rg.name] = rg
             except ValueError as e:
@@ -282,7 +282,7 @@ class Scenario:
             network=network_obj,
             failure_policy_set=failure_policy_set,
             workflow=workflow_steps,
-            traffic_matrix_set=tms,
+            demand_set=ds,
             components_library=final_components,
             seed=seed,
         )
@@ -293,7 +293,7 @@ class Scenario:
                 build_scenario_snapshot(
                     seed=seed,
                     failure_policy_set=failure_policy_set,
-                    traffic_matrix_set=tms,
+                    demand_set=ds,
                 )
             )
         except Exception as exc:
@@ -306,7 +306,7 @@ class Scenario:
                 len(getattr(network_obj, "nodes", {})),
                 len(getattr(network_obj, "links", {})),
                 len(getattr(failure_policy_set, "policies", {})),
-                len(getattr(tms, "matrices", {})),
+                len(getattr(ds, "sets", {})),
                 len(workflow_steps),
             )
         except Exception as exc:

@@ -3,8 +3,8 @@
 import pytest
 
 from ngraph.analysis.failure_manager import FailureManager
+from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
-    FailureCondition,
     FailureMode,
     FailurePolicy,
     FailureRule,
@@ -22,7 +22,7 @@ class TestFailureTracePolicyLevel:
 
     def test_trace_captures_mode_index(self) -> None:
         """Test that mode_index is correctly captured."""
-        rule = FailureRule(entity_scope="node", rule_type="all")
+        rule = FailureRule(scope="node", mode="all")
         policy = FailurePolicy(
             modes=[
                 FailureMode(weight=0.0, rules=[]),  # weight=0 never selected
@@ -40,7 +40,7 @@ class TestFailureTracePolicyLevel:
     def test_trace_captures_mode_attrs(self) -> None:
         """Test that mode_attrs is a copy of the selected mode's attrs."""
         attrs = {"severity": "high", "region": "west"}
-        rule = FailureRule(entity_scope="node", rule_type="all")
+        rule = FailureRule(scope="node", mode="all")
         policy = FailurePolicy(
             modes=[FailureMode(weight=1.0, rules=[rule], attrs=attrs)]
         )
@@ -55,9 +55,9 @@ class TestFailureTracePolicyLevel:
     def test_trace_captures_selection_fields(self) -> None:
         """Test that selections contain correct fields."""
         rule = FailureRule(
-            entity_scope="node",
-            conditions=[FailureCondition(attr="type", operator="==", value="router")],
-            rule_type="choice",
+            scope="node",
+            conditions=[Condition(attr="type", op="==", value="router")],
+            mode="choice",
             count=1,
         )
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
@@ -73,19 +73,17 @@ class TestFailureTracePolicyLevel:
         assert len(trace["selections"]) == 1
         sel = trace["selections"][0]
         assert sel["rule_index"] == 0
-        assert sel["entity_scope"] == "node"
-        assert sel["rule_type"] == "choice"
+        assert sel["scope"] == "node"
+        assert sel["mode"] == "choice"
         assert sel["matched_count"] == 2  # N1 and N2 matched
         assert len(sel["selected_ids"]) == 1  # count=1
 
     def test_trace_empty_selections_when_no_match(self) -> None:
         """Test that rules matching nothing are not recorded."""
         rule = FailureRule(
-            entity_scope="node",
-            conditions=[
-                FailureCondition(attr="type", operator="==", value="nonexistent")
-            ],
-            rule_type="all",
+            scope="node",
+            conditions=[Condition(attr="type", op="==", value="nonexistent")],
+            mode="all",
         )
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
@@ -112,12 +110,10 @@ class TestFailureTracePolicyLevel:
             modes=[
                 FailureMode(
                     weight=1.0,
-                    rules=[
-                        FailureRule(entity_scope="node", rule_type="choice", count=1)
-                    ],
+                    rules=[FailureRule(scope="node", mode="choice", count=1)],
                 )
             ],
-            fail_risk_groups=True,
+            expand_groups=True,
         )
         policy_choice.apply_failures(nodes, links, failure_trace=trace, seed=42)
 
@@ -130,15 +126,13 @@ class TestFailureTracePolicyLevel:
         """Test expansion tracking for risk group children."""
         # Select only the parent, then expansion should add child
         rule = FailureRule(
-            entity_scope="risk_group",
-            conditions=[
-                FailureCondition(attr="name", operator="==", value="parent_rg")
-            ],
-            rule_type="all",
+            scope="risk_group",
+            conditions=[Condition(attr="name", op="==", value="parent_rg")],
+            mode="all",
         )
         policy = FailurePolicy(
             modes=[FailureMode(weight=1.0, rules=[rule])],
-            fail_risk_group_children=True,
+            expand_children=True,
         )
 
         risk_groups = {
@@ -165,7 +159,7 @@ class TestFailureTracePolicyLevel:
 
     def test_trace_none_does_not_populate(self) -> None:
         """Test that passing failure_trace=None doesn't cause errors."""
-        rule = FailureRule(entity_scope="node", rule_type="all")
+        rule = FailureRule(scope="node", mode="all")
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
         # Should not raise
@@ -174,7 +168,7 @@ class TestFailureTracePolicyLevel:
 
     def test_trace_deterministic_with_seed(self) -> None:
         """Test that trace is deterministic with fixed seed."""
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
         nodes = {"N1": {}, "N2": {}, "N3": {}}
@@ -229,7 +223,7 @@ class TestFailureTraceManagerIntegration:
 
     def test_results_include_trace_fields(self, simple_network: Network) -> None:
         """Test that results include trace fields when store_failure_patterns=True."""
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         policy = FailurePolicy(
             modes=[FailureMode(weight=1.0, rules=[rule], attrs={"test": "attr"})]
         )
@@ -259,7 +253,7 @@ class TestFailureTraceManagerIntegration:
 
     def test_baseline_has_no_trace_fields(self, simple_network: Network) -> None:
         """Test that baseline result doesn't have trace fields."""
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set = FailurePolicySet()
         policy_set.policies["test"] = policy
@@ -291,9 +285,9 @@ class TestFailureTraceManagerIntegration:
         """Test that deduplicated iterations produce single unique result."""
         # Use a deterministic policy that always produces same result
         rule = FailureRule(
-            entity_scope="node",
-            conditions=[FailureCondition(attr="type", operator="==", value="router")],
-            rule_type="all",  # Always selects same nodes
+            scope="node",
+            conditions=[Condition(attr="type", op="==", value="router")],
+            mode="all",  # Always selects same nodes
         )
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set = FailurePolicySet()
@@ -321,7 +315,7 @@ class TestFailureTraceManagerIntegration:
 
     def test_trace_deterministic_across_runs(self, simple_network: Network) -> None:
         """Test that trace is deterministic with fixed seed across runs."""
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set = FailurePolicySet()
         policy_set.policies["test"] = policy
@@ -357,7 +351,7 @@ class TestFailureTraceManagerIntegration:
         self, simple_network: Network
     ) -> None:
         """Test that trace is not captured when store_failure_patterns=False."""
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
         policy_set = FailurePolicySet()
         policy_set.policies["test"] = policy

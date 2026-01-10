@@ -1,7 +1,7 @@
 """Schema definitions for unified node selection.
 
 Provides dataclasses for node selection configuration used across
-adjacency, demands, overrides, and workflow steps.
+network rules, demands, and workflow steps.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ VALID_OPERATORS: frozenset[str] = frozenset(
         "not_contains",
         "in",
         "not_in",
-        "any_value",
-        "no_value",
+        "exists",
+        "not_exists",
     }
 )
 
@@ -42,12 +42,12 @@ class Condition:
 
     Attributes:
         attr: Attribute name to match (supports dot-notation for nested attrs).
-        operator: Comparison operator.
-        value: Right-hand operand (unused for any_value/no_value).
+        op: Comparison operator.
+        value: Right-hand operand (unused for exists/not_exists).
     """
 
     attr: str
-    operator: Literal[
+    op: Literal[
         "==",
         "!=",
         "<",
@@ -58,15 +58,15 @@ class Condition:
         "not_contains",
         "in",
         "not_in",
-        "any_value",
-        "no_value",
+        "exists",
+        "not_exists",
     ]
     value: Any = None
 
     def __post_init__(self) -> None:
-        if self.operator not in VALID_OPERATORS:
+        if self.op not in VALID_OPERATORS:
             raise ValueError(
-                f"Invalid operator '{self.operator}'. "
+                f"Invalid operator '{self.op}'. "
                 f"Valid operators: {sorted(VALID_OPERATORS)}"
             )
 

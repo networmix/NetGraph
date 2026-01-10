@@ -38,7 +38,7 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             mode="combine",
         )
 
@@ -59,7 +59,7 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             include_flow_details=True,
             include_min_cut=True,
         )
@@ -85,7 +85,7 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             mode="pairwise",
             shortest_path=True,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
@@ -109,7 +109,7 @@ class TestMaxFlowAnalysis:
                 excluded_nodes=set(),
                 excluded_links=set(),
                 source="nonexistent.*",
-                sink="also_nonexistent.*",
+                target="also_nonexistent.*",
             )
 
 
@@ -138,8 +138,8 @@ class TestDemandPlacementAnalysis:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,
+                "target": "D",
+                "volume": 50.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
@@ -178,8 +178,8 @@ class TestDemandPlacementAnalysis:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 0.0,
+                "target": "B",
+                "volume": 0.0,
             }
         ]
 
@@ -223,8 +223,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "stable-pairwise-id",
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,
+                "target": "D",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -252,8 +252,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "stable-combine-id",
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -283,8 +283,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "reusable-id",
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -310,8 +310,8 @@ class TestDemandPlacementWithContextCaching:
         demands_config = [
             {
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -351,7 +351,7 @@ class TestSensitivityAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -381,5 +381,5 @@ class TestSensitivityAnalysis:
                 excluded_nodes=set(),
                 excluded_links=set(),
                 source="nonexistent.*",
-                sink="also_nonexistent.*",
+                target="also_nonexistent.*",
             )

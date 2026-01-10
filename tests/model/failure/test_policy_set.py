@@ -53,13 +53,13 @@ class TestFailurePolicySet:
         fps = FailurePolicySet()
 
         # Create a policy with some rules and attributes
-        rule = FailureRule(entity_scope="node", rule_type="choice", count=1)
+        rule = FailureRule(scope="node", mode="choice", count=1)
         from ngraph.model.failure.policy import FailureMode
 
         policy = FailurePolicy(
             modes=[FailureMode(weight=1.0, rules=[rule])],
             attrs={"name": "test_policy", "description": "Test policy"},
-            fail_risk_groups=True,
+            expand_groups=True,
         )
 
         fps.add("test", policy)
@@ -69,7 +69,7 @@ class TestFailurePolicySet:
         assert "test" in result
         assert "modes" in result["test"]
         assert "attrs" in result["test"]
-        assert result["test"]["fail_risk_groups"] is True
+        assert result["test"]["expand_groups"] is True
         # Modes present
         assert "modes" in result["test"] and len(result["test"]["modes"]) == 1
 
@@ -77,8 +77,8 @@ class TestFailurePolicySet:
         mode = result["test"]["modes"][0]
         assert len(mode["rules"]) == 1
         rule_dict = mode["rules"][0]
-        assert rule_dict["entity_scope"] == "node"
-        assert rule_dict["rule_type"] == "choice"
+        assert rule_dict["scope"] == "node"
+        assert rule_dict["mode"] == "choice"
         assert rule_dict["count"] == 1
 
     def test_to_dict_multiple_policies(self):

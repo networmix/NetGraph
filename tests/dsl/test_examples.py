@@ -21,12 +21,11 @@ network:
   links:
     - source: SEA
       target: SFO
-      link_params:
-        capacity: 200
-        cost: 6846
-        attrs:
-          distance_km: 1369.13
-          media_type: "fiber"
+      capacity: 200
+      cost: 6846
+      attrs:
+        distance_km: 1369.13
+        media_type: "fiber"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -41,24 +40,23 @@ def test_groups_example():
     """Test network groups with adjacency patterns."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     direct_group_A:
-      node_count: 2
-      name_template: "server-{node_num}"
+      count: 2
+      template: "server-{n}"
       attrs:
         os: "linux"
     direct_group_B:
-      node_count: 2
-      name_template: "switch-{node_num}"
+      count: 2
+      template: "switch-{n}"
       attrs:
         type: "switch"
-  adjacency:
+  links:
     - source: /direct_group_A
       target: /direct_group_B
       pattern: "mesh"
-      link_params:
-        capacity: 100
-        cost: 10
+      capacity: 100
+      cost: 10
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -72,48 +70,47 @@ def test_adjacency_selector_match_filters_nodes():
     """Adjacency selectors with match should filter nodes by attributes."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     servers:
-      node_count: 4
-      name_template: "srv-{node_num}"
+      count: 4
+      template: "srv-{n}"
       attrs:
         role: "compute"
         rack: "rack-1"
     servers_b:
-      node_count: 2
-      name_template: "srvb-{node_num}"
+      count: 2
+      template: "srvb-{n}"
       attrs:
         role: "compute"
         rack: "rack-9"
     switches:
-      node_count: 2
-      name_template: "sw-{node_num}"
+      count: 2
+      template: "sw-{n}"
       attrs:
         tier: "spine"
 
-  adjacency:
+  links:
     - source:
         path: "/servers"
         match:
           logic: "and"
           conditions:
             - attr: "role"
-              operator: "=="
+              op: "=="
               value: "compute"
             - attr: "rack"
-              operator: "!="
+              op: "!="
               value: "rack-9"
       target:
         path: "/switches"
         match:
           conditions:
             - attr: "tier"
-              operator: "=="
+              op: "=="
               value: "spine"
       pattern: "mesh"
-      link_params:
-        capacity: 10
-        cost: 1
+      capacity: 10
+      cost: 1
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -127,15 +124,15 @@ def test_bracket_expansion():
     yaml_content = """
 blueprints:
   simple_pod:
-    groups:
+    nodes:
       switches:
-        node_count: 2
-        name_template: "sw-{node_num}"
+        count: 2
+        template: "sw-{n}"
 
 network:
-  groups:
+  nodes:
     pod[1-2]:
-      use_blueprint: simple_pod
+      blueprint: simple_pod
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -148,29 +145,28 @@ def test_blueprint_example():
     yaml_content = """
 blueprints:
   my_blueprint_name:
-    groups:
+    nodes:
       group_name_1:
-        node_count: 2
-        name_template: "prefix-{node_num}"
+        count: 2
+        template: "prefix-{n}"
         attrs:
           hw_type: "router_model_X"
           role: "leaf"
         risk_groups: ["RG1", "RG2"]
       group_name_2:
-        node_count: 2
-        name_template: "spine-{node_num}"
-    adjacency:
+        count: 2
+        template: "spine-{n}"
+    links:
       - source: /group_name_1
         target: /group_name_2
         pattern: "mesh"
-        link_params:
-          capacity: 100
-          cost: 10
+        capacity: 100
+        cost: 10
 
 network:
-  groups:
+  nodes:
     instance_of_bp:
-      use_blueprint: my_blueprint_name
+      blueprint: my_blueprint_name
       attrs:
         location: "rack1"
 
@@ -256,7 +252,7 @@ network:
     assert len(rack1.children) == 2
 
 
-def test_traffic_matrix_set_example():
+def test_demand_set_example():
     """Test traffic matrix set definition."""
     yaml_content = """
 network:
@@ -274,11 +270,11 @@ network:
       attrs:
         role: "server"
 
-traffic_matrix_set:
+demands:
   default:
     - source: "source.*"
-      sink: "sink.*"
-      demand: 100
+      target: "sink.*"
+      volume: 100
       mode: "combine"
       priority: 1
       attrs:
@@ -286,12 +282,12 @@ traffic_matrix_set:
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    default_demands = scenario.traffic_matrix_set.get_default_matrix()
+    default_demands = scenario.demand_set.get_default_set()
     assert len(default_demands) == 1
     demand = default_demands[0]
     assert demand.source == "source.*"
-    assert demand.sink == "sink.*"
-    assert demand.demand == 100
+    assert demand.target == "sink.*"
+    assert demand.volume == 100
     assert demand.mode == "combine"
 
 
@@ -307,22 +303,23 @@ network:
       attrs:
         role: "leaf"
 
-failure_policy_set:
+failures:
   default:
-    fail_risk_groups: true
-    fail_risk_group_children: false
+    expand_groups: true
+    expand_children: false
     attrs:
       custom_key: "value"
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "node"
-            conditions:
-              - attr: "role"
-                operator: "=="
-                value: "spine"
-            logic: "and"
-            rule_type: "all"
+          - scope: "node"
+            match:
+              logic: "and"
+              conditions:
+                - attr: "role"
+                  op: "=="
+                  value: "spine"
+            mode: "all"
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -330,13 +327,13 @@ failure_policy_set:
     policies = scenario.failure_policy_set.get_all_policies()
     assert len(policies) > 0
     default_policy = scenario.failure_policy_set.get_policy("default")
-    assert default_policy.fail_risk_groups
-    assert not default_policy.fail_risk_group_children
+    assert default_policy.expand_groups
+    assert not default_policy.expand_children
     assert len(default_policy.modes) == 1
     mode = default_policy.modes[0]
     assert len(mode.rules) == 1
     rule = mode.rules[0]
-    assert rule.entity_scope == "node"
+    assert rule.scope == "node"
     assert len(rule.conditions) == 1
 
 
@@ -349,7 +346,7 @@ network:
     node2: {}
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -369,17 +366,17 @@ def test_node_overrides_example():
     yaml_content = """
 blueprints:
   test_bp:
-    groups:
+    nodes:
       switches:
-        node_count: 3
-        name_template: "switch-{node_num}"
+        count: 3
+        template: "switch-{n}"
 
 network:
-  groups:
+  nodes:
     my_clos1:
-      use_blueprint: test_bp
+      blueprint: test_bp
 
-  node_overrides:
+  node_rules:
     - path: "^my_clos1/switches/switch-(1|3)$"
       disabled: true
       attrs:
@@ -402,28 +399,26 @@ def test_link_overrides_example():
     """Test link overrides functionality."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     group1:
-      node_count: 2
-      name_template: "node-{node_num}"
+      count: 2
+      template: "node-{n}"
     group2:
-      node_count: 2
-      name_template: "node-{node_num}"
+      count: 2
+      template: "node-{n}"
 
-  adjacency:
+  links:
     - source: /group1
       target: /group2
       pattern: "mesh"
-      link_params:
-        capacity: 100
-        cost: 10
+      capacity: 100
+      cost: 10
 
-  link_overrides:
+  link_rules:
     - source: "^group1/node-1$"
       target: "^group2/node-1$"
-      link_params:
-        capacity: 200
-        cost: 5
+      capacity: 200
+      cost: 5
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -445,30 +440,30 @@ def test_variable_expansion():
     yaml_content = """
 blueprints:
   test_expansion:
-    groups:
+    nodes:
       plane1_rack:
-        node_count: 2
-        name_template: "rack-{node_num}"
+        count: 2
+        template: "rack-{n}"
       plane2_rack:
-        node_count: 2
-        name_template: "rack-{node_num}"
+        count: 2
+        template: "rack-{n}"
       spine:
-        node_count: 2
-        name_template: "spine-{node_num}"
-    adjacency:
+        count: 2
+        template: "spine-{n}"
+    links:
       - source: "plane${p}_rack"
         target: "spine"
-        expand_vars:
-          p: [1, 2]
-        expansion_mode: "cartesian"
+        expand:
+          vars:
+            p: [1, 2]
+          mode: "cartesian"
         pattern: "mesh"
-        link_params:
-          capacity: 100
+        capacity: 100
 
 network:
-  groups:
+  nodes:
     test_instance:
-      use_blueprint: test_expansion
+      blueprint: test_expansion
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -486,9 +481,9 @@ def test_unknown_blueprint_raises():
     """Using an unknown blueprint should raise ValueError with a clear message."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     use_missing:
-      use_blueprint: non_existent
+      blueprint: non_existent
 """
 
     with pytest.raises(ValueError) as exc:
@@ -500,12 +495,12 @@ def test_one_to_one_mismatch_raises():
     """one_to_one requires sizes with a multiple factor; mismatch should error."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     A:
-      node_count: 3
+      count: 3
     B:
-      node_count: 2
-  adjacency:
+      count: 2
+  links:
     - source: /A
       target: /B
       pattern: one_to_one
@@ -517,25 +512,27 @@ network:
 
 
 def test_unknown_adjacency_pattern_raises():
-    """Unknown adjacency pattern should raise ValueError."""
+    """Unknown link pattern should raise ValidationError."""
+    import jsonschema
+
     yaml_content = """
 network:
   nodes:
     N1: {}
     N2: {}
-  adjacency:
+  links:
     - source: /N1
       target: /N2
       pattern: non_existent_pattern
 """
 
-    with pytest.raises(ValueError) as exc:
+    with pytest.raises(jsonschema.ValidationError) as exc:
         Scenario.from_yaml(yaml_content)
-    assert "Unknown adjacency pattern" in str(exc.value)
+    assert "is not one of ['mesh', 'one_to_one']" in str(exc.value)
 
 
-def test_direct_link_same_node_raises():
-    """A direct link with identical source and target should raise ValueError."""
+def test_direct_link_same_node_skipped():
+    """A direct link with identical source and target is silently skipped (no self-loops)."""
     yaml_content = """
 network:
   nodes:
@@ -545,28 +542,29 @@ network:
       target: X
 """
 
-    with pytest.raises(ValueError) as exc:
-        Scenario.from_yaml(yaml_content)
-    assert "Link cannot have the same source and target" in str(exc.value)
+    # Self-loop links are silently skipped by the mesh pattern
+    scenario = Scenario.from_yaml(yaml_content)
+    assert "X" in scenario.network.nodes
+    assert len(scenario.network.links) == 0  # No link created
 
 
 def test_nested_parameter_override_in_attrs():
-    """Nested parameter override via parameters should modify node attrs."""
+    """Nested parameter override via params should modify node attrs."""
     yaml_content = """
 blueprints:
   bp1:
-    groups:
+    nodes:
       leaf:
-        node_count: 1
+        count: 1
         attrs:
           some_field:
             nested_key: 111
 
 network:
-  groups:
+  nodes:
     Main:
-      use_blueprint: bp1
-      parameters:
+      blueprint: bp1
+      params:
         leaf.attrs.some_field.nested_key: 999
 """
 
@@ -582,20 +580,21 @@ def test_zip_variable_mismatch_raises():
     """Zip expansion requires all lists same length; mismatch should raise."""
     yaml_content = """
 network:
-  groups:
+  nodes:
     RackA:
-      node_count: 1
+      count: 1
     RackB:
-      node_count: 1
+      count: 1
     RackC:
-      node_count: 1
-  adjacency:
+      count: 1
+  links:
     - source: /Rack${rack_id}
       target: /Rack${other_rack_id}
-      expand_vars:
-        rack_id: [A, B]
-        other_rack_id: [C, A, B]
-      expansion_mode: zip
+      expand:
+        vars:
+          rack_id: [A, B]
+          other_rack_id: [C, A, B]
+        mode: zip
 """
 
     with pytest.raises(ValueError) as exc:
@@ -603,8 +602,8 @@ network:
     assert "zip expansion requires equal-length lists" in str(exc.value)
 
 
-def test_direct_link_unknown_node_raises():
-    """Referencing an unknown node in a direct link should raise ValueError."""
+def test_direct_link_unknown_node_skipped():
+    """Referencing an unknown node in a direct link creates no links (pattern finds no target)."""
     yaml_content = """
 network:
   nodes:
@@ -614,9 +613,10 @@ network:
       target: UnknownNode
 """
 
-    with pytest.raises(ValueError) as exc:
-        Scenario.from_yaml(yaml_content)
-    assert "Link references unknown node(s)" in str(exc.value)
+    # Link with unknown target node is silently skipped (no matching target)
+    scenario = Scenario.from_yaml(yaml_content)
+    assert "KnownNode" in scenario.network.nodes
+    assert len(scenario.network.links) == 0  # No link created
 
 
 def test_group_by_selector_inside_blueprint():
@@ -630,40 +630,39 @@ def test_group_by_selector_inside_blueprint():
     yaml_content = """
 blueprints:
   bp_group:
-    groups:
+    nodes:
       leaf:
-        node_count: 2
-        name_template: "leaf-{node_num}"
+        count: 2
+        template: "leaf-{n}"
         attrs:
           role: "leaf"
       spine:
-        node_count: 1
-        name_template: "spine-{node_num}"
+        count: 1
+        template: "spine-{n}"
         attrs:
           role: "spine"
-    adjacency:
+    links:
       - source:
           group_by: "role"
           match:
             conditions:
               - attr: "role"
-                operator: "=="
+                op: "=="
                 value: "leaf"
         target:
           group_by: "role"
           match:
             conditions:
               - attr: "role"
-                operator: "=="
+                op: "=="
                 value: "spine"
         pattern: "mesh"
-        link_params:
-          capacity: 10
+        capacity: 10
 
 network:
-  groups:
+  nodes:
     pod1:
-      use_blueprint: bp_group
+      blueprint: bp_group
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -682,33 +681,33 @@ def test_group_by_with_variable_expansion():
     yaml_content = """
 blueprints:
   bp_group_vars:
-    groups:
+    nodes:
       leaf:
-        node_count: 2
-        name_template: "leaf-{node_num}"
+        count: 2
+        template: "leaf-{n}"
         attrs:
           src_role: "leaf"
       spine:
-        node_count: 1
-        name_template: "spine-{node_num}"
+        count: 1
+        template: "spine-{n}"
         attrs:
           dst_role: "spine"
-    adjacency:
+    links:
       - source:
           group_by: "${src_attr}"
         target:
           group_by: "${dst_attr}"
-        expand_vars:
-          src_attr: ["src_role"]
-          dst_attr: ["dst_role"]
+        expand:
+          vars:
+            src_attr: ["src_role"]
+            dst_attr: ["dst_role"]
         pattern: "mesh"
-        link_params:
-          capacity: 10
+        capacity: 10
 
 network:
-  groups:
+  nodes:
     pod1:
-      use_blueprint: bp_group_vars
+      blueprint: bp_group_vars
 """
 
     scenario = Scenario.from_yaml(yaml_content)
@@ -753,7 +752,7 @@ network:
     A: {}
     B: {}
   links:
-    - link_params: {capacity: 1}
+    - capacity: 1
 """
 
     with pytest.raises(ValueError) as exc:

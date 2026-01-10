@@ -153,10 +153,10 @@ risk_groups:
 blueprints:
   # Basic server rack with ToR switch
   server_rack:
-    groups:
+    nodes:
       tor:
-        node_count: 1
-        name_template: "tor-{node_num}"
+        count: 1
+        template: "tor-{n}"
         attrs:
           hardware:
             component: "ToRSwitch48p"
@@ -164,30 +164,29 @@ blueprints:
           role: "top_of_rack"
         risk_groups: ["CoolingZone_DC1_R1_CZA"]
       servers:
-        node_count: 8 # 8 servers per rack for test efficiency
-        name_template: "srv-{node_num}"
+        count: 8 # 8 servers per rack for test efficiency
+        template: "srv-{n}"
         attrs:
           hardware:
             component: "ServerNode"
             count: 1
           role: "compute"
         risk_groups: ["CoolingZone_DC1_R1_CZA"]
-    adjacency:
+    links:
       - source: /servers
         target: /tor
         pattern: "one_to_one"
-        link_params:
-          capacity: 25.0 # 25 Gb/s server uplinks
-          cost: 1
-          attrs:
-            media_type: "copper"
+        capacity: 25.0 # 25 Gb/s server uplinks
+        cost: 1
+        attrs:
+          media_type: "copper"
 
   # Spine-leaf fabric with variable expansion
   leaf_spine_fabric:
-    groups:
+    nodes:
       leaf:
-        node_count: 2 # 2 leaf switches per fabric
-        name_template: "leaf-{node_num}"
+        count: 2 # 2 leaf switches per fabric
+        template: "leaf-{n}"
         attrs:
           hardware:
             component: "ToRSwitch48p"
@@ -195,39 +194,39 @@ blueprints:
           role: "leaf"
         # Leaf switches in DC1 and DC2 have their own power zones
       spine:
-        node_count: 2 # 2 spine switches per fabric
-        name_template: "spine-{node_num}"
+        count: 2 # 2 spine switches per fabric
+        template: "spine-{n}"
         attrs:
           hardware:
             component: "SpineSwitch32p"
             count: 1
           role: "spine"
         # Spine switches share room-level risk (cooling/power in spine room)
-    adjacency:
+    links:
       # Variable expansion for leaf-spine connectivity using $var syntax
       - source: "leaf-${leaf_id}"
         target: "spine-${spine_id}"
-        expand_vars:
-          leaf_id: [1, 2]
-          spine_id: [1, 2]
-        expansion_mode: "cartesian"
+        expand:
+          vars:
+            leaf_id: [1, 2]
+            spine_id: [1, 2]
+          mode: "cartesian"
         pattern: "mesh"
-        link_params:
-          capacity: 400.0 # 400 Gb/s leaf-spine links
-          cost: 1
-          attrs:
-            media_type: "fiber"
-            link_type: "leaf_spine"
+        capacity: 400.0 # 400 Gb/s leaf-spine links
+        cost: 1
+        attrs:
+          media_type: "fiber"
+          link_type: "leaf_spine"
 
 network:
   name: "Advanced DSL Demonstration"
   version: "2.0"
 
-  groups:
+  nodes:
     # Multi-datacenter pod and rack expansion
     # Each rack group inherits building-level power zone risk
     dc[1-2]_pod[a,b]_rack[1-2]:
-      use_blueprint: server_rack
+      blueprint: server_rack
       attrs:
         datacenter: "dc1"
         pod: "poda"
@@ -237,45 +236,44 @@ network:
     # Fabric per DC using bracket expansion
     # Fabric equipment shares building-level risk
     dc[1-2]_fabric:
-      use_blueprint: leaf_spine_fabric
+      blueprint: leaf_spine_fabric
       attrs:
         datacenter: "dc1"
       risk_groups: ["Building_DC1"]
 
   # Top-level adjacency with variable expansion using $var syntax
-  adjacency:
+  links:
     # Connect racks to fabric using variable expansion
     - source: "dc${dc}_pod${pod}_rack${rack}/tor"
       target: "dc${dc}_fabric/leaf"
-      expand_vars:
-        dc: [1, 2]
-        pod: ["a", "b"]
-        rack: [1, 2]
-      expansion_mode: "cartesian"
+      expand:
+        vars:
+          dc: [1, 2]
+          pod: ["a", "b"]
+          rack: [1, 2]
+        mode: "cartesian"
       pattern: "one_to_one"
-      link_params:
-        capacity: 100.0 # 100 Gb/s rack-to-fabric uplinks
-        cost: 2
-        attrs:
-          connection_type: "rack_to_fabric"
+      capacity: 100.0 # 100 Gb/s rack-to-fabric uplinks
+      cost: 2
+      attrs:
+        connection_type: "rack_to_fabric"
 
     # Inter-DC spine connectivity - links traverse fiber conduit between buildings
     - source: "dc1_fabric/spine"
       target: "dc2_fabric/spine"
       pattern: "mesh"
-      link_params:
-        capacity: 400.0 # 400 Gb/s inter-DC links
-        cost: 10
-        risk_groups: ["Conduit_DC1_DC2_C1"]
-        attrs:
-          connection_type: "inter_dc"
-          fiber:
-            path_id: "DC1-DC2"
-            conduit_id: "DC1-DC2-C1"
-          distance_km: 50
+      capacity: 400.0 # 400 Gb/s inter-DC links
+      cost: 10
+      risk_groups: ["Conduit_DC1_DC2_C1"]
+      attrs:
+        connection_type: "inter_dc"
+        fiber:
+          path_id: "DC1-DC2"
+          conduit_id: "DC1-DC2-C1"
+        distance_km: 50
 
   # Complex node overrides with regex patterns
-  node_overrides:
+  node_rules:
     # Override DC1 spine switches - assign to DC1 spine room
     - path: "dc1_fabric/spine/spine-[1-2]"
       attrs:
@@ -324,44 +322,42 @@ network:
         maintenance_status: "scheduled"
 
   # Complex link overrides
-  link_overrides:
+  link_rules:
     # Higher capacity for inter-DC links - both conduit and path level risk
     - source: "dc1_fabric/spine/.*"
       target: "dc2_fabric/spine/.*"
-      any_direction: true
-      link_params:
-        capacity: 800.0 # 800 Gb/s inter-DC links
-        cost: 5
-        risk_groups: ["Conduit_DC1_DC2_C1", "Path_DC1_DC2"]
-        attrs:
-          link_class: "inter_dc"
-          encryption: "enabled"
-          fiber:
-            path_id: "DC1-DC2"
-            conduit_id: "DC1-DC2-C1"
+      bidirectional: true
+      capacity: 800.0 # 800 Gb/s inter-DC links
+      cost: 5
+      risk_groups: ["Conduit_DC1_DC2_C1", "Path_DC1_DC2"]
+      attrs:
+        link_class: "inter_dc"
+        encryption: "enabled"
+        fiber:
+          path_id: "DC1-DC2"
+          conduit_id: "DC1-DC2-C1"
 
     # Higher capacity uplinks for specific racks
     - source: "dc1_pod[ab]_rack1/tor/.*"
       target: "dc1_fabric/leaf/.*"
-      link_params:
-        capacity: 200.0 # 200 Gb/s uplinks
-        cost: 1
+      capacity: 200.0 # 200 Gb/s uplinks
+      cost: 1
 
 # Traffic patterns for realistic workloads
-traffic_matrix_set:
+demands:
   default:
     # East-west traffic within DC
     - source: "dc1_pod[ab]_rack.*/servers/.*"
-      sink: "dc1_pod[ab]_rack.*/servers/.*"
-      demand: 5.0 # 5 Gb/s east-west traffic
+      target: "dc1_pod[ab]_rack.*/servers/.*"
+      volume: 5.0 # 5 Gb/s east-west traffic
       mode: "pairwise"
       attrs:
         traffic_type: "east_west"
 
     # North-south traffic to external
     - source: "dc1_.*servers/.*"
-      sink: "dc2_.*servers/.*"
-      demand: 10.0 # 10 Gb/s inter-DC traffic
+      target: "dc2_.*servers/.*"
+      volume: 10.0 # 10 Gb/s inter-DC traffic
       mode: "combine"
       attrs:
         traffic_type: "inter_dc"
@@ -369,22 +365,22 @@ traffic_matrix_set:
   # High-performance computing workload
   hpc_workload:
     - source: "dc1_poda_rack1/servers/srv-[1-4]"
-      sink: "dc1_poda_rack1/servers/srv-[1-4]"
-      demand: 20.0 # 20 Gb/s HPC collective communication
+      target: "dc1_poda_rack1/servers/srv-[1-4]"
+      volume: 20.0 # 20 Gb/s HPC collective communication
       mode: "pairwise"
       attrs:
         traffic_type: "hpc_collective"
 
 # Failure policies for realistic failure scenarios
-failure_policy_set:
+failures:
   single_link_failure:
     attrs:
       description: "Single link failure"
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "link"
-            rule_type: "choice"
+          - scope: "link"
+            mode: "choice"
             count: 1
 
   single_node_failure:
@@ -393,8 +389,8 @@ failure_policy_set:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "node"
-            rule_type: "choice"
+          - scope: "node"
+            mode: "choice"
             count: 1
 
   default:
@@ -403,21 +399,21 @@ failure_policy_set:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "link"
-            rule_type: "choice"
+          - scope: "link"
+            mode: "choice"
             count: 1
 
 # Multi-step workflow demonstrating various workflow steps
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 
   # Capacity analysis with different traffic patterns
   # Forward intra-DC capacity analysis
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: intra_dc_capacity_forward
     source: "dc1_pod[ab]_rack.*/servers/.*"
-    sink: "dc1_pod[ab]_rack.*/servers/.*"
+    target: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
@@ -425,10 +421,10 @@ workflow:
     failure_policy: null
 
   # Reverse intra-DC capacity analysis
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: intra_dc_capacity_reverse
     source: "dc1_pod[ab]_rack.*/servers/.*"
-    sink: "dc1_pod[ab]_rack.*/servers/.*"
+    target: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
@@ -436,10 +432,10 @@ workflow:
     failure_policy: null
 
   # Forward inter-DC capacity analysis
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: inter_dc_capacity_forward
     source: "dc1_.*servers/.*"
-    sink: "dc2_.*servers/.*"
+    target: "dc2_.*servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
@@ -447,10 +443,10 @@ workflow:
     failure_policy: null
 
   # Reverse inter-DC capacity analysis
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: inter_dc_capacity_reverse
     source: "dc2_.*servers/.*"
-    sink: "dc1_.*servers/.*"
+    target: "dc1_.*servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "EQUAL_BALANCED"
@@ -458,10 +454,10 @@ workflow:
     failure_policy: null
 
   # Failure analysis with different policies
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: rack_failure_analysis
     source: "dc1_pod[ab]_rack.*/servers/.*"
-    sink: "dc1_pod[ab]_rack.*/servers/.*"
+    target: "dc1_pod[ab]_rack.*/servers/.*"
     mode: "combine"
     failure_policy: "single_link_failure"
     iterations: 10 # 10 iterations for test efficiency
@@ -469,10 +465,10 @@ workflow:
     shortest_path: false
     flow_placement: "PROPORTIONAL"
 
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: spine_failure_analysis
     source: "dc1_.*servers/.*"
-    sink: "dc2_.*servers/.*"
+    target: "dc2_.*servers/.*"
     mode: "combine"
     failure_policy: "single_node_failure"
     iterations: 20 # 20 iterations for test efficiency

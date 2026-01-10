@@ -128,8 +128,8 @@ class TestSPFCachingBasic:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,
+                "target": "D",
+                "volume": 50.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
@@ -158,15 +158,15 @@ class TestSPFCachingBasic:
         demands_config = [
             {
                 "source": "S1",
-                "sink": "D1",
-                "demand": 30.0,
+                "target": "D1",
+                "volume": 30.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
             {
                 "source": "S1",
-                "sink": "D2",
-                "demand": 30.0,
+                "target": "D2",
+                "volume": 30.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
@@ -189,20 +189,20 @@ class TestSPFCachingBasic:
         demands_config = [
             {
                 "source": "S1",
-                "sink": "D1",
-                "demand": 50.0,
+                "target": "D1",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
             {
                 "source": "S2",
-                "sink": "D1",
-                "demand": 50.0,
+                "target": "D1",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
             {
                 "source": "S3",
-                "sink": "D2",
-                "demand": 50.0,
+                "target": "D2",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -272,10 +272,10 @@ class TestSPFCachingEquivalence:
         for config in demands_config:
             demand = TrafficDemand(
                 source=config["source"],
-                sink=config["sink"],
-                demand=config["demand"],
+                target=config["target"],
+                volume=config["volume"],
                 mode=config.get("mode", "pairwise"),
-                flow_policy_config=config.get("flow_policy_config"),
+                flow_policy=config.get("flow_policy"),
                 priority=config.get("priority", 0),
             )
             traffic_demands.append(demand)
@@ -393,8 +393,8 @@ class TestSPFCachingEquivalence:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 80.0,
+                "target": "D",
+                "volume": 80.0,
                 "mode": "pairwise",
             },
         ]
@@ -428,10 +428,10 @@ class TestSPFCachingEquivalence:
     def test_equivalence_ecmp_multiple_demands(self, mesh_network: Network) -> None:
         """Test ECMP placement equivalence with multiple demands."""
         demands_config = [
-            {"source": "A", "sink": "B", "demand": 30.0, "mode": "pairwise"},
-            {"source": "A", "sink": "D", "demand": 40.0, "mode": "pairwise"},
-            {"source": "C", "sink": "B", "demand": 25.0, "mode": "pairwise"},
-            {"source": "C", "sink": "D", "demand": 35.0, "mode": "pairwise"},
+            {"source": "A", "target": "B", "volume": 30.0, "mode": "pairwise"},
+            {"source": "A", "target": "D", "volume": 40.0, "mode": "pairwise"},
+            {"source": "C", "target": "B", "volume": 25.0, "mode": "pairwise"},
+            {"source": "C", "target": "D", "volume": 35.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -466,7 +466,7 @@ class TestSPFCachingEquivalence:
     def test_equivalence_with_flow_details(self, mesh_network: Network) -> None:
         """Test equivalence when include_flow_details is True."""
         demands_config = [
-            {"source": "A", "sink": "D", "demand": 50.0, "mode": "pairwise"},
+            {"source": "A", "target": "D", "volume": 50.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -498,7 +498,7 @@ class TestSPFCachingEquivalence:
     def test_equivalence_with_used_edges(self, mesh_network: Network) -> None:
         """Test equivalence when include_used_edges is True."""
         demands_config = [
-            {"source": "A", "sink": "D", "demand": 50.0, "mode": "pairwise"},
+            {"source": "A", "target": "D", "volume": 50.0, "mode": "pairwise"},
         ]
 
         cached_result = demand_placement_analysis(
@@ -556,10 +556,10 @@ class TestSPFCachingTEPolicy:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 40.0,
+                "target": "D",
+                "volume": 40.0,
                 "mode": "pairwise",
-                "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
+                "flow_policy": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
         ]
 
@@ -581,10 +581,10 @@ class TestSPFCachingTEPolicy:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 80.0,  # Exceeds primary path capacity
+                "target": "D",
+                "volume": 80.0,  # Exceeds primary path capacity
                 "mode": "pairwise",
-                "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
+                "flow_policy": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
         ]
 
@@ -615,18 +615,18 @@ class TestSPFCachingTEPolicy:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 30.0,
+                "target": "D",
+                "volume": 30.0,
                 "mode": "pairwise",
-                "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
+                "flow_policy": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 30.0,
+                "target": "D",
+                "volume": 30.0,
                 "mode": "pairwise",
                 "priority": 1,  # Different priority = different demand
-                "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
+                "flow_policy": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
         ]
 
@@ -670,8 +670,8 @@ class TestSPFCachingEdgeCases:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",  # Unreachable from A
-                "demand": 50.0,
+                "target": "D",  # Unreachable from A
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -698,8 +698,8 @@ class TestSPFCachingEdgeCases:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 0.0,
+                "target": "B",
+                "volume": 0.0,
                 "mode": "pairwise",
             },
         ]
@@ -726,8 +726,8 @@ class TestSPFCachingEdgeCases:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 50.0,
+                "target": "B",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -755,8 +755,8 @@ class TestSPFCachingEdgeCases:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 50.0,
+                "target": "B",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -782,8 +782,8 @@ class TestSPFCachingEdgeCases:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 50.0,
+                "target": "B",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -821,8 +821,8 @@ class TestSPFCachingWithExclusions:
         demands_config = [
             {
                 "source": "A",
-                "sink": "C",
-                "demand": 50.0,
+                "target": "C",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -849,8 +849,8 @@ class TestSPFCachingWithExclusions:
         demands_config = [
             {
                 "source": "A",
-                "sink": "C",
-                "demand": 50.0,
+                "target": "C",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -901,8 +901,8 @@ class TestSPFCachingCostDistribution:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 25.0,  # Fits in tier 1
+                "target": "D",
+                "volume": 25.0,  # Fits in tier 1
                 "mode": "pairwise",
             },
         ]
@@ -927,10 +927,10 @@ class TestSPFCachingCostDistribution:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,  # Exceeds tier 1 capacity
+                "target": "D",
+                "volume": 50.0,  # Exceeds tier 1 capacity
                 "mode": "pairwise",
-                "flow_policy_config": FlowPolicyPreset.TE_WCMP_UNLIM,
+                "flow_policy": FlowPolicyPreset.TE_WCMP_UNLIM,
             },
         ]
 

@@ -60,7 +60,7 @@ def validate_risk_group_hierarchy(network: "Network") -> None:
 
     Uses DFS-based cycle detection to find any risk group that is part of
     a cycle in the children hierarchy. This can happen when membership rules
-    with entity_scope='risk_group' create mutual parent-child relationships.
+    with scope='risk_group' create mutual parent-child relationships.
 
     Args:
         network: Network with risk_groups populated (after membership resolution).
@@ -113,7 +113,7 @@ def validate_risk_group_hierarchy(network: "Network") -> None:
                     f"Circular reference detected in risk group hierarchy:\n"
                     f"  {cycle_str}\n\n"
                     f"Risk groups cannot form cycles in their parent-child relationships. "
-                    f"This may be caused by membership rules with entity_scope='risk_group' "
+                    f"This may be caused by membership rules with scope='risk_group' "
                     f"that create mutual parent-child relationships. Review the membership "
                     f"rules for these groups and adjust conditions to break the cycle."
                 )

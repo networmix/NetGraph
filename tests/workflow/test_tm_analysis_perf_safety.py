@@ -9,18 +9,18 @@ from ngraph.workflow.traffic_matrix_placement_step import (
 
 class _ScenarioStub:
     def __init__(
-        self, network: Any, tmset: Any, results: Any, failure_policy_set: Any
+        self, network: Any, demand_set: Any, results: Any, failures: Any
     ) -> None:
         self.network = network
-        self.traffic_matrix_set = tmset
+        self.demand_set = demand_set
         self.results = results
-        self.failure_policy_set = failure_policy_set
+        self.failure_policy_set = failures
         self._execution_counter = 0
 
 
 def test_tm_basic_behavior_unchanged(monkeypatch):
     # Small sanity test that the step runs end-to-end and stores outputs
-    from ngraph.model.demand.matrix import TrafficMatrixSet
+    from ngraph.model.demand.matrix import DemandSet
     from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.network import Link, Network, Node
 
@@ -30,10 +30,10 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
     net.add_link(Link("A", "B", capacity=5, cost=1))
     net.add_link(Link("B", "C", capacity=5, cost=1))
 
-    tmset = TrafficMatrixSet()
-    tmset.add(
+    demand_set = DemandSet()
+    demand_set.add(
         "default",
-        [TrafficDemand(source="A", sink="C", demand=2.0, mode="pairwise")],
+        [TrafficDemand(source="A", target="C", volume=2.0, mode="pairwise")],
     )
 
     class _ResultsStore:
@@ -60,10 +60,10 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
     class _FailurePolicySetStub:
         pass
 
-    scenario = _ScenarioStub(net, tmset, _ResultsStore(), _FailurePolicySetStub())
+    scenario = _ScenarioStub(net, demand_set, _ResultsStore(), _FailurePolicySetStub())
 
     step = TrafficMatrixPlacement(
-        matrix_name="default",
+        demand_set="default",
         iterations=2,
         placement_rounds="auto",
         include_flow_details=False,

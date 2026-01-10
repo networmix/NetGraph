@@ -36,26 +36,27 @@ def _reconstruct_traffic_demands(
     """Reconstruct TrafficDemand objects from serialized config.
 
     Args:
-        demands_config: List of demand configurations.
+        demands_config: List of demand configurations with fields:
+            source, target, volume, mode, group_mode, flow_policy, priority.
 
     Returns:
         List of TrafficDemand objects with preserved IDs.
     """
-    return [
-        TrafficDemand(
-            id=config.get("id") or "",
-            source=config["source"],
-            sink=config["sink"],
-            demand=config["demand"],
-            mode=config.get("mode", "pairwise"),
-            group_mode=config.get("group_mode", "flatten"),
-            expand_vars=config.get("expand_vars", {}),
-            expansion_mode=config.get("expansion_mode", "cartesian"),
-            flow_policy_config=config.get("flow_policy_config"),
-            priority=config.get("priority", 0),
+    results = []
+    for config in demands_config:
+        results.append(
+            TrafficDemand(
+                id=config.get("id") or "",
+                source=config["source"],
+                target=config.get("target", ""),
+                volume=config.get("volume", 0.0),
+                mode=config.get("mode", "pairwise"),
+                group_mode=config.get("group_mode", "flatten"),
+                flow_policy=config.get("flow_policy"),
+                priority=config.get("priority", 0),
+            )
         )
-        for config in demands_config
-    ]
+    return results
 
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ def max_flow_analysis(
     excluded_nodes: Set[str],
     excluded_links: Set[str],
     source: str | dict[str, Any],
-    sink: str | dict[str, Any],
+    target: str | dict[str, Any],
     mode: str = "combine",
     shortest_path: bool = False,
     require_capacity: bool = True,
@@ -84,7 +85,7 @@ def max_flow_analysis(
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
         source: Source node selector (string path or selector dict).
-        sink: Sink node selector (string path or selector dict).
+        target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: Whether to use shortest paths only.
         require_capacity: If True (default), path selection considers available
@@ -105,7 +106,7 @@ def max_flow_analysis(
     if context is not None:
         ctx = context
     else:
-        ctx = analyze(network, source=source, sink=sink, mode=mode_enum)
+        ctx = analyze(network, source=source, sink=target, mode=mode_enum)
 
     flow_entries: list[FlowEntry] = []
     total_demand = 0.0
@@ -293,7 +294,7 @@ def sensitivity_analysis(
     excluded_nodes: Set[str],
     excluded_links: Set[str],
     source: str | dict[str, Any],
-    sink: str | dict[str, Any],
+    target: str | dict[str, Any],
     mode: str = "combine",
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -304,7 +305,7 @@ def sensitivity_analysis(
 
     Identifies critical edges (saturated edges) and computes the flow reduction
     caused by removing each one. Returns a FlowIterationResult where each
-    FlowEntry represents a source/sink pair with:
+    FlowEntry represents a source/target pair with:
     - demand/placed = max flow value (the capacity being analyzed)
     - dropped = 0.0 (baseline analysis, no failures applied)
     - data["sensitivity"] = {link_id:direction: flow_reduction} for critical edges
@@ -314,7 +315,7 @@ def sensitivity_analysis(
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
         source: Source node selector (string path or selector dict).
-        sink: Sink node selector (string path or selector dict).
+        target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
             Reports only edges used under ECMP routing. If False (default), use
@@ -333,7 +334,7 @@ def sensitivity_analysis(
     if context is not None:
         ctx = context
     else:
-        ctx = analyze(network, source=source, sink=sink, mode=mode_enum)
+        ctx = analyze(network, source=source, sink=target, mode=mode_enum)
 
     # Get max flow values for each pair
     flow_values = ctx.max_flow(
@@ -387,7 +388,7 @@ def build_demand_context(
 ) -> AnalysisContext:
     """Build an AnalysisContext for repeated demand placement analysis.
 
-    Pre-computes the graph with augmentations (pseudo source/sink nodes) for
+    Pre-computes the graph with augmentations (pseudo source/target nodes) for
     efficient repeated analysis with different exclusion sets.
 
     Args:
@@ -413,22 +414,22 @@ def build_demand_context(
 def build_maxflow_context(
     network: "Network",
     source: str | dict[str, Any],
-    sink: str | dict[str, Any],
+    target: str | dict[str, Any],
     mode: str = "combine",
 ) -> AnalysisContext:
     """Build an AnalysisContext for repeated max-flow analysis.
 
-    Pre-computes the graph with pseudo source/sink nodes for all source/sink
+    Pre-computes the graph with pseudo source/target nodes for all source/target
     pairs, enabling O(|excluded|) mask building per iteration.
 
     Args:
         network: Network instance.
         source: Source node selector (string path or selector dict).
-        sink: Sink node selector (string path or selector dict).
+        target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
 
     Returns:
         AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
     """
     mode_enum = Mode.COMBINE if mode == "combine" else Mode.PAIRWISE
-    return analyze(network, source=source, sink=sink, mode=mode_enum)
+    return analyze(network, source=source, sink=target, mode=mode_enum)

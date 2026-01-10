@@ -285,13 +285,13 @@ class TestDictSelectorsWithShortestPaths:
             {
                 "path": ".*",
                 "match": {
-                    "conditions": [{"attr": "group", "operator": "==", "value": "src"}]
+                    "conditions": [{"attr": "group", "op": "==", "value": "src"}]
                 },
             },
             {
                 "path": ".*",
                 "match": {
-                    "conditions": [{"attr": "group", "operator": "==", "value": "dst"}]
+                    "conditions": [{"attr": "group", "op": "==", "value": "dst"}]
                 },
             },
             mode=Mode.COMBINE,

@@ -59,7 +59,7 @@ def _calculate_scenario_3_total_nodes() -> int:
 # Scenario 1: Basic 6-node L3 US backbone network
 # Simple topology with explicitly defined nodes and links
 SCENARIO_1_EXPECTATIONS = NetworkExpectations(
-    node_count=6,
+    count=6,
     edge_count=SCENARIO_1_PHYSICAL_LINKS * DEFAULT_BIDIRECTIONAL_MULTIPLIER,
     specific_nodes={"SEA", "SFO", "DEN", "DFW", "JFK", "DCA"},
     specific_links=[
@@ -79,7 +79,7 @@ SCENARIO_1_EXPECTATIONS = NetworkExpectations(
 # Scenario 2: Hierarchical DSL with blueprints and multi-node expansions
 # Topology using nested blueprints with parameter overrides
 SCENARIO_2_EXPECTATIONS = NetworkExpectations(
-    node_count=sum(SCENARIO_2_NODE_BREAKDOWN.values()),
+    count=sum(SCENARIO_2_NODE_BREAKDOWN.values()),
     edge_count=SCENARIO_2_PHYSICAL_LINKS * DEFAULT_BIDIRECTIONAL_MULTIPLIER,
     specific_nodes={"DEN", "DFW", "JFK", "DCA"},  # Standalone nodes
     blueprint_expansions={
@@ -96,7 +96,7 @@ SCENARIO_2_EXPECTATIONS = NetworkExpectations(
 # Scenario 3: 3-tier Clos network with nested blueprints
 # Topology with deep blueprint nesting and capacity probing
 SCENARIO_3_EXPECTATIONS = NetworkExpectations(
-    node_count=_calculate_scenario_3_total_nodes(),
+    count=_calculate_scenario_3_total_nodes(),
     edge_count=SCENARIO_3_PHYSICAL_LINKS * DEFAULT_BIDIRECTIONAL_MULTIPLIER,
     specific_nodes=set(),  # All nodes generated from blueprints
     blueprint_expansions={
@@ -186,7 +186,7 @@ def _calculate_scenario_4_total_links() -> int:
 
 # Main expectation structure for scenario 4
 SCENARIO_4_EXPECTATIONS = NetworkExpectations(
-    node_count=_calculate_scenario_4_total_nodes(),  # Total nodes after disabled rack
+    count=_calculate_scenario_4_total_nodes(),  # Total nodes after disabled rack
     edge_count=_calculate_scenario_4_total_links(),  # Actual observed link count
     specific_nodes=set(),  # All nodes generated from blueprints and expansion
     blueprint_expansions={

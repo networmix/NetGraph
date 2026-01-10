@@ -130,13 +130,13 @@ def parse_match_spec(
             raise ValueError(
                 f"Condition in {context} must be a dict, got {type(cond_dict).__name__}"
             )
-        if "attr" not in cond_dict or "operator" not in cond_dict:
-            raise ValueError(f"Condition in {context} must have 'attr' and 'operator'")
+        if "attr" not in cond_dict or "op" not in cond_dict:
+            raise ValueError(f"Condition in {context} must have 'attr' and 'op'")
 
         conditions.append(
             Condition(
                 attr=cond_dict["attr"],
-                operator=cond_dict["operator"],
+                op=cond_dict["op"],
                 value=cond_dict.get("value"),
             )
         )

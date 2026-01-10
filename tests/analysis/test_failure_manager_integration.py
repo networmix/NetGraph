@@ -35,8 +35,8 @@ class TestFailureManagerCore:
 
         # Single link failure policy
         rule = FailureRule(
-            entity_scope="link",
-            rule_type="choice",
+            scope="link",
+            mode="choice",
             count=1,
         )
         from ngraph.model.failure.policy import FailureMode
@@ -120,7 +120,7 @@ class TestFailureManagerCore:
             seed=42,
             # Pass analysis parameters directly as kwargs
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -163,7 +163,7 @@ class TestFailureManagerCore:
             parallelism=2,  # Multiple workers
             seed=42,
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -186,7 +186,7 @@ class TestFailureManagerCore:
             parallelism=1,
             seed=42,
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -214,7 +214,7 @@ class TestFailureManagerCore:
             store_failure_patterns=True,
             seed=42,
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -240,8 +240,8 @@ class TestFailureManagerCore:
             if trace["selections"]:
                 sel = trace["selections"][0]
                 assert "rule_index" in sel
-                assert "entity_scope" in sel
-                assert "rule_type" in sel
+                assert "scope" in sel
+                assert "mode" in sel
                 assert "matched_count" in sel
                 assert "selected_ids" in sel
 
@@ -263,7 +263,7 @@ class TestFailureManagerCore:
             store_failure_patterns=False,  # Disabled
             seed=42,
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -283,7 +283,7 @@ class TestFailureManagerCore:
             store_failure_patterns=True,
             seed=42,
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -305,7 +305,7 @@ class TestFailureManagerCore:
                 store_failure_patterns=True,
                 seed=42,
                 source="A",
-                sink="C",
+                target="C",
                 mode="combine",
             )
 
@@ -351,8 +351,8 @@ class TestFailureManagerIntegration:
         # Create failure policy
         policy_set = FailurePolicySet()
         rule = FailureRule(
-            entity_scope="link",
-            rule_type="choice",
+            scope="link",
+            mode="choice",
             count=2,
         )
         from ngraph.model.failure.policy import FailureMode
@@ -369,7 +369,7 @@ class TestFailureManagerIntegration:
             parallelism=1,
             seed=123,
             source="spine.*",
-            sink="leaf.*",
+            target="leaf.*",
             mode="pairwise",
         )
 

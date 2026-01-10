@@ -29,8 +29,8 @@ def simple_network() -> Network:
 def simple_failure_policy() -> FailurePolicy:
     """Create a simple failure policy that fails one link."""
     rule = FailureRule(
-        entity_scope="link",
-        rule_type="choice",
+        scope="link",
+        mode="choice",
         count=1,
     )
     return FailurePolicy(
@@ -62,10 +62,10 @@ class TestMaxFlowStep:
 
     def test_initialization_defaults(self):
         """Test MaxFlow initialization with defaults."""
-        step = MaxFlow(source="^A", sink="^C")
+        step = MaxFlow(source="^A", target="^C")
 
         assert step.source == "^A"
-        assert step.sink == "^C"
+        assert step.target == "^C"
         assert step.mode == "combine"
         assert step.failure_policy is None
         assert step.iterations == 1
@@ -80,7 +80,7 @@ class TestMaxFlowStep:
         """Test MaxFlow initialization with custom values."""
         step = MaxFlow(
             source="^src",
-            sink="^dst",
+            target="^dst",
             mode="pairwise",
             failure_policy="test_policy",
             iterations=100,
@@ -93,7 +93,7 @@ class TestMaxFlowStep:
         )
 
         assert step.source == "^src"
-        assert step.sink == "^dst"
+        assert step.target == "^dst"
         assert step.mode == "pairwise"
         assert step.failure_policy == "test_policy"
         assert step.iterations == 100
@@ -107,18 +107,18 @@ class TestMaxFlowStep:
     def test_validation_errors(self):
         """Test parameter validation."""
         with pytest.raises(ValueError, match="iterations must be >= 0"):
-            MaxFlow(source="^A", sink="^C", iterations=-1)
+            MaxFlow(source="^A", target="^C", iterations=-1)
 
         with pytest.raises(ValueError, match="parallelism must be >= 1"):
-            MaxFlow(source="^A", sink="^C", parallelism=0)
+            MaxFlow(source="^A", target="^C", parallelism=0)
 
         with pytest.raises(ValueError, match="mode must be 'combine' or 'pairwise'"):
-            MaxFlow(source="^A", sink="^C", mode="invalid")
+            MaxFlow(source="^A", target="^C", mode="invalid")
 
     def test_flow_placement_enum_usage(self):
         """Test that FlowPlacement enum is used correctly."""
         step = MaxFlow(
-            source="^A", sink="^C", flow_placement=FlowPlacement.PROPORTIONAL
+            source="^A", target="^C", flow_placement=FlowPlacement.PROPORTIONAL
         )
         assert step.flow_placement == FlowPlacement.PROPORTIONAL
 
@@ -166,7 +166,7 @@ class TestMaxFlowStep:
         # Create and run the step
         step = MaxFlow(
             source="^A",
-            sink="^C",
+            target="^C",
             failure_policy="test_policy",
             iterations=1,
             parallelism=1,
@@ -184,7 +184,7 @@ class TestMaxFlowStep:
         # Verify convenience method was called with correct parameters
         _, kwargs = mock_failure_manager.run_max_flow_monte_carlo.call_args
         assert kwargs["source"] == "^A"
-        assert kwargs["sink"] == "^C"
+        assert kwargs["target"] == "^C"
         assert kwargs["mode"] == "combine"
         assert kwargs["iterations"] == 1
         assert kwargs["parallelism"] == 1
@@ -243,7 +243,7 @@ class TestMaxFlowStep:
         # Create and run the step with failure pattern storage
         step = MaxFlow(
             source="^A",
-            sink="^C",
+            target="^C",
             iterations=2,
             store_failure_patterns=True,
             parallelism=1,
@@ -259,7 +259,7 @@ class TestMaxFlowStep:
         """Test capacity envelope step with mocked FailureManager."""
         step = MaxFlow(
             source="^A",
-            sink="^C",
+            target="^C",
             mode="combine",
             iterations=2,
             parallelism=1,
@@ -369,7 +369,7 @@ class TestMaxFlowStep:
         # Test with include_flow_details=True
         step = MaxFlow(
             source="^A",
-            sink="^C",
+            target="^C",
             iterations=1,
             include_flow_details=True,
             parallelism=1,
@@ -399,8 +399,8 @@ class TestMaxFlowStep:
             "selections": [
                 {
                     "rule_index": 0,
-                    "entity_scope": "link",
-                    "rule_type": "choice",
+                    "scope": "link",
+                    "mode": "choice",
                     "matched_count": 3,
                     "selected_ids": ["link1"],
                 }
@@ -450,7 +450,7 @@ class TestMaxFlowStep:
         step = MaxFlow(
             name="test_step",
             source="^A",
-            sink="^C",
+            target="^C",
             iterations=2,
             store_failure_patterns=True,
             parallelism=1,
@@ -506,7 +506,7 @@ class TestMaxFlowStep:
         step = MaxFlow(
             name="test_step_disabled",
             source="^A",
-            sink="^C",
+            target="^C",
             iterations=1,
             store_failure_patterns=False,
             parallelism=1,

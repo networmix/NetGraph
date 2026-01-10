@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: December 22, 2025 at 01:21 UTC
+Generated from source code on: January 10, 2026 at 04:53 UTC
 
 Modules auto-discovered: 53
 
@@ -261,7 +261,7 @@ Typical usage example:
 - `network` (Network)
 - `workflow` (List[WorkflowStep])
 - `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
-- `traffic_matrix_set` (TrafficMatrixSet) = TrafficMatrixSet(matrices={})
+- `demand_set` (DemandSet) = DemandSet(sets={})
 - `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
 - `seed` (Optional[int])
@@ -412,20 +412,20 @@ Returns:
 
 ## ngraph.model.demand.builder
 
-Builders for traffic matrices.
+Builders for demand sets.
 
-Construct `TrafficMatrixSet` from raw dictionaries (e.g. parsed YAML).
+Construct `DemandSet` from raw dictionaries (e.g. parsed YAML).
 
-### build_traffic_matrix_set(raw: 'Dict[str, List[dict]]') -> 'TrafficMatrixSet'
+### build_demand_set(raw: 'Dict[str, List[dict]]') -> 'DemandSet'
 
-Build a `TrafficMatrixSet` from a mapping of name -> list of dicts.
+Build a `DemandSet` from a mapping of name -> list of dicts.
 
 Args:
-    raw: Mapping where each key is a matrix name and each value is a list of
+    raw: Mapping where each key is a demand set name and each value is a list of
         dictionaries with `TrafficDemand` constructor fields.
 
 Returns:
-    Initialized `TrafficMatrixSet` with constructed `TrafficDemand` objects.
+    Initialized `DemandSet` with constructed `TrafficDemand` objects.
 
 Raises:
     ValueError: If ``raw`` is not a mapping of name -> list[dict],
@@ -435,32 +435,32 @@ Raises:
 
 ## ngraph.model.demand.matrix
 
-Traffic matrix containers.
+Demand set containers.
 
-Provides `TrafficMatrixSet`, a named collection of `TrafficDemand` lists
+Provides `DemandSet`, a named collection of `TrafficDemand` lists
 used as input to demand expansion and placement. This module contains input
 containers, not analysis results.
 
-### TrafficMatrixSet
+### DemandSet
 
 Named collection of TrafficDemand lists.
 
-This mutable container maps scenario names to lists of TrafficDemand objects,
-allowing management of multiple traffic matrices for analysis.
+This mutable container maps set names to lists of TrafficDemand objects,
+allowing management of multiple demand sets for analysis.
 
 Attributes:
-    matrices: Dictionary mapping scenario names to TrafficDemand lists.
+    sets: Dictionary mapping set names to TrafficDemand lists.
 
 **Attributes:**
 
-- `matrices` (dict[str, list[TrafficDemand]]) = {}
+- `sets` (dict[str, list[TrafficDemand]]) = {}
 
 **Methods:**
 
-- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a traffic matrix to the collection.
-- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all matrices combined.
-- `get_default_matrix(self) -> 'list[TrafficDemand]'` - Get default traffic matrix.
-- `get_matrix(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific traffic matrix by name.
+- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a demand list to the collection.
+- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all sets combined.
+- `get_default_set(self) -> 'list[TrafficDemand]'` - Get default demand set.
+- `get_set(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific demand set by name.
 - `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
 
 ---
@@ -479,33 +479,29 @@ Traffic demand specification using unified selectors.
 
 Attributes:
     source: Source node selector (string path or selector dict).
-    sink: Sink node selector (string path or selector dict).
-    demand: Total demand volume.
-    demand_placed: Portion of this demand placed so far.
+    target: Target node selector (string path or selector dict).
+    volume: Total demand volume.
+    volume_placed: Portion of this demand placed so far.
     priority: Priority class (lower = higher priority).
     mode: Node pairing mode ("combine" or "pairwise").
     group_mode: How grouped nodes produce demands
         ("flatten", "per_group", "group_pairwise").
-    expand_vars: Variable substitutions using $var syntax.
-    expansion_mode: How to combine expand_vars ("cartesian" or "zip").
-    flow_policy_config: Policy preset for routing.
-    flow_policy: Concrete policy instance (overrides flow_policy_config).
+    flow_policy: Policy preset for routing.
+    flow_policy_obj: Concrete policy instance (overrides flow_policy).
     attrs: Arbitrary user metadata.
     id: Unique identifier. Auto-generated if empty.
 
 **Attributes:**
 
 - `source` (Union)
-- `sink` (Union)
-- `demand` (float) = 0.0
-- `demand_placed` (float) = 0.0
+- `target` (Union)
+- `volume` (float) = 0.0
+- `volume_placed` (float) = 0.0
 - `priority` (int) = 0
 - `mode` (str) = combine
 - `group_mode` (str) = flatten
-- `expand_vars` (Dict) = {}
-- `expansion_mode` (str) = cartesian
-- `flow_policy_config` (Optional)
 - `flow_policy` (Optional)
+- `flow_policy_obj` (Optional)
 - `attrs` (Dict) = {}
 - `id` (str)
 
@@ -523,17 +519,19 @@ attribute values from nodes or links.
 Parsed generate block specification.
 
 Attributes:
-    entity_scope: Type of entities to group ("node" or "link").
+    scope: Type of entities to group ("node" or "link").
+    path: Optional regex pattern to filter entities by name.
     group_by: Attribute name to group by (supports dot-notation).
-    name_template: Template for generated group names. Use ${value}
+    name: Template for generated group names. Use ${value}
         as placeholder for the attribute value.
     attrs: Optional static attributes for generated groups.
 
 **Attributes:**
 
-- `entity_scope` (Literal['node', 'link'])
+- `scope` (Literal['node', 'link'])
 - `group_by` (str)
-- `name_template` (str)
+- `name` (str)
+- `path` (Optional[str])
 - `attrs` (Dict[str, Any]) = {}
 
 ### generate_risk_groups(network: "'Network'", spec: 'GenerateSpec') -> 'List[RiskGroup]'
@@ -581,13 +579,15 @@ on attribute conditions.
 Parsed membership rule specification.
 
 Attributes:
-    entity_scope: Type of entities to match ("node", "link", or "risk_group").
+    scope: Type of entities to match ("node", "link", or "risk_group").
+    path: Optional regex pattern to filter entities by name.
     match: Match specification with conditions.
 
 **Attributes:**
 
-- `entity_scope` (EntityScope)
-- `match` (MatchSpec)
+- `scope` (EntityScope)
+- `path` (Optional[str])
+- `match` (Optional[MatchSpec])
 
 ### resolve_membership_rules(network: "'Network'") -> 'None'
 
@@ -595,11 +595,11 @@ Apply membership rules to populate entity risk_groups sets.
 
 For each risk group with a `_membership_raw` specification:
 
-- If entity_scope is "node" or "link": adds the risk group name to each
+- If scope is "node" or "link": adds the risk group name to each
 
   matched entity's risk_groups set.
 
-- If entity_scope is "risk_group": adds matched risk groups as children
+- If scope is "risk_group": adds matched risk groups as children
 
   of this risk group (hierarchical membership).
 
@@ -660,12 +660,12 @@ Returns:
 
 Failure policy primitives.
 
-Defines `FailureCondition`, `FailureRule`, and `FailurePolicy` for expressing
-how nodes, links, and risk groups fail in analyses. Conditions match on
-top-level attributes with simple operators; rules select matches using
-"all", probabilistic "random" (with `probability`), or fixed-size "choice"
-(with `count`). Policies can optionally expand failures by shared risk groups
-or by risk-group children.
+Defines `FailureRule` and `FailurePolicy` for expressing how nodes, links,
+and risk groups fail in analyses. Conditions match on top-level attributes
+with simple operators; rules select matches using "all", probabilistic
+"random" (with `probability`), or fixed-size "choice" (with `count`).
+Policies can optionally expand failures by shared risk groups or by
+risk-group children.
 
 ### FailureMode
 
@@ -689,77 +689,30 @@ Attributes:
 
 ### FailurePolicy
 
-A container for multiple FailureRules plus optional metadata in `attrs`.
+A container for failure modes plus optional metadata in `attrs`.
 
 The main entry point is `apply_failures`, which:
-  1) For each rule, gather the relevant entities (node, link, or risk_group).
-          2) Match them based on rule conditions using 'and' or 'or' logic.
-  3) Apply the selection strategy (all, random, or choice).
-  4) Collect the union of all failed entities across all rules.
-  5) Optionally expand failures by shared-risk groups or sub-risks.
-
-Example YAML configuration:
-    ```yaml
-    failure_policy:
-      attrs:
-        description: "Regional power grid failure affecting telecom infrastructure"
-      fail_risk_groups: true
-      rules:
-        # Fail all nodes in Texas electrical grid
-        - entity_scope: "node"
-
-          conditions:
-            - attr: "electric_grid"
-
-              operator: "=="
-              value: "texas"
-          logic: "and"
-          rule_type: "all"
-
-        # Randomly fail 40% of underground fiber links in affected region
-        - entity_scope: "link"
-
-          conditions:
-            - attr: "region"
-
-              operator: "=="
-              value: "southwest"
-            - attr: "installation"
-
-              operator: "=="
-              value: "underground"
-          logic: "and"
-          rule_type: "random"
-          probability: 0.4
-
-        # Choose exactly 2 risk groups to fail (e.g., data centers)
-        # Note: logic defaults to "or" when not specified
-        - entity_scope: "risk_group"
-
-          rule_type: "choice"
-          count: 2
-    ```
+  1) Select a mode based on weights.
+  2) For each rule in the mode, gather relevant entities.
+  3) Match based on rule conditions using 'and' or 'or' logic.
+  4) Apply the selection strategy (all, random, or choice).
+  5) Collect the union of all failed entities across all rules.
+  6) Optionally expand failures by shared-risk groups or sub-risks.
 
 Attributes:
-    rules (List[FailureRule]):
-        A list of FailureRules to apply.
-    attrs (Dict[str, Any]):
-        Arbitrary metadata about this policy (e.g. "name", "description").
-    fail_risk_groups (bool):
-        If True, after initial selection, expand failures among any
-        node/link that shares a risk group with a failed entity.
-    fail_risk_group_children (bool):
-        If True, and if a risk_group is marked as failed, expand to
-        children risk_groups recursively.
-    seed (Optional[int]):
-        Seed for reproducible random operations. If None, operations
-        will be non-deterministic.
+    attrs: Arbitrary metadata about this policy.
+    expand_groups: If True, expand failures among entities sharing
+        risk groups with failed entities.
+    expand_children: If True, expand failed risk groups to include
+        their children recursively.
+    seed: Seed for reproducible random operations.
+    modes: List of weighted failure modes.
 
 **Attributes:**
 
 - `attrs` (Dict[str, Any]) = {}
-- `fail_risk_groups` (bool) = False
-- `fail_risk_group_children` (bool) = False
+- `expand_groups` (bool) = False
+- `expand_children` (bool) = False
 - `seed` (Optional[int])
 - `modes` (List[FailureMode]) = []
 
@@ -773,34 +726,31 @@ Attributes:
 Defines how to match and then select entities for failure.
 
 Attributes:
-    entity_scope (EntityScope):
-        The type of entities this rule applies to: "node", "link", or "risk_group".
-    conditions (List[FailureCondition]):
-        A list of conditions to filter matching entities.
-    logic (Literal["and", "or"]):
-        "and": All conditions must be true for a match.
-        "or": At least one condition is true for a match (default).
-    rule_type (Literal["random", "choice", "all"]):
-        The selection strategy among the matched set:
+    scope: The type of entities this rule applies to: "node", "link",
+        or "risk_group".
+    conditions: A list of conditions to filter matching entities.
+    logic: "and" (all must be true) or "or" (any must be true, default).
+    mode: The selection strategy among the matched set:
 
-- "random": each matched entity is chosen with probability = `probability`.
-- "choice": pick exactly `count` items from the matched set (random sample).
-- "all": select every matched entity in the matched set.
+- "random": each matched entity is chosen with probability.
+- "choice": pick exactly `count` items (random sample).
+- "all": select every matched entity.
 
-    probability (float):
-        Probability in [0,1], used if `rule_type="random"`.
-    count (int):
-        Number of entities to pick if `rule_type="choice"`.
+    probability: Probability in [0,1], used if mode="random".
+    count: Number of entities to pick if mode="choice".
+    weight_by: Optional attribute for weighted sampling in choice mode.
+    path: Optional regex pattern to filter entities by name.
 
 **Attributes:**
 
-- `entity_scope` (EntityScope)
-- `conditions` (List[FailureCondition]) = []
+- `scope` (EntityScope)
+- `conditions` (List[Condition]) = []
 - `logic` (Literal['and', 'or']) = or
-- `rule_type` (Literal['random', 'choice', 'all']) = all
+- `mode` (Literal['random', 'choice', 'all']) = all
 - `probability` (float) = 1.0
 - `count` (int) = 1
 - `weight_by` (Optional[str])
+- `path` (Optional[str])
 
 ---
 
@@ -850,7 +800,7 @@ Detect circular references in risk group parent-child relationships.
 
 Uses DFS-based cycle detection to find any risk group that is part of
 a cycle in the children hierarchy. This can happen when membership rules
-with entity_scope='risk_group' create mutual parent-child relationships.
+with scope='risk_group' create mutual parent-child relationships.
 
 Args:
     network: Network with risk_groups populated (after membership resolution).
@@ -1065,15 +1015,9 @@ cost. Cached properties expose derived sequences for nodes and edges, and
 helpers provide equality, ordering by cost, and sub-path extraction with cost
 recalculation.
 
-Breaking change from v1.x: Edge references now use EdgeRef (link_id + direction)
-instead of integer edge keys for stable scenario-level edge identification.
-
 ### Path
 
 Represents a single path in the network.
-
-Breaking change from v1.x: path field now uses EdgeRef (link_id + direction)
-instead of integer edge keys for stable scenario-level edge identification.
 
 Attributes:
     path: Sequence of (node_name, (edge_refs...)) tuples representing the path.
@@ -1305,11 +1249,11 @@ YAML Configuration Example:
 
     workflow:
 
-- step_type: MaxFlow
+- type: MaxFlow
 
         name: "maxflow_dc_to_edge"
         source: "^datacenter/.*"
-        sink: "^edge/.*"
+        target: "^edge/.*"
         mode: "combine"
         failure_policy: "random_failures"
         iterations: 100
@@ -1333,7 +1277,7 @@ many iterations matched that pattern.
 
 Attributes:
     source: Source node selector (string path or selector dict).
-    sink: Sink node selector (string path or selector dict).
+    target: Target node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     failure_policy: Name of failure policy in scenario.failure_policy_set.
     iterations: Number of failure iterations to run.
@@ -1353,7 +1297,7 @@ Attributes:
 - `seed` (int | None)
 - `_seed_source` (str)
 - `source` (Union[str, Dict[str, Any]])
-- `sink` (Union[str, Dict[str, Any]])
+- `target` (Union[str, Dict[str, Any]])
 - `mode` (str) = combine
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
@@ -1374,10 +1318,10 @@ Attributes:
 
 ## ngraph.workflow.maximum_supported_demand_step
 
-Maximum Supported Demand (MSD) workflow step.
+MaximumSupportedDemand workflow step.
 
 Searches for the maximum uniform traffic multiplier `alpha_star` that is fully
-placeable for a given matrix. Stores results under `data` as:
+placeable for a given demand set. Stores results under `data` as:
 
 - `alpha_star`: float
 - `context`: parameters used for the search
@@ -1389,14 +1333,30 @@ all binary search probes. Only demand volumes change per probe.
 
 ### MaximumSupportedDemand
 
-MaximumSupportedDemand(name: 'str' = '', seed: 'Optional[int]' = None, _seed_source: 'str' = '', matrix_name: 'str' = 'default', acceptance_rule: 'str' = 'hard', alpha_start: 'float' = 1.0, growth_factor: 'float' = 2.0, alpha_min: 'float' = 1e-06, alpha_max: 'float' = 1000000000.0, resolution: 'float' = 0.01, max_bracket_iters: 'int' = 32, max_bisect_iters: 'int' = 32, seeds_per_alpha: 'int' = 1, placement_rounds: 'int | str' = 'auto')
+Finds the maximum uniform traffic multiplier that is fully placeable.
+
+Uses binary search to find alpha_star, the maximum multiplier for all
+demands in the set that can still be fully placed on the network.
+
+Attributes:
+    demand_set: Name of the demand set to analyze.
+    acceptance_rule: Currently only "hard" is implemented.
+    alpha_start: Starting multiplier for binary search.
+    growth_factor: Factor for bracket expansion.
+    alpha_min: Minimum allowed alpha value.
+    alpha_max: Maximum allowed alpha value.
+    resolution: Convergence threshold for binary search.
+    max_bracket_iters: Maximum iterations for bracketing phase.
+    max_bisect_iters: Maximum iterations for bisection phase.
+    seeds_per_alpha: Number of placement attempts per alpha probe.
+    placement_rounds: Placement optimization rounds.
 
 **Attributes:**
 
 - `name` (str)
 - `seed` (Optional[int])
 - `_seed_source` (str)
-- `matrix_name` (str) = default
+- `demand_set` (str) = default
 - `acceptance_rule` (str) = hard
 - `alpha_start` (float) = 1.0
 - `growth_factor` (float) = 2.0
@@ -1483,7 +1443,7 @@ instances using the WORKFLOW_STEP_REGISTRY and attaches unique names/seeds.
 Instantiate workflow steps from normalized dictionaries.
 
 Args:
-    workflow_data: List of step dicts; each must have "step_type".
+    workflow_data: List of step dicts; each must have "type".
     derive_seed: Callable that takes a step name and returns a seed or None.
 
 Returns:
@@ -1495,7 +1455,7 @@ Returns:
 
 TrafficMatrixPlacement workflow step.
 
-Runs Monte Carlo demand placement using a named traffic matrix and produces
+Runs Monte Carlo demand placement using a named demand set and produces
 unified `flow_results` per iteration under `data.flow_results`.
 
 Baseline (no failures) is always run first as a separate reference. The `iterations`
@@ -1503,7 +1463,7 @@ parameter specifies how many failure scenarios to run.
 
 ### TrafficMatrixPlacement
 
-Monte Carlo demand placement using a named traffic matrix.
+Monte Carlo demand placement using a named demand set.
 
 Baseline (no failures) is always run first as a separate reference. Results are
 returned with baseline in a separate field. The flow_results list contains unique
@@ -1511,8 +1471,8 @@ failure patterns (deduplicated); each result has occurrence_count indicating how
 many iterations matched that pattern.
 
 Attributes:
-    matrix_name: Name of the traffic matrix to analyze.
-    failure_policy: Optional policy name in scenario.failure_policy_set.
+    demand_set: Name of the demand set to analyze.
+    failure_policy: Optional failure policy name in scenario.failure_policy_set.
     iterations: Number of failure iterations to run.
     parallelism: Number of parallel worker processes.
     placement_rounds: Placement optimization rounds (int or "auto").
@@ -1520,7 +1480,7 @@ Attributes:
     store_failure_patterns: Whether to store failure pattern results.
     include_flow_details: When True, include cost_distribution per flow.
     include_used_edges: When True, include set of used edges per demand in entry data.
-    alpha: Numeric scale for demands in the matrix.
+    alpha: Numeric scale for demands in the set.
     alpha_from_step: Optional producer step name to read alpha from.
     alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
 
@@ -1529,7 +1489,7 @@ Attributes:
 - `name` (str)
 - `seed` (int | None)
 - `_seed_source` (str)
-- `matrix_name` (str)
+- `demand_set` (str)
 - `failure_policy` (str | None)
 - `iterations` (int) = 1
 - `parallelism` (int | str) = auto
@@ -1556,24 +1516,19 @@ Network topology blueprints and generation.
 
 Represents a reusable blueprint for hierarchical sub-topologies.
 
-A blueprint may contain multiple groups of nodes (each can have a node_count
-and a name_template), plus adjacency rules describing how those groups connect.
+A blueprint may contain multiple node definitions (each can have count
+and template), plus link definitions describing how those nodes connect.
 
 Attributes:
-    name (str): Unique identifier of this blueprint.
-    groups (Dict[str, Any]): A mapping of group_name -> group definition.
-        Allowed top-level keys in each group definition here are the same
-        as in normal group definitions (e.g. node_count, name_template,
-        attrs, disabled, risk_groups, or nested use_blueprint references, etc.).
-    adjacency (List[Dict[str, Any]]): A list of adjacency definitions
-        describing how these groups are linked, using the DSL fields
-        (source, target, pattern, link_params, etc.).
+    name: Unique identifier of this blueprint.
+    nodes: A mapping of node_name -> node definition.
+    links: A list of link definitions.
 
 **Attributes:**
 
 - `name` (str)
-- `groups` (Dict[str, Any])
-- `adjacency` (List[Dict[str, Any]])
+- `nodes` (Dict[str, Any])
+- `links` (List[Dict[str, Any]])
 
 ### DSLExpansionContext
 
@@ -1581,16 +1536,15 @@ Carries the blueprint definitions and the final Network instance
 to be populated during DSL expansion.
 
 Attributes:
-    blueprints (Dict[str, Blueprint]): Dictionary of blueprint-name -> Blueprint.
-    network (Network): The Network into which expanded nodes/links are inserted.
-    pending_bp_adj (List[tuple[Dict[str, Any], str]]): Deferred blueprint adjacency
-        expansions collected as (adj_def, parent_path) to be processed later.
+    blueprints: Dictionary of blueprint-name -> Blueprint.
+    network: The Network into which expanded nodes/links are inserted.
+    pending_bp_links: Deferred blueprint link expansions.
 
 **Attributes:**
 
 - `blueprints` (Dict[str, Blueprint])
 - `network` (Network)
-- `pending_bp_adj` (List[tuple[Dict[str, Any], str]]) = []
+- `pending_bp_links` (List[tuple[Dict[str, Any], str]]) = []
 
 ### expand_network_dsl(data: 'Dict[str, Any]') -> 'Network'
 
@@ -1599,43 +1553,33 @@ Expands a combined blueprint + network DSL into a complete Network object.
 Overall flow:
   1) Parse "blueprints" into Blueprint objects.
   2) Build a Network from "network" metadata (e.g. name, version).
-  3) Expand 'network["groups"]' (collect blueprint adjacencies for later).
+  3) Expand 'network["nodes"]' (collect blueprint links for later).
 
-- If a group references a blueprint, incorporate that blueprint's subgroups
+- If a node group references a blueprint, incorporate that blueprint's
 
-       while merging parent's attrs + disabled + risk_groups into subgroups.
-       Blueprint adjacency is deferred and processed after node overrides.
+       nodes while merging parent's attrs + disabled + risk_groups.
+       Blueprint links are deferred and processed after node rules.
 
 - Otherwise, directly create nodes (a "direct node group").
 
-  4) Process any direct node definitions (network["nodes"]).
-  5) Process node overrides (in order if multiple overrides match).
-  6) Expand deferred blueprint adjacencies.
-  7) Expand adjacency definitions in 'network["adjacency"]'.
-  8) Process any direct link definitions (network["links"]).
-  9) Process link overrides (in order if multiple overrides match).
+  4) Process node rules (in order if multiple rules match).
+  5) Expand deferred blueprint links.
+  6) Expand link definitions in 'network["links"]'.
+  7) Process link rules (in order if multiple rules match).
 
 Field validation rules:
 
-- Only certain top-level fields are permitted in each structure. Any extra
+- Only certain top-level fields are permitted in each structure.
+- Link properties are flat (capacity, cost, etc. at link level).
+- For node definitions: count, template, attrs, disabled, risk_groups,
 
-    keys raise a ValueError. "attrs" is where arbitrary user fields go.
-
-- For link_params, recognized fields are "capacity", "cost", "disabled",
-
-    "risk_groups", "attrs". Everything else must go inside link_params["attrs"].
-
-- For node/group definitions, recognized fields include "node_count",
-
-    "name_template", "attrs", "disabled", "risk_groups" or "use_blueprint"
-    for blueprint-based groups.
+    or blueprint for blueprint-based nodes.
 
 Args:
-    data (Dict[str, Any]): The YAML-parsed dictionary containing
-        optional "blueprints" + "network".
+    data: The YAML-parsed dictionary containing optional "blueprints" + "network".
 
 Returns:
-    Network: The expanded Network object with all nodes and links.
+    The expanded Network object with all nodes and links.
 
 ---
 
@@ -1646,16 +1590,9 @@ Parsing helpers for the network DSL.
 This module factors out pure parsing/validation helpers from the expansion
 module so they can be tested independently and reused.
 
-### check_adjacency_keys(adj_def: 'Dict[str, Any]', context: 'str') -> 'None'
+### check_link_keys(link_def: 'Dict[str, Any]', context: 'str') -> 'None'
 
-Ensure adjacency definitions only contain recognized keys.
-
-### check_link_params(link_params: 'Dict[str, Any]', context: 'str') -> 'None'
-
-Ensure link_params contain only recognized keys.
-
-Link attributes may include "hardware" per-end mapping when set under
-link_params.attrs. This function only validates top-level link_params keys.
+Ensure link definitions only contain recognized keys.
 
 ### check_no_extra_keys(data_dict: 'Dict[str, Any]', allowed: 'set[str]', context: 'str') -> 'None'
 
@@ -1760,19 +1697,20 @@ Provides dataclasses for template expansion configuration.
 Specification for variable-based expansion.
 
 Attributes:
-    expand_vars: Mapping of variable names to lists of values.
-    expansion_mode: How to combine variable values.
+    vars: Mapping of variable names to lists of values.
+    mode: How to combine variable values.
 
 - "cartesian": All combinations (default)
 - "zip": Pair values by position
 
 **Attributes:**
 
-- `expand_vars` (Dict[str, List[Any]]) = {}
-- `expansion_mode` (Literal['cartesian', 'zip']) = cartesian
+- `vars` (Dict[str, List[Any]]) = {}
+- `mode` (Literal['cartesian', 'zip']) = cartesian
 
 **Methods:**
 
+- `from_dict(data: 'Dict[str, Any]') -> "Optional['ExpansionSpec']"` - Extract expand: block from dict.
 - `is_empty(self) -> 'bool'` - Check if no variables are defined.
 
 ---
@@ -1781,8 +1719,23 @@ Attributes:
 
 Variable expansion for templates.
 
-Provides expand_templates() function for substituting $var and ${var}
-placeholders in template strings.
+Provides substitution of $var and ${var} placeholders in strings,
+with recursive substitution in nested structures.
+
+### expand_block(block: 'Dict[str, Any]', spec: "Optional['ExpansionSpec']") -> 'Iterator[Dict[str, Any]]'
+
+Expand a DSL block, yielding one dict per variable combination.
+
+If no expand spec is provided or it has no vars, yields the original block.
+Otherwise, yields a deep copy with all strings substituted for each
+variable combination.
+
+Args:
+    block: DSL block (dict) that may contain template strings.
+    spec: Optional expansion specification.
+
+Yields:
+    Dict with variable substitutions applied.
 
 ### expand_templates(templates: 'Dict[str, str]', spec: "'ExpansionSpec'") -> 'Iterator[Dict[str, str]]'
 
@@ -1791,7 +1744,7 @@ Expand template strings with variable substitution.
 Uses $var or ${var} syntax only.
 
 Args:
-    templates: Dict of template strings, e.g. {"source": "dc${dc}/...", "sink": "..."}.
+    templates: Dict of template strings.
     spec: Expansion specification with variables and mode.
 
 Yields:
@@ -1801,26 +1754,16 @@ Raises:
     ValueError: If zip mode has mismatched list lengths or expansion exceeds limit.
     KeyError: If a template references an undefined variable.
 
-Example:
-    >>> spec = ExpansionSpec(expand_vars={"dc": [1, 2]})
-    >>> list(expand_templates({"src": "dc${dc}"}, spec))
-    [{"src": "dc1"}, {"src": "dc2"}]
+### substitute_vars(obj: 'Any', var_dict: 'Dict[str, Any]') -> 'Any'
 
-### substitute_vars(template: 'str', var_dict: 'Dict[str, Any]') -> 'str'
-
-Substitute $var and ${var} placeholders in a template string.
-
-Uses $ prefix to avoid collision with regex {m,n} quantifiers.
+Recursively substitute ${var} in all strings within obj.
 
 Args:
-    template: String containing $var or ${var} placeholders.
+    obj: Any value (string, dict, list, or primitive).
     var_dict: Mapping of variable names to values.
 
 Returns:
-    Template with variables substituted.
-
-Raises:
-    KeyError: If a referenced variable is not in var_dict.
+    Object with all string values having variables substituted.
 
 ---
 
@@ -1848,7 +1791,7 @@ Condition evaluation for node/entity filtering.
 
 Provides evaluation logic for attribute conditions used in selectors
 and failure policies. Supports operators: ==, !=, <, <=, >, >=,
-contains, not_contains, in, not_in, any_value, no_value.
+contains, not_contains, in, not_in, exists, not_exists.
 
 Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
 
@@ -1958,7 +1901,7 @@ Raises:
 Schema definitions for unified node selection.
 
 Provides dataclasses for node selection configuration used across
-adjacency, demands, overrides, and workflow steps.
+network rules, demands, and workflow steps.
 
 ### Condition
 
@@ -1969,13 +1912,13 @@ resolves to attrs["hardware"]["vendor"]).
 
 Attributes:
     attr: Attribute name to match (supports dot-notation for nested attrs).
-    operator: Comparison operator.
-    value: Right-hand operand (unused for any_value/no_value).
+    op: Comparison operator.
+    value: Right-hand operand (unused for exists/not_exists).
 
 **Attributes:**
 
 - `attr` (str)
-- `operator` (Literal['==', '!=', '<', '<=', '>', '>=', 'contains', 'not_contains', 'in', 'not_in', 'any_value', 'no_value'])
+- `op` (Literal['==', '!=', '<', '<=', '>', '>=', 'contains', 'not_contains', 'in', 'not_in', 'exists', 'not_exists'])
 - `value` (Any)
 
 ### MatchSpec
@@ -2297,10 +2240,10 @@ Args:
 
 Scenario snapshot helpers.
 
-Build a concise dictionary snapshot of failure policies and traffic matrices for
+Build a concise dictionary snapshot of failure policies and demand sets for
 export into results without keeping heavy domain objects.
 
-### build_scenario_snapshot(*, seed: 'int | None', failure_policy_set, traffic_matrix_set) -> 'Dict[str, Any]'
+### build_scenario_snapshot(*, seed: 'int | None', failure_policy_set, demand_set) -> 'Dict[str, Any]'
 
 No documentation available.
 
@@ -2891,14 +2834,16 @@ Expand TrafficDemand specifications into concrete demands with augmentations.
 
 Pure function that:
 
-1. Expands variables in selectors using expand_vars
-2. Normalizes and evaluates selectors to get node groups
-3. Distributes volume based on mode (combine/pairwise) and group_mode
-4. Generates augmentation edges for combine mode (pseudo nodes)
-5. Returns demands (node names) + augmentations
+1. Normalizes and evaluates selectors to get node groups
+2. Distributes volume based on mode (combine/pairwise) and group_mode
+3. Generates augmentation edges for combine mode (pseudo nodes)
+4. Returns demands (node names) + augmentations
 
 Node names are used (not IDs) so expansion happens BEFORE graph building.
 IDs are resolved after graph is built with augmentations.
+
+Note: Variable expansion (expand: block) is handled during YAML parsing in
+build_demand_set(), so TrafficDemand objects here are already expanded.
 
 Args:
     network: Network for node selection.
@@ -2965,9 +2910,9 @@ Attributes:
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
 - `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---
@@ -2994,7 +2939,7 @@ sharing the same sources, this can reduce SPF computations by an order of magnit
 
 Build an AnalysisContext for repeated demand placement analysis.
 
-Pre-computes the graph with augmentations (pseudo source/sink nodes) for
+Pre-computes the graph with augmentations (pseudo source/target nodes) for
 efficient repeated analysis with different exclusion sets.
 
 Args:
@@ -3004,17 +2949,17 @@ Args:
 Returns:
     AnalysisContext ready for use with demand_placement_analysis.
 
-### build_maxflow_context(network: "'Network'", source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine') -> 'AnalysisContext'
+### build_maxflow_context(network: "'Network'", source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine') -> 'AnalysisContext'
 
 Build an AnalysisContext for repeated max-flow analysis.
 
-Pre-computes the graph with pseudo source/sink nodes for all source/sink
+Pre-computes the graph with pseudo source/target nodes for all source/target
 pairs, enabling O(|excluded|) mask building per iteration.
 
 Args:
     network: Network instance.
     source: Source node selector (string path or selector dict).
-    sink: Sink node selector (string path or selector dict).
+    target: Target node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
 
 Returns:
@@ -3052,7 +2997,7 @@ Args:
 Returns:
     FlowIterationResult describing this iteration.
 
-### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze maximum flow capacity between node groups.
 
@@ -3061,7 +3006,7 @@ Args:
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
     source: Source node selector (string path or selector dict).
-    sink: Sink node selector (string path or selector dict).
+    target: Target node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: Whether to use shortest paths only.
     require_capacity: If True (default), path selection considers available
@@ -3075,13 +3020,13 @@ Args:
 Returns:
     FlowIterationResult describing this iteration.
 
-### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', sink: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
 
 Analyze component sensitivity to failures.
 
 Identifies critical edges (saturated edges) and computes the flow reduction
 caused by removing each one. Returns a FlowIterationResult where each
-FlowEntry represents a source/sink pair with:
+FlowEntry represents a source/target pair with:
 
 - demand/placed = max flow value (the capacity being analyzed)
 - dropped = 0.0 (baseline analysis, no failures applied)
@@ -3092,7 +3037,7 @@ Args:
     excluded_nodes: Set of node names to exclude temporarily.
     excluded_links: Set of link IDs to exclude temporarily.
     source: Source node selector (string path or selector dict).
-    sink: Sink node selector (string path or selector dict).
+    target: Target node selector (string path or selector dict).
     mode: Flow analysis mode ("combine" or "pairwise").
     shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
         Reports only edges used under ECMP routing. If False (default), use

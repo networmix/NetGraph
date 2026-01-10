@@ -16,14 +16,14 @@ Workflows are ordered steps executed on a scenario. Each step computes a result 
 
 ```yaml
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: network_statistics
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd_baseline
-    matrix_name: baseline_traffic_matrix
-  - step_type: TrafficMatrixPlacement
+    demand_set: baseline_traffic_matrix
+  - type: TrafficMatrixPlacement
     name: tm_placement
-    matrix_name: baseline_traffic_matrix
+    demand_set: baseline_traffic_matrix
     failure_policy: random_failures
     iterations: 1000
 ```
@@ -41,7 +41,7 @@ workflow:
 Validates network topology and exports node-link JSON for external analysis. Optional for other workflow steps.
 
 ```yaml
-- step_type: BuildGraph
+- type: BuildGraph
   name: build_graph
   add_reverse: true  # Add reverse edges for bidirectional connectivity (default: true)
 ```
@@ -55,7 +55,7 @@ Parameters:
 Compute node, link, and degree metrics. Supports temporary exclusions without modifying the base network.
 
 ```yaml
-- step_type: NetworkStats
+- type: NetworkStats
   name: baseline_stats
   include_disabled: false           # Include disabled nodes/links in stats
   excluded_nodes: []                # Optional: Temporary node exclusions
@@ -73,10 +73,10 @@ Parameters:
 Monte Carlo maximum flow analysis between node groups. Baseline (no failures) is always run first as a separate reference.
 
 ```yaml
-- step_type: MaxFlow
+- type: MaxFlow
   name: capacity_analysis
   source: "^servers/.*"
-  sink: "^storage/.*"
+  target: "^storage/.*"
   mode: "combine"              # combine | pairwise
   failure_policy: random_failures
   iterations: 1000             # Number of failure iterations
@@ -91,18 +91,18 @@ Monte Carlo maximum flow analysis between node groups. Baseline (no failures) is
 
 ### TrafficMatrixPlacement
 
-Monte Carlo placement of a named traffic matrix with optional alpha scaling. Baseline (no failures) is always run first as a separate reference.
+Monte Carlo placement of a named demand set with optional alpha scaling. Baseline (no failures) is always run first as a separate reference.
 
 ```yaml
-- step_type: TrafficMatrixPlacement
+- type: TrafficMatrixPlacement
   name: tm_placement
-  matrix_name: default
-  failure_policy: random_failures  # Optional: policy name in failure_policy_set
-  iterations: 100                  # Number of failure iterations
+  demand_set: default
+  failure_policy: random_failures        # Optional: policy name in failures section
+  iterations: 100                # Number of failure iterations
   parallelism: auto
-  placement_rounds: auto           # or an integer
-  include_flow_details: true       # cost_distribution per flow
-  include_used_edges: false        # include per-demand used edge lists
+  placement_rounds: auto         # or an integer
+  include_flow_details: true     # cost_distribution per flow
+  include_used_edges: false      # include per-demand used edge lists
   store_failure_patterns: false
   # Alpha scaling – explicit or from another step
   alpha: 1.0
@@ -114,7 +114,7 @@ Outputs:
 
 - metadata: iterations, parallelism, analysis_function, policy_name,
   execution_time, unique_patterns
-- data.context: matrix_name, placement_rounds, include_flow_details,
+- data.context: demand_set, placement_rounds, include_flow_details,
   include_used_edges, base_demands, alpha, alpha_source
 
 ### MaximumSupportedDemand
@@ -122,9 +122,9 @@ Outputs:
 Search for the maximum uniform traffic multiplier `alpha_star` that is fully placeable.
 
 ```yaml
-- step_type: MaximumSupportedDemand
+- type: MaximumSupportedDemand
   name: msd_default
-  matrix_name: default
+  demand_set: default
   acceptance_rule: hard          # Currently only "hard" is supported
   alpha_start: 1.0               # Starting alpha value for search
   growth_factor: 2.0             # Growth factor for bracketing (must be > 1.0)
@@ -139,7 +139,7 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
 
 Parameters:
 
-- `matrix_name`: Name of the traffic matrix to analyze (default: "default").
+- `demand_set`: Name of the demand set to analyze (default: "default").
 - `acceptance_rule`: Acceptance rule for feasibility (currently only "hard" is supported).
 - `alpha_start`: Initial alpha value to probe.
 - `growth_factor`: Multiplier for bracketing phase (must be > 1.0).
@@ -163,7 +163,7 @@ Outputs:
 Aggregate platform and optics capex/power by hierarchy level (split by `/`).
 
 ```yaml
-- step_type: CostPower
+- type: CostPower
   name: cost_power
   include_disabled: false
   aggregation_level: 2
@@ -210,7 +210,7 @@ source:
   match:
     conditions:
       - attr: "tier"
-        operator: "=="
+        op: "=="
         value: "leaf"
 ```
 
@@ -248,23 +248,23 @@ source:
 
 ### Flow Analysis Modes
 
-**`combine` Mode**: Aggregates all source matches into one virtual source, all sink matches into one virtual sink. Produces single flow value.
+**`combine` Mode**: Aggregates all source matches into one virtual source, all target matches into one virtual target. Produces single flow value.
 
-**`pairwise` Mode**: Computes flow between each source group and sink group pair. Produces flow matrix keyed by `(source_group, sink_group)`.
+**`pairwise` Mode**: Computes flow between each source group and target group pair. Produces flow matrix keyed by `(source_group, target_group)`.
 
 ## MaxFlow Parameters
 
 ### Required Parameters
 
 - `source`: Node selector for source nodes (string pattern or selector object)
-- `sink`: Node selector for sink nodes (string pattern or selector object)
+- `target`: Node selector for target nodes (string pattern or selector object)
 
 ### Analysis Configuration
 
 ```yaml
 mode: combine                    # combine | pairwise (default: combine)
 iterations: 1000                 # Failure iterations to run (default: 1)
-failure_policy: policy_name      # Name in failure_policy_set (default: null)
+failure_policy: policy_name      # Name in failures section (default: null)
 parallelism: auto                # Worker processes (default: auto)
 shortest_path: false             # Restrict to shortest paths (default: false)
 require_capacity: true           # Path selection considers capacity (default: true)
@@ -285,7 +285,7 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
 {
   "workflow": {
     "network_statistics": {
-      "step_type": "NetworkStats",
+      "type": "NetworkStats",
       "step_name": "network_statistics",
       "execution_order": 0,
       "scenario_seed": 42,
@@ -303,7 +303,7 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
       "metadata": { "duration_sec": 1.234 },
       "data": {
         "alpha_star": 1.37,
-        "context": { "matrix_name": "baseline_traffic_matrix" }
+        "context": { "demand_set": "baseline_traffic_matrix" }
       }
     },
     "tm_placement": {
@@ -318,11 +318,11 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
             "data": {}
           }
         ],
-        "context": { "matrix_name": "baseline_traffic_matrix" }
+        "context": { "demand_set": "baseline_traffic_matrix" }
       }
     }
   },
-  "scenario": { "seed": 42, "failure_policy_set": { }, "traffic_matrices": { } }
+  "scenario": { "seed": 42, "failures": { }, "demands": { } }
 }
 ```
 

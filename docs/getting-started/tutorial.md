@@ -5,7 +5,7 @@ This guide shows the fastest way to run a scenario from the CLI and a minimal pr
 ## CLI: run and inspect
 
 ```bash
-# Inspect (validate and preview structure, steps, matrices)
+# Inspect (validate and preview structure, steps, demands)
 ngraph inspect scenarios/square_mesh.yaml --detail
 
 # Run and store results (JSON) next to the scenario or under --output
@@ -28,9 +28,9 @@ network:
     A: {}
     B: {}
   links:
-    - {source: A, target: B, link_params: {capacity: 10.0, cost: 1.0}}
+    - {source: A, target: B, capacity: 10.0, cost: 1.0}
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: baseline_stats
 """
 

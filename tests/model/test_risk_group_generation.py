@@ -24,28 +24,25 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            path_id: "NYC-CHI"
+      attrs:
+        fiber:
+          path_id: "NYC-CHI"
     - source: CHI
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            path_id: "CHI-LA"
+      attrs:
+        fiber:
+          path_id: "CHI-LA"
     - source: NYC
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            path_id: "NYC-CHI"
+      attrs:
+        fiber:
+          path_id: "NYC-CHI"
 
 risk_groups:
   - generate:
-      entity_scope: link
+      scope: link
       group_by: fiber.path_id
-      name_template: Path_${value}
+      name: Path_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -79,9 +76,9 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: Building_${value}
+      name: Building_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -104,22 +101,20 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "NYC-CHI-C1"
+      attrs:
+        fiber:
+          conduit_id: "NYC-CHI-C1"
     - source: CHI
       target: NYC
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "NYC-CHI-C2"
+      attrs:
+        fiber:
+          conduit_id: "NYC-CHI-C2"
 
 risk_groups:
   - generate:
-      entity_scope: link
+      scope: link
       group_by: fiber.conduit_id
-      name_template: Conduit_${value}
+      name: Conduit_${value}
       attrs:
         type: fiber_conduit
         failure_probability: 0.001
@@ -155,9 +150,9 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.power_zone
-      name_template: PowerZone_${value}
+      name: PowerZone_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -191,9 +186,9 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.nonexistent
-      name_template: Missing_${value}
+      name: Missing_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -221,9 +216,9 @@ network:
 risk_groups:
   - "Building_DC1_Manual"
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.room_id
-      name_template: Room_${value}
+      name: Room_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -254,13 +249,13 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: Building_${value}
+      name: Building_${value}
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.power_zone
-      name_template: PowerZone_${value}
+      name: PowerZone_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -294,9 +289,9 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: Building_${value}
+      name: Building_${value}
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -328,16 +323,16 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
-      name_template: Test_${value}
+      scope: node
+      name: Test_${value}
 """
         with pytest.raises(jsonschema.ValidationError) as exc_info:
             Scenario.from_yaml(yaml_content)
 
         assert "group_by" in str(exc_info.value)
 
-    def test_missing_name_template(self) -> None:
-        """Error when name_template is missing (schema validation)."""
+    def test_missing_name(self) -> None:
+        """Error when name is missing (schema validation)."""
         import jsonschema
 
         yaml_content = """
@@ -347,16 +342,16 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
 """
         with pytest.raises(jsonschema.ValidationError) as exc_info:
             Scenario.from_yaml(yaml_content)
 
-        assert "name_template" in str(exc_info.value)
+        assert "'name' is a required property" in str(exc_info.value)
 
-    def test_name_template_without_placeholder(self) -> None:
-        """Error when name_template lacks ${value} placeholder."""
+    def test_name_without_placeholder(self) -> None:
+        """Error when name lacks ${value} placeholder."""
         yaml_content = """
 network:
   nodes:
@@ -367,9 +362,9 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: StaticBuildingName
+      name: StaticBuildingName
 """
         with pytest.raises(ValueError) as exc_info:
             Scenario.from_yaml(yaml_content)
@@ -393,9 +388,9 @@ risk_groups:
       explicit: true
   # Generate block that produces same name
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: Building_${value}
+      name: Building_${value}
 """
         with pytest.raises(ValueError) as exc_info:
             Scenario.from_yaml(yaml_content)
@@ -417,13 +412,13 @@ network:
 
 risk_groups:
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.building_id
-      name_template: Site_${value}
+      name: Site_${value}
   - generate:
-      entity_scope: node
+      scope: node
       group_by: facility.campus_id
-      name_template: Site_${value}
+      name: Site_${value}
 """
         with pytest.raises(ValueError) as exc_info:
             Scenario.from_yaml(yaml_content)

@@ -21,20 +21,21 @@ network:
   links:
     - source: A
       target: B
-      link_params: {capacity: 10, cost: 2}
+      capacity: 10
+      cost: 2
 
-failure_policy_set:
+failures:
   p1:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: link
-            rule_type: choice
+          - scope: link
+            mode: choice
             count: 1
             weight_by: cost
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build
 """
     data = yaml.safe_load(yaml_doc)

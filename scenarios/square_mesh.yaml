@@ -1,72 +1,55 @@
-# Toy scenario: 4-node full mesh topology with single-link failure analysis
-# Each node connected to every other node with identical link parameters
-
 seed: 42
-
 network:
   nodes:
     N1: {}
     N2: {}
     N3: {}
     N4: {}
-
   links:
-    # Full mesh connectivity: 6 bidirectional links (connects every node to every other node)
-    # Links are bidirectional by default in NetGraph
     - source: N1
       target: N2
-      link_params:
-        capacity: 2.0
-        cost: 1.0
+      capacity: 2.0
+      cost: 1.0
     - source: N1
       target: N3
-      link_params:
-        capacity: 1.0
-        cost: 1.0
+      capacity: 1.0
+      cost: 1.0
     - source: N1
       target: N4
-      link_params:
-        capacity: 2.0
-        cost: 1.0
+      capacity: 2.0
+      cost: 1.0
     - source: N2
       target: N3
-      link_params:
-        capacity: 2.0
-        cost: 1.0
+      capacity: 2.0
+      cost: 1.0
     - source: N2
       target: N4
-      link_params:
-        capacity: 1.0
-        cost: 1.0
+      capacity: 1.0
+      cost: 1.0
     - source: N3
       target: N4
-      link_params:
-        capacity: 2.0
-        cost: 1.0
-
-failure_policy_set:
+      capacity: 2.0
+      cost: 1.0
+failures:
   single_link_failure:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: link
-            rule_type: choice
+          - scope: link
+            mode: choice
             count: 1
-
-traffic_matrix_set:
+demands:
   baseline_traffic_matrix:
-    - source: "^N([1-4])$"
-      sink: "^N([1-4])$"
-      demand: 12.0
-      mode: "pairwise"
+    - source: ^N([1-4])$
+      target: ^N([1-4])$
+      volume: 12.0
+      mode: pairwise
       attrs:
         euclidean_km: 10
-
 workflow:
-  # 1) Maximum Supported Demand search
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd_baseline
-    matrix_name: baseline_traffic_matrix
+    demand_set: baseline_traffic_matrix
     acceptance_rule: hard
     alpha_start: 1.0
     growth_factor: 2.0
@@ -77,11 +60,9 @@ workflow:
     max_bisect_iters: 32
     seeds_per_alpha: 1
     placement_rounds: 2
-
-  # 2) Traffic matrix placement using MSD alpha
-  - step_type: TrafficMatrixPlacement
+  - type: TrafficMatrixPlacement
     name: tm_placement
-    matrix_name: baseline_traffic_matrix
+    demand_set: baseline_traffic_matrix
     failure_policy: single_link_failure
     iterations: 1000
     parallelism: 8
@@ -91,12 +72,10 @@ workflow:
     include_flow_details: true
     alpha_from_step: msd_baseline
     alpha_from_field: data.alpha_star
-
-  # 3) MaxFlow capacity matrix between all node pairs
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: node_to_node_capacity_matrix
-    source: "^(N[1-4])$"
-    sink: "^(N[1-4])$"
+    source: ^(N[1-4])$
+    target: ^(N[1-4])$
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000

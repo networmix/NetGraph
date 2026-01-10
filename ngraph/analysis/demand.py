@@ -7,10 +7,9 @@ Uses unified selectors for node selection.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Dict, Iterator, List
+from typing import Dict, List
 
 from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
-from ngraph.dsl.expansion import ExpansionSpec, expand_templates
 from ngraph.dsl.selectors import normalize_selector, select_nodes
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
@@ -89,21 +88,21 @@ def _expand_combine(
     for src_name in src_names:
         augmentations.append(AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0))
 
-    # Real sinks -> pseudo-sink (unidirectional IN)
+    # Real targets -> pseudo-target (unidirectional IN)
     for dst_name in dst_names:
         augmentations.append(AugmentationEdge(dst_name, pseudo_snk, LARGE_CAPACITY, 0))
 
     # Single aggregated demand
-    demand = ExpandedDemand(
+    expanded = ExpandedDemand(
         src_name=pseudo_src,
         dst_name=pseudo_snk,
-        volume=td.demand,
+        volume=td.volume,
         priority=td.priority,
         policy_preset=policy_preset,
         demand_id=td.id,
     )
 
-    return [demand], augmentations
+    return [expanded], augmentations
 
 
 def _expand_pairwise(
@@ -125,7 +124,7 @@ def _expand_pairwise(
         return [], []
 
     # Distribute volume evenly
-    volume_per_pair = td.demand / len(pairs)
+    volume_per_pair = td.volume / len(pairs)
 
     demands = [
         ExpandedDemand(
@@ -140,86 +139,6 @@ def _expand_pairwise(
     ]
 
     return demands, []  # No augmentations for pairwise
-
-
-def _extract_selector_templates(selector: Any, prefix: str) -> Dict[str, str]:
-    """Extract string fields from a selector that may contain variables.
-
-    Args:
-        selector: String path or dict selector.
-        prefix: Key prefix for the returned template dict.
-
-    Returns:
-        Dict mapping template keys to string values that may contain $var.
-    """
-    templates: Dict[str, str] = {}
-    if isinstance(selector, str):
-        templates[prefix] = selector
-    elif isinstance(selector, dict):
-        if "path" in selector and isinstance(selector["path"], str):
-            templates[f"{prefix}.path"] = selector["path"]
-        if "group_by" in selector and isinstance(selector["group_by"], str):
-            templates[f"{prefix}.group_by"] = selector["group_by"]
-    return templates
-
-
-def _rebuild_selector(original: Any, substituted: Dict[str, str], prefix: str) -> Any:
-    """Rebuild a selector with substituted values.
-
-    Args:
-        original: Original selector (string or dict).
-        substituted: Dict of substituted template values.
-        prefix: Key prefix used in substituted dict.
-
-    Returns:
-        Selector with variables substituted.
-    """
-    if isinstance(original, str):
-        return substituted.get(prefix, original)
-
-    if isinstance(original, dict):
-        result = dict(original)
-        if f"{prefix}.path" in substituted:
-            result["path"] = substituted[f"{prefix}.path"]
-        if f"{prefix}.group_by" in substituted:
-            result["group_by"] = substituted[f"{prefix}.group_by"]
-        return result
-
-    return original
-
-
-def _expand_with_variables(td: TrafficDemand) -> Iterator[TrafficDemand]:
-    """Expand a TrafficDemand using its expand_vars specification.
-
-    Yields one or more TrafficDemand instances with variables substituted.
-    Handles both string and dict selectors correctly.
-    """
-    if not td.expand_vars:
-        yield td
-        return
-
-    spec = ExpansionSpec(
-        expand_vars=td.expand_vars,
-        expansion_mode=td.expansion_mode,  # type: ignore[arg-type]
-    )
-
-    # Extract string templates from selectors (handles both str and dict)
-    templates = _extract_selector_templates(td.source, "source")
-    templates.update(_extract_selector_templates(td.sink, "sink"))
-
-    if not templates:
-        # No expandable string fields - yield as-is
-        yield td
-        return
-
-    # Expand templates and rebuild selectors
-    for substituted in expand_templates(templates, spec):
-        yield replace(
-            td,
-            source=_rebuild_selector(td.source, substituted, "source"),
-            sink=_rebuild_selector(td.sink, substituted, "sink"),
-            expand_vars={},  # Clear to prevent re-expansion
-        )
 
 
 def _expand_by_group_mode(
@@ -288,13 +207,13 @@ def _expand_by_group_mode(
             return [], []
 
         # Divide volume among group pairs
-        volume_per_group_pair = td.demand / len(group_pairs)
+        volume_per_group_pair = td.volume / len(group_pairs)
 
         for src_label, dst_label in group_pairs:
             group_td = replace(
                 td,
                 id=f"{td.id}|{src_label}|{dst_label}",
-                demand=volume_per_group_pair,
+                volume=volume_per_group_pair,
             )
             single_src = {src_label: src_groups[src_label]}
             single_dst = {dst_label: dst_groups[dst_label]}
@@ -325,14 +244,16 @@ def expand_demands(
     """Expand TrafficDemand specifications into concrete demands with augmentations.
 
     Pure function that:
-    1. Expands variables in selectors using expand_vars
-    2. Normalizes and evaluates selectors to get node groups
-    3. Distributes volume based on mode (combine/pairwise) and group_mode
-    4. Generates augmentation edges for combine mode (pseudo nodes)
-    5. Returns demands (node names) + augmentations
+    1. Normalizes and evaluates selectors to get node groups
+    2. Distributes volume based on mode (combine/pairwise) and group_mode
+    3. Generates augmentation edges for combine mode (pseudo nodes)
+    4. Returns demands (node names) + augmentations
 
     Node names are used (not IDs) so expansion happens BEFORE graph building.
     IDs are resolved after graph is built with augmentations.
+
+    Note: Variable expansion (expand: block) is handled during YAML parsing in
+    build_demand_set(), so TrafficDemand objects here are already expanded.
 
     Args:
         network: Network for node selection.
@@ -349,35 +270,33 @@ def expand_demands(
     all_augmentations: List[AugmentationEdge] = []
 
     for td in traffic_demands:
-        # Step 1: Variable expansion (if expand_vars present)
-        for expanded_td in _expand_with_variables(td):
-            # Step 2: Normalize selectors
-            src_sel = normalize_selector(expanded_td.source, "demand")
-            sink_sel = normalize_selector(expanded_td.sink, "demand")
+        # Step 1: Normalize selectors
+        src_sel = normalize_selector(td.source, "demand")
+        tgt_sel = normalize_selector(td.target, "demand")
 
-            # Step 3: Select nodes (active_only=True for demands by context default)
-            src_groups = select_nodes(network, src_sel, default_active_only=True)
-            dst_groups = select_nodes(network, sink_sel, default_active_only=True)
+        # Step 2: Select nodes (active_only=True for demands by context default)
+        src_groups = select_nodes(network, src_sel, default_active_only=True)
+        dst_groups = select_nodes(network, tgt_sel, default_active_only=True)
 
-            if not src_groups or not dst_groups:
-                continue
+        if not src_groups or not dst_groups:
+            continue
 
-            policy_preset = expanded_td.flow_policy_config or default_policy_preset
+        policy_preset = td.flow_policy or default_policy_preset
 
-            # Step 4: Expand by group_mode
-            demands, augmentations = _expand_by_group_mode(
-                expanded_td, src_groups, dst_groups, policy_preset
-            )
+        # Step 3: Expand by group_mode
+        demands, augmentations = _expand_by_group_mode(
+            td, src_groups, dst_groups, policy_preset
+        )
 
-            all_demands.extend(demands)
-            all_augmentations.extend(augmentations)
+        all_demands.extend(demands)
+        all_augmentations.extend(augmentations)
 
     if not all_demands:
         raise ValueError(
             "No demands could be expanded. Possible causes:\n"
-            "  - Source/sink selectors don't match any nodes\n"
+            "  - Source/target selectors don't match any nodes\n"
             "  - All matching nodes are disabled\n"
-            "  - Source and sink are identical (self-loops not allowed)"
+            "  - Source and target are identical (self-loops not allowed)"
         )
 
     # Sort by priority (lower = higher priority)
