@@ -2,18 +2,18 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-Scenario-driven network modeling and analysis framework combining Python's flexibility with high-performance C++ algorithms.
+Scenario-driven network modeling and analysis framework combining Python with C++ graph algorithms.
 
 ## Overview
 
-NetGraph enables declarative modeling of network topologies, traffic matrices, and failure scenarios. It delegates computationally intensive graph algorithms to [NetGraph-Core](https://github.com/networmix/NetGraph-Core) while providing a rich Python API and CLI for orchestration.
+NetGraph enables declarative modeling of network topologies, traffic matrices, and failure scenarios. It delegates computationally intensive graph algorithms to [NetGraph-Core](https://github.com/networmix/NetGraph-Core) while providing a Python API and CLI for orchestration.
 
 ## Architecture
 
 NetGraph employs a **hybrid Python+C++ architecture**:
 
 - **Python layer (NetGraph)**: Scenario DSL parsing, workflow orchestration, result aggregation, and high-level APIs.
-- **C++ layer (NetGraph-Core)**: Performance-critical graph algorithms (SPF, KSP, Max-Flow) executing in optimized C++ with the GIL released.
+- **C++ layer (NetGraph-Core)**: Graph algorithms (SPF, KSP, Max-Flow) executing in C++ with the GIL released.
 
 ## Key Features
 
@@ -21,7 +21,7 @@ NetGraph employs a **hybrid Python+C++ architecture**:
 
 - **Declarative Scenarios**: Define topology, traffic, and workflows in validated YAML.
 - **Blueprints**: Reusable topology templates (e.g., Clos fabrics, regions) with parameterized expansion.
-- **Strict Multigraph**: Deterministic graph representation with stable edge IDs.
+- **Directed Multigraph**: Deterministic graph representation with stable edge IDs.
 
 ### 2. Failure Analysis
 
@@ -31,15 +31,15 @@ NetGraph employs a **hybrid Python+C++ architecture**:
 
 ### 3. Traffic Engineering
 
-- **Routing Modes**: Unified modeling of **IP Routing** (static costs, oblivious to congestion) and **Traffic Engineering** (dynamic residuals, congestion-aware).
+- **Routing Modes**: Cost-based routing (shortest paths, ignores capacity) and capacity-aware routing (considers residual capacity).
 - **Flow Placement**: Strategies for **ECMP** (Equal-Cost Multi-Path) and **WCMP** (Weighted Cost Multi-Path).
 - **Capacity Analysis**: Compute max-flow envelopes and demand allocation with configurable placement policies.
 
 ### 4. Workflow & Integration
 
 - **Structured Results**: Export analysis artifacts to JSON for downstream processing.
-- **CLI**: Comprehensive command-line interface for validation and execution.
-- **Python API**: Full programmatic access to all modeling and solving capabilities.
+- **CLI**: Command-line interface for validation and execution.
+- **Python API**: Programmatic access to modeling and analysis capabilities.
 
 ## Installation
 
@@ -64,10 +64,10 @@ make check  # Run full test suite
 
 ```bash
 # Validate and inspect a scenario
-ngraph inspect scenarios/backbone_clos.yml --detail
+ngraph inspect scenarios/readme_example.yml --detail
 
 # Run analysis workflow
-ngraph run scenarios/backbone_clos.yml --results clos.results.json
+ngraph run scenarios/readme_example.yml --results example.results.json
 ```
 
 ### Python API
@@ -95,7 +95,7 @@ degraded = ctx.max_flow(excluded_nodes={"B"})  # Test failure scenario
 
 ## Example Scenario
 
-NetGraph scenarios define topology, configuration, and analysis steps in a unified YAML file. This example demonstrates **blueprints** for modular topology definition:
+NetGraph scenarios define topology, configuration, and analysis steps in a unified YAML file. This example demonstrates **blueprints** for modular topology definition and a **flow analysis workflow** with Monte Carlo failure simulation:
 
 ```yaml
 seed: 42
@@ -130,6 +130,16 @@ network:
     capacity: 50
     cost: 10
 
+# Define failure policy for Monte Carlo analysis
+failures:
+  random_link:
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+
 # Define traffic demands
 demands:
   global_traffic:
@@ -139,7 +149,7 @@ demands:
       mode: combine
       flow_policy: SHORTEST_PATHS_ECMP
 
-# Define analysis workflow
+# Analysis workflow: find max supported demand, then test under failures
 workflow:
 - type: NetworkStats
   name: stats
@@ -148,11 +158,18 @@ workflow:
   source: ^site1/leaf/
   target: ^site2/leaf/
   mode: combine
-  shortest_path: false
 - type: MaximumSupportedDemand
   name: max_demand
   demand_set: global_traffic
+- type: TrafficMatrixPlacement
+  name: placement_at_max
+  demand_set: global_traffic
+  alpha_from_step: max_demand      # Use alpha_star from MSD step
+  failure_policy: random_link
+  iterations: 100
 ```
+
+The workflow demonstrates **step chaining**: `MaximumSupportedDemand` finds the maximum feasible demand multiplier (`alpha_star=1.0`), then `TrafficMatrixPlacement` uses that value via `alpha_from_step` to run Monte Carlo placement under random link failures. Results show baseline placement at 100% and worst-case failure at 50% (when a spine-to-spine link fails).
 
 ## Repository Structure
 
