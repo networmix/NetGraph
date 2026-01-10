@@ -104,31 +104,31 @@ seed: 42
 blueprints:
   Clos_Fabric:
     nodes:
-      spine: {count: 2, template: "spine{n}"}
-      leaf:  {count: 4, template: "leaf{n}"}
+      spine: { count: 2, template: "spine{n}" }
+      leaf: { count: 4, template: "leaf{n}" }
     links:
-    - source: /leaf
-      target: /spine
-      pattern: mesh
-      capacity: 100
-      cost: 1
-    - source: /spine
-      target: /leaf
-      pattern: mesh
-      capacity: 100
-      cost: 1
+      - source: /leaf
+        target: /spine
+        pattern: mesh
+        capacity: 100
+        cost: 1
+      - source: /spine
+        target: /leaf
+        pattern: mesh
+        capacity: 100
+        cost: 1
 
 # Instantiate network from templates
 network:
   nodes:
-    site1: {blueprint: Clos_Fabric}
-    site2: {blueprint: Clos_Fabric}
+    site1: { blueprint: Clos_Fabric }
+    site2: { blueprint: Clos_Fabric }
   links:
-  - source: {path: site1/spine}
-    target: {path: site2/spine}
-    pattern: one_to_one
-    capacity: 50
-    cost: 10
+    - source: { path: site1/spine }
+      target: { path: site2/spine }
+      pattern: one_to_one
+      capacity: 50
+      cost: 10
 
 # Define failure policy for Monte Carlo analysis
 failures:
@@ -149,24 +149,24 @@ demands:
       mode: combine
       flow_policy: SHORTEST_PATHS_ECMP
 
-# Analysis workflow: find max supported demand, then test under failures
+# Analysis workflow: find max capacity, then test under failures
 workflow:
-- type: NetworkStats
-  name: stats
-- type: MaxFlow
-  name: site_capacity
-  source: ^site1/leaf/
-  target: ^site2/leaf/
-  mode: combine
-- type: MaximumSupportedDemand
-  name: max_demand
-  demand_set: global_traffic
-- type: TrafficMatrixPlacement
-  name: placement_at_max
-  demand_set: global_traffic
-  alpha_from_step: max_demand      # Use alpha_star from MSD step
-  failure_policy: random_link
-  iterations: 100
+  - type: NetworkStats
+    name: stats
+  - type: MaxFlow
+    name: site_capacity
+    source: ^site1/leaf/
+    target: ^site2/leaf/
+    mode: combine
+  - type: MaximumSupportedDemand
+    name: max_demand
+    demand_set: global_traffic
+  - type: TrafficMatrixPlacement
+    name: placement_at_max
+    demand_set: global_traffic
+    alpha_from_step: max_demand # Use alpha_star from MSD step
+    failure_policy: random_link
+    iterations: 100
 ```
 
 The workflow demonstrates **step chaining**: `MaximumSupportedDemand` finds the maximum feasible demand multiplier (`alpha_star=1.0`), then `TrafficMatrixPlacement` uses that value via `alpha_from_step` to run Monte Carlo placement under random link failures. Results show baseline placement at 100% and worst-case failure at 50% (when a spine-to-spine link fails).
@@ -175,14 +175,15 @@ The workflow demonstrates **step chaining**: `MaximumSupportedDemand` finds the 
 
 ```text
 ngraph/             # Python package source
+  analysis/         # Core algorithm wrappers and placement
   dsl/              # Scenario parsing and blueprint expansion
-  model/            # Network and flow domain models
-  solver/           # Algorithms and Core wrappers
-  workflow/         # Analysis steps and orchestration
+  model/            # Network, demand, and flow domain models
+  results/          # Result artifacts and storage
+  workflow/         # Workflow steps and orchestration
 scenarios/          # Example scenario definitions
-tests/              # Pytest suite (unit and integration)
+tests/              # Pytest suite
 docs/               # Documentation source (MkDocs)
-dev/                # Development tools and scripts
+dev/                # Development scripts
 ```
 
 ## Development
@@ -197,7 +198,7 @@ make docs-serve # Preview documentation
 
 ## Requirements
 
-- **Python**: 3.9+
+- **Python**: 3.11+
 - **NetGraph-Core**: Compatible C++ backend version
 
 ## Documentation
