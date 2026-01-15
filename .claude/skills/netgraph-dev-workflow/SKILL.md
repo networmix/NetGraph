@@ -1,8 +1,8 @@
 ---
 name: netgraph-dev-workflow
 description: >
-  NetGraph development workflow for running tests, linting, and validation.
-  Use when: setting up dev environment, running tests or lint, fixing CI failures,
+  NetGraph development workflow and CLI reference. Use when: setting up dev environment,
+  running tests or lint, fixing CI failures, using the ngraph CLI (inspect, run commands),
   troubleshooting venv issues, or asking about make targets.
 ---
 
@@ -61,6 +61,90 @@ When `make lint` fails:
 ```bash
 make validate  # Validates all YAML files in scenarios/ and tests/integration/
 ```
+
+## CLI Reference
+
+The `ngraph` CLI runs and inspects network scenarios. Use `ngraph --help` or `ngraph <command> --help` for full option details.
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `ngraph inspect <scenario.yaml>` | Validate scenario and show structure summary |
+| `ngraph run <scenario.yaml>` | Execute workflow steps and export results |
+
+### Common Usage Patterns
+
+**Validate before running:**
+
+```bash
+./venv/bin/ngraph inspect scenario.yaml
+./venv/bin/ngraph run scenario.yaml
+```
+
+**Detailed inspection (node/link tables, step parameters):**
+
+```bash
+./venv/bin/ngraph inspect --detail scenario.yaml
+```
+
+**Run with profiling (CPU analysis, bottleneck detection):**
+
+```bash
+./venv/bin/ngraph run --profile scenario.yaml
+./venv/bin/ngraph run --profile --profile-memory scenario.yaml  # Include memory tracking
+```
+
+**Control output:**
+
+```bash
+./venv/bin/ngraph run scenario.yaml                          # Default: writes <scenario>.results.json
+./venv/bin/ngraph run scenario.yaml --results out.json       # Custom results path
+./venv/bin/ngraph run scenario.yaml --output ./results/      # All artifacts to directory
+./venv/bin/ngraph run scenario.yaml --no-results --stdout    # Print to stdout only
+./venv/bin/ngraph run scenario.yaml --keys msd placement     # Filter to specific workflow steps
+```
+
+**Debug logging:**
+
+```bash
+./venv/bin/ngraph -v inspect scenario.yaml   # Verbose (debug level)
+./venv/bin/ngraph --quiet run scenario.yaml  # Suppress info, show warnings only
+```
+
+### Key Options
+
+**Global:**
+- `-v, --verbose` - Enable debug logging
+- `--quiet` - Suppress console output (warnings only)
+
+**inspect:**
+- `-d, --detail` - Show complete node/link tables and step parameters
+- `-o, --output DIR` - Output directory for artifacts
+
+**run:**
+- `-r, --results FILE` - Custom results JSON path
+- `--no-results` - Skip writing results file
+- `--stdout` - Print results to stdout
+- `-k, --keys STEP [STEP...]` - Filter output to specific workflow step names
+- `--profile` - Enable CPU profiling with analysis
+- `--profile-memory` - Add memory tracking (requires `--profile`)
+- `-o, --output DIR` - Output directory for results and profiles
+
+### Output Interpretation
+
+**inspect output sections:**
+1. **OVERVIEW** - Quick metrics: nodes, links, capacity, demand, utilization
+2. **NETWORK STRUCTURE** - Hierarchy tree, capacity statistics, validation warnings
+3. **RISK GROUPS** - Failure correlation groups defined
+4. **COMPONENTS LIBRARY** - Hardware definitions for cost/power modeling
+5. **FAILURE POLICIES** - Failure simulation rules and modes
+6. **DEMAND SETS** - Traffic demands with pattern matching summary
+7. **WORKFLOW STEPS** - Execution plan with node selection preview
+
+**run output:**
+- Results JSON contains `steps.<step_name>.data` for each workflow step
+- With `--profile`: performance report shows timing breakdown and bottlenecks
 
 ## Running Commands
 
