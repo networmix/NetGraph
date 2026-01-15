@@ -197,7 +197,7 @@ def create_flow_policy(
 def serialize_policy_preset(cfg: Any) -> Optional[str]:
     """Serialize a FlowPolicyPreset to its string name for JSON storage.
 
-    Handles FlowPolicyPreset enum values, integer enum values, and string fallbacks.
+    Handles FlowPolicyPreset enum values, integer enum values, and string inputs.
     Returns None for None input.
 
     Args:

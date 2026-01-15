@@ -108,7 +108,11 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
     Raises:
         ValueError: If required fields are missing or invalid.
     """
-    scope = raw.get("scope", "node")
+    scope = raw.get("scope")
+    if not scope:
+        raise ValueError(
+            "membership requires 'scope' field (node, link, or risk_group)"
+        )
     if scope not in ("node", "link", "risk_group"):
         raise ValueError(
             f"scope must be 'node', 'link', or 'risk_group', got '{scope}'"

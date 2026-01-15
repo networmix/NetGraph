@@ -537,11 +537,12 @@ failures:
           - scope: node
             mode: choice
             count: 1
-            conditions:
-              - attr: role
-                op: "=="
-                value: edge
-            logic: and
+            match:
+              logic: and
+              conditions:
+                - attr: role
+                  op: "=="
+                  value: edge
             weight_by: capacity_gbps
 
       # 35% chance: fail 1 risk group weighted by distance
@@ -559,10 +560,11 @@ failures:
         rules:
           - scope: node
             mode: all
-            conditions:
-              - attr: region
-                op: "=="
-                value: west
+            match:
+              conditions:
+                - attr: region
+                  op: "=="
+                  value: west
 
       # 10% chance: random link failures (5% each)
       - weight: 0.1
@@ -828,10 +830,11 @@ failures:
           - scope: risk_group
             mode: choice
             count: 1
-            conditions:
-              - attr: location
-                op: contains    # String contains
-                value: "DC1"
+            match:
+              conditions:
+                - attr: location
+                  op: contains    # String contains
+                  value: "DC1"
 ```
 
 **Result**: Hierarchical risk groups with recursive child failure expansion
@@ -1010,3 +1013,177 @@ demands:
 ```
 
 **Result**: Demonstrates `>=`, `<`, `in`, `contains`, `exists`, `not_exists` operators
+
+## Example 20: link_match and Rule Expansion
+
+Using `link_match` to filter link rules by the link's own attributes, and `expand` for variable-based rule application.
+
+```yaml
+network:
+  nodes:
+    dc1_srv: {}
+    dc2_srv: {}
+    dc3_srv: {}
+  links:
+    - {source: dc1_srv, target: dc2_srv, capacity: 100, cost: 1, attrs: {type: fiber}}
+    - {source: dc1_srv, target: dc2_srv, capacity: 500, cost: 1, attrs: {type: fiber}}
+    - {source: dc2_srv, target: dc3_srv, capacity: 500, cost: 1, attrs: {type: copper}}
+
+  # Update only high-capacity fiber links
+  link_rules:
+    - source: ".*"
+      target: ".*"
+      link_match:
+        logic: and
+        conditions:
+          - {attr: capacity, op: ">=", value: 400}
+          - {attr: type, op: "==", value: fiber}
+      cost: 99
+      attrs:
+        priority: high
+
+  # Apply node rules using variable expansion
+  node_rules:
+    - path: "${dc}_srv"
+      expand:
+        vars:
+          dc: [dc1, dc2]
+        mode: cartesian
+      attrs:
+        tagged: true
+```
+
+**Result**: Only the 500-capacity fiber link (dc1_srv -> dc2_srv) gets cost 99. Nodes dc1_srv and dc2_srv are tagged.
+
+## Example 21: Nested Inline Nodes (No Blueprint)
+
+Creating hierarchical topology structure without using blueprints.
+
+```yaml
+network:
+  nodes:
+    datacenter:
+      attrs:
+        region: west
+        tier: 1
+      nodes:
+        rack1:
+          attrs:
+            rack_id: 1
+          nodes:
+            tor:
+              count: 1
+              template: "sw{n}"
+              attrs:
+                role: switch
+            servers:
+              count: 4
+              template: "srv{n}"
+              attrs:
+                role: compute
+        rack2:
+          attrs:
+            rack_id: 2
+          nodes:
+            tor:
+              count: 1
+              template: "sw{n}"
+              attrs:
+                role: switch
+            servers:
+              count: 4
+              template: "srv{n}"
+              attrs:
+                role: compute
+
+  links:
+    # Connect servers to their TOR switch in each rack
+    - source:
+        path: "datacenter/rack1/servers"
+      target:
+        path: "datacenter/rack1/tor"
+      pattern: mesh
+      capacity: 25
+    - source:
+        path: "datacenter/rack2/servers"
+      target:
+        path: "datacenter/rack2/tor"
+      pattern: mesh
+      capacity: 25
+    # Connect TOR switches
+    - source: datacenter/rack1/tor/sw1
+      target: datacenter/rack2/tor/sw1
+      capacity: 100
+```
+
+**Result**: Creates 10 nodes (2 switches + 8 servers) in a two-rack hierarchy. All nodes inherit `region: west` and `tier: 1` from the datacenter parent. Each rack's nodes get the appropriate `rack_id`.
+
+## Example 22: path Filter in Generate Blocks
+
+Using `path` to narrow entities before generating risk groups.
+
+```yaml
+network:
+  nodes:
+    prod_web1: {attrs: {env: production, service: web}}
+    prod_web2: {attrs: {env: production, service: web}}
+    prod_db1: {attrs: {env: production, service: database}}
+    dev_web1: {attrs: {env: development, service: web}}
+    dev_db1: {attrs: {env: development, service: database}}
+  links:
+    - {source: prod_web1, target: prod_db1, capacity: 100, attrs: {link_type: internal}}
+    - {source: prod_web2, target: prod_db1, capacity: 100, attrs: {link_type: internal}}
+    - {source: dev_web1, target: dev_db1, capacity: 50, attrs: {link_type: internal}}
+
+risk_groups:
+  # Generate env-based risk groups only for production nodes
+  - generate:
+      scope: node
+      path: "^prod_.*"
+      group_by: env
+      name: "Env_${value}"
+      attrs:
+        generated: true
+        critical: true
+
+  # Generate service-based risk groups for all nodes
+  - generate:
+      scope: node
+      group_by: service
+      name: "Service_${value}"
+
+  # Generate link risk groups only for production links
+  - generate:
+      scope: link
+      path: ".*prod.*"
+      group_by: link_type
+      name: "ProdLinks_${value}"
+
+demands:
+  baseline:
+    - source: "^prod_web.*"
+      target: "^prod_db.*"
+      volume: 50
+      mode: pairwise
+      flow_policy: SHORTEST_PATHS_ECMP
+
+failures:
+  production_failure:
+    expand_groups: true
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: risk_group
+            path: "^Env_.*"
+            mode: choice
+            count: 1
+```
+
+**Result**: Creates the following risk groups:
+
+- `Env_production` (only production nodes due to path filter)
+- `Service_web` (prod_web1, prod_web2, dev_web1)
+- `Service_database` (prod_db1, dev_db1)
+- `ProdLinks_internal` (only production links due to path filter)
+
+Note: `Env_development` is NOT created because dev nodes don't match `^prod_.*`.

@@ -56,7 +56,7 @@ class TestLinkRulesFullSelectors:
     def test_link_rules_string_selector_still_works(
         self, network_with_roles: Network
     ) -> None:
-        """String selectors in link_rules still work (backward compatible)."""
+        """String selectors in link_rules work as expected."""
         scenario = {
             "network": {
                 "nodes": {},

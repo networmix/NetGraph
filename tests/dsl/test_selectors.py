@@ -385,6 +385,35 @@ class TestSelectNodesByGroupBy:
         node_names = [n.name for n in all_nodes]
         assert "orphan" not in node_names
 
+    def test_group_by_disabled_field(self, attributed_network: Network) -> None:
+        """group_by can use top-level fields like disabled."""
+        # Disable one node for testing
+        attributed_network.nodes["dc1_leaf_1"].disabled = True
+
+        sel = NodeSelector(path=".*", group_by="disabled")
+        groups = select_nodes(attributed_network, sel, default_active_only=False)
+
+        assert "True" in groups
+        assert "False" in groups
+        # Verify disabled node is in the True group
+        disabled_names = [n.name for n in groups["True"]]
+        assert "dc1_leaf_1" in disabled_names
+        # Verify enabled nodes are in the False group
+        enabled_names = [n.name for n in groups["False"]]
+        assert len(enabled_names) > 0
+        assert "dc1_leaf_1" not in enabled_names
+
+    def test_group_by_name_field(self, attributed_network: Network) -> None:
+        """group_by can use top-level name field."""
+        sel = NodeSelector(path="dc1_leaf.*", group_by="name")
+        groups = select_nodes(attributed_network, sel, default_active_only=False)
+
+        # Each node should be in its own group (keyed by name)
+        assert "dc1_leaf_1" in groups
+        assert "dc1_leaf_2" in groups
+        assert len(groups["dc1_leaf_1"]) == 1
+        assert len(groups["dc1_leaf_2"]) == 1
+
 
 class TestSelectNodesMatchOnly:
     """Tests for match-only selectors (no path specified)."""

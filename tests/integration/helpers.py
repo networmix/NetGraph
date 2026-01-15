@@ -382,15 +382,7 @@ class ScenarioTestHelper:
         """
         exported = self.scenario.results.to_dict()
         step_data = exported.get("steps", {}).get(step_name, {}).get("data", {})
-        # Prefer direct key
         actual_flow = step_data.get(flow_label)
-        # Fallback: if flow_results list present, try summary.total_placed
-        if actual_flow is None and flow_label == "total_placed":
-            flow_results = step_data.get("flow_results", [])
-            if flow_results:
-                actual_flow = float(
-                    flow_results[0].get("summary", {}).get("total_placed", 0.0)
-                )
         assert actual_flow is not None, (
             f"Flow result '{flow_label}' not found for step '{step_name}'"
         )

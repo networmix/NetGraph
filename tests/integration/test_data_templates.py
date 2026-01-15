@@ -339,7 +339,7 @@ class FailurePolicyTemplates:
                             "conditions": [
                                 {
                                     "attr": "risk_groups",
-                                    "operator": "contains",
+                                    "op": "contains",
                                     "value": risk_group_name,
                                 }
                             ],
@@ -487,7 +487,7 @@ class WorkflowTemplates:
 
     @staticmethod
     def failure_analysis_workflow(
-        source_pattern: str, target_pattern: str, failure_policy_name: str = "default"
+        source_pattern: str, target_pattern: str
     ) -> List[Dict[str, Any]]:
         """Workflow for analyzing network under failures."""
         return [

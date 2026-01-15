@@ -26,7 +26,7 @@ import hashlib
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set
 
 from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
 from ngraph.logging import get_logger
@@ -117,24 +117,15 @@ def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
     return parallelism
 
 
-T = TypeVar("T")
-
-
 class AnalysisFunction(Protocol):
     """Protocol for analysis functions used with FailureManager.
 
-    Analysis functions should take a Network, exclusion sets, and any additional
-    keyword arguments, returning analysis results of any type.
+    Analysis functions take a Network, exclusion sets, and analysis-specific
+    parameters, returning results of any type.
     """
 
-    def __call__(
-        self,
-        network: "Network",
-        excluded_nodes: Set[str],
-        excluded_links: Set[str],
-        **kwargs,
-    ) -> Any:
-        """Execute analysis on network with exclusions and optional parameters."""
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Execute analysis on network with exclusions and parameters."""
         ...
 
 
@@ -535,7 +526,7 @@ class FailureManager:
             # Map unique task results back to their dedup keys
             key_to_result: dict[tuple, Any] = {}
             for (dedup_key, _arg), value in zip(
-                key_to_first_arg.items(), unique_result_values, strict=False
+                key_to_first_arg.items(), unique_result_values, strict=True
             ):
                 key_to_result[dedup_key] = value
         else:
@@ -775,7 +766,7 @@ class FailureManager:
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_summary: bool = False,
-        **kwargs,
+        include_min_cut: bool = False,
     ) -> Any:
         """Analyze maximum flow capacity envelopes between node groups under failures.
 
@@ -798,6 +789,7 @@ class FailureManager:
             seed: Optional seed for reproducible results.
             store_failure_patterns: Whether to store failure trace on results.
             include_flow_summary: Whether to collect detailed flow summary data.
+            include_min_cut: Whether to include min-cut edges in results.
 
         Returns:
             Dictionary with keys:
@@ -826,7 +818,7 @@ class FailureManager:
             require_capacity=require_capacity,
             flow_placement=flow_placement,
             include_flow_details=include_flow_summary,
-            **kwargs,
+            include_min_cut=include_min_cut,
         )
         return raw_results
 
@@ -898,7 +890,6 @@ class FailureManager:
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
         include_used_edges: bool = False,
-        **kwargs,
     ) -> Any:
         """Analyze traffic demand placement success under failures.
 
@@ -914,6 +905,8 @@ class FailureManager:
             placement_rounds: Optimization rounds for demand placement.
             seed: Optional seed for reproducible results.
             store_failure_patterns: Whether to store failure trace on results.
+            include_flow_details: Whether to include cost distribution details.
+            include_used_edges: Whether to include used edges in results.
 
         Returns:
             Dictionary with keys:
@@ -960,7 +953,6 @@ class FailureManager:
             placement_rounds=placement_rounds,
             include_flow_details=include_flow_details,
             include_used_edges=include_used_edges,
-            **kwargs,
         )
         return raw_results
 
@@ -975,7 +967,6 @@ class FailureManager:
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
         seed: int | None = None,
         store_failure_patterns: bool = False,
-        **kwargs,
     ) -> dict[str, Any]:
         """Analyze component criticality for flow capacity under failures.
 
@@ -1021,7 +1012,6 @@ class FailureManager:
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,
-            **kwargs,
         )
 
         # Aggregate component scores across iterations for statistical analysis

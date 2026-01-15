@@ -173,7 +173,7 @@ network:
       attrs:
         metro_name: atlanta
         metro_name_orig: Atlanta, GA
-        metro_id: 03817
+        metro_id: "03817"
         location_x: 1056698.7
         location_y: 1255491.7
         radius_km: 44.95

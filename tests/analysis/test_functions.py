@@ -89,7 +89,6 @@ class TestMaxFlowAnalysis:
             mode="pairwise",
             shortest_path=True,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
-            extra_param="ignored",
         )
 
         assert isinstance(result, FlowIterationResult)
@@ -99,6 +98,20 @@ class TestMaxFlowAnalysis:
         for flow in result.flows:
             assert flow.source.startswith("datacenter")
             assert flow.destination.startswith("edge")
+
+    def test_max_flow_analysis_rejects_unknown_params(
+        self, simple_network: Network
+    ) -> None:
+        """Test that unknown parameters raise TypeError."""
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            max_flow_analysis(
+                network=simple_network,
+                excluded_nodes=set(),
+                excluded_links=set(),
+                source="datacenter.*",
+                target="edge.*",
+                unknown_param="should_fail",
+            )
 
     def test_max_flow_analysis_empty_result(self, simple_network: Network) -> None:
         """Test max_flow_analysis with no matching nodes raises an error."""
@@ -116,21 +129,7 @@ class TestMaxFlowAnalysis:
 class TestDemandPlacementAnalysis:
     """Test demand_placement_analysis function."""
 
-    @pytest.fixture
-    def diamond_network(self) -> Network:
-        """Create a diamond network for testing demand placement."""
-        network = Network()
-        # Add nodes: A -> B,C -> D (diamond shape)
-        for node in ["A", "B", "C", "D"]:
-            network.add_node(Node(node))
-
-        # Add links with limited capacity
-        network.add_link(Link("A", "B", capacity=60.0, cost=1.0))
-        network.add_link(Link("A", "C", capacity=60.0, cost=1.0))
-        network.add_link(Link("B", "D", capacity=60.0, cost=1.0))
-        network.add_link(Link("C", "D", capacity=60.0, cost=1.0))
-
-        return network
+    # Uses diamond_network fixture from conftest.py
 
     def test_demand_placement_analysis_basic(self, diamond_network: Network) -> None:
         """Test basic demand_placement_analysis functionality."""
@@ -203,17 +202,7 @@ class TestDemandPlacementAnalysis:
 class TestDemandPlacementWithContextCaching:
     """Test demand_placement_analysis with pre-built context caching."""
 
-    @pytest.fixture
-    def diamond_network(self) -> Network:
-        """Create a diamond network for testing."""
-        network = Network()
-        for node in ["A", "B", "C", "D"]:
-            network.add_node(Node(node))
-        network.add_link(Link("A", "B", capacity=60.0, cost=1.0))
-        network.add_link(Link("A", "C", capacity=60.0, cost=1.0))
-        network.add_link(Link("B", "D", capacity=60.0, cost=1.0))
-        network.add_link(Link("C", "D", capacity=60.0, cost=1.0))
-        return network
+    # Uses diamond_network fixture from conftest.py
 
     def test_context_caching_pairwise_mode(self, diamond_network: Network) -> None:
         """Context caching works with pairwise mode."""

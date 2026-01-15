@@ -5,6 +5,19 @@ unified `flow_results` per iteration under `data.flow_results`.
 
 Baseline (no failures) is always run first as a separate reference. The `iterations`
 parameter specifies how many failure scenarios to run.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - type: TrafficMatrixPlacement
+        name: "tm_analysis"
+        demand_set: "default"
+        failure_policy: "single_link"    # Optional: failure policy name
+        iterations: 100                  # Number of failure scenarios
+        parallelism: 4                   # Worker processes (or "auto")
+        alpha: 1.0                       # Demand volume multiplier
+        include_flow_details: true       # Include cost distribution per flow
+    ```
 """
 
 from __future__ import annotations

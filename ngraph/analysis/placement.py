@@ -254,6 +254,9 @@ def _place_cached(
             residual = np.ascontiguousarray(
                 flow_graph.residual_view(), dtype=np.float64
             )
+            # Note: Do NOT cache residual-based DAGs. The TE loop computes
+            # DAGs specific to this demand's placement; caching them would
+            # corrupt results for other demands from the same source.
             fresh_dists, fresh_dag = ctx.algorithms.spf(
                 ctx.handle,
                 src=src_id,
@@ -265,7 +268,6 @@ def _place_cached(
                 multipath=True,
                 dtype="float64",
             )
-            dag_cache[cache_key] = (fresh_dists, fresh_dag)
 
             if fresh_dists[dst_id] == float("inf"):
                 break

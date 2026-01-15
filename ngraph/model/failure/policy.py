@@ -229,7 +229,7 @@ class FailurePolicy:
 
     def _match_scope(
         self,
-        rule_idx: int,
+        _rule_idx: int,
         rule: FailureRule,
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],

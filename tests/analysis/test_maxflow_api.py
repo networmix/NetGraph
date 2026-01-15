@@ -170,7 +170,7 @@ def test_network_dc_to_dc_reverse_edge_first_hop() -> None:
     Nodes: A/dc, A/leaf, B/leaf, B/dc. Links (forward):
       A/leaf->A/dc (10), A/leaf->B/leaf (10), B/leaf->B/dc (10)
 
-    The wrapper builds a StrictMultiDiGraph with add_reverse=True, creating
+    The graph builder creates a StrictMultiDiGraph with add_reverse=True, creating
     reverse DC->leaf edges, so A/dc can reach B/dc via DC->leaf->leaf->DC.
 
     Expect positive flow (10.0) in combine mode.

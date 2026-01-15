@@ -21,7 +21,7 @@ Disabled handling:
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: CostPower
+      - type: CostPower
         name: "cost_power"           # Optional custom name
         include_disabled: false       # Default: only enabled nodes/links
         aggregation_level: 2          # Produce levels: 0, 1, 2

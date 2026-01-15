@@ -175,7 +175,7 @@ The workflow demonstrates **step chaining**: `MaximumSupportedDemand` finds the 
 
 ```text
 ngraph/             # Python package source
-  analysis/         # Core algorithm wrappers and placement
+  analysis/         # Analysis functions and flow placement
   dsl/              # Scenario parsing and blueprint expansion
   model/            # Network, demand, and flow domain models
   results/          # Result artifacts and storage

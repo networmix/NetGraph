@@ -393,8 +393,11 @@ class PerformanceProfiler:
                     f"No detailed profile data available for step: {step_name}"
                 )
         else:
-            # Save combined profile data (if available)
-            logger.warning("Combined profile saving not yet implemented")
+            raise NotImplementedError(
+                "Combined profile saving requires a step_name argument. "
+                "To save all step profiles, iterate over step_profiles and call "
+                "save_detailed_profile for each step."
+            )
 
 
 class PerformanceReporter:

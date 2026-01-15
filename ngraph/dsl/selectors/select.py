@@ -247,12 +247,16 @@ def _group_by_attribute(
 ) -> Dict[str, List["Node"]]:
     """Re-group nodes by attribute value.
 
+    Uses flatten_node_attrs to support both top-level fields (name, disabled,
+    risk_groups) and custom attrs, consistent with match condition evaluation.
+
     Note: This discards any existing grouping (including regex captures).
     """
     result: Dict[str, List["Node"]] = {}
     for nodes in groups.values():
         for node in nodes:
-            if attr_name in node.attrs:
-                key = str(node.attrs[attr_name])
+            flat_attrs = flatten_node_attrs(node)
+            if attr_name in flat_attrs:
+                key = str(flat_attrs[attr_name])
                 result.setdefault(key, []).append(node)
     return result

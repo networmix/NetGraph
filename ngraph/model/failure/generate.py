@@ -127,7 +127,9 @@ def parse_generate_spec(raw: Dict[str, Any]) -> GenerateSpec:
     Raises:
         ValueError: If required fields are missing or invalid.
     """
-    scope = raw.get("scope", "node")
+    scope = raw.get("scope")
+    if not scope:
+        raise ValueError("generate requires 'scope' field (node or link)")
     if scope not in ("node", "link"):
         raise ValueError(f"generate scope must be 'node' or 'link', got '{scope}'")
 

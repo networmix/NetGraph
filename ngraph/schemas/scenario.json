@@ -180,13 +180,6 @@
             "$ref": "#/$defs/nodeDefinition"
           }
         },
-        "links": {
-          "type": "array",
-          "description": "Links scoped to this node group",
-          "items": {
-            "$ref": "#/$defs/linkDefinition"
-          }
-        },
         "attrs": {
           "type": "object",
           "description": "Node attributes"
@@ -201,9 +194,6 @@
             "type": "string"
           },
           "description": "Risk groups this node belongs to"
-        },
-        "expand": {
-          "$ref": "#/$defs/expandBlock"
         }
       },
       "additionalProperties": false
@@ -602,20 +592,11 @@
                       "weight_by": {
                         "type": "string",
                         "description": "Attribute name used for weighted sampling in choice mode"
-                      },
-                      "conditions": {
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/$defs/condition"
-                        },
-                        "description": "Attribute conditions for filtering entities"
-                      },
-                      "logic": {
-                        "type": "string",
-                        "enum": ["and", "or"],
-                        "description": "How to combine conditions (default: 'or')"
                       }
                     },
+                    "required": [
+                      "scope"
+                    ],
                     "additionalProperties": false
                   }
                 }

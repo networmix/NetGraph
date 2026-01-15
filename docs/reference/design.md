@@ -512,7 +512,7 @@ After the loop, the C++ algorithm computes a FlowSummary which includes:
 
 - min_cut: the list of edges that are saturated and go from reachable to non-reachable (these form the minimum cut)
 
-- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); Python wrapper converts to `Dict[Cost, Flow]` mapping in `FlowSummary.cost_distribution`.
+- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); AnalysisContext converts these to `Dict[Cost, Flow]` mapping in `FlowSummary.cost_distribution`.
 
 This is returned along with the total flow value.
 

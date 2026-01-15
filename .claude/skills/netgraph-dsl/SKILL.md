@@ -15,59 +15,6 @@ Define network simulation scenarios in YAML format.
 > **Quick Start**: See [Minimal Example](#minimal-example) below.
 > **Complete Reference**: See [references/REFERENCE.md](references/REFERENCE.md) for full documentation.
 
-## Development Environment (Agent Guidance)
-
-Working with NetGraph requires the local virtual environment at `./venv`.
-
-### Prerequisites (Check First)
-
-Before running any command:
-
-1. **Working directory**: Must be the NetGraph repo root (where `Makefile` and `pyproject.toml` exist)
-2. **Venv exists**: Check that `./venv/bin/python` exists
-
-### Command Execution (Priority Order)
-
-**1. Prefer `make` targets** - auto-handles venv detection, simplest approach:
-
-```bash
-make qt         # Quick tests (after code changes)
-make test       # Full tests with coverage
-make lint       # Linting and type checks
-make check      # Pre-commit + tests + lint
-make validate   # Validate YAML schemas
-```
-
-**2. Use direct venv paths** - reliable, no shell state required:
-
-```bash
-./venv/bin/ngraph inspect <scenario.yaml>   # Validate scenario YAML
-./venv/bin/ngraph run <scenario.yaml>       # Execute scenario workflow
-./venv/bin/python -m pytest tests/dsl/      # Run specific tests
-```
-
-**Note**: Avoid `source venv/bin/activate` - requires shell state that agents may not maintain between commands.
-
-### If Setup Is Missing
-
-If venv doesn't exist or commands fail with import errors:
-
-```bash
-make dev  # Creates venv, installs all dependencies and pre-commit hooks
-```
-
-### Key Commands Reference
-
-| Task | Command |
-|------|---------|
-| Quick tests after changes | `make qt` |
-| Check formatting/types | `make lint` |
-| Validate scenario YAML | `./venv/bin/ngraph inspect <file>` |
-| Execute scenario | `./venv/bin/ngraph run <file>` |
-| Run specific test file | `./venv/bin/python -m pytest <path>` |
-
-Python 3.11+ is required.
-
 ## Instructions
 
 When working with NetGraph scenarios:
@@ -125,9 +72,9 @@ The DSL implements two distinct selection patterns:
 
 **2. Condition-based Entity Selection** (failure rules, membership rules, risk group generation)
 
-- Works on nodes, links, or risk_groups (`scope`)
-- Uses only attribute-based filtering (`conditions`)
-- No path/regex patterns (operates on all entities of specified type)
+- Works on nodes/links; failure + membership can also target risk_groups
+- Optional regex `path` filter on entity names/IDs (no capture grouping)
+- Attribute filtering via `match.conditions` (`match.logic` defaults vary by context)
 
 These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
 
@@ -213,22 +160,23 @@ network:
 ### Selectors with Conditions
 
 ```yaml
-links:
-  - source:
-      path: "/datacenter"
-      match:
-        logic: and         # "and" or "or"; defaults vary by context (see below)
-        conditions:
-          - attr: role
-            op: "=="
-            value: leaf
-    target: /spine
-    pattern: mesh
+network:
+  links:
+    - source:
+        path: "/datacenter"
+        match:
+          logic: and         # "and" or "or"; defaults vary by context (see below)
+          conditions:
+            - attr: role
+              op: "=="
+              value: leaf
+      target: /spine
+      pattern: mesh
 ```
 
 **Operators**: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `exists`, `not_exists`
 
-**Logic defaults by context**:
+**Logic defaults by context (for `match.logic`)**:
 
 | Context | Default `logic` | Rationale |
 |---------|-----------------|-----------|
@@ -287,6 +235,42 @@ network:
         leaf.count: 6  # Override defaults
 ```
 
+**Alternative: Inline nested nodes** (no blueprint needed):
+
+```yaml
+network:
+  nodes:
+    datacenter:
+      nodes:              # Inline hierarchy
+        rack1:
+          count: 2
+          template: "srv{n}"
+```
+
+### Node and Link Rules
+
+Modify entities after creation with optional attribute filtering:
+
+```yaml
+network:
+  node_rules:
+    - path: "^pod1/.*"
+      match:                      # Optional: filter by attributes
+        conditions:
+          - {attr: role, op: "==", value: compute}
+      disabled: true
+
+  link_rules:
+    - source: "^pod1/.*"
+      target: "^pod2/.*"
+      link_match:                 # Optional: filter by link attributes
+        conditions:
+          - {attr: capacity, op: ">=", value: 400}
+      cost: 99
+```
+
+Rules also support `expand` for variable-based application.
+
 ### Traffic Demands
 
 ```yaml
@@ -310,7 +294,7 @@ failures:
     modes:                       # Weighted modes (one selected per iteration)
       - weight: 1.0
         rules:
-          - scope: link          # node, link, or risk_group
+          - scope: link          # Required: node, link, or risk_group
             mode: choice         # all, choice, or random
             count: 1
             # Optional: weight_by: capacity  # Weighted sampling by attribute
@@ -330,13 +314,13 @@ risk_groups:
   - "RG2"                    # String shorthand (equivalent to {name: "RG2"})
 ```
 
-**Membership rules** (assign entities by attribute matching):
+**Membership rules** (assign entities by attribute matching; optional `path` filter):
 
 ```yaml
 risk_groups:
   - name: HighCapacityLinks
     membership:
-      scope: link            # node, link, or risk_group
+      scope: link            # Required: node, link, or risk_group
       match:
         logic: and           # "and" or "or" (default: "and" for membership)
         conditions:
@@ -345,12 +329,13 @@ risk_groups:
             value: 1000
 ```
 
-**Generate blocks** (create groups from unique attribute values):
+**Generate blocks** (create groups from unique attribute values; optional `path` filter):
 
 ```yaml
 risk_groups:
   - generate:
-      scope: node            # node or link only
+      scope: node            # Required: node or link only
+      path: "^prod_.*"       # Optional: narrow entities before grouping
       group_by: region       # Any attribute to group by
       name: "Region_${value}"
 ```
@@ -460,8 +445,8 @@ expand:
 
 1. Groups and direct nodes created
 2. Node rules applied
-3. Blueprint links and network links expanded
-4. Direct links created
+3. Blueprint links expanded
+4. Top-level links expanded (including direct links)
 5. Link rules applied
 
 Rules only affect entities that exist at their processing stage.
@@ -479,4 +464,4 @@ Rules only affect entities that exist at their processing stage.
 ## More Information
 
 - [Full DSL Reference](references/REFERENCE.md) - Complete field documentation, all operators, workflow steps
-- [Working Examples](references/EXAMPLES.md) - 19 complete scenarios from simple to advanced
+- [Working Examples](references/EXAMPLES.md) - 22 complete scenarios from simple to advanced

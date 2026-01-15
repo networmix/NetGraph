@@ -15,6 +15,20 @@ def build_scenario_snapshot(
     failure_policy_set,
     demand_set,
 ) -> Dict[str, Any]:
+    """Build a concise dictionary snapshot of the scenario state.
+
+    Creates a serializable representation of the scenario's failure policies
+    and demand sets, suitable for export into results without keeping heavy
+    domain objects.
+
+    Args:
+        seed: Scenario-level seed for reproducibility, or None if unseeded.
+        failure_policy_set: FailurePolicySet containing named failure policies.
+        demand_set: DemandSet containing named demand collections.
+
+    Returns:
+        Dict containing: seed, failures (policy snapshots), demands (demand snapshots).
+    """
     snapshot_failure_policies: Dict[str, Any] = {}
     for name, policy in getattr(failure_policy_set, "policies", {}).items():
         modes_list: list[dict[str, Any]] = []

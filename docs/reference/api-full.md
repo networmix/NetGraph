@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: January 10, 2026 at 04:53 UTC
+Generated from source code on: January 15, 2026 at 14:12 UTC
 
 Modules auto-discovered: 53
 
@@ -618,7 +618,22 @@ Parsers for FailurePolicySet and related failure modeling structures.
 
 ### build_failure_policy(fp_data: 'Dict[str, Any]', *, policy_name: 'str', derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicy'
 
-No documentation available.
+Build a FailurePolicy from a raw configuration dictionary.
+
+Parses modes, rules, and conditions from the policy definition and
+constructs a fully initialized FailurePolicy object.
+
+Args:
+    fp_data: Policy definition dict with keys: modes (required), attrs,
+        expand_groups, expand_children. Each mode contains weight and rules.
+    policy_name: Name identifier for this policy (used for seed derivation).
+    derive_seed: Callable to derive deterministic seeds from component names.
+
+Returns:
+    FailurePolicy: Configured policy with parsed modes and rules.
+
+Raises:
+    ValueError: If modes is empty or malformed, or if rules are invalid.
 
 ### build_failure_policy_set(raw: 'Dict[str, Any]', *, derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicySet'
 
@@ -867,7 +882,7 @@ Example:
 
 Serialize a FlowPolicyPreset to its string name for JSON storage.
 
-Handles FlowPolicyPreset enum values, integer enum values, and string fallbacks.
+Handles FlowPolicyPreset enum values, integer enum values, and string inputs.
 Returns None for None input.
 
 Args:
@@ -1037,7 +1052,7 @@ Attributes:
 
 **Methods:**
 
-- `get_sub_path(self, dst_node: 'str', graph: 'StrictMultiDiGraph | None' = None, cost_attr: 'str' = 'cost') -> 'Path'` - Create a sub-path ending at the specified destination node.
+- `get_sub_path(self, dst_node: 'str') -> 'Path'` - Create a sub-path ending at the specified destination node.
 
 ---
 
@@ -1046,8 +1061,9 @@ Attributes:
 Base classes for workflow automation.
 
 Defines the workflow step abstraction, registration decorator, and execution
-wrapper that adds timing and logging. Steps implement `run()` and are executed
-via `execute()` which records metadata and re-raises failures.
+lifecycle. Steps implement `run()` and are executed via `execute()` which
+handles timing, logging, and metadata recording. Failures are logged and
+re-raised.
 
 ### WorkflowStep
 
@@ -1060,7 +1076,7 @@ Workflow metadata is automatically stored in scenario.results for analysis.
 YAML Configuration:
     ```yaml
     workflow:
-      - step_type: <StepTypeName>
+      - type: <StepTypeName>
 
         name: "optional_step_name"  # Optional: Custom name for this step instance
         seed: 42                    # Optional: Seed for reproducible random operations
@@ -1118,7 +1134,7 @@ representation for inspection.
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: BuildGraph
+      - type: BuildGraph
 
         name: "build_network_graph"  # Optional: Custom name for this step
         add_reverse: true  # Optional: Add reverse edges (default: true)
@@ -1186,7 +1202,7 @@ Disabled handling:
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: CostPower
+      - type: CostPower
 
         name: "cost_power"           # Optional custom name
         include_disabled: false       # Default: only enabled nodes/links
@@ -1331,6 +1347,19 @@ placeable for a given demand set. Stores results under `data` as:
 Performance: AnalysisContext is built once at search start and reused across
 all binary search probes. Only demand volumes change per probe.
 
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - type: MaximumSupportedDemand
+
+        name: "msd_search"
+        demand_set: "default"
+        resolution: 0.01        # Convergence threshold
+        max_bisect_iters: 50    # Maximum bisection iterations
+        alpha_start: 1.0        # Starting multiplier
+        growth_factor: 2.0      # Bracket expansion factor
+    ```
+
 ### MaximumSupportedDemand
 
 Finds the maximum uniform traffic multiplier that is fully placeable.
@@ -1386,7 +1415,7 @@ optional exclusion simulation and disabled entity handling.
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: NetworkStats
+      - type: NetworkStats
 
         name: "network_statistics"           # Optional: Custom name for this step
         include_disabled: false              # Include disabled nodes/links in stats
@@ -1460,6 +1489,20 @@ unified `flow_results` per iteration under `data.flow_results`.
 
 Baseline (no failures) is always run first as a separate reference. The `iterations`
 parameter specifies how many failure scenarios to run.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - type: TrafficMatrixPlacement
+
+        name: "tm_analysis"
+        demand_set: "default"
+        failure_policy: "single_link"    # Optional: failure policy name
+        iterations: 100                  # Number of failure scenarios
+        parallelism: 4                   # Worker processes (or "auto")
+        alpha: 1.0                       # Demand volume multiplier
+        include_flow_details: true       # Include cost distribution per flow
+    ```
 
 ### TrafficMatrixPlacement
 
@@ -2245,7 +2288,19 @@ export into results without keeping heavy domain objects.
 
 ### build_scenario_snapshot(*, seed: 'int | None', failure_policy_set, demand_set) -> 'Dict[str, Any]'
 
-No documentation available.
+Build a concise dictionary snapshot of the scenario state.
+
+Creates a serializable representation of the scenario's failure policies
+and demand sets, suitable for export into results without keeping heavy
+domain objects.
+
+Args:
+    seed: Scenario-level seed for reproducibility, or None if unseeded.
+    failure_policy_set: FailurePolicySet containing named failure policies.
+    demand_set: DemandSet containing named demand collections.
+
+Returns:
+    Dict containing: seed, failures (policy snapshots), demands (demand snapshots).
 
 ---
 
@@ -2438,7 +2493,7 @@ Determines how multiple source and sink nodes are combined for analysis.
 
 Types and data structures for algorithm analytics.
 
-Defines immutable summary containers and aliases for algorithm outputs.
+Defines immutable summary containers for algorithm outputs.
 
 ### EdgeRef
 
@@ -2885,8 +2940,8 @@ and parallelism level.
 
 Protocol for analysis functions used with FailureManager.
 
-Analysis functions should take a Network, exclusion sets, and any additional
-keyword arguments, returning analysis results of any type.
+Analysis functions take a Network, exclusion sets, and analysis-specific
+parameters, returning results of any type.
 
 ### FailureManager
 
@@ -2909,10 +2964,10 @@ Attributes:
 
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, **kwargs) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, **kwargs) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, include_min_cut: 'bool' = False) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **kwargs) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---
@@ -2921,12 +2976,12 @@ Attributes:
 
 Flow analysis functions for network evaluation.
 
-These functions are designed for use with FailureManager and follow the
-AnalysisFunction protocol: analysis_func(network: Network, excluded_nodes: Set[str],
-excluded_links: Set[str], **kwargs) -> Any.
+These functions are designed for use with FailureManager. Each analysis function
+takes a Network, exclusion sets, and analysis-specific parameters, returning
+results of type FlowIterationResult.
 
-All functions accept only simple, hashable parameters to ensure compatibility
-with FailureManager's caching and multiprocessing systems.
+Parameters should ideally be hashable for efficient caching in FailureManager;
+non-hashable objects are identified by memory address for cache key generation.
 
 Graph caching enables efficient repeated analysis with different exclusion
 sets by building the graph once and using O(|excluded|) masks for exclusions.
@@ -2965,7 +3020,7 @@ Args:
 Returns:
     AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
 
-### demand_placement_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### demand_placement_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', demands_config: 'list[dict[str, Any]]', placement_rounds: 'int | str' = 'auto', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, context: 'Optional[AnalysisContext]' = None) -> 'FlowIterationResult'
 
 Analyze traffic demand placement success rates using Core directly.
 
@@ -2974,7 +3029,7 @@ This function:
 1. Builds Core infrastructure (graph, algorithms, flow_graph) or uses cached
 2. Expands demands into concrete (src, dst, volume) tuples
 3. Places each demand using SPF caching for cacheable policies
-4. Falls back to FlowPolicy for complex multi-flow policies
+4. Uses FlowPolicy for complex multi-flow policies
 5. Aggregates results into FlowIterationResult
 
 SPF Caching Optimization:
@@ -2992,12 +3047,11 @@ Args:
     include_flow_details: When True, include cost_distribution per flow.
     include_used_edges: When True, include set of used edges per demand in entry data.
     context: Pre-built AnalysisContext for fast repeated analysis.
-    **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
     FlowIterationResult describing this iteration.
 
-### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None) -> 'FlowIterationResult'
 
 Analyze maximum flow capacity between node groups.
 
@@ -3015,12 +3069,11 @@ Args:
     include_flow_details: Whether to collect cost distribution and similar details.
     include_min_cut: Whether to include min-cut edge list in entry data.
     context: Pre-built AnalysisContext for efficient repeated analysis.
-    **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
     FlowIterationResult describing this iteration.
 
-### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None, **kwargs) -> 'FlowIterationResult'
+### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None) -> 'FlowIterationResult'
 
 Analyze component sensitivity to failures.
 
@@ -3044,7 +3097,6 @@ Args:
         full iterative max-flow (SDN/TE mode) and report all saturated edges.
     flow_placement: Flow placement strategy.
     context: Pre-built AnalysisContext for efficient repeated analysis.
-    **kwargs: Ignored. Accepted for interface compatibility.
 
 Returns:
     FlowIterationResult with sensitivity data in each FlowEntry.data.

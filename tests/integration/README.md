@@ -403,20 +403,6 @@ def test_missing_blueprint():
         scenario.run()
 ```
 
-### Migration Guide
-
-#### **Existing Tests**
-
-- Keep existing YAML-based tests as integration references
-- Add template-based variants for parameterized testing
-- Migrate error cases to use template builders
-
-#### **New Tests**
-
-- Start with appropriate template builder
-- Use `ScenarioTemplateBuilder` for high-level composition
-- Use specialized templates for specific test categories
-
 ### Template Development
 
 #### **Adding New Templates**

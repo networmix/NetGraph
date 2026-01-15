@@ -1,11 +1,11 @@
 """Flow analysis functions for network evaluation.
 
-These functions are designed for use with FailureManager and follow the
-AnalysisFunction protocol: analysis_func(network: Network, excluded_nodes: Set[str],
-excluded_links: Set[str], **kwargs) -> Any.
+These functions are designed for use with FailureManager. Each analysis function
+takes a Network, exclusion sets, and analysis-specific parameters, returning
+results of type FlowIterationResult.
 
-All functions accept only simple, hashable parameters to ensure compatibility
-with FailureManager's caching and multiprocessing systems.
+Parameters should ideally be hashable for efficient caching in FailureManager;
+non-hashable objects are identified by memory address for cache key generation.
 
 Graph caching enables efficient repeated analysis with different exclusion
 sets by building the graph once and using O(|excluded|) masks for exclusions.
@@ -76,7 +76,6 @@ def max_flow_analysis(
     include_flow_details: bool = False,
     include_min_cut: bool = False,
     context: Optional[AnalysisContext] = None,
-    **kwargs,
 ) -> FlowIterationResult:
     """Analyze maximum flow capacity between node groups.
 
@@ -94,7 +93,6 @@ def max_flow_analysis(
         include_flow_details: Whether to collect cost distribution and similar details.
         include_min_cut: Whether to include min-cut edge list in entry data.
         context: Pre-built AnalysisContext for efficient repeated analysis.
-        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
         FlowIterationResult describing this iteration.
@@ -192,7 +190,6 @@ def demand_placement_analysis(
     include_flow_details: bool = False,
     include_used_edges: bool = False,
     context: Optional[AnalysisContext] = None,
-    **kwargs,
 ) -> FlowIterationResult:
     """Analyze traffic demand placement success rates using Core directly.
 
@@ -200,7 +197,7 @@ def demand_placement_analysis(
     1. Builds Core infrastructure (graph, algorithms, flow_graph) or uses cached
     2. Expands demands into concrete (src, dst, volume) tuples
     3. Places each demand using SPF caching for cacheable policies
-    4. Falls back to FlowPolicy for complex multi-flow policies
+    4. Uses FlowPolicy for complex multi-flow policies
     5. Aggregates results into FlowIterationResult
 
     SPF Caching Optimization:
@@ -218,7 +215,6 @@ def demand_placement_analysis(
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
         context: Pre-built AnalysisContext for fast repeated analysis.
-        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
         FlowIterationResult describing this iteration.
@@ -299,7 +295,6 @@ def sensitivity_analysis(
     shortest_path: bool = False,
     flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
     context: Optional[AnalysisContext] = None,
-    **kwargs,
 ) -> FlowIterationResult:
     """Analyze component sensitivity to failures.
 
@@ -322,7 +317,6 @@ def sensitivity_analysis(
             full iterative max-flow (SDN/TE mode) and report all saturated edges.
         flow_placement: Flow placement strategy.
         context: Pre-built AnalysisContext for efficient repeated analysis.
-        **kwargs: Ignored. Accepted for interface compatibility.
 
     Returns:
         FlowIterationResult with sensitivity data in each FlowEntry.data.

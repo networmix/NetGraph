@@ -106,10 +106,32 @@ def build_failure_policy(
     policy_name: str,
     derive_seed: Callable[[str], Optional[int]],
 ) -> FailurePolicy:
+    """Build a FailurePolicy from a raw configuration dictionary.
+
+    Parses modes, rules, and conditions from the policy definition and
+    constructs a fully initialized FailurePolicy object.
+
+    Args:
+        fp_data: Policy definition dict with keys: modes (required), attrs,
+            expand_groups, expand_children. Each mode contains weight and rules.
+        policy_name: Name identifier for this policy (used for seed derivation).
+        derive_seed: Callable to derive deterministic seeds from component names.
+
+    Returns:
+        FailurePolicy: Configured policy with parsed modes and rules.
+
+    Raises:
+        ValueError: If modes is empty or malformed, or if rules are invalid.
+    """
+
     def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
         out: List[FailureRule] = []
         for rule_dict in rule_dicts:
-            scope = rule_dict.get("scope", "node")
+            scope = rule_dict.get("scope")
+            if not scope:
+                raise ValueError(
+                    "failure rule requires 'scope' field (node, link, or risk_group)"
+                )
 
             # Get conditions from match block
             match_block = rule_dict.get("match", {})

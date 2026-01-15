@@ -10,6 +10,18 @@ placeable for a given demand set. Stores results under `data` as:
 
 Performance: AnalysisContext is built once at search start and reused across
 all binary search probes. Only demand volumes change per probe.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - type: MaximumSupportedDemand
+        name: "msd_search"
+        demand_set: "default"
+        resolution: 0.01        # Convergence threshold
+        max_bisect_iters: 50    # Maximum bisection iterations
+        alpha_start: 1.0        # Starting multiplier
+        growth_factor: 2.0      # Bracket expansion factor
+    ```
 """
 
 from __future__ import annotations
@@ -362,7 +374,7 @@ class MaximumSupportedDemand(WorkflowStep):
         """Build scaled TrafficDemand objects from serialized demands.
 
         Utility for tests to verify results at specific alpha values.
-        Preserves ID if present for context caching compatibility.
+        Preserves ID if present for stable context caching.
         """
         return [
             TrafficDemand(
