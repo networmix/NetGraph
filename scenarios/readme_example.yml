@@ -12,11 +12,6 @@ blueprints:
         pattern: mesh
         capacity: 100
         cost: 1
-      - source: /spine
-        target: /leaf
-        pattern: mesh
-        capacity: 100
-        cost: 1
 
 # Instantiate network from templates
 network:
