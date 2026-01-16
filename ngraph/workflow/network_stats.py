@@ -7,7 +7,7 @@ optional exclusion simulation and disabled entity handling.
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: NetworkStats
+      - type: NetworkStats
         name: "network_statistics"           # Optional: Custom name for this step
         include_disabled: false              # Include disabled nodes/links in stats
         excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions

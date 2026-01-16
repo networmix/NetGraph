@@ -30,9 +30,9 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
         raise ValueError("The provided YAML must map to a dictionary at top-level.")
 
     # Normalize known sections that suffer from YAML key ambiguities
-    if isinstance(data.get("traffic_matrix_set"), dict):
-        data["traffic_matrix_set"] = normalize_yaml_dict_keys(
-            data["traffic_matrix_set"]  # type: ignore[arg-type]
+    if isinstance(data.get("demands"), dict):
+        data["demands"] = normalize_yaml_dict_keys(
+            data["demands"]  # type: ignore[arg-type]
         )
 
     # Early shape checks helpful for better error messages prior to schema validation
@@ -56,15 +56,6 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
                     raise ValueError(
                         "Each link definition must include 'source' and 'target'"
                     )
-        if isinstance(network_section.get("nodes"), dict):
-            for _node_name, node_def in network_section["nodes"].items():
-                if isinstance(node_def, dict):
-                    allowed = {"attrs", "disabled", "risk_groups"}
-                    for k in node_def.keys():
-                        if k not in allowed:
-                            raise ValueError(
-                                f"Unrecognized key '{k}' in node '{_node_name}'"
-                            )
 
     if isinstance(data.get("risk_groups"), list):
         for rg in data["risk_groups"]:
@@ -106,12 +97,12 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
     recognized_keys = {
         "vars",
         "blueprints",
-        "network",
-        "failure_policy_set",
-        "traffic_matrix_set",
-        "workflow",
         "components",
+        "network",
         "risk_groups",
+        "demands",
+        "failures",
+        "workflow",
         "seed",
     }
     extra = set(data.keys()) - recognized_keys

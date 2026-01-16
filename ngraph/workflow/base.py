@@ -1,8 +1,9 @@
 """Base classes for workflow automation.
 
 Defines the workflow step abstraction, registration decorator, and execution
-wrapper that adds timing and logging. Steps implement `run()` and are executed
-via `execute()` which records metadata and re-raises failures.
+lifecycle. Steps implement `run()` and are executed via `execute()` which
+handles timing, logging, and metadata recording. Failures are logged and
+re-raised.
 """
 
 from __future__ import annotations
@@ -67,7 +68,7 @@ class WorkflowStep(ABC):
     YAML Configuration:
         ```yaml
         workflow:
-          - step_type: <StepTypeName>
+          - type: <StepTypeName>
             name: "optional_step_name"  # Optional: Custom name for this step instance
             seed: 42                    # Optional: Seed for reproducible random operations
             # ... step-specific parameters ...

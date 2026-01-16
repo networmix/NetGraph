@@ -88,19 +88,19 @@ Key elements of the DSL include:
 
 - **Blueprints**: Reusable templates for subsets of the topology. A blueprint defines internal node types, roles, and optional internal links. Blueprints enable defining a complex multi-node topology once and instantiating it multiple times with different parameters.
 
-- **Groups**: Definitions of groups of nodes in the topology, either explicitly or via patterns. Groups can use a blueprint (use_blueprint) with parameters, or define a number of nodes (node_count) with a naming template.
+- **Node Groups**: Definitions of node groups in the topology, either explicitly or via patterns. Groups can use a blueprint (`blueprint`) with parameters (`params`), or define a number of nodes (`count`) with a naming template (`template`).
 
-- **Adjacency**: Rules to generate links between groups of nodes. Instead of enumerating every link, an adjacency rule specifies source and target selectors (by path pattern), a wiring pattern (e.g. mesh for full mesh or one_to_one for paired links), number of parallel links (link_count), and link parameters (capacity, cost, attributes like distance, hardware, risk group tags, etc.). Advanced matching allows filtering nodes by attributes with logical conditions (AND/OR) to apply adjacency rules to selected nodes only. A single rule can thus expand into many concrete links.
+- **Links**: Rules to generate links between node groups. Instead of enumerating every link, a link rule specifies source and target selectors (by path pattern), a wiring pattern (e.g. mesh for full mesh or one_to_one for paired links), number of parallel links (`count`), and link properties (capacity, cost, attributes like distance, hardware, risk group tags, etc.). Link properties are specified at the top level, not inside a wrapper. Advanced matching allows filtering nodes by attributes with logical conditions (AND/OR) to apply link rules to selected nodes only. A single rule can thus expand into many concrete links.
 
-- **Overrides**: Optional modifications applied after the initial expansion. node_overrides or link_overrides can match specific nodes or links (by path or endpoints) and change their attributes or disable them. This allows fine-tuning or simulating removals without changing the base definitions.
+- **Rules**: Optional modifications applied after the initial expansion. `node_rules` or `link_rules` can match specific nodes or links (by path or endpoints) and change their attributes or disable them. This allows fine-tuning or simulating removals without changing the base definitions.
 
 - **Risk Groups**: Named shared-risk groups (potentially nested) that nodes or links can belong to. These are used in failure scenarios to correlate failures (e.g. all links in a risk group fail together).
 
-- **Traffic Matrices**: Demand definitions specifying source node sets, sink node sets (by regex or attribute path selectors), and demand volume. Each demand can also include priority or custom flow placement policy.
+- **Demands**: Traffic demand definitions specifying source node sets, target node sets (by regex or attribute path selectors), and volume. Each demand can also include priority or custom flow placement policy.
 
 - **Failure Policies**: Definitions of failure scenarios or modes, possibly with weights (probabilities). For example, a policy might say "with 5% chance, fail any single core node" or "fail all links in risk_group X". The failure manager uses these policies to generate specific failure combinations for simulation.
 
-- **Workflow**: An ordered list of analysis steps to execute. Each step has a step_type (the analysis to perform, such as "MaxFlow" or "TrafficMatrixPlacement"), a unique name, and parameters (like number of iterations, etc.). The workflow definition orchestrates the analysis pipeline.
+- **Workflow**: An ordered list of analysis steps to execute. Each step has a `type` (the analysis to perform, such as "MaxFlow" or "TrafficMatrixPlacement"), a unique name, and parameters (like number of iterations, etc.). The workflow definition orchestrates the analysis pipeline.
 
 ### DSL Expansion Process
 
@@ -204,7 +204,7 @@ source:
   match:
     conditions:
       - attr: "tier"
-        operator: "=="
+        op: "=="
         value: "leaf"
 ```
 
@@ -512,7 +512,7 @@ After the loop, the C++ algorithm computes a FlowSummary which includes:
 
 - min_cut: the list of edges that are saturated and go from reachable to non-reachable (these form the minimum cut)
 
-- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); Python wrapper converts to `Dict[Cost, Flow]` mapping in `FlowSummary.cost_distribution`.
+- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); AnalysisContext converts these to `Dict[Cost, Flow]` mapping in `FlowSummary.cost_distribution`.
 
 This is returned along with the total flow value.
 
@@ -625,20 +625,20 @@ For traffic matrix placement, NetGraph provides `FlowPolicyPreset` values that b
 
 ```yaml
 # IP network with traditional ECMP (e.g., data center leaf-spine)
-traffic_matrix_set:
+demands:
   dc_traffic:
     - source: ^rack1/
-      sink: ^rack2/
-      demand: 1000.0
-      flow_policy_config: SHORTEST_PATHS_ECMP
+      target: ^rack2/
+      volume: 1000.0
+      flow_policy: SHORTEST_PATHS_ECMP
 
 # MPLS-TE network with capacity-aware tunnel placement
-traffic_matrix_set:
+demands:
   backbone_traffic:
     - source: ^metro1/
-      sink: ^metro2/
-      demand: 5000.0
-      flow_policy_config: TE_WCMP_UNLIM
+      target: ^metro2/
+      volume: 5000.0
+      flow_policy: TE_WCMP_UNLIM
 ```
 
 ### Pseudocode (simplified max-flow loop)
@@ -700,9 +700,9 @@ Practical performance is significantly better than worst-case bounds due to earl
 
 Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 
-**Demand Expansion** (`ngraph.model.demand.builder`): Builds traffic matrix sets from DSL definitions, expanding source/sink patterns into concrete node groups.
+**Demand Expansion** (`ngraph.model.demand.builder`): Builds demand sets from DSL definitions, expanding source/target patterns into concrete node groups.
 
-- Deterministic expansion: source/sink node lists sorted alphabetically; no randomization
+- Deterministic expansion: source/target node lists sorted alphabetically; no randomization
 - Supports `combine` mode (aggregate via pseudo nodes) and `pairwise` mode (individual (src,dst) pairs with volume split)
 - Demands sorted by ascending priority before placement (lower value = higher priority)
 - Placement uses SPF caching for simple policies (ECMP, WCMP, TE_WCMP_UNLIM), FlowPolicy for complex multi-flow policies
@@ -729,15 +729,15 @@ Common built-in steps:
 
 - NetworkStats: computes node/link counts, capacity statistics, cost statistics, and degree statistics. Supports optional `excluded_nodes`/`excluded_links` and `include_disabled`.
 
-- TrafficMatrixPlacement: runs Monte Carlo placement using a named traffic matrix and the Failure Manager. Supports `baseline`, `iterations`, `parallelism`, `placement_rounds`, `store_failure_patterns`, `include_flow_details`, `include_used_edges`, and `alpha` or `alpha_from_step` (default `data.alpha_star`). Produces `data.flow_results` per iteration.
+- TrafficMatrixPlacement: runs Monte Carlo placement using a named demand set and the Failure Manager. Supports `baseline`, `iterations`, `parallelism`, `placement_rounds`, `store_failure_patterns`, `include_flow_details`, `include_used_edges`, and `alpha` or `alpha_from_step` (default `data.alpha_star`). Produces `data.flow_results` per iteration.
 
 - MaxFlow: runs Monte Carlo maximum-flow analysis between node groups using the Failure Manager. Supports `mode` (combine/pairwise), `baseline`, `iterations`, `parallelism`, `shortest_path`, `flow_placement`, and optional `include_flow_details`/`include_min_cut`. Produces `data.flow_results` per iteration.
 
-- MaximumSupportedDemand (MSD): uses bracketing and bisection on alpha to find the maximum multiplier such that alpha * demand is feasible. Stores `data.alpha_star`, `data.context`, `data.base_demands`, and `data.probes`.
+- MaximumSupportedDemand (MSD): uses bracketing and bisection on alpha to find the maximum multiplier such that alpha * volume is feasible. Stores `data.alpha_star`, `data.context`, `data.base_demands`, and `data.probes`.
 
 - CostPower: aggregates platform and per-end optics capex/power by hierarchy level (0..N). Respects `include_disabled` and `aggregation_level`. Stores `data.levels` and `data.context`.
 
-Each step is implemented in the code (in ngraph.workflow module) and has a corresponding step_type name. Steps are pure functions that don't modify the Network. They take inputs, often including references to prior steps' results (the workflow engine allows one step to use another step's output). For instance, a placement step might need the value of alpha* from an MSD step; the workflow definition can specify that link.
+Each step is implemented in the code (in ngraph.workflow module) and has a corresponding `type` name. Steps are pure functions that don't modify the Network. They take inputs, often including references to prior steps' results (the workflow engine allows one step to use another step's output). For instance, a placement step might need the value of alpha* from an MSD step; the workflow definition can specify that link.
 
 ### Results storage
 

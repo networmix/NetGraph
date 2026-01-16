@@ -15,42 +15,7 @@ from __future__ import annotations
 import pytest
 
 from ngraph import Link, Mode, Network, Node, analyze
-
-
-def _diamond_network(
-    *,
-    disable_node_b: bool = False,
-    disable_link_a_b: bool = False,
-) -> Network:
-    """Build a diamond network with optional disabled components.
-
-    Topology:
-        A -> B (cap 5) -> D (cap 5)   [path 1, cost 2]
-        A -> C (cap 3) -> D (cap 3)   [path 2, cost 4]
-
-    With both paths enabled: max flow = 8 (5 via B + 3 via C)
-    With B disabled: max flow = 3 (only via C)
-    With A->B link disabled: max flow = 3 (only via C)
-
-    Args:
-        disable_node_b: If True, disable node B.
-        disable_link_a_b: If True, disable the A->B link.
-
-    Returns:
-        Network with configured topology.
-    """
-    net = Network()
-    net.add_node(Node("A"))
-    net.add_node(Node("B", disabled=disable_node_b))
-    net.add_node(Node("C"))
-    net.add_node(Node("D"))
-
-    net.add_link(Link("A", "B", capacity=5.0, cost=1.0, disabled=disable_link_a_b))
-    net.add_link(Link("B", "D", capacity=5.0, cost=1.0))
-    net.add_link(Link("A", "C", capacity=3.0, cost=2.0))
-    net.add_link(Link("C", "D", capacity=3.0, cost=2.0))
-
-    return net
+from tests.conftest import make_asymmetric_diamond
 
 
 def _linear_network(*, disable_middle: bool = False) -> Network:
@@ -78,7 +43,7 @@ class TestDisabledNodes:
 
     def test_disabled_node_blocks_path_bound(self) -> None:
         """Disabled node should block flow through it in bound context."""
-        net = _diamond_network(disable_node_b=True)
+        net = make_asymmetric_diamond(disable_node_b=True)
 
         # Bound context - source/sink pre-configured
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
@@ -89,7 +54,7 @@ class TestDisabledNodes:
 
     def test_disabled_node_blocks_path_unbound(self) -> None:
         """Disabled node should block flow through it in unbound context."""
-        net = _diamond_network(disable_node_b=True)
+        net = make_asymmetric_diamond(disable_node_b=True)
 
         # Unbound context - source/sink per-call
         ctx = analyze(net)
@@ -100,7 +65,7 @@ class TestDisabledNodes:
 
     def test_disabled_node_bound_vs_unbound_consistency(self) -> None:
         """Bound and unbound contexts should produce identical results."""
-        net = _diamond_network(disable_node_b=True)
+        net = make_asymmetric_diamond(disable_node_b=True)
 
         # Unbound
         result_unbound = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
@@ -122,7 +87,7 @@ class TestDisabledNodes:
 
     def test_max_flow_detailed_disabled_node(self) -> None:
         """max_flow_detailed should respect disabled nodes."""
-        net = _diamond_network(disable_node_b=True)
+        net = make_asymmetric_diamond(disable_node_b=True)
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
         result = ctx.max_flow_detailed()
@@ -136,7 +101,7 @@ class TestDisabledNodes:
 
     def test_sensitivity_disabled_node(self) -> None:
         """sensitivity analysis should respect disabled nodes."""
-        net = _diamond_network(disable_node_b=True)
+        net = make_asymmetric_diamond(disable_node_b=True)
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
         result = ctx.sensitivity()
@@ -155,7 +120,7 @@ class TestDisabledLinks:
 
     def test_disabled_link_blocks_path_bound(self) -> None:
         """Disabled link should block flow through it in bound context."""
-        net = _diamond_network(disable_link_a_b=True)
+        net = make_asymmetric_diamond(disable_link_a_b=True)
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
         result = ctx.max_flow()
@@ -165,7 +130,7 @@ class TestDisabledLinks:
 
     def test_disabled_link_blocks_path_unbound(self) -> None:
         """Disabled link should block flow through it in unbound context."""
-        net = _diamond_network(disable_link_a_b=True)
+        net = make_asymmetric_diamond(disable_link_a_b=True)
 
         result = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
 
@@ -174,7 +139,7 @@ class TestDisabledLinks:
 
     def test_disabled_link_bound_vs_unbound_consistency(self) -> None:
         """Bound and unbound contexts should produce identical results."""
-        net = _diamond_network(disable_link_a_b=True)
+        net = make_asymmetric_diamond(disable_link_a_b=True)
 
         result_unbound = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
 
@@ -197,7 +162,7 @@ class TestDisabledLinks:
 
     def test_max_flow_detailed_disabled_link(self) -> None:
         """max_flow_detailed should respect disabled links."""
-        net = _diamond_network(disable_link_a_b=True)
+        net = make_asymmetric_diamond(disable_link_a_b=True)
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
         result = ctx.max_flow_detailed()
@@ -211,7 +176,7 @@ class TestCombinedExclusions:
 
     def test_disabled_node_plus_explicit_node_exclusion(self) -> None:
         """Both disabled and explicitly excluded nodes should be masked."""
-        net = _diamond_network(disable_node_b=True)  # B disabled
+        net = make_asymmetric_diamond(disable_node_b=True)  # B disabled
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
@@ -222,7 +187,7 @@ class TestCombinedExclusions:
 
     def test_disabled_link_plus_explicit_link_exclusion(self) -> None:
         """Both disabled and explicitly excluded links should be masked."""
-        net = _diamond_network(disable_link_a_b=True)  # A->B disabled
+        net = make_asymmetric_diamond(disable_link_a_b=True)  # A->B disabled
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
@@ -241,7 +206,7 @@ class TestCombinedExclusions:
 
     def test_explicit_exclusion_without_disabled_topology(self) -> None:
         """Explicit exclusions should work even when no disabled topology."""
-        net = _diamond_network()  # Nothing disabled
+        net = make_asymmetric_diamond()  # Nothing disabled
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
@@ -257,7 +222,7 @@ class TestNoDisabledTopology:
 
     def test_no_disabled_topology_full_flow(self) -> None:
         """With no disabled components, full flow should be achieved."""
-        net = _diamond_network()  # Nothing disabled
+        net = make_asymmetric_diamond()  # Nothing disabled
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
         result = ctx.max_flow()
@@ -267,7 +232,7 @@ class TestNoDisabledTopology:
 
     def test_bound_vs_unbound_no_disabled(self) -> None:
         """Bound and unbound should match when nothing is disabled."""
-        net = _diamond_network()
+        net = make_asymmetric_diamond()
 
         result_unbound = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
 
@@ -314,7 +279,7 @@ class TestContextReuse:
 
     def test_multiple_exclusion_scenarios(self) -> None:
         """Same context should work with different exclusion sets."""
-        net = _diamond_network()  # Nothing disabled
+        net = make_asymmetric_diamond()  # Nothing disabled
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
@@ -336,7 +301,7 @@ class TestContextReuse:
 
     def test_bound_context_rejects_source_sink_override(self) -> None:
         """Bound context should reject source/sink arguments."""
-        net = _diamond_network()
+        net = make_asymmetric_diamond()
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
@@ -345,7 +310,7 @@ class TestContextReuse:
 
     def test_unbound_context_requires_source_sink(self) -> None:
         """Unbound context should require source/sink arguments."""
-        net = _diamond_network()
+        net = make_asymmetric_diamond()
 
         ctx = analyze(net)
 

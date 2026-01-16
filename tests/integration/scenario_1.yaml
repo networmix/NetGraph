@@ -30,113 +30,103 @@ network:
     # West -> Middle
     - source: SEA
       target: DEN
-      link_params:
-        capacity: 200
-        cost: 6846
-        attrs:
-          distance_km: 1369.13
+      capacity: 200
+      cost: 6846
+      attrs:
+        distance_km: 1369.13
 
     - source: SFO
       target: DEN
-      link_params:
-        capacity: 200
-        cost: 7754
-        attrs:
-          distance_km: 1550.77
+      capacity: 200
+      cost: 7754
+      attrs:
+        distance_km: 1550.77
 
     - source: SEA
       target: DFW
-      link_params:
-        capacity: 200
-        cost: 9600
-        attrs:
-          distance_km: 1920
+      capacity: 200
+      cost: 9600
+      attrs:
+        distance_km: 1920
 
     - source: SFO
       target: DFW
-      link_params:
-        capacity: 200
-        cost: 10000
-        attrs:
-          distance_km: 2000
+      capacity: 200
+      cost: 10000
+      attrs:
+        distance_km: 2000
 
     # Middle <-> Middle (two parallel links to represent redundancy)
     - source: DEN
       target: DFW
-      link_params:
-        capacity: 400
-        cost: 7102
-        attrs:
-          distance_km: 1420.28
+      capacity: 400
+      cost: 7102
+      attrs:
+        distance_km: 1420.28
 
     - source: DEN
       target: DFW
-      link_params:
-        capacity: 400
-        cost: 7102
-        attrs:
-          distance_km: 1420.28
+      capacity: 400
+      cost: 7102
+      attrs:
+        distance_km: 1420.28
 
     # Middle -> East
     - source: DEN
       target: JFK
-      link_params:
-        capacity: 200
-        cost: 7500
-        attrs:
-          distance_km: 1500
+      capacity: 200
+      cost: 7500
+      attrs:
+        distance_km: 1500
 
     - source: DFW
       target: DCA
-      link_params:
-        capacity: 200
-        cost: 8000
-        attrs:
-          distance_km: 1600
+      capacity: 200
+      cost: 8000
+      attrs:
+        distance_km: 1600
 
     - source: DFW
       target: JFK
-      link_params:
-        capacity: 200
-        cost: 9500
-        attrs:
-          distance_km: 1900
+      capacity: 200
+      cost: 9500
+      attrs:
+        distance_km: 1900
 
     # East <-> East
     - source: JFK
       target: DCA
-      link_params:
-        capacity: 100
-        cost: 1714
-        attrs:
-          distance_km: 342.69
+      capacity: 100
+      cost: 1714
+      attrs:
+        distance_km: 342.69
 
-failure_policy_set:
+failures:
   default:
     attrs:
       description: "Evaluate traffic routing under any single link failure."
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "link"
-            rule_type: "choice"
+          - scope: "link"
+            mode: "choice"
             count: 1
 
-traffic_matrix_set:
+demands:
   default:
     - source: SEA
-      sink: JFK
-      demand: 50
+      target: JFK
+      volume: 50
     - source: SFO
-      sink: DCA
-      demand: 50
+      target: DCA
+      volume: 50
     - source: SEA
-      sink: DCA
-      demand: 50
+      target: DCA
+      volume: 50
     - source: SFO
-      sink: JFK
-      demand: 50
+      target: JFK
+      volume: 50
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph

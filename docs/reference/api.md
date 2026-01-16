@@ -354,7 +354,7 @@ network.add_link(Link("A", "B", capacity=100.0))
 network.add_link(Link("B", "C", capacity=100.0))
 
 # Define failure policy: randomly choose 1 link to fail
-rule = FailureRule(entity_scope="link", rule_type="choice", count=1)  # scope can be "node", "link", or "risk_group"
+rule = FailureRule(scope="link", mode="choice", count=1)  # scope can be "node", "link", or "risk_group"
 mode = FailureMode(weight=1.0, rules=[rule])
 policy = FailurePolicy(modes=[mode])
 policy_set = FailurePolicySet(policies={"single_link": policy})
@@ -368,13 +368,12 @@ fm = FailureManager(
 
 # Run max-flow Monte Carlo analysis
 results = fm.run_max_flow_monte_carlo(
-    source_path="^A$",
-    sink_path="^C$",
+    source="^A$",
+    target="^C$",
     mode="combine",
     iterations=100,
     parallelism=1,
-    baseline=True,  # Include no-failure baseline
-    seed=42         # For reproducibility
+    seed=42  # For reproducibility
 )
 
 # Access results
@@ -396,10 +395,10 @@ Pre-built analysis steps for YAML-driven workflows.
 
 ```yaml
 workflow:
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: "dc_to_edge_capacity"
-    source_path: "^datacenter/.*"
-    sink_path: "^edge/.*"
+    source: "^datacenter/.*"
+    target: "^edge/.*"
     mode: "combine"
     failure_policy: "random_link_failures"
     iterations: 100
@@ -413,9 +412,9 @@ workflow:
 
 ```yaml
 workflow:
-  - step_type: TrafficMatrixPlacement
+  - type: TrafficMatrixPlacement
     name: "tm_placement_analysis"
-    matrix_name: "peak_traffic"
+    demand_set: "peak_traffic"
     failure_policy: "dual_link_failures"
     iterations: 100
     parallelism: auto
@@ -426,9 +425,9 @@ workflow:
 
 ```yaml
 workflow:
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: "find_alpha_star"
-    matrix_name: "peak_traffic"
+    demand_set: "peak_traffic"
     alpha_start: 1.0
     growth_factor: 2.0
     resolution: 0.01
@@ -439,7 +438,7 @@ workflow:
 
 ```yaml
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: "baseline_stats"
     include_disabled: false
     excluded_nodes: ["n1"]
@@ -449,7 +448,7 @@ workflow:
 
 ```yaml
 workflow:
-  - step_type: CostPower
+  - type: CostPower
     name: "cost_power_analysis"
     include_disabled: false
     aggregation_level: 2

@@ -38,7 +38,7 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             mode="combine",
         )
 
@@ -59,7 +59,7 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             include_flow_details=True,
             include_min_cut=True,
         )
@@ -85,11 +85,10 @@ class TestMaxFlowAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="datacenter.*",
-            sink="edge.*",
+            target="edge.*",
             mode="pairwise",
             shortest_path=True,
             flow_placement=FlowPlacement.EQUAL_BALANCED,
-            extra_param="ignored",
         )
 
         assert isinstance(result, FlowIterationResult)
@@ -100,6 +99,20 @@ class TestMaxFlowAnalysis:
             assert flow.source.startswith("datacenter")
             assert flow.destination.startswith("edge")
 
+    def test_max_flow_analysis_rejects_unknown_params(
+        self, simple_network: Network
+    ) -> None:
+        """Test that unknown parameters raise TypeError."""
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            max_flow_analysis(
+                network=simple_network,
+                excluded_nodes=set(),
+                excluded_links=set(),
+                source="datacenter.*",
+                target="edge.*",
+                unknown_param="should_fail",
+            )
+
     def test_max_flow_analysis_empty_result(self, simple_network: Network) -> None:
         """Test max_flow_analysis with no matching nodes raises an error."""
         # In NetGraph-Core, non-matching nodes raise ValueError (better UX than silent empty)
@@ -109,28 +122,14 @@ class TestMaxFlowAnalysis:
                 excluded_nodes=set(),
                 excluded_links=set(),
                 source="nonexistent.*",
-                sink="also_nonexistent.*",
+                target="also_nonexistent.*",
             )
 
 
 class TestDemandPlacementAnalysis:
     """Test demand_placement_analysis function."""
 
-    @pytest.fixture
-    def diamond_network(self) -> Network:
-        """Create a diamond network for testing demand placement."""
-        network = Network()
-        # Add nodes: A -> B,C -> D (diamond shape)
-        for node in ["A", "B", "C", "D"]:
-            network.add_node(Node(node))
-
-        # Add links with limited capacity
-        network.add_link(Link("A", "B", capacity=60.0, cost=1.0))
-        network.add_link(Link("A", "C", capacity=60.0, cost=1.0))
-        network.add_link(Link("B", "D", capacity=60.0, cost=1.0))
-        network.add_link(Link("C", "D", capacity=60.0, cost=1.0))
-
-        return network
+    # Uses diamond_network fixture from conftest.py
 
     def test_demand_placement_analysis_basic(self, diamond_network: Network) -> None:
         """Test basic demand_placement_analysis functionality."""
@@ -138,8 +137,8 @@ class TestDemandPlacementAnalysis:
         demands_config = [
             {
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,
+                "target": "D",
+                "volume": 50.0,
                 "mode": "pairwise",
                 "priority": 0,
             },
@@ -178,8 +177,8 @@ class TestDemandPlacementAnalysis:
         demands_config = [
             {
                 "source": "A",
-                "sink": "B",
-                "demand": 0.0,
+                "target": "B",
+                "volume": 0.0,
             }
         ]
 
@@ -203,17 +202,7 @@ class TestDemandPlacementAnalysis:
 class TestDemandPlacementWithContextCaching:
     """Test demand_placement_analysis with pre-built context caching."""
 
-    @pytest.fixture
-    def diamond_network(self) -> Network:
-        """Create a diamond network for testing."""
-        network = Network()
-        for node in ["A", "B", "C", "D"]:
-            network.add_node(Node(node))
-        network.add_link(Link("A", "B", capacity=60.0, cost=1.0))
-        network.add_link(Link("A", "C", capacity=60.0, cost=1.0))
-        network.add_link(Link("B", "D", capacity=60.0, cost=1.0))
-        network.add_link(Link("C", "D", capacity=60.0, cost=1.0))
-        return network
+    # Uses diamond_network fixture from conftest.py
 
     def test_context_caching_pairwise_mode(self, diamond_network: Network) -> None:
         """Context caching works with pairwise mode."""
@@ -223,8 +212,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "stable-pairwise-id",
                 "source": "A",
-                "sink": "D",
-                "demand": 50.0,
+                "target": "D",
+                "volume": 50.0,
                 "mode": "pairwise",
             },
         ]
@@ -252,8 +241,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "stable-combine-id",
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -283,8 +272,8 @@ class TestDemandPlacementWithContextCaching:
             {
                 "id": "reusable-id",
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -310,8 +299,8 @@ class TestDemandPlacementWithContextCaching:
         demands_config = [
             {
                 "source": "[AB]",
-                "sink": "[CD]",
-                "demand": 50.0,
+                "target": "[CD]",
+                "volume": 50.0,
                 "mode": "combine",
             },
         ]
@@ -351,7 +340,7 @@ class TestSensitivityAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             source="A",
-            sink="C",
+            target="C",
             mode="combine",
         )
 
@@ -381,5 +370,5 @@ class TestSensitivityAnalysis:
                 excluded_nodes=set(),
                 excluded_links=set(),
                 source="nonexistent.*",
-                sink="also_nonexistent.*",
+                target="also_nonexistent.*",
             )

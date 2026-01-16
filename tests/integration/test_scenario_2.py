@@ -116,7 +116,7 @@ class TestScenario2:
             f"Parameter override for spine.node_count failed: expected 6, found {len(spine_nodes)}"
         )
 
-        # Should use overridden name template "myspine-{node_num}"
+        # Should use overridden name template "myspine-{n}"
         for node_name in spine_nodes:
             assert "myspine-" in node_name, (
                 f"Parameter override for spine.name_template failed: {node_name} "
@@ -203,9 +203,9 @@ class TestScenario2:
         helper.validate_traffic_demands(expected_count=4)
 
         # Same traffic demands as scenario 1
-        default_demands = helper.scenario.traffic_matrix_set.get_default_matrix()
+        default_demands = helper.scenario.demand_set.get_default_set()
         demands_dict = {
-            (demand.source, demand.sink): demand.demand for demand in default_demands
+            (demand.source, demand.target): demand.volume for demand in default_demands
         }
 
         expected_demands = {

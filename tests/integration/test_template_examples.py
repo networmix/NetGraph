@@ -49,7 +49,7 @@ class TestNetworkTemplates:
         for link in network_data["links"]:
             assert link["source"] == center
             assert link["target"] in leaves
-            assert link["link_params"]["capacity"] == 20.0
+            assert link["capacity"] == 20.0
 
     def test_mesh_network_template(self):
         """Test full mesh network template creates all-to-all connectivity."""
@@ -89,10 +89,8 @@ class TestNetworkTemplates:
 @pytest.mark.slow
 class TestBlueprintTemplates:
     def test_simple_group_blueprint_minimal(self):
-        blueprint = BlueprintTemplates.simple_group_blueprint(
-            "servers", 5, "srv-{node_num}"
-        )
-        assert blueprint["groups"]["servers"]["node_count"] == 5
+        blueprint = BlueprintTemplates.simple_group_blueprint("servers", 5, "srv-{n}")
+        assert blueprint["nodes"]["servers"]["count"] == 5
 
 
 @pytest.mark.slow
@@ -116,7 +114,7 @@ class TestWorkflowTemplates:
     def test_basic_build_workflow_minimal(self):
         workflow = WorkflowTemplates.basic_build_workflow()
         assert len(workflow) == 1
-        assert workflow[0]["step_type"] == "BuildGraph"
+        assert workflow[0]["type"] == "BuildGraph"
 
 
 @pytest.mark.slow
@@ -177,7 +175,7 @@ class TestTemplateComposition:
 
         # Add traffic demands
         demands = TrafficDemandTemplates.all_to_all_uniform(backbone_nodes, 10.0)
-        builder.builder.data["traffic_matrix_set"] = {"default": demands}
+        builder.builder.data["demands"] = {"default": demands}
 
         # Add failure policy
         policy = FailurePolicyTemplates.single_link_failure()
@@ -259,7 +257,7 @@ class TestTemplateValidation:
 
         # Zero count should work
         blueprint_zero = BlueprintTemplates.two_tier_blueprint(tier1_count=0)
-        assert blueprint_zero["groups"]["tier1"]["node_count"] == 0
+        assert blueprint_zero["nodes"]["tier1"]["count"] == 0
 
         # Negative demands might be allowed in NetGraph - test actual behavior
         demands_negative = TrafficDemandTemplates.all_to_all_uniform(
@@ -268,7 +266,7 @@ class TestTemplateValidation:
         # Should create demands but with negative values
         assert len(demands_negative) == 2  # A->B and B->A
         for demand in demands_negative:
-            assert demand["demand"] == -5.0
+            assert demand["volume"] == -5.0
 
     def test_template_consistency(self):
         """Test that templates produce consistent results."""
@@ -328,7 +326,8 @@ class TestMainScenarioVariants:
                 {
                     "source": source,
                     "target": target,
-                    "link_params": {"capacity": capacity, "cost": 1},
+                    "capacity": capacity,
+                    "cost": 1,
                 }
             )
 
@@ -337,7 +336,8 @@ class TestMainScenarioVariants:
             {
                 "source": "DEN",
                 "target": "DFW",
-                "link_params": {"capacity": 400.0, "cost": 1},
+                "capacity": 400.0,
+                "cost": 1,
             }
         )
 
@@ -345,12 +345,12 @@ class TestMainScenarioVariants:
 
         # Add traffic demands matching scenario 1
         demands = [
-            {"source": "SEA", "sink": "JFK", "demand": 50},
-            {"source": "SFO", "sink": "DCA", "demand": 50},
-            {"source": "SEA", "sink": "DCA", "demand": 50},
-            {"source": "SFO", "sink": "JFK", "demand": 50},
+            {"source": "SEA", "target": "JFK", "volume": 50},
+            {"source": "SFO", "target": "DCA", "volume": 50},
+            {"source": "SEA", "target": "DCA", "volume": 50},
+            {"source": "SFO", "target": "JFK", "volume": 50},
         ]
-        builder.builder.data["traffic_matrix_set"] = {"default": demands}
+        builder.builder.data["demands"] = {"default": demands}
 
         # Add failure policy matching scenario 1
         policy = FailurePolicyTemplates.single_link_failure()
@@ -389,33 +389,34 @@ class TestMainScenarioVariants:
             tier1_count=4, tier2_count=4, pattern="mesh", link_capacity=100.0
         )
         # Rename groups to match scenario 2
-        clos_2tier["groups"] = {
-            "leaf": clos_2tier["groups"]["tier1"],
-            "spine": clos_2tier["groups"]["tier2"],
+        clos_2tier["nodes"] = {
+            "leaf": clos_2tier["nodes"]["tier1"],
+            "spine": clos_2tier["nodes"]["tier2"],
         }
-        clos_2tier["adjacency"][0]["source"] = "/leaf"
-        clos_2tier["adjacency"][0]["target"] = "/spine"
+        clos_2tier["links"][0]["source"] = "/leaf"
+        clos_2tier["links"][0]["target"] = "/spine"
 
         builder.builder.with_blueprint("clos_2tier", clos_2tier)
 
         # Create city_cloud blueprint that uses clos_2tier
         city_cloud = {
-            "groups": {
+            "nodes": {
                 "clos_instance": {
-                    "use_blueprint": "clos_2tier",
-                    "parameters": {
-                        "spine.node_count": 6,
-                        "spine.name_template": "myspine-{node_num}",
+                    "blueprint": "clos_2tier",
+                    "params": {
+                        "spine.count": 6,
+                        "spine.template": "myspine-{n}",
                     },
                 },
-                "edge_nodes": {"node_count": 4, "name_template": "edge-{node_num}"},
+                "edge_nodes": {"count": 4, "template": "edge-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "/clos_instance/leaf",
                     "target": "/edge_nodes",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 100, "cost": 1000},
+                    "capacity": 100,
+                    "cost": 1000,
                 }
             ],
         }
@@ -423,7 +424,7 @@ class TestMainScenarioVariants:
 
         # Create single_node blueprint
         single_node = BlueprintTemplates.simple_group_blueprint(
-            "single", 1, "single-{node_num}"
+            "single", 1, "single-{n}"
         )
         builder.builder.with_blueprint("single_node", single_node)
 
@@ -431,67 +432,78 @@ class TestMainScenarioVariants:
         network_data = {
             "name": "scenario_2_template",
             "version": "1.1",
-            "groups": {
-                "SEA": {"use_blueprint": "city_cloud"},
-                "SFO": {"use_blueprint": "single_node"},
+            "nodes": {
+                "SEA": {"blueprint": "city_cloud"},
+                "SFO": {"blueprint": "single_node"},
+                "DEN": {},
+                "DFW": {},
+                "JFK": {},
+                "DCA": {},
             },
-            "nodes": {"DEN": {}, "DFW": {}, "JFK": {}, "DCA": {}},
             "links": [
                 {
                     "source": "DEN",
                     "target": "DFW",
-                    "link_params": {"capacity": 400, "cost": 7102},
+                    "capacity": 400,
+                    "cost": 7102,
                 },
                 {
                     "source": "DEN",
                     "target": "DFW",
-                    "link_params": {"capacity": 400, "cost": 7102},
+                    "capacity": 400,
+                    "cost": 7102,
                 },
                 {
                     "source": "DEN",
                     "target": "JFK",
-                    "link_params": {"capacity": 200, "cost": 7500},
+                    "capacity": 200,
+                    "cost": 7500,
                 },
                 {
                     "source": "DFW",
                     "target": "DCA",
-                    "link_params": {"capacity": 200, "cost": 8000},
+                    "capacity": 200,
+                    "cost": 8000,
                 },
                 {
                     "source": "DFW",
                     "target": "JFK",
-                    "link_params": {"capacity": 200, "cost": 9500},
+                    "capacity": 200,
+                    "cost": 9500,
                 },
                 {
                     "source": "JFK",
                     "target": "DCA",
-                    "link_params": {"capacity": 100, "cost": 1714},
+                    "capacity": 100,
+                    "cost": 1714,
                 },
-            ],
-            "adjacency": [
                 {
                     "source": "/SFO",
                     "target": "/DEN",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 100, "cost": 7754},
+                    "capacity": 100,
+                    "cost": 7754,
                 },
                 {
                     "source": "/SFO",
                     "target": "/DFW",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 200, "cost": 10000},
+                    "capacity": 200,
+                    "cost": 10000,
                 },
                 {
                     "source": "/SEA/edge_nodes",
                     "target": "/DEN",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 100, "cost": 6846},
+                    "capacity": 100,
+                    "cost": 6846,
                 },
                 {
                     "source": "/SEA/edge_nodes",
                     "target": "/DFW",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 100, "cost": 9600},
+                    "capacity": 100,
+                    "cost": 9600,
                 },
             ],
         }
@@ -499,12 +511,12 @@ class TestMainScenarioVariants:
 
         # Add traffic and failure policy same as scenario 1
         demands = [
-            {"source": "SEA", "sink": "JFK", "demand": 50},
-            {"source": "SFO", "sink": "DCA", "demand": 50},
-            {"source": "SEA", "sink": "DCA", "demand": 50},
-            {"source": "SFO", "sink": "JFK", "demand": 50},
+            {"source": "SEA", "target": "JFK", "volume": 50},
+            {"source": "SFO", "target": "DCA", "volume": 50},
+            {"source": "SEA", "target": "DCA", "volume": 50},
+            {"source": "SFO", "target": "JFK", "volume": 50},
         ]
-        builder.builder.data["traffic_matrix_set"] = {"default": demands}
+        builder.builder.data["demands"] = {"default": demands}
 
         policy = FailurePolicyTemplates.single_link_failure()
         policy["attrs"]["name"] = "anySingleLink"
@@ -534,16 +546,17 @@ class TestMainScenarioVariants:
 
         # Create brick_2tier blueprint
         brick_2tier = {
-            "groups": {
-                "t1": {"node_count": 4, "name_template": "t1-{node_num}"},
-                "t2": {"node_count": 4, "name_template": "t2-{node_num}"},
+            "nodes": {
+                "t1": {"count": 4, "template": "t1-{n}"},
+                "t2": {"count": 4, "template": "t2-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "/t1",
                     "target": "/t2",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 2, "cost": 1},
+                    "capacity": 2,
+                    "cost": 1,
                 }
             ],
         }
@@ -551,23 +564,25 @@ class TestMainScenarioVariants:
 
         # Create 3tier_clos blueprint
         three_tier_clos = {
-            "groups": {
-                "b1": {"use_blueprint": "brick_2tier"},
-                "b2": {"use_blueprint": "brick_2tier"},
-                "spine": {"node_count": 16, "name_template": "t3-{node_num}"},
+            "nodes": {
+                "b1": {"blueprint": "brick_2tier"},
+                "b2": {"blueprint": "brick_2tier"},
+                "spine": {"count": 16, "template": "t3-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "b1/t2",
                     "target": "spine",
                     "pattern": "one_to_one",
-                    "link_params": {"capacity": 2, "cost": 1},
+                    "capacity": 2,
+                    "cost": 1,
                 },
                 {
                     "source": "b2/t2",
                     "target": "spine",
                     "pattern": "one_to_one",
-                    "link_params": {"capacity": 2, "cost": 1},
+                    "capacity": 2,
+                    "cost": 1,
                 },
             ],
         }
@@ -577,16 +592,17 @@ class TestMainScenarioVariants:
         network_data = {
             "name": "scenario_3_template",
             "version": "1.0",
-            "groups": {
-                "my_clos1": {"use_blueprint": "3tier_clos"},
-                "my_clos2": {"use_blueprint": "3tier_clos"},
+            "nodes": {
+                "my_clos1": {"blueprint": "3tier_clos"},
+                "my_clos2": {"blueprint": "3tier_clos"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "my_clos1/spine",
                     "target": "my_clos2/spine",
                     "pattern": "one_to_one",
-                    "link_params": {"capacity": 2, "cost": 1},
+                    "capacity": 2,
+                    "cost": 1,
                 }
             ],
         }
@@ -594,12 +610,12 @@ class TestMainScenarioVariants:
 
         # Add capacity probe workflow
         workflow = [
-            {"step_type": "BuildGraph", "name": "build_graph"},
+            {"type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "capacity_analysis",
                 "source": "my_clos1/b.*/t1",
-                "sink": "my_clos2/b.*/t1",
+                "target": "my_clos2/b.*/t1",
                 "mode": "combine",
                 "shortest_path": True,
                 "flow_placement": "PROPORTIONAL",
@@ -607,10 +623,10 @@ class TestMainScenarioVariants:
                 "failure_policy": None,
             },
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "capacity_analysis2",
                 "source": "my_clos1/b.*/t1",
-                "sink": "my_clos2/b.*/t1",
+                "target": "my_clos2/b.*/t1",
                 "mode": "combine",
                 "shortest_path": True,
                 "flow_placement": "EQUAL_BALANCED",

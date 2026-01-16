@@ -80,47 +80,45 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      link_params:
-        capacity: 10
-        cost: 5
-        attrs:
-          type: link
-          some_attr: some_value
+      capacity: 10
+      cost: 5
+      attrs:
+        type: link
+        some_attr: some_value
     - source: NodeB
       target: NodeC
-      link_params:
-        capacity: 20
-        cost: 4
-        attrs:
-          type: link
-failure_policy_set:
+      capacity: 20
+      cost: 4
+      attrs:
+        type: link
+failures:
   default:
     attrs:
       name: "multi_rule_example"
       description: "Testing modal policy."
-    fail_risk_groups: false
-    fail_risk_group_children: false
+    expand_groups: false
+    expand_children: false
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: node
-            rule_type: "choice"
+          - scope: node
+            mode: "choice"
             count: 1
-          - entity_scope: link
-            rule_type: "all"
-traffic_matrix_set:
+          - scope: link
+            mode: "all"
+demands:
   default:
     - source: NodeA
-      sink: NodeB
-      demand: 15
+      target: NodeB
+      volume: 15
     - source: NodeA
-      sink: NodeC
-      demand: 5
+      target: NodeC
+      volume: 5
 workflow:
-  - step_type: DoSmth
+  - type: DoSmth
     name: Step1
     some_param: 42
-  - step_type: DoSmthElse
+  - type: DoSmthElse
     name: Step2
     factor: 2.0
 """
@@ -129,7 +127,7 @@ workflow:
 @pytest.fixture
 def missing_step_type_yaml() -> str:
     """
-    Returns a YAML string missing the 'step_type' in the workflow,
+    Returns a YAML string missing the 'type' in the workflow,
     which should raise a ValueError.
     """
     return """
@@ -140,18 +138,17 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      link_params:
-        capacity: 1
-failure_policy_set:
+      capacity: 1
+failures:
   default:
     modes:
       - weight: 1.0
         rules: []
-traffic_matrix_set:
+demands:
   default:
     - source: NodeA
-      sink: NodeB
-      demand: 10
+      target: NodeB
+      volume: 10
 workflow:
   - name: StepWithoutType
     some_param: 123
@@ -172,20 +169,19 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      link_params:
-        capacity: 1
-failure_policy_set:
+      capacity: 1
+failures:
   default:
     modes:
       - weight: 1.0
         rules: []
-traffic_matrix_set:
+demands:
   default:
     - source: NodeA
-      sink: NodeB
-      demand: 10
+      target: NodeB
+      volume: 10
 workflow:
-  - step_type: NonExistentStep
+  - type: NonExistentStep
     name: BadStep
     some_param: 999
 """
@@ -205,16 +201,15 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      link_params:
-        capacity: 1
-traffic_matrix_set: {}
-failure_policy_set:
+      capacity: 1
+demands: {}
+failures:
   default:
     modes:
       - weight: 1.0
         rules: []
 workflow:
-  - step_type: DoSmth
+  - type: DoSmth
     name: StepWithExtra
     some_param: 42
     extra_param: 99
@@ -229,7 +224,7 @@ def minimal_scenario_yaml() -> str:
     """
     return """
 workflow:
-  - step_type: DoSmth
+  - type: DoSmth
     name: JustStep
     some_param: 100
 """
@@ -290,8 +285,8 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     # Check failure policy - access by known name "default"
     simple_policy = scenario.failure_policy_set.get_policy("default")
     assert isinstance(simple_policy, FailurePolicy)
-    assert not simple_policy.fail_risk_groups
-    assert not simple_policy.fail_risk_group_children
+    assert not simple_policy.expand_groups
+    assert not simple_policy.expand_children
 
     assert len(simple_policy.modes) == 1
     assert simple_policy.attrs.get("name") == "multi_rule_example"
@@ -301,22 +296,22 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     mode = simple_policy.modes[0]
     assert len(mode.rules) == 2
     r1, r2 = mode.rules
-    assert r1.entity_scope == "node" and r1.rule_type == "choice" and r1.count == 1
-    assert r2.entity_scope == "link" and r2.rule_type == "all"
+    assert r1.scope == "node" and r1.mode == "choice" and r1.count == 1
+    assert r2.scope == "link" and r2.mode == "all"
 
     # Check traffic matrix set
-    assert len(scenario.traffic_matrix_set.matrices) == 1
-    assert "default" in scenario.traffic_matrix_set.matrices
-    default_demands = scenario.traffic_matrix_set.matrices["default"]
+    assert len(scenario.demand_set.sets) == 1
+    assert "default" in scenario.demand_set.sets
+    default_demands = scenario.demand_set.sets["default"]
     assert len(default_demands) == 2
     d1 = default_demands[0]
     d2 = default_demands[1]
     assert d1.source == "NodeA"
-    assert d1.sink == "NodeB"
-    assert d1.demand == 15
+    assert d1.target == "NodeB"
+    assert d1.volume == 15
     assert d2.source == "NodeA"
-    assert d2.sink == "NodeC"
-    assert d2.demand == 5
+    assert d2.target == "NodeC"
+    assert d2.volume == 5
 
     # Check workflow
     assert len(scenario.workflow) == 2
@@ -349,7 +344,7 @@ def test_scenario_run(valid_scenario_yaml: str) -> None:
 def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> None:
     """
     Tests that Scenario.from_yaml raises an error if a workflow step
-    is missing the 'step_type' field.
+    is missing the 'type' field.
 
     Schema validation catches this and raises ValidationError.
     """
@@ -392,7 +387,7 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     # If no failure_policy_set block, scenario.failure_policy_set has no policies
     assert len(scenario.failure_policy_set.get_all_policies()) == 0
 
-    assert len(scenario.traffic_matrix_set.matrices) == 0
+    assert len(scenario.demand_set.sets) == 0
     assert len(scenario.workflow) == 1
     step = scenario.workflow[0]
     assert step.name == "JustStep"
@@ -409,7 +404,7 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
     assert len(scenario.failure_policy_set.get_all_policies()) == 0
-    assert len(scenario.traffic_matrix_set.matrices) == 0
+    assert len(scenario.demand_set.sets) == 0
     assert scenario.workflow == []
 
 
@@ -427,19 +422,17 @@ network:
   links:
     - source: NodeA
       target: NodeB
-      link_params:
-        capacity: 10
-        cost: 5
-        attrs:
-          type: link
-          some_attr: some_value
+      capacity: 10
+      cost: 5
+      attrs:
+        type: link
+        some_attr: some_value
     - source: NodeB
       target: NodeC
-      link_params:
-        capacity: 20
-        cost: 4
-        attrs:
-          type: link
+      capacity: 20
+      cost: 4
+      attrs:
+        type: link
 risk_groups:
   - name: "RG1"
     disabled: false
@@ -500,10 +493,9 @@ network:
   links:
     - source: N1
       target: N2
-      link_params:
-        capacity: *default_cap
+      capacity: *default_cap
 
-traffic_matrix_set:
+demands:
   default: []
 """
 

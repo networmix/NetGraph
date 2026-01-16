@@ -18,11 +18,11 @@ def test_traffic_matrix_placement_stores_core_outputs(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "A"
-    mock_td.sink = "B"
-    mock_td.demand = 10.0
+    mock_td.target = "B"
+    mock_td.volume = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value: baseline separate, failure iterations in results
     mock_raw = {
@@ -87,7 +87,7 @@ def test_traffic_matrix_placement_stores_core_outputs(
 
     step = TrafficMatrixPlacement(
         name="tm_step",
-        matrix_name="default",
+        demand_set="default",
         iterations=2,
     )
     mock_scenario.results = Results()
@@ -111,11 +111,11 @@ def test_traffic_matrix_placement_flow_details_edges(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "A"
-    mock_td.sink = "B"
-    mock_td.demand = 10.0
+    mock_td.target = "B"
+    mock_td.volume = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value with edges used (baseline separate)
     mock_raw = {
@@ -141,7 +141,7 @@ def test_traffic_matrix_placement_flow_details_edges(
                         "source": "A",
                         "destination": "B",
                         "priority": 0,
-                        "demand": 10.0,
+                        "volume": 10.0,
                         "placed": 8.0,
                         "dropped": 2.0,
                         "cost_distribution": {},
@@ -165,7 +165,7 @@ def test_traffic_matrix_placement_flow_details_edges(
                         "source": "A",
                         "destination": "B",
                         "priority": 0,
-                        "demand": 10.0,
+                        "volume": 10.0,
                         "placed": 10.0,
                         "dropped": 0.0,
                         "cost_distribution": {},
@@ -190,7 +190,7 @@ def test_traffic_matrix_placement_flow_details_edges(
 
     step = TrafficMatrixPlacement(
         name="tm_step",
-        matrix_name="default",
+        demand_set="default",
         iterations=2,
         include_flow_details=True,
         include_used_edges=True,
@@ -214,11 +214,11 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "S"
-    mock_td.sink = "T"
-    mock_td.demand = 10.0
+    mock_td.target = "T"
+    mock_td.volume = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value (minimal valid structure)
     mock_raw = {
@@ -241,7 +241,7 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     # Run with alpha scaling
     step = TrafficMatrixPlacement(
         name="tm_step_alpha",
-        matrix_name="default",
+        demand_set="default",
         iterations=1,
         alpha=2.5,
     )
@@ -254,8 +254,8 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     dcfg = kwargs.get("demands_config")
     assert isinstance(dcfg, list) and len(dcfg) == 1
     assert dcfg[0]["source"] == "S"
-    assert dcfg[0]["sink"] == "T"
-    assert abs(float(dcfg[0]["demand"]) - 25.0) < 1e-12
+    assert dcfg[0]["target"] == "T"
+    assert abs(float(dcfg[0]["volume"]) - 25.0) < 1e-12
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
@@ -265,11 +265,11 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "A"
-    mock_td.sink = "B"
-    mock_td.demand = 1.0
+    mock_td.target = "B"
+    mock_td.volume = 1.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     mock_raw = {
         "results": [
@@ -290,7 +290,7 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
 
     step = TrafficMatrixPlacement(
         name="tm_step_meta",
-        matrix_name="default",
+        demand_set="default",
         iterations=1,
         alpha=3.0,
     )
@@ -311,12 +311,12 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
     mock_scenario = MagicMock()
     td = MagicMock()
     td.source = "S"
-    td.sink = "T"
-    td.demand = 4.0
+    td.target = "T"
+    td.volume = 4.0
     td.mode = "pairwise"
     td.priority = 0
-    td.flow_policy_config = None
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [td]
+    td.flow_policy = None
+    mock_scenario.demand_set.get_set.return_value = [td]
 
     # Populate results metadata: prior MSD step
     # Provide MSD step data in Results store
@@ -331,11 +331,11 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
             "base_demands": [
                 {
                     "source": "S",
-                    "sink": "T",
-                    "demand": 4.0,
+                    "target": "T",
+                    "volume": 4.0,
                     "mode": "pairwise",
                     "priority": 0,
-                    "flow_policy_config": None,
+                    "flow_policy": None,
                 }
             ],
         },
@@ -362,7 +362,7 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
 
     step = TrafficMatrixPlacement(
         name="tm_auto",
-        matrix_name="default",
+        demand_set="default",
         iterations=1,
         alpha_from_step="msd1",
         alpha_from_field="data.alpha_star",
@@ -373,7 +373,7 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
     _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
     dcfg = kwargs.get("demands_config")
     assert isinstance(dcfg, list) and len(dcfg) == 1
-    assert abs(float(dcfg[0]["demand"]) - 8.0) < 1e-12
+    assert abs(float(dcfg[0]["volume"]) - 8.0) < 1e-12
 
 
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
@@ -383,19 +383,19 @@ def test_traffic_matrix_placement_alpha_auto_missing_msd_raises(
     mock_scenario = MagicMock()
     td = MagicMock()
     td.source = "S"
-    td.sink = "T"
-    td.demand = 4.0
+    td.target = "T"
+    td.volume = 4.0
     td.mode = "pairwise"
     td.priority = 0
-    td.flow_policy_config = None
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [td]
+    td.flow_policy = None
+    mock_scenario.demand_set.get_set.return_value = [td]
 
     # No MSD metadata
     mock_scenario.results.get_all_step_metadata.return_value = {}
 
     step = TrafficMatrixPlacement(
         name="tm_auto",
-        matrix_name="default",
+        demand_set="default",
         iterations=1,
         alpha_from_step="msd1",
         alpha_from_field="data.alpha_star",
@@ -413,11 +413,11 @@ def test_traffic_matrix_placement_failure_trace_on_results(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "A"
-    mock_td.sink = "B"
-    mock_td.demand = 10.0
+    mock_td.target = "B"
+    mock_td.volume = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Create mock result with failure_trace and occurrence_count
     mock_result = MagicMock()
@@ -429,8 +429,8 @@ def test_traffic_matrix_placement_failure_trace_on_results(
         "selections": [
             {
                 "rule_index": 0,
-                "entity_scope": "link",
-                "rule_type": "choice",
+                "scope": "link",
+                "mode": "choice",
                 "matched_count": 5,
                 "selected_ids": ["L1"],
             }
@@ -483,7 +483,7 @@ def test_traffic_matrix_placement_failure_trace_on_results(
 
     step = TrafficMatrixPlacement(
         name="tm_patterns",
-        matrix_name="default",
+        demand_set="default",
         iterations=2,
         store_failure_patterns=True,
     )
@@ -513,11 +513,11 @@ def test_traffic_matrix_placement_no_trace_when_disabled(
     mock_scenario = MagicMock()
     mock_td = MagicMock()
     mock_td.source = "A"
-    mock_td.sink = "B"
-    mock_td.demand = 10.0
+    mock_td.target = "B"
+    mock_td.volume = 10.0
     mock_td.mode = "pairwise"
     mock_td.priority = 0
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [mock_td]
+    mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     mock_result = MagicMock()
     mock_result.failure_trace = None  # No trace when disabled
@@ -549,7 +549,7 @@ def test_traffic_matrix_placement_no_trace_when_disabled(
 
     step = TrafficMatrixPlacement(
         name="tm_no_patterns",
-        matrix_name="default",
+        demand_set="default",
         iterations=1,
         store_failure_patterns=False,
     )

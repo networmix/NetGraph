@@ -89,10 +89,12 @@ jsonschema.validate(data, schema)
 - `network` - Network topology definition
 - `blueprints` - Reusable network templates
 - `risk_groups` - Risk group definitions
-- `failure_policy_set` - Named failure policies
-- `traffic_matrix_set` - Named traffic matrices
+- `failures` - Named failure policies
+- `demands` - Named demand sets
 - `workflow` - Workflow step definitions
 - `components` - Hardware component library
+- `vars` - YAML anchors and variables for reuse
+- `seed` - Master random seed for reproducibility
 
 ## Schema Maintenance
 

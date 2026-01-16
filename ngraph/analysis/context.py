@@ -73,10 +73,7 @@ def _get_active_node_names(
     nodes: List[Any],
     excluded_nodes: Optional[Set[str]] = None,
 ) -> List[str]:
-    """Extract names of active (non-disabled) nodes, optionally excluding some.
-
-    This is a local helper to replace utils.nodes.get_active_node_names.
-    """
+    """Extract names of active (non-disabled) nodes, optionally excluding some."""
     if excluded_nodes:
         return [
             n.name for n in nodes if not n.disabled and n.name not in excluded_nodes
@@ -1628,7 +1625,7 @@ def _construct_max_flow_result(
     if core_summary is not None and len(core_summary.costs) > 0:
         cost_dist = {
             float(c): float(f)
-            for c, f in zip(core_summary.costs, core_summary.flows, strict=False)
+            for c, f in zip(core_summary.costs, core_summary.flows, strict=True)
         }
     return MaxFlowResult(
         total_flow=flow_value,

@@ -40,11 +40,11 @@ network:
 risk_groups:
   - name: PowerZone_DC1_R1_PZA
     membership:
-      entity_scope: node
+      scope: node
       match:
         conditions:
           - attr: facility.power_zone
-            operator: "=="
+            op: "=="
             value: "DC1-R1-PZ-A"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -75,25 +75,23 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "NYC-CHI-C1"
+      attrs:
+        fiber:
+          conduit_id: "NYC-CHI-C1"
     - source: CHI
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "CHI-LA-C1"
+      attrs:
+        fiber:
+          conduit_id: "CHI-LA-C1"
 
 risk_groups:
   - name: Conduit_NYC_CHI_C1
     membership:
-      entity_scope: link
+      scope: link
       match:
         conditions:
           - attr: fiber.conduit_id
-            operator: "=="
+            op: "=="
             value: "NYC-CHI-C1"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -127,11 +125,11 @@ risk_groups:
         path_id: "NYC-LA"
   - name: Path_NYC_CHI
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: fiber.path_id
-            operator: "=="
+            op: "=="
             value: "NYC-CHI"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -172,15 +170,15 @@ network:
 risk_groups:
   - name: Room1_PowerZoneA
     membership:
-      entity_scope: node
+      scope: node
       match:
         logic: and
         conditions:
           - attr: facility.room_id
-            operator: "=="
+            op: "=="
             value: "DC1-R1"
           - attr: facility.power_zone
-            operator: "=="
+            op: "=="
             value: "DC1-R1-PZ-A"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -210,35 +208,32 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "NYC-CHI-C1"
+      attrs:
+        fiber:
+          conduit_id: "NYC-CHI-C1"
     - source: NYC
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "NYC-LA-C1"
+      attrs:
+        fiber:
+          conduit_id: "NYC-LA-C1"
     - source: CHI
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            conduit_id: "CHI-LA-C1"
+      attrs:
+        fiber:
+          conduit_id: "CHI-LA-C1"
 
 risk_groups:
   - name: Path_NYC_Outbound
     membership:
-      entity_scope: link
+      scope: link
       match:
         logic: or
         conditions:
           - attr: fiber.conduit_id
-            operator: "=="
+            op: "=="
             value: "NYC-CHI-C1"
           - attr: fiber.conduit_id
-            operator: "=="
+            op: "=="
             value: "NYC-LA-C1"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -279,11 +274,11 @@ network:
 risk_groups:
   - name: Building_DC1
     membership:
-      entity_scope: node
+      scope: node
       match:
         conditions:
           - attr: facility.building_id
-            operator: "=="
+            op: "=="
             value: "DC1"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -323,11 +318,11 @@ network:
 risk_groups:
   - name: Building_DC99
     membership:
-      entity_scope: node
+      scope: node
       match:
         conditions:
           - attr: facility.building_id
-            operator: "=="
+            op: "=="
             value: "DC99"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -348,11 +343,11 @@ risk_groups:
     attrs:
       type: meta
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: name
-            operator: any_value
+            op: exists
 """
         scenario = Scenario.from_yaml(yaml_content)
 
@@ -375,11 +370,11 @@ risk_groups:
   - name: CoolingZone_DC1_R1_CZA
   - name: PowerZone_DC1_R1_PZA
     membership:
-      entity_scope: node
+      scope: node
       match:
         conditions:
           - attr: facility.power_zone
-            operator: "=="
+            op: "=="
             value: "DC1-R1-PZ-A"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -403,25 +398,23 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            pair_ids: ["FP01", "FP02", "FP03"]
+      attrs:
+        fiber:
+          pair_ids: ["FP01", "FP02", "FP03"]
     - source: CHI
       target: NYC
-      link_params:
-        attrs:
-          fiber:
-            pair_ids: ["FP04", "FP05"]
+      attrs:
+        fiber:
+          pair_ids: ["FP04", "FP05"]
 
 risk_groups:
   - name: FiberPair_FP01
     membership:
-      entity_scope: link
+      scope: link
       match:
         conditions:
           - attr: fiber.pair_ids
-            operator: contains
+            op: contains
             value: "FP01"
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -454,11 +447,11 @@ network:
 risk_groups:
   - name: Campus_East
     membership:
-      entity_scope: node
+      scope: node
       match:
         conditions:
           - attr: facility.building_id
-            operator: in
+            op: in
             value: ["DC1", "DC2"]
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -478,31 +471,28 @@ network:
   links:
     - source: NYC
       target: CHI
-      link_params:
-        attrs:
-          fiber:
-            distance_km: 1200
+      attrs:
+        fiber:
+          distance_km: 1200
     - source: NYC
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            distance_km: 4000
+      attrs:
+        fiber:
+          distance_km: 4000
     - source: CHI
       target: LA
-      link_params:
-        attrs:
-          fiber:
-            distance_km: 2800
+      attrs:
+        fiber:
+          distance_km: 2800
 
 risk_groups:
   - name: LongHaulFiber
     membership:
-      entity_scope: link
+      scope: link
       match:
         conditions:
           - attr: fiber.distance_km
-            operator: ">="
+            op: ">="
             value: 2000
 """
         scenario = Scenario.from_yaml(yaml_content)
@@ -538,22 +528,22 @@ risk_groups:
       type: path
       route: "NYC-CHI"
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: route
-            operator: "=="
+            op: "=="
             value: "NYC-CHI"
   - name: Conduit_NYC_CHI_C1
     attrs:
       type: conduit
       route: "NYC-CHI"
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: type
-            operator: "=="
+            op: "=="
             value: path
 """
         with pytest.raises(ValueError) as exc_info:
@@ -576,31 +566,31 @@ risk_groups:
     attrs:
       tier: 1
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: tier
-            operator: "=="
+            op: "=="
             value: 3
   - name: GroupB
     attrs:
       tier: 2
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: tier
-            operator: "=="
+            op: "=="
             value: 1
   - name: GroupC
     attrs:
       tier: 3
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: tier
-            operator: "=="
+            op: "=="
             value: 2
 """
         with pytest.raises(ValueError) as exc_info:
@@ -631,11 +621,11 @@ risk_groups:
         path_id: "NYC-LA"
   - name: Path_NYC_CHI
     membership:
-      entity_scope: risk_group
+      scope: risk_group
       match:
         conditions:
           - attr: fiber.path_id
-            operator: "=="
+            op: "=="
             value: "NYC-CHI"
 """
         # Should not raise

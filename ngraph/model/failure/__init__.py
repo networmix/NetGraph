@@ -16,7 +16,7 @@ Public entry points:
 
 from .generate import GenerateSpec, generate_risk_groups, parse_generate_spec
 from .membership import MembershipSpec, resolve_membership_rules
-from .policy import FailureCondition, FailureMode, FailurePolicy, FailureRule
+from .policy import FailureMode, FailurePolicy, FailureRule
 from .policy_set import FailurePolicySet
 from .validation import validate_risk_group_hierarchy, validate_risk_group_references
 
@@ -25,7 +25,6 @@ __all__ = [
     "FailurePolicy",
     "FailureRule",
     "FailureMode",
-    "FailureCondition",
     "FailurePolicySet",
     # Generation
     "GenerateSpec",

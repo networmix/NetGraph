@@ -82,7 +82,7 @@ class TestNodeSelectorSchema:
 
     def test_match_only_valid(self) -> None:
         """NodeSelector with only match is valid."""
-        cond = Condition(attr="role", operator="==", value="leaf")
+        cond = Condition(attr="role", op="==", value="leaf")
         match = MatchSpec(conditions=[cond])
         sel = NodeSelector(match=match)
         assert sel.match is not None
@@ -91,7 +91,7 @@ class TestNodeSelectorSchema:
 
     def test_all_fields_valid(self) -> None:
         """NodeSelector with all fields is valid."""
-        cond = Condition(attr="role", operator="==", value="leaf")
+        cond = Condition(attr="role", op="==", value="leaf")
         match = MatchSpec(conditions=[cond])
         sel = NodeSelector(path="^dc1/.*", group_by="role", match=match)
         assert sel.path == "^dc1/.*"
@@ -135,7 +135,7 @@ class TestNormalizeSelector:
         sel = normalize_selector(
             {
                 "match": {
-                    "conditions": [{"attr": "role", "operator": "==", "value": "leaf"}],
+                    "conditions": [{"attr": "role", "op": "==", "value": "leaf"}],
                     "logic": "and",
                 }
             },
@@ -151,9 +151,7 @@ class TestNormalizeSelector:
             {
                 "path": "^dc1/.*",
                 "group_by": "role",
-                "match": {
-                    "conditions": [{"attr": "tier", "operator": "==", "value": 1}]
-                },
+                "match": {"conditions": [{"attr": "tier", "op": "==", "value": 1}]},
             },
             "demand",
         )
@@ -263,9 +261,7 @@ class TestSelectNodesByMatch:
         """Match conditions filter nodes."""
         sel = NodeSelector(
             path=".*",
-            match=MatchSpec(
-                conditions=[Condition(attr="role", operator="==", value="leaf")]
-            ),
+            match=MatchSpec(conditions=[Condition(attr="role", op="==", value="leaf")]),
         )
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
@@ -280,8 +276,8 @@ class TestSelectNodesByMatch:
             path=".*",
             match=MatchSpec(
                 conditions=[
-                    Condition(attr="role", operator="==", value="leaf"),
-                    Condition(attr="dc", operator="==", value="dc1"),
+                    Condition(attr="role", op="==", value="leaf"),
+                    Condition(attr="dc", op="==", value="dc1"),
                 ],
                 logic="and",
             ),
@@ -298,8 +294,8 @@ class TestSelectNodesByMatch:
             path=".*",
             match=MatchSpec(
                 conditions=[
-                    Condition(attr="role", operator="==", value="leaf"),
-                    Condition(attr="role", operator="==", value="spine"),
+                    Condition(attr="role", op="==", value="leaf"),
+                    Condition(attr="role", op="==", value="spine"),
                 ],
                 logic="or",
             ),
@@ -389,6 +385,35 @@ class TestSelectNodesByGroupBy:
         node_names = [n.name for n in all_nodes]
         assert "orphan" not in node_names
 
+    def test_group_by_disabled_field(self, attributed_network: Network) -> None:
+        """group_by can use top-level fields like disabled."""
+        # Disable one node for testing
+        attributed_network.nodes["dc1_leaf_1"].disabled = True
+
+        sel = NodeSelector(path=".*", group_by="disabled")
+        groups = select_nodes(attributed_network, sel, default_active_only=False)
+
+        assert "True" in groups
+        assert "False" in groups
+        # Verify disabled node is in the True group
+        disabled_names = [n.name for n in groups["True"]]
+        assert "dc1_leaf_1" in disabled_names
+        # Verify enabled nodes are in the False group
+        enabled_names = [n.name for n in groups["False"]]
+        assert len(enabled_names) > 0
+        assert "dc1_leaf_1" not in enabled_names
+
+    def test_group_by_name_field(self, attributed_network: Network) -> None:
+        """group_by can use top-level name field."""
+        sel = NodeSelector(path="dc1_leaf.*", group_by="name")
+        groups = select_nodes(attributed_network, sel, default_active_only=False)
+
+        # Each node should be in its own group (keyed by name)
+        assert "dc1_leaf_1" in groups
+        assert "dc1_leaf_2" in groups
+        assert len(groups["dc1_leaf_1"]) == 1
+        assert len(groups["dc1_leaf_2"]) == 1
+
 
 class TestSelectNodesMatchOnly:
     """Tests for match-only selectors (no path specified)."""
@@ -398,7 +423,7 @@ class TestSelectNodesMatchOnly:
     ) -> None:
         """Match-only selector starts with all nodes, then filters."""
         sel = NodeSelector(
-            match=MatchSpec(conditions=[Condition(attr="tier", operator="==", value=2)])
+            match=MatchSpec(conditions=[Condition(attr="tier", op="==", value=2)])
         )
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
@@ -491,20 +516,20 @@ class TestConditionOperators:
         )
         assert evaluate_condition(attrs, Condition("x", "not_in", ["d", "e"])) is False
 
-    def test_any_value_operator(self) -> None:
-        """Test any_value operator (attribute exists and is not None)."""
+    def test_exists_operator(self) -> None:
+        """Test exists operator (attribute exists and is not None)."""
         attrs = {"x": 0, "y": None, "z": ""}
-        assert evaluate_condition(attrs, Condition("x", "any_value")) is True
-        assert evaluate_condition(attrs, Condition("y", "any_value")) is False
-        assert evaluate_condition(attrs, Condition("z", "any_value")) is True
-        assert evaluate_condition(attrs, Condition("missing", "any_value")) is False
+        assert evaluate_condition(attrs, Condition("x", "exists")) is True
+        assert evaluate_condition(attrs, Condition("y", "exists")) is False
+        assert evaluate_condition(attrs, Condition("z", "exists")) is True
+        assert evaluate_condition(attrs, Condition("missing", "exists")) is False
 
-    def test_no_value_operator(self) -> None:
-        """Test no_value operator (attribute missing or None)."""
+    def test_not_exists_operator(self) -> None:
+        """Test not_exists operator (attribute missing or None)."""
         attrs = {"x": 0, "y": None}
-        assert evaluate_condition(attrs, Condition("x", "no_value")) is False
-        assert evaluate_condition(attrs, Condition("y", "no_value")) is True
-        assert evaluate_condition(attrs, Condition("missing", "no_value")) is True
+        assert evaluate_condition(attrs, Condition("x", "not_exists")) is False
+        assert evaluate_condition(attrs, Condition("y", "not_exists")) is True
+        assert evaluate_condition(attrs, Condition("missing", "not_exists")) is True
 
     def test_missing_attribute_returns_false(self) -> None:
         """Missing attribute returns False for most operators."""

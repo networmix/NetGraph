@@ -44,38 +44,32 @@ network:
     # Parallel edges between A->B
     - source: A
       target: B
-      link_params:
-        capacity: 1
-        cost: 1
+      capacity: 1
+      cost: 1
     - source: A
       target: B
-      link_params:
-        capacity: 2
-        cost: 1
+      capacity: 2
+      cost: 1
 
     # Parallel edges between B->C
     - source: B
       target: C
-      link_params:
-        capacity: 1
-        cost: 1
+      capacity: 1
+      cost: 1
     - source: B
       target: C
-      link_params:
-        capacity: 2
-        cost: 1
+      capacity: 2
+      cost: 1
 
     # Alternative path A->D->C
     - source: A
       target: D
-      link_params:
-        capacity: 3
-        cost: 2
+      capacity: 3
+      cost: 2
     - source: D
       target: C
-      link_params:
-        capacity: 3
-        cost: 2
+      capacity: 3
+      cost: 2
 """
 
 # Create the network
@@ -83,7 +77,7 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 ```
 
-Note that here we used a simple `nodes` and `links` structure to directly define the network topology. The optional `seed` parameter ensures reproducible results when using randomized workflow steps. In more complex scenarios, you would typically use `groups` and `adjacency` to define groups of nodes and their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
+Note that here we used a simple `nodes` and `links` structure to directly define the network topology. The optional `seed` parameter ensures reproducible results when using randomized workflow steps. In more complex scenarios, you would typically use node groups with `count` and `template` to define groups of nodes and link rules to define their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
 
 ### Flow Analysis Variants
 
@@ -138,7 +132,7 @@ result = analyze(network).max_flow_detailed(
 )
 
 # Extract flow value and summary
-(src_label, sink_label), summary = next(iter(result.items()))
+(src_label, target_label), summary = next(iter(result.items()))
 
 print(f"Total flow: {summary.total_flow}")
 print(f"Cost distribution: {summary.cost_distribution}")

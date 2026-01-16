@@ -1,0 +1,69 @@
+seed: 42
+
+# Define reusable topology templates
+blueprints:
+  Clos_Fabric:
+    nodes:
+      spine: { count: 2, template: "spine{n}" }
+      leaf: { count: 4, template: "leaf{n}" }
+    links:
+      - source: /leaf
+        target: /spine
+        pattern: mesh
+        capacity: 100
+        cost: 1
+      - source: /spine
+        target: /leaf
+        pattern: mesh
+        capacity: 100
+        cost: 1
+
+# Instantiate network from templates
+network:
+  nodes:
+    site1: { blueprint: Clos_Fabric }
+    site2: { blueprint: Clos_Fabric }
+  links:
+    - source: { path: site1/spine }
+      target: { path: site2/spine }
+      pattern: one_to_one
+      capacity: 50
+      cost: 10
+
+# Define failure policy for Monte Carlo analysis
+failures:
+  random_link:
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+
+# Define traffic demands
+demands:
+  global_traffic:
+    - source: ^site1/leaf/
+      target: ^site2/leaf/
+      volume: 100.0
+      mode: combine
+      flow_policy: SHORTEST_PATHS_ECMP
+
+# Analysis workflow: find max capacity, then test under failures
+workflow:
+  - type: NetworkStats
+    name: stats
+  - type: MaxFlow
+    name: site_capacity
+    source: ^site1/leaf/
+    target: ^site2/leaf/
+    mode: combine
+  - type: MaximumSupportedDemand
+    name: max_demand
+    demand_set: global_traffic
+  - type: TrafficMatrixPlacement
+    name: placement_at_max
+    demand_set: global_traffic
+    alpha_from_step: max_demand # Use alpha_star from MSD step
+    failure_policy: random_link
+    iterations: 100

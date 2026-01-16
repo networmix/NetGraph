@@ -49,8 +49,13 @@ class TestMalformedYAML:
               disabled: "not_a_boolean"  # Should be boolean
         """
 
-        # NetGraph rejects invalid keys during parsing
-        with pytest.raises(ValueError, match="Unrecognized key"):
+        # Schema validation now catches invalid keys
+        import jsonschema.exceptions
+
+        with pytest.raises(
+            jsonschema.exceptions.ValidationError,
+            match="Additional properties are not allowed",
+        ):
             _scenario = Scenario.from_yaml(invalid_node_yaml)
 
     def test_invalid_link_definitions(self):
@@ -59,7 +64,7 @@ class TestMalformedYAML:
         assert True
 
     def test_nonexistent_link_endpoints(self):
-        """Test links referencing nonexistent nodes."""
+        """Test links referencing nonexistent nodes are silently skipped."""
         # Use raw YAML since builder would validate node existence
         invalid_endpoints_yaml = """
         network:
@@ -68,17 +73,18 @@ class TestMalformedYAML:
           links:
             - source: NodeA
               target: NonexistentNode  # Node doesn't exist
-              link_params:
-                capacity: 10
-                cost: 1
+              capacity: 10
+              cost: 1
         workflow:
-          - step_type: BuildGraph
+          - type: BuildGraph
             name: build_graph
         """
 
-        with pytest.raises((ValueError, KeyError)):
-            scenario = Scenario.from_yaml(invalid_endpoints_yaml)
-            scenario.run()
+        # Links to unknown nodes are silently skipped by mesh pattern
+        scenario = Scenario.from_yaml(invalid_endpoints_yaml)
+        scenario.run()
+        assert "NodeA" in scenario.network.nodes
+        assert len(scenario.network.links) == 0  # Link is silently skipped
 
 
 @pytest.mark.slow
@@ -91,9 +97,9 @@ class TestBlueprintErrors:
         invalid_blueprint_ref = """
         network:
           name: "test_network"
-          groups:
+          nodes:
             test_group:
-              use_blueprint: nonexistent_blueprint  # Doesn't exist
+              blueprint: nonexistent_blueprint  # Doesn't exist
         """
 
         with pytest.raises((ValueError, KeyError)):
@@ -104,19 +110,19 @@ class TestBlueprintErrors:
         """Test circular references between blueprints."""
         builder = ScenarioDataBuilder()
         builder.with_blueprint(
-            "blueprint_a", {"groups": {"group_a": {"use_blueprint": "blueprint_b"}}}
+            "blueprint_a", {"nodes": {"group_a": {"blueprint": "blueprint_b"}}}
         )
         builder.with_blueprint(
             "blueprint_b",
             {
-                "groups": {"group_b": {"use_blueprint": "blueprint_a"}}  # Circular!
+                "nodes": {"group_b": {"blueprint": "blueprint_a"}}  # Circular!
             },
         )
 
         # Add network using one of the circular blueprints
         builder.data["network"] = {
             "name": "test_network",
-            "groups": {"test_group": {"use_blueprint": "blueprint_a"}},
+            "nodes": {"test_group": {"blueprint": "blueprint_a"}},
         }
         builder.with_workflow_step("BuildGraph", "build_graph")
 
@@ -130,33 +136,32 @@ class TestBlueprintErrors:
         assert True
 
     def test_malformed_adjacency_patterns(self):
-        """Test malformed adjacency pattern definitions."""
+        """Test malformed link patterns."""
         import jsonschema.exceptions
 
         # Use raw YAML for invalid pattern value that builder might validate
         malformed_adjacency = """
         blueprints:
           bad_blueprint:
-            groups:
+            nodes:
               group1:
-                node_count: 2
-                name_template: "node-{node_num}"
+                count: 2
+                template: "node-{n}"
               group2:
-                node_count: 2
-                name_template: "node-{node_num}"
-            adjacency:
+                count: 2
+                template: "node-{n}"
+            links:
               - source: group1
                 target: group2
                 pattern: "invalid_pattern"  # Should be 'mesh' or 'one_to_one'
-                link_params:
-                  capacity: 10
+                capacity: 10
 
         network:
-          groups:
+          nodes:
             test_group:
-              use_blueprint: bad_blueprint
+              blueprint: bad_blueprint
         workflow:
-          - step_type: BuildGraph
+          - type: BuildGraph
             name: build_graph
         """
 
@@ -239,20 +244,18 @@ class TestEdgeCases:
           links:
             - source: NodeA
               target: NodeA  # Self-loop
-              link_params:
-                capacity: 10
-                cost: 1
+              capacity: 10
+              cost: 1
         workflow:
-          - step_type: BuildGraph
+          - type: BuildGraph
             name: build_graph
         """
 
-        # NetGraph correctly rejects self-loops as invalid
-        with pytest.raises(
-            ValueError, match="Link cannot have the same source and target"
-        ):
-            scenario = Scenario.from_yaml(self_loop_yaml)
-            scenario.run()
+        # NetGraph silently skips self-loops (mesh pattern behavior)
+        scenario = Scenario.from_yaml(self_loop_yaml)
+        scenario.run()
+        assert "NodeA" in scenario.network.nodes
+        assert len(scenario.network.links) == 0  # Self-loop is silently skipped
 
     def test_duplicate_links(self):
         """Test multiple links between the same pair of nodes."""
@@ -264,7 +267,8 @@ class TestEdgeCases:
             {
                 "source": "NodeA",
                 "target": "NodeB",
-                "link_params": {"capacity": 20.0, "cost": 2},
+                "capacity": 20.0,
+                "cost": 2,
             }
         )
         builder.with_workflow_step("BuildGraph", "build_graph")
@@ -293,7 +297,8 @@ class TestEdgeCases:
             {
                 "source": "NodeA",
                 "target": "NodeB",
-                "link_params": {"capacity": 0, "cost": 1},  # Zero capacity
+                "capacity": 0,
+                "cost": 1,  # Zero capacity
             }
         ]
         builder.with_workflow_step("BuildGraph", "build_graph")
@@ -314,10 +319,8 @@ class TestEdgeCases:
             {
                 "source": "NodeA",
                 "target": "NodeB",
-                "link_params": {
-                    "capacity": 999999999999,  # Very large capacity
-                    "cost": 999999999999,  # Very large cost
-                },
+                "capacity": 999999999999,  # Very large capacity
+                "cost": 999999999999,  # Very large cost
             }
         ]
         builder.with_workflow_step("BuildGraph", "build_graph")

@@ -13,7 +13,7 @@
           "type": "string",
           "description": "Attribute name to evaluate (supports dot-notation for nested attributes, e.g., 'hardware.vendor')"
         },
-        "operator": {
+        "op": {
           "type": "string",
           "enum": [
             "==",
@@ -26,18 +26,18 @@
             "not_contains",
             "in",
             "not_in",
-            "any_value",
-            "no_value"
+            "exists",
+            "not_exists"
           ],
           "description": "Comparison operator"
         },
         "value": {
-          "description": "Value to compare against (not required for any_value/no_value operators)"
+          "description": "Value to compare against (not required for exists/not_exists operators)"
         }
       },
       "required": [
         "attr",
-        "operator"
+        "op"
       ],
       "additionalProperties": false
     },
@@ -51,7 +51,7 @@
             "and",
             "or"
           ],
-          "description": "How to combine conditions (defaults vary by context: 'or' for adjacency/demands, 'and' for membership rules)"
+          "description": "How to combine conditions (defaults vary by context: 'or' for links/demands, 'and' for membership rules)"
         },
         "conditions": {
           "type": "array",
@@ -97,6 +97,165 @@
           "$ref": "#/$defs/nodeSelector"
         }
       ]
+    },
+    "expandBlock": {
+      "type": "object",
+      "description": "Variable expansion block",
+      "properties": {
+        "vars": {
+          "type": "object",
+          "description": "Variable substitutions using ${var} syntax",
+          "additionalProperties": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "cartesian",
+            "zip"
+          ],
+          "description": "How to combine variable lists (default: cartesian)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "linkProperties": {
+      "type": "object",
+      "description": "Common link properties (flattened, no wrapper)",
+      "properties": {
+        "capacity": {
+          "type": "number",
+          "description": "Link capacity"
+        },
+        "cost": {
+          "type": "number",
+          "description": "Link cost"
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Whether the link is disabled"
+        },
+        "risk_groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Risk groups this link belongs to"
+        },
+        "attrs": {
+          "type": "object",
+          "description": "Additional link attributes",
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "nodeDefinition": {
+      "type": "object",
+      "description": "Node definition - either single node, counted group, blueprint reference, or nested nodes",
+      "properties": {
+        "blueprint": {
+          "type": "string",
+          "description": "Blueprint to instantiate"
+        },
+        "params": {
+          "type": "object",
+          "description": "Parameters to pass to the blueprint"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of nodes to create (distinguishes group from single node)"
+        },
+        "template": {
+          "type": "string",
+          "description": "Name template using {n} placeholder for sequential numbering"
+        },
+        "nodes": {
+          "type": "object",
+          "description": "Nested child nodes (inline hierarchy without blueprints)",
+          "additionalProperties": {
+            "$ref": "#/$defs/nodeDefinition"
+          }
+        },
+        "attrs": {
+          "type": "object",
+          "description": "Node attributes"
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Whether the node is disabled"
+        },
+        "risk_groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Risk groups this node belongs to"
+        }
+      },
+      "additionalProperties": false
+    },
+    "linkDefinition": {
+      "type": "object",
+      "description": "Link definition with flattened properties",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/selectorOrString",
+          "description": "Source node selector or name"
+        },
+        "target": {
+          "$ref": "#/$defs/selectorOrString",
+          "description": "Target node selector or name"
+        },
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "mesh",
+            "one_to_one"
+          ],
+          "description": "Connection pattern between source and target sets"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of parallel links to create"
+        },
+        "capacity": {
+          "type": "number",
+          "description": "Link capacity"
+        },
+        "cost": {
+          "type": "number",
+          "description": "Link cost"
+        },
+        "disabled": {
+          "type": "boolean",
+          "description": "Whether the link is disabled"
+        },
+        "risk_groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Risk groups this link belongs to"
+        },
+        "attrs": {
+          "type": "object",
+          "description": "Additional link attributes",
+          "additionalProperties": true
+        },
+        "expand": {
+          "$ref": "#/$defs/expandBlock"
+        }
+      },
+      "required": [
+        "source",
+        "target"
+      ],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -129,257 +288,27 @@
         },
         "nodes": {
           "type": "object",
-          "description": "Node definitions",
-          "patternProperties": {
-            "^[a-zA-Z0-9_-]+$": {
-              "type": "object",
-              "properties": {
-                "attrs": {
-                  "type": "object",
-                  "description": "Node attributes. Supports 'hardware': {component, count} for node hardware component definition.",
-                  "properties": {
-                    "hardware": {
-                      "type": "object",
-                      "properties": {
-                        "component": {
-                          "type": "string"
-                        },
-                        "count": {
-                          "type": "number",
-                          "minimum": 0
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  },
-                  "additionalProperties": true
-                },
-                "disabled": {
-                  "type": "boolean",
-                  "description": "Whether the node is disabled"
-                },
-                "risk_groups": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "Risk groups this node belongs to"
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "additionalProperties": false
+          "description": "Node definitions (single nodes or counted groups distinguished by 'count' field)",
+          "additionalProperties": {
+            "$ref": "#/$defs/nodeDefinition"
+          }
         },
         "links": {
           "type": "array",
           "description": "Link definitions",
           "items": {
-            "type": "object",
-            "properties": {
-              "source": {
-                "type": "string",
-                "description": "Source node name"
-              },
-              "target": {
-                "type": "string",
-                "description": "Target node name"
-              },
-              "link_params": {
-                "type": "object",
-                "properties": {
-                  "capacity": {
-                    "type": "number",
-                    "description": "Link capacity"
-                  },
-                  "cost": {
-                    "type": "number",
-                    "description": "Link cost"
-                  },
-                  "disabled": {
-                    "type": "boolean",
-                    "description": "Whether the link is disabled"
-                  },
-                  "risk_groups": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Risk groups this link belongs to"
-                  },
-                  "attrs": {
-                    "type": "object",
-                    "description": "Additional link attributes. Supports per-end hardware under 'hardware': {source: {component, count, exclusive}, target: {component, count, exclusive}}",
-                    "properties": {
-                      "hardware": {
-                        "type": "object",
-                        "properties": {
-                          "source": {
-                            "type": "object",
-                            "properties": {
-                              "component": {
-                                "type": "string"
-                              },
-                              "count": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "exclusive": {
-                                "type": "boolean"
-                              }
-                            },
-                            "additionalProperties": false
-                          },
-                          "target": {
-                            "type": "object",
-                            "properties": {
-                              "component": {
-                                "type": "string"
-                              },
-                              "count": {
-                                "type": "number",
-                                "minimum": 0
-                              },
-                              "exclusive": {
-                                "type": "boolean"
-                              }
-                            },
-                            "additionalProperties": false
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "additionalProperties": true
-                  }
-                },
-                "additionalProperties": false
-              },
-              "link_count": {
-                "type": "integer",
-                "minimum": 1,
-                "description": "Number of parallel links to create"
-              }
-            },
-            "required": [
-              "source",
-              "target"
-            ],
-            "additionalProperties": false
+            "$ref": "#/$defs/linkDefinition"
           }
         },
-        "groups": {
-          "type": "object",
-          "description": "Node group definitions for blueprint expansion. NOTE: Runtime validation enforces that groups with 'use_blueprint' can only have {use_blueprint, parameters, attrs, disabled, risk_groups}, while groups without 'use_blueprint' can only have {node_count, name_template, attrs, disabled, risk_groups}.",
-          "patternProperties": {
-            "^[a-zA-Z0-9_\\[\\]-]+$": {
-              "type": "object",
-              "properties": {
-                "use_blueprint": {
-                  "type": "string"
-                },
-                "parameters": {
-                  "type": "object"
-                },
-                "node_count": {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                "name_template": {
-                  "type": "string"
-                },
-                "attrs": {
-                  "type": "object"
-                },
-                "disabled": {
-                  "type": "boolean"
-                },
-                "risk_groups": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "additionalProperties": false
-            }
-          }
-        },
-        "adjacency": {
+        "node_rules": {
           "type": "array",
-          "description": "Adjacency rules for blueprint expansion",
-          "items": {
-            "type": "object",
-            "properties": {
-              "source": {
-                "$ref": "#/$defs/selectorOrString"
-              },
-              "target": {
-                "$ref": "#/$defs/selectorOrString"
-              },
-              "pattern": {
-                "type": "string"
-              },
-              "link_count": {
-                "type": "integer",
-                "minimum": 1
-              },
-              "link_params": {
-                "type": "object",
-                "properties": {
-                  "capacity": {
-                    "type": "number"
-                  },
-                  "cost": {
-                    "type": "number"
-                  },
-                  "disabled": {
-                    "type": "boolean"
-                  },
-                  "risk_groups": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "attrs": {
-                    "type": "object"
-                  }
-                },
-                "additionalProperties": false
-              },
-              "expand_vars": {
-                "type": "object",
-                "description": "Variable substitutions using $var or ${var} syntax",
-                "additionalProperties": {
-                  "type": "array",
-                  "items": {}
-                }
-              },
-              "expansion_mode": {
-                "type": "string",
-                "enum": [
-                  "cartesian",
-                  "zip"
-                ],
-                "description": "How to combine expand_vars lists"
-              }
-            },
-            "required": [
-              "source",
-              "target"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "node_overrides": {
-          "type": "array",
-          "description": "Node override rules",
+          "description": "Node override rules (post-expansion)",
           "items": {
             "type": "object",
             "properties": {
               "path": {
-                "type": "string"
+                "type": "string",
+                "description": "Regex pattern on node.name"
               },
               "match": {
                 "$ref": "#/$defs/matchSpec"
@@ -395,14 +324,17 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "expand": {
+                "$ref": "#/$defs/expandBlock"
               }
             },
             "additionalProperties": false
           }
         },
-        "link_overrides": {
+        "link_rules": {
           "type": "array",
-          "description": "Link override rules",
+          "description": "Link override rules (post-expansion)",
           "items": {
             "type": "object",
             "properties": {
@@ -412,32 +344,34 @@
               "target": {
                 "$ref": "#/$defs/selectorOrString"
               },
-              "any_direction": {
+              "bidirectional": {
+                "type": "boolean",
+                "description": "Whether to match links in both directions"
+              },
+              "link_match": {
+                "$ref": "#/$defs/matchSpec",
+                "description": "Filter by the link's own attributes"
+              },
+              "capacity": {
+                "type": "number"
+              },
+              "cost": {
+                "type": "number"
+              },
+              "disabled": {
                 "type": "boolean"
               },
-              "link_params": {
-                "type": "object",
-                "properties": {
-                  "capacity": {
-                    "type": "number"
-                  },
-                  "cost": {
-                    "type": "number"
-                  },
-                  "disabled": {
-                    "type": "boolean"
-                  },
-                  "risk_groups": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "attrs": {
-                    "type": "object"
-                  }
-                },
-                "additionalProperties": false
+              "risk_groups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "attrs": {
+                "type": "object"
+              },
+              "expand": {
+                "$ref": "#/$defs/expandBlock"
               }
             },
             "additionalProperties": false
@@ -449,123 +383,26 @@
     "blueprints": {
       "type": "object",
       "description": "Reusable network blueprint definitions",
-      "patternProperties": {
-        "^[a-zA-Z0-9_-]+$": {
-          "type": "object",
-          "properties": {
-            "groups": {
-              "type": "object",
-              "description": "Node group definitions for blueprint expansion.",
-              "patternProperties": {
-                "^[a-zA-Z0-9_\\[\\]-]+$": {
-                  "type": "object",
-                  "properties": {
-                    "use_blueprint": {
-                      "type": "string"
-                    },
-                    "parameters": {
-                      "type": "object"
-                    },
-                    "node_count": {
-                      "type": "integer",
-                      "minimum": 1
-                    },
-                    "name_template": {
-                      "type": "string"
-                    },
-                    "attrs": {
-                      "type": "object"
-                    },
-                    "disabled": {
-                      "type": "boolean"
-                    },
-                    "risk_groups": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    }
-                  },
-                  "additionalProperties": false
-                }
-              },
-              "additionalProperties": false
-            },
-            "adjacency": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "source": {
-                    "$ref": "#/$defs/selectorOrString"
-                  },
-                  "target": {
-                    "$ref": "#/$defs/selectorOrString"
-                  },
-                  "pattern": {
-                    "type": "string",
-                    "enum": [
-                      "mesh",
-                      "one_to_one"
-                    ]
-                  },
-                  "link_count": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "link_params": {
-                    "type": "object",
-                    "properties": {
-                      "capacity": {
-                        "type": "number"
-                      },
-                      "cost": {
-                        "type": "number"
-                      },
-                      "disabled": {
-                        "type": "boolean"
-                      },
-                      "risk_groups": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "attrs": {
-                        "type": "object"
-                      }
-                    },
-                    "additionalProperties": false
-                  },
-                  "expand_vars": {
-                    "type": "object",
-                    "description": "Variable substitutions using $var or ${var} syntax",
-                    "additionalProperties": {
-                      "type": "array",
-                      "items": {}
-                    }
-                  },
-                  "expansion_mode": {
-                    "type": "string",
-                    "enum": [
-                      "cartesian",
-                      "zip"
-                    ],
-                    "description": "How to combine expand_vars lists"
-                  }
-                },
-                "required": [
-                  "source",
-                  "target"
-                ],
-                "additionalProperties": false
-              }
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "object",
+            "description": "Node definitions within the blueprint",
+            "additionalProperties": {
+              "$ref": "#/$defs/nodeDefinition"
             }
           },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
+          "links": {
+            "type": "array",
+            "description": "Link definitions within the blueprint",
+            "items": {
+              "$ref": "#/$defs/linkDefinition"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "risk_groups": {
       "type": "array",
@@ -574,10 +411,11 @@
         "oneOf": [
           {
             "type": "string",
-            "description": "String shorthand for simple risk group (equivalent to {name: 'GroupName'})"
+            "description": "String shorthand for simple risk group"
           },
           {
             "type": "object",
+            "description": "Full risk group definition",
             "properties": {
               "name": {
                 "type": "string",
@@ -602,7 +440,7 @@
                 "type": "object",
                 "description": "Policy-based membership rule for auto-assigning entities to this risk group",
                 "properties": {
-                  "entity_scope": {
+                  "scope": {
                     "type": "string",
                     "enum": [
                       "node",
@@ -611,66 +449,18 @@
                     ],
                     "description": "Type of entities to match"
                   },
+                  "path": {
+                    "type": "string",
+                    "description": "Regex filter on entity name"
+                  },
                   "match": {
-                    "type": "object",
-                    "description": "Match specification",
-                    "properties": {
-                      "logic": {
-                        "type": "string",
-                        "enum": [
-                          "and",
-                          "or"
-                        ],
-                        "description": "How to combine conditions (defaults to 'and' for membership rules)"
-                      },
-                      "conditions": {
-                        "type": "array",
-                        "description": "List of conditions to match",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "attr": {
-                              "type": "string",
-                              "description": "Attribute name (supports dot-notation for nested attrs)"
-                            },
-                            "operator": {
-                              "type": "string",
-                              "enum": [
-                                "==",
-                                "!=",
-                                ">",
-                                "<",
-                                ">=",
-                                "<=",
-                                "contains",
-                                "not_contains",
-                                "in",
-                                "not_in",
-                                "any_value",
-                                "no_value"
-                              ],
-                              "description": "Comparison operator"
-                            },
-                            "value": {
-                              "description": "Value to compare against"
-                            }
-                          },
-                          "required": [
-                            "attr",
-                            "operator"
-                          ]
-                        }
-                      }
-                    },
-                    "required": [
-                      "conditions"
-                    ]
+                    "$ref": "#/$defs/matchSpec"
                   }
                 },
                 "required": [
-                  "entity_scope",
-                  "match"
-                ]
+                  "scope"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -686,21 +476,25 @@
                 "type": "object",
                 "description": "Generate risk groups from unique attribute values",
                 "properties": {
-                  "entity_scope": {
+                  "scope": {
                     "type": "string",
                     "enum": [
                       "node",
                       "link"
                     ],
-                    "description": "Type of entities to group (node or link only, not risk_group)"
+                    "description": "Type of entities to group (node or link only)"
                   },
                   "group_by": {
                     "type": "string",
                     "description": "Attribute name to group by (supports dot-notation)"
                   },
-                  "name_template": {
+                  "name": {
                     "type": "string",
                     "description": "Template for generated group names. Use ${value} as placeholder"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Regex filter on entity name"
                   },
                   "attrs": {
                     "type": "object",
@@ -708,10 +502,11 @@
                   }
                 },
                 "required": [
-                  "entity_scope",
+                  "scope",
                   "group_by",
-                  "name_template"
-                ]
+                  "name"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -722,250 +517,223 @@
         ]
       }
     },
-    "failure_policy_set": {
+    "failures": {
       "type": "object",
       "description": "Named failure policies for simulation",
-      "patternProperties": {
-        "^[a-zA-Z0-9_-]+$": {
-          "type": "object",
-          "properties": {
-            "attrs": {
-              "type": "object",
-              "description": "Policy metadata"
-            },
-            "fail_risk_groups": {
-              "type": "boolean",
-              "description": "Whether to fail risk groups"
-            },
-            "fail_risk_group_children": {
-              "type": "boolean",
-              "description": "Whether to recursively fail risk group children"
-            },
-            "modes": {
-              "type": "array",
-              "description": "Weighted mode list; exactly one mode is chosen per iteration.",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "weight": {
-                    "type": "number",
-                    "minimum": 0
-                  },
-                  "attrs": {
-                    "type": "object"
-                  },
-                  "rules": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "entity_scope": {
-                          "type": "string",
-                          "enum": [
-                            "node",
-                            "link",
-                            "risk_group"
-                          ],
-                          "description": "What entities this rule applies to"
-                        },
-                        "conditions": {
-                          "type": "array",
-                          "description": "Conditions that must be met",
-                          "items": {
-                            "$ref": "#/$defs/condition"
-                          }
-                        },
-                        "logic": {
-                          "type": "string",
-                          "enum": [
-                            "and",
-                            "or"
-                          ],
-                          "description": "Logic for combining conditions"
-                        },
-                        "rule_type": {
-                          "type": "string",
-                          "enum": [
-                            "all",
-                            "choice",
-                            "random"
-                          ],
-                          "description": "How to apply the rule"
-                        },
-                        "probability": {
-                          "type": "number",
-                          "minimum": 0,
-                          "maximum": 1,
-                          "description": "Probability for random rule type"
-                        },
-                        "count": {
-                          "type": "integer",
-                          "minimum": 1,
-                          "description": "Number of entities to affect for choice rule type"
-                        },
-                        "weight_by": {
-                          "type": "string",
-                          "description": "Attribute name used for weighted sampling in choice mode"
-                        }
-                      },
-                      "additionalProperties": false
-                    }
-                  }
-                },
-                "required": [
-                  "weight",
-                  "rules"
-                ],
-                "additionalProperties": false
-              }
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
-    "traffic_matrix_set": {
-      "type": "object",
-      "description": "Named traffic demand matrices",
-      "patternProperties": {
-        "^[a-zA-Z0-9_-]+$": {
-          "type": "array",
-          "description": "List of traffic demands",
-          "items": {
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "attrs": {
             "type": "object",
-            "properties": {
-              "source": {
-                "$ref": "#/$defs/selectorOrString",
-                "description": "Source node selector"
-              },
-              "sink": {
-                "$ref": "#/$defs/selectorOrString",
-                "description": "Sink node selector"
-              },
-              "demand": {
-                "type": "number",
-                "description": "Traffic demand amount"
-              },
-              "priority": {
-                "type": "integer",
-                "description": "Priority class"
-              },
-              "demand_placed": {
-                "type": "number",
-                "description": "Pre-placed demand amount"
-              },
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "combine",
-                  "pairwise"
-                ],
-                "description": "Expansion mode"
-              },
-              "group_mode": {
-                "type": "string",
-                "enum": [
-                  "flatten",
-                  "per_group",
-                  "group_pairwise"
-                ],
-                "description": "How grouped nodes produce demands"
-              },
-              "expand_vars": {
-                "type": "object",
-                "description": "Variable substitutions using $var or ${var} syntax",
-                "additionalProperties": {
-                  "type": "array"
+            "description": "Policy metadata"
+          },
+          "expand_groups": {
+            "type": "boolean",
+            "description": "Whether to fail risk groups"
+          },
+          "expand_children": {
+            "type": "boolean",
+            "description": "Whether to recursively fail risk group children"
+          },
+          "modes": {
+            "type": "array",
+            "description": "Weighted mode list; exactly one mode is chosen per iteration.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weight": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "attrs": {
+                  "type": "object"
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "enum": [
+                          "node",
+                          "link",
+                          "risk_group"
+                        ],
+                        "description": "What entities this rule applies to"
+                      },
+                      "path": {
+                        "type": "string",
+                        "description": "Regex filter on entity name"
+                      },
+                      "match": {
+                        "$ref": "#/$defs/matchSpec"
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "all",
+                          "choice",
+                          "random"
+                        ],
+                        "description": "How to apply the rule"
+                      },
+                      "probability": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Probability for random mode"
+                      },
+                      "count": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Number of entities to affect for choice mode"
+                      },
+                      "weight_by": {
+                        "type": "string",
+                        "description": "Attribute name used for weighted sampling in choice mode"
+                      }
+                    },
+                    "required": [
+                      "scope"
+                    ],
+                    "additionalProperties": false
+                  }
                 }
               },
-              "expansion_mode": {
-                "type": "string",
-                "enum": [
-                  "cartesian",
-                  "zip"
-                ]
-              },
-              "flow_policy_config": {
-                "description": "Routing policy config",
-                "oneOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "integer"
-                  },
-                  {
-                    "type": "object"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "flow_policy": {
-                "type": "object",
-                "description": "Inline FlowPolicy definition"
-              },
-              "attrs": {
-                "type": "object",
-                "description": "Additional demand attributes"
-              }
-            },
-            "additionalProperties": false
+              "required": [
+                "weight",
+                "rules"
+              ],
+              "additionalProperties": false
+            }
           }
+        },
+        "additionalProperties": false
+      }
+    },
+    "demands": {
+      "type": "object",
+      "description": "Named traffic demand sets",
+      "additionalProperties": {
+        "type": "array",
+        "description": "List of traffic demands",
+        "items": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/selectorOrString",
+              "description": "Source node selector"
+            },
+            "target": {
+              "$ref": "#/$defs/selectorOrString",
+              "description": "Target node selector"
+            },
+            "volume": {
+              "type": "number",
+              "description": "Traffic demand volume"
+            },
+            "priority": {
+              "type": "integer",
+              "description": "Priority class"
+            },
+            "demand_placed": {
+              "type": "number",
+              "description": "Pre-placed demand volume"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "combine",
+                "pairwise"
+              ],
+              "description": "Expansion mode for source/target pairs"
+            },
+            "group_mode": {
+              "type": "string",
+              "enum": [
+                "flatten",
+                "per_group",
+                "group_pairwise"
+              ],
+              "description": "How grouped nodes produce demands"
+            },
+            "expand": {
+              "$ref": "#/$defs/expandBlock"
+            },
+            "flow_policy": {
+              "description": "Routing policy configuration (preset name or inline object)",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attrs": {
+              "type": "object",
+              "description": "Additional demand attributes"
+            }
+          },
+          "required": [
+            "source",
+            "target"
+          ],
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      }
     },
     "components": {
       "type": "object",
-      "description": "Hardware component library",
-      "patternProperties": {
-        "^[a-zA-Z0-9_\\-\\+]+$": {
-          "type": "object",
-          "properties": {
-            "component_type": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "capex": {
-              "type": "number"
-            },
-            "power_watts": {
-              "type": "number"
-            },
-            "power_watts_max": {
-              "type": "number"
-            },
-            "capacity": {
-              "type": "number"
-            },
-            "ports": {
-              "type": "integer"
-            },
-            "count": {
-              "type": "integer"
-            },
-            "attrs": {
-              "type": "object"
-            },
-            "children": {
-              "type": "object",
-              "patternProperties": {
-                "^[a-zA-Z0-9_\\-\\+]+$": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
+      "description": "Hardware component library (preserved as-is)",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "component_type": {
+            "type": "string"
           },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
+          "description": {
+            "type": "string"
+          },
+          "capex": {
+            "type": "number"
+          },
+          "power_watts": {
+            "type": "number"
+          },
+          "power_watts_max": {
+            "type": "number"
+          },
+          "capacity": {
+            "type": "number"
+          },
+          "ports": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "attrs": {
+            "type": "object"
+          },
+          "children": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": false
+      }
     },
     "workflow": {
       "type": "array",
@@ -973,9 +741,9 @@
       "items": {
         "type": "object",
         "properties": {
-          "step_type": {
+          "type": {
             "type": "string",
-            "description": "Type of workflow step"
+            "description": "Type of workflow step (BuildGraph, NetworkStats, MaxFlow, TrafficMatrixPlacement, MaximumSupportedDemand, CostPower)"
           },
           "name": {
             "type": "string",
@@ -985,13 +753,24 @@
             "$ref": "#/$defs/selectorOrString",
             "description": "Source node selector"
           },
-          "sink": {
+          "target": {
             "$ref": "#/$defs/selectorOrString",
-            "description": "Sink node selector"
+            "description": "Target node selector"
+          },
+          "demand_set": {
+            "type": "string",
+            "description": "Name of demand set to use"
+          },
+          "failure_policy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of failure policy to use (optional)"
           }
         },
         "required": [
-          "step_type"
+          "type"
         ],
         "additionalProperties": true
       }

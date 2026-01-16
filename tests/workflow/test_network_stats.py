@@ -140,7 +140,3 @@ def test_network_stats_with_exclusions(mock_scenario):
     # Should exclude node A and its links
     assert data["node_count"] == 2  # B, C (excluding A)
     assert data["link_count"] == 0  # All links connect to A, so none remain
-
-
-# (Removed backward-compatibility param duplication; covered by explicit
-# include_disabled default behavior in other tests.)

@@ -134,11 +134,11 @@ class TestScenario1:
         helper.validate_traffic_demands(expected_count=4)
 
         # Verify specific demands from the YAML
-        default_demands = helper.scenario.traffic_matrix_set.get_default_matrix()
+        default_demands = helper.scenario.demand_set.get_default_set()
 
         # Convert to a more testable format
         demands_dict = {
-            (demand.source, demand.sink): demand.demand for demand in default_demands
+            (demand.source, demand.target): demand.volume for demand in default_demands
         }
 
         expected_demands = {
@@ -169,8 +169,8 @@ class TestScenario1:
         rule = policy.modes[0].rules[0]
 
         assert rule.logic == "or", f"Expected rule logic 'or', found '{rule.logic}'"
-        assert rule.rule_type == "choice", (
-            f"Expected rule type 'choice', found '{rule.rule_type}'"
+        assert rule.mode == "choice", (
+            f"Expected rule type 'choice', found '{rule.mode}'"
         )
         assert rule.count == 1, f"Expected rule count 1, found {rule.count}"
 

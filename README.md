@@ -2,80 +2,24 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-Scenario-driven network modeling and analysis framework combining Python's flexibility with high-performance C++ algorithms.
+Network modeling and analysis framework combining Python with high-performance C++ graph algorithms.
 
-## Overview
+## What It Does
 
-NetGraph enables declarative modeling of network topologies, traffic matrices, and failure scenarios. It delegates computationally intensive graph algorithms to [NetGraph-Core](https://github.com/networmix/NetGraph-Core) while providing a rich Python API and CLI for orchestration.
+NetGraph lets you model network topologies, traffic demands, and failure scenarios - then analyze capacity and resilience. Define networks in Python or declarative YAML, run max-flow and failure simulations, and export reproducible JSON results. Compute-intensive algorithms run in C++ with the GIL released.
 
-## Architecture
-
-NetGraph employs a **hybrid Python+C++ architecture**:
-
-- **Python layer (NetGraph)**: Scenario DSL parsing, workflow orchestration, result aggregation, and high-level APIs.
-- **C++ layer (NetGraph-Core)**: Performance-critical graph algorithms (SPF, KSP, Max-Flow) executing in optimized C++ with the GIL released.
-
-## Key Features
-
-### 1. Modeling & DSL
-
-- **Declarative Scenarios**: Define topology, traffic, and workflows in validated YAML.
-- **Blueprints**: Reusable topology templates (e.g., Clos fabrics, regions) with parameterized expansion.
-- **Strict Multigraph**: Deterministic graph representation with stable edge IDs.
-
-### 2. Failure Analysis
-
-- **Policy Engine**: Weighted failure modes with multiple policy rules per mode.
-- **Non-Destructive**: Runtime exclusions simulate failures without modifying the base topology.
-- **Risk Groups**: Model shared fate (e.g., fiber cuts, power zones).
-
-### 3. Traffic Engineering
-
-- **Routing Modes**: Unified modeling of **IP Routing** (static costs, oblivious to congestion) and **Traffic Engineering** (dynamic residuals, congestion-aware).
-- **Flow Placement**: Strategies for **ECMP** (Equal-Cost Multi-Path) and **WCMP** (Weighted Cost Multi-Path).
-- **Capacity Analysis**: Compute max-flow envelopes and demand allocation with configurable placement policies.
-
-### 4. Workflow & Integration
-
-- **Structured Results**: Export analysis artifacts to JSON for downstream processing.
-- **CLI**: Comprehensive command-line interface for validation and execution.
-- **Python API**: Full programmatic access to all modeling and solving capabilities.
-
-## Installation
-
-### From PyPI
+## Install
 
 ```bash
 pip install ngraph
 ```
 
-### From Source
-
-```bash
-git clone https://github.com/networmix/NetGraph
-cd NetGraph
-make dev    # Install in editable mode with dev dependencies
-make check  # Run full test suite
-```
-
-## Quick Start
-
-### CLI Usage
-
-```bash
-# Validate and inspect a scenario
-ngraph inspect scenarios/backbone_clos.yml --detail
-
-# Run analysis workflow
-ngraph run scenarios/backbone_clos.yml --results clos.results.json
-```
-
-### Python API
+## Python API
 
 ```python
 from ngraph import Network, Node, Link, analyze, Mode
 
-# Build network programmatically
+# Build a simple network
 network = Network()
 network.add_node(Node("A"))
 network.add_node(Node("B"))
@@ -83,19 +27,14 @@ network.add_node(Node("C"))
 network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
 network.add_link(Link("B", "C", capacity=10.0, cost=1.0))
 
-# Compute max flow with the analyze() API
-flow = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-print(f"Max flow: {flow}")  # {('^A$', '^C$'): 10.0}
-
-# Efficient repeated analysis with bound context
-ctx = analyze(network, source="^A$", sink="^C$", mode=Mode.COMBINE)
-baseline = ctx.max_flow()
-degraded = ctx.max_flow(excluded_nodes={"B"})  # Test failure scenario
+# Compute max flow
+result = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+print(result)  # {('^A$', '^C$'): 10.0}
 ```
 
-## Example Scenario
+## Scenario DSL
 
-NetGraph scenarios define topology, configuration, and analysis steps in a unified YAML file. This example demonstrates **blueprints** for modular topology definition:
+For reproducible analysis workflows, define topology, traffic, demands, and failure policies in YAML:
 
 ```yaml
 seed: 42
@@ -103,89 +42,101 @@ seed: 42
 # Define reusable topology templates
 blueprints:
   Clos_Fabric:
-    groups:
-      spine: {node_count: 2, name_template: "spine{node_num}"}
-      leaf:  {node_count: 4, name_template: "leaf{node_num}"}
-    adjacency:
-    - source: /leaf
-      target: /spine
-      pattern: mesh
-      link_params: {capacity: 100, cost: 1}
-    - source: /spine
-      target: /leaf
-      pattern: mesh
-      link_params: {capacity: 100, cost: 1}
+    nodes:
+      spine: { count: 2, template: "spine{n}" }
+      leaf: { count: 4, template: "leaf{n}" }
+    links:
+      - source: /leaf
+        target: /spine
+        pattern: mesh
+        capacity: 100
+        cost: 1
+      - source: /spine
+        target: /leaf
+        pattern: mesh
+        capacity: 100
+        cost: 1
 
 # Instantiate network from templates
 network:
-  groups:
-    site1: {use_blueprint: Clos_Fabric}
-    site2: {use_blueprint: Clos_Fabric}
-  adjacency:
-  - source: {path: site1/spine}
-    target: {path: site2/spine}
-    pattern: one_to_one
-    link_params: {capacity: 50, cost: 10}
+  nodes:
+    site1: { blueprint: Clos_Fabric }
+    site2: { blueprint: Clos_Fabric }
+  links:
+    - source: { path: site1/spine }
+      target: { path: site2/spine }
+      pattern: one_to_one
+      capacity: 50
+      cost: 10
 
-# Define traffic matrix
-traffic_matrix_set:
+# Define failure policy for Monte Carlo analysis
+failures:
+  random_link:
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+
+# Define traffic demands
+demands:
   global_traffic:
     - source: ^site1/leaf/
-      sink: ^site2/leaf/
-      demand: 100.0
+      target: ^site2/leaf/
+      volume: 100.0
       mode: combine
-      flow_policy_config: SHORTEST_PATHS_ECMP
+      flow_policy: SHORTEST_PATHS_ECMP
 
-# Define analysis workflow
+# Analysis workflow: find max capacity, then test under failures
 workflow:
-- step_type: NetworkStats
-  name: stats
-- step_type: MaxFlow
-  name: site_capacity
-  source: ^site1/leaf/
-  sink: ^site2/leaf/
-  mode: combine
-  shortest_path: false
-- step_type: MaximumSupportedDemand
-  name: max_demand
-  matrix_name: global_traffic
+  - type: NetworkStats
+    name: stats
+  - type: MaxFlow
+    name: site_capacity
+    source: ^site1/leaf/
+    target: ^site2/leaf/
+    mode: combine
+  - type: MaximumSupportedDemand
+    name: max_demand
+    demand_set: global_traffic
+  - type: TrafficMatrixPlacement
+    name: placement_at_max
+    demand_set: global_traffic
+    alpha_from_step: max_demand # Use alpha_star from MSD step
+    failure_policy: random_link
+    iterations: 100
 ```
-
-## Repository Structure
-
-```text
-ngraph/             # Python package source
-  dsl/              # Scenario parsing and blueprint expansion
-  model/            # Network and flow domain models
-  solver/           # Algorithms and Core wrappers
-  workflow/         # Analysis steps and orchestration
-scenarios/          # Example scenario definitions
-tests/              # Pytest suite (unit and integration)
-docs/               # Documentation source (MkDocs)
-dev/                # Development tools and scripts
-```
-
-## Development
 
 ```bash
-make dev        # Setup environment
-make check      # Run tests and linting
-make lint       # Run linting only
-make test       # Run tests only
-make docs-serve # Preview documentation
+ngraph run scenario.yml --output results/
 ```
 
-## Requirements
+This scenario builds a dual-site Clos fabric from blueprints, finds the maximum supportable demand, then runs 100 Monte Carlo iterations with random link failures - exporting results to JSON.
 
-- **Python**: 3.9+
-- **NetGraph-Core**: Compatible C++ backend version
+See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/) for more.
+
+## Capabilities
+
+- **Declarative scenarios** with schema validation, reusable blueprints, and strict multigraph representation
+- **Failure analysis** via policy engine with weighted modes, risk groups, and non-destructive runtime exclusions
+- **Routing modes** for IP routing (cost-based) and traffic engineering (capacity-aware)
+- **Flow placement** strategies for ECMP and WCMP with max-flow and capacity envelopes
+- **Reproducible results** via seeded randomness and stable edge IDs
+- **C++ performance** with GIL released via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
 
 ## Documentation
 
-- **Site**: [networmix.github.io/NetGraph](https://networmix.github.io/NetGraph/)
-- **Tutorial**: [Getting Started](https://networmix.github.io/NetGraph/getting-started/tutorial/)
-- **Reference**: [API](https://networmix.github.io/NetGraph/reference/api/) | [CLI](https://networmix.github.io/NetGraph/reference/cli/) | [DSL](https://networmix.github.io/NetGraph/reference/dsl/)
+- [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/) - Getting started guide
+- [**Examples**](https://networmix.github.io/NetGraph/examples/clos-fabric/) - Clos fabric, failure analysis, and more
+- [**DSL Reference**](https://networmix.github.io/NetGraph/reference/dsl/) - YAML scenario syntax
+- [**API Reference**](https://networmix.github.io/NetGraph/reference/api/) - Python API docs
 
 ## License
 
 [GNU Affero General Public License v3.0 or later](LICENSE)
+
+## Requirements
+
+- Python 3.11+
+- NetGraph-Core (installed automatically)

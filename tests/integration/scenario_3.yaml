@@ -4,90 +4,84 @@ seed: 3003
 
 blueprints:
   brick_2tier:
-    groups:
+    nodes:
       t1:
-        node_count: 4
-        name_template: t1-{node_num}
+        count: 4
+        template: t1-{n}
       t2:
-        node_count: 4
-        name_template: t2-{node_num}
+        count: 4
+        template: t2-{n}
 
-    adjacency:
+    links:
       - source: /t1
         target: /t2
         pattern: mesh
-        link_params:
-          capacity: 100.0 # 100 Gb/s tier1-tier2 links
-          cost: 1
+        capacity: 100.0 # 100 Gb/s tier1-tier2 links
+        cost: 1
 
   3tier_clos:
-    groups:
+    nodes:
       b1:
-        use_blueprint: brick_2tier
+        blueprint: brick_2tier
       b2:
-        use_blueprint: brick_2tier
+        blueprint: brick_2tier
       spine:
-        node_count: 16
-        name_template: t3-{node_num}
+        count: 16
+        template: t3-{n}
 
-    adjacency:
+    links:
       - source: b1/t2
         target: spine
         pattern: one_to_one
-        link_params:
-          capacity: 400.0 # 400 Gb/s tier2-spine links
-          cost: 1
+        capacity: 400.0 # 400 Gb/s tier2-spine links
+        cost: 1
       - source: b2/t2
         target: spine
         pattern: one_to_one
-        link_params:
-          capacity: 400.0 # 400 Gb/s tier2-spine links
-          cost: 1
+        capacity: 400.0 # 400 Gb/s tier2-spine links
+        cost: 1
 
 network:
   name: "3tier_clos_network"
   version: 1.0
 
-  groups:
+  nodes:
     my_clos1:
-      use_blueprint: 3tier_clos
+      blueprint: 3tier_clos
 
     my_clos2:
-      use_blueprint: 3tier_clos
+      blueprint: 3tier_clos
 
-  adjacency:
+  links:
     - source: my_clos1/spine
       target: my_clos2/spine
       pattern: one_to_one
-      link_params:
-        capacity: 400.0 # 400 Gb/s inter-Clos spine links
-        cost: 1
+      capacity: 400.0 # 400 Gb/s inter-Clos spine links
+      cost: 1
 
-  link_overrides:
+  link_rules:
     # Overriding a link between two spine devices.
     - source: my_clos1/spine/t3-1$
       target: my_clos2/spine/t3-1$
-      link_params:
-        capacity: 200.0 # Override capacity to 200 Gb/s
-        cost: 1
+      capacity: 200.0 # Override capacity to 200 Gb/s
+      cost: 1
 
     # Set fiber conduit risk groups and hw_component on all spine to spine links
     # These inter-clos links traverse a fiber conduit between buildings
     - source: .*/spine/.*
       target: .*/spine/.*
-      any_direction: True
-      link_params:
-        risk_groups: ["Conduit_InterClos_C1"]
-        attrs:
-          fiber:
-            conduit_id: "InterClos-C1"
-            path_id: "Clos1-Clos2"
-          hardware:
-            source: {component: "400G-LR4", count: 1}
-            target: {component: "400G-LR4", count: 1}
+      bidirectional: True
+      risk_groups: ["Conduit_InterClos_C1"]
+      attrs:
+        fiber:
+          conduit_id: "InterClos-C1"
+          path_id: "Clos1-Clos2"
+        hardware:
+          source: {component: "400G-LR4", count: 1}
+          target: {component: "400G-LR4", count: 1}
 
   # Node overrides for facility-based risk groups
-  node_overrides:
+  node_rules:
     - path: my_clos1/b1/t1
       risk_groups: ["PowerZone_Clos1_B1_PZA"]
       attrs:
@@ -163,14 +157,14 @@ risk_groups:
         room_id: "Spine"
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 
   # Forward direction analysis - equivalent to capacity_probe
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: capacity_analysis_forward
     source: my_clos1/b.*/t1
-    sink: my_clos2/b.*/t1
+    target: my_clos2/b.*/t1
     mode: combine
     shortest_path: true
     flow_placement: PROPORTIONAL
@@ -178,10 +172,10 @@ workflow:
     failure_policy: null
 
   # Reverse direction analysis - equivalent to capacity_probe with probe_reverse
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: capacity_analysis_reverse
     source: my_clos2/b.*/t1
-    sink: my_clos1/b.*/t1
+    target: my_clos1/b.*/t1
     mode: combine
     shortest_path: true
     flow_placement: PROPORTIONAL
@@ -189,10 +183,10 @@ workflow:
     failure_policy: null
 
   # Forward direction with EQUAL_BALANCED - equivalent to capacity_probe2
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: capacity_analysis_forward_balanced
     source: my_clos1/b.*/t1
-    sink: my_clos2/b.*/t1
+    target: my_clos2/b.*/t1
     mode: combine
     shortest_path: true
     flow_placement: EQUAL_BALANCED
@@ -200,10 +194,10 @@ workflow:
     failure_policy: null
 
   # Reverse direction with EQUAL_BALANCED - equivalent to capacity_probe2 with probe_reverse
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: capacity_analysis_reverse_balanced
     source: my_clos2/b.*/t1
-    sink: my_clos1/b.*/t1
+    target: my_clos1/b.*/t1
     mode: combine
     shortest_path: true
     flow_placement: EQUAL_BALANCED

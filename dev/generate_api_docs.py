@@ -199,7 +199,7 @@ def discover_modules():
 
     # Sort modules in logical order for documentation
     def module_sort_key(module_name):
-        """Sort key to organize modules logically after refactor."""
+        """Sort key to organize modules in logical documentation order."""
         parts = module_name.split(".")
         # Main ngraph modules first (ngraph.xxx)
         if len(parts) == 2:

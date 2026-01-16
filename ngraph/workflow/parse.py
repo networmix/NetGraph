@@ -22,7 +22,7 @@ def build_workflow_steps(
     """Instantiate workflow steps from normalized dictionaries.
 
     Args:
-        workflow_data: List of step dicts; each must have "step_type".
+        workflow_data: List of step dicts; each must have "type".
         derive_seed: Callable that takes a step name and returns a seed or None.
 
     Returns:
@@ -35,18 +35,18 @@ def build_workflow_steps(
     assigned_names: set[str] = set()
 
     for step_index, step_info in enumerate(workflow_data):
-        step_type = step_info.get("step_type")
+        step_type = step_info.get("type")
         if not step_type:
             raise ValueError(
-                "Each workflow entry must have a 'step_type' field "
+                "Each workflow entry must have a 'type' field "
                 "indicating the WorkflowStep subclass to use."
             )
 
         step_cls = WORKFLOW_STEP_REGISTRY.get(step_type)
         if not step_cls:
-            raise ValueError(f"Unrecognized 'step_type': {step_type}")
+            raise ValueError(f"Unrecognized step 'type': {step_type}")
 
-        ctor_args = {k: v for k, v in step_info.items() if k != "step_type"}
+        ctor_args = {k: v for k, v in step_info.items() if k != "type"}
         normalized_ctor_args = normalize_yaml_dict_keys(ctor_args)
 
         raw_name = normalized_ctor_args.get("name")

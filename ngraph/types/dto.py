@@ -1,6 +1,6 @@
 """Types and data structures for algorithm analytics.
 
-Defines immutable summary containers and aliases for algorithm outputs.
+Defines immutable summary containers for algorithm outputs.
 """
 
 from __future__ import annotations

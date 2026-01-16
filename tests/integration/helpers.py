@@ -50,14 +50,14 @@ class NetworkExpectations:
     specific network elements, and blueprint expansion results.
 
     Attributes:
-        node_count: Expected total number of nodes in the final network
+        count: Expected total number of nodes in the final network
         edge_count: Expected total number of directed edges (links * 2 for bidirectional)
         specific_nodes: Set of specific node names that must be present
         specific_links: List of (source, target) tuples that must exist as links
         blueprint_expansions: Dict mapping blueprint paths to expected node counts
     """
 
-    node_count: int
+    count: int
     edge_count: int
     specific_nodes: Optional[Set[str]] = None
     specific_links: Optional[List[Tuple[str, str]]] = None
@@ -152,8 +152,8 @@ class ScenarioTestHelper:
 
         # Validate node count with detailed context
         actual_nodes = len(self.graph.nodes)
-        assert actual_nodes == expectations.node_count, (
-            f"Network node count mismatch: expected {expectations.node_count}, "
+        assert actual_nodes == expectations.count, (
+            f"Network node count mismatch: expected {expectations.count}, "
             f"found {actual_nodes}. "
             f"Graph nodes: {sorted(list(self.graph.nodes)[:10])}{'...' if actual_nodes > 10 else ''}"
         )
@@ -239,12 +239,12 @@ class ScenarioTestHelper:
         Raises:
             AssertionError: If traffic demand count doesn't match expectations
         """
-        default_demands = self.scenario.traffic_matrix_set.get_default_matrix()
+        default_demands = self.scenario.demand_set.get_default_set()
         actual_count = len(default_demands)
 
         assert actual_count == expected_count, (
             f"Traffic demand count mismatch: expected {expected_count}, found {actual_count}. "
-            f"Demands: {[(d.source, d.sink, d.demand) for d in default_demands[:5]]}"
+            f"Demands: {[(d.source, d.target, d.volume) for d in default_demands[:5]]}"
             f"{'...' if actual_count > 5 else ''}"
         )
 
@@ -283,7 +283,7 @@ class ScenarioTestHelper:
         # Validate rule scopes if specified
         if expected_scopes:
             actual_scopes = [
-                rule.entity_scope
+                rule.scope
                 for mode in getattr(policy, "modes", [])
                 for rule in mode.rules
             ]
@@ -382,15 +382,7 @@ class ScenarioTestHelper:
         """
         exported = self.scenario.results.to_dict()
         step_data = exported.get("steps", {}).get(step_name, {}).get("data", {})
-        # Prefer direct key
         actual_flow = step_data.get(flow_label)
-        # Fallback: if flow_results list present, try summary.total_placed
-        if actual_flow is None and flow_label == "total_placed":
-            flow_results = step_data.get("flow_results", [])
-            if flow_results:
-                actual_flow = float(
-                    flow_results[0].get("summary", {}).get("total_placed", 0.0)
-                )
         assert actual_flow is not None, (
             f"Flow result '{flow_label}' not found for step '{step_name}'"
         )
@@ -531,8 +523,8 @@ class ScenarioDataBuilder:
         """Initialize empty scenario data with basic structure."""
         self.data: Dict[str, Any] = {
             "network": {},
-            "failure_policy_set": {},
-            "traffic_matrix_set": {},
+            "failures": {},
+            "demands": {},
             "workflow": [],
         }
 
@@ -586,7 +578,8 @@ class ScenarioDataBuilder:
                 {
                     "source": source,
                     "target": target,
-                    "link_params": {"capacity": capacity, "cost": DEFAULT_LINK_COST},
+                    "capacity": capacity,
+                    "cost": DEFAULT_LINK_COST,
                 }
             )
         return self
@@ -610,25 +603,25 @@ class ScenarioDataBuilder:
         return self
 
     def with_traffic_demand(
-        self, source: str, sink: str, demand: float, matrix_name: str = "default"
+        self, source: str, target: str, volume: float, demand_set: str = "default"
     ) -> "ScenarioDataBuilder":
         """
         Add a traffic demand to the specified traffic matrix.
 
         Args:
             source: Source node/pattern for traffic demand
-            sink: Sink node/pattern for traffic demand
-            demand: Traffic demand value
-            matrix_name: Name of traffic matrix (default: "default")
+            target: Target node/pattern for traffic demand
+            volume: Traffic demand volume
+            demand_set: Name of traffic matrix (default: "default")
 
         Returns:
             Self for method chaining
         """
-        if matrix_name not in self.data["traffic_matrix_set"]:
-            self.data["traffic_matrix_set"][matrix_name] = []
+        if demand_set not in self.data["demands"]:
+            self.data["demands"][demand_set] = []
 
-        self.data["traffic_matrix_set"][matrix_name].append(
-            {"source": source, "sink": sink, "demand": demand}
+        self.data["demands"][demand_set].append(
+            {"source": source, "target": target, "volume": volume}
         )
         return self
 
@@ -646,24 +639,24 @@ class ScenarioDataBuilder:
         Returns:
             Self for method chaining
         """
-        self.data["failure_policy_set"][policy_name] = policy_data
+        self.data["failures"][policy_name] = policy_data
         return self
 
     def with_workflow_step(
-        self, step_type: str, name: str, **kwargs
+        self, type: str, name: str, **kwargs
     ) -> "ScenarioDataBuilder":
         """
         Add a workflow step to the scenario execution plan.
 
         Args:
-            step_type: Type of workflow step (e.g., "BuildGraph", "CapacityEnvelopeAnalysis")
+            type: Type of workflow step (e.g., "BuildGraph", "CapacityEnvelopeAnalysis")
             name: Unique name for this step instance
             **kwargs: Additional step-specific parameters
 
         Returns:
             Self for method chaining
         """
-        step_data = {"step_type": step_type, "name": name}
+        step_data = {"type": type, "name": name}
         step_data.update(kwargs)
         self.data["workflow"].append(step_data)
         return self
@@ -683,9 +676,9 @@ class ScenarioDataBuilder:
         # Ensure BuildGraph workflow step is included if workflow exists but lacks one
         workflow_steps = self.data.get("workflow", [])
         if workflow_steps and not any(
-            step.get("step_type") == "BuildGraph" for step in workflow_steps
+            step.get("type") == "BuildGraph" for step in workflow_steps
         ):
-            workflow_steps.insert(0, {"step_type": "BuildGraph", "name": "build_graph"})
+            workflow_steps.insert(0, {"type": "BuildGraph", "name": "build_graph"})
             self.data["workflow"] = workflow_steps
 
         return yaml.dump(self.data, default_flow_style=False)
@@ -784,7 +777,7 @@ def basic_failure_scenario() -> Scenario:
             "single_link_failure",
             {
                 "attrs": {"description": "Single link failure"},
-                "rules": [{"entity_scope": "link", "rule_type": "choice", "count": 1}],
+                "rules": [{"scope": "link", "mode": "choice", "count": 1}],
             },
         )
         .with_workflow_step("BuildGraph", "build_graph")

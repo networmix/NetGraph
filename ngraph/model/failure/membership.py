@@ -7,8 +7,9 @@ on attribute conditions.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from ngraph.dsl.selectors import (
     EntityScope,
@@ -32,21 +33,23 @@ class MembershipSpec:
     """Parsed membership rule specification.
 
     Attributes:
-        entity_scope: Type of entities to match ("node", "link", or "risk_group").
+        scope: Type of entities to match ("node", "link", or "risk_group").
+        path: Optional regex pattern to filter entities by name.
         match: Match specification with conditions.
     """
 
-    entity_scope: EntityScope
-    match: MatchSpec
+    scope: EntityScope
+    path: Optional[str] = None
+    match: Optional[MatchSpec] = None
 
 
 def resolve_membership_rules(network: "Network") -> None:
     """Apply membership rules to populate entity risk_groups sets.
 
     For each risk group with a `_membership_raw` specification:
-    - If entity_scope is "node" or "link": adds the risk group name to each
+    - If scope is "node" or "link": adds the risk group name to each
       matched entity's risk_groups set.
-    - If entity_scope is "risk_group": adds matched risk groups as children
+    - If scope is "risk_group": adds matched risk groups as children
       of this risk group (hierarchical membership).
 
     Args:
@@ -68,9 +71,9 @@ def resolve_membership_rules(network: "Network") -> None:
             ) from e
 
         matched_count = 0
-        if spec.entity_scope == "risk_group":
+        if spec.scope == "risk_group":
             # Hierarchical: add matched groups as children
-            matched_rgs = _select_risk_groups(network, spec.match)
+            matched_rgs = _select_risk_groups(network, spec)
             for matched_rg in matched_rgs:
                 # Don't add self-reference
                 if matched_rg.name != rg_name:
@@ -88,7 +91,7 @@ def resolve_membership_rules(network: "Network") -> None:
         _logger.debug(
             "Resolved membership for '%s': scope=%s, matched=%d",
             rg_name,
-            spec.entity_scope,
+            spec.scope,
             matched_count,
         )
 
@@ -105,80 +108,136 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
     Raises:
         ValueError: If required fields are missing or invalid.
     """
-    entity_scope = raw.get("entity_scope", "node")
-    if entity_scope not in ("node", "link", "risk_group"):
+    scope = raw.get("scope")
+    if not scope:
         raise ValueError(
-            f"entity_scope must be 'node', 'link', or 'risk_group', got '{entity_scope}'"
+            "membership requires 'scope' field (node, link, or risk_group)"
+        )
+    if scope not in ("node", "link", "risk_group"):
+        raise ValueError(
+            f"scope must be 'node', 'link', or 'risk_group', got '{scope}'"
         )
 
+    path = raw.get("path")
     match_raw = raw.get("match")
-    if match_raw is None:
-        raise ValueError("membership requires a 'match' block")
 
-    # Use unified parser with membership-specific defaults
-    match_spec = parse_match_spec(
-        match_raw,
-        default_logic="and",
-        require_conditions=True,
-        context="membership rule",
-    )
+    # At least one of path or match must be specified
+    if path is None and match_raw is None:
+        raise ValueError("membership requires at least 'path' or 'match'")
 
-    return MembershipSpec(entity_scope=entity_scope, match=match_spec)
+    match_spec = None
+    if match_raw is not None:
+        # Use unified parser with membership-specific defaults
+        match_spec = parse_match_spec(
+            match_raw,
+            default_logic="and",
+            require_conditions=True,
+            context="membership rule",
+        )
+
+    return MembershipSpec(scope=scope, path=path, match=match_spec)
 
 
 def _select_entities(
     network: "Network", spec: MembershipSpec
 ) -> List[Union["Node", "Link"]]:
-    """Select nodes or links based on match conditions.
+    """Select nodes or links based on path and/or match conditions.
 
     Uses the shared match_entity_ids() function from selectors.
 
     Args:
         network: Network to search.
-        spec: Membership specification with entity_scope and match.
+        spec: Membership specification with scope, path, and match.
 
     Returns:
         List of matched Node or Link objects.
     """
-    if spec.entity_scope == "node":
+    path_pattern = re.compile(spec.path) if spec.path else None
+
+    if spec.scope == "node":
         # Build flattened attrs dict for all nodes
         entity_attrs = {
             node.name: flatten_node_attrs(node) for node in network.nodes.values()
         }
-        matched_ids = match_entity_ids(
-            entity_attrs, spec.match.conditions, spec.match.logic
-        )
+        # Start with all or path-filtered IDs
+        if path_pattern:
+            candidate_ids = {eid for eid in entity_attrs if path_pattern.match(eid)}
+        else:
+            candidate_ids = set(entity_attrs.keys())
+
+        # Apply match conditions if specified
+        if spec.match:
+            filtered_attrs = {
+                k: v for k, v in entity_attrs.items() if k in candidate_ids
+            }
+            matched_ids = match_entity_ids(
+                filtered_attrs, spec.match.conditions, spec.match.logic
+            )
+        else:
+            matched_ids = candidate_ids
+
         return [network.nodes[node_id] for node_id in matched_ids]
 
-    elif spec.entity_scope == "link":
+    elif spec.scope == "link":
         # Build flattened attrs dict for all links
         entity_attrs = {
             link_id: flatten_link_attrs(link, link_id)
             for link_id, link in network.links.items()
         }
-        matched_ids = match_entity_ids(
-            entity_attrs, spec.match.conditions, spec.match.logic
-        )
+        # Start with all or path-filtered IDs
+        if path_pattern:
+            candidate_ids = {eid for eid in entity_attrs if path_pattern.match(eid)}
+        else:
+            candidate_ids = set(entity_attrs.keys())
+
+        # Apply match conditions if specified
+        if spec.match:
+            filtered_attrs = {
+                k: v for k, v in entity_attrs.items() if k in candidate_ids
+            }
+            matched_ids = match_entity_ids(
+                filtered_attrs, spec.match.conditions, spec.match.logic
+            )
+        else:
+            matched_ids = candidate_ids
+
         return [network.links[link_id] for link_id in matched_ids]
 
     return []
 
 
-def _select_risk_groups(network: "Network", match: MatchSpec) -> List["RiskGroup"]:
-    """Select risk groups based on match conditions.
+def _select_risk_groups(network: "Network", spec: MembershipSpec) -> List["RiskGroup"]:
+    """Select risk groups based on path and/or match conditions.
 
     Uses the shared match_entity_ids() function from selectors.
 
     Args:
         network: Network with risk_groups.
-        match: Match specification with conditions.
+        spec: Membership specification with path and match.
 
     Returns:
         List of matched RiskGroup objects.
     """
+    path_pattern = re.compile(spec.path) if spec.path else None
+
     # Build flattened attrs dict for all risk groups
     entity_attrs = {
         rg.name: flatten_risk_group_attrs(rg) for rg in network.risk_groups.values()
     }
-    matched_ids = match_entity_ids(entity_attrs, match.conditions, match.logic)
+
+    # Start with all or path-filtered IDs
+    if path_pattern:
+        candidate_ids = {eid for eid in entity_attrs if path_pattern.match(eid)}
+    else:
+        candidate_ids = set(entity_attrs.keys())
+
+    # Apply match conditions if specified
+    if spec.match:
+        filtered_attrs = {k: v for k, v in entity_attrs.items() if k in candidate_ids}
+        matched_ids = match_entity_ids(
+            filtered_attrs, spec.match.conditions, spec.match.logic
+        )
+    else:
+        matched_ids = candidate_ids
+
     return [network.risk_groups[rg_name] for rg_name in matched_ids]

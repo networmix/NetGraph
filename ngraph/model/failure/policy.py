@@ -1,11 +1,11 @@
 """Failure policy primitives.
 
-Defines `FailureCondition`, `FailureRule`, and `FailurePolicy` for expressing
-how nodes, links, and risk groups fail in analyses. Conditions match on
-top-level attributes with simple operators; rules select matches using
-"all", probabilistic "random" (with `probability`), or fixed-size "choice"
-(with `count`). Policies can optionally expand failures by shared risk groups
-or by risk-group children.
+Defines `FailureRule` and `FailurePolicy` for expressing how nodes, links,
+and risk groups fail in analyses. Conditions match on top-level attributes
+with simple operators; rules select matches using "all", probabilistic
+"random" (with `probability`), or fixed-size "choice" (with `count`).
+Policies can optionally expand failures by shared risk groups or by
+risk-group children.
 """
 
 from __future__ import annotations
@@ -17,51 +17,41 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, Set, Tuple
 
 from ngraph.dsl.selectors import Condition, EntityScope, match_entity_ids
 
-# Alias for clarity in failure policy context
-FailureCondition = Condition
-
 
 @dataclass
 class FailureRule:
     """Defines how to match and then select entities for failure.
 
     Attributes:
-        entity_scope (EntityScope):
-            The type of entities this rule applies to: "node", "link", or "risk_group".
-        conditions (List[FailureCondition]):
-            A list of conditions to filter matching entities.
-        logic (Literal["and", "or"]):
-            "and": All conditions must be true for a match.
-            "or": At least one condition is true for a match (default).
-        rule_type (Literal["random", "choice", "all"]):
-            The selection strategy among the matched set:
-              - "random": each matched entity is chosen with probability = `probability`.
-              - "choice": pick exactly `count` items from the matched set (random sample).
-              - "all": select every matched entity in the matched set.
-        probability (float):
-            Probability in [0,1], used if `rule_type="random"`.
-        count (int):
-            Number of entities to pick if `rule_type="choice"`.
+        scope: The type of entities this rule applies to: "node", "link",
+            or "risk_group".
+        conditions: A list of conditions to filter matching entities.
+        logic: "and" (all must be true) or "or" (any must be true, default).
+        mode: The selection strategy among the matched set:
+            - "random": each matched entity is chosen with probability.
+            - "choice": pick exactly `count` items (random sample).
+            - "all": select every matched entity.
+        probability: Probability in [0,1], used if mode="random".
+        count: Number of entities to pick if mode="choice".
+        weight_by: Optional attribute for weighted sampling in choice mode.
+        path: Optional regex pattern to filter entities by name.
     """
 
-    entity_scope: EntityScope
-    conditions: List[FailureCondition] = field(default_factory=list)
+    scope: EntityScope
+    conditions: List[Condition] = field(default_factory=list)
     logic: Literal["and", "or"] = "or"
-    rule_type: Literal["random", "choice", "all"] = "all"
+    mode: Literal["random", "choice", "all"] = "all"
     probability: float = 1.0
     count: int = 1
-    # Optional attribute for weighted sampling in choice mode
-    # When set and rule_type=="choice", items are sampled without replacement
-    # with probability proportional to the non-negative numeric value of this attribute.
-    # If all weights are non-positive or missing, fallback to uniform sampling.
     weight_by: Optional[str] = None
+    path: Optional[str] = None
 
     def __post_init__(self) -> None:
-        if self.rule_type == "random":
+        if self.mode == "random":
             if not (0.0 <= self.probability <= 1.0):
                 raise ValueError(
                     f"probability={self.probability} must be within [0,1] "
-                    f"for rule_type='random'."
+                    f"for mode='random'."
                 )
 
 
@@ -87,71 +77,29 @@ class FailureMode:
 
 @dataclass
 class FailurePolicy:
-    """A container for multiple FailureRules plus optional metadata in `attrs`.
+    """A container for failure modes plus optional metadata in `attrs`.
 
     The main entry point is `apply_failures`, which:
-      1) For each rule, gather the relevant entities (node, link, or risk_group).
-              2) Match them based on rule conditions using 'and' or 'or' logic.
-      3) Apply the selection strategy (all, random, or choice).
-      4) Collect the union of all failed entities across all rules.
-      5) Optionally expand failures by shared-risk groups or sub-risks.
-
-    Example YAML configuration:
-        ```yaml
-        failure_policy:
-          attrs:
-            description: "Regional power grid failure affecting telecom infrastructure"
-          fail_risk_groups: true
-          rules:
-            # Fail all nodes in Texas electrical grid
-            - entity_scope: "node"
-              conditions:
-                - attr: "electric_grid"
-                  operator: "=="
-                  value: "texas"
-              logic: "and"
-              rule_type: "all"
-
-            # Randomly fail 40% of underground fiber links in affected region
-            - entity_scope: "link"
-              conditions:
-                - attr: "region"
-                  operator: "=="
-                  value: "southwest"
-                - attr: "installation"
-                  operator: "=="
-                  value: "underground"
-              logic: "and"
-              rule_type: "random"
-              probability: 0.4
-
-            # Choose exactly 2 risk groups to fail (e.g., data centers)
-            # Note: logic defaults to "or" when not specified
-            - entity_scope: "risk_group"
-              rule_type: "choice"
-              count: 2
-        ```
+      1) Select a mode based on weights.
+      2) For each rule in the mode, gather relevant entities.
+      3) Match based on rule conditions using 'and' or 'or' logic.
+      4) Apply the selection strategy (all, random, or choice).
+      5) Collect the union of all failed entities across all rules.
+      6) Optionally expand failures by shared-risk groups or sub-risks.
 
     Attributes:
-        rules (List[FailureRule]):
-            A list of FailureRules to apply.
-        attrs (Dict[str, Any]):
-            Arbitrary metadata about this policy (e.g. "name", "description").
-        fail_risk_groups (bool):
-            If True, after initial selection, expand failures among any
-            node/link that shares a risk group with a failed entity.
-        fail_risk_group_children (bool):
-            If True, and if a risk_group is marked as failed, expand to
-            children risk_groups recursively.
-        seed (Optional[int]):
-            Seed for reproducible random operations. If None, operations
-            will be non-deterministic.
-
+        attrs: Arbitrary metadata about this policy.
+        expand_groups: If True, expand failures among entities sharing
+            risk groups with failed entities.
+        expand_children: If True, expand failed risk groups to include
+            their children recursively.
+        seed: Seed for reproducible random operations.
+        modes: List of weighted failure modes.
     """
 
     attrs: Dict[str, Any] = field(default_factory=dict)
-    fail_risk_groups: bool = False
-    fail_risk_group_children: bool = False
+    expand_groups: bool = False
+    expand_children: bool = False
     seed: Optional[int] = None
     modes: List[FailureMode] = field(default_factory=list)
 
@@ -223,12 +171,8 @@ class FailurePolicy:
                 rule,
                 effective_seed,
                 network_nodes
-                if rule.entity_scope == "node"
-                else (
-                    network_links
-                    if rule.entity_scope == "link"
-                    else network_risk_groups
-                ),
+                if rule.scope == "node"
+                else (network_links if rule.scope == "link" else network_risk_groups),
             )
 
             # Record selection in trace if non-empty
@@ -236,19 +180,19 @@ class FailurePolicy:
                 failure_trace["selections"].append(
                     {
                         "rule_index": idx,
-                        "entity_scope": rule.entity_scope,
-                        "rule_type": rule.rule_type,
+                        "scope": rule.scope,
+                        "mode": rule.mode,
                         "matched_count": len(matched_ids),
                         "selected_ids": sorted(selected),
                     }
                 )
 
             # Add them to the respective fail sets
-            if rule.entity_scope == "node":
+            if rule.scope == "node":
                 failed_nodes |= set(selected)
-            elif rule.entity_scope == "link":
+            elif rule.scope == "link":
                 failed_links |= set(selected)
-            elif rule.entity_scope == "risk_group":
+            elif rule.scope == "risk_group":
                 failed_risk_groups |= set(selected)
 
         # Snapshot before expansion for trace
@@ -261,13 +205,13 @@ class FailurePolicy:
             pre_rgs = set(failed_risk_groups)
 
         # Optionally expand by risk groups
-        if self.fail_risk_groups:
+        if self.expand_groups:
             self._expand_risk_groups(
                 failed_nodes, failed_links, network_nodes, network_links
             )
 
         # Optionally expand failed risk-group children
-        if self.fail_risk_group_children and failed_risk_groups:
+        if self.expand_children and failed_risk_groups:
             self._expand_failed_risk_group_children(
                 failed_risk_groups, network_risk_groups
             )
@@ -285,7 +229,7 @@ class FailurePolicy:
 
     def _match_scope(
         self,
-        rule_idx: int,
+        _rule_idx: int,
         rule: FailureRule,
         network_nodes: Dict[str, Any],
         network_links: Dict[str, Any],
@@ -294,14 +238,26 @@ class FailurePolicy:
         """Get the set of IDs matched by the given rule.
 
         Uses the shared match_entity_ids() function from selectors.
+        Applies optional path filter if specified.
         """
+        import re
+
         # Decide which mapping to iterate
-        if rule.entity_scope == "node":
-            return match_entity_ids(network_nodes, rule.conditions, rule.logic)
-        elif rule.entity_scope == "link":
-            return match_entity_ids(network_links, rule.conditions, rule.logic)
+        if rule.scope == "node":
+            candidates = match_entity_ids(network_nodes, rule.conditions, rule.logic)
+        elif rule.scope == "link":
+            candidates = match_entity_ids(network_links, rule.conditions, rule.logic)
         else:  # risk_group
-            return match_entity_ids(network_risk_groups, rule.conditions, rule.logic)
+            candidates = match_entity_ids(
+                network_risk_groups, rule.conditions, rule.logic
+            )
+
+        # Apply path filter if specified
+        if rule.path:
+            pattern = re.compile(rule.path)
+            candidates = {eid for eid in candidates if pattern.match(eid)}
+
+        return candidates
 
     @staticmethod
     def _select_entities(
@@ -312,7 +268,7 @@ class FailurePolicy:
     ) -> Set[str]:
         """Select entities for failure per rule.
 
-        For rule_type="choice" and rule.weight_by set, perform weighted sampling
+        For mode="choice" and rule.weight_by set, perform weighted sampling
         without replacement according to the specified attribute. If all weights
         are non-positive or missing, fallback to uniform sampling.
         """
@@ -324,10 +280,10 @@ class FailurePolicy:
         # intentionally non-deterministic across processes (hash randomization).
         ordered_ids = sorted(entity_ids)
 
-        if rule.rule_type == "random":
+        if rule.mode == "random":
             rng = _random.Random(seed) if seed is not None else _random
             return {eid for eid in ordered_ids if rng.random() < rule.probability}
-        elif rule.rule_type == "choice":
+        elif rule.mode == "choice":
             count = min(rule.count, len(entity_ids))
             if count <= 0:
                 return set()
@@ -370,10 +326,10 @@ class FailurePolicy:
             entity_list = ordered_ids
             rng = _random.Random(seed) if seed is not None else _random
             return set(rng.sample(entity_list, k=count))
-        elif rule.rule_type == "all":
+        elif rule.mode == "all":
             return entity_ids
         else:
-            raise ValueError(f"Unsupported rule_type: {rule.rule_type}")
+            raise ValueError(f"Unsupported mode: {rule.mode}")
 
     @staticmethod
     def _extract_weight(entity: Any, attr_name: str) -> float:
@@ -558,8 +514,8 @@ class FailurePolicy:
         """
         data: Dict[str, Any] = {
             "attrs": self.attrs,
-            "fail_risk_groups": self.fail_risk_groups,
-            "fail_risk_group_children": self.fail_risk_group_children,
+            "expand_groups": self.expand_groups,
+            "expand_children": self.expand_children,
             "seed": self.seed,
         }
         if self.modes:
@@ -568,20 +524,21 @@ class FailurePolicy:
                     "weight": mode.weight,
                     "rules": [
                         {
-                            "entity_scope": rule.entity_scope,
+                            "scope": rule.scope,
                             "conditions": [
                                 {
                                     "attr": cond.attr,
-                                    "operator": cond.operator,
+                                    "op": cond.op,
                                     "value": cond.value,
                                 }
                                 for cond in rule.conditions
                             ],
                             "logic": rule.logic,
-                            "rule_type": rule.rule_type,
+                            "mode": rule.mode,
                             "probability": rule.probability,
                             "count": rule.count,
                             **({"weight_by": rule.weight_by} if rule.weight_by else {}),
+                            **({"path": rule.path} if rule.path else {}),
                         }
                         for rule in mode.rules
                     ],

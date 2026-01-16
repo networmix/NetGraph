@@ -26,7 +26,7 @@ import hashlib
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set, TypeVar
+from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set
 
 from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
 from ngraph.logging import get_logger
@@ -117,24 +117,15 @@ def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
     return parallelism
 
 
-T = TypeVar("T")
-
-
 class AnalysisFunction(Protocol):
     """Protocol for analysis functions used with FailureManager.
 
-    Analysis functions should take a Network, exclusion sets, and any additional
-    keyword arguments, returning analysis results of any type.
+    Analysis functions take a Network, exclusion sets, and analysis-specific
+    parameters, returning results of any type.
     """
 
-    def __call__(
-        self,
-        network: "Network",
-        excluded_nodes: Set[str],
-        excluded_links: Set[str],
-        **kwargs,
-    ) -> Any:
-        """Execute analysis on network with exclusions and optional parameters."""
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Execute analysis on network with exclusions and parameters."""
         ...
 
 
@@ -421,7 +412,7 @@ class FailureManager:
                 )
                 logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
 
-            elif "source" in analysis_kwargs and "sink" in analysis_kwargs:
+            elif "source" in analysis_kwargs and "target" in analysis_kwargs:
                 # Max-flow analysis or sensitivity analysis
                 from ngraph.analysis.functions import build_maxflow_context
 
@@ -429,7 +420,7 @@ class FailureManager:
                 analysis_kwargs["context"] = build_maxflow_context(
                     self.network,
                     analysis_kwargs["source"],
-                    analysis_kwargs["sink"],
+                    analysis_kwargs["target"],
                     mode=analysis_kwargs.get("mode", "combine"),
                 )
                 logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
@@ -535,7 +526,7 @@ class FailureManager:
             # Map unique task results back to their dedup keys
             key_to_result: dict[tuple, Any] = {}
             for (dedup_key, _arg), value in zip(
-                key_to_first_arg.items(), unique_result_values, strict=False
+                key_to_first_arg.items(), unique_result_values, strict=True
             ):
                 key_to_result[dedup_key] = value
         else:
@@ -765,7 +756,7 @@ class FailureManager:
     def run_max_flow_monte_carlo(
         self,
         source: str | dict[str, Any],
-        sink: str | dict[str, Any],
+        target: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
         parallelism: int = 1,
@@ -775,19 +766,19 @@ class FailureManager:
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_summary: bool = False,
-        **kwargs,
+        include_min_cut: bool = False,
     ) -> Any:
         """Analyze maximum flow capacity envelopes between node groups under failures.
 
         Computes statistical distributions (envelopes) of maximum flow capacity between
-        source and sink node groups across Monte Carlo failure scenarios. Results include
+        source and target node groups across Monte Carlo failure scenarios. Results include
         frequency-based capacity envelopes and optional failure pattern analysis.
 
         Baseline (no failures) is always run first as a separate reference.
 
         Args:
             source: Source node selector (string path or selector dict).
-            sink: Sink node selector (string path or selector dict).
+            target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
@@ -798,6 +789,7 @@ class FailureManager:
             seed: Optional seed for reproducible results.
             store_failure_patterns: Whether to store failure trace on results.
             include_flow_summary: Whether to collect detailed flow summary data.
+            include_min_cut: Whether to include min-cut edges in results.
 
         Returns:
             Dictionary with keys:
@@ -820,13 +812,13 @@ class FailureManager:
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             source=source,
-            sink=sink,
+            target=target,
             mode=mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
             flow_placement=flow_placement,
             include_flow_details=include_flow_summary,
-            **kwargs,
+            include_min_cut=include_min_cut,
         )
         return raw_results
 
@@ -890,7 +882,7 @@ class FailureManager:
     def run_demand_placement_monte_carlo(
         self,
         demands_config: list[dict[str, Any]]
-        | Any,  # List of demand configs or TrafficMatrixSet
+        | Any,  # List of demand configs or DemandSet
         iterations: int = 100,
         parallelism: int = 1,
         placement_rounds: int | str = "auto",
@@ -898,7 +890,6 @@ class FailureManager:
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
         include_used_edges: bool = False,
-        **kwargs,
     ) -> Any:
         """Analyze traffic demand placement success under failures.
 
@@ -908,12 +899,14 @@ class FailureManager:
         Baseline (no failures) is always run first as a separate reference.
 
         Args:
-            demands_config: List of demand configs or TrafficMatrixSet object.
+            demands_config: List of demand configs or DemandSet object.
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
             placement_rounds: Optimization rounds for demand placement.
             seed: Optional seed for reproducible results.
             store_failure_patterns: Whether to store failure trace on results.
+            include_flow_details: Whether to include cost distribution details.
+            include_used_edges: Whether to include used edges in results.
 
         Returns:
             Dictionary with keys:
@@ -926,10 +919,10 @@ class FailureManager:
 
         # If caller passed a sequence of TrafficDemand objects, convert to dicts
         if not isinstance(demands_config, list):
-            # Accept TrafficMatrixSet or any container providing get_matrix()/matrices
+            # Accept DemandSet or any container providing get_all_demands()
             serializable_demands: list[dict[str, Any]] = []
             if hasattr(demands_config, "get_all_demands"):
-                td_iter = demands_config.get_all_demands()  # TrafficMatrixSet helper
+                td_iter = demands_config.get_all_demands()  # DemandSet helper
             elif hasattr(demands_config, "demands"):
                 # Accept a mock object exposing 'demands' for tests
                 td_iter = demands_config.demands
@@ -940,17 +933,11 @@ class FailureManager:
                     {
                         "id": getattr(demand, "id", None),
                         "source": getattr(demand, "source", ""),
-                        "sink": getattr(demand, "sink", ""),
-                        "demand": float(getattr(demand, "demand", 0.0)),
+                        "target": getattr(demand, "target", ""),
+                        "volume": float(getattr(demand, "volume", 0.0)),
                         "mode": getattr(demand, "mode", "pairwise"),
                         "group_mode": getattr(demand, "group_mode", "flatten"),
-                        "expand_vars": getattr(demand, "expand_vars", {}),
-                        "expansion_mode": getattr(
-                            demand, "expansion_mode", "cartesian"
-                        ),
-                        "flow_policy_config": getattr(
-                            demand, "flow_policy_config", None
-                        ),
+                        "flow_policy": getattr(demand, "flow_policy", None),
                         "priority": int(getattr(demand, "priority", 0)),
                     }
                 )
@@ -966,14 +953,13 @@ class FailureManager:
             placement_rounds=placement_rounds,
             include_flow_details=include_flow_details,
             include_used_edges=include_used_edges,
-            **kwargs,
         )
         return raw_results
 
     def run_sensitivity_monte_carlo(
         self,
         source: str | dict[str, Any],
-        sink: str | dict[str, Any],
+        target: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
         parallelism: int = 1,
@@ -981,7 +967,6 @@ class FailureManager:
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
         seed: int | None = None,
         store_failure_patterns: bool = False,
-        **kwargs,
     ) -> dict[str, Any]:
         """Analyze component criticality for flow capacity under failures.
 
@@ -993,7 +978,7 @@ class FailureManager:
 
         Args:
             source: Source node selector (string path or selector dict).
-            sink: Sink node selector (string path or selector dict).
+            target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
             parallelism: Number of parallel workers (auto-adjusted if needed).
@@ -1023,11 +1008,10 @@ class FailureManager:
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             source=source,
-            sink=sink,
+            target=target,
             mode=mode,
             shortest_path=shortest_path,
             flow_placement=flow_placement,
-            **kwargs,
         )
 
         # Aggregate component scores across iterations for statistical analysis
@@ -1037,7 +1021,7 @@ class FailureManager:
 
         # Augment metadata with analysis-specific context
         raw_results["metadata"]["source"] = source
-        raw_results["metadata"]["sink"] = sink
+        raw_results["metadata"]["target"] = target
         raw_results["metadata"]["mode"] = mode
 
         return raw_results

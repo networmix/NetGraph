@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from ngraph.model.failure.policy import FailureCondition, FailurePolicy, FailureRule
+from ngraph.dsl.selectors.schema import Condition
+from ngraph.model.failure.policy import FailurePolicy, FailureRule
 
 
 def test_expand_by_shared_risk_groups() -> None:
@@ -19,18 +20,16 @@ def test_expand_by_shared_risk_groups() -> None:
 
     # Rule fails N1 explicitly
     rule = FailureRule(
-        entity_scope="node",
-        conditions=[
-            FailureCondition(attr="risk_groups", operator="contains", value="rg1")
-        ],
+        scope="node",
+        conditions=[Condition(attr="risk_groups", op="contains", value="rg1")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
 
     from ngraph.model.failure.policy import FailureMode
 
     policy = FailurePolicy(
-        modes=[FailureMode(weight=1.0, rules=[rule])], fail_risk_groups=True
+        modes=[FailureMode(weight=1.0, rules=[rule])], expand_groups=True
     )
     failed = set(policy.apply_failures(nodes, links))
 
@@ -47,15 +46,15 @@ def test_expand_failed_risk_group_children() -> None:
 
     # Rule selects top-level risk group name directly via risk_group scope
     rule = FailureRule(
-        entity_scope="risk_group",
-        conditions=[FailureCondition(attr="name", operator="==", value="parent")],
+        scope="risk_group",
+        conditions=[Condition(attr="name", op="==", value="parent")],
         logic="and",
-        rule_type="all",
+        mode="all",
     )
     from ngraph.model.failure.policy import FailureMode
 
     policy = FailurePolicy(
-        modes=[FailureMode(weight=1.0, rules=[rule])], fail_risk_group_children=True
+        modes=[FailureMode(weight=1.0, rules=[rule])], expand_children=True
     )
 
     # Risk group hierarchy as dicts (the policy supports dict objects for groups)

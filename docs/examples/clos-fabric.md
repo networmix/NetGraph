@@ -9,7 +9,7 @@ Refer to [Tutorial](../getting-started/tutorial.md) for running bundled scenario
 We'll create two separate 3-tier Clos networks and analyze the maximum flow capacity between them. This scenario showcases:
 
 - Hierarchical blueprint composition
-- Complex adjacency patterns
+- Complex link patterns
 - Flow analysis with different placement policies
 
 ## Programmatic scenario
@@ -21,65 +21,61 @@ from ngraph import analyze, Mode, FlowPlacement
 scenario_yaml = """
 blueprints:
   brick_2tier:
-    groups:
+    nodes:
       t1:
-        node_count: 8
-        name_template: "t1-{node_num}"
+        count: 8
+        template: "t1-{n}"
       t2:
-        node_count: 8
-        name_template: "t2-{node_num}"
+        count: 8
+        template: "t2-{n}"
 
-    adjacency:
+    links:
       - source: /t1
         target: /t2
         pattern: mesh
-        link_params:
-          capacity: 2
-          cost: 1
+        capacity: 2
+        cost: 1
 
   3tier_clos:
-    groups:
+    nodes:
       b1:
-        use_blueprint: brick_2tier
+        blueprint: brick_2tier
       b2:
-        use_blueprint: brick_2tier
+        blueprint: brick_2tier
       spine:
-        node_count: 64
-        name_template: "t3-{node_num}"
+        count: 64
+        template: "t3-{n}"
 
-    adjacency:
+    links:
       - source: b1/t2
         target: spine
         pattern: one_to_one
-        link_params:
-          capacity: 2
-          cost: 1
+        capacity: 2
+        cost: 1
       - source: b2/t2
         target: spine
         pattern: one_to_one
-        link_params:
-          capacity: 2
-          cost: 1
+        capacity: 2
+        cost: 1
 
 network:
   name: "3tier_clos_network"
   version: 1.0
 
-  groups:
+  nodes:
     my_clos1:
-      use_blueprint: 3tier_clos
+      blueprint: 3tier_clos
 
     my_clos2:
-      use_blueprint: 3tier_clos
+      blueprint: 3tier_clos
 
-  adjacency:
+  links:
     - source: my_clos1/spine
       target: my_clos2/spine
       pattern: one_to_one
-      link_count: 4
-      link_params:
-        capacity: 1
-        cost: 1
+      count: 4
+      capacity: 1
+      cost: 1
 """
 
 # Create and analyze the scenario
@@ -104,7 +100,7 @@ print(f"Maximum flow with ECMP: {max_flow_ecmp}")
 The result `{('b1|b2', 'b1|b2'): 256.0}` means:
 
 - **Source**: All t1 nodes in both b1 and b2 segments of my_clos1
-- **Sink**: All t1 nodes in both b1 and b2 segments of my_clos2
+- **Target**: All t1 nodes in both b1 and b2 segments of my_clos2
 - **Capacity**: Maximum flow of 256.0 units
 
 ## ECMP vs WCMP: Impact of Link Failures
@@ -133,26 +129,26 @@ from ngraph.scenario import Scenario
 scenario_yaml = """
 blueprints:
   brick_2tier:
-    groups:
-      t1: {node_count: 8, name_template: "t1-{node_num}"}
-      t2: {node_count: 8, name_template: "t2-{node_num}"}
-    adjacency:
-      - {source: /t1, target: /t2, pattern: mesh, link_params: {capacity: 2, cost: 1}}
+    nodes:
+      t1: {count: 8, template: "t1-{n}"}
+      t2: {count: 8, template: "t2-{n}"}
+    links:
+      - {source: /t1, target: /t2, pattern: mesh, capacity: 2, cost: 1}
   3tier_clos:
-    groups:
-      b1: {use_blueprint: brick_2tier}
-      b2: {use_blueprint: brick_2tier}
-      spine: {node_count: 64, name_template: "t3-{node_num}"}
-    adjacency:
-      - {source: b1/t2, target: spine, pattern: one_to_one, link_params: {capacity: 2, cost: 1}}
-      - {source: b2/t2, target: spine, pattern: one_to_one, link_params: {capacity: 2, cost: 1}}
+    nodes:
+      b1: {blueprint: brick_2tier}
+      b2: {blueprint: brick_2tier}
+      spine: {count: 64, template: "t3-{n}"}
+    links:
+      - {source: b1/t2, target: spine, pattern: one_to_one, capacity: 2, cost: 1}
+      - {source: b2/t2, target: spine, pattern: one_to_one, capacity: 2, cost: 1}
 network:
   name: 3tier_clos_network
-  groups:
-    my_clos1: {use_blueprint: 3tier_clos}
-    my_clos2: {use_blueprint: 3tier_clos}
-  adjacency:
-    - {source: my_clos1/spine, target: my_clos2/spine, pattern: one_to_one, link_count: 4, link_params: {capacity: 1, cost: 1}}
+  nodes:
+    my_clos1: {blueprint: 3tier_clos}
+    my_clos2: {blueprint: 3tier_clos}
+  links:
+    - {source: my_clos1/spine, target: my_clos2/spine, pattern: one_to_one, count: 4, capacity: 1, cost: 1}
 """
 
 scenario = Scenario.from_yaml(scenario_yaml)

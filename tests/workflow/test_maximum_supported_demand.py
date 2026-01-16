@@ -12,12 +12,12 @@ def _mock_scenario_with_matrix() -> MagicMock:
     mock_scenario = MagicMock()
     td = MagicMock()
     td.source = "A"
-    td.sink = "B"
-    td.demand = 10.0
+    td.target = "B"
+    td.volume = 10.0
     td.mode = "pairwise"
     td.priority = 0
-    td.flow_policy_config = None
-    mock_scenario.traffic_matrix_set.get_matrix.return_value = [td]
+    td.flow_policy = None
+    mock_scenario.demand_set.get_set.return_value = [td]
     return mock_scenario
 
 
@@ -43,7 +43,7 @@ def test_msd_basic_bracket_and_bisect(
     scenario = _mock_scenario_with_matrix()
     step = MaximumSupportedDemand(
         name="msd_step",
-        matrix_name="default",
+        demand_set="default",
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
@@ -80,7 +80,7 @@ def test_msd_no_feasible_raises(
     scenario = _mock_scenario_with_matrix()
     step = MaximumSupportedDemand(
         name="msd_step",
-        matrix_name="default",
+        demand_set="default",
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
@@ -105,13 +105,13 @@ def test_msd_end_to_end_single_link() -> None:
         ScenarioDataBuilder()
         .with_simple_nodes(["A", "B"])
         .with_simple_links([("A", "B", 10.0)])
-        .with_traffic_demand("A", "B", 5.0, matrix_name="default")
+        .with_traffic_demand("A", "B", 5.0, demand_set="default")
         .build_scenario()
     )
 
     step = MaximumSupportedDemand(
         name="msd_e2e",
-        matrix_name="default",
+        demand_set="default",
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
@@ -136,11 +136,11 @@ def test_msd_end_to_end_single_link() -> None:
         {
             "id": d.id,
             "source": d.source,
-            "sink": d.sink,
-            "demand": d.demand,
+            "target": d.target,
+            "volume": d.volume,
             "mode": d.mode,
             "priority": d.priority,
-            "flow_policy_config": d.flow_policy_config,
+            "flow_policy": d.flow_policy,
         }
         for d in scaled_demands
     ]
@@ -163,11 +163,11 @@ def test_msd_end_to_end_single_link() -> None:
         {
             "id": d.id,
             "source": d.source,
-            "sink": d.sink,
-            "demand": d.demand,
+            "target": d.target,
+            "volume": d.volume,
             "mode": d.mode,
             "priority": d.priority,
-            "flow_policy_config": d.flow_policy_config,
+            "flow_policy": d.flow_policy,
         }
         for d in scaled_demands_above
     ]
@@ -196,13 +196,13 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
         ScenarioDataBuilder()
         .with_simple_nodes(["A", "B"])
         .with_simple_links([("A", "B", 10.0)])
-        .with_traffic_demand("A", "B", 5.0, matrix_name="default")
+        .with_traffic_demand("A", "B", 5.0, demand_set="default")
         .build_scenario()
     )
 
     step_auto = MSD(
         name="msd_auto",
-        matrix_name="default",
+        demand_set="default",
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
@@ -211,7 +211,7 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
     )
     step_one = MSD(
         name="msd_one",
-        matrix_name="default",
+        demand_set="default",
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,

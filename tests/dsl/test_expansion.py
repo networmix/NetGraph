@@ -28,19 +28,19 @@ class TestExpansionSpec:
     def test_default_values(self) -> None:
         """Default ExpansionSpec has empty vars and cartesian mode."""
         spec = ExpansionSpec()
-        assert spec.expand_vars == {}
-        assert spec.expansion_mode == "cartesian"
+        assert spec.vars == {}
+        assert spec.mode == "cartesian"
 
     def test_is_empty(self) -> None:
         """is_empty returns True for empty expand_vars."""
         assert ExpansionSpec().is_empty() is True
-        assert ExpansionSpec(expand_vars={"x": [1]}).is_empty() is False
+        assert ExpansionSpec(vars={"x": [1]}).is_empty() is False
 
     def test_custom_values(self) -> None:
         """Custom values are preserved."""
-        spec = ExpansionSpec(expand_vars={"dc": [1, 2]}, expansion_mode="zip")
-        assert spec.expand_vars == {"dc": [1, 2]}
-        assert spec.expansion_mode == "zip"
+        spec = ExpansionSpec(vars={"dc": [1, 2]}, mode="zip")
+        assert spec.vars == {"dc": [1, 2]}
+        assert spec.mode == "zip"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ class TestExpandTemplatesCartesian:
 
     def test_single_var_expands(self) -> None:
         """Single variable expands to multiple results."""
-        spec = ExpansionSpec(expand_vars={"dc": [1, 2, 3]})
+        spec = ExpansionSpec(vars={"dc": [1, 2, 3]})
         results = list(expand_templates({"path": "dc${dc}"}, spec))
 
         assert len(results) == 3
@@ -112,7 +112,7 @@ class TestExpandTemplatesCartesian:
 
     def test_multiple_vars_cartesian(self) -> None:
         """Multiple variables create cartesian product."""
-        spec = ExpansionSpec(expand_vars={"dc": [1, 2], "rack": ["a", "b"]})
+        spec = ExpansionSpec(vars={"dc": [1, 2], "rack": ["a", "b"]})
         results = list(expand_templates({"path": "dc${dc}_rack${rack}"}, spec))
 
         assert len(results) == 4  # 2 * 2
@@ -124,14 +124,16 @@ class TestExpandTemplatesCartesian:
 
     def test_multiple_templates(self) -> None:
         """Multiple template fields are all expanded."""
-        spec = ExpansionSpec(expand_vars={"dc": [1, 2]})
+        spec = ExpansionSpec(vars={"dc": [1, 2]})
         results = list(
-            expand_templates({"source": "dc${dc}/leaf", "sink": "dc${dc}/spine"}, spec)
+            expand_templates(
+                {"source": "dc${dc}/leaf", "target": "dc${dc}/spine"}, spec
+            )
         )
 
         assert len(results) == 2
-        assert results[0] == {"source": "dc1/leaf", "sink": "dc1/spine"}
-        assert results[1] == {"source": "dc2/leaf", "sink": "dc2/spine"}
+        assert results[0] == {"source": "dc1/leaf", "target": "dc1/spine"}
+        assert results[1] == {"source": "dc2/leaf", "target": "dc2/spine"}
 
     def test_empty_vars_yields_original(self) -> None:
         """Empty expand_vars yields original template."""
@@ -147,9 +149,7 @@ class TestExpandTemplatesZip:
 
     def test_zip_pairs_by_index(self) -> None:
         """Zip mode pairs variables by index."""
-        spec = ExpansionSpec(
-            expand_vars={"src": ["a", "b"], "dst": ["x", "y"]}, expansion_mode="zip"
-        )
+        spec = ExpansionSpec(vars={"src": ["a", "b"], "dst": ["x", "y"]}, mode="zip")
         results = list(expand_templates({"path": "${src}->${dst}"}, spec))
 
         assert len(results) == 2
@@ -159,8 +159,8 @@ class TestExpandTemplatesZip:
     def test_zip_mismatched_lengths_raises(self) -> None:
         """Zip mode with mismatched list lengths raises."""
         spec = ExpansionSpec(
-            expand_vars={"src": ["a", "b"], "dst": ["x", "y", "z"]},
-            expansion_mode="zip",
+            vars={"src": ["a", "b"], "dst": ["x", "y", "z"]},
+            mode="zip",
         )
         with pytest.raises(ValueError, match="equal-length"):
             list(expand_templates({"path": "${src}->${dst}"}, spec))
@@ -173,7 +173,7 @@ class TestExpandTemplatesLimits:
         """Expansion exceeding limit raises."""
         # Create vars that would produce > 10,000 combinations
         spec = ExpansionSpec(
-            expand_vars={
+            vars={
                 "a": list(range(50)),
                 "b": list(range(50)),
                 "c": list(range(50)),

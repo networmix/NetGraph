@@ -6,8 +6,8 @@ def test_weighted_choice_uses_weight_by_and_excludes_zero_weight_items() -> None
     selection should return only positive-weight items regardless of RNG.
     """
     rule = FailureRule(
-        entity_scope="link",
-        rule_type="choice",
+        scope="link",
+        mode="choice",
         count=2,
         weight_by="cost",
     )
@@ -31,8 +31,8 @@ def test_weighted_choice_fills_from_zero_when_insufficient_positive() -> None:
     uniformly from zero-weight items.
     """
     rule = FailureRule(
-        entity_scope="link",
-        rule_type="choice",
+        scope="link",
+        mode="choice",
         count=2,
         weight_by="cost",
     )
@@ -59,9 +59,9 @@ def test_weighted_choice_fills_from_zero_when_insufficient_positive() -> None:
 def test_weighted_modes_selects_positive_weight_mode_only() -> None:
     """With one zero-weight and one positive-weight mode, selection must use the positive-weight mode."""
     # Mode 0 (weight 0): link rule
-    link_rule = FailureRule(entity_scope="link", rule_type="choice", count=1)
+    link_rule = FailureRule(scope="link", mode="choice", count=1)
     # Mode 1 (weight 1): node rule
-    node_rule = FailureRule(entity_scope="node", rule_type="all")
+    node_rule = FailureRule(scope="node", mode="all")
 
     from ngraph.model.failure.policy import FailureMode
 

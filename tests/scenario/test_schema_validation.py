@@ -39,39 +39,37 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 1000.0
-        cost: 10
-        risk_groups: ["link_rg_1"]
+      capacity: 1000.0
+      cost: 10
+      risk_groups: ["link_rg_1"]
     - source: B
       target: C
-      link_params:
-        capacity: 1000.0
-        cost: 10
-        risk_groups: ["link_rg_2"]
+      capacity: 1000.0
+      cost: 10
+      risk_groups: ["link_rg_2"]
 
 risk_groups:
   - name: link_rg_1
   - name: link_rg_2
 
-failure_policy_set:
+failures:
   default:
     attrs:
       description: "Test single link failure policy"
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "link"
-            rule_type: "choice"
+          - scope: "link"
+            mode: "choice"
             count: 1
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
-  - step_type: CapacityEnvelopeAnalysis
+  - type: CapacityEnvelopeAnalysis
     name: capacity_test
     source: "A"
-    sink: "C"
+    target: "C"
     iterations: 1
     baseline: false
     failure_policy: null
@@ -147,7 +145,7 @@ workflow:
         jsonschema.validate(valid_data, schema)
 
     def test_schema_validates_link_risk_groups(self, schema):
-        """Test that the schema validates risk_groups in link_params."""
+        """Test that the schema validates risk_groups in links."""
         valid_data = {
             "network": {
                 "nodes": {"A": {}, "B": {}},
@@ -155,11 +153,9 @@ workflow:
                     {
                         "source": "A",
                         "target": "B",
-                        "link_params": {
-                            "capacity": 100,
-                            "cost": 1,
-                            "risk_groups": ["rg1", "rg2"],
-                        },
+                        "capacity": 100,
+                        "cost": 1,
+                        "risk_groups": ["rg1", "rg2"],
                     }
                 ],
             }
@@ -172,7 +168,7 @@ workflow:
         """Test that the schema validates failure policy structure."""
         valid_data = {
             "network": {"nodes": {}, "links": []},
-            "failure_policy_set": {
+            "failures": {
                 "default": {
                     "attrs": {"name": "test_policy"},
                     "modes": [
@@ -180,8 +176,8 @@ workflow:
                             "weight": 1.0,
                             "rules": [
                                 {
-                                    "entity_scope": "link",
-                                    "rule_type": "choice",
+                                    "scope": "link",
+                                    "mode": "choice",
                                     "count": 1,
                                 }
                             ],
@@ -199,47 +195,45 @@ workflow:
         blueprint_scenario = """
 blueprints:
   clos_2tier:
-    groups:
+    nodes:
       leaf:
-        node_count: 4
-        name_template: "leaf-{node_num}"
+        count: 4
+        template: "leaf-{n}"
         attrs:
           role: "leaf"
       spine:
-        node_count: 2
-        name_template: "spine-{node_num}"
+        count: 2
+        template: "spine-{n}"
         attrs:
           role: "spine"
-    adjacency:
+    links:
       - source: "/leaf"
         target: "/spine"
         pattern: "mesh"
-        link_params:
-          capacity: 40000.0
-          cost: 1000
+        capacity: 40000.0
+        cost: 1000
 
 network:
   name: Blueprint Test Network
-  groups:
+  nodes:
     fabric:
-      use_blueprint: "clos_2tier"
-      parameters:
-        leaf.node_count: 6
+      blueprint: "clos_2tier"
+      params:
+        leaf.count: 6
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 """
         data = yaml.safe_load(blueprint_scenario)
         jsonschema.validate(data, schema)
 
-    def test_schema_validates_adjacency_selector_objects(self, schema):
-        """Adjacency with selector objects for source/target should validate."""
+    def test_schema_validates_link_selector_objects(self, schema):
+        """Links with selector objects for source/target should validate."""
         valid = {
             "network": {
                 "nodes": {},
-                "links": [],
-                "adjacency": [
+                "links": [
                     {
                         "source": {
                             "path": "/A",
@@ -248,7 +242,7 @@ workflow:
                                 "conditions": [
                                     {
                                         "attr": "role",
-                                        "operator": "==",
+                                        "op": "==",
                                         "value": "compute",
                                     }
                                 ],
@@ -267,26 +261,25 @@ workflow:
         override_scenario = """
 network:
   name: Override Test Network
-  groups:
+  nodes:
     servers:
-      node_count: 4
-      name_template: "srv-{node_num}"
-  node_overrides:
+      count: 4
+      template: "srv-{n}"
+  node_rules:
     - path: "srv-[12]"
       attrs:
         hw_type: "gpu_server"
         gpu_count: 8
       risk_groups: ["gpu_srg"]
-  link_overrides:
+  link_rules:
     - source: "srv-1"
       target: "srv-2"
-      link_params:
-        capacity: 100000.0
-        attrs:
-          link_type: "high_bandwidth"
+      capacity: 100000.0
+      attrs:
+        link_type: "high_bandwidth"
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 """
         data = yaml.safe_load(override_scenario)
@@ -316,7 +309,7 @@ network:
         hw_component: "ToRSwitch48p"
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 """
         data = yaml.safe_load(components_scenario)
@@ -325,30 +318,31 @@ workflow:
     def test_schema_validates_complex_failure_policies(self, schema):
         """Test that the schema validates complex failure policies with conditions."""
         complex_failure_scenario = """
-failure_policy_set:
+failures:
   conditional_failure:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "node"
-            rule_type: "choice"
+          - scope: "node"
+            mode: "choice"
             count: 2
-            conditions:
-              - attr: "attrs.role"
-                operator: "=="
-                value: "spine"
-              - attr: "attrs.criticality"
-                operator: ">="
-                value: 5
-            logic: "and"
+            match:
+              logic: "and"
+              conditions:
+                - attr: "attrs.role"
+                  op: "=="
+                  value: "spine"
+                - attr: "attrs.criticality"
+                  op: ">="
+                  value: 5
   risk_group_failure:
-    fail_risk_groups: true
-    fail_risk_group_children: true
+    expand_groups: true
+    expand_children: true
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: "risk_group"
-            rule_type: "choice"
+          - scope: "risk_group"
+            mode: "choice"
             count: 1
 
 network:
@@ -364,7 +358,7 @@ network:
         criticality: 3
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 """
         data = yaml.safe_load(complex_failure_scenario)
@@ -373,21 +367,21 @@ workflow:
     def test_schema_validates_traffic_matrices(self, schema):
         """Test that the schema validates complex traffic matrices."""
         traffic_scenario = """
-traffic_matrix_set:
+demands:
   default:
     - source: "^spine.*"
-      sink: "^leaf.*"
-      demand: 1000.0
+      target: "^leaf.*"
+      volume: 1000.0
       mode: "combine"
       priority: 1
       attrs:
         traffic_type: "north_south"
   hpc_workload:
     - source: "compute.*"
-      sink: "storage.*"
-      demand: 5000.0
+      target: "storage.*"
+      volume: 5000.0
       mode: "pairwise"
-      flow_policy_config:
+      flow_policy:
         shortest_path: false
         flow_placement: "EQUAL_BALANCED"
 
@@ -400,12 +394,12 @@ network:
     storage1: {}
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
-  - step_type: CapacityEnvelopeAnalysis
+  - type: CapacityEnvelopeAnalysis
     name: capacity_test
     source: "spine1"
-    sink: "leaf1"
+    target: "leaf1"
     iterations: 1
     baseline: false
     failure_policy: null
@@ -415,36 +409,36 @@ workflow:
         jsonschema.validate(data, schema)
 
     def test_schema_validates_variable_expansion(self, schema):
-        """Test that the schema validates variable expansion in adjacency."""
+        """Test that the schema validates variable expansion in links."""
         expansion_scenario = """
 blueprints:
   datacenter:
-    groups:
+    nodes:
       rack:
-        node_count: 4
-        name_template: "rack{rack_id}-{node_num}"
+        count: 4
+        template: "rack{rack_id}-{n}"
       spine:
-        node_count: 2
-        name_template: "spine-{node_num}"
-    adjacency:
+        count: 2
+        template: "spine-{n}"
+    links:
       - source: "/rack"
         target: "/spine"
         pattern: "mesh"
-        expand_vars:
-          rack_id: [1, 2, 3]
-        expansion_mode: "cartesian"
-        link_params:
-          capacity: 25000.0
-          cost: 1
+        expand:
+          vars:
+            rack_id: [1, 2, 3]
+          mode: "cartesian"
+        capacity: 25000.0
+        cost: 1
 
 network:
   name: Variable Expansion Test
-  groups:
+  nodes:
     dc1:
-      use_blueprint: "datacenter"
+      blueprint: "datacenter"
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build_graph
 """
         data = yaml.safe_load(expansion_scenario)
@@ -462,16 +456,15 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 100
-        cost: 1
-        risk_groups: ["test_rg"]
+      capacity: 100
+      cost: 1
+      risk_groups: ["test_rg"]
 
 risk_groups:
   - name: test_rg
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
     name: build
 """
         data = yaml.safe_load(valid_yaml)

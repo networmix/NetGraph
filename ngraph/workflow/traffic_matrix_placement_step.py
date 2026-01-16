@@ -1,10 +1,23 @@
 """TrafficMatrixPlacement workflow step.
 
-Runs Monte Carlo demand placement using a named traffic matrix and produces
+Runs Monte Carlo demand placement using a named demand set and produces
 unified `flow_results` per iteration under `data.flow_results`.
 
 Baseline (no failures) is always run first as a separate reference. The `iterations`
 parameter specifies how many failure scenarios to run.
+
+YAML Configuration Example:
+    ```yaml
+    workflow:
+      - type: TrafficMatrixPlacement
+        name: "tm_analysis"
+        demand_set: "default"
+        failure_policy: "single_link"    # Optional: failure policy name
+        iterations: 100                  # Number of failure scenarios
+        parallelism: 4                   # Worker processes (or "auto")
+        alpha: 1.0                       # Demand volume multiplier
+        include_flow_details: true       # Include cost distribution per flow
+    ```
 """
 
 from __future__ import annotations
@@ -30,7 +43,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class TrafficMatrixPlacement(WorkflowStep):
-    """Monte Carlo demand placement using a named traffic matrix.
+    """Monte Carlo demand placement using a named demand set.
 
     Baseline (no failures) is always run first as a separate reference. Results are
     returned with baseline in a separate field. The flow_results list contains unique
@@ -38,8 +51,8 @@ class TrafficMatrixPlacement(WorkflowStep):
     many iterations matched that pattern.
 
     Attributes:
-        matrix_name: Name of the traffic matrix to analyze.
-        failure_policy: Optional policy name in scenario.failure_policy_set.
+        demand_set: Name of the demand set to analyze.
+        failure_policy: Optional failure policy name in scenario.failure_policy_set.
         iterations: Number of failure iterations to run.
         parallelism: Number of parallel worker processes.
         placement_rounds: Placement optimization rounds (int or "auto").
@@ -47,12 +60,12 @@ class TrafficMatrixPlacement(WorkflowStep):
         store_failure_patterns: Whether to store failure pattern results.
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
-        alpha: Numeric scale for demands in the matrix.
+        alpha: Numeric scale for demands in the set.
         alpha_from_step: Optional producer step name to read alpha from.
         alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
     """
 
-    matrix_name: str = ""
+    demand_set: str = ""
     failure_policy: str | None = None
     iterations: int = 1
     parallelism: int | str = "auto"
@@ -78,15 +91,15 @@ class TrafficMatrixPlacement(WorkflowStep):
             raise ValueError("alpha must be > 0.0")
 
     def run(self, scenario: "Scenario") -> None:
-        if not self.matrix_name:
-            raise ValueError("'matrix_name' is required for TrafficMatrixPlacement")
+        if not self.demand_set:
+            raise ValueError("'demand_set' is required for TrafficMatrixPlacement")
 
         t0 = time.perf_counter()
         logger.info("Starting TrafficMatrixPlacement: name=%s", self.name)
         logger.debug(
-            "TrafficMatrixPlacement params: matrix_name=%s failure_iters=%d "
+            "TrafficMatrixPlacement params: demand_set=%s failure_iters=%d "
             "parallelism=%s placement_rounds=%s failure_policy=%s alpha=%s",
-            self.matrix_name,
+            self.demand_set,
             self.iterations,
             self.parallelism,
             self.placement_rounds,
@@ -94,12 +107,12 @@ class TrafficMatrixPlacement(WorkflowStep):
             self.alpha,
         )
 
-        # Extract and serialize traffic matrix
+        # Extract and serialize demand set
         try:
-            td_list = scenario.traffic_matrix_set.get_matrix(self.matrix_name)
+            td_list = scenario.demand_set.get_set(self.demand_set)
         except KeyError as exc:
             raise ValueError(
-                f"Traffic matrix '{self.matrix_name}' not found in scenario."
+                f"Demand set '{self.demand_set}' not found in scenario."
             ) from exc
 
         from ngraph.model.flow.policy_config import serialize_policy_preset
@@ -122,30 +135,26 @@ class TrafficMatrixPlacement(WorkflowStep):
                 {
                     "id": td.id,
                     "source": td.source,
-                    "sink": td.sink,
-                    "demand": float(td.demand) * float(effective_alpha),
+                    "target": td.target,
+                    "volume": float(td.volume) * float(effective_alpha),
                     "mode": getattr(td, "mode", "pairwise"),
-                    "flow_policy_config": getattr(td, "flow_policy_config", None),
+                    "flow_policy": getattr(td, "flow_policy", None),
                     "priority": getattr(td, "priority", 0),
                     "group_mode": getattr(td, "group_mode", "flatten"),
-                    "expand_vars": getattr(td, "expand_vars", None) or {},
-                    "expansion_mode": getattr(td, "expansion_mode", "cartesian"),
                 }
             )
             base_demands.append(
                 {
                     "id": td.id,
                     "source": getattr(td, "source", ""),
-                    "sink": getattr(td, "sink", ""),
-                    "demand": float(getattr(td, "demand", 0.0)),
+                    "target": getattr(td, "target", ""),
+                    "volume": float(getattr(td, "volume", 0.0)),
                     "mode": getattr(td, "mode", "pairwise"),
                     "priority": int(getattr(td, "priority", 0)),
-                    "flow_policy_config": serialize_policy_preset(
-                        getattr(td, "flow_policy_config", None)
+                    "flow_policy": serialize_policy_preset(
+                        getattr(td, "flow_policy", None)
                     ),
                     "group_mode": getattr(td, "group_mode", "flatten"),
-                    "expand_vars": getattr(td, "expand_vars", None) or {},
-                    "expansion_mode": getattr(td, "expansion_mode", "cartesian"),
                 }
             )
 
@@ -205,7 +214,7 @@ class TrafficMatrixPlacement(WorkflowStep):
                 "baseline": baseline_dict,
                 "flow_results": flow_results,
                 "context": {
-                    "matrix_name": self.matrix_name,
+                    "demand_set": self.demand_set,
                     "placement_rounds": self.placement_rounds,
                     "include_flow_details": self.include_flow_details,
                     "include_used_edges": self.include_used_edges,

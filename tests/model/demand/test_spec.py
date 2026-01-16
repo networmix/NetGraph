@@ -4,12 +4,12 @@ from ngraph.model.flow.policy_config import FlowPolicyPreset as FlowPolicyConfig
 
 def test_defaults_and_id_generation() -> None:
     """TrafficDemand sets sane defaults and generates a unique, structured id."""
-    demand = TrafficDemand(source="Src", sink="Dst")
+    demand = TrafficDemand(source="Src", target="Dst")
 
     # Defaults
     assert demand.priority == 0
-    assert demand.demand == 0.0
-    assert demand.demand_placed == 0.0
+    assert demand.volume == 0.0
+    assert demand.volume_placed == 0.0
     assert demand.mode == "combine"
     assert demand.attrs == {}
 
@@ -20,7 +20,7 @@ def test_defaults_and_id_generation() -> None:
     assert len(parts) == 3
     assert all(parts)
 
-    demand2 = TrafficDemand(source="Src", sink="Dst")
+    demand2 = TrafficDemand(source="Src", target="Dst")
     assert demand2.id != demand.id
 
 
@@ -29,23 +29,23 @@ def test_explicit_id_preserved() -> None:
     demand = TrafficDemand(
         id="my-explicit-id",
         source="Src",
-        sink="Dst",
-        demand=100.0,
+        target="Dst",
+        volume=100.0,
     )
     assert demand.id == "my-explicit-id"
 
 
 def test_explicit_id_round_trip() -> None:
     """TrafficDemand ID survives serialization to dict and reconstruction."""
-    original = TrafficDemand(source="A", sink="B", demand=50.0)
+    original = TrafficDemand(source="A", target="B", volume=50.0)
     original_id = original.id
 
     # Simulate serialization (as done in workflow steps)
     config = {
         "id": original.id,
         "source": original.source,
-        "sink": original.sink,
-        "demand": original.demand,
+        "target": original.target,
+        "volume": original.volume,
         "mode": original.mode,
         "priority": original.priority,
     }
@@ -54,8 +54,8 @@ def test_explicit_id_round_trip() -> None:
     reconstructed = TrafficDemand(
         id=config.get("id"),
         source=config["source"],
-        sink=config["sink"],
-        demand=config["demand"],
+        target=config["target"],
+        volume=config["volume"],
         mode=config.get("mode", "pairwise"),
         priority=config.get("priority", 0),
     )
@@ -65,8 +65,8 @@ def test_explicit_id_round_trip() -> None:
 
 def test_attrs_isolation_between_instances() -> None:
     """Each instance gets its own attrs dict; mutating one does not affect others."""
-    d1 = TrafficDemand(source="A", sink="B")
-    d2 = TrafficDemand(source="A", sink="B")
+    d1 = TrafficDemand(source="A", target="B")
+    d2 = TrafficDemand(source="A", target="B")
 
     d1.attrs["k"] = "v"
     assert d1.attrs == {"k": "v"}
@@ -77,20 +77,20 @@ def test_custom_assignment_including_policy_config() -> None:
     """Custom field values are preserved, including mode and policy config."""
     demand = TrafficDemand(
         source="SourceNode",
-        sink="TargetNode",
+        target="TargetNode",
         priority=5,
-        demand=42.5,
-        demand_placed=10.0,
+        volume=42.5,
+        volume_placed=10.0,
         attrs={"description": "test"},
         mode="pairwise",
-        flow_policy_config=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
+        flow_policy=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
     )
 
     assert demand.source == "SourceNode"
-    assert demand.sink == "TargetNode"
+    assert demand.target == "TargetNode"
     assert demand.priority == 5
-    assert demand.demand == 42.5
-    assert demand.demand_placed == 10.0
+    assert demand.volume == 42.5
+    assert demand.volume_placed == 10.0
     assert demand.attrs == {"description": "test"}
     assert demand.mode == "pairwise"
-    assert demand.flow_policy_config == FlowPolicyConfig.SHORTEST_PATHS_ECMP
+    assert demand.flow_policy == FlowPolicyConfig.SHORTEST_PATHS_ECMP

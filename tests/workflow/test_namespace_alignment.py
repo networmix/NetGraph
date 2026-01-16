@@ -14,7 +14,7 @@ network:
     B: {}
 
 workflow:
-  - step_type: BuildGraph
+  - type: BuildGraph
 """
 
     scenario = Scenario.from_yaml(yaml_content)

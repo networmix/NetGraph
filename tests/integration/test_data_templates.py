@@ -59,7 +59,8 @@ class NetworkTemplates:
                 {
                     "source": node_names[i],
                     "target": node_names[i + 1],
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 }
             )
 
@@ -78,7 +79,8 @@ class NetworkTemplates:
                 {
                     "source": center_node,
                     "target": leaf,
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 }
             )
 
@@ -98,7 +100,8 @@ class NetworkTemplates:
                         {
                             "source": source,
                             "target": target,
-                            "link_params": {"capacity": link_capacity, "cost": 1},
+                            "capacity": link_capacity,
+                            "cost": 1,
                         }
                     )
 
@@ -117,7 +120,8 @@ class NetworkTemplates:
                 {
                     "source": node_names[i],
                     "target": node_names[next_i],
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 }
             )
 
@@ -150,7 +154,8 @@ class NetworkTemplates:
                         {
                             "source": parent_name,
                             "target": child_name,
-                            "link_params": {"capacity": link_capacity, "cost": 1},
+                            "capacity": link_capacity,
+                            "cost": 1,
                         }
                     )
 
@@ -165,17 +170,13 @@ class BlueprintTemplates:
 
     @staticmethod
     def simple_group_blueprint(
-        group_name: str, node_count: int, name_template: Optional[str] = None
+        group_name: str, count: int, template: Optional[str] = None
     ) -> Dict[str, Any]:
         """Create a simple blueprint with one group of nodes."""
-        if name_template is None:
-            name_template = f"{group_name}-{{node_num}}"
+        if template is None:
+            template = f"{group_name}-{{n}}"
 
-        return {
-            "groups": {
-                group_name: {"node_count": node_count, "name_template": name_template}
-            }
-        }
+        return {"nodes": {group_name: {"count": count, "template": template}}}
 
     @staticmethod
     def two_tier_blueprint(
@@ -186,16 +187,17 @@ class BlueprintTemplates:
     ) -> Dict[str, Any]:
         """Create a two-tier blueprint (leaf-spine pattern)."""
         return {
-            "groups": {
-                "tier1": {"node_count": tier1_count, "name_template": "t1-{node_num}"},
-                "tier2": {"node_count": tier2_count, "name_template": "t2-{node_num}"},
+            "nodes": {
+                "tier1": {"count": tier1_count, "template": "t1-{n}"},
+                "tier2": {"count": tier2_count, "template": "t2-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "/tier1",
                     "target": "/tier2",
                     "pattern": pattern,
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 }
             ],
         }
@@ -209,29 +211,31 @@ class BlueprintTemplates:
     ) -> Dict[str, Any]:
         """Create a three-tier Clos blueprint."""
         return {
-            "groups": {
-                "leaf": {"node_count": leaf_count, "name_template": "leaf-{node_num}"},
+            "nodes": {
+                "leaf": {"count": leaf_count, "template": "leaf-{n}"},
                 "spine": {
-                    "node_count": spine_count,
-                    "name_template": "spine-{node_num}",
+                    "count": spine_count,
+                    "template": "spine-{n}",
                 },
                 "super_spine": {
-                    "node_count": super_spine_count,
-                    "name_template": "ss-{node_num}",
+                    "count": super_spine_count,
+                    "template": "ss-{n}",
                 },
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "/leaf",
                     "target": "/spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 },
                 {
                     "source": "/spine",
                     "target": "/super_spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": link_capacity, "cost": 1},
+                    "capacity": link_capacity,
+                    "cost": 1,
                 },
             ],
         }
@@ -244,11 +248,11 @@ class BlueprintTemplates:
     ) -> Dict[str, Any]:
         """Create a blueprint that wraps another blueprint with additional components."""
         blueprint_data = {
-            "groups": {wrapper_group_name: {"use_blueprint": inner_blueprint_name}}
+            "nodes": {wrapper_group_name: {"blueprint": inner_blueprint_name}}
         }
 
         if additional_groups:
-            blueprint_data["groups"].update(additional_groups)
+            blueprint_data["nodes"].update(additional_groups)
 
         return blueprint_data
 
@@ -266,9 +270,7 @@ class FailurePolicyTemplates:
             "modes": [
                 {
                     "weight": 1.0,
-                    "rules": [
-                        {"entity_scope": "link", "rule_type": "choice", "count": 1}
-                    ],
+                    "rules": [{"scope": "link", "mode": "choice", "count": 1}],
                 }
             ],
         }
@@ -283,27 +285,25 @@ class FailurePolicyTemplates:
             "modes": [
                 {
                     "weight": 1.0,
-                    "rules": [
-                        {"entity_scope": "node", "rule_type": "choice", "count": 1}
-                    ],
+                    "rules": [{"scope": "node", "mode": "choice", "count": 1}],
                 }
             ],
         }
 
     @staticmethod
-    def multiple_failure(entity_scope: str, count: int) -> Dict[str, Any]:
+    def multiple_failure(scope: str, count: int) -> Dict[str, Any]:
         """Template for multiple simultaneous failures."""
         return {
             "attrs": {
-                "description": f"Multiple {entity_scope} failure scenario",
+                "description": f"Multiple {scope} failure scenario",
             },
             "modes": [
                 {
                     "weight": 1.0,
                     "rules": [
                         {
-                            "entity_scope": entity_scope,
-                            "rule_type": "choice",
+                            "scope": scope,
+                            "mode": "choice",
                             "count": count,
                         }
                     ],
@@ -318,9 +318,7 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": "All links failure scenario",
             },
-            "modes": [
-                {"weight": 1.0, "rules": [{"entity_scope": "link", "rule_type": "all"}]}
-            ],
+            "modes": [{"weight": 1.0, "rules": [{"scope": "link", "mode": "all"}]}],
         }
 
     @staticmethod
@@ -330,18 +328,18 @@ class FailurePolicyTemplates:
             "attrs": {
                 "description": f"Failure of risk group {risk_group_name}",
             },
-            "fail_risk_groups": True,
+            "expand_groups": True,
             "modes": [
                 {
                     "weight": 1.0,
                     "rules": [
                         {
-                            "entity_scope": "link",
-                            "rule_type": "all",
+                            "scope": "link",
+                            "mode": "all",
                             "conditions": [
                                 {
                                     "attr": "risk_groups",
-                                    "operator": "contains",
+                                    "op": "contains",
                                     "value": risk_group_name,
                                 }
                             ],
@@ -362,13 +360,13 @@ class TrafficDemandTemplates:
         """Create uniform all-to-all traffic demands."""
         demands = []
         for source in node_names:
-            for sink in node_names:
-                if source != sink:  # Skip self-demands
+            for target in node_names:
+                if source != target:  # Skip self-demands
                     demands.append(
                         {
                             "source": source,
-                            "sink": sink,
-                            "demand": demand_value,
+                            "target": target,
+                            "volume": demand_value,
                         }
                     )
         return demands
@@ -383,13 +381,13 @@ class TrafficDemandTemplates:
         # Traffic from leaves to center
         for leaf in leaf_nodes:
             demands.append(
-                {"source": leaf, "sink": center_node, "demand": demand_value}
+                {"source": leaf, "target": center_node, "volume": demand_value}
             )
 
         # Traffic from center to leaves
         for leaf in leaf_nodes:
             demands.append(
-                {"source": center_node, "sink": leaf, "demand": demand_value}
+                {"source": center_node, "target": leaf, "volume": demand_value}
             )
 
         return demands
@@ -410,10 +408,10 @@ class TrafficDemandTemplates:
 
         for _ in range(num_demands):
             source = random.choice(node_names)
-            sink = random.choice([n for n in node_names if n != source])
+            target = random.choice([n for n in node_names if n != source])
             demand_value = random.uniform(min_demand, max_demand)
 
-            demands.append({"source": source, "sink": sink, "demand": demand_value})
+            demands.append({"source": source, "target": target, "volume": demand_value})
 
         return demands
 
@@ -433,20 +431,20 @@ class TrafficDemandTemplates:
                 demands.append(
                     {
                         "source": source,
-                        "sink": hotspot,
-                        "demand": hotspot_demand,
+                        "target": hotspot,
+                        "volume": hotspot_demand,
                     }
                 )
 
         # Normal demand for other traffic
         for source in other_nodes:
-            for sink in other_nodes:
-                if source != sink:
+            for target in other_nodes:
+                if source != target:
                     demands.append(
                         {
                             "source": source,
-                            "sink": sink,
-                            "demand": normal_demand,
+                            "target": target,
+                            "volume": normal_demand,
                         }
                     )
 
@@ -459,25 +457,25 @@ class WorkflowTemplates:
     @staticmethod
     def basic_build_workflow() -> List[Dict[str, Any]]:
         """Basic workflow that just builds the graph."""
-        return [{"step_type": "BuildGraph", "name": "build_graph"}]
+        return [{"type": "BuildGraph", "name": "build_graph"}]
 
     @staticmethod
     def capacity_analysis_workflow(
-        source_pattern: str, sink_pattern: str, modes: Optional[List[str]] = None
+        source_pattern: str, target_pattern: str, modes: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
-        """Workflow for capacity analysis between source and sink patterns."""
+        """Workflow for capacity analysis between source and target patterns."""
         if modes is None:
             modes = ["combine", "pairwise"]
 
-        workflow = [{"step_type": "BuildGraph", "name": "build_graph"}]
+        workflow = [{"type": "BuildGraph", "name": "build_graph"}]
 
         for i, mode in enumerate(modes):
             workflow.append(
                 {
-                    "step_type": "MaxFlow",
+                    "type": "MaxFlow",
                     "name": f"capacity_analysis_{i}",
                     "source": source_pattern,
-                    "sink": sink_pattern,
+                    "target": target_pattern,
                     "mode": mode,
                     "iterations": 1,
                     "failure_policy": None,
@@ -489,16 +487,16 @@ class WorkflowTemplates:
 
     @staticmethod
     def failure_analysis_workflow(
-        source_pattern: str, sink_pattern: str, failure_policy_name: str = "default"
+        source_pattern: str, target_pattern: str
     ) -> List[Dict[str, Any]]:
         """Workflow for analyzing network under failures."""
         return [
-            {"step_type": "BuildGraph", "name": "build_graph"},
+            {"type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "failure_analysis",
                 "source": source_pattern,
-                "sink": sink_pattern,
+                "target": target_pattern,
                 "iterations": 100,
                 "parallelism": 4,
             },
@@ -506,33 +504,33 @@ class WorkflowTemplates:
 
     @staticmethod
     def comprehensive_analysis_workflow(
-        source_pattern: str, sink_pattern: str
+        source_pattern: str, target_pattern: str
     ) -> List[Dict[str, Any]]:
         """Comprehensive workflow with multiple analysis steps."""
         return [
-            {"step_type": "BuildGraph", "name": "build_graph"},
+            {"type": "BuildGraph", "name": "build_graph"},
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "capacity_analysis_combine",
                 "source": source_pattern,
-                "sink": sink_pattern,
+                "target": target_pattern,
                 "mode": "combine",
                 "iterations": 1,
             },
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "capacity_analysis_pairwise",
                 "source": source_pattern,
-                "sink": sink_pattern,
+                "target": target_pattern,
                 "mode": "pairwise",
                 "shortest_path": True,
                 "iterations": 1,
             },
             {
-                "step_type": "MaxFlow",
+                "type": "MaxFlow",
                 "name": "envelope_analysis",
                 "source": source_pattern,
-                "sink": sink_pattern,
+                "target": target_pattern,
                 "iterations": 50,
             },
         ]
@@ -596,11 +594,11 @@ class ScenarioTemplateBuilder:
         # Add to network
         if "network" not in self.builder.data:
             self.builder.data["network"] = {"name": self.name, "version": self.version}
-        if "groups" not in self.builder.data["network"]:
-            self.builder.data["network"]["groups"] = {}
+        if "nodes" not in self.builder.data["network"]:
+            self.builder.data["network"]["nodes"] = {}
 
-        self.builder.data["network"]["groups"][fabric_name] = {
-            "use_blueprint": "clos_fabric"
+        self.builder.data["network"]["nodes"][fabric_name] = {
+            "blueprint": "clos_fabric"
         }
 
         return self
@@ -611,19 +609,19 @@ class ScenarioTemplateBuilder:
         """Add uniform traffic demands between node patterns."""
         demands = []
         for source_pattern in node_patterns:
-            for sink_pattern in node_patterns:
-                if source_pattern != sink_pattern:
+            for target_pattern in node_patterns:
+                if source_pattern != target_pattern:
                     demands.append(
                         {
                             "source": source_pattern,
-                            "sink": sink_pattern,
-                            "demand": demand_value,
+                            "target": target_pattern,
+                            "volume": demand_value,
                         }
                     )
 
-        if "traffic_matrix_set" not in self.builder.data:
-            self.builder.data["traffic_matrix_set"] = {}
-        self.builder.data["traffic_matrix_set"]["default"] = demands
+        if "demands" not in self.builder.data:
+            self.builder.data["demands"] = {}
+        self.builder.data["demands"]["default"] = demands
 
         return self
 
@@ -653,9 +651,9 @@ class CommonScenarios:
     """Pre-built scenario templates for common testing patterns."""
 
     @staticmethod
-    def simple_linear_with_failures(node_count: int = 4) -> str:
+    def simple_linear_with_failures(count: int = 4) -> str:
         """Simple linear network with single link failure analysis."""
-        nodes = [f"Node{i}" for i in range(1, node_count + 1)]
+        nodes = [f"Node{i}" for i in range(1, count + 1)]
 
         return (
             ScenarioTemplateBuilder("simple_linear", "1.0")
@@ -733,7 +731,8 @@ class ErrorInjectionTemplates:
             {
                 "source": "NodeA",
                 "target": "NonexistentNode",
-                "link_params": {"capacity": 10, "cost": 1},
+                "capacity": 10,
+                "cost": 1,
             }
         ]
         builder.with_workflow_step("BuildGraph", "build_graph")
@@ -744,14 +743,14 @@ class ErrorInjectionTemplates:
         """Create scenario builder with circular blueprint references."""
         builder = ScenarioDataBuilder()
         builder.with_blueprint(
-            "blueprint_a", {"groups": {"group_a": {"use_blueprint": "blueprint_b"}}}
+            "blueprint_a", {"nodes": {"group_a": {"blueprint": "blueprint_b"}}}
         )
         builder.with_blueprint(
-            "blueprint_b", {"groups": {"group_b": {"use_blueprint": "blueprint_a"}}}
+            "blueprint_b", {"nodes": {"group_b": {"blueprint": "blueprint_a"}}}
         )
         builder.data["network"] = {
             "name": "circular_test",
-            "groups": {"test_group": {"use_blueprint": "blueprint_a"}},
+            "nodes": {"test_group": {"blueprint": "blueprint_a"}},
         }
         builder.with_workflow_step("BuildGraph", "build_graph")
         return builder
@@ -767,8 +766,8 @@ class ErrorInjectionTemplates:
             {
                 "rules": [
                     {
-                        "entity_scope": "invalid_scope",  # Invalid scope
-                        "rule_type": "choice",
+                        "scope": "invalid_scope",  # Invalid scope
+                        "mode": "choice",
                         "count": 1,
                     }
                 ]
@@ -796,7 +795,7 @@ class ErrorInjectionTemplates:
         # Add CapacityEnvelopeAnalysis without required parameters
         builder.data["workflow"] = [
             {
-                "step_type": "CapacityEnvelopeAnalysis",
+                "type": "CapacityEnvelopeAnalysis",
                 "name": "incomplete_analysis",
                 # Missing source and sink
             }
@@ -804,16 +803,16 @@ class ErrorInjectionTemplates:
         return builder
 
     @staticmethod
-    def large_network_builder(node_count: int = 1000) -> ScenarioDataBuilder:
+    def large_network_builder(count: int = 1000) -> ScenarioDataBuilder:
         """Create scenario builder for stress testing with large networks."""
         builder = ScenarioDataBuilder()
 
         # Create many nodes
-        node_names = [f"Node_{i:04d}" for i in range(node_count)]
+        node_names = [f"Node_{i:04d}" for i in range(count)]
         builder.with_simple_nodes(node_names)
 
         # Create star topology to avoid O(n²) mesh complexity
-        if node_count > 1:
+        if count > 1:
             center_node = node_names[0]
             leaf_nodes = node_names[1:]
 
@@ -837,10 +836,10 @@ class ErrorInjectionTemplates:
                 builder.with_blueprint(
                     f"level_{i}",
                     {
-                        "groups": {
-                            "nodes": {
-                                "node_count": 1,
-                                "name_template": f"level_{i}_node_{{node_num}}",
+                        "nodes": {
+                            "leaf": {
+                                "count": 1,
+                                "template": f"level_{i}_node_{{n}}",
                             }
                         }
                     },
@@ -848,13 +847,13 @@ class ErrorInjectionTemplates:
             else:
                 builder.with_blueprint(
                     f"level_{i}",
-                    {"groups": {"nested": {"use_blueprint": f"level_{i - 1}"}}},
+                    {"nodes": {"nested": {"blueprint": f"level_{i - 1}"}}},
                 )
 
         # Use the deepest blueprint
         builder.data["network"] = {
             "name": "deep_nesting_test",
-            "groups": {"deep_group": {"use_blueprint": f"level_{depth - 1}"}},
+            "nodes": {"deep_group": {"blueprint": f"level_{depth - 1}"}},
         }
         builder.with_workflow_step("BuildGraph", "build_graph")
         return builder
@@ -880,10 +879,10 @@ class EdgeCaseTemplates:
         return builder
 
     @staticmethod
-    def isolated_nodes_builder(node_count: int = 5) -> ScenarioDataBuilder:
+    def isolated_nodes_builder(count: int = 5) -> ScenarioDataBuilder:
         """Create scenario builder with multiple isolated nodes."""
         builder = ScenarioDataBuilder()
-        node_names = [f"Isolated_{i}" for i in range(node_count)]
+        node_names = [f"Isolated_{i}" for i in range(count)]
         builder.with_simple_nodes(node_names)
         # No links - all nodes isolated
         builder.with_workflow_step("BuildGraph", "build_graph")
@@ -895,8 +894,8 @@ class EdgeCaseTemplates:
         builder = ScenarioDataBuilder()
         builder.with_simple_nodes(["A", "B", "C"])
         builder.data["network"]["links"] = [
-            {"source": "A", "target": "B", "link_params": {"capacity": 0, "cost": 1}},
-            {"source": "B", "target": "C", "link_params": {"capacity": 0, "cost": 1}},
+            {"source": "A", "target": "B", "capacity": 0, "cost": 1},
+            {"source": "B", "target": "C", "capacity": 0, "cost": 1},
         ]
         builder.with_workflow_step("BuildGraph", "build_graph")
         return builder
@@ -910,10 +909,8 @@ class EdgeCaseTemplates:
             {
                 "source": "NodeA",
                 "target": "NodeB",
-                "link_params": {
-                    "capacity": 999999999999,  # Very large capacity
-                    "cost": 999999999999,  # Very large cost
-                },
+                "capacity": 999999999999,  # Very large capacity
+                "cost": 999999999999,  # Very large cost
             }
         ]
         builder.with_traffic_demand("NodeA", "NodeB", 888888888888.0)  # Large demand
@@ -942,9 +939,9 @@ class EdgeCaseTemplates:
 
         # Add multiple links with different parameters
         builder.data["network"]["links"] = [
-            {"source": "A", "target": "B", "link_params": {"capacity": 10, "cost": 1}},
-            {"source": "A", "target": "B", "link_params": {"capacity": 20, "cost": 2}},
-            {"source": "A", "target": "B", "link_params": {"capacity": 15, "cost": 3}},
+            {"source": "A", "target": "B", "capacity": 10, "cost": 1},
+            {"source": "A", "target": "B", "capacity": 20, "cost": 2},
+            {"source": "A", "target": "B", "capacity": 15, "cost": 3},
         ]
         builder.with_workflow_step("BuildGraph", "build_graph")
         return builder
@@ -983,16 +980,17 @@ class PerformanceTestTemplates:
 
         # Create large mesh blueprint
         large_mesh_blueprint = {
-            "groups": {
-                "side_a": {"node_count": side_size, "name_template": "a-{node_num}"},
-                "side_b": {"node_count": side_size, "name_template": "b-{node_num}"},
+            "nodes": {
+                "side_a": {"count": side_size, "template": "a-{n}"},
+                "side_b": {"count": side_size, "template": "b-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "/side_a",
                     "target": "/side_b",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 1, "cost": 1},
+                    "capacity": 1,
+                    "cost": 1,
                 }
             ],
         }
@@ -1000,7 +998,7 @@ class PerformanceTestTemplates:
         builder.with_blueprint("large_mesh", large_mesh_blueprint)
         builder.data["network"] = {
             "name": "large_mesh_test",
-            "groups": {"mesh_group": {"use_blueprint": "large_mesh"}},
+            "nodes": {"mesh_group": {"blueprint": "large_mesh"}},
         }
         builder.with_workflow_step("BuildGraph", "build_graph")
         return builder
@@ -1016,23 +1014,25 @@ class PerformanceTestTemplates:
 
         # Create aggregation layer
         agg_layer = {
-            "groups": {
-                "brick1": {"use_blueprint": "basic_brick"},
-                "brick2": {"use_blueprint": "basic_brick"},
-                "agg_spine": {"node_count": 8, "name_template": "agg-{node_num}"},
+            "nodes": {
+                "brick1": {"blueprint": "basic_brick"},
+                "brick2": {"blueprint": "basic_brick"},
+                "agg_spine": {"count": 8, "template": "agg-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "brick1/tier2",
                     "target": "agg_spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 20, "cost": 1},
+                    "capacity": 20,
+                    "cost": 1,
                 },
                 {
                     "source": "brick2/tier2",
                     "target": "agg_spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 20, "cost": 1},
+                    "capacity": 20,
+                    "cost": 1,
                 },
             ],
         }
@@ -1040,23 +1040,25 @@ class PerformanceTestTemplates:
 
         # Create core layer
         core_layer = {
-            "groups": {
-                "agg1": {"use_blueprint": "agg_layer"},
-                "agg2": {"use_blueprint": "agg_layer"},
-                "core_spine": {"node_count": 4, "name_template": "core-{node_num}"},
+            "nodes": {
+                "agg1": {"blueprint": "agg_layer"},
+                "agg2": {"blueprint": "agg_layer"},
+                "core_spine": {"count": 4, "template": "core-{n}"},
             },
-            "adjacency": [
+            "links": [
                 {
                     "source": "agg1/agg_spine",
                     "target": "core_spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 40, "cost": 1},
+                    "capacity": 40,
+                    "cost": 1,
                 },
                 {
                     "source": "agg2/agg_spine",
                     "target": "core_spine",
                     "pattern": "mesh",
-                    "link_params": {"capacity": 40, "cost": 1},
+                    "capacity": 40,
+                    "cost": 1,
                 },
             ],
         }
@@ -1065,7 +1067,7 @@ class PerformanceTestTemplates:
         # Use in network
         builder.data["network"] = {
             "name": "complex_multi_blueprint",
-            "groups": {"datacenter": {"use_blueprint": "core_layer"}},
+            "nodes": {"datacenter": {"blueprint": "core_layer"}},
         }
 
         # Add capacity analysis workflow

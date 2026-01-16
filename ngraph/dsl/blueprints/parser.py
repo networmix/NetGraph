@@ -13,8 +13,7 @@ from ngraph.dsl.expansion import expand_name_patterns
 
 __all__ = [
     "check_no_extra_keys",
-    "check_adjacency_keys",
-    "check_link_params",
+    "check_link_keys",
     "expand_name_patterns",
     "join_paths",
 ]
@@ -38,38 +37,26 @@ def check_no_extra_keys(
         )
 
 
-def check_adjacency_keys(adj_def: Dict[str, Any], context: str) -> None:
-    """Ensure adjacency definitions only contain recognized keys."""
+def check_link_keys(link_def: Dict[str, Any], context: str) -> None:
+    """Ensure link definitions only contain recognized keys."""
     check_no_extra_keys(
-        adj_def,
+        link_def,
         allowed={
             "source",
             "target",
             "pattern",
-            "link_count",
-            "link_params",
-            "expand_vars",
-            "expansion_mode",
+            "count",
+            "expand",
+            "capacity",
+            "cost",
+            "disabled",
+            "risk_groups",
+            "attrs",
         },
         context=context,
     )
-    if "source" not in adj_def or "target" not in adj_def:
-        raise ValueError(f"Adjacency in {context} must have 'source' and 'target'.")
-
-
-def check_link_params(link_params: Dict[str, Any], context: str) -> None:
-    """Ensure link_params contain only recognized keys.
-
-    Link attributes may include "hardware" per-end mapping when set under
-    link_params.attrs. This function only validates top-level link_params keys.
-    """
-    recognized = {"capacity", "cost", "disabled", "risk_groups", "attrs"}
-    extra = set(link_params.keys()) - recognized
-    if extra:
-        raise ValueError(
-            f"Unrecognized link_params key(s) in {context}: {', '.join(sorted(extra))}. "
-            f"Allowed: {sorted(recognized)}"
-        )
+    if "source" not in link_def or "target" not in link_def:
+        raise ValueError(f"Link in {context} must have 'source' and 'target'.")
 
 
 def join_paths(parent_path: str, rel_path: str) -> str:

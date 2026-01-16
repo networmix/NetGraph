@@ -4,30 +4,21 @@ The ``Path`` dataclass stores a node-and-parallel-edges sequence and a numeric
 cost. Cached properties expose derived sequences for nodes and edges, and
 helpers provide equality, ordering by cost, and sub-path extraction with cost
 recalculation.
-
-Breaking change from v1.x: Edge references now use EdgeRef (link_id + direction)
-instead of integer edge keys for stable scenario-level edge identification.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Iterator, Set, Tuple
+from typing import Any, Iterator, Set, Tuple
 
 from ngraph.types.base import Cost
 from ngraph.types.dto import EdgeRef
-
-if TYPE_CHECKING:
-    from netgraph_core import StrictMultiDiGraph
 
 
 @dataclass
 class Path:
     """Represents a single path in the network.
-
-    Breaking change from v1.x: path field now uses EdgeRef (link_id + direction)
-    instead of integer edge keys for stable scenario-level edge identification.
 
     Attributes:
         path: Sequence of (node_name, (edge_refs...)) tuples representing the path.
@@ -154,27 +145,14 @@ class Path:
         """
         return tuple(node for node, _ in self.path)
 
-    def get_sub_path(
-        self,
-        dst_node: str,
-        graph: StrictMultiDiGraph | None = None,
-        cost_attr: str = "cost",
-    ) -> Path:
+    def get_sub_path(self, dst_node: str) -> Path:
         """Create a sub-path ending at the specified destination node.
 
         The sub-path is formed by truncating the original path at the first occurrence
         of `dst_node` and ensuring that the final element has an empty tuple of edges.
 
-        Note: With EdgeRef-based paths, cost recalculation requires graph lookup.
-        The graph and cost_attr parameters are accepted for interface compatibility
-        but not currently used. Cost is set to infinity to explicitly indicate
-        recalculation is needed. Check for `math.isinf(sub_path.cost)` if you need
-        the actual cost.
-
         Args:
             dst_node: The node at which to truncate the path.
-            graph: Graph for cost recalculation (currently unused).
-            cost_attr: Edge attribute for cost lookup (currently unused).
 
         Returns:
             A new Path instance representing the sub-path from the original source
@@ -183,9 +161,6 @@ class Path:
         Raises:
             ValueError: If `dst_node` is not found in the current path.
         """
-        # Suppress unused parameter warnings - accepted for interface compatibility
-        _ = graph, cost_attr
-
         new_elements = []
         found = False
 

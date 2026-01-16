@@ -9,27 +9,7 @@ from __future__ import annotations
 import pytest
 
 from ngraph import FlowPlacement, Link, Mode, Network, Node, analyze
-
-
-def _multi_tier_network() -> Network:
-    """Build a network with multiple cost tiers.
-
-    Topology:
-        A -> B (cost 1, cap 5) -> D (cost 1, cap 5)  [tier 1: cost 2, cap 5]
-        A -> C (cost 2, cap 3) -> D (cost 2, cap 3)  [tier 2: cost 4, cap 3]
-
-    Total max flow: 8 (5 from tier 1 + 3 from tier 2)
-    """
-    net = Network()
-    for name in ["A", "B", "C", "D"]:
-        net.add_node(Node(name))
-
-    net.add_link(Link("A", "B", capacity=5.0, cost=1.0))
-    net.add_link(Link("B", "D", capacity=5.0, cost=1.0))
-    net.add_link(Link("A", "C", capacity=3.0, cost=2.0))
-    net.add_link(Link("C", "D", capacity=3.0, cost=2.0))
-
-    return net
+from tests.conftest import make_asymmetric_diamond
 
 
 def _parallel_equal_cost_network() -> Network:
@@ -73,7 +53,7 @@ class TestCostDistributionBasic:
 
     def test_multi_tier_distribution(self) -> None:
         """Test that flow is distributed across cost tiers correctly."""
-        net = _multi_tier_network()
+        net = make_asymmetric_diamond()
 
         result = analyze(net).max_flow_detailed("^A$", "^D$", mode=Mode.COMBINE)
 
@@ -121,9 +101,9 @@ class TestShortestPathMode:
 
     def test_shortest_path_mode_uses_only_best_tier(self) -> None:
         """Test that shortest_path=True only uses lowest cost tier."""
-        net = _multi_tier_network()
+        net = make_asymmetric_diamond()
 
-        # _multi_tier_network has nodes A, B, C, D
+        # make_asymmetric_diamond has nodes A, B, C, D
         result = analyze(net).max_flow_detailed(
             "^A$", "^D$", mode=Mode.COMBINE, shortest_path=True
         )
@@ -168,7 +148,7 @@ class TestFlowPlacement:
 
     def test_proportional_placement(self) -> None:
         """Test PROPORTIONAL flow placement."""
-        net = _multi_tier_network()
+        net = make_asymmetric_diamond()
 
         result = analyze(net).max_flow_detailed(
             "^A$", "^D$", mode=Mode.COMBINE, flow_placement=FlowPlacement.PROPORTIONAL

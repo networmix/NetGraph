@@ -8,7 +8,7 @@ representation for inspection.
 YAML Configuration Example:
     ```yaml
     workflow:
-      - step_type: BuildGraph
+      - type: BuildGraph
         name: "build_network_graph"  # Optional: Custom name for this step
         add_reverse: true  # Optional: Add reverse edges (default: true)
     ```
@@ -104,7 +104,6 @@ class BuildGraph(WorkflowStep):
                 )
 
         # Convert to node-link format for serialization
-        # Use edges="edges" for forward compatibility with NetworkX 3.6+
         graph_dict = nx.node_link_data(graph, edges="edges")
 
         scenario.results.put(

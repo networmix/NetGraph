@@ -11,45 +11,44 @@ A basic leaf-spine topology with traffic analysis.
 
 ```yaml
 network:
-  groups:
+  nodes:
     leaf:
-      node_count: 4
-      name_template: "leaf-{node_num}"
+      count: 4
+      template: "leaf{n}"
       attrs:
         role: leaf
     spine:
-      node_count: 2
-      name_template: "spine-{node_num}"
+      count: 2
+      template: "spine{n}"
       attrs:
         role: spine
-  adjacency:
+  links:
     - source: /leaf
       target: /spine
       pattern: mesh
-      link_params:
-        capacity: 100
-        cost: 1
+      capacity: 100
+      cost: 1
 
-traffic_matrix_set:
+demands:
   default:
     - source: "^leaf/.*"
-      sink: "^leaf/.*"
-      demand: 50
+      target: "^leaf/.*"
+      volume: 50
       mode: pairwise
 
-failure_policy_set:
+failures:
   single_link:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: link
-            rule_type: choice
+          - scope: link
+            mode: choice
             count: 1
 
 workflow:
-  - step_type: TrafficMatrixPlacement
+  - type: TrafficMatrixPlacement
     name: placement
-    matrix_name: default
+    demand_set: default
     failure_policy: single_link
     iterations: 100
 ```
@@ -63,42 +62,40 @@ Two pods sharing a blueprint, connected via spine layer.
 ```yaml
 blueprints:
   clos_pod:
-    groups:
+    nodes:
       leaf:
-        node_count: 4
-        name_template: "leaf-{node_num}"
+        count: 4
+        template: "leaf{n}"
         attrs:
           role: leaf
       spine:
-        node_count: 2
-        name_template: "spine-{node_num}"
+        count: 2
+        template: "spine{n}"
         attrs:
           role: spine
-    adjacency:
+    links:
       - source: /leaf
         target: /spine
         pattern: mesh
-        link_params:
-          capacity: 100
+        capacity: 100
 
 network:
-  groups:
+  nodes:
     pod[1-2]:
-      use_blueprint: clos_pod
+      blueprint: clos_pod
 
-  adjacency:
+  links:
     - source:
         path: "pod1/spine"
         match:
           conditions:
             - attr: role
-              operator: "=="
+              op: "=="
               value: spine
       target:
         path: "pod2/spine"
       pattern: mesh
-      link_params:
-        capacity: 400
+      capacity: 400
 ```
 
 **Result**: 12 nodes (2 pods x 6 nodes), 20 links (16 internal + 4 inter-pod)
@@ -118,22 +115,19 @@ network:
     # Parallel diverse paths
     - source: NewYork
       target: Chicago
-      link_params:
-        capacity: 100
-        cost: 10
-        risk_groups: [RG_NY_CHI]
+      capacity: 100
+      cost: 10
+      risk_groups: [RG_NY_CHI]
     - source: NewYork
       target: Chicago
-      link_params:
-        capacity: 100
-        cost: 10
+      capacity: 100
+      cost: 10
     # Single path
     - source: Chicago
       target: LosAngeles
-      link_params:
-        capacity: 100
-        cost: 15
-        risk_groups: [RG_CHI_LA]
+      capacity: 100
+      cost: 15
+      risk_groups: [RG_CHI_LA]
 
 risk_groups:
   - name: RG_NY_CHI
@@ -145,13 +139,13 @@ risk_groups:
       corridor: Chicago-LA
       distance_km: 2800
 
-failure_policy_set:
+failures:
   srlg_failure:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: risk_group
-            rule_type: choice
+          - scope: risk_group
+            mode: choice
             count: 1
 ```
 
@@ -163,30 +157,30 @@ Large fabric using variable expansion.
 
 ```yaml
 network:
-  groups:
+  nodes:
     plane[1-4]/rack[1-8]:
-      node_count: 48
-      name_template: "server-{node_num}"
+      count: 48
+      template: "server{n}"
       attrs:
         role: compute
 
     fabric/spine[1-4]:
-      node_count: 1
-      name_template: "spine"
+      count: 1
+      template: "spine"
       attrs:
         role: spine
 
-  adjacency:
+  links:
     - source: "plane${p}/rack${r}"
       target: "fabric/spine${s}"
-      expand_vars:
-        p: [1, 2, 3, 4]
-        r: [1, 2, 3, 4, 5, 6, 7, 8]
-        s: [1, 2, 3, 4]
-      expansion_mode: cartesian
+      expand:
+        vars:
+          p: [1, 2, 3, 4]
+          r: [1, 2, 3, 4, 5, 6, 7, 8]
+          s: [1, 2, 3, 4]
+        mode: cartesian
       pattern: mesh
-      link_params:
-        capacity: 100
+      capacity: 100
 ```
 
 **Result**: 1540 nodes (4x8x48 compute + 4 spine), 6144 links
@@ -208,51 +202,57 @@ network:
   links:
     - source: N1
       target: N2
-      link_params: {capacity: 2.0, cost: 1.0}
+      capacity: 2.0
+      cost: 1.0
     - source: N1
       target: N3
-      link_params: {capacity: 1.0, cost: 1.0}
+      capacity: 1.0
+      cost: 1.0
     - source: N1
       target: N4
-      link_params: {capacity: 2.0, cost: 1.0}
+      capacity: 2.0
+      cost: 1.0
     - source: N2
       target: N3
-      link_params: {capacity: 2.0, cost: 1.0}
+      capacity: 2.0
+      cost: 1.0
     - source: N2
       target: N4
-      link_params: {capacity: 1.0, cost: 1.0}
+      capacity: 1.0
+      cost: 1.0
     - source: N3
       target: N4
-      link_params: {capacity: 2.0, cost: 1.0}
+      capacity: 2.0
+      cost: 1.0
 
-failure_policy_set:
+failures:
   single_link_failure:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: link
-            rule_type: choice
+          - scope: link
+            mode: choice
             count: 1
 
-traffic_matrix_set:
+demands:
   baseline:
     - source: "^N([1-4])$"
-      sink: "^N([1-4])$"
-      demand: 12.0
+      target: "^N([1-4])$"
+      volume: 12.0
       mode: pairwise
 
 workflow:
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd
-    matrix_name: baseline
+    demand_set: baseline
     acceptance_rule: hard
     alpha_start: 1.0
     resolution: 0.05
 
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: capacity_matrix
     source: "^(N[1-4])$"
-    sink: "^(N[1-4])$"
+    target: "^(N[1-4])$"
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000
@@ -265,48 +265,47 @@ Using match conditions to filter nodes.
 
 ```yaml
 network:
-  groups:
+  nodes:
     servers:
-      node_count: 4
-      name_template: "srv-{node_num}"
+      count: 4
+      template: "srv{n}"
       attrs:
         role: compute
         rack: "rack-1"
     servers_b:
-      node_count: 2
-      name_template: "srvb-{node_num}"
+      count: 2
+      template: "srvb{n}"
       attrs:
         role: compute
         rack: "rack-9"
     switches:
-      node_count: 2
-      name_template: "sw-{node_num}"
+      count: 2
+      template: "sw{n}"
       attrs:
         tier: spine
 
-  adjacency:
+  links:
     - source:
         path: "/servers"
         match:
           logic: and
           conditions:
             - attr: role
-              operator: "=="
+              op: "=="
               value: compute
             - attr: rack
-              operator: "!="
+              op: "!="
               value: "rack-9"
       target:
         path: "/switches"
         match:
           conditions:
             - attr: tier
-              operator: "=="
+              op: "=="
               value: spine
       pattern: mesh
-      link_params:
-        capacity: 10
-        cost: 1
+      capacity: 10
+      cost: 1
 ```
 
 **Result**: 8 nodes, 8 links (only rack-1 servers connect to switches)
@@ -318,67 +317,65 @@ Customizing blueprint instances.
 ```yaml
 blueprints:
   bp1:
-    groups:
+    nodes:
       leaf:
-        node_count: 1
+        count: 1
         attrs:
           some_field:
             nested_key: 111
 
 network:
-  groups:
+  nodes:
     Main:
-      use_blueprint: bp1
-      parameters:
+      blueprint: bp1
+      params:
         leaf.attrs.some_field.nested_key: 999
 ```
 
-**Result**: Node `Main/leaf/leaf-1` has `attrs.some_field.nested_key = 999`
+**Result**: Node `Main/leaf/leaf1` has `attrs.some_field.nested_key = 999`
 
-## Example 8: Node and Link Overrides
+## Example 8: Node and Link Rules
 
 Modifying topology after creation.
 
 ```yaml
 blueprints:
   test_bp:
-    groups:
+    nodes:
       switches:
-        node_count: 3
-        name_template: "switch-{node_num}"
+        count: 3
+        template: "switch{n}"
 
 network:
-  groups:
+  nodes:
     group1:
-      node_count: 2
-      name_template: "node-{node_num}"
+      count: 2
+      template: "node{n}"
     group2:
-      node_count: 2
-      name_template: "node-{node_num}"
+      count: 2
+      template: "node{n}"
     my_clos1:
-      use_blueprint: test_bp
+      blueprint: test_bp
 
-  adjacency:
+  links:
     - source: /group1
       target: /group2
       pattern: mesh
-      link_params:
-        capacity: 100
-        cost: 10
+      capacity: 100
+      cost: 10
 
-  node_overrides:
-    - path: "^my_clos1/switches/switch-(1|3)$"
+  node_rules:
+    - path: "^my_clos1/switches/switch(1|3)$"
       disabled: true
       attrs:
         maintenance_mode: active
         hw_type: newer_model
 
-  link_overrides:
-    - source: "^group1/node-1$"
-      target: "^group2/node-1$"
-      link_params:
-        capacity: 200
-        cost: 5
+  link_rules:
+    - source: "^group1/node1$"
+      target: "^group2/node1$"
+      capacity: 200
+      cost: 5
 ```
 
 **Result**: Switches 1 and 3 disabled, specific link upgraded to 200 capacity
@@ -392,66 +389,65 @@ seed: 42
 
 blueprints:
   Clos_L16_S4:
-    groups:
+    nodes:
       spine:
-        node_count: 4
-        name_template: spine{node_num}
+        count: 4
+        template: spine{n}
         attrs:
           role: spine
       leaf:
-        node_count: 16
-        name_template: leaf{node_num}
+        count: 16
+        template: leaf{n}
         attrs:
           role: leaf
-    adjacency:
+    links:
       - source: /leaf
         target: /spine
         pattern: mesh
-        link_params:
-          capacity: 3200
-          cost: 1
+        capacity: 3200
+        cost: 1
 
 network:
-  groups:
+  nodes:
     metro1/pop[1-2]:
-      use_blueprint: Clos_L16_S4
+      blueprint: Clos_L16_S4
       attrs:
         metro_name: new-york
         node_type: pop
 
-traffic_matrix_set:
+demands:
   baseline:
     - source: "^metro1/pop1/.*"
-      sink: "^metro1/pop2/.*"
-      demand: 15000.0
+      target: "^metro1/pop2/.*"
+      volume: 15000.0
       mode: pairwise
-      flow_policy_config: TE_WCMP_UNLIM
+      flow_policy: TE_WCMP_UNLIM
 
-failure_policy_set:
+failures:
   single_link:
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: link
-            rule_type: choice
+          - scope: link
+            mode: choice
             count: 1
 
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: network_statistics
 
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd_baseline
-    matrix_name: baseline
+    demand_set: baseline
     acceptance_rule: hard
     alpha_start: 1.0
     growth_factor: 2.0
     resolution: 0.05
 
-  - step_type: TrafficMatrixPlacement
+  - type: TrafficMatrixPlacement
     name: tm_placement
     seed: 42
-    matrix_name: baseline
+    demand_set: baseline
     failure_policy: single_link
     iterations: 1000
     parallelism: 7
@@ -474,18 +470,18 @@ network:
   links:
     - source: dc1_srv1
       target: dc2_srv1
-      link_params: {capacity: 100}
+      capacity: 100
     - source: dc1_srv2
       target: dc2_srv2
-      link_params: {capacity: 100}
+      capacity: 100
 
-traffic_matrix_set:
+demands:
   inter_dc:
     - source:
         group_by: dc
-      sink:
+      target:
         group_by: dc
-      demand: 100
+      volume: 100
       mode: pairwise
 ```
 
@@ -506,16 +502,20 @@ network:
   links:
     - source: core1
       target: core2
-      link_params: {capacity: 1000, risk_groups: [RG_core]}
+      capacity: 1000
+      risk_groups: [RG_core]
     - source: core1
       target: edge1
-      link_params: {capacity: 400, risk_groups: [RG_west]}
+      capacity: 400
+      risk_groups: [RG_west]
     - source: core1
       target: edge3
-      link_params: {capacity: 200, risk_groups: [RG_west]}
+      capacity: 200
+      risk_groups: [RG_west]
     - source: core2
       target: edge2
-      link_params: {capacity: 400, risk_groups: [RG_east]}
+      capacity: 400
+      risk_groups: [RG_east]
 
 risk_groups:
   - name: RG_core
@@ -525,31 +525,32 @@ risk_groups:
   - name: RG_east
     attrs: {tier: edge, distance_km: 800}
 
-failure_policy_set:
+failures:
   mixed_failures:
-    fail_risk_groups: true          # Expand to shared-risk entities
-    fail_risk_group_children: false
+    expand_groups: true          # Expand to shared-risk entities
+    expand_children: false
     modes:
       # 40% chance: fail 1 edge node weighted by capacity
       - weight: 0.4
         attrs: {scenario: edge_failure}
         rules:
-          - entity_scope: node
-            rule_type: choice
+          - scope: node
+            mode: choice
             count: 1
-            conditions:
-              - attr: role
-                operator: "=="
-                value: edge
-            logic: and
+            match:
+              logic: and
+              conditions:
+                - attr: role
+                  op: "=="
+                  value: edge
             weight_by: capacity_gbps
 
       # 35% chance: fail 1 risk group weighted by distance
       - weight: 0.35
         attrs: {scenario: srlg_failure}
         rules:
-          - entity_scope: risk_group
-            rule_type: choice
+          - scope: risk_group
+            mode: choice
             count: 1
             weight_by: distance_km
 
@@ -557,26 +558,27 @@ failure_policy_set:
       - weight: 0.15
         attrs: {scenario: regional_outage}
         rules:
-          - entity_scope: node
-            rule_type: all
-            conditions:
-              - attr: region
-                operator: "=="
-                value: west
+          - scope: node
+            mode: all
+            match:
+              conditions:
+                - attr: region
+                  op: "=="
+                  value: west
 
       # 10% chance: random link failures (5% each)
       - weight: 0.1
         attrs: {scenario: random_link}
         rules:
-          - entity_scope: link
-            rule_type: random
+          - scope: link
+            mode: random
             probability: 0.05
 
 workflow:
-  - step_type: MaxFlow
+  - type: MaxFlow
     name: failure_analysis
     source: "^(edge[1-3])$"
-    sink: "^(edge[1-3])$"
+    target: "^(edge[1-3])$"
     mode: pairwise
     failure_policy: mixed_failures
     iterations: 1000
@@ -620,45 +622,44 @@ network:
   name: "datacenter-fabric"
   version: "2.0"
 
-  groups:
+  nodes:
     spine:
-      node_count: 2
-      name_template: "spine-{node_num}"
+      count: 2
+      template: "spine{n}"
       attrs:
         hardware:
           component: SpineRouter
           count: 1
     leaf:
-      node_count: 4
-      name_template: "leaf-{node_num}"
+      count: 4
+      template: "leaf{n}"
       attrs:
         hardware:
           component: LeafRouter
           count: 1
 
-  adjacency:
+  links:
     - source: /leaf
       target: /spine
       pattern: mesh
-      link_count: 2                    # 2 parallel links per pair
-      link_params:
-        capacity: 800
-        cost: 1
-        attrs:
-          hardware:
-            source:
-              component: Optic400G
-              count: 2
-            target:
-              component: Optic400G
-              count: 2
-              exclusive: true          # Dedicated optics (rounds up count)
+      count: 2                    # 2 parallel links per pair
+      capacity: 800
+      cost: 1
+      attrs:
+        hardware:
+          source:
+            component: Optic400G
+            count: 2
+          target:
+            component: Optic400G
+            count: 2
+            exclusive: true          # Dedicated optics (rounds up count)
 
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: stats
 
-  - step_type: CostPower
+  - type: CostPower
     name: cost_analysis
     include_disabled: false
     aggregation_level: 1               # Aggregate by top-level group
@@ -683,67 +684,65 @@ vars:
     tier: 1
 
 network:
-  groups:
+  nodes:
     spine:
-      node_count: 2
-      name_template: "spine-{node_num}"
+      count: 2
+      template: "spine{n}"
       attrs:
         <<: *spine_attrs             # Merge anchor
         region: east
 
     leaf:
-      node_count: 4
-      name_template: "leaf-{node_num}"
+      count: 4
+      template: "leaf{n}"
       attrs:
         <<: *leaf_attrs
         region: east
 
-  adjacency:
+  links:
     - source: /leaf
       target: /spine
       pattern: mesh
-      link_params:
-        <<: *link_cfg                # Reuse link config
-        attrs:
-          link_type: fabric
+      <<: *link_cfg                # Reuse link config
+      attrs:
+        link_type: fabric
 ```
 
 **Result**: Anchors resolved during YAML parsing; cleaner, less repetitive config
 
-## Example 14: One-to-One Adjacency and Zip Expansion
+## Example 14: One-to-One Pattern and Zip Expansion
 
 Demonstrating pairwise connectivity patterns.
 
 ```yaml
 network:
-  groups:
+  nodes:
     # 4 servers, 2 switches - compatible for one_to_one (4 is multiple of 2)
     server[1-4]:
-      node_count: 1
-      name_template: "srv"
+      count: 1
+      template: "srv"
     switch[1-2]:
-      node_count: 1
-      name_template: "sw"
+      count: 1
+      template: "sw"
 
-  adjacency:
+  links:
     # one_to_one: server1->switch1, server2->switch2, server3->switch1, server4->switch2
     - source: /server
       target: /switch
       pattern: one_to_one
-      link_params:
-        capacity: 100
+      capacity: 100
 
     # zip expansion: pairs variables by index (equal-length lists required)
     - source: "server${idx}"
       target: "switch${sw}"
-      expand_vars:
-        idx: [1, 2]
-        sw: [1, 2]
-      expansion_mode: zip            # server1->switch1, server2->switch2
+      expand:
+        vars:
+          idx: [1, 2]
+          sw: [1, 2]
+        mode: zip            # server1->switch1, server2->switch2
       pattern: one_to_one
-      link_params:
-        capacity: 50
-        cost: 2
+      capacity: 50
+      cost: 2
 ```
 
 **Result**: Demonstrates one_to_one modulo wrap and zip expansion mode
@@ -761,33 +760,34 @@ network:
     dc2_leaf2: {attrs: {dc: dc2, role: leaf}}
     dc3_leaf1: {attrs: {dc: dc3, role: leaf}}
   links:
-    - {source: dc1_leaf1, target: dc2_leaf1, link_params: {capacity: 100}}
-    - {source: dc1_leaf2, target: dc2_leaf2, link_params: {capacity: 100}}
-    - {source: dc2_leaf1, target: dc3_leaf1, link_params: {capacity: 100}}
+    - {source: dc1_leaf1, target: dc2_leaf1, capacity: 100}
+    - {source: dc1_leaf2, target: dc2_leaf2, capacity: 100}
+    - {source: dc2_leaf1, target: dc3_leaf1, capacity: 100}
 
-traffic_matrix_set:
+demands:
   # Variable expansion in demands
   inter_dc:
     - source: "^${src}/.*"
-      sink: "^${dst}/.*"
-      demand: 50
-      expand_vars:
-        src: [dc1, dc2]
-        dst: [dc2, dc3]
-      expansion_mode: zip            # dc1->dc2, dc2->dc3
+      target: "^${dst}/.*"
+      volume: 50
+      expand:
+        vars:
+          src: [dc1, dc2]
+          dst: [dc2, dc3]
+        mode: zip            # dc1->dc2, dc2->dc3
 
   # Group modes with group_by
   grouped:
     - source:
         group_by: dc
-      sink:
+      target:
         group_by: dc
-      demand: 100
+      volume: 100
       mode: pairwise
       group_mode: per_group          # Separate demand per group pair
       priority: 1
       demand_placed: 10.0            # 10 units pre-placed
-      flow_policy_config: SHORTEST_PATHS_WCMP
+      flow_policy: SHORTEST_PATHS_WCMP
 ```
 
 **Result**: Shows variable expansion in demands, group_mode, priority, demand_placed
@@ -804,9 +804,9 @@ network:
     rack1_srv3: {risk_groups: [Rack1_Card2]}
     rack2_srv1: {risk_groups: [Rack2]}
   links:
-    - {source: rack1_srv1, target: rack2_srv1, link_params: {capacity: 100}}
-    - {source: rack1_srv2, target: rack2_srv1, link_params: {capacity: 100}}
-    - {source: rack1_srv3, target: rack2_srv1, link_params: {capacity: 100}}
+    - {source: rack1_srv1, target: rack2_srv1, capacity: 100}
+    - {source: rack1_srv2, target: rack2_srv1, capacity: 100}
+    - {source: rack1_srv3, target: rack2_srv1, capacity: 100}
 
 risk_groups:
   - name: Rack1
@@ -820,20 +820,21 @@ risk_groups:
     disabled: false
     attrs: {location: "DC1-Row2"}
 
-failure_policy_set:
+failures:
   hierarchical:
-    fail_risk_groups: true
-    fail_risk_group_children: true   # Failing Rack1 also fails Card1, Card2
+    expand_groups: true
+    expand_children: true   # Failing Rack1 also fails Card1, Card2
     modes:
       - weight: 1.0
         rules:
-          - entity_scope: risk_group
-            rule_type: choice
+          - scope: risk_group
+            mode: choice
             count: 1
-            conditions:
-              - attr: location
-                operator: contains    # String contains
-                value: "DC1"
+            match:
+              conditions:
+                - attr: location
+                  op: contains    # String contains
+                  value: "DC1"
 ```
 
 **Result**: Hierarchical risk groups with recursive child failure expansion
@@ -852,39 +853,38 @@ network:
   links:
     - source: core1
       target: core2
-      link_params:
-        capacity: 1000
-        attrs:
-          route_type: backbone
-          path_id: primary
+      capacity: 1000
+      attrs:
+        route_type: backbone
+        path_id: primary
     - source: core1
       target: edge1
-      link_params: {capacity: 400}
+      capacity: 400
 
 risk_groups:
   # Assign all core tier-3 nodes
   - name: CoreTier3
     membership:
-      entity_scope: node
+      scope: node
       match:
         logic: and              # Must match ALL conditions
         conditions:
           - attr: role
-            operator: "=="
+            op: "=="
             value: core
           - attr: tier
-            operator: "=="
+            op: "=="
             value: 3
 
   # Assign links by route type
   - name: BackboneLinks
     membership:
-      entity_scope: link
+      scope: link
       match:
         logic: and
         conditions:
           - attr: route_type      # Dot-notation for nested attrs
-            operator: "=="
+            op: "=="
             value: backbone
 
   # String shorthand for simple groups
@@ -906,38 +906,36 @@ network:
   links:
     - source: srv1
       target: srv2
-      link_params:
-        capacity: 100
-        attrs:
-          connection_type: intra_dc
+      capacity: 100
+      attrs:
+        connection_type: intra_dc
     - source: srv2
       target: srv3
-      link_params:
-        capacity: 100
-        attrs:
-          connection_type: inter_dc
+      capacity: 100
+      attrs:
+        connection_type: inter_dc
 
 risk_groups:
   # Generate risk group per datacenter (from nodes)
   - generate:
-      entity_scope: node
+      scope: node
       group_by: datacenter
-      name_template: "DC_${value}"
+      name: "DC_${value}"
       attrs:
         generated: true
         type: location
 
   # Generate risk group per rack (from nodes)
   - generate:
-      entity_scope: node
+      scope: node
       group_by: rack
-      name_template: "Rack_${value}"
+      name: "Rack_${value}"
 
   # Generate risk group per connection type (from links)
   - generate:
-      entity_scope: link
+      scope: link
       group_by: connection_type
-      name_template: "Links_${value}"
+      name: "Links_${value}"
 ```
 
 **Result**: Creates 6 risk groups:
@@ -961,26 +959,26 @@ network:
     srv3: {attrs: {tier: 3, tags: [dev], region: west}}
     srv4: {attrs: {tier: 2}}
   links:
-    - {source: srv1, target: srv2, link_params: {capacity: 100}}
-    - {source: srv2, target: srv3, link_params: {capacity: 100}}
-    - {source: srv3, target: srv4, link_params: {capacity: 100}}
+    - {source: srv1, target: srv2, capacity: 100}
+    - {source: srv2, target: srv3, capacity: 100}
+    - {source: srv3, target: srv4, capacity: 100}
 
-traffic_matrix_set:
+demands:
   filtered:
     # Tier comparison operators
     - source:
         match:
           conditions:
             - attr: tier
-              operator: ">="
+              op: ">="
               value: 2
-      sink:
+      target:
         match:
           conditions:
             - attr: tier
-              operator: "<"
+              op: "<"
               value: 3
-      demand: 50
+      volume: 50
       mode: pairwise
 
     # List membership operators
@@ -988,15 +986,15 @@ traffic_matrix_set:
         match:
           conditions:
             - attr: region
-              operator: in
+              op: in
               value: [east, west]
-      sink:
+      target:
         match:
           conditions:
             - attr: tags
-              operator: contains     # List contains value
+              op: contains     # List contains value
               value: prod
-      demand: 25
+      volume: 25
       mode: combine
 
     # Existence operators
@@ -1004,14 +1002,188 @@ traffic_matrix_set:
         match:
           conditions:
             - attr: region
-              operator: any_value    # Attribute exists and not null
-      sink:
+              op: exists       # Attribute exists and not null
+      target:
         match:
           conditions:
             - attr: region
-              operator: no_value     # Attribute missing or null
-      demand: 10
+              op: not_exists   # Attribute missing or null
+      volume: 10
       mode: pairwise
 ```
 
-**Result**: Demonstrates `>=`, `<`, `in`, `contains`, `any_value`, `no_value` operators
+**Result**: Demonstrates `>=`, `<`, `in`, `contains`, `exists`, `not_exists` operators
+
+## Example 20: link_match and Rule Expansion
+
+Using `link_match` to filter link rules by the link's own attributes, and `expand` for variable-based rule application.
+
+```yaml
+network:
+  nodes:
+    dc1_srv: {}
+    dc2_srv: {}
+    dc3_srv: {}
+  links:
+    - {source: dc1_srv, target: dc2_srv, capacity: 100, cost: 1, attrs: {type: fiber}}
+    - {source: dc1_srv, target: dc2_srv, capacity: 500, cost: 1, attrs: {type: fiber}}
+    - {source: dc2_srv, target: dc3_srv, capacity: 500, cost: 1, attrs: {type: copper}}
+
+  # Update only high-capacity fiber links
+  link_rules:
+    - source: ".*"
+      target: ".*"
+      link_match:
+        logic: and
+        conditions:
+          - {attr: capacity, op: ">=", value: 400}
+          - {attr: type, op: "==", value: fiber}
+      cost: 99
+      attrs:
+        priority: high
+
+  # Apply node rules using variable expansion
+  node_rules:
+    - path: "${dc}_srv"
+      expand:
+        vars:
+          dc: [dc1, dc2]
+        mode: cartesian
+      attrs:
+        tagged: true
+```
+
+**Result**: Only the 500-capacity fiber link (dc1_srv -> dc2_srv) gets cost 99. Nodes dc1_srv and dc2_srv are tagged.
+
+## Example 21: Nested Inline Nodes (No Blueprint)
+
+Creating hierarchical topology structure without using blueprints.
+
+```yaml
+network:
+  nodes:
+    datacenter:
+      attrs:
+        region: west
+        tier: 1
+      nodes:
+        rack1:
+          attrs:
+            rack_id: 1
+          nodes:
+            tor:
+              count: 1
+              template: "sw{n}"
+              attrs:
+                role: switch
+            servers:
+              count: 4
+              template: "srv{n}"
+              attrs:
+                role: compute
+        rack2:
+          attrs:
+            rack_id: 2
+          nodes:
+            tor:
+              count: 1
+              template: "sw{n}"
+              attrs:
+                role: switch
+            servers:
+              count: 4
+              template: "srv{n}"
+              attrs:
+                role: compute
+
+  links:
+    # Connect servers to their TOR switch in each rack
+    - source:
+        path: "datacenter/rack1/servers"
+      target:
+        path: "datacenter/rack1/tor"
+      pattern: mesh
+      capacity: 25
+    - source:
+        path: "datacenter/rack2/servers"
+      target:
+        path: "datacenter/rack2/tor"
+      pattern: mesh
+      capacity: 25
+    # Connect TOR switches
+    - source: datacenter/rack1/tor/sw1
+      target: datacenter/rack2/tor/sw1
+      capacity: 100
+```
+
+**Result**: Creates 10 nodes (2 switches + 8 servers) in a two-rack hierarchy. All nodes inherit `region: west` and `tier: 1` from the datacenter parent. Each rack's nodes get the appropriate `rack_id`.
+
+## Example 22: path Filter in Generate Blocks
+
+Using `path` to narrow entities before generating risk groups.
+
+```yaml
+network:
+  nodes:
+    prod_web1: {attrs: {env: production, service: web}}
+    prod_web2: {attrs: {env: production, service: web}}
+    prod_db1: {attrs: {env: production, service: database}}
+    dev_web1: {attrs: {env: development, service: web}}
+    dev_db1: {attrs: {env: development, service: database}}
+  links:
+    - {source: prod_web1, target: prod_db1, capacity: 100, attrs: {link_type: internal}}
+    - {source: prod_web2, target: prod_db1, capacity: 100, attrs: {link_type: internal}}
+    - {source: dev_web1, target: dev_db1, capacity: 50, attrs: {link_type: internal}}
+
+risk_groups:
+  # Generate env-based risk groups only for production nodes
+  - generate:
+      scope: node
+      path: "^prod_.*"
+      group_by: env
+      name: "Env_${value}"
+      attrs:
+        generated: true
+        critical: true
+
+  # Generate service-based risk groups for all nodes
+  - generate:
+      scope: node
+      group_by: service
+      name: "Service_${value}"
+
+  # Generate link risk groups only for production links
+  - generate:
+      scope: link
+      path: ".*prod.*"
+      group_by: link_type
+      name: "ProdLinks_${value}"
+
+demands:
+  baseline:
+    - source: "^prod_web.*"
+      target: "^prod_db.*"
+      volume: 50
+      mode: pairwise
+      flow_policy: SHORTEST_PATHS_ECMP
+
+failures:
+  production_failure:
+    expand_groups: true
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: risk_group
+            path: "^Env_.*"
+            mode: choice
+            count: 1
+```
+
+**Result**: Creates the following risk groups:
+
+- `Env_production` (only production nodes due to path filter)
+- `Service_web` (prod_web1, prod_web2, dev_web1)
+- `Service_database` (prod_db1, dev_db1)
+- `ProdLinks_internal` (only production links due to path filter)
+
+Note: `Env_development` is NOT created because dev nodes don't match `^prod_.*`.

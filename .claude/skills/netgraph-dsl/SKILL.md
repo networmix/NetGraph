@@ -3,14 +3,9 @@ name: netgraph-dsl
 description: >
   NetGraph scenario DSL for defining network topologies, traffic demands, failure policies,
   and analysis workflows in YAML. Use when: creating or editing .yaml/.yml network scenarios,
-  defining nodes/links/groups, writing adjacency rules, configuring selectors or blueprints,
-  setting up traffic matrices or failure policies, debugging DSL syntax or validation errors,
+  defining nodes/links/groups, writing link rules with patterns, configuring selectors or blueprints,
+  setting up traffic demands or failure policies, debugging DSL syntax or validation errors,
   or asking about NetGraph scenario structure.
-license: MIT
-metadata:
-  author: "netgraph"
-  version: "1.1"
-  repo: "https://github.com/networmix/NetGraph"
 ---
 
 # NetGraph DSL
@@ -25,7 +20,7 @@ Define network simulation scenarios in YAML format.
 When working with NetGraph scenarios:
 
 1. **Creating new scenarios**: Start with the [Minimal Example](#minimal-example), then add sections as needed
-2. **Editing existing scenarios**: Identify the relevant section (network, traffic_matrix_set, failure_policy_set, etc.)
+2. **Editing existing scenarios**: Identify the relevant section (network, demands, failures, etc.)
 3. **Understanding selection**: Review [Selection Models](#selection-models) to understand path-based vs condition-based selection
 4. **Debugging issues**: Check [Common Pitfalls](#common-pitfalls) and [Validation Checklist](#validation-checklist)
 5. **Complex topologies**: Use [Blueprints](#blueprints) for reusable patterns
@@ -37,13 +32,13 @@ Refer to specific sections below for detailed syntax and examples.
 
 | Section | Purpose |
 |---------|---------|
-| `network` | Topology: nodes, links, groups, adjacency (required) |
+| `network` | Topology: nodes, links (required) |
 | `blueprints` | Reusable topology templates |
 | `components` | Hardware library for cost/power modeling |
 | `risk_groups` | Failure correlation groups |
 | `vars` | YAML anchors for value reuse |
-| `traffic_matrix_set` | Traffic demand definitions |
-| `failure_policy_set` | Failure simulation rules |
+| `demands` | Traffic demand definitions |
+| `failures` | Failure simulation rules |
 | `workflow` | Analysis execution steps |
 | `seed` | Master seed for reproducibility |
 
@@ -57,9 +52,8 @@ network:
   links:
     - source: A
       target: B
-      link_params:
-        capacity: 100
-        cost: 1
+      capacity: 100
+      cost: 1
 ```
 
 ## Core Patterns
@@ -68,7 +62,7 @@ network:
 
 The DSL implements two distinct selection patterns:
 
-**1. Path-based Node Selection** (adjacency rules, traffic demands, workflow steps)
+**1. Path-based Node Selection** (link rules, traffic demands, workflow steps)
 
 - Uses regex patterns on hierarchical node names
 - Supports capture group-based grouping
@@ -78,9 +72,9 @@ The DSL implements two distinct selection patterns:
 
 **2. Condition-based Entity Selection** (failure rules, membership rules, risk group generation)
 
-- Works on nodes, links, or risk_groups (`entity_scope`)
-- Uses only attribute-based filtering (`conditions`)
-- No path/regex patterns (operates on all entities of specified type)
+- Works on nodes/links; failure + membership can also target risk_groups
+- Optional regex `path` filter on entity names/IDs (no capture grouping)
+- Attribute filtering via `match.conditions` (`match.logic` defaults vary by context)
 
 These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
 
@@ -103,35 +97,34 @@ network:
   links:
     - source: Seattle
       target: Portland
-      link_params:     # Required wrapper for link parameters
-        capacity: 100
-        cost: 10
-        attrs:
-          distance_km: 280
-      link_count: 2    # Parallel links
+      capacity: 100    # Direct properties (no wrapper)
+      cost: 10
+      attrs:
+        distance_km: 280
+      count: 2         # Parallel links
 ```
 
 ### Node Groups
 
 ```yaml
 network:
-  groups:
+  nodes:
     leaf:
-      node_count: 4
-      name_template: "leaf-{node_num}"
+      count: 4
+      template: "leaf{n}"
       attrs:
         role: leaf
 ```
 
-Creates: `leaf/leaf-1`, `leaf/leaf-2`, `leaf/leaf-3`, `leaf/leaf-4`
+Creates: `leaf/leaf1`, `leaf/leaf2`, `leaf/leaf3`, `leaf/leaf4`
 
 ### Template Syntaxes
 
 | Syntax | Example | Context |
 |--------|---------|---------|
 | `[1-3]` | `dc[1-3]/rack` | Group names, risk groups |
-| `$var`/`${var}` | `pod${p}/leaf` | Adjacency & demand selectors |
-| `{node_num}` | `srv-{node_num}` | `name_template` field |
+| `$var`/`${var}` | `pod${p}/leaf` | Link & demand selectors |
+| `{n}` | `srv{n}` | `template` field |
 
 These are NOT interchangeable. See [REFERENCE.md](references/REFERENCE.md) for details.
 
@@ -139,26 +132,25 @@ These are NOT interchangeable. See [REFERENCE.md](references/REFERENCE.md) for d
 
 ```yaml
 network:
-  groups:
+  nodes:
     dc[1-3]/rack[a,b]:    # Cartesian product
-      node_count: 4
-      name_template: "srv-{node_num}"
+      count: 4
+      template: "srv{n}"
 ```
 
 Creates: `dc1/racka`, `dc1/rackb`, `dc2/racka`, `dc2/rackb`, `dc3/racka`, `dc3/rackb`
 
 **Scope**: Bracket expansion works in group names, risk group definitions (including children), and risk group membership arrays. Component names and other fields treat brackets as literal characters.
 
-### Adjacency Patterns
+### Link Patterns
 
 ```yaml
 network:
-  adjacency:
+  links:
     - source: /leaf
       target: /spine
       pattern: mesh        # Every source to every target
-      link_params:
-        capacity: 100
+      capacity: 100
 
     - source: /group_a     # 4 nodes
       target: /group_b     # 2 nodes
@@ -168,26 +160,27 @@ network:
 ### Selectors with Conditions
 
 ```yaml
-adjacency:
-  - source:
-      path: "/datacenter"
-      match:
-        logic: and         # "and" or "or"; defaults vary by context (see below)
-        conditions:
-          - attr: role
-            operator: "=="
-            value: leaf
-    target: /spine
-    pattern: mesh
+network:
+  links:
+    - source:
+        path: "/datacenter"
+        match:
+          logic: and         # "and" or "or"; defaults vary by context (see below)
+          conditions:
+            - attr: role
+              op: "=="
+              value: leaf
+      target: /spine
+      pattern: mesh
 ```
 
-**Operators**: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `any_value`, `no_value`
+**Operators**: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `exists`, `not_exists`
 
-**Logic defaults by context**:
+**Logic defaults by context (for `match.logic`)**:
 
 | Context | Default `logic` | Rationale |
 |---------|-----------------|-----------|
-| Adjacency `match` | `"or"` | Inclusive: match any condition |
+| Link `match` | `"or"` | Inclusive: match any condition |
 | Demand `match` | `"or"` | Inclusive: match any condition |
 | Membership rules | `"and"` | Precise: must match all conditions |
 | Failure rules | `"or"` | Inclusive: match any condition |
@@ -205,13 +198,14 @@ source: "^(dc\\d+)/(spine|leaf)/.*"  # Groups: dc1|spine, dc1|leaf, etc.
 ### Variable Expansion
 
 ```yaml
-adjacency:
+links:
   - source: "plane${p}/rack"
     target: "spine${s}"
-    expand_vars:
-      p: [1, 2]
-      s: [1, 2, 3]
-    expansion_mode: cartesian  # or "zip" (equal-length lists required)
+    expand:
+      vars:
+        p: [1, 2]
+        s: [1, 2, 3]
+      mode: cartesian  # or "zip" (equal-length lists required)
     pattern: mesh
 ```
 
@@ -220,38 +214,73 @@ adjacency:
 ```yaml
 blueprints:
   clos_pod:
-    groups:
+    nodes:
       leaf:
-        node_count: 4
-        name_template: "leaf-{node_num}"
+        count: 4
+        template: "leaf{n}"
       spine:
-        node_count: 2
-        name_template: "spine-{node_num}"
-    adjacency:
+        count: 2
+        template: "spine{n}"
+    links:
       - source: /leaf
         target: /spine
         pattern: mesh
-        link_params:
-          capacity: 100
+        capacity: 100
 
 network:
-  groups:
+  nodes:
     pod[1-2]:
-      use_blueprint: clos_pod
-      parameters:
-        leaf.node_count: 6  # Override defaults
+      blueprint: clos_pod
+      params:
+        leaf.count: 6  # Override defaults
 ```
+
+**Alternative: Inline nested nodes** (no blueprint needed):
+
+```yaml
+network:
+  nodes:
+    datacenter:
+      nodes:              # Inline hierarchy
+        rack1:
+          count: 2
+          template: "srv{n}"
+```
+
+### Node and Link Rules
+
+Modify entities after creation with optional attribute filtering:
+
+```yaml
+network:
+  node_rules:
+    - path: "^pod1/.*"
+      match:                      # Optional: filter by attributes
+        conditions:
+          - {attr: role, op: "==", value: compute}
+      disabled: true
+
+  link_rules:
+    - source: "^pod1/.*"
+      target: "^pod2/.*"
+      link_match:                 # Optional: filter by link attributes
+        conditions:
+          - {attr: capacity, op: ">=", value: 400}
+      cost: 99
+```
+
+Rules also support `expand` for variable-based application.
 
 ### Traffic Demands
 
 ```yaml
-traffic_matrix_set:
+demands:
   production:
     - source: "^dc1/.*"
-      sink: "^dc2/.*"
-      demand: 1000
+      target: "^dc2/.*"
+      volume: 1000
       mode: pairwise       # or "combine"
-      flow_policy_config: SHORTEST_PATHS_ECMP
+      flow_policy: SHORTEST_PATHS_ECMP
 ```
 
 **Flow policies**: `SHORTEST_PATHS_ECMP`, `SHORTEST_PATHS_WCMP`, `TE_WCMP_UNLIM`, `TE_ECMP_16_LSP`, `TE_ECMP_UP_TO_256_LSP`
@@ -259,19 +288,19 @@ traffic_matrix_set:
 ### Failure Policies
 
 ```yaml
-failure_policy_set:
+failures:
   single_link:
-    fail_risk_groups: false         # Expand to shared-risk entities
-    modes:                          # Weighted modes (one selected per iteration)
+    expand_groups: false         # Expand to shared-risk entities
+    modes:                       # Weighted modes (one selected per iteration)
       - weight: 1.0
         rules:
-          - entity_scope: link      # node, link, or risk_group
-            rule_type: choice       # all, choice, or random
+          - scope: link          # Required: node, link, or risk_group
+            mode: choice         # all, choice, or random
             count: 1
             # Optional: weight_by: capacity  # Weighted sampling by attribute
 ```
 
-**Rule types**: `all` (select all matches), `choice` (sample `count`), `random` (each with `probability`)
+**Rule modes**: `all` (select all matches), `choice` (sample `count`), `random` (each with `probability`)
 
 ### Risk Groups
 
@@ -285,29 +314,30 @@ risk_groups:
   - "RG2"                    # String shorthand (equivalent to {name: "RG2"})
 ```
 
-**Membership rules** (assign entities by attribute matching):
+**Membership rules** (assign entities by attribute matching; optional `path` filter):
 
 ```yaml
 risk_groups:
   - name: HighCapacityLinks
     membership:
-      entity_scope: link     # node, link, or risk_group
+      scope: link            # Required: node, link, or risk_group
       match:
         logic: and           # "and" or "or" (default: "and" for membership)
         conditions:
           - attr: capacity
-            operator: ">="
+            op: ">="
             value: 1000
 ```
 
-**Generate blocks** (create groups from unique attribute values):
+**Generate blocks** (create groups from unique attribute values; optional `path` filter):
 
 ```yaml
 risk_groups:
   - generate:
-      entity_scope: node     # node or link only
+      scope: node            # Required: node or link only
+      path: "^prod_.*"       # Optional: narrow entities before grouping
       group_by: region       # Any attribute to group by
-      name_template: "Region_${value}"
+      name: "Region_${value}"
 ```
 
 **Validation:** Risk group references are validated at load time (undefined references and circular hierarchies detected).
@@ -318,23 +348,23 @@ See [REFERENCE.md](references/REFERENCE.md) for complete details.
 
 ```yaml
 workflow:
-  - step_type: NetworkStats
+  - type: NetworkStats
     name: stats
-  - step_type: MaximumSupportedDemand
+  - type: MaximumSupportedDemand
     name: msd
-    matrix_name: production
+    demand_set: production
     alpha_start: 1.0
     resolution: 0.05
-  - step_type: TrafficMatrixPlacement
+  - type: TrafficMatrixPlacement
     name: placement
-    matrix_name: production
+    demand_set: production
     failure_policy: single_link
     iterations: 1000
     alpha_from_step: msd          # Reference MSD result
     alpha_from_field: data.alpha_star
-  - step_type: MaxFlow
+  - type: MaxFlow
     source: "^(dc[1-3])$"
-    sink: "^(dc[1-3])$"
+    target: "^(dc[1-3])$"
     mode: pairwise
     failure_policy: single_link
     iterations: 1000
@@ -360,21 +390,21 @@ nodes:
       my_field: value
 ```
 
-### 2. Link parameters require `link_params` wrapper
+### 2. Link properties are flattened (no wrapper)
 
 ```yaml
 # WRONG
 links:
   - source: A
     target: B
-    capacity: 100      # Error!
+    link_params:       # Error! No wrapper
+      capacity: 100
 
 # CORRECT
 links:
   - source: A
     target: B
-    link_params:
-      capacity: 100
+    capacity: 100      # Direct property
 ```
 
 ### 3. `one_to_one` requires compatible sizes
@@ -404,26 +434,27 @@ source: "${dc}/leaf"
 
 ```yaml
 # WRONG
-expand_vars:
-  a: [1, 2]
-  b: [x, y, z]     # Length mismatch!
-expansion_mode: zip
+expand:
+  vars:
+    a: [1, 2]
+    b: [x, y, z]     # Length mismatch!
+  mode: zip
 ```
 
 ### 7. Processing order matters
 
 1. Groups and direct nodes created
-2. Node overrides applied
-3. Adjacency and blueprint adjacencies expanded
-4. Direct links created
-5. Link overrides applied
+2. Node rules applied
+3. Blueprint links expanded
+4. Top-level links expanded (including direct links)
+5. Link rules applied
 
-Overrides only affect entities that exist at their processing stage.
+Rules only affect entities that exist at their processing stage.
 
 ## Validation Checklist
 
 - [ ] Custom fields inside `attrs`
-- [ ] Link parameters inside `link_params`
+- [ ] Link properties directly on link (no wrapper)
 - [ ] Referenced blueprints exist
 - [ ] Node names in direct links exist
 - [ ] `one_to_one` sizes have multiple factor
@@ -433,4 +464,4 @@ Overrides only affect entities that exist at their processing stage.
 ## More Information
 
 - [Full DSL Reference](references/REFERENCE.md) - Complete field documentation, all operators, workflow steps
-- [Working Examples](references/EXAMPLES.md) - 17 complete scenarios from simple to advanced
+- [Working Examples](references/EXAMPLES.md) - 22 complete scenarios from simple to advanced
