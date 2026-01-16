@@ -210,7 +210,7 @@ The CLI outputs results as JSON with a fixed top-level shape:
 
 ```json
 {
-  "workflow": { "<step>": { "type": "...", "execution_order": 0, "step_name": "..." } },
+  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, "step_name": "..." } },
   "steps": {
     "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
     "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "demand_set": "baseline_traffic_matrix" } } },

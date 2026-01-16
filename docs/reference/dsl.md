@@ -26,9 +26,9 @@ The DSL uses three distinct template syntaxes in different contexts:
 
 | Syntax | Example | Context | Purpose |
 |--------|---------|---------|---------|
-| `[1-3]` | `dc[1-3]/rack[a,b]` | Node group names | Generate multiple groups |
-| `$var` / `${var}` | `pod${p}/leaf` | Links, demands | Template expansion with `expand` block |
-| `{n}` | `srv-{n}` | `template` | Node naming (1-indexed) |
+| `[1-3]` | `dc[1-3]/rack[a,b]` | Node/risk group names | Generate multiple groups |
+| `$var` / `${var}` | `pod${p}/leaf` | Links, rules, demands | Template expansion with `expand` block |
+| `{n}` | `srv-{n}` | `template` field | Node naming (1-indexed counter) |
 
 **These syntaxes are not interchangeable.** Each works only in its designated context.
 
@@ -61,8 +61,8 @@ The DSL uses distinct selection strategies depending on the operation:
 **2. Condition-Based Entity Selection** (failure rules, membership rules, risk group generation)
 
 - Works on nodes, links, or risk_groups (`scope`)
-- Uses only attribute-based filtering (`conditions`)
-- No path/regex patterns (operates on all entities of specified type)
+- Supports attribute-based filtering (`conditions`)
+- Supports optional `path` regex filtering to narrow candidates before condition matching
 
 These patterns share common primitives (condition evaluation, match specification) but serve different purposes and should not be confused.
 
@@ -187,7 +187,7 @@ flowchart TD
 | Feature | Links | Traffic Demands | Risk Groups |
 |---------|-------|-----------------|-------------|
 | Selection Type | Path-based | Path-based | Condition-based |
-| Regex Patterns | Yes | Yes | No |
+| Regex Patterns | Yes | Yes | Yes (optional) |
 | Capture Groups | Yes | Yes | No |
 | `group_by` | Yes | Yes | Yes (generate only) |
 | `match` Conditions | Yes | Yes | Yes (membership/generate) |
@@ -200,23 +200,67 @@ flowchart TD
 
 All selection mechanisms share common evaluation primitives:
 
-1. **Condition evaluation**: `evaluate_condition()` handles all operators
-   - Comparison: `==`, `!=`, `<`, `<=`, `>`, `>=`
-   - String/collection: `contains`, `not_contains`, `in`, `not_in`
-   - Existence: `exists`, `not_exists`
+**1. Condition Structure**
 
-2. **Condition combining**: `evaluate_conditions()` applies `"and"`/`"or"` logic
+Each condition has three fields:
 
-3. **Attribute flattening**: Unified access to entity attributes
-   - `flatten_node_attrs()`: Merges node.attrs with top-level fields
-   - `flatten_link_attrs()`: Merges link.attrs with top-level fields
-   - `flatten_risk_group_attrs()`: Merges risk_group.attrs with top-level fields
+```yaml
+conditions:
+  - attr: "role"           # Attribute name (supports dot-notation)
+    op: "=="               # Operator
+    value: "leaf"          # Expected value
+```
 
-4. **Dot-notation support**: `resolve_attr_path()` handles nested attributes
-   - Example: `hardware.vendor` resolves to `attrs["hardware"]["vendor"]`
+**2. Condition Operators**
 
-5. **Variable expansion**: `expand_templates()` handles `$var` and `${var}` substitution
-   - Supports `cartesian` and `zip` expansion modes
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equals | `attr: "role", op: "==", value: "leaf"` |
+| `!=` | Not equals | `attr: "tier", op: "!=", value: 1` |
+| `<` | Less than (numeric) | `attr: "cost", op: "<", value: 100` |
+| `<=` | Less than or equal | `attr: "priority", op: "<=", value: 5` |
+| `>` | Greater than (numeric) | `attr: "capacity", op: ">", value: 1000` |
+| `>=` | Greater than or equal | `attr: "tier", op: ">=", value: 2` |
+| `contains` | String contains or collection includes | `attr: "name", op: "contains", value: "spine"` |
+| `not_contains` | String/collection does not include | `attr: "tags", op: "not_contains", value: "deprecated"` |
+| `in` | Value is in provided list | `attr: "role", op: "in", value: ["leaf", "spine"]` |
+| `not_in` | Value is not in provided list | `attr: "dc", op: "not_in", value: ["dc3", "dc4"]` |
+| `exists` | Attribute exists and is not null | `attr: "hardware.vendor", op: "exists"` |
+| `not_exists` | Attribute missing or null | `attr: "deprecated", op: "not_exists"` |
+
+**3. Condition Combining (`logic`)**
+
+- `"or"` (default in most contexts): Any condition must match
+- `"and"`: All conditions must match
+
+```yaml
+match:
+  logic: "and"
+  conditions:
+    - attr: "role", op: "==", value: "leaf"
+    - attr: "tier", op: ">=", value: 2
+```
+
+**4. Attribute Access**
+
+Conditions evaluate against a flattened view of entity attributes:
+- Top-level fields: `name`, `disabled`, `capacity`, `cost`, `risk_groups`
+- Custom attributes from `attrs` block
+
+**5. Dot-Notation for Nested Attributes**
+
+Access nested attributes using dots:
+
+```yaml
+conditions:
+  - attr: "hardware.vendor"      # Resolves to attrs["hardware"]["vendor"]
+    op: "=="
+    value: "Acme"
+```
+
+**6. Variable Expansion**
+
+Template expansion (`$var`, `${var}`) is processed before condition evaluation (see [Variable Expansion](#variable-expansion)).
 
 ### Context-Aware Defaults
 
@@ -248,9 +292,33 @@ workflow:                # Analysis execution steps
 seed:                    # Master seed for reproducibility (integer)
 ```
 
+| Key | Required | Description |
+|-----|----------|-------------|
+| `network` | **Yes** | Network topology: nodes, links, and rules |
+| `blueprints` | No | Reusable topology templates |
+| `components` | No | Hardware component library for cost/power modeling |
+| `risk_groups` | No | Failure correlation groups for resilience analysis |
+| `vars` | No | YAML anchors for reuse within the scenario |
+| `demands` | No | Traffic demand patterns for capacity analysis |
+| `failures` | No | Failure policies for simulation |
+| `workflow` | No | Analysis workflow steps to execute |
+| `seed` | No | Master seed (integer) for reproducible random operations |
+
+**Seed:** When specified, the `seed` value is used to initialize random number generators for failure sampling, ensuring reproducible results across runs. Without a seed, results may vary between executions.
+
 ## `network` - Core Foundation
 
 The only required section. Defines network topology through nodes and links.
+
+**Network metadata fields:**
+
+```yaml
+network:
+  name: "my-network"       # Optional network name (stored in network.attrs)
+  version: "1.0"           # Optional version (stored in network.attrs)
+  nodes: { ... }
+  links: [ ... ]
+```
 
 ### Direct Node and Link Definitions
 
@@ -327,6 +395,38 @@ network:
 ```
 
 Creates: `leaf/leaf-1`, `leaf/leaf-2`, `leaf/leaf-3`, `leaf/leaf-4`, `spine/spine-1`, `spine/spine-2`
+
+The `{n}` placeholder is replaced with a 1-indexed counter (1, 2, 3, ...) up to `count`. The group name becomes the parent path, and template generates child node names.
+
+**Nested Nodes (Inline Hierarchy):**
+
+Create hierarchical node structures without blueprints using nested `nodes`:
+
+```yaml
+network:
+  nodes:
+    dc1:
+      nodes:                    # Inline nested hierarchy
+        rack1:
+          count: 4
+          template: "srv-{n}"
+          attrs:
+            role: "server"
+        rack2:
+          count: 4
+          template: "srv-{n}"
+          attrs:
+            role: "server"
+        tor:
+          count: 2
+          template: "tor-{n}"
+          attrs:
+            role: "switch"
+```
+
+Creates: `dc1/rack1/srv-1`, `dc1/rack1/srv-2`, ..., `dc1/tor/tor-1`, `dc1/tor/tor-2`
+
+Nested nodes are useful for creating simple hierarchies without defining reusable blueprints. For complex or repeated structures, prefer blueprints.
 
 **Link Definitions:**
 
@@ -441,6 +541,13 @@ network:
 
 - Numeric ranges: `[1-4]` -> 1, 2, 3, 4
 - Explicit lists: `[red,blue,green]` -> red, blue, green
+- Mixed expressions: `[1,3,5-7]` -> 1, 3, 5, 6, 7
+- Multiple brackets: Cartesian product of all brackets
+
+```yaml
+# Multiple brackets produce cartesian product
+dc[1-2]/rack[a,b]:   # Creates: dc1/racka, dc1/rackb, dc2/racka, dc2/rackb
+```
 
 **Scope:** Bracket expansion applies to:
 
@@ -474,9 +581,25 @@ network:
 
 The range syntax `[start-end]` only supports integers. For letters, mixed sequences, or zero-padded numbers, use comma-separated explicit lists.
 
-### Variable Expansion in Links
+### Variable Expansion
 
-Use `$var` or `${var}` syntax with an `expand` block for template substitution:
+Use `$var` or `${var}` syntax with an `expand` block for template substitution. Variables are recursively substituted in all string fields within the block, including nested `attrs`.
+
+**Supported contexts:**
+
+- Link definitions (`network.links`)
+- Link rules (`network.link_rules`)
+- Node rules (`network.node_rules`)
+- Traffic demands (`demands.*`)
+
+**Expansion modes:**
+
+| Mode | Behavior | Example |
+|------|----------|---------|
+| `cartesian` (default) | All combinations of variable values | `p:[1,2]`, `r:[a,b]` → 4 expansions |
+| `zip` | Pair values by index (lists must have equal length) | `a:[1,2]`, `b:[x,y]` → 2 expansions |
+
+**Example in links:**
 
 ```yaml
 links:
@@ -487,7 +610,7 @@ links:
         p: [1, 2]
         r: ["a", "b"]
         s: [1, 2, 3]
-      mode: "cartesian"  # All combinations
+      mode: "cartesian"  # 2 × 2 × 3 = 12 link definitions
     pattern: "mesh"
 
   - source: "server${idx}"
@@ -495,9 +618,26 @@ links:
     expand:
       vars:
         idx: [1, 2, 3, 4]
-      mode: "zip"        # Paired by index
+      mode: "zip"        # 4 paired link definitions
     pattern: "one_to_one"
 ```
+
+**Variables in nested attributes:**
+
+```yaml
+links:
+  - source: "${dc}/leaf"
+    target: "${dc}/spine"
+    expand:
+      vars:
+        dc: ["dc1", "dc2"]
+    attrs:
+      datacenter: "${dc}"      # Also substituted
+      corridor: "${dc}_internal"
+    pattern: "mesh"
+```
+
+**Limits:** Expansion is capped at 10,000 items per block to prevent accidental combinatorial explosion.
 
 ## `blueprints` - Reusable Templates
 
@@ -539,36 +679,111 @@ network:
 
 ## Node and Link Rules
 
-Modify specific nodes or links after initial creation:
+Modify specific nodes or links after initial creation. Rules run post-expansion and can override properties, add attributes, or disable elements.
+
+### Node Rules
 
 ```yaml
 network:
   node_rules:
-    - path: "^pod1/spine/.*$"           # Regex pattern matching
+    # Simple path-based matching
+    - path: "^pod1/spine/.*$"
       disabled: true
       attrs:
         maintenance_mode: "active"
-    - path: "server-[1-3]$"             # Specific node subset
+
+    # Path with attribute filtering
+    - path: "^dc1/.*"
+      match:
+        logic: "and"
+        conditions:
+          - attr: "role"
+            op: "=="
+            value: "leaf"
+          - attr: "tier"
+            op: ">="
+            value: 2
       attrs:
         priority: "high"
 
+    # Variable expansion for repeated rules
+    - path: "^${dc}/rack1/.*"
+      expand:
+        vars:
+          dc: ["dc1", "dc2", "dc3"]
+      attrs:
+        zone: "${dc}_zone1"
+```
+
+**Node rule fields:**
+
+- `path`: Regex pattern matched against node names (required)
+- `match`: Optional attribute conditions to filter matched nodes
+- `disabled`: Set node disabled state
+- `attrs`: Attributes to merge into matched nodes
+- `risk_groups`: Risk groups to add to matched nodes
+- `expand`: Variable expansion block for templated rules
+
+### Link Rules
+
+```yaml
+network:
   link_rules:
+    # Basic endpoint matching
     - source: "^pod1/leaf/.*$"
       target: "^pod1/spine/.*$"
-      capacity: 100                     # Override capacity
+      capacity: 100
+
+    # Bidirectional matching (default: true)
     - source: ".*/spine/.*"
       target: ".*/spine/.*"
-      bidirectional: true               # Bidirectional matching (default: true)
+      bidirectional: true
       cost: 5
       attrs:
         link_type: "backbone"
+
+    # Filter by link's own attributes using link_match
+    - source: "^dc1/.*"
+      target: "^dc2/.*"
+      link_match:
+        logic: "and"
+        conditions:
+          - attr: "link_type"
+            op: "=="
+            value: "inter_dc"
+          - attr: "capacity"
+            op: ">="
+            value: 100
+      cost: 10
+      attrs:
+        priority: "high"
+
+    # Variable expansion
+    - source: "^${src}/.*"
+      target: "^${dst}/.*"
+      expand:
+        vars:
+          src: ["dc1", "dc2"]
+          dst: ["dc2", "dc3"]
+        mode: "zip"
+      attrs:
+        corridor: "${src}_to_${dst}"
 ```
 
-Notes:
+**Link rule fields:**
 
-- For `link_rules`, link properties (`capacity`, `cost`, `disabled`, `risk_groups`, `attrs`) are specified at the top level (no wrapper).
-- `bidirectional` defaults to `true` if omitted.
-- Ordering: `node_rules` run after node creation (groups and direct nodes) and before any link expansion; `link_rules` run after links are created.
+- `source`, `target`: Regex patterns or selector objects for endpoint matching
+- `bidirectional`: Match links in both directions (default: `true`)
+- `link_match`: Filter by link's own attributes (not endpoint attributes)
+- `capacity`, `cost`, `disabled`: Override link properties
+- `attrs`: Attributes to merge into matched links
+- `risk_groups`: Risk groups to add to matched links
+- `expand`: Variable expansion block for templated rules
+
+**Execution order:**
+
+1. `node_rules` run after node creation but before link expansion
+2. `link_rules` run after all links are created
 
 ## `components` - Hardware Library
 
@@ -968,6 +1183,21 @@ demands:
 - `cartesian`: All combinations of variable values (default)
 - `zip`: Pair values by index (lists must have equal length)
 
+### Demand Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | string or selector | Source node selector (required) |
+| `target` | string or selector | Target node selector (required) |
+| `volume` | number | Traffic demand volume (default: 0) |
+| `priority` | integer | Priority class; lower = higher priority (default: 0) |
+| `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
+| `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
+| `flow_policy` | string | Routing policy preset name |
+| `id` | string | Unique demand identifier (auto-generated if omitted) |
+| `attrs` | object | Arbitrary metadata |
+| `expand` | object | Variable expansion block |
+
 ### Selector Fields
 
 The `source` and `target` fields accept either:
@@ -975,10 +1205,44 @@ The `source` and `target` fields accept either:
 - A string regex pattern matched against node names
 - A selector object with `path`, `group_by`, and/or `match` fields
 
-### Traffic Modes
+### Traffic Modes (`mode`)
 
-- `combine`: Single aggregate flow between source and target groups
-- `pairwise`: Individual flows between all source-target node pairs
+Controls how source and target node sets are paired:
+
+- `combine`: Aggregate all sources into one virtual source, all targets into one virtual target. Produces a single flow.
+- `pairwise`: Create individual flows between all source-target node pairs. Volume is distributed across pairs.
+
+### Group Modes (`group_mode`)
+
+When using `group_by` selectors, controls how grouped nodes produce demands:
+
+- `flatten` (default): Flatten all groups into a single source/target set, then apply `mode`
+- `per_group`: Create separate demands for each group independently
+- `group_pairwise`: Create demands between each source group and each target group pair
+
+**Example with `group_mode`:**
+
+```yaml
+demands:
+  inter_dc_traffic:
+    # Each DC pair gets its own demand
+    - source:
+        group_by: "dc"
+      target:
+        group_by: "dc"
+      volume: 1000
+      mode: "combine"
+      group_mode: "group_pairwise"    # Creates dc1->dc2, dc1->dc3, dc2->dc3, etc.
+```
+
+| `mode` | `group_mode` | Result |
+|--------|--------------|--------|
+| `combine` | `flatten` | Single aggregated demand across all nodes |
+| `combine` | `per_group` | One demand per source group (targets combined) |
+| `combine` | `group_pairwise` | One demand per (source_group, target_group) pair |
+| `pairwise` | `flatten` | Individual demands for each (src_node, tgt_node) pair |
+| `pairwise` | `per_group` | Pairwise within each group |
+| `pairwise` | `group_pairwise` | Pairwise for each group pair combination |
 
 ### Flow Policies
 
@@ -1003,6 +1267,7 @@ failures:
           - scope: "link"
             mode: "choice"
             count: 1
+
   weighted_modes:                # Example of weighted multi-mode policy
     modes:
       - weight: 0.30
@@ -1011,60 +1276,101 @@ failures:
             mode: "choice"
             count: 1
             weight_by: distance_km
+
       - weight: 0.35
         rules:
           - scope: "link"
             mode: "choice"
             count: 3
-            conditions:
-              - attr: link_type
-                op: "=="
-                value: dc_to_pop
-            logic: and
+            match:                       # Attribute conditions inside match block
+              logic: "and"
+              conditions:
+                - attr: "link_type"
+                  op: "=="
+                  value: "dc_to_pop"
             weight_by: target_capacity
+
       - weight: 0.25
         rules:
           - scope: "node"
+            path: "^dc[1-3]/.*"          # Path filter (regex)
             mode: "choice"
             count: 1
-            conditions:
-              - attr: node_type
-                op: "!="
-                value: dc_region
-            logic: and
+            match:
+              logic: "and"
+              conditions:
+                - attr: "node_type"
+                  op: "!="
+                  value: "dc_region"
             weight_by: attached_capacity_gbps
+
       - weight: 0.10
         rules:
           - scope: "link"
             mode: "choice"
             count: 4
-            conditions:
-              - attr: link_type
-                op: "=="
-                value: leaf_spine
-              - attr: link_type
-                op: "=="
-                value: intra_group
-              - attr: link_type
-                op: "=="
-                value: inter_group
-              - attr: link_type
-                op: "=="
-                value: internal_mesh
-            logic: or
+            match:
+              logic: "or"                # Any condition matches
+              conditions:
+                - attr: "link_type"
+                  op: "=="
+                  value: "leaf_spine"
+                - attr: "link_type"
+                  op: "=="
+                  value: "intra_group"
+                - attr: "link_type"
+                  op: "=="
+                  value: "inter_group"
 ```
 
-**Selection Modes:**
+### Policy-Level Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `modes` | array | required | List of weighted failure modes |
+| `attrs` | object | `{}` | Policy metadata (e.g., description) |
+| `expand_groups` | boolean | `false` | When a risk group is selected, also fail its member nodes/links |
+| `expand_children` | boolean | `false` | When a risk group is selected, recursively fail child risk groups |
+
+**Risk group expansion example:**
+
+```yaml
+failures:
+  srlg_failures:
+    expand_groups: true      # Fail all links in selected risk group
+    expand_children: true    # Also fail nested child groups
+    attrs:
+      description: "Shared-risk link group failure simulation"
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: "risk_group"
+            mode: "choice"
+            count: 1
+```
+
+### Selection Modes
 
 - `all`: Select all matching entities
-- `choice`: Select specific count of entities
-- `random`: Select entities with given probability
+- `choice`: Select specific count of entities (optionally weighted)
+- `random`: Select each entity independently with given probability
 
-Notes:
+### Rule Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scope` | string | Entity type: `node`, `link`, or `risk_group` (required) |
+| `mode` | string | Selection mode: `all`, `choice`, or `random` (default: `all`) |
+| `count` | integer | Number of entities to select (for `choice` mode) |
+| `probability` | number | Selection probability 0-1 (for `random` mode) |
+| `path` | string | Regex filter on entity name |
+| `match` | object | Attribute conditions block with `logic` and `conditions` |
+| `weight_by` | string | Attribute name for weighted sampling in `choice` mode |
+
+### Notes
 
 - Policies are mode-based. Each mode has a non-negative `weight`. One mode is chosen per iteration with probability proportional to weights, then all rules in that mode are applied and their selections are unioned.
-- Each rule has `scope` ("node" | "link" | "risk_group"), optional `logic` ("and" | "or"; defaults to "or"), optional `conditions`, and one of the selection mode parameters (`count` for choice, `probability` for random). `weight_by` can be provided for weighted sampling in `choice` rules.
-- Condition language is the same as used in link `match` selectors and supports: `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `exists`, `not_exists`. Conditions evaluate on a flat attribute mapping that includes top-level fields and `attrs`.
+- Condition syntax uses the same operators as link/demand selectors. See [Condition Operators](#shared-evaluation-primitives) for the full reference.
 
 ## `workflow` - Execution Steps
 
@@ -1090,7 +1396,8 @@ workflow:
 - `NetworkStats`: Compute basic statistics
 - `MaxFlow`: Monte Carlo capacity analysis between node groups
 - `TrafficMatrixPlacement`: Monte Carlo demand placement for a named demand set
-- `MaximumSupportedDemand`: Search for `alpha_star` for a named demand set
+- `MaximumSupportedDemand`: Search for `alpha_star` (scaling factor) for a named demand set
+- `CostPower`: Aggregate capex and power by network hierarchy level
 
 See [Workflow Reference](workflow.md) for detailed configuration.
 
@@ -1183,7 +1490,31 @@ source:
         value: 2
 ```
 
-**Supported operators:** `==`, `!=`, `<`, `<=`, `>`, `>=`, `contains`, `not_contains`, `in`, `not_in`, `exists`, `not_exists`
+See [Condition Operators](#shared-evaluation-primitives) for the full list of supported operators and condition syntax.
+
+### Active-Only Filtering
+
+Use `active_only` to control whether disabled nodes are included:
+
+```yaml
+# Override default to include disabled nodes in demands
+source:
+  path: "^dc1/.*"
+  active_only: false    # Include disabled nodes (overrides demand default of true)
+
+# Override default to exclude disabled nodes in links
+source:
+  path: "^dc1/.*"
+  active_only: true     # Exclude disabled nodes (overrides link default of false)
+```
+
+**Context defaults** (see [Context-Aware Defaults](#context-aware-defaults)):
+
+| Context | Default `active_only` | Rationale |
+|---------|----------------------|-----------|
+| Links | `false` | Create links to disabled nodes |
+| Demands | `true` | Only route traffic through active nodes |
+| Workflow | `true` | Analyze only active topology |
 
 ### Workflow Examples
 

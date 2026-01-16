@@ -984,7 +984,7 @@ network:
 def test_example_15_demand_variables():
     """Example 15: Traffic Demands with Variable Expansion and Group Modes.
 
-    Expected: Variable expansion in demands, group_mode, priority, demand_placed
+    Expected: Variable expansion in demands, group_mode, and priority
     """
     yaml_content = """
 network:
@@ -1021,7 +1021,6 @@ demands:
       mode: pairwise
       group_mode: per_group
       priority: 1
-      demand_placed: 10.0
       flow_policy: SHORTEST_PATHS_WCMP
 """
     scenario = Scenario.from_yaml(yaml_content)

@@ -786,11 +786,10 @@ demands:
       mode: pairwise
       group_mode: per_group          # Separate demand per group pair
       priority: 1
-      demand_placed: 10.0            # 10 units pre-placed
       flow_policy: SHORTEST_PATHS_WCMP
 ```
 
-**Result**: Shows variable expansion in demands, group_mode, priority, demand_placed
+**Result**: Shows variable expansion in demands, group_mode, and priority
 
 ## Example 16: Hierarchical Risk Groups
 

@@ -14,13 +14,13 @@ NetGraph DSL uses three distinct template syntaxes in different contexts:
 | Syntax | Example | Where | Purpose |
 |--------|---------|-------|---------|
 | **Brackets** `[1-3]` | `dc[1-3]/rack[a,b]` | Group names, risk groups | Generate multiple entities |
-| **Variables** `$var` | `pod${p}/leaf` | Links, demands | Template expansion |
-| **Format** `{n}` | `srv{n}` | `template` | Node naming |
+| **Variables** `$var` | `pod${p}/leaf` | Links, rules, demands | Template expansion |
+| **Format** `{n}` | `srv-{n}` | `template` | Node naming |
 
 **Important**: These syntaxes are NOT interchangeable:
 
 - `[1-3]` works in group names and risk groups (definitions and memberships), not components
-- `${var}` requires `expand.vars` dict; only works in link `source`/`target` and demand `source`/`target`
+- `${var}` requires `expand.vars` dict; works in link `source`/`target`, demand `source`/`target`, and node/link rules (via `expand` blocks)
 - `{n}` is the only placeholder available in `template` (Python format syntax)
 
 ### Endpoint Naming Conventions
@@ -316,14 +316,14 @@ network:
   nodes:
     servers:
       count: 4
-      template: "srv{n}"
+      template: "srv-{n}"
       disabled: false
       risk_groups: ["RG_Servers"]
       attrs:
         role: compute
 ```
 
-Creates: `servers/srv1`, `servers/srv2`, `servers/srv3`, `servers/srv4`
+Creates: `servers/srv-1`, `servers/srv-2`, `servers/srv-3`, `servers/srv-4`
 
 **Group-specific keys**: `count`, `template`
 
@@ -340,15 +340,15 @@ network:
       nodes:
         rack1:
           count: 2
-          template: "srv{n}"
+          template: "srv-{n}"
           attrs:
             role: compute
         rack2:
           count: 2
-          template: "srv{n}"
+          template: "srv-{n}"
 ```
 
-Creates: `datacenter/rack1/srv1`, `datacenter/rack1/srv2`, `datacenter/rack2/srv1`, `datacenter/rack2/srv2`
+Creates: `datacenter/rack1/srv-1`, `datacenter/rack1/srv-2`, `datacenter/rack2/srv-1`, `datacenter/rack2/srv-2`
 
 **Key points:**
 
@@ -368,7 +368,7 @@ network:
   nodes:
     dc[1-3]/rack[a,b]:
       count: 4
-      template: "srv{n}"
+      template: "srv-{n}"
 ```
 
 **Expansion types**:
@@ -522,12 +522,12 @@ blueprints:
     nodes:
       leaf:
         count: 4
-        template: "leaf{n}"
+        template: "leaf-{n}"
         attrs:
           role: leaf
       spine:
         count: 2
-        template: "spine{n}"
+        template: "spine-{n}"
         attrs:
           role: spine
     links:
@@ -878,7 +878,6 @@ demands:
     - source: "^dc1/.*"
       target: "^dc2/.*"
       volume: 1000
-      demand_placed: 0.0      # Optional: pre-placed portion
       mode: combine
       group_mode: flatten     # How to handle grouped nodes
       priority: 1
@@ -1154,7 +1153,6 @@ workflow:
     mode: pairwise
     failure_policy: single_link
     iterations: 500
-    baseline: true
 
   - type: CostPower
     name: cost_analysis

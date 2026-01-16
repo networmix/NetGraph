@@ -4,8 +4,8 @@ description: >
   NetGraph scenario DSL for defining network topologies, traffic demands, failure policies,
   and analysis workflows in YAML. Use when: creating or editing .yaml/.yml network scenarios,
   defining nodes/links/groups, writing link rules with patterns, configuring selectors or blueprints,
-  setting up traffic demands or failure policies, debugging DSL syntax or validation errors,
-  or asking about NetGraph scenario structure.
+  setting up traffic demands or failure policies, running scenarios and interpreting results,
+  debugging DSL syntax or validation errors, or asking about NetGraph scenario structure.
 ---
 
 # NetGraph DSL
@@ -111,20 +111,20 @@ network:
   nodes:
     leaf:
       count: 4
-      template: "leaf{n}"
+      template: "leaf-{n}"
       attrs:
         role: leaf
 ```
 
-Creates: `leaf/leaf1`, `leaf/leaf2`, `leaf/leaf3`, `leaf/leaf4`
+Creates: `leaf/leaf-1`, `leaf/leaf-2`, `leaf/leaf-3`, `leaf/leaf-4`
 
 ### Template Syntaxes
 
 | Syntax | Example | Context |
 |--------|---------|---------|
 | `[1-3]` | `dc[1-3]/rack` | Group names, risk groups |
-| `$var`/`${var}` | `pod${p}/leaf` | Link & demand selectors |
-| `{n}` | `srv{n}` | `template` field |
+| `$var`/`${var}` | `pod${p}/leaf` | Links, rules, demands |
+| `{n}` | `srv-{n}` | `template` field |
 
 These are NOT interchangeable. See [REFERENCE.md](references/REFERENCE.md) for details.
 
@@ -135,7 +135,7 @@ network:
   nodes:
     dc[1-3]/rack[a,b]:    # Cartesian product
       count: 4
-      template: "srv{n}"
+      template: "srv-{n}"
 ```
 
 Creates: `dc1/racka`, `dc1/rackb`, `dc2/racka`, `dc2/rackb`, `dc3/racka`, `dc3/rackb`
@@ -209,6 +209,8 @@ links:
     pattern: mesh
 ```
 
+**Expansion limit**: Maximum 10,000 expansions per template. Exceeding this raises an error.
+
 ### Blueprints
 
 ```yaml
@@ -217,10 +219,10 @@ blueprints:
     nodes:
       leaf:
         count: 4
-        template: "leaf{n}"
+        template: "leaf-{n}"
       spine:
         count: 2
-        template: "spine{n}"
+        template: "spine-{n}"
     links:
       - source: /leaf
         target: /spine
@@ -244,7 +246,7 @@ network:
       nodes:              # Inline hierarchy
         rack1:
           count: 2
-          template: "srv{n}"
+          template: "srv-{n}"
 ```
 
 ### Node and Link Rules
@@ -465,3 +467,123 @@ Rules only affect entities that exist at their processing stage.
 
 - [Full DSL Reference](references/REFERENCE.md) - Complete field documentation, all operators, workflow steps
 - [Working Examples](references/EXAMPLES.md) - 22 complete scenarios from simple to advanced
+
+## Running Scenarios
+
+**Always validate before running:**
+
+```bash
+./venv/bin/ngraph inspect scenario.yaml && ./venv/bin/ngraph run scenario.yaml
+```
+
+### CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `ngraph inspect <file>` | Validate and summarize scenario |
+| `ngraph inspect -d <file>` | Detailed view with node/link tables |
+| `ngraph run <file>` | Execute and write `<file>.results.json` |
+| `ngraph run <file> --stdout` | Execute and print results to stdout |
+| `ngraph run <file> --profile` | Execute with CPU profiling |
+
+### Success Indicators
+
+**inspect success:**
+```
+✓ YAML file loaded successfully
+✓ Scenario structure is valid
+```
+
+**run success:**
+```
+✅ Scenario execution completed
+✅ Results written to: scenario.results.json
+```
+Exit code 0, results JSON created.
+
+### Failure Indicators
+
+**Schema validation error:**
+```
+❌ ERROR: Failed to inspect scenario
+  ValidationError: Additional properties are not allowed ('bad_field' was unexpected)
+On instance['network']['nodes']['A']:
+    {'bad_field': 'x'}
+```
+Fix: Move custom fields inside `attrs: {}`.
+
+**Missing node reference:**
+```
+ValueError: Source node 'X' not found in network
+```
+Fix: Check node name spelling or pattern matching.
+
+**Empty selector match:**
+```
+WARNING: No nodes matched selector
+```
+Fix: Verify regex pattern matches actual node names.
+
+### Interpreting Results
+
+Results JSON structure:
+```json
+{
+  "steps": {
+    "<step_name>": {
+      "metadata": { "duration_sec": 0.5 },
+      "data": { ... }
+    }
+  }
+}
+```
+
+**Key metrics by step type:**
+
+| Step | Key Field | Good Value | Problem |
+|------|-----------|------------|---------|
+| MaximumSupportedDemand | `alpha_star` | >= 1.0 | < 1.0 means network undersized |
+| TrafficMatrixPlacement | `flow_results[].summary.total_dropped` | 0 | > 0 means congestion |
+| MaxFlow | `flow_results[].summary.total_placed` | = total_demand | < demand means bottleneck |
+
+**Quick validation after run:**
+
+```bash
+# Check alpha_star (should be >= 1.0)
+grep -o '"alpha_star": [0-9.]*' scenario.results.json
+
+# Check for dropped traffic (should be 0)
+grep -o '"total_dropped": [0-9.]*' scenario.results.json | head -5
+```
+
+### Common Errors and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `Additional properties are not allowed` | Custom field outside `attrs` | Move to `attrs: {field: value}` |
+| `Source node 'X' not found` | Link references non-existent node | Fix node name or create the node |
+| `one_to_one pattern requires sizes with multiple factor` | Mismatched group sizes | Use sizes like 4-to-2, not 3-to-2 |
+| `Variable '$x' not found in expand.vars` | Missing variable definition | Add to `expand: {vars: {x: [...]}}` |
+| `zip expansion requires equal-length lists` | Lists have different lengths | Make lists same length or use `cartesian` |
+
+### Profiling Scenarios
+
+When performance matters:
+
+```bash
+./venv/bin/ngraph run scenario.yaml --profile --profile-memory
+```
+
+Output shows:
+- **Step timing**: Time per workflow step
+- **Bottlenecks**: Steps taking >10% of total time
+- **Memory**: Peak memory per step (with `--profile-memory`)
+- **Recommendations**: Optimization suggestions
+
+### Iteration Pattern
+
+1. Write scenario YAML
+2. `./venv/bin/ngraph inspect scenario.yaml` - fix any errors
+3. `./venv/bin/ngraph run scenario.yaml`
+4. Check results: `alpha_star`, `total_dropped`
+5. If results bad -> adjust topology/demands -> repeat

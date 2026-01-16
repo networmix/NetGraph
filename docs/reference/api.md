@@ -105,7 +105,7 @@ print(flow_result)  # {("^n1$", "^n2$"): 100.0}
 
 - **disabled flags:** Node.disabled and Link.disabled mark components as inactive in the scenario topology (use `excluded_nodes`/`excluded_links` parameters for temporary analysis-time exclusion)
 - **Risk Groups:** Nodes and links can be tagged with risk group names (e.g., "rack1", "fiber_bundle") to model shared failure domains.
-- **Node selection:** Use regex patterns anchored at start (e.g., `"^datacenter.*"`) or attribute directives (`"attr:role"`) to select and group nodes (see DSL Node Selection)
+- **Node selection:** Use regex patterns anchored at start (e.g., `"^datacenter.*"`) or selector objects with `path`, `group_by`, and `match` fields to select and group nodes (see DSL Reference)
 
 ### Results
 
@@ -209,7 +209,7 @@ Essential analysis capabilities for network evaluation.
 
 **When to use:** Compute network capacity between source and sink groups. Supports multiple flow placement policies and failure scenarios.
 
-**Performance:** Max-flow computation executes in C++ with the GIL released for concurrent execution. Algorithm complexity is O(V^2E) for push-relabel with gap heuristic.
+**Performance:** Max-flow computation executes in C++ with the GIL released for concurrent execution. Algorithm uses successive shortest paths with blocking flow augmentation; complexity is O(V^2 E log V) worst-case.
 
 ```python
 from ngraph import analyze, Mode, FlowPlacement

@@ -117,7 +117,7 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 - **Shortest Path**: Only uses paths with the minimum cost
 - **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The total flow can be limited by the smallest capacity path.
 
-Note that `EQUAL_BALANCED` flow placement is only applicable when calculating MaxFlow on shortest paths.
+`EQUAL_BALANCED` flow placement is typically used with `shortest_path=True` to simulate traditional ECMP behavior, where flows are split equally across equal-cost paths.
 
 ## Cost Distribution
 

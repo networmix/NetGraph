@@ -36,6 +36,7 @@ ngraph/
 ├── dsl/            # YAML parsing (blueprints/, selectors/, expansion/)
 ├── workflow/       # WorkflowStep implementations
 ├── results/        # Results store and flow result types
+├── schemas/        # JSON Schema for scenario validation
 ├── types/          # Enums, DTOs, type aliases
 ├── profiling/      # Performance profiling
 ├── lib/            # NetworkX integration
@@ -252,22 +253,22 @@ A single construction method is provided:
 - Constructs NumPy arrays (src, dst, capacity, cost, ext_edge_ids)
 - Supports augmentation edges (e.g., pseudo-source/sink for multi-source max-flow)
 
-**Graph Container:**
+**AnalysisContext Internals:**
 
-The `Graph` dataclass holds pre-built graph components:
+`AnalysisContext` encapsulates pre-built graph components as internal attributes:
 
-- `handle`, `multidigraph`: Core graph structures
-- `node_mapper`, `edge_mapper`: Name ↔ ID translation
-- `algorithms`: Core Algorithms instance
-- `disabled_node_ids`, `disabled_link_ids`: Pre-computed disabled topology
-- `link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
-- `pseudo_node_context`: Optional context for pseudo source/sink node mappings
+- `_handle`, `_multidigraph`: Core graph structures
+- `_node_mapper`, `_edge_mapper`: Name ↔ ID translation
+- `_algorithms`: Core Algorithms instance
+- `_disabled_node_ids`, `_disabled_link_ids`: Pre-computed disabled topology
+- `_link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
+- `_pseudo_context`: Optional context for pseudo source/sink node mappings
 
-When analyzing many failure scenarios, the graph is built once and exclusions are applied via boolean masks using `build_node_mask()` and `build_edge_mask()`. These mask builders automatically include disabled nodes/links from the `Graph`, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
+When analyzing many failure scenarios, the graph is built once via `AnalysisContext.from_network()` and exclusions are applied via boolean masks. The mask builders automatically include disabled nodes/links, ensuring disabled topology is always excluded. This avoids rebuilding the graph for each iteration, providing significant speedup for Monte Carlo simulations.
 
 **Disabled Topology Handling:**
 
-Disabled nodes and links from the Network are pre-computed when `build_graph()` is called and stored in the `Graph` container. The mask builders (`build_node_mask()`, `build_edge_mask()`) automatically include these disabled elements alongside any per-iteration exclusions.
+Disabled nodes and links from the Network are pre-computed during `AnalysisContext.from_network()` and stored in the context. The mask builders automatically include these disabled elements alongside any per-iteration exclusions.
 
 **C++ Side (`netgraph_core.StrictMultiDiGraph`):**
 
@@ -715,7 +716,7 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Optional baseline execution (no failures) for comparing degraded vs. intact capacity
 - Automatic parallelism adjustment: Forces serial execution when analysis function defined in `__main__` (notebook context) to avoid pickling failures
 - Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
-- Automatic graph pre-building: Before parallel iterations, builds `Graph` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
+- Automatic graph pre-building: Before parallel iterations, builds `AnalysisContext` to amortize graph construction cost; per-iteration exclusions applied via O(|excluded|) mask operations
 
 Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
 
@@ -779,12 +780,12 @@ NetGraph's design includes several features that differentiate it from tradition
 
 **Graph Building and Reuse:**
 
-For Monte Carlo analysis with many failure iterations, graph construction is amortized via the `Graph` dataclass:
+For Monte Carlo analysis with many failure iterations, graph construction is amortized via `AnalysisContext`:
 
-- Graph built once before iterations begin (includes all nodes and augmentation edges)
+- Context built once before iterations begin (includes all nodes and augmentation edges)
 - Per-iteration exclusions applied via boolean masks rather than graph rebuilding
 - Mask building is O(|excluded|) using pre-computed `link_id_to_edge_indices` mapping
-- FailureManager automatically pre-builds the `Graph` before parallel execution
+- FailureManager automatically pre-builds the `AnalysisContext` before parallel execution
 
 This optimization is critical for performance: graph construction involves Python processing, NumPy array creation, and C++ object initialization. Building the graph once eliminates this overhead from the per-iteration critical path, enabling the GIL-releasing C++ algorithms to execute with minimal Python overhead.
 

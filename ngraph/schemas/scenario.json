@@ -637,10 +637,6 @@
               "type": "integer",
               "description": "Priority class"
             },
-            "demand_placed": {
-              "type": "number",
-              "description": "Pre-placed demand volume"
-            },
             "mode": {
               "type": "string",
               "enum": [

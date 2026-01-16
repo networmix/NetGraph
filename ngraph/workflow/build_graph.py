@@ -1,9 +1,9 @@
 """Graph building workflow component.
 
 Validates and exports network topology as a node-link representation using NetworkX.
-After NetGraph-Core integration, actual graph building happens in analysis
-functions. This step primarily validates the network and stores a serializable
-representation for inspection.
+Actual graph building for analysis happens in analysis functions; this step
+primarily validates the network and stores a serializable representation for
+inspection.
 
 YAML Configuration Example:
     ```yaml
@@ -42,9 +42,9 @@ logger = get_logger(__name__)
 class BuildGraph(WorkflowStep):
     """Validates network topology and stores node-link representation.
 
-    After NetGraph-Core integration, this step validates the network structure
-    and stores a JSON-serializable node-link representation using NetworkX.
-    Actual Core graph building happens in analysis functions as needed.
+    This step validates the network structure and stores a JSON-serializable
+    node-link representation using NetworkX. Core graph building happens in
+    analysis functions as needed.
 
     Attributes:
         add_reverse: If True, adds reverse edges for bidirectional connectivity.

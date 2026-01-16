@@ -285,7 +285,7 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
 {
   "workflow": {
     "network_statistics": {
-      "type": "NetworkStats",
+      "step_type": "NetworkStats",
       "step_name": "network_statistics",
       "execution_order": 0,
       "scenario_seed": 42,
@@ -309,15 +309,13 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
     "tm_placement": {
       "metadata": { "iterations": 1000, "parallelism": 8 },
       "data": {
-        "flow_results": [
-          {
-            "failure_id": "baseline",
-            "failure_state": null,
-            "flows": [],
-            "summary": { "total_demand": 0.0, "total_placed": 0.0, "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 0 },
-            "data": {}
-          }
-        ],
+        "baseline": {
+          "failure_id": "",
+          "failure_state": { "excluded_nodes": [], "excluded_links": [] },
+          "flows": [],
+          "summary": { "total_demand": 0.0, "total_placed": 0.0, "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 0 }
+        },
+        "flow_results": [],
         "context": { "demand_set": "baseline_traffic_matrix" }
       }
     }

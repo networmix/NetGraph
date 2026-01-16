@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: January 15, 2026 at 14:12 UTC
+Generated from source code on: January 16, 2026 at 02:49 UTC
 
 Modules auto-discovered: 53
 
@@ -1127,9 +1127,9 @@ Returns:
 Graph building workflow component.
 
 Validates and exports network topology as a node-link representation using NetworkX.
-After NetGraph-Core integration, actual graph building happens in analysis
-functions. This step primarily validates the network and stores a serializable
-representation for inspection.
+Actual graph building for analysis happens in analysis functions; this step
+primarily validates the network and stores a serializable representation for
+inspection.
 
 YAML Configuration Example:
     ```yaml
@@ -1153,9 +1153,9 @@ Results stored in `scenario.results` under the step name as two keys:
 
 Validates network topology and stores node-link representation.
 
-After NetGraph-Core integration, this step validates the network structure
-and stores a JSON-serializable node-link representation using NetworkX.
-Actual Core graph building happens in analysis functions as needed.
+This step validates the network structure and stores a JSON-serializable
+node-link representation using NetworkX. Core graph building happens in
+analysis functions as needed.
 
 Attributes:
     add_reverse: If True, adds reverse edges for bidirectional connectivity.
