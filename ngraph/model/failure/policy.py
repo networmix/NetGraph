@@ -255,7 +255,16 @@ class FailurePolicy:
         # Apply path filter if specified
         if rule.path:
             pattern = re.compile(rule.path)
-            candidates = {eid for eid in candidates if pattern.match(eid)}
+            if rule.scope == "link":
+                candidates = {
+                    eid
+                    for eid in candidates
+                    if pattern.match(
+                        f"{network_links[eid]['source']}|{network_links[eid]['target']}"
+                    )
+                }
+            else:
+                candidates = {eid for eid in candidates if pattern.match(eid)}
 
         return candidates
 

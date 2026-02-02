@@ -77,11 +77,18 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
 
     # Apply path filter if specified
     if path_pattern:
-        entities = [
-            (eid, entity, attrs)
-            for eid, entity, attrs in entities
-            if path_pattern.match(eid)
-        ]
+        if spec.scope == "node":
+            entities = [
+                (eid, entity, attrs)
+                for eid, entity, attrs in entities
+                if path_pattern.match(eid)
+            ]
+        else:
+            entities = [
+                (eid, entity, attrs)
+                for eid, entity, attrs in entities
+                if path_pattern.match(f"{attrs['source']}|{attrs['target']}")
+            ]
 
     # Group by attribute value
     groups: Dict[Any, List] = defaultdict(list)

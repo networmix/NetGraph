@@ -186,7 +186,11 @@ def _select_entities(
         }
         # Start with all or path-filtered IDs
         if path_pattern:
-            candidate_ids = {eid for eid in entity_attrs if path_pattern.match(eid)}
+            candidate_ids = {
+                eid
+                for eid, attrs in entity_attrs.items()
+                if path_pattern.match(f"{attrs['source']}|{attrs['target']}")
+            }
         else:
             candidate_ids = set(entity_attrs.keys())
 
