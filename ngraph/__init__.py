@@ -30,8 +30,11 @@ Example:
 
 from __future__ import annotations
 
+from importlib.metadata import version
+
 from ngraph import cli, logging
-from ngraph._version import __version__
+
+__version__ = version("ngraph")
 from ngraph.analysis import AnalysisContext, analyze
 from ngraph.analysis.failure_manager import FailureManager
 from ngraph.explorer import NetworkExplorer
