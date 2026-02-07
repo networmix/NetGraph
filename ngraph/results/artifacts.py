@@ -74,10 +74,9 @@ class CapacityEnvelope:
         if not values:
             raise ValueError("Cannot create envelope from empty values list")
 
-        # Single pass to calculate everything efficiently
+        # First pass: build frequency map and compute mean
         frequencies = {}
         total_sum = 0.0
-        sum_squares = 0.0
         min_capacity = float("inf")
         max_capacity = float("-inf")
 
@@ -87,7 +86,6 @@ class CapacityEnvelope:
 
             # Update statistics
             total_sum += value
-            sum_squares += value * value
             min_capacity = min(min_capacity, value)
             max_capacity = max(max_capacity, value)
 
@@ -95,9 +93,15 @@ class CapacityEnvelope:
         n = len(values)
         mean_capacity = total_sum / n
 
-        # Use computational formula for variance: Var(X) = E[X²] - (E[X])²
-        variance = (sum_squares / n) - (mean_capacity * mean_capacity)
-        stdev_capacity = variance**0.5
+        # Second pass over unique values: compute variance using the
+        # numerically stable formula sum((x - mean)^2) / n.
+        # Iterating over the frequency map is efficient when there are
+        # many duplicate values (common in Monte Carlo results).
+        variance_sum = 0.0
+        for value, count in frequencies.items():
+            diff = value - mean_capacity
+            variance_sum += count * diff * diff
+        stdev_capacity = (variance_sum / n) ** 0.5
 
         # Process flow summaries if provided
         flow_summary_stats = {}
