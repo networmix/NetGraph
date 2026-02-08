@@ -304,7 +304,7 @@ seed:                    # Master seed for reproducibility (integer)
 | `workflow` | No | Analysis workflow steps to execute |
 | `seed` | No | Master seed (integer) for reproducible random operations |
 
-**Seed:** When specified, the `seed` value is used to initialize random number generators for failure sampling, ensuring reproducible results across runs. Without a seed, results may vary between executions.
+**Seed:** When specified, the `seed` value is used to derive deterministic per-component seeds (via SHA-256 hashing) for failure sampling and workflow steps, ensuring reproducible results across runs. Each failure iteration creates a single isolated random number generator from its derived seed. Without a seed, results may vary between executions.
 
 ## `network` - Core Foundation
 

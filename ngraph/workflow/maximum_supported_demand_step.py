@@ -82,7 +82,6 @@ class MaximumSupportedDemand(WorkflowStep):
         resolution: Convergence threshold for binary search.
         max_bracket_iters: Maximum iterations for bracketing phase.
         max_bisect_iters: Maximum iterations for bisection phase.
-        seeds_per_alpha: Number of placement attempts per alpha probe.
         placement_rounds: Placement optimization rounds.
     """
 
@@ -95,7 +94,6 @@ class MaximumSupportedDemand(WorkflowStep):
     resolution: float = 0.01
     max_bracket_iters: int = 32
     max_bisect_iters: int = 32
-    seeds_per_alpha: int = 1
     placement_rounds: int | str = "auto"
 
     def __post_init__(self) -> None:
@@ -107,11 +105,8 @@ class MaximumSupportedDemand(WorkflowStep):
             self.resolution = float(self.resolution)
             self.max_bracket_iters = int(self.max_bracket_iters)
             self.max_bisect_iters = int(self.max_bisect_iters)
-            self.seeds_per_alpha = int(self.seeds_per_alpha)
         except Exception as exc:
             raise ValueError(f"Invalid MSD parameter type: {exc}") from exc
-        if self.seeds_per_alpha < 1:
-            raise ValueError("seeds_per_alpha must be >= 1")
         if self.growth_factor <= 1.0:
             raise ValueError("growth_factor must be > 1.0")
         if self.resolution <= 0.0:
@@ -125,11 +120,10 @@ class MaximumSupportedDemand(WorkflowStep):
         logger.info("Starting MaximumSupportedDemand: name=%s", self.name)
         logger.debug(
             "MaximumSupportedDemand params: demand_set=%s alpha_start=%.6g "
-            "growth=%.3f seeds=%d resolution=%.6g",
+            "growth=%.3f resolution=%.6g",
             self.demand_set,
             float(self.alpha_start),
             float(self.growth_factor),
-            int(self.seeds_per_alpha),
             float(self.resolution),
         )
 
@@ -169,7 +163,7 @@ class MaximumSupportedDemand(WorkflowStep):
         probes: list[dict[str, Any]] = []
 
         def probe(alpha: float) -> tuple[bool, dict[str, Any]]:
-            feasible, details = self._evaluate_alpha(cache, alpha, self.seeds_per_alpha)
+            feasible, details = self._evaluate_alpha(cache, alpha)
             probes.append({"alpha": alpha, "feasible": bool(feasible)} | details)
             return feasible, details
 
@@ -185,7 +179,6 @@ class MaximumSupportedDemand(WorkflowStep):
             "resolution": self.resolution,
             "max_bracket_iters": self.max_bracket_iters,
             "max_bisect_iters": self.max_bisect_iters,
-            "seeds_per_alpha": self.seeds_per_alpha,
             "demand_set": self.demand_set,
             "placement_rounds": self.placement_rounds,
         }
@@ -229,7 +222,17 @@ class MaximumSupportedDemand(WorkflowStep):
                     break
                 lower = alpha
             if upper is None:
-                upper = min(self.alpha_max, lower + max(self.resolution, 1.0))
+                # All probed alphas were feasible.
+                # If lower has reached alpha_max, the answer is alpha_max.
+                if lower >= self.alpha_max:
+                    return lower
+                # Bracket iters exhausted before reaching alpha_max.
+                # Probe alpha_max directly.
+                feas, _ = probe(self.alpha_max)
+                if feas:
+                    return self.alpha_max
+                # alpha_max is infeasible: valid bracket for bisection.
+                upper = self.alpha_max
         else:
             upper = start_alpha
             alpha = start_alpha
@@ -321,50 +324,35 @@ class MaximumSupportedDemand(WorkflowStep):
     def _evaluate_alpha(
         cache: _MSDCache,
         alpha: float,
-        seeds: int,
     ) -> tuple[bool, dict[str, Any]]:
         """Evaluate if alpha is feasible.
 
         Uses pre-built cache; only scales demand volumes by alpha.
+        Placement is deterministic so a single evaluation is sufficient.
         """
         ctx = cache.ctx
-        decisions: list[bool] = []
-        min_ratios: list[float] = []
-
-        # Pre-compute scaled volumes once per alpha
         volumes = [d.volume * alpha for d in cache.base_expanded]
 
-        for _ in range(max(1, int(seeds))):
-            flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
+        flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
+        result = place_demands(
+            cache.base_expanded,
+            volumes,
+            flow_graph,
+            ctx,
+            cache.node_mask,
+            cache.edge_mask,
+            resolved_ids=cache.resolved_ids,
+            collect_entries=False,
+        )
 
-            result = place_demands(
-                cache.base_expanded,
-                volumes,
-                flow_graph,
-                ctx,
-                cache.node_mask,
-                cache.edge_mask,
-                resolved_ids=cache.resolved_ids,
-                collect_entries=False,
+        if result.summary.total_demand == 0.0:
+            raise ValueError(
+                f"Cannot evaluate feasibility for alpha={alpha:.6g}: "
+                "total demand is zero."
             )
 
-            if result.summary.total_demand == 0.0:
-                raise ValueError(
-                    f"Cannot evaluate feasibility for alpha={alpha:.6g}: "
-                    "total demand is zero."
-                )
-
-            decisions.append(result.summary.is_feasible)
-            min_ratios.append(result.summary.ratio)
-
-        yes = sum(1 for d in decisions if d)
-        required = (len(decisions) // 2) + 1
-        feasible = yes >= required
-
-        return feasible, {
-            "seeds": len(decisions),
-            "feasible_seeds": yes,
-            "min_placement_ratio": min(min_ratios) if min_ratios else 1.0,
+        return result.summary.is_feasible, {
+            "placement_ratio": result.summary.ratio,
         }
 
     @staticmethod

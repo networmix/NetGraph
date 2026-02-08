@@ -12,15 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: January 16, 2026 at 02:49 UTC
+Generated from source code on: February 08, 2026 at 18:38 UTC
 
-Modules auto-discovered: 53
-
----
-
-## ngraph._version
-
-ngraph version metadata.
+Modules auto-discovered: 52
 
 ---
 
@@ -707,12 +701,14 @@ Attributes:
 A container for failure modes plus optional metadata in `attrs`.
 
 The main entry point is `apply_failures`, which:
-  1) Select a mode based on weights.
-  2) For each rule in the mode, gather relevant entities.
-  3) Match based on rule conditions using 'and' or 'or' logic.
-  4) Apply the selection strategy (all, random, or choice).
-  5) Collect the union of all failed entities across all rules.
-  6) Optionally expand failures by shared-risk groups or sub-risks.
+  1) Build a single RNG for the entire call (from `seed` or `self.seed`).
+  2) Select a mode based on weights (one RNG draw).
+  3) For each rule in the mode, gather relevant entities.
+  4) Match based on rule conditions using 'and' or 'or' logic.
+  5) Apply the selection strategy (all, random, or choice) drawing
+     from the same RNG, ensuring statistical independence across rules.
+  6) Collect the union of all failed entities across all rules.
+  7) Optionally expand failures by shared-risk groups or sub-risks.
 
 Attributes:
     attrs: Arbitrary metadata about this policy.
@@ -720,7 +716,8 @@ Attributes:
         risk groups with failed entities.
     expand_children: If True, expand failed risk groups to include
         their children recursively.
-    seed: Seed for reproducible random operations.
+    seed: Default seed for reproducible random operations. Overridden
+        by the ``seed`` parameter on ``apply_failures`` when provided.
     modes: List of weighted failure modes.
 
 **Attributes:**
@@ -1377,7 +1374,6 @@ Attributes:
     resolution: Convergence threshold for binary search.
     max_bracket_iters: Maximum iterations for bracketing phase.
     max_bisect_iters: Maximum iterations for bisection phase.
-    seeds_per_alpha: Number of placement attempts per alpha probe.
     placement_rounds: Placement optimization rounds.
 
 **Attributes:**
@@ -1394,7 +1390,6 @@ Attributes:
 - `resolution` (float) = 0.01
 - `max_bracket_iters` (int) = 32
 - `max_bisect_iters` (int) = 32
-- `seeds_per_alpha` (int) = 1
 - `placement_rounds` (int | str) = auto
 
 **Methods:**
@@ -2652,9 +2647,7 @@ Usage:
 
 **Methods:**
 
-- `create_random_state(self, *components: 'Any') -> 'random.Random'` - Create a new Random instance with derived seed.
 - `derive_seed(self, *components: 'Any') -> 'Optional[int]'` - Derive a deterministic seed from master seed and component identifiers.
-- `seed_global_random(self, *components: 'Any') -> 'None'` - Seed the global random module with derived seed.
 
 ---
 

@@ -80,12 +80,14 @@ class FailurePolicy:
     """A container for failure modes plus optional metadata in `attrs`.
 
     The main entry point is `apply_failures`, which:
-      1) Select a mode based on weights.
-      2) For each rule in the mode, gather relevant entities.
-      3) Match based on rule conditions using 'and' or 'or' logic.
-      4) Apply the selection strategy (all, random, or choice).
-      5) Collect the union of all failed entities across all rules.
-      6) Optionally expand failures by shared-risk groups or sub-risks.
+      1) Build a single RNG for the entire call (from `seed` or `self.seed`).
+      2) Select a mode based on weights (one RNG draw).
+      3) For each rule in the mode, gather relevant entities.
+      4) Match based on rule conditions using 'and' or 'or' logic.
+      5) Apply the selection strategy (all, random, or choice) drawing
+         from the same RNG, ensuring statistical independence across rules.
+      6) Collect the union of all failed entities across all rules.
+      7) Optionally expand failures by shared-risk groups or sub-risks.
 
     Attributes:
         attrs: Arbitrary metadata about this policy.
@@ -93,7 +95,8 @@ class FailurePolicy:
             risk groups with failed entities.
         expand_children: If True, expand failed risk groups to include
             their children recursively.
-        seed: Seed for reproducible random operations.
+        seed: Default seed for reproducible random operations. Overridden
+            by the ``seed`` parameter on ``apply_failures`` when provided.
         modes: List of weighted failure modes.
     """
 
@@ -114,14 +117,19 @@ class FailurePolicy:
     ) -> List[str]:
         """Identify which entities fail for this iteration.
 
-        Select exactly one mode using configured weights and apply its rules.
-        If no modes are configured, no failures are applied.
+        A single ``random.Random`` instance is created from the effective seed
+        (``seed`` if given, else ``self.seed``).  All random draws -- mode
+        selection followed by per-rule entity selection -- are sequential from
+        this one stream, ensuring that rules are statistically independent.
+        When no seed is available, an unseeded ``Random()`` instance is used so
+        that results are isolated from the global ``random`` module state.
 
         Args:
             network_nodes: Mapping of node_id -> flattened attribute dict.
             network_links: Mapping of link_id -> flattened attribute dict.
             network_risk_groups: Mapping of risk_group_name -> RiskGroup or dict.
-            seed: Optional deterministic seed for selection.
+            seed: Optional deterministic seed for selection.  Overrides
+                ``self.seed`` when provided.
             failure_trace: Optional dict to populate with trace data (mode selection,
                 rule selections, expansion). If provided, will be mutated in-place.
 
@@ -146,11 +154,20 @@ class FailurePolicy:
                 }
             )
 
+        # Build a single RNG for this entire apply_failures call.
+        # All random draws (mode selection, entity selection across rules)
+        # come from this one stream, ensuring statistical independence.
+        effective_seed = seed if seed is not None else self.seed
+        rng = (
+            _random.Random(effective_seed)
+            if effective_seed is not None
+            else _random.Random()
+        )
+
         # Determine rules from a selected mode (or none if no modes)
         rules_to_apply: Sequence[FailureRule] = []
         if self.modes:
-            effective_seed = seed if seed is not None else self.seed
-            mode_index = self._select_mode_index(self.modes, effective_seed)
+            mode_index = self._select_mode_index(self.modes, rng)
             rules_to_apply = self.modes[mode_index].rules
             if failure_trace is not None:
                 failure_trace["mode_index"] = mode_index
@@ -165,11 +182,10 @@ class FailurePolicy:
                 network_links,
                 network_risk_groups,
             )
-            effective_seed = seed if seed is not None else self.seed
             selected = self._select_entities(
                 matched_ids,
                 rule,
-                effective_seed,
+                rng,
                 network_nodes
                 if rule.scope == "node"
                 else (network_links if rule.scope == "link" else network_risk_groups),
@@ -272,7 +288,7 @@ class FailurePolicy:
     def _select_entities(
         entity_ids: Set[str],
         rule: FailureRule,
-        seed: Optional[int],
+        rng: _random.Random,
         entity_map: Dict[str, Any],
     ) -> Set[str]:
         """Select entities for failure per rule.
@@ -280,6 +296,12 @@ class FailurePolicy:
         For mode="choice" and rule.weight_by set, perform weighted sampling
         without replacement according to the specified attribute. If all weights
         are non-positive or missing, fallback to uniform sampling.
+
+        Args:
+            entity_ids: Set of candidate entity IDs.
+            rule: The failure rule specifying selection strategy.
+            rng: Random instance shared across the entire apply_failures call.
+            entity_map: Mapping of entity_id -> attribute dict.
         """
         if not entity_ids:
             return set()
@@ -290,7 +312,6 @@ class FailurePolicy:
         ordered_ids = sorted(entity_ids)
 
         if rule.mode == "random":
-            rng = _random.Random(seed) if seed is not None else _random
             return {eid for eid in ordered_ids if rng.random() < rule.probability}
         elif rule.mode == "choice":
             count = min(rule.count, len(entity_ids))
@@ -318,7 +339,7 @@ class FailurePolicy:
                 if positives:
                     k = min(count, len(positives))
                     selected |= FailurePolicy._weighted_sample_without_replacement(
-                        positives, k, seed
+                        positives, k, rng
                     )
                 # If we still need more picks, fill uniformly from zero-weight items
                 remaining = count - len(selected)
@@ -326,14 +347,12 @@ class FailurePolicy:
                     # zeros already follow ordered_ids order; preserve that
                     pool = [z for z in zeros if z not in selected]
                     if pool:
-                        rng = _random.Random(seed) if seed is not None else _random
                         selected |= set(rng.sample(pool, k=min(remaining, len(pool))))
                 if selected:
                     return selected
 
             # Fallback to uniform sampling
             entity_list = ordered_ids
-            rng = _random.Random(seed) if seed is not None else _random
             return set(rng.sample(entity_list, k=count))
         elif rule.mode == "all":
             return entity_ids
@@ -361,7 +380,7 @@ class FailurePolicy:
 
     @staticmethod
     def _weighted_sample_without_replacement(
-        weights: Dict[str, float], count: int, seed: Optional[int]
+        weights: Dict[str, float], count: int, rng: _random.Random
     ) -> Set[str]:
         """Sample `count` keys without replacement proportionally to `weights`.
 
@@ -371,7 +390,7 @@ class FailurePolicy:
         Args:
             weights: Mapping from item id -> non-negative weight.
             count: Number of items to sample (<= len(weights)).
-            seed: Optional deterministic seed.
+            rng: Random instance shared across the entire apply_failures call.
 
         Returns:
             Set of selected item ids.
@@ -383,7 +402,6 @@ class FailurePolicy:
         if not positive_items:
             return set()
 
-        rng = _random.Random(seed) if seed is not None else _random
         # Compute keys and select top `count`
         scored: List[Tuple[float, str]] = []
         for item_id, w in positive_items:
@@ -399,10 +417,14 @@ class FailurePolicy:
         return selected_ids
 
     @staticmethod
-    def _select_mode_index(modes: Sequence["FailureMode"], seed: Optional[int]) -> int:
+    def _select_mode_index(modes: Sequence["FailureMode"], rng: _random.Random) -> int:
         """Select a mode index based on normalized weights.
 
         Modes with non-positive weights are ignored.
+
+        Args:
+            modes: Sequence of FailureMode objects to select from.
+            rng: Random instance shared across the entire apply_failures call.
         """
         # Build cumulative weights
         effective: List[Tuple[int, float]] = [
@@ -414,7 +436,6 @@ class FailurePolicy:
             # Degenerate: no positive weights -> fall back to first mode if exists
             return 0
         total = sum(w for _, w in effective)
-        rng = _random.Random(seed) if seed is not None else _random
         r = rng.random() * total
         cumulative = 0.0
         for idx, w in effective:

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4] - 2026-02-08
+
+### Fixed
+
+- Single shared RNG per `apply_failures` call, fixing correlated-seed bug across rules
+- Bracket-exhaustion edge case in MSD binary search when all probed alphas are feasible
+
+### Removed
+
+- `seeds_per_alpha` MSD parameter (placement is deterministic)
+- `SeedManager.create_random_state()` and `seed_global_random()` (unused)
+
 ## [0.17.3] - 2026-02-02
 
 ### Fixed

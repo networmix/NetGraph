@@ -431,7 +431,6 @@ workflow:
     alpha_start: 1.0
     growth_factor: 2.0
     resolution: 0.01
-    seeds_per_alpha: 1
 ```
 
 ### NetworkStats Step

@@ -30,12 +30,10 @@ def test_msd_basic_bracket_and_bisect(
     mock_build_cache.return_value = MagicMock()
 
     # Feasible if alpha <= 1.3, infeasible otherwise
-    def _eval(cache, alpha, seeds):
+    def _eval(cache, alpha):
         feasible = alpha <= 1.3
         return feasible, {
-            "seeds": 1,
-            "feasible_seeds": 1 if feasible else 0,
-            "min_placement_ratio": 1.0 if feasible else 0.9,
+            "placement_ratio": 1.0 if feasible else 0.9,
         }
 
     mock_eval.side_effect = _eval
@@ -49,7 +47,6 @@ def test_msd_basic_bracket_and_bisect(
         resolution=0.01,
         max_bisect_iters=32,
         max_bracket_iters=16,
-        seeds_per_alpha=1,
     )
     scenario.results = Results()
     step.execute(scenario)
@@ -72,8 +69,8 @@ def test_msd_no_feasible_raises(
     mock_build_cache.return_value = MagicMock()
 
     # Always infeasible
-    def _eval(cache, alpha, seeds):
-        return False, {"seeds": 1, "feasible_seeds": 0, "min_placement_ratio": 0.0}
+    def _eval(cache, alpha):
+        return False, {"placement_ratio": 0.0}
 
     mock_eval.side_effect = _eval
 
@@ -115,7 +112,6 @@ def test_msd_end_to_end_single_link() -> None:
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
-        seeds_per_alpha=1,
     )
     scenario.results = Results()
     step.execute(scenario)
@@ -184,6 +180,85 @@ def test_msd_end_to_end_single_link() -> None:
     assert result_above.summary.overall_ratio < 1.0 - 1e-9
 
 
+# ---------------------------------------------------------------------------
+# Edge-case tests for _binary_search: all-feasible / bracket-exhaustion bugs
+# ---------------------------------------------------------------------------
+
+
+def _make_step(**kwargs: object) -> MaximumSupportedDemand:
+    """Create an MSD step with sensible defaults, overridden by kwargs."""
+    defaults: dict[str, object] = dict(
+        name="test",
+        demand_set="default",
+        alpha_start=1.0,
+        growth_factor=2.0,
+        alpha_min=1e-6,
+        alpha_max=1e9,
+        resolution=0.01,
+        max_bracket_iters=32,
+        max_bisect_iters=32,
+    )
+    defaults.update(kwargs)
+    return MaximumSupportedDemand(**defaults)
+
+
+def _threshold_probe(threshold: float | None):
+    """Return a probe function that is feasible for alpha <= threshold (or always)."""
+
+    def probe(alpha: float) -> tuple[bool, dict[str, float]]:
+        feasible = True if threshold is None else alpha <= threshold
+        return feasible, {"placement_ratio": 1.0 if feasible else 0.5}
+
+    return probe
+
+
+def test_msd_all_feasible_small_alpha_max() -> None:
+    """All alphas feasible with small alpha_max should return alpha_max, not crash."""
+    step = _make_step(alpha_max=10.0)
+    result = step._binary_search(_threshold_probe(threshold=None))
+    assert result == 10.0
+
+
+def test_msd_all_feasible_alpha_max_equals_alpha_start() -> None:
+    """All feasible with alpha_max == alpha_start should return alpha_start."""
+    step = _make_step(alpha_max=1.0, alpha_start=1.0)
+    result = step._binary_search(_threshold_probe(threshold=None))
+    assert result == 1.0
+
+
+def test_msd_all_feasible_default_alpha_max() -> None:
+    """All feasible with default alpha_max=1e9 should return alpha_max, not crash."""
+    step = _make_step()  # defaults: alpha_max=1e9, max_bracket_iters=32
+    result = step._binary_search(_threshold_probe(threshold=None))
+    assert result == 1e9
+
+
+def test_msd_bracket_exhausted_alpha_max_feasible() -> None:
+    """Bracket iters exhaust before alpha_max, but alpha_max IS feasible -> return alpha_max."""
+    step = _make_step(alpha_max=1e6, max_bracket_iters=4)
+    # With 4 iters: probes 1,2,4,8,16 -> lower=16, upper=None
+    # Fix probes alpha_max=1e6 directly -> feasible -> returns 1e6
+    result = step._binary_search(_threshold_probe(threshold=None))
+    assert result == 1e6
+
+
+def test_msd_bracket_exhausted_alpha_max_infeasible() -> None:
+    """Bracket iters exhaust before alpha_max, alpha_max is infeasible -> bisect to ~threshold."""
+    threshold = 500.0
+    step = _make_step(alpha_max=1e6, max_bracket_iters=4, resolution=0.01)
+    # With 4 iters: probes 1,2,4,8,16 -> lower=16, upper=None
+    # Fix probes alpha_max=1e6 -> infeasible -> bracket [16, 1e6] -> bisect to ~500
+    result = step._binary_search(_threshold_probe(threshold=threshold))
+    assert abs(result - threshold) <= 0.02
+
+
+def test_msd_threshold_exactly_at_alpha_max() -> None:
+    """Threshold exactly at alpha_max should return alpha_max, not crash."""
+    step = _make_step(alpha_max=10.0)
+    result = step._binary_search(_threshold_probe(threshold=10.0))
+    assert result == 10.0
+
+
 def test_msd_auto_vs_one_equivalence_single_link() -> None:
     """Test that MSD with auto vs 1 placement rounds produces equivalent results."""
     from ngraph.workflow.maximum_supported_demand_step import (
@@ -206,7 +281,6 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
-        seeds_per_alpha=1,
         placement_rounds="auto",
     )
     step_one = MSD(
@@ -215,7 +289,6 @@ def test_msd_auto_vs_one_equivalence_single_link() -> None:
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.01,
-        seeds_per_alpha=1,
         placement_rounds=1,
     )
 

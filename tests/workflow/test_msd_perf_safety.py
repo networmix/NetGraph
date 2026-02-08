@@ -13,7 +13,7 @@ class _ScenarioStub:
         self._execution_counter = 0
 
 
-def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
+def test_msd_deterministic_evaluation(monkeypatch):
     # Build a tiny scenario
     from ngraph.model.demand.matrix import DemandSet
     from ngraph.model.demand.spec import TrafficDemand
@@ -35,10 +35,9 @@ def test_msd_reuse_tm_across_seeds_is_behaviorally_identical(monkeypatch):
 
     scenario = _ScenarioStub(net, demand_set, Results())
 
-    # Run MSD with seeds=2; this exercises repeated evaluation within one TM build
+    # Run MSD with a simple scenario
     msd = MaximumSupportedDemand(
         demand_set="default",
-        seeds_per_alpha=2,
         alpha_start=1.0,
         growth_factor=2.0,
         resolution=0.1,

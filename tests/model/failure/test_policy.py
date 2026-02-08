@@ -1,17 +1,14 @@
-from unittest.mock import patch
-
 import pytest
 
 from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
+    FailureMode,
     FailurePolicy,
     FailureRule,
 )
 
 
 def _single_mode_policy(rule: FailureRule, **kwargs) -> FailurePolicy:
-    from ngraph.model.failure.policy import FailureMode
-
     return FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])], **kwargs)
 
 
@@ -97,7 +94,7 @@ def test_node_scope_all():
 
 
 def test_node_scope_random():
-    """Rule with scope='node' and mode='random' => random node failure."""
+    """Rule with scope='node' and mode='random' => seeded random node failure."""
     rule = FailureRule(
         scope="node",
         conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
@@ -114,14 +111,19 @@ def test_node_scope_random():
     }
     links = {}
 
-    # Mock random number generation to ensure deterministic results
-    with patch("random.random", return_value=0.3):  # < 0.5, so should fail
-        failed = policy.apply_failures(nodes, links)
-        assert len(failed) == 2  # Both cisco nodes should fail
+    # Same seed must produce identical results (determinism)
+    failed1 = policy.apply_failures(nodes, links, seed=42)
+    failed2 = policy.apply_failures(nodes, links, seed=42)
+    assert failed1 == failed2
 
-    with patch("random.random", return_value=0.7):  # > 0.5, so should NOT fail
-        failed = policy.apply_failures(nodes, links)
-        assert failed == []
+    # Only cisco nodes can appear in results (juniper N2 never matched)
+    assert all(f in {"N1", "N3"} for f in failed1)
+
+    # Different seeds should eventually produce different results
+    results_by_seed = {
+        tuple(policy.apply_failures(nodes, links, seed=s)) for s in range(50)
+    }
+    assert len(results_by_seed) > 1  # Not all identical
 
 
 def test_node_scope_choice():
@@ -142,11 +144,13 @@ def test_node_scope_choice():
     }
     links = {}
 
-    # Mock random selection to be deterministic
-    with patch("random.sample", return_value=["N1"]):
-        failed = policy.apply_failures(nodes, links)
-        assert len(failed) == 1  # Only 1 cisco node should fail
-        assert "N1" in failed
+    # Seeded selection is deterministic and picks exactly 1
+    failed = policy.apply_failures(nodes, links, seed=42)
+    assert len(failed) == 1
+    assert failed[0] in {"N1", "N3"}  # Must be a cisco node
+
+    # Same seed → same result
+    assert policy.apply_failures(nodes, links, seed=42) == failed
 
 
 def test_link_scope_all():
@@ -171,7 +175,7 @@ def test_link_scope_all():
 
 
 def test_link_scope_random():
-    """Rule with scope='link' and mode='random' => random link failure."""
+    """Rule with scope='link' and mode='random' => seeded random link failure."""
     rule = FailureRule(
         scope="link",
         conditions=[Condition(attr="link_type", op="==", value="fiber")],
@@ -188,14 +192,19 @@ def test_link_scope_random():
         "L3": {"link_type": "fiber"},
     }
 
-    # Mock random to ensure deterministic test
-    with patch("random.random", return_value=0.3):  # < 0.4, so should fail
-        failed = policy.apply_failures(nodes, links)
-        assert len(failed) == 2  # Both fiber links should fail
+    # Same seed must produce identical results (determinism)
+    failed1 = policy.apply_failures(nodes, links, seed=42)
+    failed2 = policy.apply_failures(nodes, links, seed=42)
+    assert failed1 == failed2
 
-    with patch("random.random", return_value=0.6):  # > 0.4, so should NOT fail
-        failed = policy.apply_failures(nodes, links)
-        assert failed == []
+    # Only fiber links can appear (radio_relay L2 never matched)
+    assert all(f in {"L1", "L3"} for f in failed1)
+
+    # Different seeds should eventually produce different results
+    results_by_seed = {
+        tuple(policy.apply_failures(nodes, links, seed=s)) for s in range(50)
+    }
+    assert len(results_by_seed) > 1
 
 
 def test_link_scope_choice():
@@ -216,11 +225,13 @@ def test_link_scope_choice():
         "L3": {"link_type": "fiber"},
     }
 
-    # Mock random selection to be deterministic
-    with patch("random.sample", return_value=["L3"]):
-        failed = policy.apply_failures(nodes, links)
-        assert len(failed) == 1
-        assert "L3" in failed
+    # Seeded selection is deterministic and picks exactly 1
+    failed = policy.apply_failures(nodes, links, seed=42)
+    assert len(failed) == 1
+    assert failed[0] in {"L1", "L3"}  # Must be a fiber link
+
+    # Same seed → same result
+    assert policy.apply_failures(nodes, links, seed=42) == failed
 
 
 def test_complex_conditions_and_logic():
@@ -290,8 +301,6 @@ def test_multiple_rules():
         logic="and",
         mode="all",
     )
-    from ngraph.model.failure.policy import FailureMode
-
     policy = FailurePolicy(
         modes=[FailureMode(weight=1.0, rules=[node_rule, link_rule])]
     )
@@ -358,8 +367,6 @@ def test_serialization():
         probability=0.2,
         count=3,
     )
-    from ngraph.model.failure.policy import FailureMode
-
     policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
     policy_dict = policy.to_dict()
@@ -402,8 +409,6 @@ def test_missing_attributes():
 
 def test_empty_policy():
     """Test policy with no rules."""
-    from ngraph.model.failure.policy import FailureMode
-
     policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
 
     nodes = {"N1": {"equipment_vendor": "cisco"}}
@@ -425,3 +430,114 @@ def test_empty_entities():
 
     failed = policy.apply_failures({}, {})
     assert failed == []
+
+
+def test_multi_rule_independence():
+    """Multi-rule policies must produce statistically independent selections.
+
+    Verifies the fix for the correlated-seed bug: each rule in a mode
+    must draw from the same RNG stream sequentially rather than each
+    creating a fresh RNG from the same seed.
+    """
+    link_rule = FailureRule(scope="link", mode="random", probability=0.5)
+    node_rule = FailureRule(scope="node", mode="random", probability=0.5)
+    policy = FailurePolicy(
+        modes=[FailureMode(weight=1.0, rules=[link_rule, node_rule])]
+    )
+
+    # 20 links and 20 nodes so we get enough samples per entity
+    links = {f"L{i:02d}": {} for i in range(20)}
+    nodes = {f"N{i:02d}": {} for i in range(20)}
+
+    N = 2000
+    # Count how often the *first* link (L00) and *first* node (N00) both fail.
+    # Under independence P(both) ≈ 0.5 * 0.5 = 0.25
+    # Under the old correlated bug P(both) ≈ 0.5 (draws are identical)
+    joint_fail = 0
+    link0_fail = 0
+    node0_fail = 0
+
+    for trial in range(N):
+        failed = set(policy.apply_failures(nodes, links, seed=trial))
+        l0 = "L00" in failed
+        n0 = "N00" in failed
+        if l0:
+            link0_fail += 1
+        if n0:
+            node0_fail += 1
+        if l0 and n0:
+            joint_fail += 1
+
+    p_link = link0_fail / N
+    p_node = node0_fail / N
+    p_joint = joint_fail / N
+    p_expected_independent = p_link * p_node
+
+    # Joint probability should be close to the product (independent).
+    # Allow generous tolerance for finite sample size, but catch the 2x
+    # correlation that the old bug produced.
+    assert abs(p_joint - p_expected_independent) < 0.06, (
+        f"Joint failure rate {p_joint:.4f} deviates too much from independent "
+        f"expectation {p_expected_independent:.4f} (p_link={p_link:.4f}, "
+        f"p_node={p_node:.4f}). Rules may be correlated."
+    )
+
+
+def test_multi_mode_entity_independence():
+    """Entity failure probability must be independent of which mode was selected.
+
+    Verifies the fix for the mode-entity correlation bug: the RNG draw
+    that selects the mode must not be the same draw that determines
+    entity[0] failure.
+    """
+    # Two modes with asymmetric weights
+    rule_mode0 = FailureRule(scope="node", mode="random", probability=0.3)
+    rule_mode1 = FailureRule(scope="node", mode="random", probability=0.3)
+    policy = FailurePolicy(
+        modes=[
+            FailureMode(weight=0.8, rules=[rule_mode0]),
+            FailureMode(weight=0.2, rules=[rule_mode1]),
+        ]
+    )
+
+    nodes = {f"N{i:02d}": {} for i in range(10)}
+    links = {}
+
+    N = 5000
+    mode0_count = 0
+    mode0_n00_fail = 0
+    mode1_count = 0
+    mode1_n00_fail = 0
+
+    for trial in range(N):
+        trace: dict = {}
+        failed = set(
+            policy.apply_failures(nodes, links, seed=trial, failure_trace=trace)
+        )
+        mode_idx = trace["mode_index"]
+        n00_failed = "N00" in failed
+
+        if mode_idx == 0:
+            mode0_count += 1
+            if n00_failed:
+                mode0_n00_fail += 1
+        else:
+            mode1_count += 1
+            if n00_failed:
+                mode1_n00_fail += 1
+
+    # Both conditional rates should be close to 0.3 (the probability),
+    # regardless of which mode was selected.
+    rate_mode0 = mode0_n00_fail / mode0_count if mode0_count > 0 else 0
+    rate_mode1 = mode1_n00_fail / mode1_count if mode1_count > 0 else 0
+
+    assert abs(rate_mode0 - 0.3) < 0.05, (
+        f"P(N00 fails | mode=0) = {rate_mode0:.4f}, expected ~0.3"
+    )
+    assert abs(rate_mode1 - 0.3) < 0.05, (
+        f"P(N00 fails | mode=1) = {rate_mode1:.4f}, expected ~0.3"
+    )
+    # Mode selection frequency should match weights
+    assert abs(mode0_count / N - 0.8) < 0.05, (
+        f"P(mode=0) = {mode0_count / N:.4f}, expected ~0.8"
+    )

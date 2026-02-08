@@ -133,7 +133,6 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
   resolution: 0.01               # Convergence resolution for bisection
   max_bracket_iters: 32          # Maximum bracketing iterations
   max_bisect_iters: 32           # Maximum bisection iterations
-  seeds_per_alpha: 1             # Number of seeds to test per alpha (majority vote)
   placement_rounds: auto         # Placement optimization rounds
 ```
 
@@ -148,7 +147,6 @@ Parameters:
 - `resolution`: Convergence threshold for bisection.
 - `max_bracket_iters`: Maximum iterations for bracketing phase.
 - `max_bisect_iters`: Maximum iterations for bisection phase.
-- `seeds_per_alpha`: Number of random seeds to test per alpha (uses majority vote).
 - `placement_rounds`: Number of placement optimization rounds (`int` or `"auto"`).
 
 Outputs:

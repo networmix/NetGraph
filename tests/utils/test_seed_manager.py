@@ -1,7 +1,5 @@
 """Tests for seed management functionality."""
 
-import random
-
 from ngraph.utils.seed_manager import SeedManager
 
 
@@ -72,43 +70,6 @@ class TestSeedManager:
 
         # All should be different
         assert len({seed1, seed2, seed3}) == 3
-
-    def test_create_random_state_with_seed(self):
-        """Test creating seeded Random instances."""
-        seed_mgr = SeedManager(42)
-
-        rng1 = seed_mgr.create_random_state("test", "component")
-        rng2 = seed_mgr.create_random_state("test", "component")
-
-        # Same seed should produce same sequence
-        assert rng1.random() == rng2.random()
-        assert rng1.randint(1, 100) == rng2.randint(1, 100)
-
-    def test_create_random_state_without_seed(self):
-        """Test creating unseeded Random instances."""
-        seed_mgr = SeedManager()
-
-        rng1 = seed_mgr.create_random_state("test", "component")
-        rng2 = seed_mgr.create_random_state("test", "component")
-
-        # Should be different (very high probability)
-        values1 = [rng1.random() for _ in range(10)]
-        values2 = [rng2.random() for _ in range(10)]
-        assert values1 != values2
-
-    def test_seed_global_random_with_seed(self):
-        """Test seeding global random module."""
-        seed_mgr = SeedManager(42)
-
-        # Seed global random
-        seed_mgr.seed_global_random("test", "component")
-        value1 = random.random()
-
-        # Seed again with same components
-        seed_mgr.seed_global_random("test", "component")
-        value2 = random.random()
-
-        assert value1 == value2
 
     def test_seed_derivation_consistency(self):
         """Test that seed derivation is consistent across instances."""

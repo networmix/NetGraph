@@ -58,7 +58,6 @@ workflow:
     resolution: 0.05
     max_bracket_iters: 16
     max_bisect_iters: 32
-    seeds_per_alpha: 1
     placement_rounds: 2
   - type: TrafficMatrixPlacement
     name: tm_placement

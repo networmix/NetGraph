@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import random
 from typing import Any, Optional
 
 
@@ -56,28 +55,3 @@ class SeedManager:
         # Convert first 4 bytes to a positive integer
         seed_value = int.from_bytes(hash_digest[:4], byteorder="big")
         return seed_value & 0x7FFFFFFF  # Ensure positive 32-bit integer
-
-    def create_random_state(self, *components: Any) -> random.Random:
-        """Create a new Random instance with derived seed.
-
-        Args:
-            *components: Component identifiers for seed derivation.
-
-        Returns:
-            New Random instance seeded with derived seed, or unseeded if no master seed.
-        """
-        derived_seed = self.derive_seed(*components)
-        rng = random.Random()
-        if derived_seed is not None:
-            rng.seed(derived_seed)
-        return rng
-
-    def seed_global_random(self, *components: Any) -> None:
-        """Seed the global random module with derived seed.
-
-        Args:
-            *components: Component identifiers for seed derivation.
-        """
-        derived_seed = self.derive_seed(*components)
-        if derived_seed is not None:
-            random.seed(derived_seed)
