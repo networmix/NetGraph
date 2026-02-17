@@ -1,7 +1,8 @@
+import io
 import json
 import logging
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -235,7 +236,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file)])
 
     out_lines = [c.args[0] for c in mprint.call_args_list]
@@ -266,7 +267,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file), "--detail"])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
@@ -293,7 +294,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file), "--detail"])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
@@ -319,7 +320,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file)])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
@@ -344,7 +345,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file), "--detail"])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
@@ -376,7 +377,7 @@ workflow:
 """
     )
 
-    with patch("sys.stdout", new=Mock()), patch("builtins.print") as mprint:
+    with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         cli.main(["inspect", str(scenario_file)])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
