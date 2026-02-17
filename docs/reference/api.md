@@ -333,6 +333,33 @@ for pair, edge_impacts in sensitivity.items():
         print(f"  {edge_key}: -{flow_reduction:.2f}")
 ```
 
+### Monte Carlo Sensitivity Analysis
+
+Run sensitivity analysis across random failure scenarios to identify which
+components are most critical under realistic failure conditions:
+
+```python
+from ngraph import FailureManager
+
+# fm = FailureManager(network=network, ...)  # see FailureManager section below
+
+# parallelism defaults to "auto" (all CPU cores)
+results = fm.run_sensitivity_monte_carlo(
+    source="^metro1/.*",
+    target="^metro5/.*",
+    mode="combine",
+    iterations=100,
+    seed=42,
+)
+
+# Aggregated component scores across all failure scenarios
+for flow_key, components in results["component_scores"].items():
+    sorted_comps = sorted(components.items(), key=lambda x: -x[1]["mean"])
+    print(f"Flow: {flow_key}")
+    for comp_key, stats in sorted_comps[:5]:
+        print(f"  {comp_key}: mean={stats['mean']:.1f}, count={stats['count']:.0f}")
+```
+
 ## 5. Monte Carlo Analysis
 
 Probabilistic failure analysis using FailureManager.
@@ -366,13 +393,12 @@ fm = FailureManager(
     policy_name="single_link"
 )
 
-# Run max-flow Monte Carlo analysis
+# Run max-flow Monte Carlo analysis (parallelism defaults to "auto")
 results = fm.run_max_flow_monte_carlo(
     source="^A$",
     target="^C$",
     mode="combine",
     iterations=100,
-    parallelism=1,
     seed=42  # For reproducibility
 )
 
@@ -384,8 +410,15 @@ for iter_result in results["results"]:
 **Key Methods:**
 
 - `run_max_flow_monte_carlo(...)` - Max-flow capacity analysis under failures
+- `run_sensitivity_monte_carlo(...)` - Component criticality analysis under failures
 - `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
 - `run_monte_carlo_analysis(analysis_func, ...)` - Generic Monte Carlo with custom function
+
+**Performance note:** All Monte Carlo convenience methods default to `parallelism="auto"`
+(all CPU cores). Set `parallelism=1` to force serial execution if needed. The C++ Core
+backend releases the GIL during computation, enabling true parallelism with threads.
+Sensitivity analysis is significantly more expensive per iteration than max-flow
+(~1-2s vs ~0.002s on a 1,280-node network), so parallelism provides substantial speedup.
 
 ## 6. Workflow Steps
 

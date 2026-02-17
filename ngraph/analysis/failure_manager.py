@@ -94,6 +94,22 @@ def _create_cache_key(
     return base_key + (tuple(hashable_kwargs),)
 
 
+def _resolve_parallelism(parallelism: int | str) -> int:
+    """Resolve parallelism setting to a concrete worker count.
+
+    Args:
+        parallelism: Either an integer worker count or "auto" for CPU count.
+
+    Returns:
+        Positive integer worker count (minimum 1).
+    """
+    if isinstance(parallelism, str):
+        if parallelism != "auto":
+            raise ValueError("parallelism must be an integer or 'auto'")
+        return max(1, int(os.cpu_count() or 1))
+    return max(1, int(parallelism))
+
+
 def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
     """Adjust parallelism based on function characteristics.
 
@@ -759,7 +775,7 @@ class FailureManager:
         target: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
-        parallelism: int = 1,
+        parallelism: int | str = "auto",
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
@@ -781,7 +797,9 @@ class FailureManager:
             target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
+            parallelism: Number of parallel workers. Defaults to ``"auto"``
+                (use all CPU cores). Set to ``1`` for serial execution. The C++ Core
+                backend releases the GIL, enabling true parallelism with threads.
             shortest_path: Whether to use shortest paths only.
             require_capacity: If True (default), path selection considers available
                 capacity. If False, path selection is cost-only (true IP/IGP semantics).
@@ -799,6 +817,9 @@ class FailureManager:
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.analysis.functions import max_flow_analysis
+
+        # Resolve "auto" parallelism to CPU count
+        parallelism = _resolve_parallelism(parallelism)
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
@@ -884,7 +905,7 @@ class FailureManager:
         demands_config: list[dict[str, Any]]
         | Any,  # List of demand configs or DemandSet
         iterations: int = 100,
-        parallelism: int = 1,
+        parallelism: int | str = "auto",
         placement_rounds: int | str = "auto",
         seed: int | None = None,
         store_failure_patterns: bool = False,
@@ -901,7 +922,9 @@ class FailureManager:
         Args:
             demands_config: List of demand configs or DemandSet object.
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
+            parallelism: Number of parallel workers. Defaults to ``"auto"``
+                (use all CPU cores). Set to ``1`` for serial execution. The C++ Core
+                backend releases the GIL, enabling true parallelism with threads.
             placement_rounds: Optimization rounds for demand placement.
             seed: Optional seed for reproducible results.
             store_failure_patterns: Whether to store failure trace on results.
@@ -916,6 +939,9 @@ class FailureManager:
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.analysis.functions import demand_placement_analysis
+
+        # Resolve "auto" parallelism to CPU count
+        parallelism = _resolve_parallelism(parallelism)
 
         # If caller passed a sequence of TrafficDemand objects, convert to dicts
         if not isinstance(demands_config, list):
@@ -962,7 +988,7 @@ class FailureManager:
         target: str | dict[str, Any],
         mode: str = "combine",
         iterations: int = 100,
-        parallelism: int = 1,
+        parallelism: int | str = "auto",
         shortest_path: bool = False,
         flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL,
         seed: int | None = None,
@@ -976,12 +1002,21 @@ class FailureManager:
 
         Baseline (no failures) is always run first as a separate reference.
 
+        .. note::
+
+            Sensitivity analysis is significantly more expensive per iteration than
+            plain max-flow (~1-2s vs ~0.002s per iteration on a 1,280-node network).
+            Multi-threaded execution (the default ``"auto"`` parallelism) provides
+            significant speedup. The C++ Core backend releases the GIL during
+            computation, enabling true parallelism with threads.
+
         Args:
             source: Source node selector (string path or selector dict).
             target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
+            parallelism: Number of parallel workers. Defaults to ``"auto"``
+                (use all CPU cores). Set to ``1`` for serial execution.
             shortest_path: Whether to use shortest paths only.
             flow_placement: Flow placement strategy.
             seed: Optional seed for reproducible results.
@@ -996,6 +1031,9 @@ class FailureManager:
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
         from ngraph.analysis.functions import sensitivity_analysis
+
+        # Resolve "auto" parallelism to CPU count
+        parallelism = _resolve_parallelism(parallelism)
 
         # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):

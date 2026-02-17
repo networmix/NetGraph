@@ -6,6 +6,7 @@ from .cost_power import CostPower
 from .max_flow_step import MaxFlow
 from .maximum_supported_demand_step import MaximumSupportedDemand
 from .network_stats import NetworkStats
+from .sensitivity_step import Sensitivity
 from .traffic_matrix_placement_step import TrafficMatrixPlacement
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "BuildGraph",
     "MaxFlow",
     "NetworkStats",
+    "Sensitivity",
     "TrafficMatrixPlacement",
     "MaximumSupportedDemand",
     "CostPower",
