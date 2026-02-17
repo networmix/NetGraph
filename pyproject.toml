@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # ---------------------------------------------------------------------
 [project]
 name = "ngraph"
-version = "0.17.4"
+version = "0.18.0"
 description = "A tool and a library for network modeling and analysis."
 readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Typing :: Typed",
 ]
