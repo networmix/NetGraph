@@ -129,7 +129,7 @@ See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Ex
 
 ## License
 
-[GNU Affero General Public License v3.0 or later](LICENSE)
+[GNU General Public License v3.0 or later](LICENSE)
 
 ## Requirements
 
