@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: February 08, 2026 at 18:38 UTC
+Generated from source code on: February 26, 2026 at 23:09 UTC
 
-Modules auto-discovered: 52
+Modules auto-discovered: 53
 
 ---
 
@@ -1472,6 +1472,84 @@ Args:
 
 Returns:
     A list of WorkflowStep instances with unique names and optional seeds.
+
+---
+
+## ngraph.workflow.sensitivity_step
+
+Sensitivity workflow step.
+
+Monte Carlo sensitivity analysis of network bottlenecks between node groups
+using FailureManager. Identifies critical edges and quantifies their impact
+on flow capacity across failure scenarios.
+
+Baseline (no failures) is always run first as a separate reference. The
+``iterations`` parameter specifies how many failure scenarios to run.
+Per-iteration results include per-edge flow-reduction deltas. Aggregated
+``component_scores`` summarize mean/max/min impact across all iterations.
+
+YAML Configuration Example:
+
+    workflow:
+
+- type: Sensitivity
+
+        name: "bottleneck_analysis"
+        source: "^datacenter/.*"
+        target: "^edge/.*"
+        mode: "combine"
+        failure_policy: "random_failures"
+        iterations: 100
+        parallelism: auto
+        shortest_path: false
+        flow_placement: "PROPORTIONAL"
+        seed: 42
+        store_failure_patterns: false
+
+### Sensitivity
+
+Monte Carlo sensitivity analysis workflow step.
+
+Identifies critical network edges by measuring the flow-capacity reduction
+caused by removing each one, across Monte Carlo failure scenarios. Results
+include per-iteration sensitivity maps and aggregated component scores.
+
+Baseline (no failures) is always run first as a separate reference. The
+flow_results list contains unique failure patterns (deduplicated); each
+result has occurrence_count indicating how many iterations matched that
+pattern.
+
+Attributes:
+    source: Source node selector (string path or selector dict).
+    target: Target node selector (string path or selector dict).
+    mode: Flow analysis mode ("combine" or "pairwise").
+    failure_policy: Name of failure policy in scenario.failure_policy_set.
+    iterations: Number of failure iterations to run.
+    parallelism: Number of parallel worker threads.
+    shortest_path: Whether to use shortest paths only.
+    flow_placement: Flow placement strategy.
+    seed: Optional seed for reproducible results.
+    store_failure_patterns: Whether to store failure patterns in results.
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (int | None)
+- `_seed_source` (str)
+- `source` (Union[str, Dict[str, Any]])
+- `target` (Union[str, Dict[str, Any]])
+- `mode` (str) = combine
+- `failure_policy` (str | None)
+- `iterations` (int) = 1
+- `parallelism` (int | str) = auto
+- `shortest_path` (bool) = False
+- `flow_placement` (FlowPlacement | str) = 1
+- `store_failure_patterns` (bool) = False
+
+**Methods:**
+
+- `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
+- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
 
 ---
 
@@ -2957,10 +3035,10 @@ Attributes:
 
 - `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
 - `get_failure_policy(self) -> "'FailurePolicy | None'"` - Get failure policy for analysis.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int' = 1, placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, include_min_cut: 'bool' = False) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
+- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | Any', iterations: 'int' = 100, parallelism: 'int | str' = 'auto', placement_rounds: 'int | str' = 'auto', seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False) -> 'Any'` - Analyze traffic demand placement success under failures.
+- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int | str' = 'auto', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_summary: 'bool' = False, include_min_cut: 'bool' = False) -> 'Any'` - Analyze maximum flow capacity envelopes between node groups under failures.
 - `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
+- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int | str' = 'auto', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
 - `run_single_failure_scenario(self, analysis_func: 'AnalysisFunction', **kwargs) -> 'Any'` - Run a single failure scenario for convenience.
 
 ---
