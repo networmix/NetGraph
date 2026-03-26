@@ -7,7 +7,7 @@ from ngraph.analysis.functions import max_flow_analysis
 from ngraph.model.failure.policy import FailurePolicy, FailureRule
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Network
-from ngraph.results.flow import FlowIterationResult
+from ngraph.results.flow import FlowIterationResult, FlowSummary
 
 
 class TestFailureManagerCore:
@@ -321,6 +321,60 @@ class TestFailureManagerCore:
             if r1.failure_trace:
                 assert r1.failure_trace["mode_index"] == r2.failure_trace["mode_index"]
                 assert r1.failure_trace["selections"] == r2.failure_trace["selections"]
+
+    def test_first_trace_wins_under_dedup_collision(self):
+        """When traces differ but exclusions collide, the first trace must be kept."""
+        from ngraph.model.failure.policy import FailureMode
+        from ngraph.model.network import Link, Node
+
+        network = Network()
+        network.add_node(Node("A"))
+        network.add_node(Node("B"))
+        network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
+
+        collision_policy = FailurePolicy(
+            modes=[
+                FailureMode(
+                    weight=1.0,
+                    rules=[FailureRule(scope="link", mode="all")],
+                    attrs={"label": "mode-a"},
+                ),
+                FailureMode(
+                    weight=1.0,
+                    rules=[FailureRule(scope="link", mode="all")],
+                    attrs={"label": "mode-b"},
+                ),
+            ]
+        )
+        policy_set = FailurePolicySet()
+        policy_set.policies["collision"] = collision_policy
+        manager = FailureManager(network, policy_set, "collision")
+
+        def mock_analysis(*args, **kwargs):
+            return FlowIterationResult(
+                summary=FlowSummary(
+                    total_demand=1.0,
+                    total_placed=1.0,
+                    overall_ratio=1.0,
+                    dropped_flows=0,
+                    num_flows=0,
+                )
+            )
+
+        result = manager.run_monte_carlo_analysis(
+            analysis_func=mock_analysis,
+            iterations=16,
+            parallelism=1,
+            store_failure_patterns=True,
+            seed=11,
+        )
+
+        assert result["metadata"]["unique_patterns"] == 1
+        unique_result = result["results"][0]
+        assert unique_result.occurrence_count == 16
+        assert unique_result.failure_trace is not None
+        assert unique_result.failure_trace["mode_index"] == 0
+        assert unique_result.failure_trace["mode_attrs"] == {"label": "mode-a"}
 
 
 class TestFailureManagerIntegration:

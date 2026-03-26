@@ -129,7 +129,7 @@ See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Ex
 
 ## License
 
-[BSD 3-Clause License](LICENSE)
+[MIT License](LICENSE)
 
 ## Requirements
 

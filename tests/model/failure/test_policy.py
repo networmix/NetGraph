@@ -153,6 +153,53 @@ def test_node_scope_choice():
     assert policy.apply_failures(nodes, links, seed=42) == failed
 
 
+def test_apply_failures_prepared_matches_preserves_results() -> None:
+    """Prepared candidate pools must not change seeded selection behavior."""
+    rule = FailureRule(
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
+        logic="and",
+        mode="choice",
+        count=1,
+    )
+    policy = _single_mode_policy(rule)
+
+    nodes = {
+        "N1": {"equipment_vendor": "cisco"},
+        "N2": {"equipment_vendor": "juniper"},
+        "N3": {"equipment_vendor": "cisco"},
+    }
+    links = {}
+    prepared_matches = policy.prepare_matches(nodes, links, {})
+
+    assert policy.apply_failures(nodes, links, seed=42) == policy.apply_failures(
+        nodes,
+        links,
+        seed=42,
+        prepared_matches=prepared_matches,
+    )
+
+
+def test_prepare_matches_is_stable_by_rule_identity() -> None:
+    """Prepared matches should expose one stable ordered pool per distinct rule."""
+    rule = FailureRule(
+        scope="node",
+        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
+        logic="and",
+        mode="all",
+    )
+    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule, rule])], seed=7)
+    nodes = {
+        "N2": {"equipment_vendor": "cisco"},
+        "N1": {"equipment_vendor": "cisco"},
+        "N3": {"equipment_vendor": "juniper"},
+    }
+
+    prepared = policy.prepare_matches(nodes, {}, {})
+
+    assert prepared == {id(rule): ("N1", "N2")}
+
+
 def test_link_scope_all():
     """Rule with scope='link' and mode='all' => fails all matched links."""
     rule = FailureRule(

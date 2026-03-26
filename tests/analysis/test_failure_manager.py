@@ -17,7 +17,7 @@ from ngraph.model.failure.policy import (
     FailureRule,
 )
 from ngraph.model.failure.policy_set import FailurePolicySet
-from ngraph.model.network import Link, Network, Node
+from ngraph.model.network import Link, Network, Node, RiskGroup
 
 
 @pytest.fixture
@@ -171,6 +171,158 @@ class TestFailureManagerExclusionComputation:
 
         assert excluded1_nodes == excluded2_nodes
         assert excluded1_links == excluded2_links
+
+    def test_compute_exclusions_expands_failed_risk_group_hierarchy(
+        self,
+        failure_policy_set: FailurePolicySet,
+    ) -> None:
+        """Failing a parent risk group should exclude direct and child members."""
+        network = Network()
+        parent = RiskGroup("rg-parent")
+        child = RiskGroup("rg-child")
+        parent.children.append(child)
+        network.risk_groups[parent.name] = parent
+        network.risk_groups[child.name] = child
+
+        parent_node = Node("parent-node", risk_groups={parent.name})
+        child_node = Node("child-node", risk_groups={child.name})
+        other_node = Node("other-node")
+        network.add_node(parent_node)
+        network.add_node(child_node)
+        network.add_node(other_node)
+
+        child_link = Link("parent-node", "child-node", capacity=100.0)
+        child_link.risk_groups = {child.name}
+        network.add_link(child_link)
+        network.add_link(Link("child-node", "other-node", capacity=100.0))
+
+        class FixedRiskGroupPolicy:
+            def __init__(self, failed_group: str) -> None:
+                self.failed_group = failed_group
+                self.modes: list[Any] = []
+
+            def prepare_matches(
+                self, *args: Any, **kwargs: Any
+            ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def apply_failures(self, *args: Any, **kwargs: Any) -> list[str]:
+                return [self.failed_group]
+
+        fm = FailureManager(
+            network=network,
+            failure_policy_set=failure_policy_set,
+            policy_name=None,
+        )
+
+        excluded_nodes, excluded_links = fm.compute_exclusions(
+            policy=FixedRiskGroupPolicy(parent.name)
+        )
+
+        assert excluded_nodes == {"parent-node", "child-node"}
+        assert excluded_links == {child_link.id}
+
+    def test_compute_exclusions_risk_group_cache_preserves_failure_trace(
+        self,
+        failure_policy_set: FailurePolicySet,
+    ) -> None:
+        """Risk-group exclusion expansion must not mutate policy-owned trace content."""
+        network = Network()
+        parent = RiskGroup("rg-parent")
+        child = RiskGroup("rg-child")
+        parent.children.append(child)
+        network.risk_groups[parent.name] = parent
+        network.risk_groups[child.name] = child
+        network.add_node(Node("n1", risk_groups={child.name}))
+
+        expected_trace = {
+            "mode_index": 0,
+            "mode_attrs": {"label": "risk-group"},
+            "selections": [
+                {
+                    "rule_index": 0,
+                    "scope": "risk_group",
+                    "mode": "all",
+                    "matched_count": 1,
+                    "selected_ids": [parent.name],
+                }
+            ],
+            "expansion": {"nodes": [], "links": [], "risk_groups": [child.name]},
+        }
+
+        class TracedRiskGroupPolicy:
+            modes: list[Any] = []
+
+            def prepare_matches(
+                self, *args: Any, **kwargs: Any
+            ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def apply_failures(
+                self,
+                *args: Any,
+                failure_trace: dict[str, Any] | None = None,
+                **kwargs: Any,
+            ) -> list[str]:
+                if failure_trace is not None:
+                    failure_trace.update(expected_trace)
+                return [parent.name]
+
+        fm = FailureManager(
+            network=network,
+            failure_policy_set=failure_policy_set,
+            policy_name=None,
+        )
+        trace: dict[str, Any] = {}
+
+        excluded_nodes, excluded_links = fm.compute_exclusions(
+            policy=TracedRiskGroupPolicy(),
+            failure_trace=trace,
+        )
+
+        assert excluded_nodes == {"n1"}
+        assert excluded_links == set()
+        assert trace == expected_trace
+
+    def test_compute_exclusions_handles_cyclic_risk_groups(
+        self,
+        failure_policy_set: FailurePolicySet,
+    ) -> None:
+        """Risk-group indexing must terminate cleanly even if children form a cycle."""
+        network = Network()
+        group_a = RiskGroup("rg-a")
+        group_b = RiskGroup("rg-b")
+        group_a.children.append(group_b)
+        group_b.children.append(group_a)
+        network.risk_groups[group_a.name] = group_a
+        network.risk_groups[group_b.name] = group_b
+
+        network.add_node(Node("na", risk_groups={group_a.name}))
+        network.add_node(Node("nb", risk_groups={group_b.name}))
+
+        class FixedRiskGroupPolicy:
+            modes: list[Any] = []
+
+            def prepare_matches(
+                self, *args: Any, **kwargs: Any
+            ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def apply_failures(self, *args: Any, **kwargs: Any) -> list[str]:
+                return [group_a.name]
+
+        fm = FailureManager(
+            network=network,
+            failure_policy_set=failure_policy_set,
+            policy_name=None,
+        )
+
+        excluded_nodes, excluded_links = fm.compute_exclusions(
+            policy=FixedRiskGroupPolicy()
+        )
+
+        assert excluded_nodes == {"na", "nb"}
+        assert excluded_links == set()
 
 
 class TestFailureManagerTopLevelMatching:

@@ -114,6 +114,7 @@ class FailurePolicy:
         *,
         seed: Optional[int] = None,
         failure_trace: Optional[Dict[str, Any]] = None,
+        prepared_matches: Optional[Dict[int, tuple[str, ...]]] = None,
     ) -> List[str]:
         """Identify which entities fail for this iteration.
 
@@ -127,11 +128,13 @@ class FailurePolicy:
         Args:
             network_nodes: Mapping of node_id -> flattened attribute dict.
             network_links: Mapping of link_id -> flattened attribute dict.
-            network_risk_groups: Mapping of risk_group_name -> RiskGroup or dict.
+            network_risk_groups: Mapping of risk_group_name -> flattened attribute dict.
             seed: Optional deterministic seed for selection.  Overrides
                 ``self.seed`` when provided.
             failure_trace: Optional dict to populate with trace data (mode selection,
                 rule selections, expansion). If provided, will be mutated in-place.
+            prepared_matches: Optional mapping from ``id(rule)`` to already-sorted
+                candidate IDs. Used by FailureManager to avoid repeated matching.
 
         Returns:
             Sorted list of failed entity IDs (nodes, links, and/or risk group names).
@@ -175,13 +178,17 @@ class FailurePolicy:
 
         # Collect matched from each rule, then select
         for idx, rule in enumerate(rules_to_apply):
-            matched_ids = self._match_scope(
-                idx,
-                rule,
-                network_nodes,
-                network_links,
-                network_risk_groups,
-            )
+            matched_ids: Sequence[str] | Set[str]
+            if prepared_matches is not None and id(rule) in prepared_matches:
+                matched_ids = prepared_matches[id(rule)]
+            else:
+                matched_ids = self._match_scope(
+                    idx,
+                    rule,
+                    network_nodes,
+                    network_links,
+                    network_risk_groups,
+                )
             selected = self._select_entities(
                 matched_ids,
                 rule,
@@ -243,6 +250,47 @@ class FailurePolicy:
         all_failed = set(failed_nodes) | set(failed_links) | set(failed_risk_groups)
         return sorted(all_failed)
 
+    def prepare_matches(
+        self,
+        network_nodes: Dict[str, Any],
+        network_links: Dict[str, Any],
+        network_risk_groups: Dict[str, Any] | None = None,
+    ) -> Dict[int, tuple[str, ...]]:
+        """Prepare stable ordered candidate pools for all rules in this policy.
+
+        Pre-computes the set of matching entity IDs for each rule so that
+        ``apply_failures`` can skip per-iteration condition evaluation.
+
+        Args:
+            network_nodes: Mapping of node_id -> flattened attribute dict.
+            network_links: Mapping of link_id -> flattened attribute dict.
+            network_risk_groups: Mapping of risk_group_name -> flattened attribute dict.
+
+        Returns:
+            Mapping from ``id(rule)`` to a sorted tuple of matching entity IDs.
+        """
+        if network_risk_groups is None:
+            network_risk_groups = {}
+
+        prepared: Dict[int, tuple[str, ...]] = {}
+        for mode in self.modes:
+            for idx, rule in enumerate(mode.rules):
+                rule_key = id(rule)
+                if rule_key in prepared:
+                    continue
+                prepared[rule_key] = tuple(
+                    sorted(
+                        self._match_scope(
+                            idx,
+                            rule,
+                            network_nodes,
+                            network_links,
+                            network_risk_groups,
+                        )
+                    )
+                )
+        return prepared
+
     def _match_scope(
         self,
         _rule_idx: int,
@@ -286,7 +334,7 @@ class FailurePolicy:
 
     @staticmethod
     def _select_entities(
-        entity_ids: Set[str],
+        entity_ids: Sequence[str] | Set[str],
         rule: FailureRule,
         rng: _random.Random,
         entity_map: Dict[str, Any],
@@ -298,7 +346,8 @@ class FailurePolicy:
         are non-positive or missing, fallback to uniform sampling.
 
         Args:
-            entity_ids: Set of candidate entity IDs.
+            entity_ids: Candidate entity IDs. Accepts a pre-sorted sequence
+                (from ``prepare_matches``) or a set (sorted internally).
             rule: The failure rule specifying selection strategy.
             rng: Random instance shared across the entire apply_failures call.
             entity_map: Mapping of entity_id -> attribute dict.
@@ -306,15 +355,18 @@ class FailurePolicy:
         if not entity_ids:
             return set()
 
-        # Ensure deterministic mapping from RNG draws to entity IDs by
-        # iterating entities in a stable order. Set iteration order is
-        # intentionally non-deterministic across processes (hash randomization).
-        ordered_ids = sorted(entity_ids)
+        # Ensure deterministic mapping from RNG draws to entity IDs. Prepared
+        # matches are already ordered; sets must still be sorted here.
+        ordered_ids = (
+            list(entity_ids)
+            if isinstance(entity_ids, (tuple, list))
+            else sorted(entity_ids)
+        )
 
         if rule.mode == "random":
             return {eid for eid in ordered_ids if rng.random() < rule.probability}
         elif rule.mode == "choice":
-            count = min(rule.count, len(entity_ids))
+            count = min(rule.count, len(ordered_ids))
             if count <= 0:
                 return set()
 
@@ -355,7 +407,7 @@ class FailurePolicy:
             entity_list = ordered_ids
             return set(rng.sample(entity_list, k=count))
         elif rule.mode == "all":
-            return entity_ids
+            return set(ordered_ids)
         else:
             raise ValueError(f"Unsupported mode: {rule.mode}")
 

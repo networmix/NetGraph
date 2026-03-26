@@ -26,6 +26,34 @@ def test_weighted_choice_uses_weight_by_and_excludes_zero_weight_items() -> None
     assert failed == {"L1", "L3"}
 
 
+def test_weighted_choice_prepared_matches_preserves_seeded_result() -> None:
+    """Prepared weighted candidate pools must preserve deterministic output."""
+    rule = FailureRule(
+        scope="link",
+        mode="choice",
+        count=2,
+        weight_by="cost",
+    )
+    from ngraph.model.failure.policy import FailureMode
+
+    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])], seed=42)
+
+    nodes: dict[str, dict] = {}
+    links = {
+        "L1": {"cost": 7.0},
+        "L2": {"cost": 0.0},
+        "L3": {"cost": 2.0},
+    }
+    prepared_matches = policy.prepare_matches(nodes, links, {})
+
+    assert policy.apply_failures(nodes, links, seed=42) == policy.apply_failures(
+        nodes,
+        links,
+        seed=42,
+        prepared_matches=prepared_matches,
+    )
+
+
 def test_weighted_choice_fills_from_zero_when_insufficient_positive() -> None:
     """If fewer positive-weight items exist than count, fill the remainder
     uniformly from zero-weight items.

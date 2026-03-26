@@ -28,7 +28,11 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set
 
-from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
+from ngraph.dsl.selectors import (
+    flatten_link_attrs,
+    flatten_node_attrs,
+    flatten_risk_group_attrs,
+)
 from ngraph.logging import get_logger
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.types.base import FlowPlacement
@@ -72,23 +76,21 @@ def _create_cache_key(
     Returns:
         Tuple suitable for use as a cache key.
     """
-    # Basic components that are always hashable
     base_key = (
         tuple(sorted(excluded_nodes)),
         tuple(sorted(excluded_links)),
         analysis_name,
     )
 
-    # Normalize analysis_kwargs for hashing
     hashable_kwargs = []
     for key, value in sorted(analysis_kwargs.items()):
-        # Try to hash the (key, value) pair directly
         if _is_hashable((key, value)):
             hashable_kwargs.append((key, value))
         else:
             # Use object id for non-hashable values. Avoid str() which triggers
-            # deep __repr__ traversals on large objects (e.g., graphs with thousands
-            # of edges). id() works here because these objects persist across calls.
+            # deep __repr__ traversals on large objects (e.g., graphs with
+            # thousands of edges). id() is safe here because these objects
+            # persist across calls within one FailureManager lifetime.
             hashable_kwargs.append((key, f"{type(value).__name__}_{id(value)}"))
 
     return base_key + (tuple(hashable_kwargs),)
@@ -244,6 +246,11 @@ class FailureManager:
         self.policy_name = policy_name
         self._merged_node_attrs: dict[str, dict[str, Any]] | None = None
         self._merged_link_attrs: dict[str, dict[str, Any]] | None = None
+        self._merged_rg_attrs: dict[str, dict[str, Any]] | None = None
+        self._prepared_policy_matches: dict[int, dict[int, tuple[str, ...]]] = {}
+        self._risk_group_exclusions: (
+            dict[str, tuple[frozenset[str], frozenset[str]]] | None
+        ) = None
 
     def get_failure_policy(self) -> "FailurePolicy | None":
         """Get failure policy for analysis.
@@ -263,6 +270,27 @@ class FailureManager:
                 ) from exc
         else:
             return None
+
+    def _ensure_flattened_maps(self) -> None:
+        """Build flattened attribute views for all entity types (once).
+
+        Merges top-level model fields (name, disabled, etc.) with .attrs
+        so that condition matching in apply_failures works uniformly.
+        All three maps are built together to prevent partial initialization.
+        """
+        if self._merged_node_attrs is not None:
+            return
+        self._merged_node_attrs = {
+            name: flatten_node_attrs(node) for name, node in self.network.nodes.items()
+        }
+        self._merged_link_attrs = {
+            lid: flatten_link_attrs(link, lid)
+            for lid, link in self.network.links.items()
+        }
+        self._merged_rg_attrs = {
+            name: flatten_risk_group_attrs(rg)
+            for name, rg in self.network.risk_groups.items()
+        }
 
     def compute_exclusions(
         self,
@@ -293,29 +321,27 @@ class FailureManager:
         if policy is None:
             return excluded_nodes, excluded_links
 
-        # Build merged views of nodes and links including top-level fields required by
-        # policy matching and risk-group expansion. Results are cached for reuse.
-        if self._merged_node_attrs is None:
-            self._merged_node_attrs = {
-                node_name: flatten_node_attrs(node)
-                for node_name, node in self.network.nodes.items()
-            }
-        if self._merged_link_attrs is None:
-            self._merged_link_attrs = {
-                link_id: flatten_link_attrs(link, link_id)
-                for link_id, link in self.network.links.items()
-            }
-
+        self._ensure_flattened_maps()
+        assert (
+            self._merged_node_attrs is not None
+        )  # guaranteed by _ensure_flattened_maps
+        assert self._merged_link_attrs is not None
+        assert self._merged_rg_attrs is not None
         node_map = self._merged_node_attrs
         link_map = self._merged_link_attrs
+        rg_map = self._merged_rg_attrs
+        prepared_matches = self._get_prepared_policy_matches(
+            policy, node_map, link_map, rg_map
+        )
 
         # Apply failure policy with optional deterministic seed override
         failed_ids = policy.apply_failures(
             node_map,
             link_map,
-            self.network.risk_groups,
+            rg_map,
             seed=seed_offset,
             failure_trace=failure_trace,
+            prepared_matches=prepared_matches,
         )
 
         # Separate entity types for exclusion sets
@@ -325,22 +351,98 @@ class FailureManager:
             elif f_id in self.network.links:
                 excluded_links.add(f_id)
             elif f_id in self.network.risk_groups:
-                # Recursively expand risk groups
-                risk_group = self.network.risk_groups[f_id]
-                to_check = [risk_group]
-                while to_check:
-                    grp = to_check.pop()
-                    # Add all nodes/links in this risk group
-                    for node_name, node in self.network.nodes.items():
-                        if grp.name in node.risk_groups:
-                            excluded_nodes.add(node_name)
-                    for link_id, link in self.network.links.items():
-                        if grp.name in link.risk_groups:
-                            excluded_links.add(link_id)
-                    # Check children recursively
-                    to_check.extend(grp.children)
+                risk_group_nodes, risk_group_links = self._get_risk_group_exclusions(
+                    f_id
+                )
+                excluded_nodes.update(risk_group_nodes)
+                excluded_links.update(risk_group_links)
 
         return excluded_nodes, excluded_links
+
+    def _get_risk_group_exclusions(
+        self,
+        risk_group_name: str,
+    ) -> tuple[frozenset[str], frozenset[str]]:
+        """Return transitive node/link exclusions for a failed risk group."""
+        if self._risk_group_exclusions is None:
+            self._risk_group_exclusions = self._build_risk_group_exclusions()
+        return self._risk_group_exclusions.get(
+            risk_group_name,
+            (frozenset(), frozenset()),
+        )
+
+    def _build_risk_group_exclusions(
+        self,
+    ) -> dict[str, tuple[frozenset[str], frozenset[str]]]:
+        """Build transitive member index for each risk group once per manager."""
+        direct_nodes: dict[str, set[str]] = {
+            name: set() for name in self.network.risk_groups
+        }
+        direct_links: dict[str, set[str]] = {
+            name: set() for name in self.network.risk_groups
+        }
+
+        for node_name, node in self.network.nodes.items():
+            for risk_group_name in node.risk_groups:
+                direct_nodes.setdefault(risk_group_name, set()).add(node_name)
+
+        for link_id, link in self.network.links.items():
+            for risk_group_name in link.risk_groups:
+                direct_links.setdefault(risk_group_name, set()).add(link_id)
+
+        expanded: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+
+        def expand_group(name: str) -> tuple[frozenset[str], frozenset[str]]:
+            cached = expanded.get(name)
+            if cached is not None:
+                return cached
+            if name in visiting:
+                return (
+                    frozenset(direct_nodes.get(name, ())),
+                    frozenset(direct_links.get(name, ())),
+                )
+
+            visiting.add(name)
+            nodes = set(direct_nodes.get(name, ()))
+            links = set(direct_links.get(name, ()))
+            risk_group = self.network.risk_groups.get(name)
+            if risk_group is not None:
+                for child in risk_group.children:
+                    child_nodes, child_links = expand_group(child.name)
+                    nodes.update(child_nodes)
+                    links.update(child_links)
+
+            result = (frozenset(nodes), frozenset(links))
+            visiting.remove(name)
+            expanded[name] = result
+            return result
+
+        visiting: set[str] = set()
+        for risk_group_name in self.network.risk_groups:
+            expand_group(risk_group_name)
+
+        return expanded
+
+    def _get_prepared_policy_matches(
+        self,
+        policy: "FailurePolicy",
+        node_map: dict[str, dict[str, Any]],
+        link_map: dict[str, dict[str, Any]],
+        rg_map: dict[str, dict[str, Any]],
+    ) -> dict[int, tuple[str, ...]]:
+        """Prepare stable ordered candidate pools for a policy once per manager."""
+        policy_key = id(policy)
+        cached = self._prepared_policy_matches.get(policy_key)
+        if cached is not None:
+            return cached
+
+        prepared = policy.prepare_matches(
+            node_map,
+            link_map,
+            rg_map,
+        )
+        self._prepared_policy_matches[policy_key] = prepared
+        return prepared
 
     def run_monte_carlo_analysis(
         self,
@@ -432,10 +534,6 @@ class FailureManager:
             f"parallelism={parallelism}, policy={self.policy_name}"
         )
 
-        # Pre-compute worker arguments for all iterations
-        logger.debug("Pre-computing failure exclusions for all iterations")
-        pre_compute_start = time.time()
-
         # Baseline is always run first (no failures, separate from failure iterations)
         baseline_arg = (
             self.network,
@@ -448,7 +546,9 @@ class FailureManager:
             func_name,
         )
 
-        # Build failure iteration arguments (indexed 0..iterations-1)
+        logger.debug("Pre-computing failure exclusions for all iterations")
+        pre_compute_start = time.time()
+
         worker_args: list[tuple] = []
         key_to_first_arg: dict[tuple, tuple] = {}
         key_to_count: dict[tuple, int] = {}
@@ -456,8 +556,6 @@ class FailureManager:
 
         for i in range(iterations):
             seed_offset = seed + i if seed is not None else None
-
-            # Pre-compute exclusions for this failure iteration
             trace = {} if store_failure_patterns else None
             excluded_nodes, excluded_links = self.compute_exclusions(
                 policy, seed_offset, failure_trace=trace
@@ -475,14 +573,12 @@ class FailureManager:
             )
             worker_args.append(arg)
 
-            # Build deduplication key (excludes iteration index)
             dedup_key = _create_cache_key(
                 excluded_nodes, excluded_links, func_name, analysis_kwargs
             )
             if dedup_key not in key_to_first_arg:
                 key_to_first_arg[dedup_key] = arg
                 key_to_count[dedup_key] = 1
-                # Store trace for first occurrence
                 if trace is not None:
                     key_to_trace[dedup_key] = trace
             else:
@@ -493,7 +589,6 @@ class FailureManager:
             f"Pre-computed {len(worker_args)} failure exclusion sets in {pre_compute_time:.2f}s"
         )
 
-        # Prepare unique tasks (deduplicated by failure pattern + analysis params)
         unique_worker_args: list[tuple] = list(key_to_first_arg.values())
         num_unique_tasks: int = len(unique_worker_args)
         if iterations > 0:
@@ -503,17 +598,14 @@ class FailureManager:
 
         start_time = time.time()
 
-        # Always run baseline first (separate from failure iterations)
         baseline_result_raw = self._run_serial([baseline_arg])
         baseline_result = baseline_result_raw[0] if baseline_result_raw else None
 
-        # Enrich baseline result with failure metadata
         if baseline_result is not None and hasattr(baseline_result, "failure_id"):
             baseline_result.failure_id = ""
             baseline_result.failure_state = {"excluded_nodes": [], "excluded_links": []}
-            baseline_result.failure_trace = None  # No policy applied for baseline
+            baseline_result.failure_trace = None
 
-        # Execute failure iterations (deduplicated)
         if iterations > 0:
             use_parallel = parallelism > 1 and num_unique_tasks > 1
             if use_parallel:
@@ -523,7 +615,6 @@ class FailureManager:
             else:
                 unique_result_values = self._run_serial(unique_worker_args)
 
-            # Map unique task results back to their dedup keys
             key_to_result: dict[tuple, Any] = {}
             for (dedup_key, _arg), value in zip(
                 key_to_first_arg.items(), unique_result_values, strict=True
