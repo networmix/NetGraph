@@ -8,31 +8,6 @@ import pytest
 
 from ngraph import cli
 
-# Utilities
-
-
-def extract_json_from_stdout(output: str) -> str:
-    """Return the JSON payload from stdout that may include status lines.
-
-    This helper isolates the first balanced JSON object for reliable parsing.
-    """
-    json_start = output.find("{")
-    if json_start == -1:
-        return output
-
-    brace_count = 0
-    json_end = -1
-    for i in range(json_start, len(output)):
-        if output[i] == "{":
-            brace_count += 1
-        elif output[i] == "}":
-            brace_count -= 1
-            if brace_count == 0:
-                json_end = i + 1
-                break
-    return output[json_start:json_end] if json_end != -1 else output
-
-
 # High-value CLI run command tests
 
 
@@ -56,9 +31,11 @@ def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> 
 
     cli.main(["run", str(scenario), "--stdout"])
     captured = capsys.readouterr()
-    payload = json.loads(extract_json_from_stdout(captured.out))
+    # stdout must be pure JSON (status banners go to stderr)
+    payload = json.loads(captured.out)
 
     assert "steps" in payload and "build_graph" in payload["steps"]
+    assert "Results written to" in captured.err
     # default <scenario_name>.results.json is created when --results not passed
     assert (tmp_path / "scenario_1.results.json").exists()
 
@@ -69,11 +46,26 @@ def test_run_no_results_flag_produces_no_file(
     scenario = Path("tests/integration/scenario_1.yaml").resolve()
     monkeypatch.chdir(tmp_path)
 
-    cli.main(["run", str(scenario), "--no-results"])  # still prints a status line
+    cli.main(["run", str(scenario), "--no-results"])  # status line goes to stderr
     captured = capsys.readouterr()
 
     assert not (tmp_path / "scenario_1.results.json").exists()
-    assert "Scenario execution completed" in captured.out
+    assert "Scenario execution completed" in captured.err
+    assert captured.out == ""
+
+
+def test_run_stdout_no_results_emits_pure_json(
+    tmp_path: Path, capsys, monkeypatch
+) -> None:
+    scenario = Path("tests/integration/scenario_1.yaml").resolve()
+    monkeypatch.chdir(tmp_path)
+
+    cli.main(["run", str(scenario), "--stdout", "--no-results"])
+    captured = capsys.readouterr()
+
+    # The full stdout stream must parse as JSON (safe to pipe to jq)
+    payload = json.loads(captured.out)
+    assert "steps" in payload and "build_graph" in payload["steps"]
 
 
 def test_run_custom_results_path_disables_default(tmp_path: Path, monkeypatch) -> None:

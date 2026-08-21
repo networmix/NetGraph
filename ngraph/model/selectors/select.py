@@ -1,12 +1,13 @@
 """Node selection and evaluation.
 
-Provides the unified select_nodes() function that handles regex matching,
-attribute filtering, active-only filtering, and grouping.
+`select_nodes()` combines regex matching, attribute filtering, active-only
+filtering, and grouping; the flatten helpers build the attribute dicts that
+condition evaluation runs against.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 from .conditions import evaluate_conditions
 from .schema import Condition, MatchSpec, NodeSelector
@@ -19,6 +20,7 @@ __all__ = [
     "flatten_node_attrs",
     "flatten_link_attrs",
     "flatten_risk_group_attrs",
+    "link_path_key",
     "match_entity_ids",
 ]
 
@@ -27,28 +29,26 @@ def select_nodes(
     network: "Network",
     selector: NodeSelector,
     default_active_only: bool,
-    excluded_nodes: Optional[Set[str]] = None,
 ) -> Dict[str, List["Node"]]:
     """Unified entry point for node selection.
 
     Evaluation order:
     1. Select nodes matching `path` regex (or all nodes if path is None)
     2. Filter by `match` conditions
-    3. Filter by `active_only` flag and excluded_nodes
+    3. Filter by `active_only` flag
     4. Group by `group_by` attribute (overrides regex capture grouping)
 
     Args:
-        network: The network graph.
+        network: Network whose nodes are searched.
         selector: Node selection specification.
-        default_active_only: Context-aware default for active_only flag.
-            Required parameter to prevent silent bugs.
-        excluded_nodes: Additional node names to exclude.
+        default_active_only: Used when the selector leaves `active_only`
+            unset. Required rather than defaulted so callers cannot silently
+            inherit the wrong policy.
 
     Returns:
-        Dict mapping group labels to lists of nodes.
+        Dict mapping group labels to lists of nodes. Groups that filter down
+        to nothing are dropped.
     """
-    excluded = excluded_nodes or set()
-
     # Resolve effective active_only flag
     active_only = (
         selector.active_only
@@ -56,9 +56,10 @@ def select_nodes(
         else default_active_only
     )
 
-    # Step 1: Select by path regex (or all nodes)
+    # Step 1: Select by path regex (or all nodes). Regex selection delegates
+    # to Network.select_node_groups_by_path() which provides caching.
     if selector.path is not None:
-        candidates = _select_by_regex(network, selector.path)
+        candidates = network.select_node_groups_by_path(selector.path)
     else:
         candidates = {"_all_": list(network.nodes.values())}
 
@@ -66,23 +67,15 @@ def select_nodes(
     if selector.match is not None:
         candidates = _filter_by_match(candidates, selector.match)
 
-    # Step 3: Filter active only + excluded
-    if active_only or excluded:
-        candidates = _filter_active_and_excluded(candidates, active_only, excluded)
+    # Step 3: Filter active only
+    if active_only:
+        candidates = _filter_active(candidates)
 
     # Step 4: Apply grouping (overrides regex capture grouping)
     if selector.group_by is not None:
         return _group_by_attribute(candidates, selector.group_by)
 
     return candidates
-
-
-def _select_by_regex(network: "Network", pattern: str) -> Dict[str, List["Node"]]:
-    """Select nodes by regex pattern with capture group handling.
-
-    Delegates to Network.select_node_groups_by_path() which provides caching.
-    """
-    return network.select_node_groups_by_path(pattern)
 
 
 def _filter_by_match(
@@ -119,7 +112,8 @@ def flatten_node_attrs(node: "Node") -> Dict[str, Any]:
     attrs: Dict[str, Any] = {
         "name": node.name,
         "disabled": node.disabled,
-        "risk_groups": list(node.risk_groups),
+        # Sorted for deterministic group_by labels and ==/in comparisons.
+        "risk_groups": sorted(node.risk_groups),
     }
     # Add user attrs, but don't overwrite top-level fields
     attrs.update({k: v for k, v in node.attrs.items() if k not in attrs})
@@ -146,50 +140,40 @@ def flatten_link_attrs(link: "Link", link_id: str) -> Dict[str, Any]:
         "capacity": link.capacity,
         "cost": link.cost,
         "disabled": link.disabled,
-        "risk_groups": list(link.risk_groups),
+        # Sorted for deterministic group_by labels and ==/in comparisons.
+        "risk_groups": sorted(link.risk_groups),
     }
     attrs.update({k: v for k, v in link.attrs.items() if k not in attrs})
     return attrs
 
 
-def flatten_risk_group_attrs(
-    rg: Union["RiskGroup", Dict[str, Any]],
-) -> Dict[str, Any]:
+def link_path_key(attrs: Dict[str, Any]) -> str:
+    """Return the "source|target" key used when path-matching links.
+
+    Links have no name of their own, so path regexes match against this
+    canonical endpoint-pair form of the flattened link attributes.
+    """
+    return f"{attrs['source']}|{attrs['target']}"
+
+
+def flatten_risk_group_attrs(rg: "RiskGroup") -> Dict[str, Any]:
     """Build flat attribute dict for condition evaluation on risk groups.
 
     Merges risk group's top-level fields (name, disabled, children) with
     rg.attrs. Top-level fields take precedence on key conflicts.
 
-    Supports both RiskGroup objects and dict representations (for flexibility
-    in failure policy matching).
-
     Args:
-        rg: RiskGroup object or dict representation.
+        rg: RiskGroup object.
 
     Returns:
         Flat dict suitable for condition evaluation.
     """
-    if isinstance(rg, dict):
-        # Dict representation
-        children_raw = rg.get("children", [])
-        child_names = [
-            c.get("name") if isinstance(c, dict) else c.name for c in children_raw
-        ]
-        attrs: Dict[str, Any] = {
-            "name": rg.get("name", ""),
-            "disabled": rg.get("disabled", False),
-            "children": child_names,
-        }
-        attrs.update({k: v for k, v in rg.get("attrs", {}).items() if k not in attrs})
-    else:
-        # RiskGroup object
-        attrs = {
-            "name": rg.name,
-            "disabled": rg.disabled,
-            "children": [c.name for c in rg.children],
-        }
-        attrs.update({k: v for k, v in rg.attrs.items() if k not in attrs})
-
+    attrs: Dict[str, Any] = {
+        "name": rg.name,
+        "disabled": rg.disabled,
+        "children": [c.name for c in rg.children],
+    }
+    attrs.update({k: v for k, v in rg.attrs.items() if k not in attrs})
     return attrs
 
 
@@ -221,24 +205,36 @@ def match_entity_ids(
     }
 
 
-def _filter_active_and_excluded(
+def _filter_active(
     groups: Dict[str, List["Node"]],
-    active_only: bool,
-    excluded: Set[str],
 ) -> Dict[str, List["Node"]]:
-    """Remove disabled and/or explicitly excluded nodes."""
+    """Remove disabled nodes, dropping groups that become empty."""
     result: Dict[str, List["Node"]] = {}
     for label, nodes in groups.items():
-        filtered = []
-        for n in nodes:
-            if n.name in excluded:
-                continue
-            if active_only and n.disabled:
-                continue
-            filtered.append(n)
+        filtered = [n for n in nodes if not n.disabled]
         if filtered:
             result[label] = filtered
     return result
+
+
+_MISSING = object()
+
+
+def _node_attr_value(node: "Node", attr_name: str) -> Any:
+    """Resolve a single node attribute without building the full flat dict.
+
+    Mirrors flatten_node_attrs semantics: top-level fields (name, disabled,
+    risk_groups) take precedence over node.attrs. Returns _MISSING when the
+    attribute is absent.
+    """
+    if attr_name == "name":
+        return node.name
+    if attr_name == "disabled":
+        return node.disabled
+    if attr_name == "risk_groups":
+        # Sorted for deterministic group_by labels.
+        return sorted(node.risk_groups)
+    return node.attrs.get(attr_name, _MISSING)
 
 
 def _group_by_attribute(
@@ -247,16 +243,16 @@ def _group_by_attribute(
 ) -> Dict[str, List["Node"]]:
     """Re-group nodes by attribute value.
 
-    Uses flatten_node_attrs to support both top-level fields (name, disabled,
-    risk_groups) and custom attrs, consistent with match condition evaluation.
+    Supports both top-level fields (name, disabled, risk_groups) and custom
+    attrs, consistent with match condition evaluation. Nodes lacking the
+    attribute are dropped.
 
     Note: This discards any existing grouping (including regex captures).
     """
     result: Dict[str, List["Node"]] = {}
     for nodes in groups.values():
         for node in nodes:
-            flat_attrs = flatten_node_attrs(node)
-            if attr_name in flat_attrs:
-                key = str(flat_attrs[attr_name])
-                result.setdefault(key, []).append(node)
+            value = _node_attr_value(node, attr_name)
+            if value is not _MISSING:
+                result.setdefault(str(value), []).append(node)
     return result

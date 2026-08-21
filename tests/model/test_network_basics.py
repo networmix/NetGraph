@@ -252,3 +252,36 @@ class TestLinkUtilities:
 
         ab_links = net.get_links_between("A", "B")
         assert set(ab_links) == {link_ab1.id, link_ab2.id}
+
+
+class TestDeterministicLinkIds:
+    """Link ids are per-pair sequences assigned at add time; collisions and
+    re-adds raise instead of silently overwriting."""
+
+    def test_ids_are_deterministic_sequences(self):
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        l1 = Link("A", "B")
+        l2 = Link("A", "B")
+        net.add_link(l1)
+        net.add_link(l2)
+        assert l1.id == "A|B|0"
+        assert l2.id == "A|B|1"
+
+    def test_pipe_in_node_names_collision_raises(self):
+        net = Network()
+        for n in ("a|b", "c", "a", "b|c"):
+            net.add_node(Node(n))
+        net.add_link(Link("a|b", "c"))
+        with pytest.raises(ValueError, match="ambiguous"):
+            net.add_link(Link("a", "b|c"))
+
+    def test_re_adding_same_link_raises(self):
+        net = Network()
+        net.add_node(Node("A"))
+        net.add_node(Node("B"))
+        link = Link("A", "B")
+        net.add_link(link)
+        with pytest.raises(ValueError, match="already been added"):
+            net.add_link(link)

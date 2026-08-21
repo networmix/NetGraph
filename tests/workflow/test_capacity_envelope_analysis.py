@@ -112,7 +112,7 @@ class TestMaxFlowStep:
         with pytest.raises(ValueError, match="parallelism must be >= 1"):
             MaxFlow(source="^A", target="^C", parallelism=0)
 
-        with pytest.raises(ValueError, match="mode must be 'combine' or 'pairwise'"):
+        with pytest.raises(ValueError, match="Invalid mode"):
             MaxFlow(source="^A", target="^C", mode="invalid")
 
     def test_flow_placement_enum_usage(self):

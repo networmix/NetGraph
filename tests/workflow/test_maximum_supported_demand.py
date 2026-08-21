@@ -4,19 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ngraph.model.demand.spec import TrafficDemand
 from ngraph.results.store import Results
 from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 
 
 def _mock_scenario_with_matrix() -> MagicMock:
     mock_scenario = MagicMock()
-    td = MagicMock()
-    td.source = "A"
-    td.target = "B"
-    td.volume = 10.0
-    td.mode = "pairwise"
-    td.priority = 0
-    td.flow_policy = None
+    td = TrafficDemand(source="A", target="B", volume=10.0, mode="pairwise")
     mock_scenario.demand_set.get_set.return_value = [td]
     return mock_scenario
 
@@ -92,9 +87,6 @@ def test_msd_no_feasible_raises(
 def test_msd_end_to_end_single_link() -> None:
     """Test MSD end-to-end with a simple single-link scenario."""
     from ngraph.analysis.functions import demand_placement_analysis
-    from ngraph.workflow.maximum_supported_demand_step import (
-        MaximumSupportedDemand as MSD,
-    )
     from tests.integration.helpers import ScenarioDataBuilder
 
     # Build a tiny deterministic scenario: A --(cap=10)--> B, demand base=5
@@ -126,54 +118,28 @@ def test_msd_end_to_end_single_link() -> None:
     base_demands = data.get("base_demands")
     assert isinstance(base_demands, list) and base_demands
 
-    # Verify feasibility at alpha* using demand_placement_analysis
-    scaled_demands = MSD._build_scaled_demands(base_demands, float(alpha_star))
-    demands_config = [
-        {
-            "id": d.id,
-            "source": d.source,
-            "target": d.target,
-            "volume": d.volume,
-            "mode": d.mode,
-            "priority": d.priority,
-            "flow_policy": d.flow_policy,
-        }
-        for d in scaled_demands
-    ]
+    def _scaled_config(alpha: float) -> list[dict]:
+        return [{**d, "volume": float(d["volume"]) * alpha} for d in base_demands]
 
+    # Verify feasibility at alpha* using demand_placement_analysis
     result = demand_placement_analysis(
         network=scenario.network,
         excluded_nodes=set(),
         excluded_links=set(),
-        demands_config=demands_config,
-        placement_rounds=1,
+        demands_config=_scaled_config(float(alpha_star)),
     )
 
     # At alpha*, all demands should be fully placed
     assert result.summary.overall_ratio >= 1.0 - 1e-9
 
     # Verify infeasibility just above alpha*
-    alpha_above = float(alpha_star) + 0.05
-    scaled_demands_above = MSD._build_scaled_demands(base_demands, alpha_above)
-    demands_config_above = [
-        {
-            "id": d.id,
-            "source": d.source,
-            "target": d.target,
-            "volume": d.volume,
-            "mode": d.mode,
-            "priority": d.priority,
-            "flow_policy": d.flow_policy,
-        }
-        for d in scaled_demands_above
-    ]
+    demands_config_above = _scaled_config(float(alpha_star) + 0.05)
 
     result_above = demand_placement_analysis(
         network=scenario.network,
         excluded_nodes=set(),
         excluded_links=set(),
         demands_config=demands_config_above,
-        placement_rounds=1,
     )
 
     # Above alpha*, placement should fail (ratio < 1.0)

@@ -8,12 +8,6 @@ from typing import Union
 #: Represents numeric cost in the network (e.g. distance, latency, etc.).
 Cost = Union[int, float]
 
-#: Capacity threshold below which capacity values are treated as effectively zero.
-MIN_CAP = 2**-12
-
-#: Flow threshold below which flow values are treated as effectively zero.
-MIN_FLOW = 2**-12
-
 
 class EdgeSelect(IntEnum):
     """Edge selection criteria for shortest-path algorithms.
@@ -69,3 +63,24 @@ class Mode(IntEnum):
     #: Analyze each (source_group, sink_group) pair independently.
     #: Returns flow values for each pair separately.
     PAIRWISE = 2
+
+    @classmethod
+    def from_string(cls, value: str) -> "Mode":
+        """Parse a string into a Mode enum value.
+
+        Args:
+            value: Case-insensitive string name (e.g., "combine", "PAIRWISE").
+
+        Returns:
+            The corresponding Mode enum member.
+
+        Raises:
+            ValueError: If the string doesn't match any enum member.
+        """
+        try:
+            return cls[value.upper()]
+        except KeyError:
+            valid = ", ".join(e.name.lower() for e in cls)
+            raise ValueError(
+                f"Invalid mode '{value}'. Valid values are: {valid}"
+            ) from None

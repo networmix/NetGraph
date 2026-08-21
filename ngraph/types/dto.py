@@ -18,8 +18,8 @@ EdgeDir = Literal["fwd", "rev"]
 class EdgeRef:
     """Reference to a directed edge via scenario link_id and direction.
 
-    Provides stable, scenario-native edge identification across Core reorderings
-    using the link's unique ID rather than node name tuples.
+    Identifying an edge by the link's unique ID rather than by a node-name
+    tuple keeps the reference valid across Core edge reorderings.
 
     Attributes:
         link_id: Scenario link identifier (matches Network.links keys)
@@ -39,7 +39,7 @@ class MaxFlowResult:
     Attributes:
         total_flow: Maximum flow value achieved.
         cost_distribution: Mapping of path cost to flow volume placed at that cost.
-        min_cut: Saturated edges forming the min-cut (None if not computed).
+        min_cut: Edges forming a minimum cut (None if not computed).
     """
 
     total_flow: float

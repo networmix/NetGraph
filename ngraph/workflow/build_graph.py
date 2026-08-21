@@ -1,9 +1,8 @@
 """Graph building workflow component.
 
-Validates and exports network topology as a node-link representation using NetworkX.
-Actual graph building for analysis happens in analysis functions; this step
-primarily validates the network and stores a serializable representation for
-inspection.
+Validates the network topology and exports it as a NetworkX node-link
+representation for inspection. Graph building for analysis happens in the
+analysis functions, not here.
 
 YAML Configuration Example:
     ```yaml
@@ -13,9 +12,9 @@ YAML Configuration Example:
         add_reverse: true  # Optional: Add reverse edges (default: true)
     ```
 
-The `add_reverse` parameter controls whether reverse edges are added for each link.
-When `True` (default), each Link(A→B) gets both forward(A→B) and reverse(B→A) edges
-for bidirectional connectivity. Set to `False` for directed-only graphs.
+With `add_reverse: true` (the default), each Link(A→B) gets both a forward
+(A→B) and a reverse (B→A) edge for bidirectional connectivity. Set it to
+`false` for directed-only graphs.
 
 Results stored in `scenario.results` under the step name as two keys:
     - metadata: Step-level execution metadata (node/link counts)
@@ -42,9 +41,8 @@ logger = get_logger(__name__)
 class BuildGraph(WorkflowStep):
     """Validates network topology and stores node-link representation.
 
-    This step validates the network structure and stores a JSON-serializable
-    node-link representation using NetworkX. Core graph building happens in
-    analysis functions as needed.
+    The stored representation is JSON-serializable NetworkX node-link data.
+    Core graph building for analysis happens in analysis functions as needed.
 
     Attributes:
         add_reverse: If True, adds reverse edges for bidirectional connectivity.
@@ -68,27 +66,27 @@ class BuildGraph(WorkflowStep):
         # Build NetworkX MultiDiGraph from Network
         graph = nx.MultiDiGraph()
 
-        # Add nodes with attributes
+        # Add nodes with attributes. Reserved keys win over user attrs to
+        # avoid kwarg collisions when attrs contain e.g. "disabled".
         for node_name in sorted(network.nodes.keys()):
             node = network.nodes[node_name]
-            graph.add_node(
-                node_name,
-                disabled=node.disabled,
-                **node.attrs,
-            )
+            graph.add_node(node_name, **{**node.attrs, "disabled": node.disabled})
 
-        # Add edges (links) with attributes
+        # Add edges (links) with attributes. Reserved keys (id, capacity,
+        # cost, disabled) win over user attrs with the same names.
         for link_id in sorted(network.links.keys()):
             link = network.links[link_id]
             # Add forward edge
             graph.add_edge(
                 link.source,
                 link.target,
-                id=link_id,
-                capacity=float(link.capacity),
-                cost=float(link.cost),
-                disabled=link.disabled,
-                **link.attrs,
+                **{
+                    **link.attrs,
+                    "id": link_id,
+                    "capacity": float(link.capacity),
+                    "cost": float(link.cost),
+                    "disabled": link.disabled,
+                },
             )
             # Add reverse edge if configured (for bidirectional connectivity)
             if self.add_reverse:
@@ -96,11 +94,13 @@ class BuildGraph(WorkflowStep):
                 graph.add_edge(
                     link.target,
                     link.source,
-                    id=reverse_id,
-                    capacity=float(link.capacity),
-                    cost=float(link.cost),
-                    disabled=link.disabled,
-                    **link.attrs,
+                    **{
+                        **link.attrs,
+                        "id": reverse_id,
+                        "capacity": float(link.capacity),
+                        "cost": float(link.cost),
+                        "disabled": link.disabled,
+                    },
                 )
 
         # Convert to node-link format for serialization

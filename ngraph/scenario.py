@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Callable, ContextManager, List, Optional
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.loader import load_scenario_yaml
@@ -23,18 +23,18 @@ from ngraph.model.network import Network
 from ngraph.results import Results
 from ngraph.results.snapshot import build_scenario_snapshot
 from ngraph.utils.seed_manager import SeedManager
-from ngraph.workflow.base import WorkflowStep
+from ngraph.workflow.base import WorkflowStep, validate_unique_step_names
 from ngraph.workflow.parse import build_workflow_steps
 
 
 @dataclass
 class Scenario:
-    """Represents a complete scenario for building and executing network workflows.
+    """A complete scenario for building and executing network workflows.
 
-    This scenario includes:
+    Holds:
       - A network (nodes/links), constructed via blueprint expansion.
       - A failure policy set (one or more named failure policies).
-      - A traffic matrix set containing one or more named traffic matrices.
+      - A demand set containing one or more named demand collections.
       - A list of workflow steps to execute.
       - A results container for storing outputs.
       - A components_library for hardware/optics definitions.
@@ -60,25 +60,31 @@ class Scenario:
     # Module-level logger
     _logger = get_logger(__name__)
 
-    @property
-    def seed_manager(self) -> SeedManager:
-        """Get the seed manager for this scenario.
+    def run(
+        self,
+        step_hook: Optional[Callable[[WorkflowStep], ContextManager[None]]] = None,
+    ) -> None:
+        """Execute the scenario's workflow steps in order.
 
-        Returns:
-            SeedManager instance configured with this scenario's seed.
+        A step may modify scenario data or store outputs in scenario.results.
+
+        Args:
+            step_hook: Optional callable invoked once per step with the step
+                about to run. It must return a context manager, which is
+                entered before ``step.execute`` and exited after it returns
+                (e.g., for per-step profiling). Exceptions raised by a step
+                propagate through the context manager.
         """
-        return SeedManager(self.seed)
-
-    def run(self) -> None:
-        """Executes the scenario's workflow steps in order.
-
-        Each step may modify scenario data or store outputs
-        in scenario.results.
-        """
+        # Reject duplicate effective step names before executing anything.
+        validate_unique_step_names(self.workflow)
         # Reset instance execution counter for this run
         self._execution_counter = 0
         for step in self.workflow:
-            step.execute(self)
+            if step_hook is None:
+                step.execute(self)
+            else:
+                with step_hook(step):
+                    step.execute(self)
 
     @classmethod
     def from_yaml(
@@ -86,8 +92,8 @@ class Scenario:
         yaml_str: str,
         default_components: Optional[ComponentsLibrary] = None,
     ) -> Scenario:
-        """Constructs a Scenario from a YAML string, optionally merging
-        with a default ComponentsLibrary if provided.
+        """Construct a Scenario from a YAML string, merging in a default
+        ComponentsLibrary when one is given.
 
         Top-level YAML keys can include:
           - vars: YAML anchors for value reuse
@@ -101,10 +107,17 @@ class Scenario:
           - seed: Master seed for reproducible randomness
 
         Risk group processing:
-        1. Direct definitions and membership rules are registered
-        2. Generate blocks create groups from unique attribute values
-        3. Membership rules auto-assign entities to groups
-        4. References are validated (undefined groups and circular hierarchies detected)
+        1. Direct risk-group definitions are registered
+        2. Membership rules auto-assign entities to groups
+        3. The risk-group hierarchy is validated (cycle detection)
+        4. Generate blocks create groups from unique attribute values
+           (membership rules cannot match generated groups, since generation
+           runs after membership resolution)
+        5. Members of groups declared disabled are disabled (recursive
+           cascade; runs after membership and generate processing so rule-
+           and generate-assigned entities are covered)
+        6. Risk-group references on nodes/links are validated (undefined
+           groups detected)
 
         If no 'workflow' key is provided, the scenario has no steps to run.
         If 'failures' is omitted, scenario.failure_policy_set is empty.
@@ -138,15 +151,11 @@ class Scenario:
         if network_obj is None:
             network_obj = Network()
         else:
-            try:
-                Scenario._logger.debug(
-                    "Expanded network: nodes=%d, links=%d",
-                    len(getattr(network_obj, "nodes", {})),
-                    len(getattr(network_obj, "links", {})),
-                )
-            except Exception as exc:
-                # Defensive: network object may not be fully initialised in some error paths
-                Scenario._logger.debug("Failed to log network stats: %s", exc)
+            Scenario._logger.debug(
+                "Expanded network: nodes=%d, links=%d",
+                len(network_obj.nodes),
+                len(network_obj.links),
+            )
 
         # 2) Build the failure policy set
         seed_manager = SeedManager(seed)
@@ -156,37 +165,27 @@ class Scenario:
         )
 
         if failure_policy_set.policies:
-            try:
-                policy_names = sorted(list(failure_policy_set.policies.keys()))
-                Scenario._logger.debug(
-                    "Built FailurePolicySet: %d policies (%s)",
-                    len(policy_names),
-                    ", ".join(policy_names[:5])
-                    + ("..." if len(policy_names) > 5 else ""),
-                )
-            except Exception as exc:
-                Scenario._logger.debug("Failed to log policy set stats: %s", exc)
+            policy_names = sorted(failure_policy_set.policies.keys())
+            Scenario._logger.debug(
+                "Built FailurePolicySet: %d policies (%s)",
+                len(policy_names),
+                ", ".join(policy_names[:5]) + ("..." if len(policy_names) > 5 else ""),
+            )
 
         # 3) Build demand sets
         raw = data.get("demands", {})
         ds = build_demand_set(raw)
-        try:
-            set_names = sorted(list(getattr(ds, "sets", {}).keys()))
-            total_demands = 0
-            for _sname, demands in getattr(ds, "sets", {}).items():
-                total_demands += len(demands)
-            Scenario._logger.debug(
-                "Constructed DemandSet: sets=%d, total_demands=%d%s",
-                len(set_names),
-                total_demands,
-                (
-                    f" ({', '.join(set_names[:5])}{'...' if len(set_names) > 5 else ''})"
-                    if set_names
-                    else ""
-                ),
-            )
-        except Exception as exc:
-            Scenario._logger.debug("Failed to log demand set stats: %s", exc)
+        set_names = sorted(ds.sets.keys())
+        Scenario._logger.debug(
+            "Constructed DemandSet: sets=%d, total_demands=%d%s",
+            len(set_names),
+            sum(len(demands) for demands in ds.sets.values()),
+            (
+                f" ({', '.join(set_names[:5])}{'...' if len(set_names) > 5 else ''})"
+                if set_names
+                else ""
+            ),
+        )
 
         # 4) Build workflow steps
         workflow_data = data.get("workflow", [])
@@ -194,22 +193,16 @@ class Scenario:
             workflow_data,
             derive_seed=lambda name: seed_manager.derive_seed("workflow_step", name),
         )
-        try:
-            labels: list[str] = []
-            for idx, step in enumerate(workflow_steps):
-                label = (step.name or step.__class__.__name__) or f"step_{idx}"
-                labels.append(label)
-            Scenario._logger.debug(
-                "Built workflow: steps=%d%s",
-                len(workflow_steps),
-                (
-                    f" ({', '.join(labels[:8])}{'...' if len(labels) > 8 else ''})"
-                    if labels
-                    else ""
-                ),
-            )
-        except Exception as exc:
-            Scenario._logger.debug("Failed to log workflow stats: %s", exc)
+        labels = [step.name or step.__class__.__name__ for step in workflow_steps]
+        Scenario._logger.debug(
+            "Built workflow: steps=%d%s",
+            len(workflow_steps),
+            (
+                f" ({', '.join(labels[:8])}{'...' if len(labels) > 8 else ''})"
+                if labels
+                else ""
+            ),
+        )
 
         # 5) Build/merge components library
         scenario_comps_data = data.get("components", {})
@@ -231,15 +224,9 @@ class Scenario:
             risk_groups, generate_specs_raw = build_risk_groups(rg_data)
             for rg in risk_groups:
                 network_obj.risk_groups[rg.name] = rg
-                if rg.disabled:
-                    network_obj.disable_risk_group(rg.name, recursive=True)
-            try:
-                Scenario._logger.debug(
-                    "Attached risk groups: %d",
-                    len(getattr(network_obj, "risk_groups", {})),
-                )
-            except Exception as exc:
-                Scenario._logger.debug("Failed to log risk group stats: %s", exc)
+            Scenario._logger.debug(
+                "Attached risk groups: %d", len(network_obj.risk_groups)
+            )
 
         # 7) Resolve membership rules (adds entities to risk groups based on conditions)
         resolve_membership_rules(network_obj)
@@ -265,14 +252,17 @@ class Scenario:
             except ValueError as e:
                 raise ValueError(f"Invalid generate block: {e}") from e
 
-        try:
-            if generate_specs_raw:
-                Scenario._logger.debug(
-                    "Generated risk groups: total now %d",
-                    len(getattr(network_obj, "risk_groups", {})),
-                )
-        except Exception as exc:
-            Scenario._logger.debug("Failed to log generate stats: %s", exc)
+        if generate_specs_raw:
+            Scenario._logger.debug(
+                "Generated risk groups: total now %d", len(network_obj.risk_groups)
+            )
+
+        # Disable members of risk groups declared disabled. This runs after
+        # membership rules and generate blocks so entities assigned to groups
+        # by those mechanisms are covered by the cascade.
+        for rg in network_obj.risk_groups.values():
+            if rg.disabled:
+                network_obj.disable_risk_group(rg.name, recursive=True)
 
         # 10) Validate risk group references
         # Ensures all risk group names referenced by nodes/links are defined
@@ -300,16 +290,13 @@ class Scenario:
             # Snapshot should never block scenario construction
             Scenario._logger.debug("Failed to attach scenario snapshot: %s", exc)
 
-        try:
-            Scenario._logger.debug(
-                "Scenario constructed: nodes=%d, links=%d, policies=%d, matrices=%d, steps=%d",
-                len(getattr(network_obj, "nodes", {})),
-                len(getattr(network_obj, "links", {})),
-                len(getattr(failure_policy_set, "policies", {})),
-                len(getattr(ds, "sets", {})),
-                len(workflow_steps),
-            )
-        except Exception as exc:
-            Scenario._logger.debug("Failed to log scenario construction stats: %s", exc)
+        Scenario._logger.debug(
+            "Scenario constructed: nodes=%d, links=%d, policies=%d, demand_sets=%d, steps=%d",
+            len(network_obj.nodes),
+            len(network_obj.links),
+            len(failure_policy_set.policies),
+            len(ds.sets),
+            len(workflow_steps),
+        )
 
         return scenario_obj

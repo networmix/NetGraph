@@ -28,7 +28,17 @@ _CACHEABLE_TE: frozenset[FlowPolicyPreset] = frozenset(
     }
 )
 
+# Threshold for recording a placed amount as a flow entry. The core engine
+# itself never augments below kMinFlow = 1/4096 (see NetGraph-Core
+# constants.hpp), so any nonzero amount it returns clears this comfortably.
 _MIN_FLOW = 1e-9
+
+# Cached-path FlowIndex ids start far above the ids Core's FlowPolicy assigns
+# internally (0..max_flow_count, <= 256), so a cached demand and a
+# policy-based demand sharing (src, dst, priority) can never produce the same
+# FlowIndex. Duplicate FlowIndex values silently merge flows in FlowGraph,
+# corrupting placement totals.
+_CACHED_FLOW_ID_BASE = 1 << 20
 
 
 @dataclass(slots=True)
@@ -62,7 +72,13 @@ class PlacementEntry:
 
 @dataclass(slots=True)
 class PlacementResult:
-    """Complete placement result."""
+    """Result of one `place_demands` call.
+
+    Attributes:
+        summary: Aggregated demand and placed totals.
+        entries: Per-demand results, or None unless the call passed
+            ``collect_entries=True``.
+    """
 
     summary: PlacementSummary
     entries: list[PlacementEntry] | None = None
@@ -105,35 +121,68 @@ def place_demands(
     collect_entries: bool = False,
     include_cost_distribution: bool = False,
     include_used_edges: bool = False,
+    dag_cache: dict[tuple[int, bool], tuple[np.ndarray, Any]] | None = None,
 ) -> PlacementResult:
     """Place demands on a flow graph with SPF caching.
 
     Args:
         demands: Expanded demands (policy_preset, priority, names).
-        volumes: Demand volumes (allows scaling without modifying demands).
-        flow_graph: Target FlowGraph.
-        ctx: AnalysisContext with graph infrastructure.
-        node_mask: Node inclusion mask.
-        edge_mask: Edge inclusion mask.
-        resolved_ids: Pre-resolved (src_id, dst_id) pairs. Computed if None.
+        volumes: Volume per demand, positionally aligned with `demands`;
+            passed separately so callers can scale without rebuilding demands.
+        flow_graph: Target FlowGraph; placed flow accumulates here.
+        ctx: AnalysisContext holding the built graph and Core algorithms.
+        node_mask: Node inclusion mask (True = include), as built by
+            ctx.build_node_mask.
+        edge_mask: Edge inclusion mask (True = include), as built by
+            ctx.build_edge_mask.
+        resolved_ids: Pre-resolved (src_id, dst_id) pairs. Computed from the
+            demand names if None.
         collect_entries: If True, populate result.entries.
         include_cost_distribution: Include cost distribution in entries.
         include_used_edges: Include used edges in entries.
+        dag_cache: Optional persistent SPF DAG cache keyed by
+            (src_id, uses_capacity_aware_selection). Base DAGs depend only on
+            the static graph and masks, so repeated calls with the same
+            context and masks (e.g. MSD probes) can share one cache.
 
     Returns:
         PlacementResult with summary and optional entries.
+
+    Raises:
+        ValueError: If a demand endpoint is not present in ``ctx``'s graph
+            (checked only when ``resolved_ids`` is not supplied). Pseudo node
+            names embed demand ids, so this usually means the context was
+            built from a different demands_config.
+        ValueError: If two policy-based demands (presets outside
+            CACHEABLE_PRESETS) share the same (src, dst, priority): their
+            FlowIndex values would collide and silently merge in FlowGraph.
+        ValueError: If ``demands``, ``volumes``, and ``resolved_ids`` are not
+            all the same length.
     """
     if resolved_ids is None:
-        resolved_ids = [
-            (ctx.node_mapper.to_id(d.src_name), ctx.node_mapper.to_id(d.dst_name))
-            for d in demands
-        ]
+        try:
+            resolved_ids = [
+                (ctx.node_mapper.to_id(d.src_name), ctx.node_mapper.to_id(d.dst_name))
+                for d in demands
+            ]
+        except KeyError as exc:
+            raise ValueError(
+                f"Demand endpoint {exc.args[0]!r} is not present in the "
+                "analysis context graph. The context was likely built from a "
+                "different demands_config (pseudo node names embed demand "
+                "ids); rebuild the context from the same config."
+            ) from exc
 
-    dag_cache: dict[tuple[int, FlowPolicyPreset], tuple[np.ndarray, Any]] = {}
+    if dag_cache is None:
+        dag_cache = {}
     entries: list[PlacementEntry] | None = [] if collect_entries else None
     total_demand = 0.0
     total_placed = 0.0
-    flow_idx_counter = 0
+    flow_idx_counter = _CACHED_FLOW_ID_BASE
+    # Core's FlowPolicy assigns flow ids internally per policy instance, so
+    # two policy-based demands sharing (src, dst, priority) would produce
+    # colliding FlowIndex values and silently merge/steal each other's flows.
+    policy_triples: set[tuple[int, int, int]] = set()
 
     for demand, volume, (src_id, dst_id) in zip(
         demands, volumes, resolved_ids, strict=True
@@ -157,6 +206,15 @@ def place_demands(
                 include_used_edges,
             )
         else:
+            triple = (src_id, dst_id, demand.priority)
+            if triple in policy_triples:
+                raise ValueError(
+                    f"Duplicate policy-based demand for source '{demand.src_name}', "
+                    f"destination '{demand.dst_name}', priority {demand.priority}: "
+                    "flow ids would collide and corrupt placement. Merge the "
+                    "demand volumes or use distinct priorities."
+                )
+            policy_triples.add(triple)
             placed, cost_dist, used_edges = _place_with_policy(
                 src_id,
                 dst_id,
@@ -198,7 +256,7 @@ def _place_cached(
     volume: float,
     priority: int,
     preset: FlowPolicyPreset,
-    dag_cache: dict[tuple[int, FlowPolicyPreset], tuple[np.ndarray, Any]],
+    dag_cache: dict[tuple[int, bool], tuple[np.ndarray, Any]],
     ctx: "AnalysisContext",
     flow_graph: netgraph_core.FlowGraph,
     node_mask: np.ndarray,
@@ -208,10 +266,13 @@ def _place_cached(
     include_used_edges: bool,
 ) -> tuple[float, dict[float, float], set[str], int]:
     """Place single demand with SPF caching."""
-    cache_key = (src_id, preset)
     selection = _get_edge_selection(preset)
     placement = _get_flow_placement(preset)
     is_te = preset in _CACHEABLE_TE
+    # ECMP and WCMP share one EdgeSelection; TE presets share the other.
+    # Keying by selection family (not preset) lets mixed workloads reuse
+    # the same base SPF DAG.
+    cache_key = (src_id, is_te)
 
     flow_indices: list[netgraph_core.FlowIndex] = []
     flow_costs: list[tuple[float, float]] = []
@@ -299,9 +360,10 @@ def _place_cached(
 
     used_edges: set[str] = set()
     if include_used_edges:
+        ext_ids = ctx.multidigraph.ext_edge_ids_view()
         for fidx in flow_indices:
             for edge_id, _ in flow_graph.get_flow_edges(fidx):
-                ref = ctx.edge_mapper.to_ref(edge_id, ctx.multidigraph)
+                ref = ctx.edge_mapper.decode_ext_id(int(ext_ids[edge_id]))
                 if ref:
                     used_edges.add(f"{ref.link_id}:{ref.direction}")
 
@@ -335,6 +397,7 @@ def _place_with_policy(
     used_edges: set[str] = set()
 
     if include_cost_distribution or include_used_edges:
+        ext_ids = ctx.multidigraph.ext_edge_ids_view()
         for flow_key, flow_data in policy.flows.items():
             if include_cost_distribution:
                 cost, flow_vol = float(flow_data[2]), float(flow_data[3])
@@ -346,7 +409,7 @@ def _place_with_policy(
                     flow_key[0], flow_key[1], flow_key[2], flow_key[3]
                 )
                 for edge_id, _ in flow_graph.get_flow_edges(fidx):
-                    ref = ctx.edge_mapper.to_ref(edge_id, ctx.multidigraph)
+                    ref = ctx.edge_mapper.decode_ext_id(int(ext_ids[edge_id]))
                     if ref:
                         used_edges.add(f"{ref.link_id}:{ref.direction}")
 

@@ -8,7 +8,7 @@ Quick links:
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-This document describes NetGraph workflows – analysis execution pipelines that perform capacity analysis, demand placement, and statistics computation.
+NetGraph workflows are analysis execution pipelines that perform capacity analysis, demand placement, and statistics computation.
 
 ## Overview
 
@@ -32,7 +32,7 @@ workflow:
 
 - Steps run sequentially via `WorkflowStep.execute()`, which records timing and metadata and stores outputs under `{metadata, data}` for the step.
 - Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes the network with exclusion sets applied to mask failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`.
-- Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, `seed_source`, and `active_seed`.
+- Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, `seed_source`, and `active_seed`. `seed_source`/`active_seed` reflect the seed the step actually uses: a step constructed without its own seed reports `seed_source: none` even when the scenario has a seed (YAML-loaded scenarios derive per-step seeds at parse time, so those report `scenario-derived`).
 
 ## Core Workflow Steps
 
@@ -100,7 +100,6 @@ Monte Carlo placement of a named demand set with optional alpha scaling. Baselin
   failure_policy: random_failures        # Optional: policy name in failures section
   iterations: 100                # Number of failure iterations
   parallelism: auto
-  placement_rounds: auto         # or an integer
   include_flow_details: true     # cost_distribution per flow
   include_used_edges: false      # include per-demand used edge lists
   store_failure_patterns: false
@@ -113,9 +112,12 @@ Monte Carlo placement of a named demand set with optional alpha scaling. Baselin
 Outputs:
 
 - metadata: iterations, parallelism, analysis_function, policy_name,
-  execution_time, unique_patterns
-- data.context: demand_set, placement_rounds, include_flow_details,
+  execution_time, unique_patterns, occurrence_counts
+- data.baseline and data.flow_results: see Results Export Shape below
+- data.context: demand_set, include_flow_details,
   include_used_edges, base_demands, alpha, alpha_source
+
+Note: `placement_rounds` is deprecated and has no effect. It is still accepted in YAML for backward compatibility and is not exported in `data.context`; setting it to any value other than `auto` also logs a deprecation warning.
 
 ### MaximumSupportedDemand
 
@@ -133,7 +135,6 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
   resolution: 0.01               # Convergence resolution for bisection
   max_bracket_iters: 32          # Maximum bracketing iterations
   max_bisect_iters: 32           # Maximum bisection iterations
-  placement_rounds: auto         # Placement optimization rounds
 ```
 
 Parameters:
@@ -147,14 +148,14 @@ Parameters:
 - `resolution`: Convergence threshold for bisection.
 - `max_bracket_iters`: Maximum iterations for bracketing phase.
 - `max_bisect_iters`: Maximum iterations for bisection phase.
-- `placement_rounds`: Number of placement optimization rounds (`int` or `"auto"`).
+- `placement_rounds`: Deprecated; accepted for backward compatibility but has no effect (placement optimization is handled by the core engine).
 
 Outputs:
 
 - data.alpha_star: maximum uniform scaling factor
 - data.context: search parameters
 - data.base_demands: serialized base demands prior to scaling
-- data.probes: bracket/bisect evaluations with feasibility and min ratios
+- data.probes: bracket/bisect evaluations with feasibility and placement ratios
 
 ### CostPower
 
@@ -173,14 +174,18 @@ Outputs:
 - data.levels: mapping level->list of {path, platform_capex, platform_power_watts,
   optics_capex, optics_power_watts, capex_total, power_total_watts}
 
+CostPower performs no hardware capacity/ports validation and completes even on networks that strict hardware validation would reject; use `ngraph inspect` for hardware validation.
+
 ## Node Selection Mechanism
 
-Workflow steps use a unified selector system for node selection. Selectors can be specified as string patterns or selector objects.
+Every workflow step selects nodes the same way: a selector is either a string pattern or a selector object.
 
 ### String Pattern Matching
 
+String patterns are regular expressions matched against node names, anchored at the start (Python `re.match()`).
+
 ```yaml
-# Exact match
+# Exact match (also matches names that continue past it, e.g. "spine-10")
 source: "spine-1"
 
 # Prefix match
@@ -232,7 +237,7 @@ source: "(dc[1-3])/servers/.*"
 **Multiple Capturing Groups**: Group labels join captured values with `|`.
 
 ```yaml
-source: "(dc[1-3])/(spine|leaf)/switch-(\d+)"
+source: '(dc[1-3])/(spine|leaf)/switch-(\d+)'
 # Creates groups: "dc1|spine|1", "dc1|leaf|2", "dc2|spine|1", etc.
 ```
 
@@ -263,7 +268,7 @@ source:
 mode: combine                    # combine | pairwise (default: combine)
 iterations: 1000                 # Failure iterations to run (default: 1)
 failure_policy: policy_name      # Name in failures section (default: null)
-parallelism: auto                # Worker processes (default: auto)
+parallelism: auto                # Worker threads (default: auto)
 shortest_path: false             # Restrict to shortest paths (default: false)
 require_capacity: true           # Path selection considers capacity (default: true)
                                  # Set false for true IP/IGP semantics (cost-only routing)
@@ -273,7 +278,7 @@ include_flow_details: false      # Emit cost_distribution per flow
 include_min_cut: false           # Emit min-cut edge list per flow
 ```
 
-Note: Baseline (no failures) is always run first as a separate reference. The `iterations` parameter specifies the number of failure scenarios to run.
+Note: Baseline (no failures) is always run first as a separate reference; `iterations` counts failure scenarios only.
 
 ## Results Export Shape
 
@@ -287,9 +292,9 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
       "step_name": "network_statistics",
       "execution_order": 0,
       "scenario_seed": 42,
-      "step_seed": 42,
+      "step_seed": 1903777304,
       "seed_source": "scenario-derived",
-      "active_seed": 42
+      "active_seed": 1903777304
     }
   },
   "steps": {

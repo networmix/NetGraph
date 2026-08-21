@@ -337,7 +337,6 @@ failures:
                   value: 5
   risk_group_failure:
     expand_groups: true
-    expand_children: true
     modes:
       - weight: 1.0
         rules:
@@ -381,9 +380,7 @@ demands:
       target: "storage.*"
       volume: 5000.0
       mode: "pairwise"
-      flow_policy:
-        shortest_path: false
-        flow_placement: "EQUAL_BALANCED"
+      flow_policy: "SHORTEST_PATHS_ECMP"
 
 network:
   name: Traffic Test Network

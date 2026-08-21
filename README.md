@@ -34,7 +34,7 @@ print(result)  # {('^A$', '^C$'): 10.0}
 
 ## Scenario DSL
 
-For reproducible analysis workflows, define topology, traffic, demands, and failure policies in YAML:
+For reproducible analysis workflows, define topology, demands, and failure policies in YAML:
 
 ```yaml
 seed: 42

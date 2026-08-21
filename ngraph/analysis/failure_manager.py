@@ -1,14 +1,15 @@
 """FailureManager for Monte Carlo failure analysis.
 
-Provides the failure analysis engine for NetGraph. Supports parallel
-processing, graph caching, and failure policy handling for workflow steps
-and direct programmatic use.
+Runs an analysis function over many failure scenarios, handling failure policy
+application, graph caching, and parallel execution. Used by workflow steps and
+directly from user code.
 
 Performance characteristics:
 Time complexity: O(S + I * A / P), where S is one-time graph setup cost,
 I is iteration count, A is per-iteration analysis cost, and P is parallelism.
-Graph caching amortizes expensive graph construction across all iterations,
-and O(|excluded|) mask building replaces O(V+E) iteration.
+Graph caching amortizes graph construction across all iterations: each
+iteration applies its exclusions as an O(|excluded|) mask update instead of
+rebuilding the graph or re-scanning all O(V+E) nodes and edges.
 
 Space complexity: O(V + E + I * R), where V and E are node and link counts,
 and R is result size per iteration. The pre-built graph is shared across
@@ -28,30 +29,32 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, Optional, Protocol, Set
 
-from ngraph.dsl.selectors import (
+from ngraph.logging import get_logger
+from ngraph.model.failure.policy_set import FailurePolicySet
+from ngraph.model.selectors import (
     flatten_link_attrs,
     flatten_node_attrs,
     flatten_risk_group_attrs,
 )
-from ngraph.logging import get_logger
-from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.types.base import FlowPlacement
 
 if TYPE_CHECKING:
     import cProfile
 
-    from ngraph.model.network import Network
+    from ngraph.model.network import Network, RiskGroup
 
+from ngraph.analysis.functions import (
+    demand_placement_analysis,
+    max_flow_analysis,
+    sensitivity_analysis,
+)
 from ngraph.model.failure.policy import FailurePolicy
 
 logger = get_logger(__name__)
 
 
 def _is_hashable(obj: Any) -> bool:
-    """Return True if obj is hashable, False otherwise.
-
-    This avoids try/except TypeError patterns when checking hashability.
-    """
+    """Return True if obj is hashable, False otherwise."""
     try:
         hash(obj)
         return True
@@ -59,29 +62,13 @@ def _is_hashable(obj: Any) -> bool:
         return False
 
 
-def _create_cache_key(
-    excluded_nodes: Set[str],
-    excluded_links: Set[str],
-    analysis_name: str,
-    analysis_kwargs: Dict[str, Any],
-) -> tuple:
-    """Create cache key from exclusions, analysis name, and parameters.
+def _hashable_kwargs_key(analysis_kwargs: Dict[str, Any]) -> tuple:
+    """Build the hashable, order-independent kwargs component of a dedup key.
 
-    Args:
-        excluded_nodes: Set of excluded node names.
-        excluded_links: Set of excluded link IDs.
-        analysis_name: Name of the analysis function.
-        analysis_kwargs: Analysis function arguments.
-
-    Returns:
-        Tuple suitable for use as a cache key.
+    This part of the key is invariant across Monte Carlo iterations, so
+    callers should compute it once and combine it with the per-iteration
+    exclusion sets via `_create_dedup_key`.
     """
-    base_key = (
-        tuple(sorted(excluded_nodes)),
-        tuple(sorted(excluded_links)),
-        analysis_name,
-    )
-
     hashable_kwargs = []
     for key, value in sorted(analysis_kwargs.items()):
         if _is_hashable((key, value)):
@@ -92,31 +79,36 @@ def _create_cache_key(
             # thousands of edges). id() is safe here because these objects
             # persist across calls within one FailureManager lifetime.
             hashable_kwargs.append((key, f"{type(value).__name__}_{id(value)}"))
+    return tuple(hashable_kwargs)
 
-    return base_key + (tuple(hashable_kwargs),)
 
+def _create_dedup_key(
+    excluded_nodes: Set[str],
+    excluded_links: Set[str],
+    analysis_name: str,
+    kwargs_key: tuple,
+) -> tuple:
+    """Create deduplication key from exclusions, analysis name, and parameters.
 
-def _auto_adjust_parallelism(parallelism: int, analysis_func: Any) -> int:
-    """Adjust parallelism based on function characteristics.
+    The key identifies identical failure patterns before dispatch: iterations
+    sharing a key are executed once and fanned back out via occurrence_count.
+    This is pre-dispatch deduplication, not a result cache.
 
     Args:
-        parallelism: Requested parallelism level.
-        analysis_func: Analysis function to check.
+        excluded_nodes: Set of excluded node names.
+        excluded_links: Set of excluded link IDs.
+        analysis_name: Name of the analysis function.
+        kwargs_key: Precomputed `_hashable_kwargs_key(analysis_kwargs)`.
 
     Returns:
-        Adjusted parallelism level.
+        Tuple suitable for use as a deduplication key.
     """
-    # Check if function is defined in __main__ (notebook context)
-    if hasattr(analysis_func, "__module__") and analysis_func.__module__ == "__main__":
-        if parallelism > 1:
-            logger.warning(
-                "Function defined in notebook/script (__main__) detected. "
-                "Forcing serial execution (parallelism=1) to avoid pickling issues. "
-                "Consider moving analysis function to a separate module for parallel execution."
-            )
-        return 1
-
-    return parallelism
+    return (
+        tuple(sorted(excluded_nodes)),
+        tuple(sorted(excluded_links)),
+        analysis_name,
+        kwargs_key,
+    )
 
 
 class AnalysisFunction(Protocol):
@@ -131,20 +123,21 @@ class AnalysisFunction(Protocol):
         ...
 
 
-def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], set[str]]:
-    """Execute analysis function with caching.
+def _generic_worker(args: tuple[Any, ...]) -> Any:
+    """Execute the analysis function once for one exclusion pattern.
 
-    Caches analysis results based on exclusion patterns and analysis parameters
-    since many Monte Carlo iterations share the same exclusion sets.
-    Analysis computation is deterministic for identical inputs, making caching safe.
+    Unpacks the args tuple, optionally enables per-worker cProfile when
+    NGRAPH_PROFILE_DIR is set, and calls
+    analysis_func(network, excluded_nodes, excluded_links, **analysis_kwargs).
+    Duplicate exclusion patterns are deduplicated upstream in
+    run_monte_carlo_analysis, so each worker invocation is unique work.
 
     Args:
         args: Tuple containing (network, excluded_nodes, excluded_links, analysis_func,
               analysis_kwargs, iteration_index, is_baseline, analysis_name).
 
     Returns:
-        Tuple of (analysis_result, iteration_index, is_baseline,
-                 excluded_nodes, excluded_links).
+        The analysis function's result.
     """
     worker_logger = get_logger(f"{__name__}.worker")
 
@@ -165,7 +158,6 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
 
     profiler: "cProfile.Profile | None" = None
     if collect_profile:
-        # Install per-worker profiler when requested
         import cProfile
 
         profiler = cProfile.Profile()
@@ -184,7 +176,6 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
         f"excluded_nodes={len(excluded_nodes)}, excluded_links={len(excluded_links)}"
     )
 
-    # Execute analysis function with network and exclusion sets
     worker_logger.debug(f"Worker {worker_id} executing {analysis_name}")
     result = analysis_func(network, excluded_nodes, excluded_links, **analysis_kwargs)
     worker_logger.debug(f"Worker {worker_id} completed analysis")
@@ -193,7 +184,6 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
     if profiler is not None:
         profiler.disable()
         import pstats
-        import threading
         import uuid
         from pathlib import Path
 
@@ -208,19 +198,18 @@ def _generic_worker(args: tuple[Any, ...]) -> tuple[Any, int, bool, set[str], se
             pstats.Stats(profiler).dump_stats(profile_path)
             worker_logger.debug("Saved worker profile to %s", profile_path.name)
 
-    return (result, iteration_index, is_baseline, excluded_nodes, excluded_links)
+    return result
 
 
 class FailureManager:
-    """Failure analysis engine with Monte Carlo capabilities.
+    """Run an analysis function across Monte Carlo failure scenarios.
 
-    This is the component for failure analysis in NetGraph.
-    Provides parallel processing, worker caching, and failure
-    policy handling for workflow steps and direct notebook usage.
+    Applies a failure policy, deduplicates identical failure patterns, and
+    runs iterations in parallel. Used by workflow steps and directly from user code.
 
-    The FailureManager can execute any analysis function that takes a Network
-    with exclusion sets and returns results, making it generic for different
-    types of failure analysis (capacity, traffic, connectivity, etc.).
+    Executes any analysis function that takes a Network plus exclusion sets and
+    returns results, so the same engine covers capacity, traffic, connectivity,
+    and custom analyses.
 
     Attributes:
         network: The underlying network (not modified during analysis).
@@ -247,10 +236,25 @@ class FailureManager:
         self._merged_node_attrs: dict[str, dict[str, Any]] | None = None
         self._merged_link_attrs: dict[str, dict[str, Any]] | None = None
         self._merged_rg_attrs: dict[str, dict[str, Any]] | None = None
-        self._prepared_policy_matches: dict[int, dict[int, tuple[str, ...]]] = {}
+        # Keyed by id(policy); each entry pins the policy object so a freed
+        # policy's address cannot be reused and silently match a stale entry.
+        self._prepared_policy_matches: dict[
+            int, tuple[FailurePolicy, dict[int, tuple[str, ...]]]
+        ] = {}
+        self._prepared_policy_weights: dict[
+            int,
+            tuple[
+                FailurePolicy,
+                dict[int, tuple[dict[str, float], tuple[str, ...]]],
+            ],
+        ] = {}
         self._risk_group_exclusions: (
             dict[str, tuple[frozenset[str], frozenset[str]]] | None
         ) = None
+        # Risk-group -> entity-ID index used by policies with
+        # expand_groups=True. Depends only on the static network, so it is
+        # built once per manager and shared across policies and iterations.
+        self._prepared_rg_index: dict[str, set[str]] | None = None
 
     def get_failure_policy(self) -> "FailurePolicy | None":
         """Get failure policy for analysis.
@@ -333,29 +337,44 @@ class FailureManager:
         prepared_matches = self._get_prepared_policy_matches(
             policy, node_map, link_map, rg_map
         )
+        prepared_weights = self._get_prepared_policy_weights(
+            policy, prepared_matches, node_map, link_map, rg_map
+        )
+        # getattr: compute_exclusions accepts duck-typed policy objects that
+        # may not declare expand_groups.
+        wants_expansion = getattr(policy, "expand_groups", False)
+        prepared_rg_index = self._get_prepared_rg_index() if wants_expansion else None
+        if wants_expansion:
+            if self._risk_group_exclusions is None:
+                self._risk_group_exclusions = self._build_risk_group_exclusions()
+            prepared_rg_members = self._risk_group_exclusions
+        else:
+            prepared_rg_members = None
 
-        # Apply failure policy with optional deterministic seed override
-        failed_ids = policy.apply_failures(
+        # Apply failure policy with optional deterministic seed override.
+        # The typed variant keeps entity kinds separate: probing merged IDs
+        # against network collections misclassifies a risk group that shares
+        # its name with a node or link.
+        failed_nodes, failed_links, failed_rgs = policy.apply_failures_typed(
             node_map,
             link_map,
             rg_map,
             seed=seed_offset,
             failure_trace=failure_trace,
             prepared_matches=prepared_matches,
+            prepared_weights=prepared_weights,
+            prepared_rg_index=prepared_rg_index,
+            prepared_rg_members=prepared_rg_members,
         )
 
-        # Separate entity types for exclusion sets
-        for f_id in failed_ids:
-            if f_id in self.network.nodes:
-                excluded_nodes.add(f_id)
-            elif f_id in self.network.links:
-                excluded_links.add(f_id)
-            elif f_id in self.network.risk_groups:
-                risk_group_nodes, risk_group_links = self._get_risk_group_exclusions(
-                    f_id
-                )
-                excluded_nodes.update(risk_group_nodes)
-                excluded_links.update(risk_group_links)
+        excluded_nodes.update(failed_nodes)
+        excluded_links.update(failed_links)
+        for rg_name in failed_rgs:
+            risk_group_nodes, risk_group_links = self._get_risk_group_exclusions(
+                rg_name
+            )
+            excluded_nodes.update(risk_group_nodes)
+            excluded_links.update(risk_group_links)
 
         return excluded_nodes, excluded_links
 
@@ -392,34 +411,37 @@ class FailureManager:
 
         expanded: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
 
-        def expand_group(name: str) -> tuple[frozenset[str], frozenset[str]]:
-            cached = expanded.get(name)
+        # Recurse on RiskGroup objects directly: nested groups are not
+        # registered in network.risk_groups (only top-level groups are), so
+        # resolving children by name would silently drop grandchild members.
+        def expand_group(
+            group: "RiskGroup",
+        ) -> tuple[frozenset[str], frozenset[str]]:
+            cached = expanded.get(group.name)
             if cached is not None:
                 return cached
-            if name in visiting:
+            if group.name in visiting:
                 return (
-                    frozenset(direct_nodes.get(name, ())),
-                    frozenset(direct_links.get(name, ())),
+                    frozenset(direct_nodes.get(group.name, ())),
+                    frozenset(direct_links.get(group.name, ())),
                 )
 
-            visiting.add(name)
-            nodes = set(direct_nodes.get(name, ()))
-            links = set(direct_links.get(name, ()))
-            risk_group = self.network.risk_groups.get(name)
-            if risk_group is not None:
-                for child in risk_group.children:
-                    child_nodes, child_links = expand_group(child.name)
-                    nodes.update(child_nodes)
-                    links.update(child_links)
+            visiting.add(group.name)
+            nodes = set(direct_nodes.get(group.name, ()))
+            links = set(direct_links.get(group.name, ()))
+            for child in group.children:
+                child_nodes, child_links = expand_group(child)
+                nodes.update(child_nodes)
+                links.update(child_links)
 
             result = (frozenset(nodes), frozenset(links))
-            visiting.remove(name)
-            expanded[name] = result
+            visiting.remove(group.name)
+            expanded[group.name] = result
             return result
 
         visiting: set[str] = set()
-        for risk_group_name in self.network.risk_groups:
-            expand_group(risk_group_name)
+        for risk_group in self.network.risk_groups.values():
+            expand_group(risk_group)
 
         return expanded
 
@@ -433,16 +455,59 @@ class FailureManager:
         """Prepare stable ordered candidate pools for a policy once per manager."""
         policy_key = id(policy)
         cached = self._prepared_policy_matches.get(policy_key)
-        if cached is not None:
-            return cached
+        if cached is not None and cached[0] is policy:
+            return cached[1]
 
         prepared = policy.prepare_matches(
             node_map,
             link_map,
             rg_map,
         )
-        self._prepared_policy_matches[policy_key] = prepared
+        self._prepared_policy_matches[policy_key] = (policy, prepared)
         return prepared
+
+    def _get_prepared_policy_weights(
+        self,
+        policy: "FailurePolicy",
+        prepared_matches: dict[int, tuple[str, ...]],
+        node_map: dict[str, dict[str, Any]],
+        link_map: dict[str, dict[str, Any]],
+        rg_map: dict[str, dict[str, Any]],
+    ) -> dict[int, tuple[dict[str, float], tuple[str, ...]]]:
+        """Prepare per-rule weight splits for a policy once per manager."""
+        policy_key = id(policy)
+        cached = self._prepared_policy_weights.get(policy_key)
+        if cached is not None and cached[0] is policy:
+            return cached[1]
+
+        # Duck-typed policy objects may not implement the optional
+        # prepare_weights optimization; treat it as "no precomputed weights".
+        prepare = getattr(policy, "prepare_weights", None)
+        prepared = (
+            prepare(prepared_matches, node_map, link_map, rg_map) if prepare else {}
+        )
+        self._prepared_policy_weights[policy_key] = (policy, prepared)
+        return prepared
+
+    def _get_prepared_rg_index(self) -> dict[str, set[str]]:
+        """Build the risk-group -> entity-ID expansion index once per manager.
+
+        The index consumed by ``FailurePolicy.apply_failures`` (via
+        ``prepared_rg_index``) depends only on the static network, so it is
+        built once and reused across policies and Monte Carlo iterations
+        instead of being rebuilt on every ``apply_failures`` call.
+        """
+        if self._prepared_rg_index is None:
+            self._ensure_flattened_maps()
+            assert (
+                self._merged_node_attrs is not None
+            )  # guaranteed by _ensure_flattened_maps
+            assert self._merged_link_attrs is not None
+            self._prepared_rg_index = FailurePolicy.build_risk_group_index(
+                self._merged_node_attrs,
+                self._merged_link_attrs,
+            )
+        return self._prepared_rg_index
 
     def run_monte_carlo_analysis(
         self,
@@ -455,32 +520,55 @@ class FailureManager:
     ) -> dict[str, Any]:
         """Run Monte Carlo failure analysis with any analysis function.
 
-        This is the main method for executing failure analysis. Handles
-        parallel processing, worker caching, and failure policy
-        application, while allowing flexibility in the analysis function.
+        The analysis function is arbitrary (see AnalysisFunction); this method
+        supplies the exclusion sets, the parallelism, and the deduplication.
 
         Baseline is always run first as a separate reference iteration (no failures).
-        The ``iterations`` parameter specifies the number of failure iterations to run.
+
+        Analysis functions may carry a ``prepare_inputs`` attribute; the
+        built-in ones do, and custom functions can set
+        ``func.prepare_inputs = lambda network, kwargs: {...}``. It runs once
+        per run, and the kwargs it returns (typically a pre-built ``context``)
+        are merged into every iteration's call, so expensive graph
+        construction happens once. Functions without the attribute run with
+        their kwargs unchanged, and passing ``context`` explicitly skips the
+        hook.
 
         Args:
             analysis_func: Function that takes (network, excluded_nodes, excluded_links, **kwargs)
-                          and returns results. Must be serializable for parallel execution.
+                          and returns results. Executed concurrently via threads;
+                          the network is shared by reference and must not be mutated.
             iterations: Number of failure iterations to run (baseline is always run separately).
             parallelism: Number of parallel worker threads to use.
-            seed: Optional seed for reproducible results across runs.
+            seed: Optional seed for reproducible results across runs. If None,
+                falls back to the policy's own seed when set, so iterations
+                still vary while remaining reproducible.
             store_failure_patterns: If True, populate failure_trace on each result.
+                Iterations are deduplicated by exclusion pattern, so the trace
+                describes the representative (first) iteration of each pattern;
+                different mode/rule draws that produced the same exclusions are
+                not individually recorded.
             **analysis_kwargs: Additional arguments passed to analysis_func.
 
         Returns:
             Dictionary containing:
             - 'baseline': FlowIterationResult for the baseline (no failures)
-            - 'results': List of unique FlowIterationResult objects (deduplicated patterns).
-              Each result has occurrence_count indicating how many iterations matched.
-            - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
+            - 'results': List of unique results (deduplicated patterns).
+              FlowIterationResult objects carry occurrence_count; for any
+              result type, metadata["occurrence_counts"] is aligned with
+              this list.
+            - 'metadata': Execution metadata (iterations, unique_patterns,
+              occurrence_counts, execution_time, etc.)
+
+        Note:
+            Deduplication executes each unique exclusion pattern once and
+            weights it by occurrence count, which is statistically valid only
+            for deterministic analysis functions (the built-ins are). A
+            stochastic custom function should not rely on per-iteration
+            re-execution.
         """
         policy = self.get_failure_policy()
 
-        # Check if policy has effective rules
         has_effective_rules = bool(
             policy and any(len(m.rules) > 0 for m in policy.modes)
         )
@@ -489,43 +577,25 @@ class FailureManager:
         if not has_effective_rules:
             iterations = 0
 
-        # Auto-adjust parallelism based on function characteristics
-        parallelism = _auto_adjust_parallelism(parallelism, analysis_func)
-
         logger.info(
             f"Running baseline + {iterations} failure iterations"
             if iterations > 0
             else "Running baseline only (no failure policy)"
         )
 
-        # Pre-build context for analysis functions
-        # This amortizes expensive graph construction across all iterations
-        if "context" not in analysis_kwargs:
-            analysis_kwargs = dict(analysis_kwargs)  # Don't mutate caller's dict
+        # Pre-build expensive per-run inputs when the analysis function
+        # carries a `prepare_inputs` hook (attached by the built-in analysis
+        # functions; third-party functions can set the attribute themselves)
+        # and the caller did not supply a pre-built context. This amortizes
+        # graph construction across all iterations.
+        prepare = getattr(analysis_func, "prepare_inputs", None)
+        if prepare is not None and "context" not in analysis_kwargs:
             cache_start = time.time()
-
-            if "demands_config" in analysis_kwargs:
-                # Demand placement analysis
-                from ngraph.analysis.functions import build_demand_context
-
-                logger.debug("Pre-building context for demand placement analysis")
-                analysis_kwargs["context"] = build_demand_context(
-                    self.network, analysis_kwargs["demands_config"]
-                )
-                logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
-
-            elif "source" in analysis_kwargs and "target" in analysis_kwargs:
-                # Max-flow analysis or sensitivity analysis
-                from ngraph.analysis.functions import build_maxflow_context
-
-                logger.debug("Pre-building context for max-flow analysis")
-                analysis_kwargs["context"] = build_maxflow_context(
-                    self.network,
-                    analysis_kwargs["source"],
-                    analysis_kwargs["target"],
-                    mode=analysis_kwargs.get("mode", "combine"),
-                )
-                logger.debug(f"Context built in {time.time() - cache_start:.3f}s")
+            analysis_kwargs = dict(analysis_kwargs)  # Don't mutate caller's dict
+            analysis_kwargs.update(prepare(self.network, analysis_kwargs))
+            logger.debug(
+                f"Pre-built analysis inputs in {time.time() - cache_start:.3f}s"
+            )
 
         # Get function name safely (Protocol doesn't guarantee __name__)
         func_name = getattr(analysis_func, "__name__", "analysis_function")
@@ -549,35 +619,41 @@ class FailureManager:
         logger.debug("Pre-computing failure exclusions for all iterations")
         pre_compute_start = time.time()
 
-        worker_args: list[tuple] = []
         key_to_first_arg: dict[tuple, tuple] = {}
         key_to_count: dict[tuple, int] = {}
         key_to_trace: dict[tuple, dict[str, Any]] = {}
 
+        # Fall back to the policy's own seed so iterations still vary: with
+        # seed_offset=None a seeded policy would rebuild the identical RNG
+        # (and failure pattern) on every iteration.
+        effective_seed = seed
+        if effective_seed is None and policy is not None:
+            effective_seed = policy.seed
+
+        # Invariant across iterations; only the exclusion sets vary.
+        kwargs_key = _hashable_kwargs_key(analysis_kwargs)
+
         for i in range(iterations):
-            seed_offset = seed + i if seed is not None else None
+            seed_offset = effective_seed + i if effective_seed is not None else None
             trace = {} if store_failure_patterns else None
             excluded_nodes, excluded_links = self.compute_exclusions(
                 policy, seed_offset, failure_trace=trace
             )
 
-            arg = (
-                self.network,
-                excluded_nodes,
-                excluded_links,
-                analysis_func,
-                analysis_kwargs,
-                i,  # iteration_index (0-based for failures)
-                False,  # is_baseline
-                func_name,
-            )
-            worker_args.append(arg)
-
-            dedup_key = _create_cache_key(
-                excluded_nodes, excluded_links, func_name, analysis_kwargs
+            dedup_key = _create_dedup_key(
+                excluded_nodes, excluded_links, func_name, kwargs_key
             )
             if dedup_key not in key_to_first_arg:
-                key_to_first_arg[dedup_key] = arg
+                key_to_first_arg[dedup_key] = (
+                    self.network,
+                    excluded_nodes,
+                    excluded_links,
+                    analysis_func,
+                    analysis_kwargs,
+                    i,  # iteration_index (0-based for failures)
+                    False,  # is_baseline
+                    func_name,
+                )
                 key_to_count[dedup_key] = 1
                 if trace is not None:
                     key_to_trace[dedup_key] = trace
@@ -586,7 +662,7 @@ class FailureManager:
 
         pre_compute_time = time.time() - pre_compute_start
         logger.debug(
-            f"Pre-computed {len(worker_args)} failure exclusion sets in {pre_compute_time:.2f}s"
+            f"Pre-computed {iterations} failure exclusion sets in {pre_compute_time:.2f}s"
         )
 
         unique_worker_args: list[tuple] = list(key_to_first_arg.values())
@@ -625,8 +701,12 @@ class FailureManager:
 
         elapsed_time = time.time() - start_time
 
-        # Enrich unique failure results with metadata and occurrence_count
+        # Enrich unique failure results with metadata and occurrence_count.
+        # metadata["occurrence_counts"] carries the per-pattern multiplicity
+        # aligned with `results`, so custom result types (which cannot be
+        # enriched in place) still get correct weights for aggregation.
         results: list[Any] = []
+        occurrence_counts: list[int] = []
         for dedup_key, rep_arg in key_to_first_arg.items():
             result = key_to_result.get(dedup_key)
             if result is None:
@@ -659,6 +739,7 @@ class FailureManager:
                 result.occurrence_count = key_to_count[dedup_key]
 
             results.append(result)
+            occurrence_counts.append(key_to_count[dedup_key])
 
         return {
             "baseline": baseline_result,
@@ -670,6 +751,7 @@ class FailureManager:
                 "policy_name": self.policy_name,
                 "execution_time": elapsed_time,
                 "unique_patterns": num_unique_tasks,
+                "occurrence_counts": occurrence_counts,
             },
         }
 
@@ -702,10 +784,6 @@ class FailureManager:
         # Network is shared by reference (zero-copy) across threads
         logger.debug(f"Sharing network by reference across {workers} threads")
 
-        # Calculate optimal chunksize to minimize overhead
-        chunksize = max(1, total_tasks // (workers * 4))
-        logger.debug(f"Using chunksize={chunksize} for parallel execution")
-
         start_time = time.time()
         completed_tasks = 0
         results = []
@@ -718,13 +796,7 @@ class FailureManager:
             )
             logger.info(f"Starting parallel execution of {total_tasks} iterations")
 
-            for (
-                result,
-                _iteration_index,
-                _is_baseline,
-                _excluded_nodes,
-                _excluded_links,
-            ) in pool.map(_generic_worker, worker_args, chunksize=chunksize):
+            for result in pool.map(_generic_worker, worker_args):
                 completed_tasks += 1
                 results.append(result)
 
@@ -775,37 +847,37 @@ class FailureManager:
                 "Temporarily disabled NGRAPH_PROFILE_DIR for serial execution to avoid nested profilers"
             )
 
-        for i, args in enumerate(worker_args):
-            iter_start = time.time()
+        try:
+            for i, args in enumerate(worker_args):
+                iter_start = time.time()
 
-            is_baseline_arg = len(args) > 6 and args[6]  # is_baseline flag
-            baseline_msg = " (baseline)" if is_baseline_arg else ""
-            logger.debug(f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}")
-
-            (
-                result,
-                _iteration_index,
-                _is_baseline,
-                _excluded_nodes,
-                _excluded_links,
-            ) = _generic_worker(args)
-
-            results.append(result)
-
-            iter_time = time.time() - iter_start
-            if len(worker_args) <= 10:
+                is_baseline_arg = len(args) > 6 and args[6]  # is_baseline flag
+                baseline_msg = " (baseline)" if is_baseline_arg else ""
                 logger.debug(
-                    f"Serial iteration {i + 1} completed in {iter_time:.3f} seconds"
+                    f"Serial iteration {i + 1}/{len(worker_args)}{baseline_msg}"
                 )
 
-            if len(worker_args) > 1 and (i + 1) % max(1, len(worker_args) // 10) == 0:
-                logger.info(
-                    f"Serial analysis progress: {i + 1}/{len(worker_args)} iterations completed"
-                )
+                result = _generic_worker(args)
 
-        # Restore worker profiling env var if we changed it
-        if _restore_profile_env:
-            os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir or ""
+                results.append(result)
+
+                iter_time = time.time() - iter_start
+                if len(worker_args) <= 10:
+                    logger.debug(
+                        f"Serial iteration {i + 1} completed in {iter_time:.3f} seconds"
+                    )
+
+                if (
+                    len(worker_args) > 1
+                    and (i + 1) % max(1, len(worker_args) // 10) == 0
+                ):
+                    logger.info(
+                        f"Serial analysis progress: {i + 1}/{len(worker_args)} iterations completed"
+                    )
+        finally:
+            # Restore worker profiling env var even if an analysis function raised
+            if _restore_profile_env and _saved_profile_dir is not None:
+                os.environ["NGRAPH_PROFILE_DIR"] = _saved_profile_dir
 
         elapsed_time = time.time() - start_time
         logger.info(f"Serial analysis completed in {elapsed_time:.2f} seconds")
@@ -819,11 +891,9 @@ class FailureManager:
     def run_single_failure_scenario(
         self, analysis_func: AnalysisFunction, **kwargs
     ) -> Any:
-        """Run a single failure scenario for convenience.
+        """Run one failure iteration, for quick analysis or debugging.
 
-        This is a convenience method for running a single iteration, useful for
-        quick analysis or debugging. For full Monte Carlo analysis, use
-        run_monte_carlo_analysis().
+        For full Monte Carlo analysis, use run_monte_carlo_analysis().
 
         Args:
             analysis_func: Function that takes (network, excluded_nodes, excluded_links, **kwargs)
@@ -837,7 +907,6 @@ class FailureManager:
         result = self.run_monte_carlo_analysis(
             analysis_func=analysis_func, iterations=1, parallelism=1, **kwargs
         )
-        # Return first failure result if available, otherwise baseline
         if result["results"]:
             return result["results"][0]
         return result["baseline"]
@@ -859,11 +928,11 @@ class FailureManager:
         include_flow_summary: bool = False,
         include_min_cut: bool = False,
     ) -> Any:
-        """Analyze maximum flow capacity envelopes between node groups under failures.
+        """Compute max-flow capacity envelopes between node groups under failures.
 
-        Computes statistical distributions (envelopes) of maximum flow capacity between
-        source and target node groups across Monte Carlo failure scenarios. Results include
-        frequency-based capacity envelopes and optional failure pattern analysis.
+        Each iteration applies one failure pattern and re-solves; the
+        per-pattern results, weighted by occurrence count, form the
+        frequency-based envelope.
 
         Baseline (no failures) is always run first as a separate reference.
 
@@ -872,12 +941,15 @@ class FailureManager:
             target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
-            shortest_path: Whether to use shortest paths only.
+            parallelism: Number of parallel worker threads.
+            shortest_path: If True, use single-tier shortest-path flow (IP/IGP
+                mode) instead of full iterative max-flow.
             require_capacity: If True (default), path selection considers available
                 capacity. If False, path selection is cost-only (true IP/IGP semantics).
-            flow_placement: Flow placement strategy.
-            seed: Optional seed for reproducible results.
+            flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP);
+                accepts the enum or its string name.
+            seed: Optional seed for reproducible results. If None, falls back
+                to the policy's own seed when set.
             store_failure_patterns: Whether to store failure trace on results.
             include_flow_summary: Whether to collect detailed flow summary data.
             include_min_cut: Whether to include min-cut edges in results.
@@ -889,13 +961,9 @@ class FailureManager:
               Each result has occurrence_count indicating how many iterations matched.
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.analysis.functions import max_flow_analysis
-
-        # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
             flow_placement = FlowPlacement.from_string(flow_placement)
 
-        # Run Monte Carlo analysis
         raw_results = self.run_monte_carlo_analysis(
             analysis_func=max_flow_analysis,
             iterations=iterations,
@@ -976,7 +1044,6 @@ class FailureManager:
         | Any,  # List of demand configs or DemandSet
         iterations: int = 100,
         parallelism: int = 1,
-        placement_rounds: int | str = "auto",
         seed: int | None = None,
         store_failure_patterns: bool = False,
         include_flow_details: bool = False,
@@ -992,9 +1059,9 @@ class FailureManager:
         Args:
             demands_config: List of demand configs or DemandSet object.
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
-            placement_rounds: Optimization rounds for demand placement.
-            seed: Optional seed for reproducible results.
+            parallelism: Number of parallel worker threads.
+            seed: Optional seed for reproducible results. If None, falls back
+                to the policy's own seed when set.
             store_failure_patterns: Whether to store failure trace on results.
             include_flow_details: Whether to include cost distribution details.
             include_used_edges: Whether to include used edges in results.
@@ -1006,31 +1073,18 @@ class FailureManager:
               Each result has occurrence_count indicating how many iterations matched.
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.analysis.functions import demand_placement_analysis
-
         # If caller passed a sequence of TrafficDemand objects, convert to dicts
         if not isinstance(demands_config, list):
             # Accept DemandSet or any container providing get_all_demands()
             serializable_demands: list[dict[str, Any]] = []
             if hasattr(demands_config, "get_all_demands"):
                 td_iter = demands_config.get_all_demands()  # DemandSet helper
-            elif hasattr(demands_config, "demands"):
-                # Accept a mock object exposing 'demands' for tests
-                td_iter = demands_config.demands
             else:
                 td_iter = []
             for demand in td_iter:  # type: ignore[assignment]
+                # Analysis wire format: canonical dict with the raw preset
                 serializable_demands.append(
-                    {
-                        "id": getattr(demand, "id", None),
-                        "source": getattr(demand, "source", ""),
-                        "target": getattr(demand, "target", ""),
-                        "volume": float(getattr(demand, "volume", 0.0)),
-                        "mode": getattr(demand, "mode", "pairwise"),
-                        "group_mode": getattr(demand, "group_mode", "flatten"),
-                        "flow_policy": getattr(demand, "flow_policy", None),
-                        "priority": int(getattr(demand, "priority", 0)),
-                    }
+                    {**demand.to_dict(), "flow_policy": demand.flow_policy}
                 )
             demands_config = serializable_demands
 
@@ -1041,7 +1095,6 @@ class FailureManager:
             seed=seed,
             store_failure_patterns=store_failure_patterns,
             demands_config=demands_config,
-            placement_rounds=placement_rounds,
             include_flow_details=include_flow_details,
             include_used_edges=include_used_edges,
         )
@@ -1062,8 +1115,7 @@ class FailureManager:
         """Analyze component criticality for flow capacity under failures.
 
         Identifies critical network components by measuring their impact on flow
-        capacity across Monte Carlo failure scenarios. Returns aggregated sensitivity
-        scores showing which components have the greatest effect on network capacity.
+        capacity across Monte Carlo failure scenarios.
 
         Baseline (no failures) is always run first as a separate reference.
 
@@ -1072,10 +1124,13 @@ class FailureManager:
             target: Target node selector (string path or selector dict).
             mode: "combine" (aggregate) or "pairwise" (individual flows).
             iterations: Number of failure scenarios to simulate.
-            parallelism: Number of parallel workers (auto-adjusted if needed).
-            shortest_path: Whether to use shortest paths only.
-            flow_placement: Flow placement strategy.
-            seed: Optional seed for reproducible results.
+            parallelism: Number of parallel worker threads.
+            shortest_path: If True, report only edges used under ECMP routing
+                (IP/IGP mode); if False, report all saturated edges (SDN/TE).
+            flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP);
+                accepts the enum or its string name.
+            seed: Optional seed for reproducible results. If None, falls back
+                to the policy's own seed when set.
             store_failure_patterns: Whether to store failure trace on results.
 
         Returns:
@@ -1086,9 +1141,6 @@ class FailureManager:
             - 'component_scores': aggregated statistics (mean, max, min, count) per component per flow
             - 'metadata': Execution metadata (iterations, unique_patterns, execution_time, etc.)
         """
-        from ngraph.analysis.functions import sensitivity_analysis
-
-        # Convert string flow_placement to enum if needed
         if isinstance(flow_placement, str):
             flow_placement = FlowPlacement.from_string(flow_placement)
 

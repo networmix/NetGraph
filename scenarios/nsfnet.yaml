@@ -554,7 +554,6 @@ failures:
       description: |
         Approximates 1992 backbone reliability: each physical DS-3 has ~99.9 % monthly availability (p=0.001 failure), and each CNSS or ENSS router has ~99.95 % availability (p=0.0005 failure).
     expand_groups: false
-    expand_children: false
     modes:
       - weight: 1.0
         rules:

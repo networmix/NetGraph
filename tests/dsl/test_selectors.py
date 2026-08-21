@@ -329,21 +329,6 @@ class TestSelectNodesActiveOnly:
         all_nodes = [n for nodes in groups.values() for n in nodes]
         assert len(all_nodes) == 3  # Includes disabled dc2_leaf_2
 
-    def test_excluded_nodes_always_excluded(self, attributed_network: Network) -> None:
-        """excluded_nodes parameter always excludes specified nodes."""
-        sel = NodeSelector(path="^dc1_.*")
-        groups = select_nodes(
-            attributed_network,
-            sel,
-            default_active_only=False,
-            excluded_nodes={"dc1_leaf_1"},
-        )
-
-        all_nodes = [n for nodes in groups.values() for n in nodes]
-        node_names = [n.name for n in all_nodes]
-        assert "dc1_leaf_1" not in node_names
-        assert len(all_nodes) == 2
-
 
 class TestSelectNodesByGroupBy:
     """Tests for group_by attribute grouping."""

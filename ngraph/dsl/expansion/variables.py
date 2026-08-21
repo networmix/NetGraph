@@ -1,7 +1,7 @@
 """Variable expansion for templates.
 
-Provides substitution of $var and ${var} placeholders in strings,
-with recursive substitution in nested structures.
+Substitutes $var and ${var} placeholders in strings, recursing into nested
+structures.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from .schema import ExpansionSpec
 
 __all__ = [
-    "expand_templates",
     "substitute_vars",
     "expand_block",
 ]
@@ -25,6 +24,13 @@ _VAR_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}|\$([a-zA-Z_][a-zA-Z0-
 
 # Expansion limits
 MAX_TEMPLATE_EXPANSIONS = 10_000
+
+
+def _lookup_var(var_name: str, var_dict: Dict[str, Any]) -> Any:
+    """Return the value bound to var_name, raising the standard KeyError."""
+    if var_name not in var_dict:
+        raise KeyError(f"Variable '${var_name}' not found in expand.vars")
+    return var_dict[var_name]
 
 
 def _substitute_string(template: str, var_dict: Dict[str, Any]) -> str:
@@ -43,9 +49,7 @@ def _substitute_string(template: str, var_dict: Dict[str, Any]) -> str:
 
     def replace(match: re.Match[str]) -> str:
         var_name = match.group(1) or match.group(2)
-        if var_name not in var_dict:
-            raise KeyError(f"Variable '${var_name}' not found in expand.vars")
-        return str(var_dict[var_name])
+        return str(_lookup_var(var_name, var_dict))
 
     return _VAR_PATTERN.sub(replace, template)
 
@@ -53,14 +57,27 @@ def _substitute_string(template: str, var_dict: Dict[str, Any]) -> str:
 def substitute_vars(obj: Any, var_dict: Dict[str, Any]) -> Any:
     """Recursively substitute ${var} in all strings within obj.
 
+    A string consisting of exactly one placeholder (e.g. "${t}") is replaced
+    by the variable's native value, preserving its type. This keeps match
+    condition values comparable to non-string attributes (e.g. int tiers).
+    Placeholders embedded in longer strings (e.g. "dc${dc}_internal") are
+    interpolated as text, so the result is a string.
+
     Args:
         obj: Any value (string, dict, list, or primitive).
         var_dict: Mapping of variable names to values.
 
     Returns:
-        Object with all string values having variables substituted.
+        Object with variables substituted: whole-placeholder strings replaced
+        by the variable's native value, other strings interpolated as text.
+
+    Raises:
+        KeyError: If a placeholder names a variable absent from var_dict.
     """
     if isinstance(obj, str):
+        whole = _VAR_PATTERN.fullmatch(obj)
+        if whole:
+            return _lookup_var(whole.group(1) or whole.group(2), var_dict)
         return _substitute_string(obj, var_dict)
     if isinstance(obj, dict):
         return {k: substitute_vars(v, var_dict) for k, v in obj.items()}
@@ -122,7 +139,7 @@ def expand_block(
 
     If no expand spec is provided or it has no vars, yields the original block.
     Otherwise, yields a deep copy with all strings substituted for each
-    variable combination.
+    variable combination; the 'expand' key itself is removed from each copy.
 
     Args:
         block: DSL block (dict) that may contain template strings.
@@ -137,33 +154,5 @@ def expand_block(
 
     for var_dict in _generate_combinations(spec.vars, spec.mode):
         expanded = copy.deepcopy(block)
-        # Remove the expand block from the result
         expanded.pop("expand", None)
         yield substitute_vars(expanded, var_dict)
-
-
-def expand_templates(
-    templates: Dict[str, str],
-    spec: "ExpansionSpec",
-) -> Iterator[Dict[str, str]]:
-    """Expand template strings with variable substitution.
-
-    Uses $var or ${var} syntax only.
-
-    Args:
-        templates: Dict of template strings.
-        spec: Expansion specification with variables and mode.
-
-    Yields:
-        Dicts with same keys as templates, values substituted.
-
-    Raises:
-        ValueError: If zip mode has mismatched list lengths or expansion exceeds limit.
-        KeyError: If a template references an undefined variable.
-    """
-    if spec.is_empty():
-        yield templates
-        return
-
-    for var_dict in _generate_combinations(spec.vars, spec.mode):
-        yield {k: _substitute_string(v, var_dict) for k, v in templates.items()}

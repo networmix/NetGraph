@@ -3,8 +3,8 @@
 Runs Monte Carlo demand placement using a named demand set and produces
 unified `flow_results` per iteration under `data.flow_results`.
 
-Baseline (no failures) is always run first as a separate reference. The `iterations`
-parameter specifies how many failure scenarios to run.
+Baseline (no failures) always runs first as a separate reference; `iterations`
+counts failure scenarios only.
 
 YAML Configuration Example:
     ```yaml
@@ -14,7 +14,7 @@ YAML Configuration Example:
         demand_set: "default"
         failure_policy: "single_link"    # Optional: failure policy name
         iterations: 100                  # Number of failure scenarios
-        parallelism: 4                   # Worker processes (or "auto")
+        parallelism: 4                   # Worker threads (or "auto")
         alpha: 1.0                       # Demand volume multiplier
         include_flow_details: true       # Include cost distribution per flow
     ```
@@ -28,11 +28,11 @@ from typing import TYPE_CHECKING, Any
 
 from ngraph.analysis.failure_manager import FailureManager
 from ngraph.logging import get_logger
-from ngraph.results.flow import FlowIterationResult
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
     resolve_parallelism,
+    serialize_monte_carlo_results,
 )
 
 if TYPE_CHECKING:
@@ -45,23 +45,29 @@ logger = get_logger(__name__)
 class TrafficMatrixPlacement(WorkflowStep):
     """Monte Carlo demand placement using a named demand set.
 
-    Baseline (no failures) is always run first as a separate reference. Results are
-    returned with baseline in a separate field. The flow_results list contains unique
-    failure patterns (deduplicated); each result has occurrence_count indicating how
-    many iterations matched that pattern.
+    Baseline (no failures) always runs first and is returned in a separate field.
+    The flow_results list holds unique failure patterns (deduplicated); each result
+    carries an occurrence_count of how many iterations matched that pattern.
 
     Attributes:
-        demand_set: Name of the demand set to analyze.
-        failure_policy: Optional failure policy name in scenario.failure_policy_set.
-        iterations: Number of failure iterations to run.
-        parallelism: Number of parallel worker processes.
-        placement_rounds: Placement optimization rounds (int or "auto").
+        demand_set: Name of the demand set to analyze. Required; an empty
+            value raises ValueError.
+        failure_policy: Failure policy name in scenario.failure_policy_set.
+            If None, no failure policy is applied.
+        iterations: Number of failure iterations to run; must be >= 0.
+        parallelism: Worker thread count, or "auto" for the CPU count.
+        placement_rounds: Deprecated; accepted for backward compatibility but
+            has no effect (placement optimization is handled by the core engine).
         seed: Optional seed for reproducibility.
-        store_failure_patterns: Whether to store failure pattern results.
+        store_failure_patterns: Record the failure trace on each result.
+            Iterations are deduplicated, so a trace describes the first
+            iteration of its pattern, not every matching iteration.
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
-        alpha: Numeric scale for demands in the set.
-        alpha_from_step: Optional producer step name to read alpha from.
+        alpha: Numeric scale for demands in the set; must be > 0.0. Ignored
+            when alpha_from_step is set.
+        alpha_from_step: Optional producer step name to read alpha from; it
+            must run before this step.
         alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
     """
 
@@ -79,14 +85,14 @@ class TrafficMatrixPlacement(WorkflowStep):
     alpha_from_field: str = "data.alpha_star"
 
     def __post_init__(self) -> None:
+        if self.placement_rounds != "auto":
+            logger.warning(
+                "TrafficMatrixPlacement 'placement_rounds' is deprecated and has "
+                "no effect; placement optimization is handled by the core engine."
+            )
         if self.iterations < 0:
             raise ValueError("iterations must be >= 0")
-        if isinstance(self.parallelism, str):
-            if self.parallelism != "auto":
-                raise ValueError("parallelism must be an integer or 'auto'")
-        else:
-            if self.parallelism < 1:
-                raise ValueError("parallelism must be >= 1")
+        resolve_parallelism(self.parallelism)  # validate at construction
         if not (float(self.alpha) > 0.0):
             raise ValueError("alpha must be > 0.0")
 
@@ -98,11 +104,10 @@ class TrafficMatrixPlacement(WorkflowStep):
         logger.info("Starting TrafficMatrixPlacement: name=%s", self.name)
         logger.debug(
             "TrafficMatrixPlacement params: demand_set=%s failure_iters=%d "
-            "parallelism=%s placement_rounds=%s failure_policy=%s alpha=%s",
+            "parallelism=%s failure_policy=%s alpha=%s",
             self.demand_set,
             self.iterations,
             self.parallelism,
-            self.placement_rounds,
             self.failure_policy,
             self.alpha,
         )
@@ -115,8 +120,6 @@ class TrafficMatrixPlacement(WorkflowStep):
                 f"Demand set '{self.demand_set}' not found in scenario."
             ) from exc
 
-        from ngraph.model.flow.policy_config import serialize_policy_preset
-
         # Resolve alpha
         effective_alpha = self._resolve_alpha(scenario)
         alpha_src = getattr(self, "_alpha_source", None) or "explicit"
@@ -126,37 +129,17 @@ class TrafficMatrixPlacement(WorkflowStep):
             str(alpha_src),
         )
 
-        # Build demands_config with scaled demands (used for analysis)
-        # Also build base_demands for output (with serialized policy, unscaled)
-        demands_config: list[dict[str, Any]] = []
-        base_demands: list[dict[str, Any]] = []
-        for td in td_list:
-            demands_config.append(
-                {
-                    "id": td.id,
-                    "source": td.source,
-                    "target": td.target,
-                    "volume": float(td.volume) * float(effective_alpha),
-                    "mode": getattr(td, "mode", "pairwise"),
-                    "flow_policy": getattr(td, "flow_policy", None),
-                    "priority": getattr(td, "priority", 0),
-                    "group_mode": getattr(td, "group_mode", "flatten"),
-                }
-            )
-            base_demands.append(
-                {
-                    "id": td.id,
-                    "source": getattr(td, "source", ""),
-                    "target": getattr(td, "target", ""),
-                    "volume": float(getattr(td, "volume", 0.0)),
-                    "mode": getattr(td, "mode", "pairwise"),
-                    "priority": int(getattr(td, "priority", 0)),
-                    "flow_policy": serialize_policy_preset(
-                        getattr(td, "flow_policy", None)
-                    ),
-                    "group_mode": getattr(td, "group_mode", "flatten"),
-                }
-            )
+        # base_demands: canonical serialized form for output (unscaled).
+        # demands_config: analysis wire format (scaled volume, raw preset).
+        base_demands: list[dict[str, Any]] = [td.to_dict() for td in td_list]
+        demands_config: list[dict[str, Any]] = [
+            {
+                **td.to_dict(),
+                "volume": float(td.volume) * float(effective_alpha),
+                "flow_policy": td.flow_policy,
+            }
+            for td in td_list
+        ]
 
         # Run via FailureManager
         fm = FailureManager(
@@ -170,7 +153,6 @@ class TrafficMatrixPlacement(WorkflowStep):
             demands_config=demands_config,
             iterations=self.iterations,
             parallelism=effective_parallelism,
-            placement_rounds=self.placement_rounds,
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
             include_flow_details=self.include_flow_details,
@@ -186,24 +168,7 @@ class TrafficMatrixPlacement(WorkflowStep):
         # Store outputs
         scenario.results.put("metadata", raw.get("metadata", {}))
 
-        # Handle baseline (separate from failure results)
-        baseline_result = raw.get("baseline")
-        baseline_dict = None
-        if baseline_result is not None:
-            if hasattr(baseline_result, "to_dict"):
-                baseline_dict = baseline_result.to_dict()
-            else:
-                baseline_dict = baseline_result
-
-        # Handle failure results
-        flow_results: list[dict] = []
-        for item in raw.get("results", []):
-            if isinstance(item, FlowIterationResult):
-                flow_results.append(item.to_dict())
-            elif hasattr(item, "to_dict") and callable(item.to_dict):
-                flow_results.append(item.to_dict())  # type: ignore[union-attr]
-            else:
-                flow_results.append(item)
+        baseline_dict, flow_results = serialize_monte_carlo_results(raw)
 
         alpha_value = float(effective_alpha)
         alpha_source_value = getattr(self, "_alpha_source", "explicit")
@@ -215,7 +180,6 @@ class TrafficMatrixPlacement(WorkflowStep):
                 "flow_results": flow_results,
                 "context": {
                     "demand_set": self.demand_set,
-                    "placement_rounds": self.placement_rounds,
                     "include_flow_details": self.include_flow_details,
                     "include_used_edges": self.include_used_edges,
                     "base_demands": base_demands,
@@ -240,9 +204,11 @@ class TrafficMatrixPlacement(WorkflowStep):
     def _resolve_alpha(self, scenario: "Scenario") -> float:
         if self.alpha_from_step:
             step = scenario.results.get_step(self.alpha_from_step)
-            if not isinstance(step, dict):
+            # Results.get_step returns {} for unknown or not-yet-run steps.
+            if not step:
                 raise ValueError(
-                    f"alpha_from_step='{self.alpha_from_step}' not found or invalid"
+                    f"alpha_from_step '{self.alpha_from_step}' has no results - "
+                    "check the step name and that it runs before this step"
                 )
             parts = [p for p in str(self.alpha_from_field).split(".") if p]
             cursor: Any = step

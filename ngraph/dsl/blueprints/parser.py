@@ -1,7 +1,7 @@
 """Parsing helpers for the network DSL.
 
-This module factors out pure parsing/validation helpers from the expansion
-module so they can be tested independently and reused.
+Pure parsing/validation helpers, kept separate from the expansion module so
+they can be tested independently and reused.
 """
 
 from __future__ import annotations

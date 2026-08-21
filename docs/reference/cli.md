@@ -8,11 +8,11 @@ Quick links:
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-NetGraph provides a command-line interface for inspecting, running, and analyzing scenarios from the terminal.
+The `ngraph` command inspects, runs, and analyzes scenarios from the terminal.
 
 ## Basic Usage
 
-The CLI provides two primary commands:
+Two commands:
 
 - `inspect`: Analyze and validate scenario files without running them
 - `run`: Execute scenario files and generate results
@@ -52,20 +52,20 @@ ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 **Options:**
 
 - `--detail`, `-d`: Show detailed information including complete node/link tables and step parameters
-- `--output`, `-o`: Output directory for generated artifacts (e.g., profiles)
+- `--output`, `-o`: Output directory for generated artifacts (accepted for CLI consistency; `inspect` itself writes no files)
 
 **What it does:**
 
-The `inspect` command loads and validates a scenario file, then provides information about:
+Loads and validates the scenario file, then reports:
 
-- **Scenario metadata**: Seed configuration and deterministic behavior
-- **Network structure**: Node/link counts, enabled/disabled breakdown, hierarchy analysis
-- **Capacity statistics**: Link and node capacity analysis with min/max/mean/total values
-- **Risk groups**: Network resilience groupings and their status
-- **Components library**: Available components for network modeling
-- **Failure policies**: Configured failure scenarios and their rules
-- **Traffic matrices**: Demand patterns and traffic flows
-- **Workflow steps**: Analysis pipeline and step-by-step execution plan
+- **Scenario metadata**: seed, and whether the run is reproducible
+- **Network structure**: node/link counts, enabled vs. disabled, hierarchy
+- **Capacity statistics**: link and node capacity min/max/mean/median/total
+- **Risk groups**: defined groups, each enabled or disabled
+- **Components library**: components available to the scenario
+- **Failure policies**: each policy's mode count (modes and rules in detail mode)
+- **Demand sets**: demand patterns and volumes, capacity-vs-demand summary
+- **Workflow steps**: the steps that would run, in order
 
 In detail mode (`--detail`), shows complete tables for all nodes and links with capacity and connectivity information.
 
@@ -105,9 +105,9 @@ ngraph [--verbose|--quiet] run <scenario_file> [options]
 
 **Options:**
 
-- `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.results.json`)
+- `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.results.json`; relative paths are placed under `--output` when provided)
 - `--no-results`: Disable results file generation
-- `--stdout`: Print results to stdout in addition to saving file
+- `--stdout`: Print results to stdout in addition to saving file. Log output, status banners, the `--profile` performance report, and run error messages all go to stderr, so stdout contains only the JSON results (safe to pipe to `jq`)
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output
 - `--profile`: Enable performance profiling with CPU analysis and bottleneck detection
 - `--profile-memory`: Also track peak memory per step
@@ -118,39 +118,22 @@ ngraph [--verbose|--quiet] run <scenario_file> [options]
 ### Basic Execution
 
 ```bash
-# Run a scenario (creates square_mesh.results.json by default)
+# Default output file (square_mesh.results.json)
 ngraph run scenarios/square_mesh.yaml
 
-# Run a scenario and save results to custom file
-ngraph run scenarios/backbone_clos.yml --results clos_analysis.json
-
-# Run a scenario without creating any files
-ngraph run scenarios/nsfnet.yaml --no-results
-```
-
-### Save Results to File
-
-```bash
-# Save results to a custom JSON file
+# Custom results path
 ngraph run scenarios/backbone_clos.yml --results analysis.json
 
-# Save to file AND print to stdout
+# Save and also print JSON to stdout
 ngraph run scenarios/backbone_clos.yml --results analysis.json --stdout
 
-# Use default filename and also print to stdout
-ngraph run scenarios/square_mesh.yaml --stdout
-```
-
-### Running Test Scenarios
-
-```bash
-# Run one of the provided scenarios with results export
-ngraph run scenarios/backbone_clos.yml --results results.json
+# Run without writing any files
+ngraph run scenarios/nsfnet.yaml --no-results
 ```
 
 ### Filtering Results by Step Names
 
-You can filter the output to include only specific workflow steps using the `--keys` option:
+`--keys` restricts the `steps` section to the named workflow steps; the `workflow` metadata section still lists every step that ran:
 
 ```bash
 # Only include results from the MSD step
@@ -214,14 +197,14 @@ The CLI outputs results as JSON with a fixed top-level shape:
   "steps": {
     "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
     "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "demand_set": "baseline_traffic_matrix" } } },
-    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "flow_results": [ { "flows": [], "summary": {} } ], "context": { "demand_set": "baseline_traffic_matrix" } } }
+    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "baseline": { "flows": [], "summary": {} }, "flow_results": [ { "flows": [], "summary": {} } ], "context": { "demand_set": "baseline_traffic_matrix" } } }
   },
   "scenario": { "seed": 42, "failures": { }, "demands": { } }
 }
 ```
 
 - **BuildGraph**: stores `data.graph` in node-link JSON format
-- **MaxFlow** and **TrafficMatrixPlacement**: store `data.flow_results` as lists of per-iteration results (flows + summary)
+- **MaxFlow** and **TrafficMatrixPlacement**: store the no-failure reference under `data.baseline` and unique failure patterns (deduplicated, each with `occurrence_count`, flows + summary) under `data.flow_results`
 - **NetworkStats**: stores capacity and degree statistics under `data`
 
 ## Output Behavior
@@ -246,7 +229,7 @@ ngraph run scenarios/square_mesh.yaml
 ngraph run scenarios/square_mesh.yaml --results my_analysis.json
 ```
 
-- Creates specified JSON file instead of results.json
+- Creates specified JSON file instead of the default `<scenario_name>.results.json`
 - Useful for organizing multiple analysis runs
 
 ### Print to Terminal
@@ -255,7 +238,7 @@ ngraph run scenarios/square_mesh.yaml --results my_analysis.json
 ngraph run scenarios/square_mesh.yaml --stdout
 ```
 
-- Creates results.json AND prints JSON to stdout
+- Creates `<scenario_name>.results.json` AND prints JSON to stdout
 - Useful for viewing results immediately while also saving them
 
 ### Combined Output
@@ -265,7 +248,6 @@ ngraph run scenarios/square_mesh.yaml --results analysis.json --stdout
 ```
 
 - Creates custom JSON file AND prints to stdout
-- Provides flexibility for different workflows
 
 ### Disable File Generation (Edge Cases)
 
@@ -279,7 +261,7 @@ ngraph run scenarios/square_mesh.yaml --no-results
 
 ## Integration with Workflows
 
-The CLI executes the complete workflow defined in your scenario file, running all steps in sequence and accumulating results. This runs complex network analysis tasks without manual intervention.
+`ngraph run` executes every step of the workflow defined in the scenario file, in sequence, accumulating results as it goes.
 
 ### Recommended Workflow
 
@@ -309,7 +291,7 @@ ngraph --verbose inspect scenarios/backbone_clos.yml --detail
 ngraph inspect scenarios/backbone_clos.yml --detail | grep -A 5 "WORKFLOW STEPS"
 ```
 
-The `inspect` command will catch common issues like:
+`inspect` catches common issues:
 
 - Invalid YAML syntax
 - Missing blueprint references

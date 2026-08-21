@@ -1,26 +1,22 @@
 """Serializable result artifacts for analysis workflows.
 
-This module defines dataclasses that capture outputs from analyses and
-simulations in a JSON-serializable form:
-
-- `CapacityEnvelope`: frequency-based capacity distributions and optional
-  aggregated flow statistics
-- `FailurePatternResult`: capacity results for specific failure patterns
+`CapacityEnvelope` captures a frequency-based capacity distribution, plus
+optional aggregated flow statistics, in JSON-serializable form.
 """
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 
 @dataclass
 class CapacityEnvelope:
-    """Frequency-based capacity envelope that stores capacity values as frequencies.
+    """Capacity distribution stored as a value -> occurrence-count map.
 
-    This approach is memory-efficient for Monte Carlo analysis where we care
-    about statistical distributions rather than individual sample order.
+    Monte Carlo runs repeat the same capacity values many times, so counting
+    them keeps memory proportional to the number of distinct values. Individual
+    sample order is not preserved.
 
     Attributes:
         source_pattern: Regex pattern used to select source nodes.
@@ -81,15 +77,11 @@ class CapacityEnvelope:
         max_capacity = float("-inf")
 
         for value in values:
-            # Update frequency map
             frequencies[value] = frequencies.get(value, 0) + 1
-
-            # Update statistics
             total_sum += value
             min_capacity = min(min_capacity, value)
             max_capacity = max(max_capacity, value)
 
-        # Calculate derived statistics
         n = len(values)
         mean_capacity = total_sum / n
 
@@ -103,7 +95,6 @@ class CapacityEnvelope:
             variance_sum += count * diff * diff
         stdev_capacity = (variance_sum / n) ** 0.5
 
-        # Process flow summaries if provided
         flow_summary_stats = {}
         if flow_summaries:
             flow_summary_stats = cls._aggregate_flow_summaries(flow_summaries)
@@ -131,7 +122,7 @@ class CapacityEnvelope:
         Returns:
             Dictionary with aggregated flow analytics including cost distribution statistics.
         """
-        from collections import defaultdict
+        from collections import Counter, defaultdict
 
         # Aggregate cost distributions
         cost_data = defaultdict(list)  # cost -> list of flow volumes
@@ -176,7 +167,7 @@ class CapacityEnvelope:
                     "min": min(volumes),
                     "max": max(volumes),
                     "total_samples": len(volumes),
-                    "frequencies": {vol: volumes.count(vol) for vol in set(volumes)},
+                    "frequencies": dict(Counter(volumes)),
                 }
 
         return {
@@ -199,7 +190,6 @@ class CapacityEnvelope:
             "total_samples": self.total_samples,
         }
 
-        # Include flow summary stats if available
         if self.flow_summary_stats:
             result["flow_summary_stats"] = self.flow_summary_stats
 
@@ -217,13 +207,7 @@ class CapacityEnvelope:
         """
         # Frequencies keys may arrive as strings via JSON; normalize to float
         freqs_raw = data.get("frequencies", {}) or {}
-        freqs: Dict[float, int] = {}
-        for k, v in freqs_raw.items():
-            try:
-                key_f = float(k)
-            except (TypeError, ValueError):
-                key_f = float(k)  # Will raise again if irrecoverable
-            freqs[key_f] = int(v)
+        freqs: Dict[float, int] = {float(k): int(v) for k, v in freqs_raw.items()}
 
         return cls(
             source_pattern=str(data.get("source", "")),
@@ -255,7 +239,6 @@ class CapacityEnvelope:
 
         target_count = (percentile / 100.0) * self.total_samples
 
-        # Sort capacities and accumulate counts
         sorted_capacities = sorted(self.frequencies.keys())
         cumulative_count = 0
 
@@ -276,69 +259,3 @@ class CapacityEnvelope:
         for capacity, count in self.frequencies.items():
             values.extend([capacity] * count)
         return values
-
-
-@dataclass
-class FailurePatternResult:
-    """Result for a unique failure pattern with associated capacity matrix.
-
-    Attributes:
-        excluded_nodes: List of failed node IDs.
-        excluded_links: List of failed link IDs.
-        capacity_matrix: Dictionary mapping flow keys to capacity values.
-        count: Number of times this pattern occurred.
-        is_baseline: Whether this represents the baseline (no failures) case.
-    """
-
-    excluded_nodes: List[str]
-    excluded_links: List[str]
-    capacity_matrix: Dict[str, float]
-    count: int
-    is_baseline: bool = False
-    _pattern_key_cache: str = field(default="", init=False, repr=False)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "excluded_nodes": self.excluded_nodes,
-            "excluded_links": self.excluded_links,
-            "capacity_matrix": self.capacity_matrix,
-            "count": self.count,
-            "is_baseline": self.is_baseline,
-        }
-
-    @property
-    def pattern_key(self) -> str:
-        """Generate a deterministic key for this failure pattern.
-
-        Uses a stable BLAKE2s hash of the sorted excluded entity list to avoid
-        Python's randomized hash() variability across processes.
-
-        Returns empty string for patterns with no exclusions (including baseline).
-        """
-        # Cache to avoid recomputation when accessed repeatedly
-        if self._pattern_key_cache:
-            return self._pattern_key_cache
-
-        # Empty exclusions (no failures) return empty string
-        if not self.excluded_nodes and not self.excluded_links:
-            return ""
-
-        # Create deterministic key from excluded entities using fast BLAKE2s
-        excluded_str = ",".join(sorted(self.excluded_nodes + self.excluded_links))
-        digest = hashlib.blake2s(
-            excluded_str.encode("utf-8"), digest_size=8
-        ).hexdigest()
-        self._pattern_key_cache = f"pattern_{digest}"
-        return self._pattern_key_cache
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FailurePatternResult":
-        """Construct FailurePatternResult from a dictionary."""
-        return cls(
-            excluded_nodes=list(data.get("excluded_nodes", [])),
-            excluded_links=list(data.get("excluded_links", [])),
-            capacity_matrix=dict(data.get("capacity_matrix", {})),
-            count=int(data.get("count", 0)),
-            is_baseline=bool(data.get("is_baseline", False)),
-        )

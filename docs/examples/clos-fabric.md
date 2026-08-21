@@ -1,16 +1,12 @@
 # Clos Fabric Analysis
 
-This example demonstrates analysis of a 3-tier Clos fabric. For production use, run the bundled scenario and generate metrics via CLI, then iterate in Python if needed.
+Analysis of a 3-tier Clos fabric. For production use, run the bundled scenario and generate metrics via CLI, then iterate in Python if needed.
 
 Refer to [Tutorial](../getting-started/tutorial.md) for running bundled scenarios via CLI.
 
 ## Scenario Overview
 
-We'll create two separate 3-tier Clos networks and analyze the maximum flow capacity between them. This scenario showcases:
-
-- Hierarchical blueprint composition
-- Complex link patterns
-- Flow analysis with different placement policies
+Two separate 3-tier Clos networks, with maximum flow capacity measured between them. The scenario nests blueprints inside blueprints, wires the tiers with `mesh` and `one_to_one` link patterns, and compares flow placement policies.
 
 ## Programmatic scenario
 
@@ -112,14 +108,14 @@ NetGraph supports different flow placement policies:
 
 Combined with the path selection settings (shortest_path=True|False), we can achieve different flow placement policies emulating ECMP, WCMP, and TE behavior in IP/MPLS networks.
 
-In this example, we use the `FlowPlacement.EQUAL_BALANCED` policy and `shortest_path=True` to emulate ECMP behavior and we will compare it with WCMP `FlowPlacement.PROPORTIONAL` (capacity-weighted split across equal-cost paths) under two conditions:
+The example above pairs `FlowPlacement.EQUAL_BALANCED` with `shortest_path=True` to emulate ECMP. Compare it against `FlowPlacement.PROPORTIONAL` (WCMP) under two conditions:
 
 - Baseline: symmetric parallel inter-spine links -> ECMP = WCMP (256.0).
-- Uneven links: make capacities within each equal-cost bundle different -> WCMP
+- Uneven links: capacities differ within each equal-cost bundle -> WCMP
   achieves higher throughput than ECMP, which is limited by equal splitting.
 
-We emulate partial inter-spine degradation by making capacities uneven across the
-4 parallel spine-to-spine links per pair while keeping equal costs. This isolates
+Partial inter-spine degradation is emulated by making capacities uneven across the
+4 parallel spine-to-spine links per pair while keeping costs equal, which isolates
 the effect of the splitting policy.
 
 ```python

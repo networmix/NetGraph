@@ -1,7 +1,4 @@
-"""Schema definitions for variable expansion.
-
-Provides dataclasses for template expansion configuration.
-"""
+"""Dataclasses describing template expansion configuration."""
 
 from __future__ import annotations
 

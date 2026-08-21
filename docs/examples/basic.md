@@ -1,6 +1,6 @@
 # Basic Example
 
-This example builds a tiny topology inline to show APIs. For real analysis, prefer running a provided scenario and generating metrics via the CLI.
+A tiny topology defined inline, used here to walk through the analysis APIs. For real analysis, run a bundled scenario through the CLI and generate metrics from that.
 
 See [Tutorial](../getting-started/tutorial.md) for CLI usage and bundled scenarios.
 
@@ -19,7 +19,7 @@ See [Tutorial](../getting-started/tutorial.md) for CLI usage and bundled scenari
 They have the same metric of 1 but different capacities (1 and 2).
 ```
 
-Let's create this network by using NetGraph's scenario system:
+Build it with the scenario system:
 
 ```python
 from ngraph.scenario import Scenario
@@ -77,7 +77,7 @@ scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 ```
 
-Note that here we used a simple `nodes` and `links` structure to directly define the network topology. The optional `seed` parameter ensures reproducible results when using randomized workflow steps. In more complex scenarios, you would typically use node groups with `count` and `template` to define groups of nodes and link rules to define their connections, or even leverage the `blueprints` to create reusable components. This advanced functionality is explained in the [DSL Reference](../reference/dsl.md) and used in the [Clos Fabric Analysis](clos-fabric.md) example.
+This spells out every node and link individually. The optional `seed` makes randomized workflow steps reproducible. Larger topologies instead use node groups (`count` plus `template`) with link rules connecting them, or `blueprints` for reusable components - see the [DSL Reference](../reference/dsl.md) and the [Clos Fabric Analysis](clos-fabric.md) example.
 
 ### Flow Analysis Variants
 

@@ -17,9 +17,6 @@ from ngraph.model.failure.policy import FailurePolicy
 class FailurePolicySet:
     """Named collection of FailurePolicy objects.
 
-    This mutable container maps failure policy names to FailurePolicy objects,
-    allowing management of multiple failure policies for analysis.
-
     Attributes:
         policies: Dictionary mapping failure policy names to FailurePolicy objects.
     """
@@ -27,11 +24,11 @@ class FailurePolicySet:
     policies: dict[str, FailurePolicy] = field(default_factory=dict)
 
     def add(self, name: str, policy: FailurePolicy) -> None:
-        """Add a failure policy to the collection.
+        """Add a policy, replacing any policy already stored under `name`.
 
         Args:
             name: Failure policy name identifier.
-            policy: FailurePolicy object for this failure policy.
+            policy: FailurePolicy to store; kept by reference, not copied.
         """
         self.policies[name] = policy
 
@@ -53,7 +50,7 @@ class FailurePolicySet:
         """Get all failure policies from the collection.
 
         Returns:
-            List of all FailurePolicy objects.
+            A new list of the stored policies, in insertion order.
         """
         return list(self.policies.values())
 

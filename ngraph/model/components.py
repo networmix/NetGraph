@@ -8,7 +8,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
+from ngraph.logging import get_logger
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
+
+LOGGER = get_logger(__name__)
 
 
 @dataclass
@@ -54,11 +57,11 @@ class Component:
         return single_instance_capex * self.count
 
     def total_power(self) -> float:
-        """Computes the total *typical* (recursive) power usage of this component,
-        including children, multiplied by this component's count.
+        """Computes *typical* power for this component and all descendants.
 
         Returns:
-            float: The total typical power in watts.
+            float: Typical power in watts, summed over children and multiplied
+                by this component's ``count``.
         """
         single_instance_power = self.power_watts
         for child in self.children.values():
@@ -66,11 +69,11 @@ class Component:
         return single_instance_power * self.count
 
     def total_power_max(self) -> float:
-        """Computes the total *peak* (recursive) power usage of this component,
-        including children, multiplied by this component's count.
+        """Computes *peak* power for this component and all descendants.
 
         Returns:
-            float: The total maximum (peak) power in watts.
+            float: Maximum (peak) power in watts, summed over children and
+                multiplied by this component's ``count``.
         """
         single_instance_power_max = self.power_watts_max
         for child in self.children.values():
@@ -78,11 +81,11 @@ class Component:
         return single_instance_power_max * self.count
 
     def total_capacity(self) -> float:
-        """Computes the total (recursive) capacity of this component,
-        including children, multiplied by this component's count.
+        """Computes capacity for this component and all descendants.
 
         Returns:
-            float: The total capacity (dimensionless or user-defined units).
+            float: Capacity summed over children and multiplied by this
+                component's ``count``, in dimensionless or user-defined units.
         """
         single_instance_capacity = self.capacity
         for child in self.children.values():
@@ -96,7 +99,8 @@ class Component:
             include_children (bool): If True, recursively includes children.
 
         Returns:
-            Dict[str, Any]: Dictionary representation of this component.
+            Dict[str, Any]: One key per field, with ``attrs`` shallow-copied and
+                a ``children`` key present only when ``include_children``.
         """
         data = {
             "name": self.name,
@@ -127,19 +131,19 @@ class ComponentsLibrary:
         components:
           BigSwitch:
             component_type: chassis
-            cost: 20000
+            capex: 20000
             power_watts: 1750
             capacity: 25600
             children:
               PIM16Q-16x200G:
                 component_type: linecard
-                cost: 1000
+                capex: 1000
                 power_watts: 10
                 ports: 16
                 count: 8
           200G-FR4:
             component_type: optic
-            cost: 2000
+            capex: 2000
             power_watts: 6
             power_watts_max: 6.5
     """
@@ -150,22 +154,26 @@ class ComponentsLibrary:
         """Retrieves a Component by its name from the library.
 
         Args:
-            name (str): Name of the component.
+            name (str): Top-level component name as registered in the library.
 
         Returns:
-            Optional[Component]: The requested Component or None if not found.
+            Optional[Component]: The requested Component, or None if the name
+                is not registered.
         """
         return self.components.get(name)
 
     def merge(
         self, other: ComponentsLibrary, override: bool = True
     ) -> ComponentsLibrary:
-        """Merges another ComponentsLibrary into this one. By default (override=True),
-        duplicate components in `other` overwrite those in the current library.
+        """Merges another ComponentsLibrary into this one.
+
+        Component objects are shared, not copied: both libraries then reference
+        the same instances.
 
         Args:
-            other (ComponentsLibrary): Another library to merge into this one.
-            override (bool): If True, components in `other` override existing ones.
+            other (ComponentsLibrary): Library whose components are merged in.
+            override (bool): If True (default), duplicate names in `other`
+                replace the existing entries; if False, existing entries win.
 
         Returns:
             ComponentsLibrary: This instance, updated in place.
@@ -185,10 +193,10 @@ class ComponentsLibrary:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ComponentsLibrary:
-        """Constructs a ComponentsLibrary from a dictionary of raw component definitions.
+        """Constructs a ComponentsLibrary from raw component definitions.
 
         Args:
-            data (Dict[str, Any]): Raw component definitions.
+            data (Dict[str, Any]): Mapping of component name -> definition dict.
 
         Returns:
             ComponentsLibrary: A newly constructed library.
@@ -205,8 +213,9 @@ class ComponentsLibrary:
         """Recursively constructs a single Component from a dictionary definition.
 
         Args:
-            name (str): Name of the component.
-            definition_data (Dict[str, Any]): Dictionary data for the component definition.
+            name (str): Name to give the constructed component.
+            definition_data (Dict[str, Any]): Component definition. Recognized
+                keys map to fields; anything else is folded into ``attrs``.
 
         Returns:
             Component: The constructed Component instance.
@@ -246,6 +255,15 @@ class ComponentsLibrary:
         }
         # Normalize leftover keys too
         leftover_keys = normalize_yaml_dict_keys(leftover_keys)
+        if "cost" in leftover_keys:
+            # Likely confusion with link 'cost'; without 'capex' the component
+            # contributes 0 to capex totals.
+            LOGGER.warning(
+                "Component '%s' defines unrecognized key 'cost'; it is stored "
+                "in attrs and ignored by capex calculations. Use 'capex' for "
+                "monetary cost.",
+                name,
+            )
         attrs.update(leftover_keys)
 
         return Component(
@@ -282,7 +300,12 @@ class ComponentsLibrary:
         if not isinstance(data, dict):
             raise ValueError("Top-level must be a dict in Components YAML.")
 
-        components_data = data.get("components") or data
+        if "components" in data:
+            # Presence-based dispatch: an explicit empty/null 'components'
+            # mapping yields an empty library, not phantom components.
+            components_data = data["components"] or {}
+        else:
+            components_data = data
         if not isinstance(components_data, dict):
             raise ValueError("'components' must be a dict if present.")
 
@@ -350,10 +373,11 @@ def _coerce_positive_float(value: Any, default: float = 1.0) -> float:
 
     Args:
         value: Arbitrary value to parse as float.
-        default: Value to return if parsing fails or non-positive.
+        default: Returned when parsing fails or the result is <= 0.
 
     Returns:
-        Positive float.
+        The parsed float when it is > 0, otherwise ``default`` (so the result
+        is strictly positive only when ``default`` is).
     """
     try:
         out = float(value)
@@ -372,20 +396,16 @@ def resolve_link_end_components(
 ]:
     """Resolve per-end hardware components for a link.
 
-    Input format inside ``link.attrs``:
-
-    Structured mapping under ``hardware`` key only:
+    Input format inside ``link.attrs`` is a structured mapping under the
+    ``hardware`` key only:
       ``{"hardware": {"source": {"component": NAME, "count": N},
                        "target": {"component": NAME, "count": N}}}``
+    An optional ``exclusive: true`` per end indicates unsharable usage; for
+    exclusive ends, validation and BOM counting round counts up to integers.
 
     Args:
         attrs: Link attributes mapping.
         library: Components library for lookups.
-
-    Exclusive usage:
-      - Optional ``exclusive: true`` per end indicates unsharable usage.
-        For exclusive ends, validation and BOM counting should round-up counts
-        to integers.
 
     Returns:
         ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive), per_end_specified)

@@ -1,7 +1,7 @@
 """Variable and pattern expansion for NetGraph DSL.
 
-This module provides template expansion with $var syntax and
-bracket pattern expansion for name generation.
+Template expansion with $var syntax, plus bracket pattern expansion for name
+generation.
 
 Usage:
     from ngraph.dsl.expansion import expand_block, expand_name_patterns, ExpansionSpec
@@ -17,13 +17,12 @@ Usage:
 
 from .brackets import expand_name_patterns, expand_risk_group_refs
 from .schema import ExpansionSpec
-from .variables import expand_block, expand_templates, substitute_vars
+from .variables import expand_block, substitute_vars
 
 __all__ = [
     # Schema
     "ExpansionSpec",
     # Variable expansion
-    "expand_templates",
     "expand_block",
     "substitute_vars",
     # Bracket expansion

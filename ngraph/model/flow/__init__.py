@@ -1,7 +1,7 @@
 """Flow policy configuration for NetGraph.
 
-This package provides preset configurations for traffic routing policies
-used in demand placement and flow analysis.
+Preset traffic routing configurations used by demand placement and flow
+analysis.
 
 Public API:
     FlowPolicyPreset: Enum of common flow policy configurations

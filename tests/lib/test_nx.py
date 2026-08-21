@@ -154,18 +154,21 @@ class TestFromNetworkx:
         assert len(edge_map) == 2
 
     def test_undirected_graph(self):
-        """Convert undirected Graph."""
+        """Undirected Graph defaults to antiparallel arc pairs per edge."""
         G = nx.Graph()
         G.add_edge("X", "Y", capacity=75.0, cost=3)
 
         graph, node_map, edge_map = from_networkx(G)
 
         assert graph.num_nodes() == 2
-        assert graph.num_edges() == 1
-        assert len(edge_map) == 1
+        assert graph.num_edges() == 2
+        assert len(edge_map) == 2
+        # Both arcs map back to the same original undirected edge
+        assert edge_map.to_ref[0] == ("X", "Y", 0)
+        assert edge_map.to_ref[1] == ("X", "Y", 0)
 
     def test_multigraph(self):
-        """Convert undirected MultiGraph."""
+        """Undirected MultiGraph defaults to antiparallel arc pairs per edge."""
         G = nx.MultiGraph()
         G.add_edge(1, 2, capacity=10.0)
         G.add_edge(1, 2, capacity=20.0)
@@ -173,8 +176,8 @@ class TestFromNetworkx:
         graph, node_map, edge_map = from_networkx(G)
 
         assert graph.num_nodes() == 2
-        assert graph.num_edges() == 2
-        assert len(edge_map) == 2
+        assert graph.num_edges() == 4
+        assert len(edge_map) == 4
 
     def test_bidirectional_adds_reverse_edges(self):
         """bidirectional=True adds reverse edge for each edge."""

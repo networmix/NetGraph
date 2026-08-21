@@ -703,7 +703,6 @@ risk_groups:
 failures:
   mixed_failures:
     expand_groups: true
-    expand_children: false
     modes:
       # 40% chance: fail 1 edge node weighted by capacity
       - weight: 0.4
@@ -769,7 +768,6 @@ failures:
     policy = scenario.failure_policy_set.get_policy("mixed_failures")
     assert len(policy.modes) == 4, f"Expected 4 modes, got {len(policy.modes)}"
     assert policy.expand_groups is True
-    assert policy.expand_children is False
 
 
 # =============================================================================
@@ -1047,11 +1045,13 @@ demands:
 def test_example_16_hierarchical_risk_groups():
     """Example 16: Hierarchical Risk Groups - nested risk group structure.
 
-    Expected: Hierarchical risk groups with children, recursive failure expansion.
+    Expected: Hierarchical risk groups with children. A failed parent group
+    always cascades to its children downstream (cascading is inherent to the
+    hierarchy; no policy flag controls it).
 
-    Note: Nodes must reference risk groups defined at the top level. Child groups
-    are used for hierarchical failure expansion (expand_children: true) but nodes
-    reference the leaf-level groups which must be defined at the top level.
+    Note: Nodes must reference risk groups defined at the top level. Child
+    groups cascade on parent failure but nodes reference the leaf-level groups
+    which must be defined at the top level.
     """
     yaml_content = """
 network:
@@ -1074,7 +1074,7 @@ risk_groups:
   - name: Rack2
     disabled: false
     attrs: {location: "DC1-Row2"}
-  # Parent risk group with children for hierarchical failure expansion
+  # Parent risk group with children; failing it cascades to the children
   - name: Rack1
     attrs: {location: "DC1-Row1"}
     children:
@@ -1084,7 +1084,6 @@ risk_groups:
 failures:
   hierarchical:
     expand_groups: true
-    expand_children: true
     modes:
       - weight: 1.0
         rules:
@@ -1117,7 +1116,6 @@ failures:
     # Validate failure policy
     policy = scenario.failure_policy_set.get_policy("hierarchical")
     assert policy.expand_groups is True
-    assert policy.expand_children is True
 
 
 # =============================================================================

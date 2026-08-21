@@ -150,7 +150,7 @@ perf:
 validate:
 	@echo "📋 Validating YAML schemas..."
 	@if $(PYTHON) -c "import jsonschema" >/dev/null 2>&1; then \
-		$(PYTHON) -c "import json, yaml, jsonschema, pathlib; from importlib import resources as res; f=res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); schema=json.load(f); f.close(); scenario_files=list(pathlib.Path('scenarios').rglob('*.yaml')); integration_files=list(pathlib.Path('tests/integration').glob('*.yaml')); all_files=scenario_files+integration_files; [jsonschema.validate(yaml.safe_load(open(fp)), schema) for fp in all_files]; print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"; \
+		$(PYTHON) -c "import json, yaml, jsonschema, pathlib; from importlib import resources as res; f=res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); schema=json.load(f); f.close(); scenario_files=sorted(set(pathlib.Path('scenarios').rglob('*.yaml')) | set(pathlib.Path('scenarios').rglob('*.yml'))); integration_files=sorted(set(pathlib.Path('tests/integration').glob('*.yaml')) | set(pathlib.Path('tests/integration').glob('*.yml'))); all_files=scenario_files+integration_files; [jsonschema.validate(yaml.safe_load(open(fp)), schema) for fp in all_files]; print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"; \
 	else \
 		echo "⚠️  jsonschema not installed. Skipping schema validation"; \
 	fi

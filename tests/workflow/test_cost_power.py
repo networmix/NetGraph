@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 import pytest
 
+from ngraph.explorer import NetworkExplorer
 from ngraph.model.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 from ngraph.results.store import Results
@@ -67,6 +68,7 @@ def test_cost_power_basic_aggregation_active() -> None:
         components_library = comps
         results = Results()
         _execution_counter = 0
+        seed = None
 
     scenario = _Scenario()
 
@@ -126,6 +128,7 @@ def test_cost_power_include_disabled_filters_active_view() -> None:
         components_library = comps
         results = Results()
         _execution_counter = 0
+        seed = None
 
     scenario = _Scenario()
 
@@ -163,6 +166,7 @@ def test_cost_power_optics_ignored_when_endpoint_has_no_hw() -> None:
         components_library = comps
         results = Results()
         _execution_counter = 0
+        seed = None
 
     scenario = _Scenario()
     step = CostPower(name="cp3", include_disabled=False, aggregation_level=0)
@@ -175,3 +179,58 @@ def test_cost_power_optics_ignored_when_endpoint_has_no_hw() -> None:
     assert root["platform_power_watts"] == pytest.approx(10.0)
     assert root["optics_capex"] == pytest.approx(1.5)
     assert root["optics_power_watts"] == pytest.approx(0.5)
+
+
+def test_cost_power_runs_despite_hardware_capacity_violation() -> None:
+    """CostPower aggregates costs even when hardware validation would fail.
+
+    Previously the step built a NetworkExplorer with strict validation as a
+    side effect, so a node whose attached link capacity exceeded its hardware
+    capacity crashed the cost aggregation. The step must not depend on the
+    explorer and must complete regardless of hardware violations.
+    """
+    net = Network()
+    net.add_node(
+        Node("dc1/leaf/A", attrs={"hardware": {"component": "NodeHW", "count": 1}})
+    )
+    net.add_node(
+        Node("dc1/leaf/B", attrs={"hardware": {"component": "NodeHW", "count": 1}})
+    )
+
+    # NodeHW supports 100.0 of capacity; a 500.0 link exceeds it on both ends.
+    link = Link("dc1/leaf/A", "dc1/leaf/B", capacity=500.0)
+    link.attrs["hardware"] = {
+        "source": {"component": "LinkHW", "count": 1},
+        "target": {"component": "LinkHW", "count": 1},
+    }
+    net.add_link(link)
+
+    comps = _build_simple_components()
+
+    # Sanity check: explorer strict validation rejects this network, which is
+    # exactly what made the old CostPower implementation crash.
+    with pytest.raises(ValueError, match="exceeds hardware"):
+        NetworkExplorer.explore_network(net, components_library=comps)
+
+    class _Scenario:
+        network = net
+        components_library = comps
+        results = Results()
+        _execution_counter = 0
+        seed = None
+
+    scenario = _Scenario()
+    step = CostPower(name="cp4", include_disabled=False, aggregation_level=2)
+    step.execute(scenario)  # type: ignore[arg-type]
+
+    exported = scenario.results.to_dict()
+    root = _extract_root(exported, "cp4")
+    assert root["platform_capex"] == pytest.approx(200.0)
+    assert root["platform_power_watts"] == pytest.approx(20.0)
+    assert root["optics_capex"] == pytest.approx(3.0)
+    assert root["optics_power_watts"] == pytest.approx(1.0)
+
+    # Hierarchy paths derive from node names directly.
+    data = exported["steps"]["cp4"]["data"]
+    lvl2 = {row["path"] for row in data["levels"]["2"]}
+    assert lvl2 == {"dc1/leaf"}

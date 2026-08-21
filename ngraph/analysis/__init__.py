@@ -1,6 +1,7 @@
 """Network analysis API.
 
-This module provides the primary entry point for network analysis in NetGraph.
+`analyze()` returns an AnalysisContext holding the prepared Core graph. Binding
+source and sink reuses that graph across calls instead of rebuilding it.
 
 Usage:
     from ngraph import analyze
@@ -8,7 +9,7 @@ Usage:
     # One-off analysis
     flow = analyze(network).max_flow("^A$", "^B$")
 
-    # Efficient repeated analysis (bound context)
+    # Repeated analysis over one prepared graph (bound context)
     ctx = analyze(network, source="^A$", sink="^B$")
     baseline = ctx.max_flow()
     degraded = ctx.max_flow(excluded_links=failed_links)
@@ -22,8 +23,6 @@ from ngraph.analysis.context import (
     AugmentationEdge,
     analyze,
 )
-from ngraph.analysis.context import build_edge_mask as build_edge_mask
-from ngraph.analysis.context import build_node_mask as build_node_mask
 from ngraph.analysis.demand import (
     DemandExpansion,
     ExpandedDemand,
@@ -31,7 +30,7 @@ from ngraph.analysis.demand import (
 )
 from ngraph.analysis.failure_manager import AnalysisFunction, FailureManager
 from ngraph.analysis.functions import (
-    build_demand_context,
+    build_demand_placement_inputs,
     build_maxflow_context,
     demand_placement_analysis,
     max_flow_analysis,
@@ -61,7 +60,7 @@ __all__ = [
     "ExpandedDemand",
     "expand_demands",
     # Analysis functions
-    "build_demand_context",
+    "build_demand_placement_inputs",
     "build_maxflow_context",
     "demand_placement_analysis",
     "max_flow_analysis",

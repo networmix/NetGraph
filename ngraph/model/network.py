@@ -1,7 +1,6 @@
 """Network topology modeling with Node, Link, RiskGroup, and Network classes.
 
-This module provides the core network model classes (Node, Link, RiskGroup, Network)
-that can be used independently.
+These classes carry no analysis machinery and can be used on their own.
 """
 
 from __future__ import annotations
@@ -10,10 +9,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
 
-from ngraph.logging import get_logger
 from ngraph.utils.ids import new_base64_uuid
-
-LOGGER = get_logger(__name__)
 
 
 @dataclass
@@ -40,10 +36,10 @@ class Node:
 class Link:
     """Represents one directed link between two nodes.
 
-    The model stores a single direction (``source`` -> ``target``). When building
-    the working graph for analysis, a reverse edge is added by default to provide
-    bidirectional connectivity. Disable with ``add_reverse=False`` in
-    ``Network.to_strict_multidigraph``.
+    The model stores a single direction (``source`` -> ``target``). When the
+    analysis graph is built (via ``AnalysisContext`` / netgraph-core), a reverse
+    edge is added automatically for each link to provide bidirectional
+    connectivity.
 
     Attributes:
         source (str): Name of the source node.
@@ -53,7 +49,10 @@ class Link:
         disabled (bool): Whether the link is disabled.
         risk_groups (Set[str]): Set of risk group names this link belongs to.
         attrs (Dict[str, Any]): Additional metadata (e.g., distance).
-        id (str): Auto-generated unique identifier: "{source}|{target}|<base64_uuid>".
+        id (str): Unique identifier. ``Network.add_link`` assigns the
+            deterministic form "{source}|{target}|<seq>", where <seq> is a
+            per-(source, target) insertion sequence number; links never added
+            to a Network keep a provisional uuid-suffixed id.
     """
 
     source: str
@@ -66,7 +65,12 @@ class Link:
     id: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """Generate the link's unique ID upon initialization."""
+        """Assign a provisional unique ID.
+
+        Network.add_link replaces it with the deterministic
+        "source|target|<seq>" form; the uuid suffix only guarantees
+        uniqueness for links never added to a Network.
+        """
         self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
 
 
@@ -122,6 +126,7 @@ class Network:
     _selection_cache: Dict[str, Dict[str, List[Node]]] = field(
         default_factory=dict, init=False, repr=False
     )
+    _link_seq: Dict[tuple, int] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: Node) -> None:
         """Add a node to the network (keyed by node.name).
@@ -135,22 +140,51 @@ class Network:
         if node.name in self.nodes:
             raise ValueError(f"Node '{node.name}' already exists in the network.")
         self.nodes[node.name] = node
-        self._selection_cache.clear()  # Invalidate cache on modification
+        self._selection_cache.clear()
 
     def add_link(self, link: Link) -> None:
-        """Add a link to the network (keyed by the link's auto-generated ID).
+        """Add a link to the network, assigning its deterministic ID.
+
+        The link's ID is (re)assigned here as "source|target|<seq>", where
+        <seq> is a per-(source, target) insertion sequence number, so ids and
+        their sort order are stable across identical scenario builds.
 
         Args:
             link (Link): Link to add.
 
         Raises:
             ValueError: If the link's source or target node does not exist.
+            ValueError: If this Link object was already added to this network.
+            ValueError: If the generated "source|target|<seq>" id collides with
+                an existing one, which distinct endpoint pairs can do when node
+                names contain '|' (e.g. 'a|b'->'c' vs 'a'->'b|c').
         """
         if link.source not in self.nodes:
             raise ValueError(f"Source node '{link.source}' not found in network.")
         if link.target not in self.nodes:
             raise ValueError(f"Target node '{link.target}' not found in network.")
 
+        # Reassign a deterministic per-pair sequence id. The uuid suffix from
+        # construction makes parallel links sort in a rebuild-dependent order,
+        # which breaks seeded reproducibility of failure sampling and makes
+        # link ids unstable across identical scenario builds.
+        if self.links.get(link.id) is link:
+            raise ValueError(
+                f"Link '{link.id}' has already been added to this network."
+            )
+        pair = (link.source, link.target)
+        seq = self._link_seq.get(pair, 0)
+        self._link_seq[pair] = seq + 1
+        new_id = f"{link.source}|{link.target}|{seq}"
+        if new_id in self.links:
+            # Distinct endpoint pairs can render to the same string when node
+            # names contain '|' (e.g. 'a|b'->'c' vs 'a'->'b|c'); refuse
+            # rather than silently overwriting the earlier link.
+            raise ValueError(
+                f"Link id '{new_id}' already exists; node names containing "
+                "'|' can make distinct endpoint pairs ambiguous."
+            )
+        link.id = new_id
         self.links[link.id] = link
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
@@ -167,11 +201,15 @@ class Network:
             path: Regex pattern for node name.
 
         Returns:
-            Mapping from group label to list of nodes.
+            A fresh mapping from group label to a fresh list of nodes; the Node
+            objects themselves are shared, so mutating the returned mapping or
+            lists does not affect the internal selection cache.
         """
-        # Check cache first
-        if path in self._selection_cache:
-            return self._selection_cache[path]
+        # Check cache first. A shallow copy protects the cache from caller
+        # mutation (groups map and lists are fresh; Node objects are shared).
+        cached = self._selection_cache.get(path)
+        if cached is not None:
+            return {label: list(nodes) for label, nodes in cached.items()}
 
         pattern = re.compile(path)
         groups_map: Dict[str, List[Node]] = {}
@@ -187,7 +225,7 @@ class Network:
                 groups_map.setdefault(label, []).append(node)
 
         self._selection_cache[path] = groups_map
-        return groups_map
+        return {label: list(nodes) for label, nodes in groups_map.items()}
 
     def disable_node(self, node_name: str) -> None:
         """Mark a node as disabled.
@@ -256,15 +294,15 @@ class Network:
             link.disabled = True
 
     def get_links_between(self, source: str, target: str) -> List[str]:
-        """Retrieve all link IDs that connect the specified source node
-        to the target node.
+        """Retrieve the IDs of all direct links from source to target.
 
         Args:
             source (str): Source node name.
             target (str): Target node name.
 
         Returns:
-            List[str]: A list of link IDs for all direct links from source to target.
+            List[str]: Link IDs for every direct source -> target link. Empty
+                if the nodes are unconnected or unknown.
         """
         matches = []
         for link_id, link in self.links.items():
@@ -278,15 +316,21 @@ class Network:
         target_regex: Optional[str] = None,
         any_direction: bool = False,
     ) -> List[Link]:
-        """Search for links using optional regex patterns for source or target node names.
+        """Search for links by regex on source and/or target node names.
+
+        Unlike selector paths (which anchor at the start via ``re.match``),
+        these patterns use unanchored ``re.search`` and match anywhere in the
+        node name; anchor explicitly (``^...$``) for exact-name matching.
 
         Args:
-            source_regex (Optional[str]): Regex to match link.source. If None, matches all sources.
-            target_regex (Optional[str]): Regex to match link.target. If None, matches all targets.
+            source_regex (Optional[str]): Regex matched against link.source;
+                None matches every source.
+            target_regex (Optional[str]): Regex matched against link.target;
+                None matches every target.
             any_direction (bool): If True, also match reversed source/target.
 
         Returns:
-            List[Link]: A list of unique Link objects that match the criteria.
+            List[Link]: Matching Link objects, deduplicated by link ID.
         """
         src_pat = re.compile(source_regex) if source_regex else None
         tgt_pat = re.compile(target_regex) if target_regex else None
@@ -312,12 +356,14 @@ class Network:
         return results
 
     def disable_risk_group(self, name: str, recursive: bool = True) -> None:
-        """Disable all nodes/links that have 'name' in their risk_groups.
-        If recursive=True, also disable items belonging to child risk groups.
+        """Disable every node/link that has 'name' in its risk_groups.
+
+        Unknown group names are ignored.
 
         Args:
-            name (str): The name of the risk group to disable.
-            recursive (bool): If True, also disable subgroups recursively.
+            name (str): Name of the risk group to disable.
+            recursive (bool): If True, also disable members of child groups,
+                transitively.
         """
         if name not in self.risk_groups:
             return
@@ -326,23 +372,24 @@ class Network:
         queue = [self.risk_groups[name]]
         while queue:
             grp = queue.pop()
+            if grp.name in to_disable:
+                continue
             to_disable.add(grp.name)
             if recursive:
                 queue.extend(grp.children)
 
-        # Disable nodes
         for node_name, node_obj in self.nodes.items():
             if node_obj.risk_groups & to_disable:
                 self.disable_node(node_name)
 
-        # Disable links
         for link_id, link_obj in self.links.items():
             if link_obj.risk_groups & to_disable:
                 self.disable_link(link_id)
 
     def enable_risk_group(self, name: str, recursive: bool = True) -> None:
-        """Enable all nodes/links that have 'name' in their risk_groups.
-        If recursive=True, also enable items belonging to child risk groups.
+        """Enable every node/link that has 'name' in its risk_groups.
+
+        Unknown group names are ignored.
 
         Note:
             If a node or link is in multiple risk groups, enabling this group
@@ -350,8 +397,9 @@ class Network:
             remain disabled.
 
         Args:
-            name (str): The name of the risk group to enable.
-            recursive (bool): If True, also enable subgroups recursively.
+            name (str): Name of the risk group to enable.
+            recursive (bool): If True, also enable members of child groups,
+                transitively.
         """
         if name not in self.risk_groups:
             return
@@ -360,16 +408,16 @@ class Network:
         queue = [self.risk_groups[name]]
         while queue:
             grp = queue.pop()
+            if grp.name in to_enable:
+                continue
             to_enable.add(grp.name)
             if recursive:
                 queue.extend(grp.children)
 
-        # Enable nodes
         for node_name, node_obj in self.nodes.items():
             if node_obj.risk_groups & to_enable:
                 self.enable_node(node_name)
 
-        # Enable links
         for link_id, link_obj in self.links.items():
             if link_obj.risk_groups & to_enable:
                 self.enable_link(link_id)

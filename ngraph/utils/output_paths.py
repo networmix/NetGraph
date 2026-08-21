@@ -1,9 +1,8 @@
 """Utilities for building CLI artifact output paths.
 
-This module centralizes logic for composing file and directory paths for
-artifacts produced by the NetGraph CLI. Paths are built from an optional
-output directory, a prefix (usually derived from the scenario file or
-results file), and a per-artifact suffix.
+Every artifact path the NetGraph CLI writes is composed here, from an optional
+output directory, a prefix (usually derived from the scenario file or results
+file), and a per-artifact suffix.
 """
 
 from __future__ import annotations

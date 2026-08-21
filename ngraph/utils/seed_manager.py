@@ -30,8 +30,8 @@ class SeedManager:
     def derive_seed(self, *components: Any) -> Optional[int]:
         """Derive a deterministic seed from master seed and component identifiers.
 
-        Uses a hash-based approach to generate consistent seeds for different
-        components while ensuring good distribution of seed values.
+        The master seed and the component identifiers are joined and hashed
+        with SHA-256, so distinct components get unrelated seeds.
 
         Args:
             *components: Component identifiers (strings, integers, etc.) that

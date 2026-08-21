@@ -28,16 +28,17 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from dataclasses import field as dataclasses_field
 from typing import TYPE_CHECKING, Any
 
 import netgraph_core
 import numpy as np
 
-from ngraph.analysis.demand import ExpandedDemand, expand_demands
+from ngraph.analysis.demand import ExpandedDemand
+from ngraph.analysis.functions import build_demand_placement_inputs
 from ngraph.analysis.placement import place_demands
 from ngraph.logging import get_logger
 from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 if TYPE_CHECKING:
@@ -63,26 +64,31 @@ class _MSDCache:
     edge_mask: np.ndarray
     base_expanded: list[ExpandedDemand]
     resolved_ids: list[tuple[int, int]]
+    # Persistent base-SPF DAG cache shared by all probes (masks never change
+    # during MSD, so cached DAGs stay valid across alpha evaluations).
+    dag_cache: dict = dataclasses_field(default_factory=dict)
 
 
 @dataclass
 class MaximumSupportedDemand(WorkflowStep):
     """Finds the maximum uniform traffic multiplier that is fully placeable.
 
-    Uses binary search to find alpha_star, the maximum multiplier for all
-    demands in the set that can still be fully placed on the network.
+    Binary search yields alpha_star: the largest multiplier at which every
+    demand in the set still places fully on the network.
 
     Attributes:
         demand_set: Name of the demand set to analyze.
-        acceptance_rule: Currently only "hard" is implemented.
+        acceptance_rule: Currently only "hard" is implemented; anything else
+            raises ValueError at run time.
         alpha_start: Starting multiplier for binary search.
-        growth_factor: Factor for bracket expansion.
+        growth_factor: Factor for bracket expansion; must be > 1.0.
         alpha_min: Minimum allowed alpha value.
         alpha_max: Maximum allowed alpha value.
-        resolution: Convergence threshold for binary search.
+        resolution: Convergence threshold for binary search; must be positive.
         max_bracket_iters: Maximum iterations for bracketing phase.
         max_bisect_iters: Maximum iterations for bisection phase.
-        placement_rounds: Placement optimization rounds.
+        placement_rounds: Deprecated; accepted for backward compatibility but
+            has no effect (placement optimization is handled by the core engine).
     """
 
     demand_set: str = "default"
@@ -97,6 +103,11 @@ class MaximumSupportedDemand(WorkflowStep):
     placement_rounds: int | str = "auto"
 
     def __post_init__(self) -> None:
+        if self.placement_rounds != "auto":
+            logger.warning(
+                "MaximumSupportedDemand 'placement_rounds' is deprecated and has "
+                "no effect; placement optimization is handled by the core engine."
+            )
         try:
             self.alpha_start = float(self.alpha_start)
             self.growth_factor = float(self.growth_factor)
@@ -128,23 +139,8 @@ class MaximumSupportedDemand(WorkflowStep):
         )
 
         # Serialize base demands for result output
-        from ngraph.model.flow.policy_config import serialize_policy_preset
-
         base_tds = scenario.demand_set.get_set(self.demand_set)
-        base_demands: list[dict[str, Any]] = [
-            {
-                "id": getattr(td, "id", None),
-                "source": getattr(td, "source", ""),
-                "target": getattr(td, "target", ""),
-                "volume": float(getattr(td, "volume", 0.0)),
-                "mode": getattr(td, "mode", "pairwise"),
-                "priority": int(getattr(td, "priority", 0)),
-                "flow_policy": serialize_policy_preset(
-                    getattr(td, "flow_policy", None)
-                ),
-            }
-            for td in base_tds
-        ]
+        base_demands: list[dict[str, Any]] = [td.to_dict() for td in base_tds]
 
         if not base_demands:
             raise ValueError(
@@ -153,7 +149,7 @@ class MaximumSupportedDemand(WorkflowStep):
             )
 
         # Build cache once for all probes
-        cache = self._build_cache(scenario, self.demand_set)
+        cache = self._build_cache(scenario, base_tds)
         logger.debug(
             "MSD cache built: %d expanded demands",
             len(cache.base_expanded),
@@ -180,7 +176,6 @@ class MaximumSupportedDemand(WorkflowStep):
             "max_bracket_iters": self.max_bracket_iters,
             "max_bisect_iters": self.max_bisect_iters,
             "demand_set": self.demand_set,
-            "placement_rounds": self.placement_rounds,
         }
         scenario.results.put("metadata", {})
         scenario.results.put(
@@ -246,7 +241,15 @@ class MaximumSupportedDemand(WorkflowStep):
                     break
                 upper = alpha
             if lower is None:
-                raise ValueError("No feasible alpha found above alpha_min")
+                # Mirror the upward branch: bracket iterations can run out
+                # before the halving sequence reaches alpha_min (e.g. a large
+                # alpha_start), so probe alpha_min directly before giving up.
+                if upper <= self.alpha_min:
+                    raise ValueError("No feasible alpha found above alpha_min")
+                feas, _ = probe(self.alpha_min)
+                if not feas:
+                    raise ValueError("No feasible alpha found above alpha_min")
+                lower = self.alpha_min
 
         assert lower is not None and upper is not None and lower < upper
 
@@ -264,53 +267,23 @@ class MaximumSupportedDemand(WorkflowStep):
         return left
 
     @staticmethod
-    def _build_cache(scenario: Any, demand_set_name: str) -> _MSDCache:
+    def _build_cache(scenario: Any, base_tds: list[TrafficDemand]) -> _MSDCache:
         """Build cache for MSD binary search.
 
-        Creates stable TrafficDemand objects, expands them once, and builds
-        AnalysisContext. Called once at search start.
+        Reuses build_demand_placement_inputs for the expand-once context and
+        resolved node IDs, then adds the no-exclusion masks shared by all
+        probes. TrafficDemand ids are stable, so pseudo-node names (which
+        embed them) stay consistent across probes. Called once at search
+        start.
         """
-        from ngraph.analysis import AnalysisContext
-
-        base_tds = scenario.demand_set.get_set(demand_set_name)
-
-        # Create stable TrafficDemand objects (same IDs for all probes)
-        stable_demands: list[TrafficDemand] = [
-            TrafficDemand(
-                id=getattr(td, "id", "") or "",
-                source=getattr(td, "source", ""),
-                target=getattr(td, "target", ""),
-                priority=int(getattr(td, "priority", 0)),
-                volume=float(getattr(td, "volume", 0.0)),
-                flow_policy=getattr(td, "flow_policy", None),
-                mode=str(getattr(td, "mode", "pairwise")),
-                group_mode=str(getattr(td, "group_mode", "flatten")),
-            )
-            for td in base_tds
-        ]
-
-        # Expand once (augmentations depend on td.id, now stable)
-        expansion = expand_demands(
+        ctx, expansion, resolved_ids = build_demand_placement_inputs(
             scenario.network,
-            stable_demands,
-            default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-        )
-
-        # Build AnalysisContext once
-        ctx = AnalysisContext.from_network(
-            scenario.network,
-            augmentations=expansion.augmentations,
+            [{**td.to_dict(), "flow_policy": td.flow_policy} for td in base_tds],
         )
 
         # Build masks once (no exclusions during MSD)
-        node_mask = ctx._build_node_mask(excluded_nodes=None)
-        edge_mask = ctx._build_edge_mask(excluded_links=None)
-
-        # Pre-resolve node IDs once
-        resolved_ids = [
-            (ctx.node_mapper.to_id(d.src_name), ctx.node_mapper.to_id(d.dst_name))
-            for d in expansion.demands
-        ]
+        node_mask = ctx.build_node_mask(excluded_nodes=None)
+        edge_mask = ctx.build_edge_mask(excluded_links=None)
 
         return _MSDCache(
             ctx=ctx,
@@ -343,6 +316,7 @@ class MaximumSupportedDemand(WorkflowStep):
             cache.edge_mask,
             resolved_ids=cache.resolved_ids,
             collect_entries=False,
+            dag_cache=cache.dag_cache,
         )
 
         if result.summary.total_demand == 0.0:
@@ -354,29 +328,6 @@ class MaximumSupportedDemand(WorkflowStep):
         return result.summary.is_feasible, {
             "placement_ratio": result.summary.ratio,
         }
-
-    @staticmethod
-    def _build_scaled_demands(
-        base_demands: list[dict[str, Any]], alpha: float
-    ) -> list[TrafficDemand]:
-        """Build scaled TrafficDemand objects from serialized demands.
-
-        Utility for tests to verify results at specific alpha values.
-        Preserves ID if present for stable context caching.
-        """
-        return [
-            TrafficDemand(
-                id=d.get("id") or "",
-                source=d["source"],
-                target=d["target"],
-                priority=int(d["priority"]),
-                volume=float(d["volume"]) * alpha,
-                flow_policy=d.get("flow_policy"),
-                mode=str(d.get("mode", "pairwise")),
-                group_mode=str(d.get("group_mode", "flatten")),
-            )
-            for d in base_demands
-        ]
 
 
 register_workflow_step("MaximumSupportedDemand")(MaximumSupportedDemand)

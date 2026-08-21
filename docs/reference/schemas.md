@@ -26,11 +26,11 @@ The schema validates:
 - Top-level section organization
 - Basic constraint checking
 
-Runtime: The schema is applied unconditionally during load in `ngraph.scenario.Scenario.from_yaml`. Additional business rules are enforced in code (e.g., blueprint expansion) and may still raise errors for semantically invalid inputs.
+Runtime: The schema is applied unconditionally during load in `ngraph.scenario.Scenario.from_yaml` (via `ngraph.dsl.loader.load_scenario_yaml`). Additional business rules are enforced in code (e.g., blueprint expansion) and may still raise errors for semantically invalid inputs.
 
 ## IDE Integration (VS Code)
 
-Automatic configuration via `.vscode/settings.json`:
+Add to `.vscode/settings.json` (not committed to the repository):
 
 ```json
 {
@@ -59,7 +59,7 @@ make check
 
 ### Integration Points
 
-- Pre-commit hooks: Validates modified `scenarios/*.yaml` files
+- Pre-commit hooks: Runs `make validate` when `scenarios/*.yaml` files change
 - CI pipeline: Validates scenarios on push/PR
 - Test suite: Validation exercised in integration tests
 

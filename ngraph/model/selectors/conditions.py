@@ -1,10 +1,10 @@
 """Condition evaluation for node/entity filtering.
 
-Provides evaluation logic for attribute conditions used in selectors
-and failure policies. Supports operators: ==, !=, <, <=, >, >=,
-contains, not_contains, in, not_in, exists, not_exists.
+Evaluates the attribute conditions used by selectors and failure policies.
+Operators: ==, !=, <, <=, >, >=, contains, not_contains, in, not_in, exists,
+not_exists.
 
-Supports dot-notation for nested attribute access (e.g., "hardware.vendor").
+Attribute names support dot-notation for nested access (e.g. "hardware.vendor").
 """
 
 from __future__ import annotations
@@ -36,9 +36,9 @@ def resolve_attr_path(attrs: Dict[str, Any], path: str) -> Tuple[bool, Any]:
 
     Examples:
         >>> resolve_attr_path({"role": "spine"}, "role")
-        (True, "spine")
+        (True, 'spine')
         >>> resolve_attr_path({"hardware": {"vendor": "Acme"}}, "hardware.vendor")
-        (True, "Acme")
+        (True, 'Acme')
         >>> resolve_attr_path({"role": "spine"}, "missing")
         (False, None)
     """

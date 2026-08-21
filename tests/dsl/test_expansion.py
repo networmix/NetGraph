@@ -2,7 +2,6 @@
 
 Tests for ngraph.dsl.expansion modules:
 - ExpansionSpec: schema for expansion configuration
-- expand_templates: variable substitution in templates
 - substitute_vars: single template substitution
 - expand_name_patterns: bracket expansion for names
 """
@@ -13,7 +12,6 @@ from ngraph.dsl.expansion import (
     ExpansionSpec,
     expand_name_patterns,
     expand_risk_group_refs,
-    expand_templates,
     substitute_vars,
 )
 
@@ -91,96 +89,28 @@ class TestSubstituteVars:
         result = substitute_vars("${my_var}", {"my_var": "value"})
         assert result == "value"
 
+    def test_whole_string_placeholder_preserves_type(self) -> None:
+        """A string that is exactly one placeholder keeps the native type."""
+        result = substitute_vars("${num}", {"num": 2})
+        assert result == 2
+        assert isinstance(result, int)
+        assert substitute_vars("$rate", {"rate": 1.5}) == 1.5
 
-# ──────────────────────────────────────────────────────────────────────────────
-# expand_templates Tests
-# ──────────────────────────────────────────────────────────────────────────────
+    def test_embedded_placeholder_stringifies(self) -> None:
+        """A placeholder embedded in a longer string is interpolated as text."""
+        assert substitute_vars("dc${num}", {"num": 2}) == "dc2"
 
-
-class TestExpandTemplatesCartesian:
-    """Tests for expand_templates with cartesian mode."""
-
-    def test_single_var_expands(self) -> None:
-        """Single variable expands to multiple results."""
-        spec = ExpansionSpec(vars={"dc": [1, 2, 3]})
-        results = list(expand_templates({"path": "dc${dc}"}, spec))
-
-        assert len(results) == 3
-        assert results[0] == {"path": "dc1"}
-        assert results[1] == {"path": "dc2"}
-        assert results[2] == {"path": "dc3"}
-
-    def test_multiple_vars_cartesian(self) -> None:
-        """Multiple variables create cartesian product."""
-        spec = ExpansionSpec(vars={"dc": [1, 2], "rack": ["a", "b"]})
-        results = list(expand_templates({"path": "dc${dc}_rack${rack}"}, spec))
-
-        assert len(results) == 4  # 2 * 2
-        paths = [r["path"] for r in results]
-        assert "dc1_racka" in paths
-        assert "dc1_rackb" in paths
-        assert "dc2_racka" in paths
-        assert "dc2_rackb" in paths
-
-    def test_multiple_templates(self) -> None:
-        """Multiple template fields are all expanded."""
-        spec = ExpansionSpec(vars={"dc": [1, 2]})
-        results = list(
-            expand_templates(
-                {"source": "dc${dc}/leaf", "target": "dc${dc}/spine"}, spec
-            )
+    def test_whole_string_placeholder_in_nested_structure(self) -> None:
+        """Type preservation applies recursively in dicts and lists."""
+        result = substitute_vars(
+            {"value": "${t}", "items": ["${t}", "tier${t}"]}, {"t": 2}
         )
+        assert result == {"value": 2, "items": [2, "tier2"]}
 
-        assert len(results) == 2
-        assert results[0] == {"source": "dc1/leaf", "target": "dc1/spine"}
-        assert results[1] == {"source": "dc2/leaf", "target": "dc2/spine"}
-
-    def test_empty_vars_yields_original(self) -> None:
-        """Empty expand_vars yields original template."""
-        spec = ExpansionSpec()
-        results = list(expand_templates({"path": "static"}, spec))
-
-        assert len(results) == 1
-        assert results[0] == {"path": "static"}
-
-
-class TestExpandTemplatesZip:
-    """Tests for expand_templates with zip mode."""
-
-    def test_zip_pairs_by_index(self) -> None:
-        """Zip mode pairs variables by index."""
-        spec = ExpansionSpec(vars={"src": ["a", "b"], "dst": ["x", "y"]}, mode="zip")
-        results = list(expand_templates({"path": "${src}->${dst}"}, spec))
-
-        assert len(results) == 2
-        assert results[0] == {"path": "a->x"}
-        assert results[1] == {"path": "b->y"}
-
-    def test_zip_mismatched_lengths_raises(self) -> None:
-        """Zip mode with mismatched list lengths raises."""
-        spec = ExpansionSpec(
-            vars={"src": ["a", "b"], "dst": ["x", "y", "z"]},
-            mode="zip",
-        )
-        with pytest.raises(ValueError, match="equal-length"):
-            list(expand_templates({"path": "${src}->${dst}"}, spec))
-
-
-class TestExpandTemplatesLimits:
-    """Tests for expansion limits."""
-
-    def test_large_expansion_raises(self) -> None:
-        """Expansion exceeding limit raises."""
-        # Create vars that would produce > 10,000 combinations
-        spec = ExpansionSpec(
-            vars={
-                "a": list(range(50)),
-                "b": list(range(50)),
-                "c": list(range(50)),
-            }
-        )
-        with pytest.raises(ValueError, match="limit"):
-            list(expand_templates({"path": "${a}${b}${c}"}, spec))
+    def test_whole_string_placeholder_missing_raises(self) -> None:
+        """Missing variable raises even for whole-string placeholders."""
+        with pytest.raises(KeyError, match="not found"):
+            substitute_vars("${missing}", {"x": 1})
 
 
 # ──────────────────────────────────────────────────────────────────────────────

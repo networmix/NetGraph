@@ -74,8 +74,8 @@ def _run_demand_placement_without_cache(
     node_mapper = ctx.node_mapper
     edge_mapper = ctx.edge_mapper
     algorithms = ctx.algorithms
-    node_mask = ctx._build_node_mask(set())
-    edge_mask = ctx._build_edge_mask(set())
+    node_mask = ctx.build_node_mask(set())
+    edge_mask = ctx.build_edge_mask(set())
 
     flow_graph = netgraph_core.FlowGraph(multidigraph)
 
@@ -1096,7 +1096,15 @@ class TestCachedVsNonCachedEquivalence:
         multi_dest_constrained_network: Network,
         multi_source_multi_dest_network: Network,
     ) -> None:
-        """Cached placement must produce identical results to FlowPolicy placement."""
+        """Cached placement matches FlowPolicy placement in uncontended cases.
+
+        The equivalence holds when demands do not compete for capacity. Under
+        contention the cached path is canonical for SHORTEST_PATHS presets:
+        it admits flow onto the cost-only shortest paths of the base topology
+        and drops the overflow (IGP semantics), whereas Core's FlowPolicy
+        reroutes onto costlier residual paths (TE semantics, available via
+        the TE_* presets).
+        """
         # Select network based on source count
         if len(sources) > 1:
             network = multi_source_multi_dest_network
@@ -1216,3 +1224,95 @@ class TestCachedVsNonCachedEquivalence:
                 f"Flow {i} ({cached_flow.source}->{cached_flow.destination}): "
                 f"placed mismatch - cached={cached_flow.placed}, ref={ref_flow.placed}"
             )
+
+
+def test_mixed_preset_same_endpoints_no_flow_index_collision() -> None:
+    """Regression: cached and policy-based demands sharing (src, dst, priority)
+    must not merge flows via colliding FlowIndex values. Pre-fix this scenario
+    reported 15.0 placed across a 10-unit min cut."""
+    from ngraph.analysis.functions import demand_placement_analysis
+    from ngraph.model.network import Link, Network, Node
+
+    net = Network()
+    for n in ("A", "B", "M1", "M2"):
+        net.add_node(Node(n))
+    net.add_link(Link("A", "M1", capacity=5.0, cost=1))
+    net.add_link(Link("M1", "B", capacity=5.0, cost=1))
+    net.add_link(Link("A", "M2", capacity=5.0, cost=1))
+    net.add_link(Link("M2", "B", capacity=5.0, cost=1))
+
+    cfg = [
+        {
+            "source": "^A$",
+            "target": "^B$",
+            "volume": 5.0,
+            "mode": "pairwise",
+            "priority": 0,
+            "flow_policy": "SHORTEST_PATHS_ECMP",
+            "id": "d1",
+        },
+        {
+            "source": "^A$",
+            "target": "^B$",
+            "volume": 5.0,
+            "mode": "pairwise",
+            "priority": 0,
+            "flow_policy": "TE_ECMP_16_LSP",
+            "id": "d2",
+        },
+        {
+            "source": "^A$",
+            "target": "^B$",
+            "volume": 5.0,
+            "mode": "pairwise",
+            "priority": 1,
+            "flow_policy": "TE_WCMP_UNLIM",
+            "id": "d3",
+        },
+    ]
+    result = demand_placement_analysis(
+        network=net, excluded_nodes=set(), excluded_links=set(), demands_config=cfg
+    )
+    assert result.summary.total_placed <= 10.0 + 1e-9
+
+
+def test_duplicate_policy_demand_triple_rejected() -> None:
+    """Two policy-based demands sharing (src, dst, priority) raise instead of
+    silently merging/stealing each other's flows."""
+    import pytest
+
+    from ngraph.analysis.functions import demand_placement_analysis
+    from ngraph.model.network import Link, Network, Node
+
+    net = Network()
+    for n in ("A", "B"):
+        net.add_node(Node(n))
+    net.add_link(Link("A", "B", capacity=10.0, cost=1))
+
+    cfg = [
+        {
+            "source": "^A$",
+            "target": "^B$",
+            "volume": 5.0,
+            "mode": "pairwise",
+            "priority": 0,
+            "flow_policy": "TE_ECMP_16_LSP",
+            "id": "p1",
+        },
+        {
+            "source": "^A$",
+            "target": "^B$",
+            "volume": 5.0,
+            "mode": "pairwise",
+            "priority": 0,
+            "flow_policy": "TE_ECMP_16_LSP",
+            "id": "p2",
+        },
+    ]
+    with pytest.raises(ValueError, match="Duplicate policy-based demand"):
+        demand_placement_analysis(
+            network=net,
+            excluded_nodes=set(),
+            excluded_links=set(),
+            demands_config=cfg,
+        )

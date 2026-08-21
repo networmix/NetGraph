@@ -1,7 +1,7 @@
 """Flow policy preset configurations for NetGraph.
 
-Provides convenient factory functions to create common FlowPolicy configurations
-using NetGraph-Core's FlowPolicy and FlowPolicyConfig.
+Named routing presets and the factory that materializes them as NetGraph-Core
+FlowPolicy objects built from a FlowPolicyConfig.
 """
 
 from __future__ import annotations
@@ -88,7 +88,8 @@ def create_flow_policy(
     Args:
         algorithms: NetGraph-Core Algorithms instance.
         graph: NetGraph-Core Graph handle.
-        preset: FlowPolicyPreset enum value specifying the desired policy.
+        preset: Preset whose path algorithm, placement, edge selection, and
+            flow-count bounds to apply.
         node_mask: Optional numpy bool array for node exclusions (True = include).
         edge_mask: Optional numpy bool array for edge exclusions (True = include).
 
@@ -197,14 +198,14 @@ def create_flow_policy(
 def serialize_policy_preset(cfg: Any) -> Optional[str]:
     """Serialize a FlowPolicyPreset to its string name for JSON storage.
 
-    Handles FlowPolicyPreset enum values, integer enum values, and string inputs.
-    Returns None for None input.
-
     Args:
-        cfg: FlowPolicyPreset enum, integer, or other value to serialize.
+        cfg: FlowPolicyPreset enum, an integer coercible to one, or any other
+            value.
 
     Returns:
-        String name of the preset (e.g., "SHORTEST_PATHS_ECMP"), or None if input is None.
+        Preset name (e.g. "SHORTEST_PATHS_ECMP"); None when ``cfg`` is None.
+        Values that do not map to a preset are logged at debug level and
+        returned as ``str(cfg)``.
     """
     if cfg is None:
         return None

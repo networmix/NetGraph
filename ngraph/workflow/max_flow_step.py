@@ -3,8 +3,8 @@
 Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
 Produces unified `flow_results` per iteration under `data.flow_results`.
 
-Baseline (no failures) is always run first as a separate reference. The `iterations`
-parameter specifies how many failure scenarios to run.
+Baseline (no failures) always runs first as a separate reference; `iterations`
+counts failure scenarios only.
 
 YAML Configuration Example:
 
@@ -34,12 +34,12 @@ from typing import TYPE_CHECKING, Any, Dict, Union
 
 from ngraph.analysis.failure_manager import FailureManager
 from ngraph.logging import get_logger
-from ngraph.results.flow import FlowIterationResult
-from ngraph.types.base import FlowPlacement
+from ngraph.types.base import FlowPlacement, Mode
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
     resolve_parallelism,
+    serialize_monte_carlo_results,
 )
 
 if TYPE_CHECKING:
@@ -52,24 +52,26 @@ logger = get_logger(__name__)
 class MaxFlow(WorkflowStep):
     """Maximum flow Monte Carlo workflow step.
 
-    Baseline (no failures) is always run first as a separate reference. Results are
-    returned with baseline in a separate field. The flow_results list contains unique
-    failure patterns (deduplicated); each result has occurrence_count indicating how
-    many iterations matched that pattern.
+    Baseline (no failures) always runs first and is returned in a separate field.
+    The flow_results list holds unique failure patterns (deduplicated); each result
+    carries an occurrence_count of how many iterations matched that pattern.
 
     Attributes:
         source: Source node selector (string path or selector dict).
         target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").
         failure_policy: Name of failure policy in scenario.failure_policy_set.
-        iterations: Number of failure iterations to run.
-        parallelism: Number of parallel worker processes.
-        shortest_path: Whether to use shortest paths only.
+            If None, no failure policy is applied.
+        iterations: Number of failure iterations to run; must be >= 0.
+        parallelism: Worker thread count, or "auto" for the CPU count.
+        shortest_path: Restrict flow to lowest-cost paths (IP/IGP mode).
         require_capacity: If True (default), path selection considers capacity.
             If False, path selection is cost-only (true IP/IGP semantics).
         flow_placement: Flow placement strategy.
         seed: Optional seed for reproducible results.
-        store_failure_patterns: Whether to store failure patterns in results.
+        store_failure_patterns: Record the failure trace on each result.
+            Iterations are deduplicated, so a trace describes the first
+            iteration of its pattern, not every matching iteration.
         include_flow_details: Whether to collect cost distribution per flow.
         include_min_cut: Whether to include min-cut edges per flow.
     """
@@ -91,14 +93,8 @@ class MaxFlow(WorkflowStep):
     def __post_init__(self) -> None:
         if self.iterations < 0:
             raise ValueError("iterations must be >= 0")
-        if isinstance(self.parallelism, str):
-            if self.parallelism != "auto":
-                raise ValueError("parallelism must be an integer or 'auto'")
-        else:
-            if self.parallelism < 1:
-                raise ValueError("parallelism must be >= 1")
-        if self.mode not in {"combine", "pairwise"}:
-            raise ValueError("mode must be 'combine' or 'pairwise'")
+        resolve_parallelism(self.parallelism)  # validate at construction
+        Mode.from_string(self.mode)  # validate; raises ValueError on bad values
         if isinstance(self.flow_placement, str):
             self.flow_placement = FlowPlacement.from_string(self.flow_placement)
 
@@ -117,6 +113,9 @@ class MaxFlow(WorkflowStep):
             self.include_flow_details,
             self.include_min_cut,
         )
+
+        # __post_init__ converts string flow_placement values to the enum
+        assert isinstance(self.flow_placement, FlowPlacement)
 
         fm = FailureManager(
             network=scenario.network,
@@ -141,24 +140,7 @@ class MaxFlow(WorkflowStep):
 
         scenario.results.put("metadata", raw.get("metadata", {}))
 
-        # Handle baseline (separate from failure results)
-        baseline_result = raw.get("baseline")
-        baseline_dict = None
-        if baseline_result is not None:
-            if hasattr(baseline_result, "to_dict"):
-                baseline_dict = baseline_result.to_dict()
-            else:
-                baseline_dict = baseline_result
-
-        # Handle failure results
-        flow_results: list[dict] = []
-        for item in raw.get("results", []):
-            if isinstance(item, FlowIterationResult):
-                flow_results.append(item.to_dict())
-            elif hasattr(item, "to_dict") and callable(item.to_dict):
-                flow_results.append(item.to_dict())  # type: ignore[union-attr]
-            else:
-                flow_results.append(item)
+        baseline_dict, flow_results = serialize_monte_carlo_results(raw)
 
         context = {
             "source": self.source,
@@ -166,9 +148,7 @@ class MaxFlow(WorkflowStep):
             "mode": self.mode,
             "shortest_path": bool(self.shortest_path),
             "require_capacity": bool(self.require_capacity),
-            "flow_placement": getattr(
-                self.flow_placement, "name", str(self.flow_placement)
-            ),
+            "flow_placement": self.flow_placement.name,
             "include_flow_details": bool(self.include_flow_details),
             "include_min_cut": bool(self.include_min_cut),
         }
