@@ -1,6 +1,6 @@
 """Profiling instrumentation and reporting for NetGraph.
 
-This package exposes public profiling APIs for workflow execution:
+Public API:
 
 - ``PerformanceProfiler``: CPU and wall-time profiling per workflow step.
 - ``PerformanceReporter``: Text report generation from profiling results.

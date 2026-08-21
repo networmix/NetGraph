@@ -1,9 +1,8 @@
 """Lightweight representation of a single routing path.
 
-The ``Path`` dataclass stores a node-and-parallel-edges sequence and a numeric
-cost. Cached properties expose derived sequences for nodes and edges, and
-helpers provide equality, ordering by cost, and sub-path extraction with cost
-recalculation.
+``Path`` stores a sequence of (node, parallel edges) elements plus a numeric
+cost. Paths sort by cost, compare by structure and cost, and support sub-path
+extraction, which leaves the cost for the caller to recompute.
 """
 
 from __future__ import annotations
@@ -67,7 +66,7 @@ class Path:
         """Return the number of elements in the path.
 
         Returns:
-            The length of `path`.
+            Count of (node, parallel_edges) elements, i.e. hop count plus one.
         """
         return len(self.path)
 
@@ -127,10 +126,11 @@ class Path:
 
     @cached_property
     def edges_seq(self) -> Tuple[Tuple[EdgeRef, ...], ...]:
-        """Return a tuple containing the sequence of parallel-edge tuples for each path element except the last.
+        """Return the parallel-edge tuples of every path element except the last.
 
         Returns:
-            A tuple of parallel-edge tuples; returns an empty tuple if the path has 1 or fewer elements.
+            A tuple of parallel-edge tuples; empty if the path has 1 or fewer
+            elements.
         """
         if len(self.path) <= 1:
             return ()
@@ -141,7 +141,7 @@ class Path:
         """Return a tuple of node names in order along the path.
 
         Returns:
-            A tuple containing the ordered sequence of nodes from source to destination.
+            Node names from source to destination, repeats included.
         """
         return tuple(node for node, _ in self.path)
 

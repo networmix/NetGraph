@@ -1,5 +1,5 @@
 from ngraph.results import Results
-from ngraph.results.artifacts import FailurePatternResult
+from ngraph.results.artifacts import CapacityEnvelope
 
 
 def test_put_and_get():
@@ -103,17 +103,17 @@ def test_results_to_dict_includes_workflow_and_step_data():
     results.enter_step("stepA")
     results.put("metadata", {})
     # Include an artifact object to confirm to_dict conversion
-    fpr = FailurePatternResult(
-        excluded_nodes=["n1"],
-        excluded_links=["l1"],
-        capacity_matrix={"A->B": 10.0},
-        count=2,
+    env = CapacityEnvelope.from_values(
+        source_pattern="^A$",
+        sink_pattern="^B$",
+        mode="combine",
+        values=[10.0, 10.0, 20.0],
     )
-    results.put("data", {"pattern": fpr, "value": 1})
+    results.put("data", {"envelope": env, "value": 1})
     results.exit_step()
 
     d = results.to_dict()
     assert "workflow" in d
     assert "stepA" in d["workflow"]
     assert d["steps"]["stepA"]["data"]["value"] == 1
-    assert isinstance(d["steps"]["stepA"]["data"]["pattern"], dict)
+    assert isinstance(d["steps"]["stepA"]["data"]["envelope"], dict)

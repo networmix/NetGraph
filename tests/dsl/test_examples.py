@@ -306,7 +306,6 @@ network:
 failures:
   default:
     expand_groups: true
-    expand_children: false
     attrs:
       custom_key: "value"
     modes:
@@ -328,7 +327,6 @@ failures:
     assert len(policies) > 0
     default_policy = scenario.failure_policy_set.get_policy("default")
     assert default_policy.expand_groups
-    assert not default_policy.expand_children
     assert len(default_policy.modes) == 1
     mode = default_policy.modes[0]
     assert len(mode.rules) == 1

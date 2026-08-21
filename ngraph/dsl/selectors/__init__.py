@@ -1,7 +1,9 @@
 """Unified node selection for NetGraph DSL.
 
-This module provides a single abstraction for node selection used across
-adjacency, demands, overrides, and workflow steps.
+Selector parsing for YAML configs: the single abstraction for node selection
+used across adjacency, demands, overrides, and workflow steps. The schema
+types and the runtime evaluation engine live in `ngraph.model.selectors`;
+they are re-exported here for backward compatibility.
 
 Usage:
     from ngraph.dsl.selectors import normalize_selector, select_nodes, NodeSelector
@@ -13,35 +15,45 @@ Usage:
     groups = select_nodes(network, selector, default_active_only=True)
 """
 
-from .conditions import evaluate_condition, evaluate_conditions, resolve_attr_path
-from .normalize import normalize_selector, parse_match_spec
-from .schema import Condition, EntityScope, MatchSpec, NodeSelector
-from .select import (
+from ngraph.model.selectors import (
+    VALID_OPERATORS,
+    Condition,
+    EntityScope,
+    MatchSpec,
+    NodeSelector,
+    evaluate_condition,
+    evaluate_conditions,
     flatten_link_attrs,
     flatten_node_attrs,
     flatten_risk_group_attrs,
+    link_path_key,
     match_entity_ids,
+    resolve_attr_path,
     select_nodes,
 )
 
+from .normalize import normalize_selector, parse_match_spec
+
 __all__ = [
-    # Schema
+    # Schema (re-exported from ngraph.model.selectors)
     "Condition",
     "EntityScope",
     "MatchSpec",
     "NodeSelector",
+    "VALID_OPERATORS",
     # Parsing
     "normalize_selector",
     "parse_match_spec",
-    # Evaluation
+    # Evaluation (re-exported from ngraph.model.selectors)
     "select_nodes",
     "evaluate_condition",
     "evaluate_conditions",
     "resolve_attr_path",
-    # Attribute flattening
+    # Attribute flattening (re-exported from ngraph.model.selectors)
     "flatten_node_attrs",
     "flatten_link_attrs",
     "flatten_risk_group_attrs",
-    # Entity matching
+    "link_path_key",
+    # Entity matching (re-exported from ngraph.model.selectors)
     "match_entity_ids",
 ]

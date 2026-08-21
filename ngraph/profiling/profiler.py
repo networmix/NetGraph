@@ -71,7 +71,8 @@ class ProfileResults:
 class PerformanceProfiler:
     """CPU profiler for NetGraph workflow execution.
 
-    Profiles workflow steps using cProfile and identifies bottlenecks.
+    Profiles each workflow step with cProfile and flags steps that take more
+    than 10% of total wall time as bottlenecks.
     """
 
     def __init__(self, track_memory: bool = False):
@@ -130,12 +131,11 @@ class PerformanceProfiler:
         """
         logger.debug(f"Starting profiling for step: {step_name} ({step_type})")
 
-        # Initialize profiling data
         start_time = time.perf_counter()
         profiler = cProfile.Profile()
         profiler.enable()
 
-        # Optional: per-step tracemalloc to capture peak memory
+        # Per-step tracemalloc, when requested, to capture peak memory
         mem_tracing_started = False
         if self._track_memory:
             try:
@@ -148,14 +148,11 @@ class PerformanceProfiler:
         try:
             yield
         finally:
-            # Capture end time
             end_time = time.perf_counter()
             wall_time = end_time - start_time
 
-            # Capture CPU profiling data
             profiler.disable()
 
-            # Create stats object for analysis
             stats_stream = io.StringIO()
             stats = pstats.Stats(profiler, stream=stats_stream)
 
@@ -171,7 +168,6 @@ class PerformanceProfiler:
                 stat_tuple[0] for stat_tuple in stats_data.values()
             )  # cc = call count
 
-            # Optional: capture peak memory usage
             memory_peak_bytes: Optional[int] = None
             if mem_tracing_started:
                 try:
@@ -186,7 +182,6 @@ class PerformanceProfiler:
                     except Exception as exc:
                         logger.debug("Failed to stop tracemalloc: %s", exc)
 
-            # Create step profile
             step_profile = StepProfile(
                 step_name=step_name,
                 step_type=step_type,
@@ -213,7 +208,6 @@ class PerformanceProfiler:
             profile_dir: Directory containing worker profile files.
             step_name: Name of the workflow step these workers belong to.
         """
-        # Find the step profile to merge into
         step_profile = None
         for profile in self.results.step_profiles:
             if profile.step_name == step_name:
@@ -224,15 +218,15 @@ class PerformanceProfiler:
             logger.warning(f"No parent profile found for step: {step_name}")
             return
 
-        # Find all worker profile files for this step
-        worker_files = list(profile_dir.glob("*_worker_*.pstats"))
+        # Find all worker profile files for this step. Workers in
+        # analysis/failure_manager.py write {analysis_name}_thread_{tid}_{uuid}.pstats.
+        worker_files = list(profile_dir.glob("*_thread_*.pstats"))
         if not worker_files:
             logger.debug(f"No worker profiles found in {profile_dir}")
             return
 
         logger.debug(f"Found {len(worker_files)} worker profiles to merge")
 
-        # Merge all worker stats into the parent stats
         try:
             merged_count = 0
             for worker_file in worker_files:
@@ -274,12 +268,10 @@ class PerformanceProfiler:
 
         logger.debug("Starting performance analysis")
 
-        # Identify time-consuming steps
         sorted_steps = sorted(
             self.results.step_profiles, key=lambda p: p.wall_time, reverse=True
         )
 
-        # Calculate percentage of total time for each step
         total_time = self.results.total_wall_time
         step_percentages = []
 
@@ -307,7 +299,6 @@ class PerformanceProfiler:
 
         self.results.bottlenecks = bottlenecks
 
-        # Generate analysis summary
         self.results.analysis_summary = {
             "total_steps": len(self.results.step_profiles),
             "slowest_step": sorted_steps[0].step_name if sorted_steps else None,
@@ -401,10 +392,9 @@ class PerformanceProfiler:
 
 
 class PerformanceReporter:
-    """Format and render performance profiling results.
+    """Render profiling results as a plain-text report.
 
-    Generates plain-text reports with timing analysis, bottleneck identification,
-    and practical performance tuning suggestions.
+    Covers per-step timing, bottleneck identification, and tuning suggestions.
     """
 
     def __init__(self, results: ProfileResults):
@@ -589,7 +579,6 @@ class PerformanceReporter:
             step_name = bottleneck["step_name"]
             lines.append(f"Top CPU-consuming functions in '{step_name}':")
 
-            # Get profiler reference to access top functions
             profiler = None
             for profile in self.results.step_profiles:
                 if profile.step_name == step_name:

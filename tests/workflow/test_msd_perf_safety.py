@@ -11,6 +11,7 @@ class _ScenarioStub:
         self.demand_set = demand_set
         self.results = results
         self._execution_counter = 0
+        self.seed = None
 
 
 def test_msd_deterministic_evaluation(monkeypatch):

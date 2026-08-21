@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ngraph.analysis.failure_manager import FailureManager
-from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
     FailureMode,
     FailurePolicy,
@@ -18,6 +17,7 @@ from ngraph.model.failure.policy import (
 )
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node, RiskGroup
+from ngraph.model.selectors import Condition
 
 
 @pytest.fixture
@@ -206,8 +206,10 @@ class TestFailureManagerExclusionComputation:
             ) -> dict[int, tuple[str, ...]]:
                 return {}
 
-            def apply_failures(self, *args: Any, **kwargs: Any) -> list[str]:
-                return [self.failed_group]
+            def apply_failures_typed(
+                self, *args: Any, **kwargs: Any
+            ) -> tuple[set[str], set[str], set[str]]:
+                return set(), set(), {self.failed_group}
 
         fm = FailureManager(
             network=network,
@@ -258,15 +260,15 @@ class TestFailureManagerExclusionComputation:
             ) -> dict[int, tuple[str, ...]]:
                 return {}
 
-            def apply_failures(
+            def apply_failures_typed(
                 self,
                 *args: Any,
                 failure_trace: dict[str, Any] | None = None,
                 **kwargs: Any,
-            ) -> list[str]:
+            ) -> tuple[set[str], set[str], set[str]]:
                 if failure_trace is not None:
                     failure_trace.update(expected_trace)
-                return [parent.name]
+                return set(), set(), {parent.name}
 
         fm = FailureManager(
             network=network,
@@ -308,8 +310,10 @@ class TestFailureManagerExclusionComputation:
             ) -> dict[int, tuple[str, ...]]:
                 return {}
 
-            def apply_failures(self, *args: Any, **kwargs: Any) -> list[str]:
-                return [group_a.name]
+            def apply_failures_typed(
+                self, *args: Any, **kwargs: Any
+            ) -> tuple[set[str], set[str], set[str]]:
+                return set(), set(), {group_a.name}
 
         fm = FailureManager(
             network=network,

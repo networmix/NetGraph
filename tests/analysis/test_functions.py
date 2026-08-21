@@ -149,7 +149,6 @@ class TestDemandPlacementAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             demands_config=demands_config,
-            placement_rounds=1,
         )
 
         # Verify results structure
@@ -187,7 +186,6 @@ class TestDemandPlacementAnalysis:
             excluded_nodes=set(),
             excluded_links=set(),
             demands_config=demands_config,
-            placement_rounds=1,
         )
 
         assert isinstance(result, FlowIterationResult)
@@ -206,7 +204,7 @@ class TestDemandPlacementWithContextCaching:
 
     def test_context_caching_pairwise_mode(self, diamond_network: Network) -> None:
         """Context caching works with pairwise mode."""
-        from ngraph.analysis.functions import build_demand_context
+        from ngraph.analysis.functions import build_demand_placement_inputs
 
         demands_config = [
             {
@@ -219,7 +217,7 @@ class TestDemandPlacementWithContextCaching:
         ]
 
         # Build context once
-        ctx = build_demand_context(diamond_network, demands_config)
+        ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
         # Use context for analysis
         result = demand_placement_analysis(
@@ -235,7 +233,7 @@ class TestDemandPlacementWithContextCaching:
 
     def test_context_caching_combine_mode(self, diamond_network: Network) -> None:
         """Context caching works with combine mode (uses pseudo nodes)."""
-        from ngraph.analysis.functions import build_demand_context
+        from ngraph.analysis.functions import build_demand_placement_inputs
 
         demands_config = [
             {
@@ -248,7 +246,7 @@ class TestDemandPlacementWithContextCaching:
         ]
 
         # Build context once
-        ctx = build_demand_context(diamond_network, demands_config)
+        ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
         # Use context for analysis - this is where the bug manifested
         result = demand_placement_analysis(
@@ -266,7 +264,7 @@ class TestDemandPlacementWithContextCaching:
         self, diamond_network: Network
     ) -> None:
         """Context can be reused for multiple analysis iterations."""
-        from ngraph.analysis.functions import build_demand_context
+        from ngraph.analysis.functions import build_demand_placement_inputs
 
         demands_config = [
             {
@@ -278,7 +276,7 @@ class TestDemandPlacementWithContextCaching:
             },
         ]
 
-        ctx = build_demand_context(diamond_network, demands_config)
+        ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
         # Run multiple iterations with different exclusions
         for excluded in [set(), {"B"}, {"C"}]:
@@ -291,11 +289,17 @@ class TestDemandPlacementWithContextCaching:
             )
             assert isinstance(result, FlowIterationResult)
 
-    def test_context_caching_without_id_raises(self, diamond_network: Network) -> None:
-        """Context caching without stable ID raises KeyError for combine mode."""
-        from ngraph.analysis.functions import build_demand_context
+    def test_context_caching_without_id_works(self, diamond_network: Network) -> None:
+        """Context caching works without explicit IDs (deterministic ids).
 
-        # Config without explicit ID - each reconstruction generates new ID
+        Regression: configs without "id" previously got a fresh uuid on
+        every reconstruction, so pseudo node names diverged from the
+        pre-built context and analysis crashed with KeyError. IDs derived
+        from source/target/position keep them stable.
+        """
+        from ngraph.analysis.functions import build_demand_placement_inputs
+
+        # Config without explicit ID - deterministic ID is derived
         demands_config = [
             {
                 "source": "[AB]",
@@ -305,19 +309,18 @@ class TestDemandPlacementWithContextCaching:
             },
         ]
 
-        # Build context - creates pseudo nodes with auto-generated ID (uuid1)
-        ctx = build_demand_context(diamond_network, demands_config)
+        ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
-        # Analysis reconstructs TrafficDemand without ID -> generates new ID (uuid2)
-        # Tries to find pseudo nodes _src_...|uuid2 which don't exist -> KeyError
-        with pytest.raises(KeyError):
-            demand_placement_analysis(
-                network=diamond_network,
-                excluded_nodes=set(),
-                excluded_links=set(),
-                demands_config=demands_config,
-                context=ctx,
-            )
+        result = demand_placement_analysis(
+            network=diamond_network,
+            excluded_nodes=set(),
+            excluded_links=set(),
+            demands_config=demands_config,
+            context=ctx,
+        )
+
+        assert result.summary.total_placed == 50.0
+        assert result.summary.overall_ratio == 1.0
 
 
 class TestSensitivityAnalysis:
@@ -372,3 +375,36 @@ class TestSensitivityAnalysis:
                 source="nonexistent.*",
                 target="also_nonexistent.*",
             )
+
+    def test_sensitivity_analysis_single_pass(
+        self, simple_network: Network, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Computes flow and sensitivity in one pass (one mask pair per call)."""
+        from ngraph.analysis.context import AnalysisContext
+        from ngraph.analysis.functions import build_maxflow_context
+
+        ctx = build_maxflow_context(simple_network, "A", "C", mode="combine")
+
+        calls = {"node_mask": 0}
+        original = AnalysisContext.build_node_mask
+
+        def counting(self: AnalysisContext, excluded_nodes=None):
+            calls["node_mask"] += 1
+            return original(self, excluded_nodes)
+
+        monkeypatch.setattr(AnalysisContext, "build_node_mask", counting)
+
+        result = sensitivity_analysis(
+            network=simple_network,
+            excluded_nodes=set(),
+            excluded_links=set(),
+            source="A",
+            target="C",
+            context=ctx,
+        )
+
+        # Previously two full passes (max_flow + sensitivity) built two masks.
+        assert calls["node_mask"] == 1
+        entry = result.flows[0]
+        assert entry.demand == entry.placed == 10.0
+        assert len(entry.data["sensitivity"]) == 2

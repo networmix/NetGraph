@@ -30,17 +30,13 @@ class DummyNet:
         return {"G1": [N(False), N(True)], "G2": [N(False)]}
 
 
-def test_format_table_and_plural() -> None:
+def test_format_table() -> None:
     table = cli_mod._format_table(
         ["H1", "H2"], [["abc", "1"], ["defghi", "2"]], max_col_width=5
     )
     assert "H1" in table and "H2" in table
     # Ensure clipping with ASCII ellipsis (max_col_width=5 -> keep 2 chars + '...')
     assert "de..." in table
-
-    assert cli_mod._plural(1, "node") == "node"
-    assert cli_mod._plural(2, "node") == "nodes"
-    assert cli_mod._plural(2, "node", "vertices") == "vertices"
 
 
 def test_collect_and_summarize_node_matches() -> None:

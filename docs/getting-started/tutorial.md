@@ -1,6 +1,6 @@
 # Tutorial
 
-This guide shows the fastest way to run a scenario from the CLI and a minimal programmatic example. See the Examples section for detailed scenarios and policies.
+The fastest way to run a scenario from the CLI, plus a minimal programmatic example. See the Examples section for fuller scenarios and for flow placement and failure policies.
 
 ## CLI: run and inspect
 
@@ -8,7 +8,7 @@ This guide shows the fastest way to run a scenario from the CLI and a minimal pr
 # Inspect (validate and preview structure, steps, demands)
 ngraph inspect scenarios/square_mesh.yaml --detail
 
-# Run and store results (JSON) next to the scenario or under --output
+# Run and store results (JSON) in the current directory or under --output
 ngraph run scenarios/square_mesh.yaml --output out
 
 # Filter exported results by workflow step names

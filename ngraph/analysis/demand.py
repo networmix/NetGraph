@@ -1,7 +1,8 @@
 """Demand expansion: converts TrafficDemand specs into concrete placement demands.
 
-Supports both pairwise and combine modes through augmentation-based pseudo nodes.
-Uses unified selectors for node selection.
+Combine mode aggregates each side behind augmentation-based pseudo nodes;
+pairwise mode emits one demand per (source, target) pair. Endpoints are
+resolved through the shared selector layer.
 """
 
 from __future__ import annotations
@@ -10,10 +11,11 @@ from dataclasses import dataclass, replace
 from typing import Dict, List
 
 from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
-from ngraph.dsl.selectors import normalize_selector, select_nodes
+from ngraph.dsl.selectors import normalize_selector
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Network, Node
+from ngraph.model.selectors import select_nodes
 
 
 @dataclass
@@ -29,7 +31,6 @@ class ExpandedDemand:
         volume: Traffic volume to place.
         priority: Priority class (lower is higher priority).
         policy_preset: FlowPolicy configuration preset.
-        demand_id: Parent TrafficDemand ID for tracking.
     """
 
     src_name: str
@@ -37,7 +38,6 @@ class ExpandedDemand:
     volume: float
     priority: int
     policy_preset: FlowPolicyPreset
-    demand_id: str
 
 
 @dataclass
@@ -72,12 +72,24 @@ def _expand_combine(
     dst_groups: Dict[str, List[Node]],
     policy_preset: FlowPolicyPreset,
 ) -> tuple[list[ExpandedDemand], list[AugmentationEdge]]:
-    """Expand combine mode: aggregate sources/sinks through pseudo nodes."""
+    """Expand combine mode: aggregate sources/sinks through pseudo nodes.
+
+    Nodes selected on both sides are excluded from the target set. Without
+    this guard a shared node would be attached to both pseudo endpoints,
+    forming a zero-cost pseudo_src -> node -> pseudo_snk bypass over two
+    LARGE_CAPACITY augmentation edges that absorbs the entire demand
+    without touching the real network. This mirrors the overlap invariant
+    enforced in context._build_pseudo_node_augmentations. If the exclusion
+    empties the target set, nothing is expanded.
+    """
     pseudo_src = f"_src_{td.id}"
     pseudo_snk = f"_snk_{td.id}"
 
     src_names = _flatten_group_names(src_groups)
-    dst_names = _flatten_group_names(dst_groups)
+    src_name_set = set(src_names)
+    dst_names = [
+        name for name in _flatten_group_names(dst_groups) if name not in src_name_set
+    ]
 
     if not src_names or not dst_names:
         return [], []
@@ -99,7 +111,6 @@ def _expand_combine(
         volume=td.volume,
         priority=td.priority,
         policy_preset=policy_preset,
-        demand_id=td.id,
     )
 
     return [expanded], augmentations
@@ -133,7 +144,6 @@ def _expand_pairwise(
             volume=volume_per_pair,
             priority=td.priority,
             policy_preset=policy_preset,
-            demand_id=td.id,
         )
         for src, dst in pairs
     ]
@@ -150,48 +160,67 @@ def _expand_by_group_mode(
     """Expand demands based on group_mode.
 
     group_mode semantics:
-    - flatten: All nodes combined (default, current behavior)
-    - per_group: One demand per (src_group, dst_group) pair
-    - group_pairwise: Pairwise expansion within each group pair
+    - flatten: All groups merged into one node set, then mode applied.
+    - per_group: Each group expands independently. With mode=combine, one
+      demand per source group with all target groups combined (nodes in
+      the source group itself are excluded from the targets; a source
+      group whose targets become empty after exclusion is skipped); with
+      mode=pairwise, pairwise within each group label present on both
+      sides. td.volume is split evenly across groups; a skipped group's
+      share is not redistributed, so total expanded volume can be less
+      than td.volume when exclusion empties a group's targets or a label
+      has no non-self pairs.
+    - group_pairwise: One expansion per (src_group, dst_group) label pair
+      with distinct labels (same-label pairs are skipped), with td.volume
+      split evenly across those pairs; a pair that empties after
+      source/target overlap exclusion likewise drops its share.
     """
+    # td.mode and td.group_mode are validated by TrafficDemand.__post_init__,
+    # so mode is "combine" or "pairwise" in every branch below.
     if td.group_mode == "flatten":
         # Standard behavior: flatten all groups, then apply mode
         if td.mode == "combine":
             return _expand_combine(td, src_groups, dst_groups, policy_preset)
-        elif td.mode == "pairwise":
-            return _expand_pairwise(td, src_groups, dst_groups, policy_preset)
-        else:
-            raise ValueError(f"Unknown demand mode: {td.mode}")
+        return _expand_pairwise(td, src_groups, dst_groups, policy_preset)
 
     elif td.group_mode == "per_group":
-        # One demand per (src_group, dst_group) pair
         all_demands: List[ExpandedDemand] = []
         all_augmentations: List[AugmentationEdge] = []
 
-        for src_label, src_nodes in src_groups.items():
-            for dst_label, dst_nodes in dst_groups.items():
-                if src_label == dst_label:
-                    continue  # Skip same-group pairs
-
-                group_td = replace(td, id=f"{td.id}|{src_label}|{dst_label}")
-                single_src = {src_label: src_nodes}
-                single_dst = {dst_label: dst_nodes}
-
-                if td.mode == "combine":
-                    demands, augs = _expand_combine(
-                        group_td, single_src, single_dst, policy_preset
-                    )
-                else:
-                    demands, augs = _expand_pairwise(
-                        group_td, single_src, single_dst, policy_preset
-                    )
-
+        if td.mode == "combine":
+            # One demand per source group, all target groups combined
+            if not src_groups:
+                return [], []
+            volume_per_group = td.volume / len(src_groups)
+            for src_label, src_nodes in src_groups.items():
+                group_td = replace(
+                    td, id=f"{td.id}|{src_label}", volume=volume_per_group
+                )
+                demands, augs = _expand_combine(
+                    group_td, {src_label: src_nodes}, dst_groups, policy_preset
+                )
+                all_demands.extend(demands)
+                all_augmentations.extend(augs)
+        else:
+            # Pairwise within each group label present on both sides
+            shared_labels = [label for label in src_groups if label in dst_groups]
+            if not shared_labels:
+                return [], []
+            volume_per_group = td.volume / len(shared_labels)
+            for label in shared_labels:
+                group_td = replace(td, id=f"{td.id}|{label}", volume=volume_per_group)
+                demands, augs = _expand_pairwise(
+                    group_td,
+                    {label: src_groups[label]},
+                    {label: dst_groups[label]},
+                    policy_preset,
+                )
                 all_demands.extend(demands)
                 all_augmentations.extend(augs)
 
         return all_demands, all_augmentations
 
-    elif td.group_mode == "group_pairwise":
+    else:  # group_pairwise
         # Pairwise between groups: each src group to each dst group
         all_demands: List[ExpandedDemand] = []
         all_augmentations: List[AugmentationEdge] = []
@@ -209,10 +238,14 @@ def _expand_by_group_mode(
         # Divide volume among group pairs
         volume_per_group_pair = td.volume / len(group_pairs)
 
-        for src_label, dst_label in group_pairs:
+        for pair_index, (src_label, dst_label) in enumerate(group_pairs):
+            # Labels are '|'-joined regex captures and may themselves contain
+            # '|', so a purely label-composed id is ambiguous across pairs.
+            # The enumeration index makes the id injective; labels are kept
+            # for readability.
             group_td = replace(
                 td,
-                id=f"{td.id}|{src_label}|{dst_label}",
+                id=f"{td.id}|{src_label}|{dst_label}#gp{pair_index}",
                 volume=volume_per_group_pair,
             )
             single_src = {src_label: src_groups[src_label]}
@@ -231,9 +264,6 @@ def _expand_by_group_mode(
             all_augmentations.extend(augs)
 
         return all_demands, all_augmentations
-
-    else:
-        raise ValueError(f"Unknown group_mode: {td.group_mode}")
 
 
 def expand_demands(
@@ -264,8 +294,19 @@ def expand_demands(
         DemandExpansion with demands and augmentations.
 
     Raises:
-        ValueError: If no demands could be expanded or unsupported mode.
+        ValueError: If no demands could be expanded, or if two demands share
+            an id (pseudo node names embed the id, so duplicates would merge
+            distinct demands' attachment edges into one endpoint).
     """
+    seen_ids: set[str] = set()
+    for td in traffic_demands:
+        if td.id in seen_ids:
+            raise ValueError(
+                f"Duplicate TrafficDemand id '{td.id}'. Demand ids must be "
+                "unique within one expansion."
+            )
+        seen_ids.add(td.id)
+
     all_demands: List[ExpandedDemand] = []
     all_augmentations: List[AugmentationEdge] = []
 
@@ -298,6 +339,26 @@ def expand_demands(
             "  - All matching nodes are disabled\n"
             "  - Source and target are identical (self-loops not allowed)"
         )
+
+    # Pseudo endpoints must be unique across the whole expansion: composed
+    # ids concatenate demand ids and group labels, both of which may contain
+    # '|', so distinct demands can render to the same pseudo name (e.g.
+    # id "X" + label "Y|Z" vs id "X|Y" + label "Z"). A shared pseudo node
+    # would silently merge the demands' attachment edges, recreating the
+    # zero-cost bypass.
+    seen_endpoints: set[str] = set()
+    for d in all_demands:
+        for name in (d.src_name, d.dst_name):
+            if not name.startswith(("_src_", "_snk_")):
+                continue
+            if name in seen_endpoints:
+                raise ValueError(
+                    f"Ambiguous demand expansion: pseudo endpoint '{name}' is "
+                    "claimed by two different demand expansions. Demand ids "
+                    "and group labels containing '|' can compose to the same "
+                    "id; use distinct demand ids."
+                )
+            seen_endpoints.add(name)
 
     # Sort by priority (lower = higher priority)
     sorted_demands = sorted(all_demands, key=lambda d: d.priority)

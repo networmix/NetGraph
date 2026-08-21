@@ -2,18 +2,18 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-Scenario-driven network modeling and analysis framework combining Python's flexibility with high-performance C++ algorithms.
+Scenario-driven network modeling and analysis framework combining Python with C++ graph algorithms.
 
 ## Overview
 
-NetGraph enables declarative modeling of network topologies, traffic matrices, and failure scenarios. It delegates computationally intensive graph algorithms to [NetGraph-Core](https://github.com/networmix/NetGraph-Core) while providing a rich Python API and CLI for orchestration.
+Model network topologies, traffic matrices, and failure scenarios declaratively. Graph algorithms are delegated to [NetGraph-Core](https://github.com/networmix/NetGraph-Core); NetGraph itself provides the Python API and CLI that orchestrate them.
 
 ## Architecture
 
-NetGraph employs a **hybrid Python+C++ architecture**:
+NetGraph uses a hybrid Python+C++ architecture, split across two layers:
 
 - **Python layer (NetGraph)**: Scenario DSL parsing, workflow orchestration, result aggregation, and high-level APIs.
-- **C++ layer (NetGraph-Core)**: Performance-critical graph algorithms (SPF, KSP, Max-Flow) executing in optimized C++ with the GIL released.
+- **C++ layer (NetGraph-Core)**: The compute-intensive graph algorithms (SPF, KSP, Max-Flow), executed in C++ with the GIL released.
 
 ## Key Features
 
@@ -31,15 +31,15 @@ NetGraph employs a **hybrid Python+C++ architecture**:
 
 ### Traffic Engineering
 
-- **Routing Modes**: Unified modeling of **IP Routing** (static costs, oblivious to congestion) and **Traffic Engineering** (dynamic residuals, congestion-aware).
-- **Flow Placement**: Strategies for **ECMP** (Equal-Cost Multi-Path) and **WCMP** (Weighted Cost Multi-Path).
+- **Routing Modes**: Unified modeling of IP routing (static costs, oblivious to congestion) and traffic engineering (dynamic residuals, congestion-aware).
+- **Flow Placement**: Strategies for ECMP (Equal-Cost Multi-Path) and WCMP (Weighted Cost Multi-Path).
 - **Capacity Analysis**: Compute max-flow envelopes and demand allocation with configurable placement policies.
 
 ### Workflow & Integration
 
 - **Structured Results**: Export analysis artifacts to JSON for downstream processing.
-- **CLI**: Comprehensive command-line interface for validation and execution.
-- **Python API**: Full programmatic access to all modeling and solving capabilities.
+- **CLI**: Validate, inspect, and run scenarios from the command line.
+- **Python API**: Programmatic access to the same modeling and solving entry points.
 
 ## Getting Started
 

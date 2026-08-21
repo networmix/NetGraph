@@ -9,9 +9,8 @@ arbitrary `data` payloads are sanitized. These dicts are written under
 `data.flow_results` by steps.
 
 Utilities:
-    _fmt_float_key: Formats floats as stable string keys for JSON serialization.
-        Uses fixed-point notation with trailing zeros stripped for human-readable,
-        canonical representations of numeric keys like cost distributions.
+    _fmt_float_key: Formats floats as stable string keys for JSON serialization,
+        in fixed-point notation with trailing zeros stripped.
 """
 
 from __future__ import annotations
@@ -49,7 +48,7 @@ def _fmt_float_key(x: float, places: int = 9) -> str:
 
 @dataclass(slots=True)
 class FlowEntry:
-    """Represents a single source→destination flow outcome within an iteration.
+    """One source→destination flow outcome within an iteration.
 
     Fields are unit-agnostic. Callers can interpret numbers as needed for
     presentation (e.g., Gbit/s).
@@ -75,7 +74,7 @@ class FlowEntry:
     data: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate invariants and types for early error detection.
+        """Validate field types and invariants.
 
         Raises:
             ValueError: If any numeric fields are NaN/inf or logically inconsistent.
@@ -179,7 +178,6 @@ class FlowEntry:
             except Exception:  # pragma: no cover - defensive
                 normalized_costs[str(k)] = float(v)
 
-        # Build dict directly from known fields (avoids asdict() overhead)
         return {
             "source": self.source,
             "destination": self.destination,
@@ -211,7 +209,7 @@ class FlowSummary:
     num_flows: int
 
     def __post_init__(self) -> None:
-        """Validate summary invariants for correctness.
+        """Validate summary invariants.
 
         Raises:
             ValueError: If totals/ratio are inconsistent or invalid.

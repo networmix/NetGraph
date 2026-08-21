@@ -1,7 +1,7 @@
 """NetGraph: Network modeling and analysis library.
 
-NetGraph provides interfaces for network topology modeling, traffic analysis, and
-capacity planning using a hybrid Python+C++ architecture.
+Network topology modeling, traffic analysis, and capacity planning on a hybrid
+Python+C++ architecture.
 
 Primary API:
     analyze() - Create an analysis context for network queries
@@ -31,8 +31,6 @@ Example:
 from __future__ import annotations
 
 from importlib.metadata import version
-
-from ngraph import cli, logging
 
 __version__ = version("ngraph")
 from ngraph.analysis import AnalysisContext, analyze
@@ -83,7 +81,4 @@ __all__ = [
     "NodeMap",
     "from_networkx",
     "to_networkx",
-    # Utilities
-    "cli",
-    "logging",
 ]

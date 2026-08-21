@@ -19,7 +19,7 @@ digraph SystemPipeline {
 
     subgraph cluster_model {
       label=""; style=invis;
-      scenario [label="Scenario\n·Network\n·FailurePolicySet\n·TrafficMatrixSet\n·Workflow", shape=box];
+      scenario [label="Scenario\n·Network\n·FailurePolicySet\n·DemandSet\n·Workflow", shape=box];
     }
 
     subgraph cluster_exec {

@@ -1,7 +1,7 @@
 """YAML loader + schema validation for Scenario DSL.
 
-Provides a single entrypoint to parse a YAML string, normalize keys where
-needed, validate against the packaged JSON schema, and return a canonical
+A single entrypoint parses a YAML string, normalizes keys where needed,
+validates against the packaged JSON schema, and returns a canonical
 dictionary suitable for downstream expansion/parsing.
 """
 
@@ -35,7 +35,7 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
             data["demands"]  # type: ignore[arg-type]
         )
 
-    # Early shape checks helpful for better error messages prior to schema validation
+    # Early shape checks give better error messages than schema validation would
     network_section = data.get("network")
     if isinstance(network_section, dict):
         if "nodes" in network_section and not isinstance(

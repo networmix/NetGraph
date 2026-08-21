@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from ngraph.dsl.selectors import Condition, evaluate_condition, evaluate_conditions
+from ngraph.model.selectors import Condition, evaluate_condition, evaluate_conditions
 
 
 class TestEvaluateCondition:

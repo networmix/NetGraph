@@ -35,7 +35,7 @@ dependencies = [
     "pyyaml>=6.0",
     "pandas>=2.0",
     "jsonschema>=4.0",
-    "netgraph-core>=0.3.0",
+    "netgraph-core>=0.7.0",
 ]
 
 [project.urls]

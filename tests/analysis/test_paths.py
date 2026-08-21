@@ -8,6 +8,12 @@ Tests cover:
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import textwrap
+from typing import Any
+
 import pytest
 
 from ngraph import Link, Mode, Network, Node, analyze
@@ -256,6 +262,182 @@ class TestKShortestPaths:
         paths = results[("A", "C")]
         # Both paths (cost 2 and 3) should be included since 3 <= 3.0
         assert len(paths) == 2
+
+    @staticmethod
+    def _multi_member_group_network() -> Network:
+        """Build a network where groups contain multiple nodes.
+
+        Topology:
+            x1 -> y1 (cost 10)
+            x2 -> y2 (cost 11)
+            x1 -> m -> y1 (cost 5 + 10 = 15)
+
+        Group-to-group paths sorted by cost: 10 (x1->y1), 11 (x2->y2),
+        15 (x1->m->y1).
+        """
+        net = Network()
+        for name in ["x1", "x2", "y1", "y2", "m"]:
+            net.add_node(Node(name))
+
+        net.add_link(Link("x1", "y1", capacity=10.0, cost=10.0))
+        net.add_link(Link("x2", "y2", capacity=10.0, cost=11.0))
+        net.add_link(Link("x1", "m", capacity=10.0, cost=5.0))
+        net.add_link(Link("m", "y1", capacity=10.0, cost=10.0))
+        return net
+
+    def test_multi_node_groups_merge_paths_across_pairs(self) -> None:
+        """KSP between multi-node groups merges paths from all node pairs.
+
+        Regression: KSP previously ran only between the single best (src,
+        snk) node pair, silently omitting cheaper paths from other pairs
+        (here the cost-11 x2->y2 path lost to the cost-15 x1->m->y1 path).
+        """
+        net = self._multi_member_group_network()
+
+        results = analyze(net).k_shortest_paths("^x", "^y", max_k=2, mode=Mode.COMBINE)
+
+        assert len(results) == 1
+        paths = list(results.values())[0]
+        assert [p.cost for p in paths] == [10.0, 11.0]
+
+    def test_multi_node_groups_all_paths_in_cost_order(self) -> None:
+        """KSP with a larger max_k returns merged paths in cost order."""
+        net = self._multi_member_group_network()
+
+        results = analyze(net).k_shortest_paths("^x", "^y", max_k=5, mode=Mode.COMBINE)
+
+        paths = list(results.values())[0]
+        assert [p.cost for p in paths] == [10.0, 11.0, 15.0]
+
+    def test_multi_node_groups_cost_factor_relative_to_group_best(self) -> None:
+        """max_path_cost_factor applies to the best cost across all pairs."""
+        net = self._multi_member_group_network()
+
+        # Cap = 10 * 1.2 = 12: includes costs 10 and 11, excludes 15
+        results = analyze(net).k_shortest_paths(
+            "^x", "^y", max_k=5, mode=Mode.COMBINE, max_path_cost_factor=1.2
+        )
+
+        paths = list(results.values())[0]
+        assert [p.cost for p in paths] == [10.0, 11.0]
+
+    @staticmethod
+    def _many_pair_group_network() -> Network:
+        """Build 10 sources and 10 sinks through one hub, all pair costs distinct.
+
+        Pair (Ai, Bj) costs (i + 1) + (j + 1) * 100, so the cheapest
+        pairs are (A0, B0) = 101, (A1, B0) = 102, (A2, B0) = 103, ...
+        """
+        net = Network()
+        net.add_node(Node("X"))
+        for i in range(10):
+            net.add_node(Node(f"A{i}"))
+            net.add_node(Node(f"B{i}"))
+            net.add_link(Link(f"A{i}", "X", capacity=10.0, cost=float(i + 1)))
+            net.add_link(Link("X", f"B{i}", capacity=10.0, cost=float((i + 1) * 100)))
+        return net
+
+    def test_multi_node_groups_prune_pairs_beyond_kth_best_cost(self) -> None:
+        """Per-pair KSP stops once later pairs cannot reach the top-k.
+
+        Regression: every reachable node pair previously ran a full KSP
+        (100 runs here) even though only the cheapest few pairs can
+        contribute paths that survive the max_k truncation.
+        """
+        net = self._many_pair_group_network()
+        ctx = analyze(net)
+        core = ctx._ensure_core()
+        inner = core._algorithms
+        calls = {"ksp": 0}
+
+        class CountingAlgorithms:
+            def __getattr__(self, name: str) -> Any:
+                return getattr(inner, name)
+
+            def ksp(self, *args: Any, **kwargs: Any) -> Any:
+                calls["ksp"] += 1
+                return inner.ksp(*args, **kwargs)
+
+        core._algorithms = CountingAlgorithms()  # type: ignore[assignment]
+
+        results = ctx.k_shortest_paths("^A", "^B", max_k=3, mode=Mode.COMBINE)
+
+        paths = list(results.values())[0]
+        assert [p.cost for p in paths] == [101.0, 102.0, 103.0]
+        # 3 KSP runs collect the top-3; the 4th-cheapest pair (cost 104)
+        # exceeds the k-th best cost (103) and terminates the pair loop.
+        assert calls["ksp"] <= 4
+
+    def test_equal_cost_truncation_is_deterministic(self) -> None:
+        """Equal-cost ties beyond max_k truncate by structural path order.
+
+        Regression: with more equal-cost paths than max_k, truncation
+        previously kept a set-iteration-order (hash-dependent) subset.
+        """
+        net = Network()
+        for name in ["S1", "S2", "M1", "M2", "M3", "T1", "T2"]:
+            net.add_node(Node(name))
+        for src in ["S1", "S2"]:
+            for mid in ["M1", "M2", "M3"]:
+                net.add_link(Link(src, mid, capacity=10.0, cost=1.0))
+        for mid in ["M1", "M2", "M3"]:
+            for dst in ["T1", "T2"]:
+                net.add_link(Link(mid, dst, capacity=10.0, cost=1.0))
+
+        # 12 equal-cost (cost 2) paths exist; max_k=3 forces truncation.
+        # The smallest 3 by (cost, node sequence) must always win.
+        for _ in range(2):  # Identical across repeated context builds
+            results = analyze(net).k_shortest_paths(
+                "^S", "^T", max_k=3, mode=Mode.COMBINE
+            )
+            paths = list(results.values())[0]
+            assert [p.nodes_seq for p in paths] == [
+                ("S1", "M1", "T1"),
+                ("S1", "M1", "T2"),
+                ("S1", "M2", "T1"),
+            ]
+
+    def test_equal_cost_truncation_stable_across_hash_seeds(self) -> None:
+        """Truncated path selection is identical across PYTHONHASHSEED values.
+
+        Regression: the selected subset of equal-cost paths previously
+        varied across processes with different string-hash seeds.
+        """
+        script = textwrap.dedent(
+            """
+            from ngraph import Link, Mode, Network, Node, analyze
+
+            net = Network()
+            for name in ["S1", "S2", "M1", "M2", "M3", "T1", "T2"]:
+                net.add_node(Node(name))
+            for src in ["S1", "S2"]:
+                for mid in ["M1", "M2", "M3"]:
+                    net.add_link(Link(src, mid, capacity=10.0, cost=1.0))
+            for mid in ["M1", "M2", "M3"]:
+                for dst in ["T1", "T2"]:
+                    net.add_link(Link(mid, dst, capacity=10.0, cost=1.0))
+
+            results = analyze(net).k_shortest_paths(
+                "^S", "^T", max_k=3, mode=Mode.COMBINE
+            )
+            paths = list(results.values())[0]
+            print(sorted(p.nodes_seq for p in paths))
+            """
+        )
+
+        outputs = set()
+        for seed in ("1", "42"):
+            env = dict(os.environ, PYTHONHASHSEED=seed)
+            proc = subprocess.run(
+                [sys.executable, "-c", script],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+            outputs.add(proc.stdout.strip())
+
+        assert len(outputs) == 1
 
 
 class TestDictSelectorsWithShortestPaths:

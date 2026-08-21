@@ -1,7 +1,6 @@
 """Traffic demand specification and set containers.
 
-This package provides data structures for defining traffic demands
-and organizing them into named demand sets.
+Defines individual demands and the named sets that group them for analysis.
 
 Public API:
     TrafficDemand: Individual demand specification with source/target selectors

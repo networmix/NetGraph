@@ -2,16 +2,14 @@
 
 from typing import Any, Dict, TypeVar
 
-K = TypeVar("K")
 V = TypeVar("V")
 
 
 def normalize_yaml_dict_keys(data: Dict[Any, V]) -> Dict[str, V]:
     """Normalize dictionary keys from YAML parsing to ensure consistent string keys.
 
-    YAML 1.1 boolean keys (e.g., true, false, yes, no, on, off) get converted to
-    Python True/False boolean values. This function converts them to predictable
-    string representations ("True"/"False") and ensures all keys are strings.
+    YAML 1.1 parses true/false/yes/no/on/off keys as Python booleans. Those
+    become "True"/"False"; every other key is coerced with str().
 
     Args:
         data: Dictionary that may contain boolean or other non-string keys from YAML parsing
@@ -28,11 +26,10 @@ def normalize_yaml_dict_keys(data: Dict[Any, V]) -> Dict[str, V]:
     """
     normalized = {}
     for key, value in data.items():
-        # Handle YAML parsing quirks: YAML 1.1 boolean keys (e.g., true, false,
-        # yes, no, on, off) get converted to Python True/False. Convert them to
-        # predictable string representations.
+        # YAML 1.1 turns true/false/yes/no/on/off keys into Python bools;
+        # normalize those to "True"/"False".
         if isinstance(key, bool):
-            key = str(key)  # Convert True/False to "True"/"False"
-        key = str(key)  # Ensure all keys are strings
+            key = str(key)
+        key = str(key)
         normalized[key] = value
     return normalized

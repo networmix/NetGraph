@@ -1,8 +1,7 @@
 """CostPower workflow step: collect capex and power by hierarchy level.
 
-This step aggregates capex and power from the network hardware inventory without
-performing any normalization or reporting. It separates contributions into two
-categories:
+Aggregates capex and power from the network hardware inventory, with no
+normalization or reporting. Contributions are split into two categories:
 
 - platform_*: node hardware (e.g., chassis, linecards) resolved from node attrs
 - optics_*: per-end link hardware (e.g., optics) resolved from link attrs
@@ -51,7 +50,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger
 from ngraph.model.components import (
     ComponentsLibrary,
@@ -70,7 +68,8 @@ class CostPower(WorkflowStep):
 
     Attributes:
         include_disabled: If True, include disabled nodes and links.
-        aggregation_level: Inclusive depth for aggregation. 0=root only.
+        aggregation_level: Inclusive depth for aggregation; 0 = root only.
+            Must be >= 0.
     """
 
     include_disabled: bool = False
@@ -101,9 +100,6 @@ class CostPower(WorkflowStep):
         network = scenario.network
         library: ComponentsLibrary = scenario.components_library
 
-        explorer = NetworkExplorer.explore_network(network, components_library=library)
-
-        # Helper: enabled checks
         def node_enabled(nd: Any) -> bool:
             return not bool(nd.disabled)
 
@@ -150,11 +146,7 @@ class CostPower(WorkflowStep):
             if comp is None:
                 continue
             capex, power, _ = totals_with_multiplier(comp, count)
-            tree_node = explorer._node_map.get(nd.name)
-            if tree_node is None:
-                continue
-            full_path = explorer._compute_full_path(tree_node)
-            add_values(full_path, float(capex), float(power), 0.0, 0.0)
+            add_values(nd.name, float(capex), float(power), 0.0, 0.0)
 
         # --- Optics aggregation (per-end link hardware) ---
         for lk in network.links.values():
@@ -175,19 +167,13 @@ class CostPower(WorkflowStep):
             src_comp, src_cnt, _src_excl = src_end
             if src_comp is not None and node_has_hw.get(lk.source, False):
                 capex, power, _ = totals_with_multiplier(src_comp, src_cnt)
-                src_tree = explorer._node_map.get(lk.source)
-                if src_tree is not None:
-                    src_path = explorer._compute_full_path(src_tree)
-                    add_values(src_path, 0.0, 0.0, float(capex), float(power))
+                add_values(lk.source, 0.0, 0.0, float(capex), float(power))
 
             # Destination endpoint
             dst_comp, dst_cnt, _dst_excl = dst_end
             if dst_comp is not None and node_has_hw.get(lk.target, False):
                 capex, power, _ = totals_with_multiplier(dst_comp, dst_cnt)
-                dst_tree = explorer._node_map.get(lk.target)
-                if dst_tree is not None:
-                    dst_path = explorer._compute_full_path(dst_tree)
-                    add_values(dst_path, 0.0, 0.0, float(capex), float(power))
+                add_values(lk.target, 0.0, 0.0, float(capex), float(power))
 
         # Build payload
         levels_payload: Dict[int, List[Dict[str, Any]]] = {}

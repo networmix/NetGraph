@@ -3,7 +3,6 @@
 import pytest
 
 from ngraph.analysis.failure_manager import FailureManager
-from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
     FailureMode,
     FailurePolicy,
@@ -11,6 +10,7 @@ from ngraph.model.failure.policy import (
 )
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node
+from ngraph.model.selectors import Condition
 
 # -----------------------------------------------------------------------------
 # FailurePolicy.apply_failures trace tests
@@ -121,30 +121,6 @@ class TestFailureTracePolicyLevel:
         assert "expansion" in trace
         assert "nodes" in trace["expansion"]
         assert "links" in trace["expansion"]
-
-    def test_trace_captures_expansion_risk_groups(self) -> None:
-        """Test expansion tracking for risk group children."""
-        # Select only the parent, then expansion should add child
-        rule = FailureRule(
-            scope="risk_group",
-            conditions=[Condition(attr="name", op="==", value="parent_rg")],
-            mode="all",
-        )
-        policy = FailurePolicy(
-            modes=[FailureMode(weight=1.0, rules=[rule])],
-            expand_children=True,
-        )
-
-        risk_groups = {
-            "parent_rg": {"name": "parent_rg", "children": [{"name": "child_rg"}]},
-            "child_rg": {"name": "child_rg", "children": []},
-        }
-
-        trace: dict = {}
-        policy.apply_failures({}, {}, risk_groups, failure_trace=trace)
-
-        # child_rg should appear in expansion.risk_groups (added by expansion, not selection)
-        assert "child_rg" in trace["expansion"]["risk_groups"]
 
     def test_trace_no_modes_returns_null_mode_index(self) -> None:
         """Test that mode_index is None when no modes configured."""

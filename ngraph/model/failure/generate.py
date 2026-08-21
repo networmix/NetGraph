@@ -1,7 +1,6 @@
 """Dynamic risk group generation from entity attributes.
 
-Provides functionality to auto-generate risk groups based on unique
-attribute values from nodes or links.
+Creates one risk group per unique value of a chosen node or link attribute.
 """
 
 from __future__ import annotations
@@ -11,13 +10,14 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
-from ngraph.dsl.selectors import (
-    flatten_link_attrs,
-    flatten_node_attrs,
-    resolve_attr_path,
-)
 from ngraph.logging import get_logger
 from ngraph.model.network import RiskGroup
+from ngraph.model.selectors import (
+    flatten_link_attrs,
+    flatten_node_attrs,
+    link_path_key,
+    resolve_attr_path,
+)
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
@@ -58,12 +58,16 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     Returns:
         List of newly created RiskGroup objects.
 
+    Raises:
+        ValueError: If `group_by` resolves to an unhashable value, or if the
+            name template renders the same group name for two distinct values.
+
     Note:
-        This function modifies entity risk_groups sets in place.
+        Modifies entity risk_groups sets in place.
     """
     path_pattern = re.compile(spec.path) if spec.path else None
 
-    # Collect entities and flatten function
+    # (entity id, entity, flattened attrs) triples for the target scope
     if spec.scope == "node":
         entities = [
             (node.name, node, flatten_node_attrs(node))
@@ -87,7 +91,7 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
             entities = [
                 (eid, entity, attrs)
                 for eid, entity, attrs in entities
-                if path_pattern.match(f"{attrs['source']}|{attrs['target']}")
+                if path_pattern.match(link_path_key(attrs))
             ]
 
     # Group by attribute value
@@ -95,18 +99,33 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     for entity_id, entity, attrs in entities:
         found, value = resolve_attr_path(attrs, spec.group_by)
         if found and value is not None:
-            groups[value].append((entity_id, entity))
+            try:
+                groups[value].append((entity_id, entity))
+            except TypeError as exc:
+                raise ValueError(
+                    f"generate block group_by '{spec.group_by}' resolved to an "
+                    f"unhashable {type(value).__name__} on entity "
+                    f"'{entity_id}'; group_by requires scalar attribute values"
+                ) from exc
 
     # Create risk groups
     result: List[RiskGroup] = []
+    seen_names: Dict[str, Any] = {}
     for value, members in groups.items():
-        # Generate group name from template
         name = spec.name.replace("${value}", str(value))
+        if name in seen_names:
+            # Distinct group_by values (e.g. int 1 and str "1") can render to
+            # the same string; a silent merge or a generic downstream conflict
+            # error would hide the real cause.
+            raise ValueError(
+                f"generate block name template '{spec.name}' renders the same "
+                f"group name '{name}' for distinct group_by values "
+                f"{seen_names[name]!r} and {value!r}"
+            )
+        seen_names[name] = value
 
-        # Create risk group with specified attrs
         rg = RiskGroup(name=name, attrs=dict(spec.attrs))
 
-        # Add membership to entities
         for _entity_id, entity in members:
             entity.risk_groups.add(name)
 
@@ -132,7 +151,9 @@ def parse_generate_spec(raw: Dict[str, Any]) -> GenerateSpec:
         Parsed GenerateSpec.
 
     Raises:
-        ValueError: If required fields are missing or invalid.
+        ValueError: If 'scope' is missing or is neither 'node' nor 'link', if
+            'group_by' or 'name' is missing, or if 'name' omits the '${value}'
+            placeholder.
     """
     scope = raw.get("scope")
     if not scope:

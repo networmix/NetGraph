@@ -66,6 +66,12 @@ def _build_demand(d: Dict[str, Any], set_name: str) -> TrafficDemand:
         raise ValueError(
             f"Each demand in set '{set_name}' requires 'source' and 'target' fields"
         )
+    for fld in ("source", "target"):
+        if not isinstance(d[fld], (str, dict)):
+            raise ValueError(
+                f"Demand '{fld}' in set '{set_name}' must be a string or "
+                f"selector dict, got {type(d[fld]).__name__}"
+            )
 
     # Build normalized dict for TrafficDemand constructor
     td_kwargs: Dict[str, Any] = {
@@ -84,31 +90,34 @@ def _build_demand(d: Dict[str, Any], set_name: str) -> TrafficDemand:
 
     # Coerce flow_policy into FlowPolicyPreset enum when provided
     if "flow_policy" in d:
-        td_kwargs["flow_policy"] = _coerce_flow_policy(d["flow_policy"])
+        td_kwargs["flow_policy"] = coerce_flow_policy(d["flow_policy"])
 
     return TrafficDemand(**td_kwargs)
 
 
-def _coerce_flow_policy(value: Any) -> Optional[FlowPolicyPreset]:
+def coerce_flow_policy(value: Any) -> Optional[FlowPolicyPreset]:
     """Return a FlowPolicyPreset from various user-friendly forms.
 
     Accepts:
       - None: returns None
       - FlowPolicyPreset: returned as-is
-      - int: mapped by value (e.g., 1 -> SHORTEST_PATHS_ECMP)
+      - int: mapped by value (e.g., 1 -> SHORTEST_PATHS_ECMP); bools are
+        rejected (True/False are not presets 1/0)
       - str: name of enum (case-insensitive); numeric strings are allowed
 
-    Any other type is returned unchanged for advanced usages
-    (e.g., dict configs handled elsewhere).
+    Raises:
+        ValueError: If the value is not one of the accepted forms (including
+            bool and dict/object configs, which are not supported).
     """
     if value is None:
         return None
     if isinstance(value, FlowPolicyPreset):
         return value
-    if isinstance(value, int):
+    # bool is a subclass of int; True/False must not coerce to presets 1/0.
+    if isinstance(value, int) and not isinstance(value, bool):
         try:
             return FlowPolicyPreset(value)
-        except Exception as exc:  # pragma: no cover - validated by enum
+        except Exception as exc:
             raise ValueError(f"Unknown flow policy value: {value}") from exc
     if isinstance(value, str):
         s = value.strip()
@@ -126,5 +135,8 @@ def _coerce_flow_policy(value: Any) -> Optional[FlowPolicyPreset]:
         except KeyError as exc:
             raise ValueError(f"Unknown flow policy: {value}") from exc
 
-    # Preserve other structural forms (e.g., dict) for callers that support them
-    return value  # type: ignore[return-value]
+    valid = ", ".join(p.name for p in FlowPolicyPreset)
+    raise ValueError(
+        f"Invalid flow_policy: {value!r}; expected a FlowPolicyPreset name "
+        f"or integer (one of: {valid})"
+    )

@@ -3,6 +3,9 @@
 These tests verify the behavior of DSL features to ensure documentation accuracy.
 """
 
+import jsonschema
+import pytest
+
 from ngraph.scenario import Scenario
 
 
@@ -326,8 +329,8 @@ demands:
 
         assert demands[0].flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
 
-    def test_flow_policy_inline_object_preserved(self):
-        """Inline object flow_policy should be preserved (not converted to preset)."""
+    def test_flow_policy_inline_object_rejected(self):
+        """Inline object flow_policy is rejected; only preset names/ints work."""
         yaml_str = """
 network:
   nodes:
@@ -345,14 +348,8 @@ demands:
         path_alg: SPF
         flow_placement: PROPORTIONAL
 """
-        scenario = Scenario.from_yaml(yaml_str)
-        demands = scenario.demand_set.sets.get("test", [])
-        assert len(demands) == 1
-        # Inline object should be preserved as dict
-        fp = demands[0].flow_policy
-        assert isinstance(fp, dict), f"Expected dict, got {type(fp)}"
-        assert fp.get("path_alg") == "SPF"
-        assert fp.get("flow_placement") == "PROPORTIONAL"
+        with pytest.raises((jsonschema.ValidationError, ValueError)):
+            Scenario.from_yaml(yaml_str)
 
 
 # Run with: pytest tests/dsl/test_dsl_features_validation.py -v

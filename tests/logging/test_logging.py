@@ -24,7 +24,8 @@ def _reset_logging_each_test():
 
 
 def test_effective_levels_enable_disable():
-    """Verify effective levels: INFO by default, DEBUG after enable, back to INFO after disable."""
+    """Verify effective levels: INFO after setup, DEBUG after enable, back to INFO after disable."""
+    setup_root_logger(level=logging.INFO, handler=logging.NullHandler())
     logger = get_logger("ngraph.test")
 
     capture = StringIO()
@@ -33,7 +34,7 @@ def test_effective_levels_enable_disable():
     logger.handlers.clear()
     logger.addHandler(handler)
 
-    # INFO should be emitted by default
+    # INFO should be emitted after explicit setup
     logger.info("info-1")
     assert "info-1" in capture.getvalue()
 
@@ -58,10 +59,11 @@ def test_effective_levels_enable_disable():
 
 def test_global_level_propagates_to_children_and_new_loggers():
     """Changing global level updates effective level of existing and new child loggers."""
+    setup_root_logger(level=logging.INFO, handler=logging.NullHandler())
     logger1 = get_logger("ngraph.module1")
     logger2 = get_logger("ngraph.module2")
 
-    # Default effective level is INFO
+    # Effective level is INFO after explicit setup
     assert logger1.getEffectiveLevel() == logging.INFO
     assert logger2.getEffectiveLevel() == logging.INFO
 

@@ -279,11 +279,19 @@ def get_class_info(cls):
             else:
                 default_val = None
 
+            default_str = str(default_val) if default_val is not None else None
+            # Drop non-reproducible reprs such as
+            # "<unlocked _thread.lock object at 0x109648810>": the address changes
+            # on every run, so the documented value is meaningless to a reader
+            # and makes the generated file differ between runs.
+            if default_str is not None and " object at 0x" in default_str:
+                default_str = None
+
             info["attributes"].append(
                 {
                     "name": field_name,
                     "type": field_type,
-                    "default": str(default_val) if default_val is not None else None,
+                    "default": default_str,
                 }
             )
 

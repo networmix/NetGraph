@@ -1,14 +1,12 @@
 """Demand set containers.
 
-Provides `DemandSet`, a named collection of `TrafficDemand` lists
-used as input to demand expansion and placement. This module contains input
-containers, not analysis results.
+`DemandSet` holds named `TrafficDemand` lists as input to demand expansion and
+placement. These are input containers, not analysis results.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from ngraph.model.demand.spec import TrafficDemand
 
@@ -17,9 +15,6 @@ from ngraph.model.demand.spec import TrafficDemand
 class DemandSet:
     """Named collection of TrafficDemand lists.
 
-    This mutable container maps set names to lists of TrafficDemand objects,
-    allowing management of multiple demand sets for analysis.
-
     Attributes:
         sets: Dictionary mapping set names to TrafficDemand lists.
     """
@@ -27,11 +22,11 @@ class DemandSet:
     sets: dict[str, list[TrafficDemand]] = field(default_factory=dict)
 
     def add(self, name: str, demands: list[TrafficDemand]) -> None:
-        """Add a demand list to the collection.
+        """Add a demand list, replacing any set already stored under `name`.
 
         Args:
             name: Set name identifier.
-            demands: List of TrafficDemand objects for this set.
+            demands: TrafficDemand objects for this set; stored by reference.
         """
         self.sets[name] = demands
 
@@ -42,7 +37,8 @@ class DemandSet:
             name: Name of the demand set to retrieve.
 
         Returns:
-            List of TrafficDemand objects for the named set.
+            The stored list for that set, not a copy: mutating it mutates the
+            DemandSet.
 
         Raises:
             KeyError: If the set name doesn't exist.
@@ -52,10 +48,8 @@ class DemandSet:
     def get_default_set(self) -> list[TrafficDemand]:
         """Get default demand set.
 
-        Returns the set named 'default' if it exists. If there is exactly
-        one set, returns that single set. If there are no sets,
-        returns an empty list. If there are multiple sets and none is
-        named 'default', raises an error.
+        Prefers the set named 'default'. Falls back to the sole set when
+        exactly one exists, and to an empty list when there are none.
 
         Returns:
             List of TrafficDemand objects for the default set.
@@ -81,20 +75,10 @@ class DemandSet:
         """Get all traffic demands from all sets combined.
 
         Returns:
-            Flattened list of all TrafficDemand objects across all sets.
+            A new list of every TrafficDemand, concatenated in set insertion
+            order.
         """
         all_demands: list[TrafficDemand] = []
         for demands in self.sets.values():
             all_demands.extend(demands)
         return all_demands
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization.
-
-        Returns:
-            Dictionary mapping set names to lists of TrafficDemand dictionaries.
-        """
-        return {
-            name: [demand.__dict__ for demand in demands]
-            for name, demands in self.sets.items()
-        }

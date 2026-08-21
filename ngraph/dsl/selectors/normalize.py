@@ -1,15 +1,15 @@
 """Selector parsing and normalization.
 
-Provides the single entry point for converting raw selector values
-(strings or dicts) into NodeSelector objects.
+Single entry point for converting raw selector values (strings or dicts)
+into NodeSelector objects.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Dict, Literal, Union
+from typing import Any, Dict, Union
 
-from .schema import Condition, MatchSpec, NodeSelector
+from ngraph.model.selectors import NodeSelector, parse_match_spec
 
 __all__ = [
     "normalize_selector",
@@ -31,8 +31,7 @@ def normalize_selector(
 ) -> NodeSelector:
     """Normalize a raw selector (string or dict) to a NodeSelector.
 
-    This is the single entry point for all selector parsing. All downstream
-    code works with NodeSelector objects only.
+    All downstream code works with NodeSelector objects only.
 
     Args:
         raw: Either a regex string, selector dict, or existing NodeSelector.
@@ -67,86 +66,18 @@ def normalize_selector(
 
 
 def _parse_dict(raw: Dict[str, Any], default_active_only: bool) -> NodeSelector:
-    """Parse a selector dictionary into a NodeSelector."""
+    """Parse a selector dictionary into a NodeSelector.
+
+    NodeSelector.__post_init__ validates that at least one selection
+    mechanism (path, group_by, or match) is present.
+    """
     match_spec = None
     if "match" in raw:
-        match_spec = _parse_match(raw["match"])
-
-    path = raw.get("path")
-    group_by = raw.get("group_by")
-    active_only = raw.get("active_only", default_active_only)
-
-    # Validate at least one selection mechanism
-    if path is None and group_by is None and match_spec is None:
-        raise ValueError(
-            "Selector dict requires at least one of: path, group_by, or match"
-        )
+        match_spec = parse_match_spec(raw["match"])
 
     return NodeSelector(
-        path=path,
-        group_by=group_by,
+        path=raw.get("path"),
+        group_by=raw.get("group_by"),
         match=match_spec,
-        active_only=active_only,
+        active_only=raw.get("active_only", default_active_only),
     )
-
-
-def parse_match_spec(
-    raw: Dict[str, Any],
-    *,
-    default_logic: Literal["and", "or"] = "or",
-    require_conditions: bool = False,
-    context: str = "match",
-) -> MatchSpec:
-    """Parse a match specification from raw dict.
-
-    Unified match specification parser for use across adjacency, demands,
-    membership rules, and failure policies.
-
-    Args:
-        raw: Dict with 'conditions' list and optional 'logic'.
-        default_logic: Default when 'logic' not specified.
-        require_conditions: If True, raise when conditions list is empty.
-        context: Used in error messages.
-
-    Returns:
-        Parsed MatchSpec.
-
-    Raises:
-        ValueError: If validation fails.
-    """
-    logic = raw.get("logic", default_logic)
-    if logic not in ("and", "or"):
-        raise ValueError(
-            f"Invalid logic '{logic}' in {context}. Must be 'and' or 'or'."
-        )
-
-    conditions_raw = raw.get("conditions", [])
-    if require_conditions and not conditions_raw:
-        raise ValueError(f"{context} requires at least one condition")
-
-    conditions = []
-    for cond_dict in conditions_raw:
-        if not isinstance(cond_dict, dict):
-            raise ValueError(
-                f"Condition in {context} must be a dict, got {type(cond_dict).__name__}"
-            )
-        if "attr" not in cond_dict or "op" not in cond_dict:
-            raise ValueError(f"Condition in {context} must have 'attr' and 'op'")
-
-        conditions.append(
-            Condition(
-                attr=cond_dict["attr"],
-                op=cond_dict["op"],
-                value=cond_dict.get("value"),
-            )
-        )
-
-    return MatchSpec(conditions=conditions, logic=logic)
-
-
-def _parse_match(raw: Dict[str, Any]) -> MatchSpec:
-    """Parse a match specification dict (internal helper).
-
-    Uses parse_match_spec with selector defaults (logic="or", conditions optional).
-    """
-    return parse_match_spec(raw, default_logic="or", require_conditions=False)

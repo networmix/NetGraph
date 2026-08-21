@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Optional
 
-from ngraph.dsl.selectors import Condition
 from ngraph.logging import get_logger
 from ngraph.model.failure.policy import (
     FailureMode,
@@ -13,6 +12,7 @@ from ngraph.model.failure.policy import (
 )
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import RiskGroup
+from ngraph.model.selectors import parse_match_spec
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
 
 _logger = get_logger(__name__)
@@ -28,6 +28,11 @@ def build_risk_groups(
     - Bracket expansion: {name: "DC[1-3]_Power"} creates DC1_Power, DC2_Power, DC3_Power
     - Children are also expanded recursively
     - Generate blocks: {generate: {...}} for dynamic group creation
+
+    'membership', 'disabled', and 'generate' are only honored on top-level
+    entries: only top-level groups are registered in network.risk_groups, so
+    these keys would be silently inert on nested children. Child entries
+    carrying them are rejected with ValueError.
 
     Args:
         rg_data: List of risk group definitions (strings or dicts).
@@ -57,7 +62,7 @@ def build_risk_groups(
         disabled = d.get("disabled", False)
         # Recursively expand and build children
         children_list = d.get("children", [])
-        child_objs = expand_and_build(children_list)
+        child_objs = expand_and_build(children_list, in_children=True)
         attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
         # Extract membership rule for deferred resolution
         membership_raw = d.get("membership")
@@ -69,14 +74,30 @@ def build_risk_groups(
             _membership_raw=membership_raw,
         )
 
-    def expand_and_build(entries: List[Any]) -> List[RiskGroup]:
+    def expand_and_build(
+        entries: List[Any], *, in_children: bool = False
+    ) -> List[RiskGroup]:
         """Expand names and build RiskGroups for a list of entries."""
         result: List[RiskGroup] = []
         for entry in entries:
             normalized = normalize_entry(entry)
-            # Skip generate blocks in children (not supported)
+            # Reject generate blocks in children (not supported)
             if "generate" in normalized:
                 raise ValueError("'generate' blocks not allowed in children")
+            if in_children:
+                # Only top-level groups are registered in network.risk_groups,
+                # so membership rules and disabled flags on nested children
+                # would be silently ignored. Reject them instead.
+                if "membership" in normalized:
+                    raise ValueError(
+                        "'membership' rules not allowed in children; define "
+                        "the group at top level and reference it as a child"
+                    )
+                if "disabled" in normalized:
+                    raise ValueError(
+                        "'disabled' not allowed in children; define the group "
+                        "at top level and reference it as a child"
+                    )
             name = normalized.get("name", "")
             if not name:
                 raise ValueError("RiskGroup entry missing 'name' field.")
@@ -108,12 +129,9 @@ def build_failure_policy(
 ) -> FailurePolicy:
     """Build a FailurePolicy from a raw configuration dictionary.
 
-    Parses modes, rules, and conditions from the policy definition and
-    constructs a fully initialized FailurePolicy object.
-
     Args:
         fp_data: Policy definition dict with keys: modes (required), attrs,
-            expand_groups, expand_children. Each mode contains weight and rules.
+            expand_groups. Each mode contains weight and rules.
         policy_name: Name identifier for this policy (used for seed derivation).
         derive_seed: Callable to derive deterministic seeds from component names.
 
@@ -121,7 +139,8 @@ def build_failure_policy(
         FailurePolicy: Configured policy with parsed modes and rules.
 
     Raises:
-        ValueError: If modes is empty or malformed, or if rules are invalid.
+        ValueError: If modes is empty or malformed, if rules are invalid, or
+            if no mode has positive weight.
     """
 
     def build_rules(rule_dicts: List[Dict[str, Any]]) -> List[FailureRule]:
@@ -133,27 +152,15 @@ def build_failure_policy(
                     "failure rule requires 'scope' field (node, link, or risk_group)"
                 )
 
-            # Get conditions from match block
-            match_block = rule_dict.get("match", {})
-            conditions_data = match_block.get("conditions", [])
-            logic = match_block.get("logic", "or")
-
-            if not isinstance(conditions_data, list):
-                raise ValueError("Each rule's 'conditions' must be a list if present.")
-            conditions: List[Condition] = []
-            for cond_dict in conditions_data:
-                conditions.append(
-                    Condition(
-                        attr=cond_dict["attr"],
-                        op=cond_dict["op"],
-                        value=cond_dict.get("value"),
-                    )
-                )
+            # Parse the match block with the unified parser
+            match_spec = parse_match_spec(
+                rule_dict.get("match", {}), context="failure rule"
+            )
             out.append(
                 FailureRule(
                     scope=scope,
-                    conditions=conditions,
-                    logic=logic,
+                    conditions=match_spec.conditions,
+                    logic=match_spec.logic,
                     mode=rule_dict.get("mode", "all"),
                     probability=rule_dict.get("probability", 1.0),
                     count=rule_dict.get("count", 1),
@@ -164,7 +171,6 @@ def build_failure_policy(
         return out
 
     expand_groups = fp_data.get("expand_groups", False)
-    expand_children = fp_data.get("expand_children", False)
     attrs = normalize_yaml_dict_keys(fp_data.get("attrs", {}))
 
     modes: List[FailureMode] = []
@@ -182,12 +188,17 @@ def build_failure_policy(
         mode_attrs = normalize_yaml_dict_keys(m.get("attrs", {}))
         modes.append(FailureMode(weight=weight, rules=mode_rules, attrs=mode_attrs))
 
+    if not any(mode.weight > 0.0 for mode in modes):
+        raise ValueError(
+            f"failure policy '{policy_name}' has no mode with positive weight; "
+            "at least one mode must have weight > 0"
+        )
+
     policy_seed = derive_seed(policy_name)
 
     return FailurePolicy(
         attrs=attrs,
         expand_groups=expand_groups,
-        expand_children=expand_children,
         seed=policy_seed,
         modes=modes,
     )
@@ -218,10 +229,6 @@ def build_failure_policy_set(
     normalized_fps = normalize_yaml_dict_keys(raw)
     fps = FailurePolicySet()
 
-    # Capture derive_seed in a closure with a different name to avoid confusion
-    # when passing to build_failure_policy (which also has a derive_seed parameter)
-    outer_derive_seed = derive_seed
-
     for name, fp_data in normalized_fps.items():
         if not isinstance(fp_data, dict):
             raise ValueError(
@@ -230,7 +237,7 @@ def build_failure_policy_set(
         policy = build_failure_policy(
             fp_data,
             policy_name=name,
-            derive_seed=lambda n, _fn=outer_derive_seed: _fn(f"failure_policy:{n}"),
+            derive_seed=lambda n, _fn=derive_seed: _fn(f"failure_policy:{n}"),
         )
         fps.add(name, policy)
     return fps

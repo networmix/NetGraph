@@ -15,11 +15,10 @@ if TYPE_CHECKING:
 
 
 def validate_risk_group_references(network: "Network") -> None:
-    """Ensure all risk group references resolve to defined groups.
+    """Ensure every risk group named by a node or link is defined.
 
-    Checks that every risk group name referenced by nodes and links
-    exists in network.risk_groups. This catches typos and missing
-    definitions that would otherwise cause silent failures in simulations.
+    Names are checked against network.risk_groups; typos and missing
+    definitions would otherwise cause silent failures in simulations.
 
     Args:
         network: Network with nodes, links, and risk_groups populated.
@@ -32,13 +31,11 @@ def validate_risk_group_references(network: "Network") -> None:
     defined: Set[str] = set(network.risk_groups.keys())
     errors: List[str] = []
 
-    # Check nodes
     for node in network.nodes.values():
         undefined = node.risk_groups - defined
         if undefined:
             errors.append(f"Node '{node.name}': {sorted(undefined)}")
 
-    # Check links
     for link in network.links.values():
         undefined = link.risk_groups - defined
         if undefined:
@@ -58,9 +55,8 @@ def validate_risk_group_references(network: "Network") -> None:
 def validate_risk_group_hierarchy(network: "Network") -> None:
     """Detect circular references in risk group parent-child relationships.
 
-    Uses DFS-based cycle detection to find any risk group that is part of
-    a cycle in the children hierarchy. This can happen when membership rules
-    with scope='risk_group' create mutual parent-child relationships.
+    Cycles arise when membership rules with scope='risk_group' create mutual
+    parent-child relationships. Detection is a DFS over the children hierarchy.
 
     Args:
         network: Network with risk_groups populated (after membership resolution).

@@ -1,11 +1,11 @@
 import pytest
 
-from ngraph.dsl.selectors.schema import Condition
 from ngraph.model.failure.policy import (
     FailureMode,
     FailurePolicy,
     FailureRule,
 )
+from ngraph.model.selectors import Condition
 
 
 def _single_mode_policy(rule: FailureRule, **kwargs) -> FailurePolicy:
@@ -37,7 +37,7 @@ def test_failure_rule_invalid_probability():
 
 def test_failure_policy_evaluate_conditions_or_logic():
     """Test condition evaluation with 'or' logic via shared evaluate_conditions."""
-    from ngraph.dsl.selectors import evaluate_conditions
+    from ngraph.model.selectors import evaluate_conditions
 
     conditions = [
         Condition(attr="vendor", op="==", value="cisco"),
@@ -60,7 +60,7 @@ def test_failure_policy_evaluate_conditions_or_logic():
 
 def test_failure_policy_evaluate_conditions_invalid_logic():
     """Test condition evaluation with invalid logic via shared evaluate_conditions."""
-    from ngraph.dsl.selectors import evaluate_conditions
+    from ngraph.model.selectors import evaluate_conditions
 
     conditions = [Condition(attr="vendor", op="==", value="cisco")]
     attrs = {"vendor": "cisco"}
@@ -417,19 +417,24 @@ def test_serialization():
     policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
 
     policy_dict = policy.to_dict()
+    assert "seed" not in policy_dict
+    assert "expand_children" not in policy_dict
     assert "modes" in policy_dict and len(policy_dict["modes"]) == 1
     mode_dict = policy_dict["modes"][0]
     assert len(mode_dict["rules"]) == 1
 
     rule_dict = mode_dict["rules"][0]
     assert rule_dict["scope"] == "node"
-    assert rule_dict["logic"] == "and"
     assert rule_dict["mode"] == "random"
     assert rule_dict["probability"] == 0.2
     assert rule_dict["count"] == 3
-    assert len(rule_dict["conditions"]) == 1
 
-    condition_dict = rule_dict["conditions"][0]
+    # Conditions and logic are nested under "match", matching the YAML format
+    match_dict = rule_dict["match"]
+    assert match_dict["logic"] == "and"
+    assert len(match_dict["conditions"]) == 1
+
+    condition_dict = match_dict["conditions"][0]
     assert condition_dict["attr"] == "equipment_vendor"
     assert condition_dict["op"] == "=="
     assert condition_dict["value"] == "cisco"

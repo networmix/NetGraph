@@ -3,8 +3,8 @@
 import pytest
 
 from ngraph.model.demand.builder import (
-    _coerce_flow_policy,
     build_demand_set,
+    coerce_flow_policy,
 )
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 
@@ -141,83 +141,124 @@ def test_build_demand_set_invalid_demand_type():
 
 def test_coerce_flow_policy_none():
     """Test coercing None."""
-    assert _coerce_flow_policy(None) is None
+    assert coerce_flow_policy(None) is None
 
 
 def test_coerce_flow_policy_enum():
     """Test coercing FlowPolicyPreset enum."""
     preset = FlowPolicyPreset.SHORTEST_PATHS_ECMP
-    assert _coerce_flow_policy(preset) == preset
+    assert coerce_flow_policy(preset) == preset
 
 
 def test_coerce_flow_policy_int():
     """Test coercing integer to enum."""
-    assert _coerce_flow_policy(1) == FlowPolicyPreset.SHORTEST_PATHS_ECMP
-    assert _coerce_flow_policy(2) == FlowPolicyPreset.SHORTEST_PATHS_WCMP
-    assert _coerce_flow_policy(3) == FlowPolicyPreset.TE_WCMP_UNLIM
-    assert _coerce_flow_policy(4) == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP
-    assert _coerce_flow_policy(5) == FlowPolicyPreset.TE_ECMP_16_LSP
+    assert coerce_flow_policy(1) == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+    assert coerce_flow_policy(2) == FlowPolicyPreset.SHORTEST_PATHS_WCMP
+    assert coerce_flow_policy(3) == FlowPolicyPreset.TE_WCMP_UNLIM
+    assert coerce_flow_policy(4) == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP
+    assert coerce_flow_policy(5) == FlowPolicyPreset.TE_ECMP_16_LSP
 
 
 def test_coerce_flow_policy_string():
     """Test coercing string to enum."""
     assert (
-        _coerce_flow_policy("SHORTEST_PATHS_ECMP")
+        coerce_flow_policy("SHORTEST_PATHS_ECMP")
         == FlowPolicyPreset.SHORTEST_PATHS_ECMP
     )
     assert (
-        _coerce_flow_policy("shortest_paths_ecmp")
+        coerce_flow_policy("shortest_paths_ecmp")
         == FlowPolicyPreset.SHORTEST_PATHS_ECMP
     )
     assert (
-        _coerce_flow_policy("SHORTEST_PATHS_WCMP")
+        coerce_flow_policy("SHORTEST_PATHS_WCMP")
         == FlowPolicyPreset.SHORTEST_PATHS_WCMP
     )
-    assert _coerce_flow_policy("TE_WCMP_UNLIM") == FlowPolicyPreset.TE_WCMP_UNLIM
+    assert coerce_flow_policy("TE_WCMP_UNLIM") == FlowPolicyPreset.TE_WCMP_UNLIM
     assert (
-        _coerce_flow_policy("TE_ECMP_UP_TO_256_LSP")
+        coerce_flow_policy("TE_ECMP_UP_TO_256_LSP")
         == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP
     )
-    assert _coerce_flow_policy("TE_ECMP_16_LSP") == FlowPolicyPreset.TE_ECMP_16_LSP
+    assert coerce_flow_policy("TE_ECMP_16_LSP") == FlowPolicyPreset.TE_ECMP_16_LSP
 
 
 def test_coerce_flow_policy_string_numeric():
     """Test coercing numeric string to enum."""
-    assert _coerce_flow_policy("1") == FlowPolicyPreset.SHORTEST_PATHS_ECMP
-    assert _coerce_flow_policy("2") == FlowPolicyPreset.SHORTEST_PATHS_WCMP
-    assert _coerce_flow_policy("3") == FlowPolicyPreset.TE_WCMP_UNLIM
+    assert coerce_flow_policy("1") == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+    assert coerce_flow_policy("2") == FlowPolicyPreset.SHORTEST_PATHS_WCMP
+    assert coerce_flow_policy("3") == FlowPolicyPreset.TE_WCMP_UNLIM
 
 
 def test_coerce_flow_policy_empty_string():
     """Test coercing empty string."""
-    assert _coerce_flow_policy("") is None
-    assert _coerce_flow_policy("   ") is None
+    assert coerce_flow_policy("") is None
+    assert coerce_flow_policy("   ") is None
 
 
 def test_coerce_flow_policy_invalid_string():
     """Test error handling for invalid string."""
     with pytest.raises(ValueError, match="Unknown flow policy"):
-        _coerce_flow_policy("INVALID_POLICY")
+        coerce_flow_policy("INVALID_POLICY")
 
 
 def test_coerce_flow_policy_invalid_numeric_string():
     """Test error handling for invalid numeric string."""
     with pytest.raises(ValueError, match="Unknown flow policy value"):
-        _coerce_flow_policy("999")
+        coerce_flow_policy("999")
 
 
 def test_coerce_flow_policy_invalid_int():
     """Test error handling for invalid integer."""
     with pytest.raises(ValueError, match="Unknown flow policy value"):
-        _coerce_flow_policy(999)
+        coerce_flow_policy(999)
 
 
-def test_coerce_flow_policy_other_types():
-    """Test that other types are passed through unchanged."""
-    # Dict config for advanced usage
-    dict_config = {"custom": "config"}
-    assert _coerce_flow_policy(dict_config) == dict_config
+def test_coerce_flow_policy_rejects_bool():
+    """Booleans are not presets 1/0 and fail fast with a clear error."""
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        coerce_flow_policy(True)
 
-    # List (unusual but should pass through)
-    list_config = ["a", "b"]
-    assert _coerce_flow_policy(list_config) == list_config
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        coerce_flow_policy(False)
+
+
+def test_coerce_flow_policy_rejects_dict_and_list():
+    """Unsupported structural forms fail fast with a clear error."""
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        coerce_flow_policy({"custom": "config"})
+
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        coerce_flow_policy(["a", "b"])
+
+
+def test_build_demand_set_rejects_inline_dict_flow_policy():
+    """Inline dict flow_policy raises at build time, not deep in analysis."""
+    raw = {
+        "tm1": [
+            {
+                "source": "A",
+                "target": "B",
+                "volume": 100.0,
+                "flow_policy": {"path_alg": "SPF", "flow_placement": "PROPORTIONAL"},
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        build_demand_set(raw)
+
+
+def test_build_demand_set_rejects_bool_flow_policy():
+    """Bool flow_policy raises instead of coercing to SHORTEST_PATHS_ECMP."""
+    raw = {
+        "tm1": [
+            {
+                "source": "A",
+                "target": "B",
+                "volume": 100.0,
+                "flow_policy": True,
+            }
+        ]
+    }
+
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        build_demand_set(raw)

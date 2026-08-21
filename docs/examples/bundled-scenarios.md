@@ -10,7 +10,7 @@ Inspect first, then run:
 # Inspect (structure, steps, demands, failure policies)
 ngraph inspect scenarios/backbone_clos.yml --detail
 
-# Run and write JSON results next to the scenario (or under --output)
+# Run and write JSON results in the current directory (or under --output)
 ngraph run scenarios/backbone_clos.yml --output out
 ```
 
@@ -76,4 +76,4 @@ ngraph run scenarios/nsfnet.yaml --keys node_to_node_capacity_matrix_1 --stdout
 
 ## Notes on results
 
-All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store per-iteration lists under `data.flow_results` with `summary` and optional `cost_distribution` or `min_cut` fields. See Reference -> Workflow for the exact schema.
+All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store a list under `data.flow_results` with one entry per unique failure pattern - patterns are deduplicated across iterations, so the list holds at most `iterations` entries and usually far fewer - alongside a single unfailed entry under `data.baseline`; with no `failure_policy`, `flow_results` is empty. Each entry carries a `summary` and per-flow `flows` entries whose `cost_distribution` is populated when `include_flow_details` is set (and `{}` otherwise), and with `include_min_cut` the min-cut edges appear under a flow entry's `data` (`edges` plus `edges_kind: "min_cut"`). See Reference -> Workflow for the exact schema.

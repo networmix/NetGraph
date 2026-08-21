@@ -17,12 +17,40 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 
+def _deep_convert(v: Any) -> Any:
+    """Recursively convert a value into a JSON-safe structure.
+
+    Objects exposing a callable ``to_dict()`` are converted and their output is
+    converted recursively, dictionary keys are coerced to strings, and tuples
+    are emitted as lists.
+
+    Args:
+        v: Value to convert.
+
+    Returns:
+        JSON-safe representation of ``v``.
+    """
+    to_dict = getattr(v, "to_dict", None)
+    if callable(to_dict):
+        converted = to_dict()
+        # Recurse only into plain containers to avoid unbounded recursion on
+        # objects whose to_dict() returns another convertible object.
+        if isinstance(converted, (dict, list, tuple)):
+            return _deep_convert(converted)
+        return converted
+    if isinstance(v, dict):
+        return {str(k): _deep_convert(val) for k, val in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_deep_convert(x) for x in v]
+    return v
+
+
 @dataclass
 class WorkflowStepMetadata:
     """Metadata for a workflow step execution.
 
     Attributes:
-        step_type: The workflow step class name (e.g., 'CapacityEnvelopeAnalysis').
+        step_type: The workflow step class name (e.g., 'NetworkStats').
         step_name: The instance name of the step.
         execution_order: Order in which this step was executed (0-based).
         scenario_seed: Scenario-level seed provided in the YAML (if any).
@@ -204,26 +232,15 @@ class Results:
                     f"Step '{step_name}' must store dicts for 'metadata' and 'data'"
                 )
 
-            def deep_convert(v: Any) -> Any:
-                # Convert nested structures; apply to_dict to any object that supports it
-                if hasattr(v, "to_dict") and callable(v.to_dict):
-                    return v.to_dict()
-                if isinstance(v, dict):
-                    return {str(k): deep_convert(val) for k, val in v.items()}
-                if isinstance(v, (list, tuple)):
-                    return [deep_convert(x) for x in v]
-                return v
-
             steps[step_name] = {
-                "metadata": deep_convert(metadata_part),
-                "data": deep_convert(data_part),
+                "metadata": _deep_convert(metadata_part),
+                "data": _deep_convert(data_part),
             }
 
-        # Compose final
         out: Dict[str, Any] = {
             "workflow": workflow,
             "steps": steps,
         }
         if self._scenario:
-            out["scenario"] = self._scenario
+            out["scenario"] = _deep_convert(self._scenario)
         return out

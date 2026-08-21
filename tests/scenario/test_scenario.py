@@ -97,7 +97,6 @@ failures:
       name: "multi_rule_example"
       description: "Testing modal policy."
     expand_groups: false
-    expand_children: false
     modes:
       - weight: 1.0
         rules:
@@ -286,7 +285,6 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     simple_policy = scenario.failure_policy_set.get_policy("default")
     assert isinstance(simple_policy, FailurePolicy)
     assert not simple_policy.expand_groups
-    assert not simple_policy.expand_children
 
     assert len(simple_policy.modes) == 1
     assert simple_policy.attrs.get("name") == "multi_rule_example"
@@ -524,3 +522,62 @@ demands:
 
 ## Removed redundant anchor test without assertions on attribute merging. The
 ## remaining anchor test validates both anchors and attribute overrides.
+
+
+def test_scenario_snapshot_serialization_format():
+    """Scenario snapshot must serialize policies in YAML format and presets by name.
+
+    Regression tests: the snapshot delegates failure-policy serialization to
+    FailurePolicy.to_dict (conditions nested under "match", no expand_children)
+    and stores flow_policy as the preset name string instead of a raw IntEnum.
+    """
+    import json
+
+    yaml_content = """
+network:
+  nodes:
+    A: {}
+    B: {}
+  links:
+    - source: A
+      target: B
+      capacity: 10
+failures:
+  default:
+    modes:
+      - weight: 1.0
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+            match:
+              logic: and
+              conditions:
+                - attr: capacity
+                  op: ">="
+                  value: 1
+demands:
+  default:
+    - source: A
+      target: B
+      volume: 5
+      flow_policy: SHORTEST_PATHS_ECMP
+"""
+    scenario = Scenario.from_yaml(yaml_content)
+    exported = scenario.results.to_dict()
+    snapshot = exported["scenario"]
+
+    # Failure policies use the parser-compatible to_dict shape
+    policy_dict = snapshot["failures"]["default"]
+    assert "expand_children" not in policy_dict
+    assert "seed" not in policy_dict
+    rule_dict = policy_dict["modes"][0]["rules"][0]
+    assert rule_dict["match"]["logic"] == "and"
+    assert rule_dict["match"]["conditions"][0]["attr"] == "capacity"
+
+    # flow_policy is the preset name string, consistent with step exports
+    demand_entry = snapshot["demands"]["default"][0]
+    assert demand_entry["flow_policy"] == "SHORTEST_PATHS_ECMP"
+
+    # The whole export must be JSON-serializable
+    json.dumps(exported)

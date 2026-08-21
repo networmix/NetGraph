@@ -135,10 +135,11 @@ def test_max_flow_with_details_total_matches() -> None:
 
 
 def test_max_flow_with_details_include_min_cut() -> None:
-    """Test that include_min_cut correctly returns saturated edges.
+    """Test that include_min_cut returns a true minimum cut.
 
     Uses the simple network with two parallel paths S->A->T and S->B->T.
-    All 4 edges should be saturated (form the min-cut).
+    A minimum cut is {S->A, S->B} (2 edges, total capacity == max flow),
+    not the full set of 4 saturated edges.
     """
     net = _simple_network()
 
@@ -146,19 +147,23 @@ def test_max_flow_with_details_include_min_cut() -> None:
     res_no_cut = analyze(net).max_flow_detailed("^S$", "^T$", mode=Mode.COMBINE)
     assert res_no_cut[("^S$", "^T$")].min_cut is None
 
-    # With include_min_cut=True, min_cut should contain saturated edges
+    # With include_min_cut=True, min_cut should be a minimum cut
     res_with_cut = analyze(net).max_flow_detailed(
         "^S$", "^T$", mode=Mode.COMBINE, include_min_cut=True
     )
     summary = res_with_cut[("^S$", "^T$")]
 
     assert summary.min_cut is not None
-    assert len(summary.min_cut) == 4  # All 4 edges are saturated
+    assert len(summary.min_cut) == 2  # True min cut, not all saturated edges
 
-    # Verify edge refs have expected structure
+    # Min-cut edges are distinct links in the forward direction
     link_ids = {e.link_id for e in summary.min_cut}
-    # Each link appears once (forward direction)
-    assert len(link_ids) == 4
+    assert len(link_ids) == 2
+    assert all(e.direction == "fwd" for e in summary.min_cut)
+
+    # Max-flow/min-cut duality: cut capacity equals max flow
+    cut_capacity = sum(net.links[e.link_id].capacity for e in summary.min_cut)
+    assert pytest.approx(cut_capacity, rel=0, abs=1e-9) == 2.0
 
     # Verify total flow is still correct
     assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 2.0
@@ -280,3 +285,26 @@ def test_require_capacity_parameter() -> None:
         "^S$", "^T$", mode=Mode.COMBINE, shortest_path=True, require_capacity=False
     )
     assert result_ip[("^S$", "^T$")] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_cost_and_capacity_bounds_rejected() -> None:
+    """Graph build rejects costs >= 2**62 (core overflow) and capacities at or
+    above the internal pseudo-edge capacity, instead of silently corrupting."""
+    import pytest
+
+    from ngraph.analysis import analyze
+    from ngraph.model.network import Link, Network, Node
+
+    net = Network()
+    net.add_node(Node("A"))
+    net.add_node(Node("B"))
+    net.add_link(Link("A", "B", capacity=10.0, cost=float(2**62)))
+    with pytest.raises(ValueError, match="2\\*\\*62"):
+        analyze(net, source="^A$", sink="^B$")
+
+    net2 = Network()
+    net2.add_node(Node("A"))
+    net2.add_node(Node("B"))
+    net2.add_link(Link("A", "B", capacity=5e15, cost=1))
+    with pytest.raises(ValueError, match="pseudo-edge capacity"):
+        analyze(net2, source="^A$", sink="^B$")

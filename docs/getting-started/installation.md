@@ -54,12 +54,15 @@ pip install -e .
 # Install NetGraph
 cd ../NetGraph
 pip install -e .
+
+# Or, with development tooling (tests, linters, docs):
+pip install -e '.[dev]'
 ```
 
 ## Platform Notes
 
 **Pre-built wheels**: Available for Linux (x86_64, aarch64), macOS (x86_64, arm64), and Windows (x86_64).
 
-**Building from source**: Requires CMake 3.15+. Builds automatically during `pip install` if no compatible wheel is available.
+**Building from source**: Requires CMake 3.23+ and a C++20 compiler (per netgraph-core's build configuration). Builds automatically during `pip install` if no compatible wheel is available.
 
 **Next**: See [Tutorial](tutorial.md) for running scenarios and programmatic usage examples.

@@ -78,7 +78,7 @@
 <text xml:space="preserve" text-anchor="middle" x="504.82" y="-74.62" font-family="Times,serif" font-size="10.00">Scenario</text>
 <text xml:space="preserve" text-anchor="middle" x="504.82" y="-63.38" font-family="Times,serif" font-size="10.00">·Network</text>
 <text xml:space="preserve" text-anchor="middle" x="504.82" y="-52.12" font-family="Times,serif" font-size="10.00">·FailurePolicySet</text>
-<text xml:space="preserve" text-anchor="middle" x="504.82" y="-40.88" font-family="Times,serif" font-size="10.00">·TrafficMatrixSet</text>
+<text xml:space="preserve" text-anchor="middle" x="504.82" y="-40.88" font-family="Times,serif" font-size="10.00">·DemandSet</text>
 <text xml:space="preserve" text-anchor="middle" x="504.82" y="-29.62" font-family="Times,serif" font-size="10.00">·Workflow</text>
 </g>
 <!-- expand&#45;&gt;scenario -->

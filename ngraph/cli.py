@@ -7,13 +7,14 @@ import json
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from statistics import median
 from time import perf_counter
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from ngraph.explorer import NetworkExplorer
-from ngraph.logging import get_logger, set_global_log_level
+from ngraph.logging import get_logger, set_global_log_level, setup_root_logger
 from ngraph.profiling.profiler import PerformanceProfiler, PerformanceReporter
 from ngraph.scenario import Scenario
 from ngraph.utils.output_paths import (
@@ -21,6 +22,7 @@ from ngraph.utils.output_paths import (
     profiles_dir_for_run,
     results_path_for_run,
 )
+from ngraph.workflow.base import WorkflowStep
 
 logger = get_logger(__name__)
 
@@ -34,12 +36,15 @@ def _format_table(
     """Format data as a simple ASCII table.
 
     Args:
-        headers: Column headers
-        rows: Data rows
-        min_width: Minimum column width
+        headers: Column labels, one per column.
+        rows: One list of cell values per row, each the same length as
+            ``headers``.
+        min_width: Floor for every column width, in characters.
+        max_col_width: Clip longer cells to this width with a trailing "...".
+            None leaves cells unclipped.
 
     Returns:
-        Formatted table string
+        The rendered table, or "" when ``rows`` is empty.
     """
     if not rows:
         return ""
@@ -55,20 +60,18 @@ def _format_table(
     clipped_headers = [clip(h) for h in headers]
     clipped_rows = [[clip(item) for item in row] for row in rows]
 
-    # Calculate column widths from clipped content
+    # Widths come from the clipped content, not the originals.
     all_data = [clipped_headers] + clipped_rows
     col_widths = []
     for col_idx in range(len(clipped_headers)):
         max_width = max(len(str(row[col_idx])) for row in all_data)
         col_widths.append(max(max_width, min_width))
 
-    # Format rows
     def format_row(row_data: List[str]) -> str:
         return "   " + " | ".join(
             f"{str(item):<{col_widths[i]}}" for i, item in enumerate(row_data)
         )
 
-    # Build table
     lines = []
     lines.append(format_row(clipped_headers))
     lines.append("   " + "-+-".join("-" * width for width in col_widths))
@@ -114,22 +117,6 @@ def _format_duration(seconds: float) -> str:
     minutes = int(seconds // 60)
     rem = seconds - minutes * 60
     return f"{minutes}m {rem:.1f}s"
-
-
-def _plural(n: int, singular: str, plural: Optional[str] = None) -> str:
-    """Return grammatically correct unit for count n.
-
-    Args:
-        n: Count.
-        singular: Singular form.
-        plural: Optional plural form; defaults to singular + 's' when None.
-
-    Returns:
-        Appropriate unit string for the count.
-    """
-    if n == 1:
-        return singular
-    return plural or (singular + "s")
 
 
 def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
@@ -217,6 +204,21 @@ def _print_network_structure(
     enabled_links = [link for link in links.values() if not link.disabled]
     disabled_links = [link for link in links.values() if link.disabled]
 
+    # Per-node attached capacity and enabled-link counts, computed in a single
+    # O(E) pass shared by the detail-mode node table and the statistics block.
+    # Self-loops contribute once per link, matching per-node match semantics.
+    cap_by_node: Dict[str, float] = {}
+    link_count_by_node: Dict[str, int] = {}
+    for link in enabled_links:
+        endpoints = (
+            (link.source,) if link.source == link.target else (link.source, link.target)
+        )
+        for endpoint in endpoints:
+            cap_by_node[endpoint] = cap_by_node.get(endpoint, 0.0) + float(
+                link.capacity
+            )
+            link_count_by_node[endpoint] = link_count_by_node.get(endpoint, 0) + 1
+
     enabled_nodes_pct = (len(enabled_nodes) / len(nodes) * 100.0) if nodes else 0.0
     print(f"   Enabled Nodes: {len(enabled_nodes):,} ({enabled_nodes_pct:.1f}%)")
     if disabled_nodes:
@@ -229,8 +231,9 @@ def _print_network_structure(
 
     # Network hierarchy analysis
     if nodes:
-        original_level = logger.level
-        logger.setLevel(logging.WARNING)
+        pkg_logger = logging.getLogger("ngraph")
+        original_level = pkg_logger.level
+        pkg_logger.setLevel(logging.WARNING)
         explorer = None
         try:
             # Use non-strict validation so hierarchy is printable even with issues
@@ -253,12 +256,12 @@ def _print_network_structure(
         except Exception as e:
             print(f"   Network Hierarchy: Unable to analyze ({e})")
         finally:
-            logger.setLevel(original_level)
+            pkg_logger.setLevel(original_level)
 
         # Hardware utilization and validation summary (non-fatal)
         try:
             if explorer is not None:
-                node_utils = explorer.get_node_utilization(include_disabled=False)
+                node_utils = explorer.get_node_utilization()
                 link_issues = explorer.get_link_issues()
 
                 # Node capacity violations
@@ -378,14 +381,8 @@ def _print_network_structure(
                 node = nodes[node_name]
                 status = "disabled" if node.disabled else "enabled"
 
-                # Calculate total capacity and link count for this node
-                node_capacity = 0
-                node_link_count = 0
-                for link in links.values():
-                    if link.source == node_name or link.target == node_name:
-                        if not link.disabled:
-                            node_capacity += link.capacity
-                            node_link_count += 1
+                node_capacity = cap_by_node.get(node_name, 0.0)
+                node_link_count = link_count_by_node.get(node_name, 0)
 
                 capacity_str = f"{node_capacity:,.0f}" if node_capacity > 0 else "0"
 
@@ -447,14 +444,8 @@ def _print_network_structure(
     # Node capacity analysis
     if nodes and links:
         print("\n   Node Capacity Statistics:")
-        node_capacities = []
-        for node_name in nodes.keys():
-            node_capacity = 0
-            for link in enabled_links:
-                if link.source == node_name or link.target == node_name:
-                    node_capacity += link.capacity
-            if node_capacity > 0:  # Only include nodes with links
-                node_capacities.append(node_capacity)
+        # Only include nodes with enabled links attached
+        node_capacities = [cap_by_node[n] for n in nodes if cap_by_node.get(n, 0.0) > 0]
 
         if node_capacities:
             node_cap_table = _format_table(
@@ -590,7 +581,7 @@ def _print_demand_sets(
         for demands in ds.sets.values():
             grand_demand_count += len(demands)
             for d in demands:
-                grand_total_demand += float(getattr(d, "volume", 0.0))
+                grand_total_demand += float(d.volume)
 
         print("\n   Capacity vs Demand:")
         print(f"     enabled link capacity: {total_enabled_link_capacity:,.1f}")
@@ -610,7 +601,7 @@ def _print_demand_sets(
     set_items = list(ds.sets.items())[:5]
     for set_name, demands in set_items:
         demand_count = len(demands)
-        total_volume = sum(getattr(d, "volume", 0.0) for d in demands)
+        total_volume = sum(d.volume for d in demands)
         print(
             f"     {set_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
         )
@@ -627,7 +618,7 @@ def _print_demand_sets(
             key = (src_key, tgt_key)
             stats = pair_counts.setdefault(key, {"count": 0, "volume": 0.0})
             stats["count"] = int(stats["count"]) + 1
-            stats["volume"] = float(stats["volume"]) + float(getattr(d, "volume", 0.0))
+            stats["volume"] = float(stats["volume"]) + float(d.volume)
 
         if detail:
             print(f"       total demand: {total_volume:,.0f}")
@@ -682,7 +673,7 @@ def _print_demand_sets(
                 top_n = 5
                 sorted_demands = sorted(
                     demands,
-                    key=lambda d: float(getattr(d, "demand", 0.0)),
+                    key=lambda d: float(d.volume),
                     reverse=True,
                 )[:top_n]
                 if sorted_demands:
@@ -695,8 +686,8 @@ def _print_demand_sets(
                             [
                                 src,
                                 tgt,
-                                f"{float(getattr(d, 'volume', 0.0)):,.1f}",
-                                str(getattr(d, "priority", 0)),
+                                f"{float(d.volume):,.1f}",
+                                str(d.priority),
                             ]
                         )
                     top_table = _format_table(
@@ -884,11 +875,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             "Scenario loaded: nodes=%d, links=%d, steps=%d, policies=%d, demand_sets=%d",
             len(getattr(scenario.network, "nodes", {})),
             len(getattr(scenario.network, "links", {})),
-            len(
-                getattr(scenario.workflow, "__iter__", [])
-                and list(scenario.workflow)
-                or []
-            ),
+            len(scenario.workflow),
             len(getattr(scenario.failure_policy_set, "policies", {})),
             len(getattr(scenario.demand_set, "sets", {})),
         )
@@ -920,7 +907,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             for demands in ds.sets.values():
                 total_demands += len(demands)
                 for d in demands:
-                    total_demand_volume += float(getattr(d, "volume", 0.0))
+                    total_demand_volume += float(d.volume)
 
             util = (
                 (total_demand_volume / total_enabled_capacity)
@@ -1047,14 +1034,15 @@ def _run_scenario(
 
     Args:
         path: Scenario YAML file.
-        output: Optional explicit path where JSON results should be written. When
-            ``None``, defaults to ``<scenario_name>.results.json`` in the current directory,
-            or under ``--output`` if provided.
+        results_override: Optional explicit path for JSON results. When ``None``,
+            the path is derived from the scenario name under ``output_dir``.
         no_results: Whether to disable results file generation.
         stdout: Whether to also print results to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
             exported.
         profile: Whether to enable performance profiling with CPU analysis.
+        profile_memory: Whether the profiler also tracks memory usage.
+        output_dir: Base directory for derived output paths (results, profiles).
     """
     logger.info(f"Loading scenario from: {path}")
     _start_time = perf_counter()
@@ -1065,35 +1053,45 @@ def _run_scenario(
 
         if profile:
             logger.info("Performance profiling enabled")
-            # Initialize detailed profiler
             profiler = PerformanceProfiler(track_memory=profile_memory)
-
-            # Start scenario-level profiling
             profiler.start_scenario()
 
             logger.info("Starting scenario execution with profiling")
 
-            # Enable child-process profiling for parallel workflows
+            # Enable worker-thread profiling for parallel workflows
             child_profile_dir = profiles_dir_for_run(path, output_dir)
             child_profile_dir.mkdir(parents=True, exist_ok=True)
+            prev_profile_dir = os.environ.get("NGRAPH_PROFILE_DIR")
             os.environ["NGRAPH_PROFILE_DIR"] = str(child_profile_dir.resolve())
             logger.info(f"Worker profiles will be saved to: {child_profile_dir}")
 
-            # Manual execution of workflow steps with profiling
-            for step in scenario.workflow:
+            @contextmanager
+            def _profile_step_hook(step: WorkflowStep) -> Iterator[None]:
+                """Wrap step execution with profiling and worker-profile merge.
+
+                Worker profiles are merged only after the profiled block exits
+                cleanly; exceptions raised by the step propagate unchanged and
+                skip the merge.
+                """
                 step_name = step.name or step.__class__.__name__
-                step_type = step.__class__.__name__
-
-                with profiler.profile_step(step_name, step_type):
-                    step.execute(scenario)
-
+                with profiler.profile_step(step_name, step.__class__.__name__):
+                    yield
                 # Merge any worker profiles generated by this step
                 if child_profile_dir.exists():
                     profiler.merge_child_profiles(child_profile_dir, step_name)
 
+            try:
+                scenario.run(step_hook=_profile_step_hook)
+            finally:
+                # Restore the environment so later in-process runs do not
+                # inherit profiling into a stale directory.
+                if prev_profile_dir is None:
+                    os.environ.pop("NGRAPH_PROFILE_DIR", None)
+                else:
+                    os.environ["NGRAPH_PROFILE_DIR"] = prev_profile_dir
+
             logger.info("Scenario execution completed successfully")
 
-            # End scenario profiling and analyze results
             profiler.end_scenario()
             profiler.analyze_performance()
 
@@ -1117,19 +1115,20 @@ def _run_scenario(
                     except Exception as exc:
                         logger.debug("Failed to remove profiles dir: %s", exc)
 
-            # Generate and display performance report
+            # Report goes to stderr so machine-readable stdout (--stdout)
+            # stays pure JSON.
             reporter = PerformanceReporter(profiler.results)
             performance_report = reporter.generate_report()
-            print("\n" + performance_report)
+            print("\n" + performance_report, file=sys.stderr)
 
         else:
             logger.info("Starting scenario execution")
             scenario.run()
             logger.info("Scenario execution completed successfully")
-            print("✅ Scenario execution completed")
+            print("✅ Scenario execution completed", file=sys.stderr)
 
         # Export JSON results by default unless disabled
-        if not no_results:
+        if not no_results or stdout:
             logger.info("Serializing results to JSON")
             results_dict: Dict[str, Any] = scenario.results.to_dict()
 
@@ -1143,32 +1142,22 @@ def _run_scenario(
 
             json_str = json.dumps(results_dict, indent=2, default=str)
 
-            # Derive default results file path using output directory policy
-            effective_output = results_path_for_run(
-                scenario_path=path,
-                output_dir=output_dir,
-                results_override=results_override,
-            )
+            if not no_results:
+                # Derive default results file path using output directory policy
+                effective_output = results_path_for_run(
+                    scenario_path=path,
+                    output_dir=output_dir,
+                    results_override=results_override,
+                )
 
-            ensure_parent_dir(effective_output)
-            logger.info(f"Writing results to: {effective_output}")
-            effective_output.write_text(json_str)
-            logger.info("Results written successfully")
-            print(f"✅ Results written to: {effective_output}")
+                ensure_parent_dir(effective_output)
+                logger.info(f"Writing results to: {effective_output}")
+                effective_output.write_text(json_str)
+                logger.info("Results written successfully")
+                print(f"✅ Results written to: {effective_output}", file=sys.stderr)
 
             if stdout:
                 print(json_str)
-        elif stdout:
-            # Print to stdout even without file export
-            results_dict: Dict[str, Any] = scenario.results.to_dict()
-            if keys:
-                steps_map = results_dict.get("steps", {})
-                filtered_steps: Dict[str, Any] = {
-                    step: steps_map[step] for step in keys if step in steps_map
-                }
-                results_dict["steps"] = filtered_steps
-            json_str = json.dumps(results_dict, indent=2, default=str)
-            print(json_str)
 
         # Final success duration log
         _elapsed = perf_counter() - _start_time
@@ -1178,11 +1167,14 @@ def _run_scenario(
 
     except FileNotFoundError:
         logger.error(f"Scenario file not found: {path}")
-        print(f"❌ ERROR: Scenario file not found: {path}")
+        print(f"❌ ERROR: Scenario file not found: {path}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to run scenario: {type(e).__name__}: {e}")
-        print(f"❌ ERROR: Failed to run scenario: {type(e).__name__}: {e}")
+        print(
+            f"❌ ERROR: Failed to run scenario: {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -1290,6 +1282,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     args = parser.parse_args(effective_args)
 
     # Configure logging based on arguments
+    setup_root_logger()
     if args.verbose:
         set_global_log_level(logging.DEBUG)
         logger.debug("Debug logging enabled")

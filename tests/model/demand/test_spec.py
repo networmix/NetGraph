@@ -1,5 +1,14 @@
+import dataclasses
+
 from ngraph.model.demand.spec import TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset as FlowPolicyConfig
+
+
+def test_removed_legacy_fields_absent() -> None:
+    """Dead pre-netgraph-core fields are not part of the dataclass."""
+    field_names = {f.name for f in dataclasses.fields(TrafficDemand)}
+    assert "volume_placed" not in field_names
+    assert "flow_policy_obj" not in field_names
 
 
 def test_defaults_and_id_generation() -> None:
@@ -9,7 +18,6 @@ def test_defaults_and_id_generation() -> None:
     # Defaults
     assert demand.priority == 0
     assert demand.volume == 0.0
-    assert demand.volume_placed == 0.0
     assert demand.mode == "combine"
     assert demand.attrs == {}
 
@@ -80,7 +88,6 @@ def test_custom_assignment_including_policy_config() -> None:
         target="TargetNode",
         priority=5,
         volume=42.5,
-        volume_placed=10.0,
         attrs={"description": "test"},
         mode="pairwise",
         flow_policy=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
@@ -90,7 +97,6 @@ def test_custom_assignment_including_policy_config() -> None:
     assert demand.target == "TargetNode"
     assert demand.priority == 5
     assert demand.volume == 42.5
-    assert demand.volume_placed == 10.0
     assert demand.attrs == {"description": "test"}
     assert demand.mode == "pairwise"
     assert demand.flow_policy == FlowPolicyConfig.SHORTEST_PATHS_ECMP

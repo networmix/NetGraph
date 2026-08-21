@@ -1,8 +1,9 @@
 """Workflow step for basic node and link statistics.
 
 Computes and stores network statistics including node/link counts,
-capacity distributions, cost distributions, and degree distributions. Supports
-optional exclusion simulation and disabled entity handling.
+capacity distributions, cost distributions, and degree distributions. Excluded
+entities are filtered out without modifying the base network; disabled nodes
+and links are excluded too unless `include_disabled` is set.
 
 YAML Configuration Example:
     ```yaml
@@ -25,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from statistics import mean, median
-from typing import TYPE_CHECKING, Dict, Iterable, List
+from typing import TYPE_CHECKING, Dict, Iterable
 
 from ngraph.logging import get_logger
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
@@ -67,7 +68,7 @@ class NetworkStats(WorkflowStep):
         """
         logger.info("Starting NetworkStats: name=%s", self.name)
 
-        # Convert exclusion iterables to sets for efficient lookup
+        # Sets, so the per-node/per-link membership tests below stay O(1)
         excluded_nodes_set = set(self.excluded_nodes) if self.excluded_nodes else set()
         excluded_links_set = set(self.excluded_links) if self.excluded_links else set()
 
@@ -104,10 +105,7 @@ class NetworkStats(WorkflowStep):
                 and link.target in nodes
             }
 
-        # Compute node statistics
         node_count = len(nodes)
-
-        # Compute link statistics
         link_count = len(links)
 
         total_capacity_val = mean_capacity_val = median_capacity_val = 0.0
@@ -128,8 +126,7 @@ class NetworkStats(WorkflowStep):
             min_cost_val = min(costs)
             max_cost_val = max(costs)
 
-        # Compute degree statistics (only for enabled nodes)
-        degree_values: List[int] = []
+        # Compute degree statistics over the selected node set
         mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
         if nodes:
             degrees: Dict[str, int] = {name: 0 for name in nodes}
@@ -148,32 +145,24 @@ class NetworkStats(WorkflowStep):
 
         # Store results
         scenario.results.put("metadata", {})
-        # Ensure locals exist even when sets are empty
-        if not links:
-            total_capacity_val = mean_capacity_val = median_capacity_val = 0.0
-            min_capacity_val = max_capacity_val = 0.0
-            mean_cost_val = median_cost_val = min_cost_val = max_cost_val = 0.0
-        if not nodes:
-            mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
-
         scenario.results.put(
             "data",
             {
                 "node_count": int(node_count),
                 "link_count": int(link_count),
-                "total_capacity": float(total_capacity_val) if links else 0.0,
-                "mean_capacity": float(mean_capacity_val) if links else 0.0,
-                "median_capacity": float(median_capacity_val) if links else 0.0,
-                "min_capacity": float(min_capacity_val) if links else 0.0,
-                "max_capacity": float(max_capacity_val) if links else 0.0,
-                "mean_cost": float(mean_cost_val) if links else 0.0,
-                "median_cost": float(median_cost_val) if links else 0.0,
-                "min_cost": float(min_cost_val) if links else 0.0,
-                "max_cost": float(max_cost_val) if links else 0.0,
-                "mean_degree": float(mean_degree_val) if nodes else 0.0,
-                "median_degree": float(median_degree_val) if nodes else 0.0,
-                "min_degree": float(min_degree_val) if nodes else 0.0,
-                "max_degree": float(max_degree_val) if nodes else 0.0,
+                "total_capacity": float(total_capacity_val),
+                "mean_capacity": float(mean_capacity_val),
+                "median_capacity": float(median_capacity_val),
+                "min_capacity": float(min_capacity_val),
+                "max_capacity": float(max_capacity_val),
+                "mean_cost": float(mean_cost_val),
+                "median_cost": float(median_cost_val),
+                "min_cost": float(min_cost_val),
+                "max_cost": float(max_cost_val),
+                "mean_degree": float(mean_degree_val),
+                "median_degree": float(median_degree_val),
+                "min_degree": float(min_degree_val),
+                "max_degree": float(max_degree_val),
             },
         )
 
@@ -182,7 +171,7 @@ class NetworkStats(WorkflowStep):
             self.name,
             node_count,
             link_count,
-            float(total_capacity_val) if links else 0.0,
+            float(total_capacity_val),
         )
 
 

@@ -1,7 +1,7 @@
 """NetworkX graph conversion utilities.
 
-This module provides functions to convert between NetworkX graphs and the
-internal graph representation used by ngraph for high-performance algorithms.
+Convert between NetworkX graphs and the internal graph representation that
+ngraph's algorithms run on.
 
 Example:
     >>> import networkx as nx
@@ -100,11 +100,13 @@ class EdgeMap:
 
     Example:
         >>> graph, node_map, edge_map = from_networkx(G)
-        >>> # After running algorithms, map flow results back to original edges
-        >>> for ext_id, flow in enumerate(flow_state.edge_flow_view()):
+        >>> # edge_flow_view() is indexed by internal Core edge index, so
+        >>> # translate through ext_edge_ids_view() before using to_ref.
+        >>> ext_edge_ids = graph.ext_edge_ids_view()
+        >>> for edge_idx, flow in enumerate(flow_state.edge_flow_view()):
         ...     if flow > 0:
-        ...         u, v, key = edge_map.to_ref[ext_id]
-        ...         G.edges[u, v, key]["flow"] = flow
+        ...         u, v, key = edge_map.to_ref[int(ext_edge_ids[edge_idx])]
+        ...         G.edges[u, v, key]["flow"] = flow  # G.edges[u, v] for a DiGraph
     """
 
     to_ref: Dict[int, NxEdgeTuple] = field(default_factory=dict)
@@ -122,7 +124,7 @@ def from_networkx(
     cost_attr: str = "cost",
     default_capacity: float = 1.0,
     default_cost: int = 1,
-    bidirectional: bool = False,
+    bidirectional: Optional[bool] = None,
 ) -> Tuple[netgraph_core.StrictMultiDiGraph, NodeMap, EdgeMap]:
     """Convert a NetworkX graph to ngraph's internal graph format.
 
@@ -133,11 +135,17 @@ def from_networkx(
     Args:
         G: NetworkX graph (DiGraph, MultiDiGraph, Graph, or MultiGraph)
         capacity_attr: Edge attribute name for capacity (default: "capacity")
-        cost_attr: Edge attribute name for cost (default: "cost")
+        cost_attr: Edge attribute name for cost (default: "cost"). Cost values
+            must be integers (netgraph_core requires int64 costs); fractional
+            values raise ValueError.
         default_capacity: Capacity value when attribute is missing (default: 1.0)
-        default_cost: Cost value when attribute is missing (default: 1)
-        bidirectional: If True, add reverse edge for each edge. Useful for
-            undirected connectivity analysis. (default: False)
+        default_cost: Cost value when attribute is missing (default: 1).
+            Must be an integer value.
+        bidirectional: If True, add a reverse edge for each edge. If None
+            (default), inferred from the graph type: directed inputs get one
+            arc per edge, undirected inputs get antiparallel arc pairs (the
+            standard undirected-to-directed reduction for max-flow and
+            reachability). Pass an explicit True or False to override.
 
     Returns:
         Tuple of (graph, node_map, edge_map) where:
@@ -147,7 +155,8 @@ def from_networkx(
 
     Raises:
         TypeError: If G is not a NetworkX graph
-        ValueError: If graph has no nodes
+        ValueError: If graph has no nodes, or an edge cost is not an integer
+            value
 
     Example:
         >>> import networkx as nx
@@ -156,10 +165,10 @@ def from_networkx(
         >>> graph, node_map, edge_map = from_networkx(G)
         >>> graph.num_nodes()
         2
-        >>> node_map.to_index["src"]
-        0
-        >>> edge_map.to_ref[0]  # First edge
-        ('dst', 'src', 0)  # sorted node order: dst < src
+        >>> node_map.to_index  # node indices assigned in sorted-name order
+        {'dst': 0, 'src': 1}
+        >>> edge_map.to_ref[0]  # edge refs preserve original (u, v, key)
+        ('src', 'dst', 0)
     """
     import networkx as nx
 
@@ -171,6 +180,10 @@ def from_networkx(
 
     if G.number_of_nodes() == 0:
         raise ValueError("Graph has no nodes")
+
+    # Undirected inputs need antiparallel arcs to preserve connectivity.
+    if bidirectional is None:
+        bidirectional = not G.is_directed()
 
     # Build node mapping (sorted for deterministic ordering)
     node_names = sorted(G.nodes(), key=str)
@@ -200,7 +213,16 @@ def from_networkx(
         src_idx = node_map.to_index[u]
         dst_idx = node_map.to_index[v]
         cap = float(data.get(capacity_attr, default_capacity))
-        cst = int(data.get(cost_attr, default_cost))
+        raw_cost = data.get(cost_attr, default_cost)
+        cost_f = float(raw_cost)
+        if not cost_f.is_integer():
+            raise ValueError(
+                f"Edge ({u!r}, {v!r}, {key!r}): cost {raw_cost!r} is not an "
+                f"integer; netgraph_core requires int64 costs. Pre-scale "
+                f"fractional costs (e.g., multiply by 10 or 100) before "
+                f"conversion."
+            )
+        cst = int(cost_f)
         edge_ref: NxEdgeTuple = (u, v, key)
 
         # Forward edge
@@ -227,9 +249,8 @@ def from_networkx(
 
     edge_map = EdgeMap(to_ref=edge_to_ref, from_ref=ref_to_edges)
 
-    # Handle graphs with nodes but no edges
+    # Graphs with nodes but no edges still need correctly typed empty arrays.
     if not src_list:
-        # Create minimal arrays for empty edge set
         src_arr = np.array([], dtype=np.int32)
         dst_arr = np.array([], dtype=np.int32)
         capacity_arr = np.array([], dtype=np.float64)
@@ -303,7 +324,6 @@ def to_networkx(
     capacity_arr = graph.capacity_view()
     cost_arr = graph.cost_view()
 
-    # Add edges
     num_edges = graph.num_edges()
     for i in range(num_edges):
         src_idx = int(src_arr[i])

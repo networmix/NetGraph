@@ -1,36 +1,36 @@
 """Schema definitions for unified node selection.
 
-Provides dataclasses for node selection configuration used across
-network rules, demands, and workflow steps.
+Dataclasses shared by network rules, demands, and workflow steps.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Literal, Optional
+from typing import Any, List, Literal, Optional, get_args
 
 # Type alias for entity scope used in condition-based selection
 EntityScope = Literal["node", "link", "risk_group"]
 """Type of network entity for condition-based selection."""
 
 
-# Valid operators for conditions
-VALID_OPERATORS: frozenset[str] = frozenset(
-    {
-        "==",
-        "!=",
-        "<",
-        "<=",
-        ">",
-        ">=",
-        "contains",
-        "not_contains",
-        "in",
-        "not_in",
-        "exists",
-        "not_exists",
-    }
-)
+ConditionOp = Literal[
+    "==",
+    "!=",
+    "<",
+    "<=",
+    ">",
+    ">=",
+    "contains",
+    "not_contains",
+    "in",
+    "not_in",
+    "exists",
+    "not_exists",
+]
+"""Comparison operators supported by conditions."""
+
+# Valid operators for conditions (derived from ConditionOp)
+VALID_OPERATORS: frozenset[str] = frozenset(get_args(ConditionOp))
 
 
 @dataclass
@@ -47,20 +47,7 @@ class Condition:
     """
 
     attr: str
-    op: Literal[
-        "==",
-        "!=",
-        "<",
-        "<=",
-        ">",
-        ">=",
-        "contains",
-        "not_contains",
-        "in",
-        "not_in",
-        "exists",
-        "not_exists",
-    ]
+    op: ConditionOp
     value: Any = None
 
     def __post_init__(self) -> None:
@@ -112,4 +99,8 @@ class NodeSelector:
         if self.path is None and self.group_by is None and self.match is None:
             raise ValueError(
                 "NodeSelector requires at least one of: path, group_by, or match"
+            )
+        if self.path is not None and not isinstance(self.path, str):
+            raise ValueError(
+                f"Selector 'path' must be a string, got {type(self.path).__name__}"
             )
