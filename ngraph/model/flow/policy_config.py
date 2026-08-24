@@ -82,6 +82,7 @@ def create_flow_policy(
     preset: FlowPolicyPreset,
     node_mask=None,
     edge_mask=None,
+    static_path_count: Optional[int] = None,
 ) -> netgraph_core.FlowPolicy:
     """Create a FlowPolicy instance from a preset configuration.
 
@@ -92,6 +93,9 @@ def create_flow_policy(
             flow-count bounds to apply.
         node_mask: Optional numpy bool array for node exclusions (True = include).
         edge_mask: Optional numpy bool array for edge exclusions (True = include).
+        static_path_count: Number of routes the caller will pin with
+            `FlowPolicy.set_static_paths`. Sets the flow count to match, since
+            a pinned policy creates one flow per route and never grows.
 
     Returns:
         netgraph_core.FlowPolicy: Configured policy instance.
@@ -105,6 +109,20 @@ def create_flow_policy(
         >>> graph = algs.build_graph(strict_multidigraph)
         >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
     """
+
+    def _build(config: netgraph_core.FlowPolicyConfig) -> netgraph_core.FlowPolicy:
+        if static_path_count is not None:
+            # A pinned policy creates exactly one flow per route, so the flow
+            # bounds must match; Core rejects a mismatch. Cost ceilings and
+            # reoptimization are inert once paths are pinned.
+            config.min_flow_count = 1
+            config.max_flow_count = static_path_count
+            config.reoptimize_flows_on_each_placement = False
+            config.shortest_path = False
+        return netgraph_core.FlowPolicy(
+            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
+        )
+
     if preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP:
         # Hop-by-hop equal-cost balanced routing (similar to IP forwarding with ECMP)
         config = netgraph_core.FlowPolicyConfig()
@@ -117,9 +135,7 @@ def create_flow_policy(
         )
         config.min_flow_count = 1
         config.max_flow_count = 1
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
+        return _build(config)
 
     elif preset == FlowPolicyPreset.SHORTEST_PATHS_WCMP:
         # Hop-by-hop weighted ECMP (WCMP) over equal-cost paths (proportional split)
@@ -133,9 +149,7 @@ def create_flow_policy(
         )
         config.min_flow_count = 1
         config.max_flow_count = 1
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
+        return _build(config)
 
     elif preset == FlowPolicyPreset.TE_WCMP_UNLIM:
         # Traffic engineering with WCMP (proportional split) and capacity-aware selection
@@ -149,9 +163,7 @@ def create_flow_policy(
         )
         config.min_flow_count = 1
         # max_flow_count defaults to None (unlimited)
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
+        return _build(config)
 
     elif preset == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP:
         # TE with up to 256 LSPs using ECMP flow placement
@@ -168,9 +180,7 @@ def create_flow_policy(
         config.min_flow_count = 1
         config.max_flow_count = 256
         config.reoptimize_flows_on_each_placement = True
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
+        return _build(config)
 
     elif preset == FlowPolicyPreset.TE_ECMP_16_LSP:
         # TE with exactly 16 LSPs using ECMP flow placement
@@ -187,9 +197,7 @@ def create_flow_policy(
         config.min_flow_count = 16
         config.max_flow_count = 16
         config.reoptimize_flows_on_each_placement = True
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
+        return _build(config)
 
     else:
         raise ValueError(f"Unknown flow policy preset: {preset}")

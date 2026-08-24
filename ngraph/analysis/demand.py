@@ -8,11 +8,11 @@ resolved through the shared selector layer.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
 from ngraph.dsl.selectors import normalize_selector
-from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.demand.spec import StaticPath, TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Network, Node
 from ngraph.model.selectors import select_nodes
@@ -31,6 +31,8 @@ class ExpandedDemand:
         volume: Traffic volume to place.
         priority: Priority class (lower is higher priority).
         policy_preset: FlowPolicy configuration preset.
+        static_paths: Routes this demand is pinned to, empty when it is
+            routed by the policy.
     """
 
     src_name: str
@@ -38,6 +40,7 @@ class ExpandedDemand:
     volume: float
     priority: int
     policy_preset: FlowPolicyPreset
+    static_paths: Tuple[StaticPath, ...] = ()
 
 
 @dataclass
@@ -144,6 +147,7 @@ def _expand_pairwise(
             volume=volume_per_pair,
             priority=td.priority,
             policy_preset=policy_preset,
+            static_paths=td.static_paths,
         )
         for src, dst in pairs
     ]
@@ -294,9 +298,11 @@ def expand_demands(
         DemandExpansion with demands and augmentations.
 
     Raises:
-        ValueError: If no demands could be expanded, or if two demands share
-            an id (pseudo node names embed the id, so duplicates would merge
-            distinct demands' attachment edges into one endpoint).
+        ValueError: If no demands could be expanded, if two demands share an
+            id (pseudo node names embed the id, so duplicates would merge
+            distinct demands' attachment edges into one endpoint), or if a
+            demand with `static_paths` does not resolve to exactly one
+            source/target pair.
     """
     seen_ids: set[str] = set()
     for td in traffic_demands:
@@ -320,6 +326,11 @@ def expand_demands(
         dst_groups = select_nodes(network, tgt_sel, default_active_only=True)
 
         if not src_groups or not dst_groups:
+            if td.static_paths:
+                raise ValueError(
+                    f"Demand '{td.id}' sets static_paths but its selectors match "
+                    "no active source or target node"
+                )
             continue
 
         policy_preset = td.flow_policy or default_policy_preset
@@ -328,6 +339,24 @@ def expand_demands(
         demands, augmentations = _expand_by_group_mode(
             td, src_groups, dst_groups, policy_preset
         )
+
+        if td.static_paths:
+            # Routes are pinned between two concrete nodes, so the demand has
+            # to name exactly one pair. Combine mode routes through pseudo
+            # endpoints, which no operator-supplied route can start from.
+            if td.mode == "combine":
+                raise ValueError(
+                    f"Demand '{td.id}' sets static_paths, which pins traffic to "
+                    "routes between two nodes; use mode 'pairwise' instead of "
+                    "'combine'"
+                )
+            if len(demands) != 1:
+                raise ValueError(
+                    f"Demand '{td.id}' sets static_paths but its selectors "
+                    f"expand to {len(demands)} source/target pairs; static "
+                    "paths require selectors matching exactly one source and "
+                    "one target"
+                )
 
         all_demands.extend(demands)
         all_augmentations.extend(augmentations)

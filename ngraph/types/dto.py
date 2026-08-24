@@ -38,7 +38,9 @@ class MaxFlowResult:
 
     Attributes:
         total_flow: Maximum flow value achieved.
-        cost_distribution: Mapping of path cost to flow volume placed at that cost.
+        cost_distribution: Mapping of cost to flow volume placed at that cost.
+            Completion-phase entries are marginal costs, so a key need not match
+            any single path's cost.
         min_cut: Edges forming a minimum cut (None if not computed).
     """
 

@@ -26,10 +26,41 @@ from ngraph.analysis.context import AnalysisContext, analyze
 from ngraph.analysis.demand import DemandExpansion, expand_demands
 from ngraph.analysis.placement import place_demands
 from ngraph.model.demand.builder import coerce_flow_policy
-from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.demand.spec import StaticPath, TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.types.base import FlowPlacement, Mode
+
+
+def _static_paths_from_config(raw: Any) -> tuple[StaticPath, ...]:
+    """Rebuild pinned routes from their serialized form.
+
+    Accepts every form the scenario DSL accepts, plus `StaticPath` objects
+    unchanged, so demand configs built in Python behave like ones produced by
+    `TrafficDemand.to_dict()`.
+
+    Raises:
+        ValueError: If an entry is not a StaticPath, a list of node names, or
+            a mapping with exactly one of 'nodes' or 'links'.
+    """
+    if not raw:
+        return ()
+    paths = []
+    for entry in raw:
+        if isinstance(entry, StaticPath):
+            paths.append(entry)
+        elif isinstance(entry, (list, tuple)):
+            paths.append(StaticPath(nodes=tuple(entry)))
+        elif isinstance(entry, dict) and set(entry) == {"nodes"}:
+            paths.append(StaticPath(nodes=tuple(entry["nodes"])))
+        elif isinstance(entry, dict) and set(entry) == {"links"}:
+            paths.append(StaticPath(links=tuple(entry["links"])))
+        else:
+            raise ValueError(
+                f"Invalid static path {entry!r}: expected a list of node names "
+                "or a mapping with exactly one of 'nodes' or 'links'"
+            )
+    return tuple(paths)
 
 
 def _reconstruct_traffic_demands(
@@ -49,7 +80,7 @@ def _reconstruct_traffic_demands(
     Args:
         demands_config: List of demand configurations with fields:
             source, target, volume, mode, group_mode, flow_policy,
-            priority, attrs.
+            priority, static_paths, attrs.
 
     Returns:
         List of TrafficDemand objects with stable IDs.
@@ -67,6 +98,7 @@ def _reconstruct_traffic_demands(
                 group_mode=config.get("group_mode", "flatten"),
                 flow_policy=coerce_flow_policy(config.get("flow_policy")),
                 priority=config.get("priority", 0),
+                static_paths=_static_paths_from_config(config.get("static_paths")),
                 attrs=config.get("attrs") or {},
             )
         )
