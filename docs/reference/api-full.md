@@ -12,9 +12,9 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 21, 2026 at 00:49 UTC
+Generated from source code on: August 24, 2026 at 00:43 UTC
 
-Modules auto-discovered: 53
+Modules auto-discovered: 54
 
 ---
 
@@ -488,7 +488,33 @@ Attributes:
 Traffic demand specification.
 
 Defines `TrafficDemand`, a user-facing specification used by demand expansion
-and placement. Routing behavior is selected via an optional `FlowPolicyPreset`.
+and placement. Routing behavior is selected via an optional `FlowPolicyPreset`,
+or pinned to explicit routes with `StaticPath`.
+
+### StaticPath
+
+One explicit route a demand can be pinned to (an MPLS-style LSP).
+
+Give exactly one of `nodes` or `links`:
+
+- `nodes`: the node names the route visits, source first and target last.
+
+  Each consecutive pair must be adjacent. When several parallel links
+  connect a pair, the cheapest is used (ties broken by link id); name the
+  link explicitly to choose a different one.
+
+- `links`: the link ids the route traverses, in order. Unambiguous when
+
+  parallel links exist. A link may be traversed in either direction.
+
+Attributes:
+    nodes: Node names along the route, or empty when `links` is given.
+    links: Link ids along the route, or empty when `nodes` is given.
+
+**Attributes:**
+
+- `nodes` (Tuple) = ()
+- `links` (Tuple) = ()
 
 ### TrafficDemand
 
@@ -503,6 +529,10 @@ Attributes:
     group_mode: How grouped nodes produce demands
         ("flatten", "per_group", "group_pairwise").
     flow_policy: Policy preset for routing.
+    static_paths: Explicit routes to pin this demand to. When set, the
+        demand is placed only on these routes: one flow per route, and a
+        route broken by a failure carries nothing rather than rerouting.
+        Requires selectors matching exactly one source and one target.
     attrs: Arbitrary user metadata.
     id: Unique identifier. Auto-generated if empty.
 
@@ -515,6 +545,7 @@ Attributes:
 - `mode` (str) = combine
 - `group_mode` (str) = flatten
 - `flow_policy` (Union)
+- `static_paths` (Tuple) = ()
 - `attrs` (Dict) = {}
 - `id` (str)
 
@@ -888,7 +919,7 @@ Enumerates common flow policy presets for traffic routing.
 These presets map to specific combinations of path algorithms, flow placement
 strategies, and edge selection modes provided by NetGraph-Core.
 
-### create_flow_policy(algorithms: 'netgraph_core.Algorithms', graph: 'netgraph_core.Graph', preset: 'FlowPolicyPreset', node_mask=None, edge_mask=None) -> 'netgraph_core.FlowPolicy'
+### create_flow_policy(algorithms: 'netgraph_core.Algorithms', graph: 'netgraph_core.Graph', preset: 'FlowPolicyPreset', node_mask=None, edge_mask=None, static_path_count: 'Optional[int]' = None) -> 'netgraph_core.FlowPolicy'
 
 Create a FlowPolicy instance from a preset configuration.
 
@@ -899,6 +930,9 @@ Args:
         flow-count bounds to apply.
     node_mask: Optional numpy bool array for node exclusions (True = include).
     edge_mask: Optional numpy bool array for edge exclusions (True = include).
+    static_path_count: Number of routes the caller will pin with
+        `FlowPolicy.set_static_paths`. Sets the flow count to match, since
+        a pinned policy creates one flow per route and never grows.
 
 Returns:
     netgraph_core.FlowPolicy: Configured policy instance.
@@ -2922,6 +2956,8 @@ Attributes:
     volume: Traffic volume to place.
     priority: Priority class (lower is higher priority).
     policy_preset: FlowPolicy configuration preset.
+    static_paths: Routes this demand is pinned to, empty when it is
+        routed by the policy.
 
 **Attributes:**
 
@@ -2930,6 +2966,7 @@ Attributes:
 - `volume` (float)
 - `priority` (int)
 - `policy_preset` (FlowPolicyPreset)
+- `static_paths` (Tuple[StaticPath, ...]) = ()
 
 ### expand_demands(network: 'Network', traffic_demands: 'List[TrafficDemand]', default_policy_preset: 'FlowPolicyPreset' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 1>) -> 'DemandExpansion'
 
@@ -2957,9 +2994,11 @@ Returns:
     DemandExpansion with demands and augmentations.
 
 Raises:
-    ValueError: If no demands could be expanded, or if two demands share
-        an id (pseudo node names embed the id, so duplicates would merge
-        distinct demands' attachment edges into one endpoint).
+    ValueError: If no demands could be expanded, if two demands share an
+        id (pseudo node names embed the id, so duplicates would merge
+        distinct demands' attachment edges into one endpoint), or if a
+        demand with `static_paths` does not resolve to exactly one
+        source/target pair.
 
 ---
 
@@ -3259,6 +3298,39 @@ Raises:
         FlowIndex values would collide and silently merge in FlowGraph.
     ValueError: If ``demands``, ``volumes``, and ``resolved_ids`` are not
         all the same length.
+
+---
+
+## ngraph.analysis.static_paths
+
+Resolution of explicit routes into Core path bundles.
+
+Turns the `StaticPath` entries on a demand into the `PredDAG` bundles that
+`FlowPolicy.set_static_paths` pins traffic to. A bundle is a single simple
+path: one edge per hop, so a route that names adjacent nodes with parallel
+links between them picks one of those links (see `StaticPath`).
+
+### build_static_path_bundles(ctx: "'AnalysisContext'", paths: 'Sequence[StaticPath]', src_name: 'str', dst_name: 'str') -> 'List[netgraph_core.PredDAG]'
+
+Build the Core path bundles a demand is pinned to.
+
+Args:
+    ctx: Context holding the built graph; routes resolve against it.
+    paths: Routes to pin, in the order flows should be created.
+    src_name: Node every route must start at.
+    dst_name: Node every route must end at.
+
+Returns:
+    One `PredDAG` per route, in the given order. Results are cached per
+    context, so repeated calls during a Monte Carlo run resolve once.
+
+Raises:
+    ValueError: If an endpoint is absent from the context graph, if a
+        route names an unknown node or a disabled/unknown link, has a hop
+        whose nodes are joined only by disabled links, has a hop with
+        no link, traverses a link that does not leave the node it has
+        reached, does not run from `src_name` to `dst_name`, or revisits
+        a node (a pinned route must be a simple path).
 
 ---
 

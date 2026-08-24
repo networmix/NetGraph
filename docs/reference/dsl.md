@@ -1249,10 +1249,66 @@ demands:
 | `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
 | `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
 | `flow_policy` | string or integer | Routing policy preset name (case-insensitive, or its integer value); inline policy mappings fail schema validation at scenario load |
+| `static_paths` | array | Explicit routes to pin the demand to; see below |
 | `attrs` | object | Arbitrary metadata |
 | `expand` | object | Variable expansion block |
 
 Each demand receives an auto-generated unique `id`; an explicit `id` key is not accepted in scenario YAML. Duplicate ids can arise only when demands are constructed programmatically, and demand expansion rejects them with `ValueError`.
+
+### Static Paths
+
+`static_paths` pins a demand to routes you choose, instead of letting the flow
+policy pick them. This models MPLS-style LSPs: one flow per route, and a route
+broken by a failure carries nothing rather than rerouting.
+
+```yaml
+demands:
+  default:
+    - source: "^A$"
+      target: "^C$"
+      volume: 10
+      mode: pairwise
+      flow_policy: SHORTEST_PATHS_WCMP
+      static_paths:
+        - ["A", "B", "C"]              # node names, source first
+        - links: ["A|D|0", "D|C|0"]    # or link ids, in traversal order
+```
+
+Each route is either a list of node names or a mapping with `nodes` or
+`links`. Name nodes for readability; name links when parallel links connect
+the same pair and you need a specific one.
+
+A route is a strict explicit route: every hop is one link. Where parallel
+links connect a pair, a node hop takes the cheapest enabled one (ties broken
+by link id), so the route carries that single link's capacity and fails when
+that link fails — not when the whole bundle does. To model an LSP per parallel
+link, list one route per link using the `links` form. Disabled links are never
+chosen for a node hop, and naming one in the `links` form is an error.
+
+Semantics:
+
+- One flow per route, created in the order listed. How volume divides depends
+  on the preset: proportional presets such as `SHORTEST_PATHS_WCMP` fill the
+  routes in the order you list them, so a volume smaller than the first
+  route's bottleneck never reaches the second; equal-balanced presets give
+  every surviving route the same share, so total placement is limited by the
+  smallest surviving route. Route order is therefore significant under
+  proportional presets.
+- A route whose nodes or links are excluded carries nothing. Traffic does not
+  move to another route, which is what makes this different from ordinary
+  routing.
+- The policy neither adds routes nor reoptimizes, so preset cost ceilings and
+  LSP counts do not apply.
+
+Two demands pinned between the same source, target, and priority are rejected,
+because their flows would collide. Put every route on one demand, or separate
+the demands by priority.
+
+Because routes run between two concrete nodes, a demand using `static_paths`
+must set `mode: pairwise` and use selectors matching exactly one source and
+one target; anything else raises `ValueError` during expansion. Every route
+must start at the source and end at the target, visit adjacent nodes, and not
+revisit a node.
 
 ### Selector Fields
 

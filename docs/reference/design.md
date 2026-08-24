@@ -491,11 +491,11 @@ See "Routing Semantics: IP/IGP vs SDN/TE" section for detailed explanation.
 The residual network is maintained via `FlowState`, which tracks per-edge flow and computes residual capacities on demand. For each edge u→v:
 
 - Forward residual capacity: `capacity(u,v) - flow(u,v)`
-- Reverse residual capacity: `flow(u,v)` (used for residual reachability when computing the min-cut and reachable set)
+- Reverse residual capacity: `flow(u,v)` (traversed to return previously placed flow during the completion phase, and for residual reachability when computing the min-cut and reachable set)
 
 SPF operates over the residual graph by requesting edges with `require_capacity=true`, which filters to edges with positive residual capacity. The `FlowState` provides a residual capacity view without graph mutation.
 
-Note: Reverse residual arcs are distinct from physical reverse edges added via `add_reverse=True` during graph construction. Physical reverse edges model bidirectional links with independent capacity; reverse residual arcs are bookkeeping over a single edge's flow. The augmenting SPF search traverses forward residual edges only — placed flow is never cancelled across tiers; reverse residual arcs are traversed only for reachability when computing the min-cut and reachable set, while Dinic-style reverse edges allow redistribution within a single tier's placement.
+Note: Reverse residual arcs are distinct from physical reverse edges added via `add_reverse=True` during graph construction. Physical reverse edges model bidirectional links with independent capacity; reverse residual arcs are bookkeeping over a single edge's flow. The cost-tier SPF loop traverses forward residual edges only, so it cannot cancel an earlier placement and may stop below the true maximum. A completion phase then runs BFS augmentation over the full residual graph, traversing arcs backwards to return previously placed flow, which makes the result a true maximum flow whose min-cut matches it. The completion phase applies only to max-flow semantics — `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`; `EQUAL_BALANCED` (ECMP admission) and `require_capacity=False` (fixed-cost IP routing) are placement models rather than max-flow computations and keep the tier-loop result. Dinic-style reverse edges additionally allow redistribution within a single tier's placement.
 
 The core loop finds augmenting paths using the cost-aware SPF described above:
 
