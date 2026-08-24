@@ -79,13 +79,14 @@ Other fixes.
 
 ### Added
 
+- Demands can be pinned to explicit routes with `static_paths`, modelling MPLS-style LSPs: one flow per route, and a route broken by a failure carries nothing instead of rerouting. A route is a list of node names or link ids (link ids pick a specific one of several parallel links). Requires `mode: pairwise` with selectors matching exactly one source and one target
 - `AnalysisContext.sensitivity_with_flow`: max flow and edge sensitivity per group pair in a single pass, used by `sensitivity_analysis` and the sensitivity Monte Carlo path (results unchanged)
 - `AnalysisContext.build_node_mask`/`build_edge_mask` as public methods, for analysis functions calling Core primitives directly
 - `Scenario.run(step_hook=...)`: a callable returning a context manager entered around each step, used by the CLI `--profile` path
 - `FailurePolicy.apply_failures_typed`, returning scope-typed failure sets (`apply_failures` remains as a merged-list wrapper), plus `prepare_weights`, `build_risk_group_index`, and the `prepared_rg_index` parameter on `apply_failures` for reuse across Monte Carlo iterations
 - `build_demand_placement_inputs`, exported from `ngraph.analysis`; `demand_placement_analysis` accepts precomputed `expansion=` and `resolved_ids=`
 - `TrafficDemand.to_dict()`, `Mode.from_string` in `ngraph.types`, and `link_path_key` in `ngraph.model.selectors` (the canonical "source|target" key used when path-matching links)
-- Minimum `netgraph-core` raised to 0.7.0, the API family this release targets; the previous 0.3.0 floor predated APIs now in use
+- Minimum `netgraph-core` raised to 0.8.0, which introduces the `FlowPolicy.set_static_paths` and `PredDAG.from_edges` APIs that pinned routes are built on, and whose max-flow completion phase makes `max_flow` return a true maximum (values can increase against 0.7.x)
 
 ### Removed
 

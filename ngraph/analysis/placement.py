@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Sequence
 import netgraph_core
 import numpy as np
 
+from ngraph.analysis.static_paths import build_static_path_bundles
+from ngraph.model.demand.spec import StaticPath
 from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 
 if TYPE_CHECKING:
@@ -189,7 +191,7 @@ def place_demands(
     ):
         total_demand += volume
 
-        if demand.policy_preset in CACHEABLE_PRESETS:
+        if demand.policy_preset in CACHEABLE_PRESETS and not demand.static_paths:
             placed, cost_dist, used_edges, flow_idx_counter = _place_cached(
                 src_id,
                 dst_id,
@@ -208,11 +210,21 @@ def place_demands(
         else:
             triple = (src_id, dst_id, demand.priority)
             if triple in policy_triples:
+                same_pair = (
+                    f"source '{demand.src_name}', destination "
+                    f"'{demand.dst_name}', priority {demand.priority}"
+                )
+                if demand.static_paths:
+                    raise ValueError(
+                        f"Two demands pinned to static paths share {same_pair}. "
+                        "Their flow ids would collide and corrupt placement. "
+                        "List every route on a single demand, or give the "
+                        "demands distinct priorities."
+                    )
                 raise ValueError(
-                    f"Duplicate policy-based demand for source '{demand.src_name}', "
-                    f"destination '{demand.dst_name}', priority {demand.priority}: "
-                    "flow ids would collide and corrupt placement. Merge the "
-                    "demand volumes or use distinct priorities."
+                    f"Duplicate policy-based demand for {same_pair}: flow ids "
+                    "would collide and corrupt placement. Merge the demand "
+                    "volumes or use distinct priorities."
                 )
             policy_triples.add(triple)
             placed, cost_dist, used_edges = _place_with_policy(
@@ -227,6 +239,9 @@ def place_demands(
                 edge_mask,
                 include_cost_distribution,
                 include_used_edges,
+                static_paths=demand.static_paths,
+                src_name=demand.src_name,
+                dst_name=demand.dst_name,
             )
 
         total_placed += placed
@@ -382,15 +397,27 @@ def _place_with_policy(
     edge_mask: np.ndarray,
     include_cost_distribution: bool,
     include_used_edges: bool,
+    static_paths: Sequence[StaticPath] = (),
+    src_name: str = "",
+    dst_name: str = "",
 ) -> tuple[float, dict[float, float], set[str]]:
-    """Place single demand using FlowPolicy (for non-cacheable presets)."""
+    """Place a single demand using FlowPolicy.
+
+    Used for non-cacheable presets and for any demand pinned to explicit
+    routes. With `static_paths` the policy is pinned to those routes: one flow
+    per route, and a route broken by the masks carries nothing.
+    """
     policy = create_flow_policy(
         ctx.algorithms,
         ctx.handle,
         preset,
         node_mask=node_mask,
         edge_mask=edge_mask,
+        static_path_count=len(static_paths) or None,
     )
+    if static_paths:
+        bundles = build_static_path_bundles(ctx, static_paths, src_name, dst_name)
+        policy.set_static_paths(src_id, dst_id, bundles)
     placed, _ = policy.place_demand(flow_graph, src_id, dst_id, priority, volume)
 
     cost_dist: dict[float, float] = {}

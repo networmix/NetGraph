@@ -5,11 +5,11 @@ Construct `DemandSet` from raw dictionaries (e.g. parsed YAML).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ngraph.dsl.expansion import ExpansionSpec, expand_block
 from ngraph.model.demand.matrix import DemandSet
-from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.demand.spec import StaticPath, TrafficDemand
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
 
@@ -92,7 +92,57 @@ def _build_demand(d: Dict[str, Any], set_name: str) -> TrafficDemand:
     if "flow_policy" in d:
         td_kwargs["flow_policy"] = coerce_flow_policy(d["flow_policy"])
 
+    if "static_paths" in d:
+        td_kwargs["static_paths"] = _build_static_paths(d["static_paths"], set_name)
+
     return TrafficDemand(**td_kwargs)
+
+
+def _build_static_paths(raw: Any, set_name: str) -> Tuple[StaticPath, ...]:
+    """Build the pinned routes of one demand from its YAML form.
+
+    Each entry is either a list of node names or a mapping with `nodes` or
+    `links`.
+
+    Raises:
+        ValueError: If the block is not a non-empty list, or an entry is not
+            one of the accepted forms.
+    """
+    if not isinstance(raw, list) or not raw:
+        raise ValueError(
+            f"'static_paths' in set '{set_name}' must be a non-empty list of routes"
+        )
+
+    def _names(values: Any, kind: str) -> Tuple[str, ...]:
+        if not isinstance(values, (list, tuple)) or not all(
+            isinstance(v, str) for v in values
+        ):
+            # Variable expansion substitutes native types, so a ${var} bound to
+            # a list reaches here despite the schema constraining route entries.
+            raise ValueError(
+                f"'static_paths' in set '{set_name}': {kind} must all be "
+                f"strings, got {values!r}"
+            )
+        return tuple(values)
+
+    paths: list[StaticPath] = []
+    for entry in raw:
+        if isinstance(entry, list):
+            paths.append(StaticPath(nodes=_names(entry, "node names")))
+            continue
+        if isinstance(entry, dict):
+            keys = set(entry)
+            if keys == {"nodes"}:
+                paths.append(StaticPath(nodes=_names(entry["nodes"], "node names")))
+                continue
+            if keys == {"links"}:
+                paths.append(StaticPath(links=_names(entry["links"], "link ids")))
+                continue
+        raise ValueError(
+            f"Each entry of 'static_paths' in set '{set_name}' must be a list "
+            "of node names, or a mapping with exactly one of 'nodes' or 'links'"
+        )
+    return tuple(paths)
 
 
 def coerce_flow_policy(value: Any) -> Optional[FlowPolicyPreset]:
