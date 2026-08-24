@@ -521,7 +521,7 @@ After the loop, the C++ algorithm computes a FlowSummary which includes:
 
 - min_cut: the list of edges that are saturated and go from reachable to non-reachable (these form the minimum cut)
 
-- cost_distribution: flow volume placed at each path cost tier. Core returns parallel arrays (`costs`, `flows`); AnalysisContext converts these to the `Dict[Cost, Flow]` mapping in `MaxFlowResult.cost_distribution`.
+- cost_distribution: flow volume keyed by cost. Tier-loop entries are the cost of the shortest-path DAG the flow was placed on; completion-phase entries are marginal costs (the augmenting path's forward edge costs minus the cost of the flow it cancels), so a key need not correspond to any traversable path. Core returns parallel arrays (`costs`, `flows`); AnalysisContext converts these to the `Dict[Cost, Flow]` mapping in `MaxFlowResult.cost_distribution`.
 
 The summary is returned along with the total flow value.
 
@@ -688,6 +688,22 @@ function MAX_FLOW(graph, S, T, placement=PROPORTIONAL, require_capacity=True,
         if shortest_path:  # Single augmentation pass (IP/IGP mode)
             break
 
+    # Completion phase: max-flow semantics only. The tier loop above walks
+    # forward residual edges, so it can stop below the true maximum.
+    if placement == PROPORTIONAL and require_capacity and not shortest_path:
+        while True:
+            # BFS over the full residual graph, including reverse arcs that
+            # return previously placed flow
+            path = BFS_AUGMENTING_PATH(flow_state.residual_view(), S, T)
+            if path is None:
+                break
+            placed = flow_state.augment(path)
+            if placed < kMinFlow:
+                break
+            total_flow += placed
+            # Marginal cost: forward edge costs minus the cost of cancelled flow
+            cost_distribution[marginal_cost(path)] += placed
+
     # Compute min-cut, reachability, cost distribution
     min_cut = flow_state.compute_min_cut(S, node_mask, edge_mask)
 
@@ -703,7 +719,7 @@ function MAX_FLOW(graph, S, T, placement=PROPORTIONAL, require_capacity=True,
 
 The flow tolerance constant `kMinFlow` (1/4096 ≈ 2.4e-4) determines when flow placement is considered negligible and iteration terminates.
 
-Each augmentation phase performs one SPF \(O((V+E) \log V)\) and one placement pass over the tier's predecessor DAG. For EQUAL_BALANCED the placement is a single topological pass \(O(V+E)\); for PROPORTIONAL it is a complete Dinic max-flow over the tier DAG (repeated BFS level construction, level-restricted blocking-flow DFS, and a group rebuild from the updated residual), worst case \(O(V^2 E)\). Placed flow is never removed from an edge, so each phase permanently saturates at least one edge before the next SPF runs, bounding the number of phases by \(O(E)\); with PROPORTIONAL placement the tier's path cost also strictly increases between phases, so phases are further bounded by the number of distinct path-cost values. The resulting loose worst-case bound is \(O(E \cdot (V^2 E + (V+E) \log V))\).
+Each augmentation phase performs one SPF \(O((V+E) \log V)\) and one placement pass over the tier's predecessor DAG. For EQUAL_BALANCED the placement is a single topological pass \(O(V+E)\); for PROPORTIONAL it is a complete Dinic max-flow over the tier DAG (repeated BFS level construction, level-restricted blocking-flow DFS, and a group rebuild from the updated residual), worst case \(O(V^2 E)\). The tier loop never removes placed flow, so each phase permanently saturates at least one edge before the next SPF runs, bounding the number of phases by \(O(E)\); with PROPORTIONAL placement the tier's path cost also strictly increases between phases, so phases are further bounded by the number of distinct path-cost values. The resulting loose worst-case bound is \(O(E \cdot (V^2 E + (V+E) \log V))\). The completion phase that follows is Edmonds-Karp at \(O(V E^2)\), which this bound dominates.
 
 Practical performance is significantly better than these worst-case bounds: iteration stops as soon as the residual network disconnects source from sink, the phase count in practice equals the small number of cost tiers actually used, and the `kMinFlow` threshold additionally caps the number of phases at \(F / k_{MinFlow}\) for total flow \(F\).
 
@@ -775,7 +791,7 @@ NetGraph's design includes several features that differentiate it from tradition
 
 - Configurable flow placement: Proportional (WCMP-style, capacity-weighted) and Equal-Balanced (ECMP-style, uniform) splitting across parallel equal-cost edges
 
-- Cost-aware augmentation: Prefer cheapest capacity first via successive shortest paths. Does not re-route previously placed flow.
+- Cost-aware augmentation: Prefer cheapest capacity first via successive shortest paths. The cost-tier loop does not re-route previously placed flow; the max-flow completion phase may cancel earlier placements to reach the true maximum.
 
 - Deterministic simulation with seeding: Random aspects (e.g., failure sampling) are controlled by explicit seeds that propagate through steps. Runs are reproducible given the same scenario and seed.
 

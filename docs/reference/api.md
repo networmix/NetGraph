@@ -229,7 +229,7 @@ print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volu
 
 - `analyze(network, *, source=None, sink=None, mode=Mode.COMBINE)` - Create analysis context
 - `ctx.max_flow(source, sink, *, mode, shortest_path, require_capacity, flow_placement, excluded_nodes, excluded_links)` - Maximum flow
-- `ctx.max_flow_detailed(..., include_min_cut=False)` - Maximum flow with cost distribution and optional min-cut; the min-cut is a true minimum cut (its capacity equals the max flow), not the set of saturated edges
+- `ctx.max_flow_detailed(..., include_min_cut=False)` - Maximum flow with cost distribution and optional min-cut; the min-cut is a true minimum cut (its capacity equals the max flow under the default `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`), not the set of saturated edges
 - `ctx.sensitivity(...)` - Identify critical edges and their impact on flow
 - `ctx.sensitivity_with_flow(...)` - Compute max flow and edge sensitivity together per group pair in a single pass (used by the sensitivity Monte Carlo hot path)
 - `ctx.shortest_path_cost(source, sink, *, mode, edge_select=ALL_MIN_COST, excluded_nodes, excluded_links)` - Shortest path cost
