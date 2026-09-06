@@ -142,3 +142,6 @@ analysis*.html
 dev/perf_results/
 dev/perf_plots/
 .benchmarks/
+
+# Personal Superset lifecycle overrides
+.superset/config.local.json
