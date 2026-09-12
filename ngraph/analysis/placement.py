@@ -305,7 +305,7 @@ def place_demands(
                     member_ids.append(member_id)
                 if (
                     _preset_modes(demand.policy_preset)[1]
-                    == netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED
+                    == netgraph_core.FlowPlacement.EQUAL_BALANCED
                 ):
                     # Lossless admission applies to the demand as a whole: one
                     # pass over a DAG that fans out evenly from the pseudo
