@@ -33,6 +33,10 @@ class ExpandedDemand:
         policy_preset: FlowPolicy configuration preset.
         static_paths: Routes this demand is pinned to, empty when it is
             routed by the policy.
+        src_members: Real source node names behind a combine-mode pseudo
+            source, in selection order; empty for pairwise demands. Hop-by-hop
+            presets originate an even share of the volume at each member that
+            can reach a target instead of routing from the pseudo source.
     """
 
     src_name: str
@@ -41,6 +45,7 @@ class ExpandedDemand:
     priority: int
     policy_preset: FlowPolicyPreset
     static_paths: Tuple[StaticPath, ...] = ()
+    src_members: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -76,6 +81,13 @@ def _expand_combine(
     policy_preset: FlowPolicyPreset,
 ) -> tuple[list[ExpandedDemand], list[AugmentationEdge]]:
     """Expand combine mode: aggregate sources/sinks through pseudo nodes.
+
+    The pseudo source is a virtual source, a pool of the selected sources: a
+    TE preset carries the aggregate with whichever sources have capacity.
+    Hop-by-hop presets cannot steer origination, so placement originates an
+    even share at every member of ``src_members`` that can reach a target
+    instead; the pseudo sink still delivers each share to that source's
+    nearest targets.
 
     Nodes selected on both sides are excluded from the target set. Without
     this guard a shared node would be attached to both pseudo endpoints,
@@ -114,6 +126,7 @@ def _expand_combine(
         volume=td.volume,
         priority=td.priority,
         policy_preset=policy_preset,
+        src_members=tuple(src_names),
     )
 
     return [expanded], augmentations

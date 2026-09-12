@@ -1,7 +1,10 @@
 """Flow policy preset configurations for NetGraph.
 
-Named routing presets and the factory that materializes them as NetGraph-Core
-FlowPolicy objects built from a FlowPolicyConfig.
+Named routing presets, the single mapping from a preset to a NetGraph-Core
+``FlowPolicyConfig``, and the factory that materializes a preset as a Core
+``FlowPolicy``. Both placement engines (the SPF-cached fast path in
+``ngraph.analysis.placement`` and Core's FlowPolicy) read their edge selection
+and placement mode from ``preset_config`` so the two cannot drift.
 """
 
 from __future__ import annotations
@@ -26,18 +29,29 @@ class FlowPolicyPreset(IntEnum):
 
     These presets map to specific combinations of path algorithms, flow placement
     strategies, and edge selection modes provided by NetGraph-Core.
+
+    The ``SHORTEST_PATHS_*`` presets model hop-by-hop IP/IGP forwarding: routes
+    follow link costs alone and each demand is placed in one pass on the
+    cost-only shortest-path DAG. The ``TE_*`` presets model a controller that
+    selects paths with knowledge of residual capacity.
     """
 
     SHORTEST_PATHS_ECMP = 1
-    """Hop-by-hop equal-cost multi-path routing (ECMP).
+    """Hop-by-hop equal-cost multi-path routing (ECMP), lossless admission.
 
-    Single flow with equal-cost path splitting, similar to IP forwarding with ECMP.
+    Traffic is hashed equally over every equal-cost next hop and admitted at
+    the largest volume that causes no loss on any of them. A next hop
+    saturated by an earlier demand blocks admission of any later demand
+    hashed onto it, because the forwarding table does not react to load.
+    ``placed`` is the volume the network carries without drops.
     """
 
     SHORTEST_PATHS_WCMP = 2
     """Hop-by-hop weighted cost multi-path routing (WCMP).
 
-    Single flow with proportional splitting over equal-cost paths.
+    Single flow with proportional splitting over equal-cost paths. Weights
+    follow residual capacity, which equals link capacity on an unloaded
+    network and adapts to load placed by earlier demands.
     """
 
     TE_WCMP_UNLIM = 3
@@ -75,6 +89,110 @@ class FlowPolicyPreset(IntEnum):
     Configuration: multipath=False ensures tunnel-based ECMP (not hash-based ECMP).
     """
 
+    SHORTEST_PATHS_ECMP_LOSSY = 6
+    """Hop-by-hop ECMP, best-effort forwarding with loss.
+
+    Traffic is hashed equally over every equal-cost next hop; each link
+    carries what fits and drops the rest, and a deficit propagates
+    downstream. ``placed`` is the volume delivered to the destination and
+    ``dropped`` is what was lost on the way. With flow details enabled the
+    result records the dropped volume per link.
+    """
+
+
+#: Presets that model hop-by-hop IP/IGP forwarding: cost-only routes, one
+#: placement pass per demand, no rerouting. In combine mode these presets
+#: originate an even share of the demand at every source that can reach a
+#: target.
+HOP_BY_HOP_PRESETS: frozenset[FlowPolicyPreset] = frozenset(
+    {
+        FlowPolicyPreset.SHORTEST_PATHS_ECMP,
+        FlowPolicyPreset.SHORTEST_PATHS_WCMP,
+        FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY,
+    }
+)
+
+
+def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
+    """Build the Core ``FlowPolicyConfig`` a preset stands for.
+
+    This is the single source of the preset semantics. The SPF-cached
+    placement engine reads ``selection`` and ``flow_placement`` from it, and
+    ``create_flow_policy`` materializes it as a Core ``FlowPolicy``.
+
+    Hop-by-hop presets set ``require_capacity=False`` (routes follow costs
+    only) and ``shortest_path=True`` (one placement on the cost-only DAG), so
+    a FlowPolicy built from them places exactly what the cached engine
+    places.
+
+    Args:
+        preset: Preset to describe.
+
+    Returns:
+        A fresh ``FlowPolicyConfig``; callers may adjust it further.
+
+    Raises:
+        ValueError: If an unknown FlowPolicyPreset value is provided.
+    """
+    config = netgraph_core.FlowPolicyConfig()
+    config.path_alg = netgraph_core.PathAlg.SPF
+
+    if preset in HOP_BY_HOP_PRESETS:
+        # Hop-by-hop IP/IGP forwarding: cost-only routing, single pass, one
+        # flow whose split rule is the only thing that differs per preset.
+        config.selection = netgraph_core.EdgeSelection(
+            multi_edge=True,
+            require_capacity=False,
+            tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
+        )
+        config.require_capacity = False
+        config.shortest_path = True
+        config.min_flow_count = 1
+        config.max_flow_count = 1
+        if preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP:
+            config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED
+        elif preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY:
+            config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY
+        else:
+            config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
+        return config
+
+    if preset == FlowPolicyPreset.TE_WCMP_UNLIM:
+        # Traffic engineering with WCMP (proportional split) and capacity-aware selection
+        config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
+        config.selection = netgraph_core.EdgeSelection(
+            multi_edge=True,
+            require_capacity=True,
+            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
+        )
+        config.min_flow_count = 1
+        # max_flow_count defaults to None (unlimited)
+        return config
+
+    if preset in (
+        FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP,
+        FlowPolicyPreset.TE_ECMP_16_LSP,
+    ):
+        # TE with ECMP flow placement over single-path tunnels.
+        # multipath=False ensures each LSP is a single path (MPLS tunnel semantics)
+        config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
+        config.selection = netgraph_core.EdgeSelection(
+            multi_edge=False,
+            require_capacity=True,
+            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
+        )
+        config.multipath = False
+        config.reoptimize_flows_on_each_placement = True
+        if preset == FlowPolicyPreset.TE_ECMP_16_LSP:
+            config.min_flow_count = 16
+            config.max_flow_count = 16
+        else:
+            config.min_flow_count = 1
+            config.max_flow_count = 256
+        return config
+
+    raise ValueError(f"Unknown flow policy preset: {preset}")
+
 
 def create_flow_policy(
     algorithms: netgraph_core.Algorithms,
@@ -90,7 +208,7 @@ def create_flow_policy(
         algorithms: NetGraph-Core Algorithms instance.
         graph: NetGraph-Core Graph handle.
         preset: Preset whose path algorithm, placement, edge selection, and
-            flow-count bounds to apply.
+            flow-count bounds to apply (see ``preset_config``).
         node_mask: Optional numpy bool array for node exclusions (True = include).
         edge_mask: Optional numpy bool array for edge exclusions (True = include).
         static_path_count: Number of routes the caller will pin with
@@ -109,98 +227,19 @@ def create_flow_policy(
         >>> graph = algs.build_graph(strict_multidigraph)
         >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
     """
-
-    def _build(config: netgraph_core.FlowPolicyConfig) -> netgraph_core.FlowPolicy:
-        if static_path_count is not None:
-            # A pinned policy creates exactly one flow per route, so the flow
-            # bounds must match; Core rejects a mismatch. Cost ceilings and
-            # reoptimization are inert once paths are pinned.
-            config.min_flow_count = 1
-            config.max_flow_count = static_path_count
-            config.reoptimize_flows_on_each_placement = False
-            config.shortest_path = False
-        return netgraph_core.FlowPolicy(
-            algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
-        )
-
-    if preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP:
-        # Hop-by-hop equal-cost balanced routing (similar to IP forwarding with ECMP)
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=False,
-            tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
-        )
+    config = preset_config(preset)
+    if static_path_count is not None:
+        # A pinned policy creates exactly one flow per route, so the flow
+        # bounds must match; Core rejects a mismatch. Cost ceilings,
+        # reoptimization and the single-augmentation IP mode are inert or
+        # rejected once paths are pinned.
         config.min_flow_count = 1
-        config.max_flow_count = 1
-        return _build(config)
-
-    elif preset == FlowPolicyPreset.SHORTEST_PATHS_WCMP:
-        # Hop-by-hop weighted ECMP (WCMP) over equal-cost paths (proportional split)
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=False,
-            tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
-        )
-        config.min_flow_count = 1
-        config.max_flow_count = 1
-        return _build(config)
-
-    elif preset == FlowPolicyPreset.TE_WCMP_UNLIM:
-        # Traffic engineering with WCMP (proportional split) and capacity-aware selection
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.PROPORTIONAL
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=True,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.min_flow_count = 1
-        # max_flow_count defaults to None (unlimited)
-        return _build(config)
-
-    elif preset == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP:
-        # TE with up to 256 LSPs using ECMP flow placement
-        # multipath=False ensures each LSP is a single path (MPLS tunnel semantics)
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.multipath = False  # Each LSP uses a single path (tunnel-based ECMP)
-        config.min_flow_count = 1
-        config.max_flow_count = 256
-        config.reoptimize_flows_on_each_placement = True
-        return _build(config)
-
-    elif preset == FlowPolicyPreset.TE_ECMP_16_LSP:
-        # TE with exactly 16 LSPs using ECMP flow placement
-        # multipath=False ensures each LSP is a single path (MPLS tunnel semantics)
-        config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
-        config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
-        config.selection = netgraph_core.EdgeSelection(
-            multi_edge=False,
-            require_capacity=True,
-            tie_break=netgraph_core.EdgeTieBreak.PREFER_HIGHER_RESIDUAL,
-        )
-        config.multipath = False  # Each LSP uses a single path (tunnel-based ECMP)
-        config.min_flow_count = 16
-        config.max_flow_count = 16
-        config.reoptimize_flows_on_each_placement = True
-        return _build(config)
-
-    else:
-        raise ValueError(f"Unknown flow policy preset: {preset}")
+        config.max_flow_count = static_path_count
+        config.reoptimize_flows_on_each_placement = False
+        config.shortest_path = False
+    return netgraph_core.FlowPolicy(
+        algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
+    )
 
 
 def serialize_policy_preset(cfg: Any) -> Optional[str]:

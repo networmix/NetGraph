@@ -262,3 +262,11 @@ def test_build_demand_set_rejects_bool_flow_policy():
 
     with pytest.raises(ValueError, match="Invalid flow_policy"):
         build_demand_set(raw)
+
+
+def test_coerce_flow_policy_lossy_ecmp_preset():
+    assert coerce_flow_policy(6) == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY
+    assert (
+        coerce_flow_policy("shortest_paths_ecmp_lossy")
+        == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY
+    )

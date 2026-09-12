@@ -82,13 +82,6 @@ ngraph inspect scenarios/nsfnet.yaml --detail
 ngraph --verbose inspect scenarios/square_mesh.yaml
 ```
 
-**Use cases:**
-
-- **Scenario validation**: Verify YAML syntax and structure
-- **Network debugging**: Analyze blueprint expansion and node/link creation
-- **Capacity analysis**: Review network capacity distribution and connectivity
-- **Workflow preview**: Examine analysis steps before execution
-
 ### `run`
 
 Execute a NetGraph scenario file.
@@ -173,19 +166,7 @@ ngraph run scenarios/backbone_clos.yml --profile --results analysis.json
 ngraph run scenarios/backbone_clos.yml --profile --profile-memory --keys tm_placement
 ```
 
-The profiling output includes:
-
-- **Summary**: Total execution time, CPU efficiency, function call statistics
-- **Step timing**: Time spent in each workflow step with percentage breakdown
-- **Bottlenecks**: Steps consuming >10% of total execution time
-- **Function analysis**: Top CPU-consuming functions within bottlenecks
-- **Recommendations**: Specific suggestions for each bottleneck
-
-**When to use profiling:**
-
-- Performance analysis during development
-- Identifying bottlenecks in complex workflows
-- Benchmarking before/after changes
+The report lists total execution time, time per step, the steps that take more than 10% of the total, and the top CPU-consuming functions within those steps.
 
 ### Output Format
 
@@ -209,85 +190,23 @@ The CLI outputs results as JSON with a fixed top-level shape:
 
 ## Output Behavior
 
-NetGraph CLI generates results by default for analysis workflows:
+| Command | Writes | Prints JSON |
+|---------|--------|-------------|
+| `ngraph run scenario.yaml` | `<scenario_name>.results.json` | no |
+| `ngraph run scenario.yaml --results out.json` | `out.json` | no |
+| `ngraph run scenario.yaml --stdout` | `<scenario_name>.results.json` | yes |
+| `ngraph run scenario.yaml --results out.json --stdout` | `out.json` | yes |
+| `ngraph run scenario.yaml --no-results` | nothing | no |
 
-### Default Behavior (Results Generated)
+Logs and status messages go to stderr in every case.
 
-```bash
-ngraph run scenarios/square_mesh.yaml
-```
+## Debugging Scenarios
 
-- Executes the scenario
-- Logs execution progress to the terminal
-- **Creates `<scenario_name>.results.json` by default**
-- Shows success message with file location
-
-### Custom Results File
-
-```bash
-# Save to custom file
-ngraph run scenarios/square_mesh.yaml --results my_analysis.json
-```
-
-- Creates specified JSON file instead of the default `<scenario_name>.results.json`
-- Useful for organizing multiple analysis runs
-
-### Print to Terminal
+`ngraph run` executes every workflow step in order. Inspect a scenario before running it, and use `--verbose` with `--detail` when blueprint expansion does not produce the nodes or links you expect:
 
 ```bash
-ngraph run scenarios/square_mesh.yaml --stdout
-```
-
-- Creates `<scenario_name>.results.json` AND prints JSON to stdout
-- Useful for viewing results immediately while also saving them
-
-### Combined Output
-
-```bash
-ngraph run scenarios/square_mesh.yaml --results analysis.json --stdout
-```
-
-- Creates custom JSON file AND prints to stdout
-
-### Disable File Generation (Edge Cases)
-
-```bash
-ngraph run scenarios/square_mesh.yaml --no-results
-```
-
-- Executes scenario without creating any output files
-- Only shows execution logs and completion status
-- Useful for testing, CI/CD validation, or when only logs are needed
-
-## Integration with Workflows
-
-`ngraph run` executes every step of the workflow defined in the scenario file, in sequence, accumulating results as it goes.
-
-### Recommended Workflow
-
-1. **Inspect first**: Always use `inspect` to validate and understand your scenario
-2. **Debug issues**: Use detailed inspection to troubleshoot network expansion problems
-3. **Run after validation**: Execute scenarios after successful inspection
-4. **Iterate**: Use inspection during scenario development to verify changes
-
-```bash
-# Development workflow
-ngraph inspect scenarios/backbone_clos.yml --detail
-ngraph run scenarios/backbone_clos.yml
-```
-
-### Debugging Scenarios
-
-When developing complex scenarios with blueprints and hierarchical structures:
-
-```bash
-# Check if scenario loads correctly
 ngraph inspect scenarios/square_mesh.yaml
-
-# Debug network expansion issues (note: global option placement)
 ngraph --verbose inspect scenarios/backbone_clos.yml --detail
-
-# Verify workflow steps are configured correctly
 ngraph inspect scenarios/backbone_clos.yml --detail | grep -A 5 "WORKFLOW STEPS"
 ```
 

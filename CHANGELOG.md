@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-09-13
+
+### Fixed
+
+Placement results that were wrong in plausible scenarios. Re-run analyses that used these configurations.
+
+- Combine mode with a `SHORTEST_PATHS_*` preset routed the whole demand from the pseudo source, so only the sources nearest the targets carried traffic and the equal hash across sources let one small source scale the rest down. The pseudo source is now a pool: every source that can reach a target originates an even share, routed to its nearest targets over a DAG built by Core's new reverse SPF. Under `SHORTEST_PATHS_ECMP` the pool is admitted as one demand at a single lossless scale (two equal-cost sources of capacity 100 and 10 admit 20 of 110; `SHORTEST_PATHS_ECMP_LOSSY` delivers 65). `TE_*` presets keep letting capacity decide which sources originate. A fixed per-source matrix is `group_mode: per_group` with `group_by: name`, or `pairwise`
+- `SHORTEST_PATHS_ECMP` skipped next hops filled by earlier demands, overstating lossless capacity. It now models a load-blind forwarding table: a filled next hop blocks later demands hashed onto it (Core placement `EQUAL_BALANCED_FIXED`)
+- `TE_WCMP_UNLIM` stopped rerouting after 100 cost tiers and dropped the remainder silently. The loop is now bounded by the edge count
+- `MaximumSupportedDemand` failed with "No feasible alpha found" for LSP presets over many small demands. Core never places less than 1/4096 on a flow, so those demands were always short by a fraction of that. Feasible now means every demand is placed to within that resolution and none placed nothing; the failure message reports the best ratio seen
+- `create_flow_policy` left Core's `require_capacity` at its default for the `SHORTEST_PATHS_*` presets, so a FlowPolicy built from an IGP preset selected paths with residual awareness and the WCMP one rerouted. Both engines now read one `preset_config`, and a hop-by-hop FlowPolicy places exactly what the cached engine places
+
+### Changed
+
+- `TrafficMatrixPlacement` resolves `parallelism: auto` to 1 unless the demand set uses an LSP preset or the interpreter is free-threaded. Iterations for the other presets are Python-bound between short engine calls, and the CPU-count default made Monte Carlo about 2x slower than serial. Explicit worker counts are unchanged
+- Minimum `netgraph-core` raised to 0.9.0 (new placement modes, per-link drop reporting, reverse SPF)
+- Documentation describes placement as greedy and sequential: priority order, input order within a priority, order-dependent totals under contention
+
+### Added
+
+- `SHORTEST_PATHS_ECMP_LOSSY` preset: hop-by-hop ECMP forwarded best-effort. Every link carries what fits and drops the rest, `placed` is the delivered volume, and with `include_flow_details` each entry reports `dropped_edges`, the lost volume per link. On a 100/10 parallel pair offered 100 units, `SHORTEST_PATHS_ECMP` admits 20 and the lossy preset delivers 60
+- `ngraph.model.flow.policy_config.preset_config` and `HOP_BY_HOP_PRESETS`; `PlacementSummary.max_shortfall` and `unserved_demands`; `resolve_placement_parallelism`
+
 ## [0.22.0] - 2026-08-24
 
 ### Fixed

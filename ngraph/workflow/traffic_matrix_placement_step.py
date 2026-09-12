@@ -22,12 +22,16 @@ YAML Configuration Example:
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable
 
 from ngraph.analysis.failure_manager import FailureManager
+from ngraph.analysis.placement import CACHEABLE_PRESETS
 from ngraph.logging import get_logger
+from ngraph.model.demand.spec import TrafficDemand
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
@@ -39,6 +43,48 @@ if TYPE_CHECKING:
     from ngraph.scenario import Scenario
 
 logger = get_logger(__name__)
+
+
+def _python_is_free_threaded() -> bool:
+    """True on a free-threaded (no-GIL) interpreter, where threads scale."""
+    is_gil_enabled = getattr(sys, "_is_gil_enabled", None)
+    return is_gil_enabled is not None and not is_gil_enabled()
+
+
+def resolve_placement_parallelism(
+    parallelism: int | str, demands: Iterable[TrafficDemand]
+) -> int:
+    """Resolve the worker count for demand placement iterations.
+
+    An explicit integer is used as given. ``"auto"`` becomes the CPU count
+    only when iterations can run concurrently: on a free-threaded interpreter,
+    or when the demand set uses a preset outside ``CACHEABLE_PRESETS`` (the
+    LSP presets), whose placement runs inside the core engine with the GIL
+    released. Iterations for cacheable presets are dominated by Python-side
+    work between very short engine calls, so on a GIL interpreter threads
+    only add contention and ``"auto"`` resolves to 1.
+
+    Args:
+        parallelism: Positive worker count or ``"auto"``.
+        demands: Demands of the set to place; unset presets count as the
+            default ``SHORTEST_PATHS_ECMP``.
+
+    Returns:
+        Positive worker count.
+
+    Raises:
+        ValueError: If ``parallelism`` is neither a positive integer nor
+            ``"auto"``.
+    """
+    resolved = resolve_parallelism(parallelism)
+    if parallelism != "auto" or resolved == 1:
+        return resolved
+    if _python_is_free_threaded():
+        return resolved
+    presets = {td.flow_policy or FlowPolicyPreset.SHORTEST_PATHS_ECMP for td in demands}
+    if presets - CACHEABLE_PRESETS:
+        return resolved
+    return 1
 
 
 @dataclass
@@ -55,9 +101,13 @@ class TrafficMatrixPlacement(WorkflowStep):
         failure_policy: Failure policy name in scenario.failure_policy_set.
             If None, no failure policy is applied.
         iterations: Number of failure iterations to run; must be >= 0.
-        parallelism: Worker thread count, or "auto" for the CPU count.
+        parallelism: Worker thread count, or "auto". Auto uses the CPU count
+            when iterations can run concurrently (an LSP preset in the demand
+            set, or a free-threaded interpreter) and 1 otherwise, because
+            cacheable presets are Python-bound under the GIL and threads only
+            slow them down. See ``resolve_placement_parallelism``.
         placement_rounds: Deprecated; accepted for backward compatibility but
-            has no effect (placement optimization is handled by the core engine).
+            has no effect (each demand is placed in one deterministic pass).
         seed: Optional seed for reproducibility.
         store_failure_patterns: Record the failure trace on each result.
             Iterations are deduplicated, so a trace describes the first
@@ -88,7 +138,7 @@ class TrafficMatrixPlacement(WorkflowStep):
         if self.placement_rounds != "auto":
             logger.warning(
                 "TrafficMatrixPlacement 'placement_rounds' is deprecated and has "
-                "no effect; placement optimization is handled by the core engine."
+                "no effect; each demand is placed in one deterministic pass."
             )
         if self.iterations < 0:
             raise ValueError("iterations must be >= 0")
@@ -147,7 +197,12 @@ class TrafficMatrixPlacement(WorkflowStep):
             failure_policy_set=scenario.failure_policy_set,
             policy_name=self.failure_policy,
         )
-        effective_parallelism = resolve_parallelism(self.parallelism)
+        effective_parallelism = resolve_placement_parallelism(self.parallelism, td_list)
+        if self.parallelism == "auto":
+            logger.info(
+                "Resolved parallelism 'auto' to %d worker(s) for this demand set",
+                effective_parallelism,
+            )
 
         raw = fm.run_demand_placement_monte_carlo(
             demands_config=demands_config,

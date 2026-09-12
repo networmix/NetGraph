@@ -8,11 +8,11 @@ Quick links:
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-NetGraph workflows are analysis execution pipelines that perform capacity analysis, demand placement, and statistics computation.
+A workflow is the ordered list of analysis steps a scenario runs.
 
 ## Overview
 
-Workflows are ordered steps executed on a scenario. Each step computes a result (e.g., stats, Monte Carlo analysis, export) and writes it under its step name in the results store.
+Each step computes one result (statistics, a Monte Carlo analysis, an export) and writes it under its step name in the results store.
 
 ```yaml
 workflow:
@@ -31,7 +31,7 @@ workflow:
 ## Execution Model
 
 - Steps run sequentially via `WorkflowStep.execute()`, which records timing and metadata and stores outputs under `{metadata, data}` for the step.
-- Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes the network with exclusion sets applied to mask failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`.
+- Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes the network with exclusion sets applied to mask failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`. For `MaxFlow`, `auto` is the CPU count. For `TrafficMatrixPlacement`, `auto` is 1 unless the demand set uses an LSP preset or the interpreter is free-threaded, because iterations for the other presets are Python-bound and threads only slow them down; an explicit integer is always honoured.
 - Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, `seed_source`, and `active_seed`. `seed_source`/`active_seed` reflect the seed the step actually uses: a step constructed without its own seed reports `seed_source: none` even when the scenario has a seed (YAML-loaded scenarios derive per-step seeds at parse time, so those report `scenario-derived`).
 
 ## Core Workflow Steps
@@ -99,7 +99,7 @@ Monte Carlo placement of a named demand set with optional alpha scaling. Baselin
   demand_set: default
   failure_policy: random_failures        # Optional: policy name in failures section
   iterations: 100                # Number of failure iterations
-  parallelism: auto
+  parallelism: auto              # 1 for hop-by-hop/TE_WCMP presets, CPU count with LSP presets
   include_flow_details: true     # cost_distribution per flow
   include_used_edges: false      # include per-demand used edge lists
   store_failure_patterns: false
@@ -116,6 +116,9 @@ Outputs:
 - data.baseline and data.flow_results: see Results Export Shape below
 - data.context: demand_set, include_flow_details,
   include_used_edges, base_demands, alpha, alpha_source
+- each flow entry's `data` holds `edges`/`edges_kind: used` with
+  `include_used_edges`, and `dropped_edges` (volume lost per link) for
+  `SHORTEST_PATHS_ECMP_LOSSY` demands with `include_flow_details`
 
 Note: `placement_rounds` is deprecated and has no effect. It is still accepted in YAML for backward compatibility and is not exported in `data.context`; setting it to any value other than `auto` also logs a deprecation warning.
 
@@ -140,7 +143,7 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
 Parameters:
 
 - `demand_set`: Name of the demand set to analyze (default: "default").
-- `acceptance_rule`: Acceptance rule for feasibility (currently only "hard" is supported).
+- `acceptance_rule`: Acceptance rule for feasibility (currently only "hard" is supported): every demand must be placed to within the core engine's resolution of 1/4096 and no demand may place nothing.
 - `alpha_start`: Initial alpha value to probe.
 - `growth_factor`: Multiplier for bracketing phase (must be > 1.0).
 - `alpha_min`: Minimum alpha bound for search.
@@ -148,7 +151,7 @@ Parameters:
 - `resolution`: Convergence threshold for bisection.
 - `max_bracket_iters`: Maximum iterations for bracketing phase.
 - `max_bisect_iters`: Maximum iterations for bisection phase.
-- `placement_rounds`: Deprecated; accepted for backward compatibility but has no effect (placement optimization is handled by the core engine).
+- `placement_rounds`: Deprecated; accepted for backward compatibility but has no effect (each demand is placed in one deterministic pass, so repeated rounds change nothing).
 
 Outputs:
 

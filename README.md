@@ -2,7 +2,7 @@
 
 [![Python-test](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml/badge.svg?branch=main)](https://github.com/networmix/NetGraph/actions/workflows/python-test.yml)
 
-Network modeling and analysis framework combining Python with high-performance C++ graph algorithms.
+Network modeling and analysis framework: Python front end, C++ graph algorithms.
 
 ## What It Does
 
@@ -105,6 +105,7 @@ workflow:
 
 ```bash
 ngraph run scenario.yml --output results/
+jq '.steps.max_demand.data.alpha_star' results/scenario.results.json
 ```
 
 This scenario builds a dual-site Clos fabric from blueprints, finds the maximum supportable demand, then runs 100 Monte Carlo iterations with random link failures - exporting results to JSON.
@@ -118,7 +119,7 @@ See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Ex
 - **Routing modes** for IP routing (cost-based) and traffic engineering (capacity-aware)
 - **Flow placement** strategies for ECMP and WCMP with max-flow and capacity envelopes
 - **Reproducible results** via seeded randomness and stable edge IDs
-- **C++ performance** with GIL released via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
+- **C++ algorithms** with the GIL released, via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
 
 ## Documentation
 

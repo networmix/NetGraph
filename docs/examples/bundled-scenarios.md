@@ -74,6 +74,41 @@ ngraph run scenarios/nsfnet.yaml --output out
 ngraph run scenarios/nsfnet.yaml --keys node_to_node_capacity_matrix_1 --stdout
 ```
 
+## Reading the results
+
+`--stdout` prints only the JSON, so it pipes into `jq`:
+
+```bash
+# The largest traffic multiplier that still fits (square_mesh: 1.0)
+ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys msd_baseline \
+  | jq '.steps.msd_baseline.data.alpha_star'
+
+# One line per distinct failure pattern: which links failed, how many
+# iterations drew it, and the fraction of demand still placed
+ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys tm_placement \
+  | jq -c '.steps.tm_placement.data.flow_results[]
+           | {links: .failure_state.excluded_links, n: .occurrence_count, ratio: .summary.overall_ratio}'
+
+# Pairwise capacity matrix: 676 source/destination pairs in the no-failure baseline
+ngraph run scenarios/nsfnet.yaml --no-results --stdout --keys node_to_node_capacity_matrix_1 \
+  | jq '.steps.node_to_node_capacity_matrix_1.data.baseline.flows | length'
+
+# Capex and power per metro from the components library
+ngraph run scenarios/backbone_clos.yml --no-results --stdout --keys cost_power \
+  | jq -c '.steps.cost_power.data.levels["1"][] | {path, capex_total, power_total_watts}'
+```
+
+The `square_mesh` placement output looks like this (1000 iterations, six single-link patterns):
+
+```text
+{"links":["N1|N2|0"],"n":164,"ratio":0.8333333333333334}
+{"links":["N3|N4|0"],"n":180,"ratio":0.8333333333333334}
+{"links":["N2|N4|0"],"n":165,"ratio":1.0}
+{"links":["N2|N3|0"],"n":183,"ratio":0.8333333333333334}
+{"links":["N1|N3|0"],"n":164,"ratio":1.0}
+{"links":["N1|N4|0"],"n":144,"ratio":0.8333333333333334}
+```
+
 ## Notes on results
 
 All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store a list under `data.flow_results` with one entry per unique failure pattern - patterns are deduplicated across iterations, so the list holds at most `iterations` entries and usually far fewer - alongside a single unfailed entry under `data.baseline`; with no `failure_policy`, `flow_results` is empty. Each entry carries a `summary` and per-flow `flows` entries whose `cost_distribution` is populated when `include_flow_details` is set (and `{}` otherwise), and with `include_min_cut` the min-cut edges appear under a flow entry's `data` (`edges` plus `edges_kind: "min_cut"`). See Reference -> Workflow for the exact schema.

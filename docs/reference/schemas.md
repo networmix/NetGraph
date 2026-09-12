@@ -9,7 +9,7 @@ Quick links:
 - [API Reference](api.md) — Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) — complete class and method documentation
 
-NetGraph includes JSON Schema definitions for YAML scenario files, providing IDE validation, autocompletion, and automated testing.
+A JSON Schema describes the scenario YAML. It drives load-time validation, IDE completion, and tests.
 
 ## Schema Location
 
@@ -26,7 +26,7 @@ The schema validates:
 - Top-level section organization
 - Basic constraint checking
 
-Runtime: The schema is applied unconditionally during load in `ngraph.scenario.Scenario.from_yaml` (via `ngraph.dsl.loader.load_scenario_yaml`). Additional business rules are enforced in code (e.g., blueprint expansion) and may still raise errors for semantically invalid inputs.
+`Scenario.from_yaml` always validates against the schema (in `ngraph.dsl.loader.load_scenario_yaml`) before expansion. Rules the schema cannot express, such as blueprint parameter names or risk-group references, are checked in code and raise `ValueError`.
 
 ## IDE Integration (VS Code)
 
@@ -98,18 +98,4 @@ jsonschema.validate(data, schema)
 
 ## Schema Maintenance
 
-**Update triggers**:
-
-- New top-level sections added
-- Property types or validation rules change
-- New workflow step types
-
-**Update process**:
-
-1. Implement feature in `ngraph/scenario.py` validation logic
-2. Test runtime validation
-3. Update JSON Schema to match implementation
-4. Run `make test` to verify schema tests
-5. Update documentation
-
-Authority: code implementation in `ngraph/scenario.py` and `ngraph/dsl/blueprints/expand.py` is authoritative, not the schema.
+Update the schema whenever a top-level section, a field's type, or a workflow step type changes, then run `make test` (the integration tests load every bundled scenario and the DSL examples). The code is authoritative: `ngraph/dsl/loader.py` validates, and `ngraph/dsl/blueprints/expand.py` and the model classes enforce what the schema cannot express.

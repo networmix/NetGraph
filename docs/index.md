@@ -31,13 +31,13 @@ NetGraph uses a hybrid Python+C++ architecture, split across two layers:
 
 ### Traffic Engineering
 
-- **Routing Modes**: Unified modeling of IP routing (static costs, oblivious to congestion) and traffic engineering (dynamic residuals, congestion-aware).
+- **Routing Modes**: IP routing (cost-only, fixed paths) and traffic engineering (capacity-aware) in one model.
 - **Flow Placement**: Strategies for ECMP (Equal-Cost Multi-Path) and WCMP (Weighted Cost Multi-Path).
-- **Capacity Analysis**: Compute max-flow envelopes and demand allocation with configurable placement policies.
+- **Capacity Analysis**: Max-flow between node groups and traffic-matrix placement with selectable placement policies.
 
 ### Workflow & Integration
 
-- **Structured Results**: Export analysis artifacts to JSON for downstream processing.
+- **Structured Results**: JSON export with a fixed shape.
 - **CLI**: Validate, inspect, and run scenarios from the command line.
 - **Python API**: Programmatic access to the same modeling and solving entry points.
 

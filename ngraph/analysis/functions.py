@@ -309,12 +309,20 @@ def demand_placement_analysis(
        pre-built ``context``
     2. Expand demands into concrete (src, dst, volume) tuples (or use a
        pre-computed expansion)
-    3. Place each demand using SPF caching for cacheable policies.
-       SHORTEST_PATHS_* presets admit flow onto the cost-only shortest paths
-       of the base topology and drop overflow (IGP semantics); TE_* presets
+    3. Place each demand using SPF caching for cacheable policies, in priority
+       order and input order within a priority; nothing is revisited.
+       SHORTEST_PATHS_* presets place in one pass on the cost-only shortest
+       paths of the base topology: ``_ECMP`` admits what the equal-cost next
+       hops carry without loss, ``_ECMP_LOSSY`` delivers what survives
+       per-link drops, ``_WCMP`` splits by residual capacity. A combine-mode
+       demand is a virtual source: with one of these presets every source
+       that can reach a target originates an even share, and under
+       ``_ECMP`` the pool is admitted at one global scale. TE_* presets
        reroute remaining volume onto residual-capacity paths.
     4. Fall back to FlowPolicy for presets outside CACHEABLE_PRESETS
-    5. Aggregate results into FlowIterationResult
+    5. Aggregate results into FlowIterationResult. With
+       ``include_flow_details`` a lossy demand's entry carries
+       ``data["dropped_edges"]``, the dropped volume per ``link_id:direction``.
 
     SPF Caching Optimization:
         For cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are
@@ -381,23 +389,26 @@ def demand_placement_analysis(
     )
 
     # Phase 4: Convert to FlowEntry format
-    flow_entries = [
-        FlowEntry(
-            source=e.src_name,
-            destination=e.dst_name,
-            priority=e.priority,
-            demand=e.volume,
-            placed=e.placed,
-            dropped=e.volume - e.placed,
-            cost_distribution=e.cost_distribution,
-            data=(
-                {"edges": sorted(e.used_edges), "edges_kind": "used"}
-                if e.used_edges
-                else {}
-            ),
+    flow_entries = []
+    for e in result.entries or []:
+        data: dict[str, Any] = {}
+        if e.used_edges:
+            data["edges"] = sorted(e.used_edges)
+            data["edges_kind"] = "used"
+        if e.dropped_edges:
+            data["dropped_edges"] = dict(sorted(e.dropped_edges.items()))
+        flow_entries.append(
+            FlowEntry(
+                source=e.src_name,
+                destination=e.dst_name,
+                priority=e.priority,
+                demand=e.volume,
+                placed=e.placed,
+                dropped=e.volume - e.placed,
+                cost_distribution=e.cost_distribution,
+                data=data,
+            )
         )
-        for e in result.entries or []
-    ]
 
     dropped_flows = sum(1 for e in flow_entries if e.dropped > 0.0)
     summary = FlowSummary(

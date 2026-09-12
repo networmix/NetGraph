@@ -191,7 +191,22 @@ class TestCombineOverlapExclusion:
             }
             assert not attached_to_src & attached_to_snk
 
-    def test_per_group_combine_placement_bounded_by_real_capacity(self) -> None:
+    @pytest.mark.parametrize(
+        "preset,expected_placed",
+        [
+            # Each group's combine demand is a virtual source: A/2 and B/2
+            # have no path at all and leave the pool, so A/1 -> B/1 and
+            # B/1 -> A/1 each carry the single capacity-1.0 link's worth
+            # whatever the preset. The bypass previously placed all 100.
+            ("SHORTEST_PATHS_ECMP", 2.0),
+            ("SHORTEST_PATHS_ECMP_LOSSY", 2.0),
+            ("SHORTEST_PATHS_WCMP", 2.0),
+            ("TE_WCMP_UNLIM", 2.0),
+        ],
+    )
+    def test_per_group_combine_placement_bounded_by_real_capacity(
+        self, preset: str, expected_placed: float
+    ) -> None:
         """Placement is bounded by real capacity, not the pseudo bypass."""
         network = self._two_group_single_link_network()
         demands_config = [
@@ -201,6 +216,7 @@ class TestCombineOverlapExclusion:
                 "volume": 100.0,
                 "mode": "combine",
                 "group_mode": "per_group",
+                "flow_policy": preset,
             }
         ]
 
@@ -211,11 +227,9 @@ class TestCombineOverlapExclusion:
             demands_config=demands_config,
         )
 
-        # The single capacity-1.0 link (plus its reverse edge) bounds
-        # placement at 2.0; the bypass previously placed all 100.
         assert result.summary.total_demand == pytest.approx(100.0)
-        assert result.summary.total_placed == pytest.approx(2.0)
-        assert result.summary.overall_ratio == pytest.approx(0.02)
+        assert result.summary.total_placed == pytest.approx(expected_placed)
+        assert result.summary.overall_ratio == pytest.approx(expected_placed / 100.0)
 
     def test_flatten_combine_full_overlap_raises(self) -> None:
         network = self._two_group_single_link_network()

@@ -173,7 +173,7 @@ for lk in network.links.values():
        (s.startswith("my_clos2/spine") and t.startswith("my_clos1/spine")):
         groups[(s, t)].append(lk)
 for i, key in enumerate(sorted(groups.keys())):
-    links = sorted(groups[key], key=lambda x: (x.source, x.target, id(x)))
+    links = sorted(groups[key], key=lambda x: x.id)
     caps = [4.0, 0.25, 0.25, 0.25] if i % 2 == 0 else [2.0, 1.0, 0.5, 0.25]
     for lk, cap in zip(links, caps):
         lk.capacity = cap
@@ -206,6 +206,55 @@ Uneven WCMP: {('b1|b2', 'b1|b2'): 248.0}
 ```
 
 As expected, WCMP achieves higher throughput than ECMP when parallel links within equal-cost bundles have uneven capacities. ECMP is limited by the link with the lowest capacity in the equal-cost group.
+
+## Failure Analysis
+
+The same ECMP-versus-WCMP question under failures, this time with `FailureManager` running a Monte Carlo over random spine failures in `my_clos1`. Each iteration fails two spines; identical failure patterns are run once and weighted by how often they were drawn.
+
+```python
+from collections import Counter
+from ngraph import FailureManager, FlowPlacement
+from ngraph.model.failure.policy import FailurePolicy, FailureMode, FailureRule
+from ngraph.model.failure.policy_set import FailurePolicySet
+
+# Restore symmetric inter-spine links for this section
+for lk in network.links.values():
+    if lk.source.startswith("my_clos1/spine") or lk.source.startswith("my_clos2/spine"):
+        lk.capacity = 1.0
+
+two_spines = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[
+    FailureRule(scope="node", mode="choice", count=2, path="^my_clos1/spine/"),
+])])
+fm = FailureManager(
+    network=network,
+    failure_policy_set=FailurePolicySet(policies={"two_spines": two_spines}),
+    policy_name="two_spines",
+)
+
+for placement in (FlowPlacement.EQUAL_BALANCED, FlowPlacement.PROPORTIONAL):
+    mc = fm.run_max_flow_monte_carlo(
+        source=r"my_clos1.*(b[0-9]*)/t1",
+        target=r"my_clos2.*(b[0-9]*)/t1",
+        mode="combine",
+        iterations=100,
+        parallelism=1,
+        seed=1,
+        shortest_path=True,
+        flow_placement=placement,
+    )
+    capacity = Counter()
+    for item in mc["results"]:
+        capacity[item.summary.total_placed] += item.occurrence_count
+    print(placement.name, "baseline", mc["baseline"].summary.total_placed,
+          "under failure", dict(sorted(capacity.items())))
+```
+
+```text
+EQUAL_BALANCED baseline 256.0 under failure {192.0: 13, 224.0: 87}
+PROPORTIONAL baseline 256.0 under failure {248.0: 100}
+```
+
+Losing two spines removes 8 of 256 inter-spine links. WCMP loses exactly that capacity in every iteration. ECMP loses 32, or 64 when both failed spines serve the same t2 switch, because the surviving equal-cost next hops still receive equal shares and the smallest one caps the whole split.
 
 ## Network Structure Analysis
 

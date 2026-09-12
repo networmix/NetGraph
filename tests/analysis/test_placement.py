@@ -190,7 +190,8 @@ class TestHelperFunctions:
         import netgraph_core
 
         placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
-        assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED
+        # Lossless hash-ECMP admission with a load-blind next-hop set.
+        assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED
 
     def test_get_placement_for_wcmp(self) -> None:
         """Test FlowPlacement for WCMP preset."""
@@ -1066,9 +1067,13 @@ class TestCachedVsNonCachedEquivalence:
             (FlowPolicyPreset.SHORTEST_PATHS_ECMP, ["A"], ["D"], False),
             (FlowPolicyPreset.SHORTEST_PATHS_ECMP, ["A"], ["D", "E"], False),
             (FlowPolicyPreset.SHORTEST_PATHS_ECMP, ["A", "B"], ["D"], False),
+            (FlowPolicyPreset.SHORTEST_PATHS_ECMP, ["A"], ["D", "E"], True),
             # WCMP tests
             (FlowPolicyPreset.SHORTEST_PATHS_WCMP, ["A"], ["D"], False),
             (FlowPolicyPreset.SHORTEST_PATHS_WCMP, ["A"], ["D", "E"], False),
+            (FlowPolicyPreset.SHORTEST_PATHS_WCMP, ["A"], ["D", "E"], True),
+            # Lossy ECMP
+            (FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY, ["A"], ["D", "E"], True),
             # TE_WCMP_UNLIM tests
             (FlowPolicyPreset.TE_WCMP_UNLIM, ["A"], ["D"], False),
             (FlowPolicyPreset.TE_WCMP_UNLIM, ["A"], ["D"], True),
@@ -1079,8 +1084,11 @@ class TestCachedVsNonCachedEquivalence:
             "ecmp_single_src_single_dest",
             "ecmp_single_src_multi_dest",
             "ecmp_multi_src_single_dest",
+            "ecmp_single_src_multi_dest_constrained",
             "wcmp_single_src_single_dest",
             "wcmp_single_src_multi_dest",
+            "wcmp_single_src_multi_dest_constrained",
+            "lossy_single_src_multi_dest_constrained",
             "te_single_src_single_dest_unconstrained",
             "te_single_src_single_dest_constrained",
             "te_multi_src_single_dest_constrained",
@@ -1096,14 +1104,12 @@ class TestCachedVsNonCachedEquivalence:
         multi_dest_constrained_network: Network,
         multi_source_multi_dest_network: Network,
     ) -> None:
-        """Cached placement matches FlowPolicy placement in uncontended cases.
+        """Cached placement matches FlowPolicy placement, contended or not.
 
-        The equivalence holds when demands do not compete for capacity. Under
-        contention the cached path is canonical for SHORTEST_PATHS presets:
-        it admits flow onto the cost-only shortest paths of the base topology
-        and drops the overflow (IGP semantics), whereas Core's FlowPolicy
-        reroutes onto costlier residual paths (TE semantics, available via
-        the TE_* presets).
+        Both engines read the same ``preset_config``: hop-by-hop presets are
+        cost-only and single-pass in the FlowPolicy too, so under contention
+        both admit onto the base shortest paths and leave the overflow,
+        while TE presets reroute in both.
         """
         # Select network based on source count
         if len(sources) > 1:
