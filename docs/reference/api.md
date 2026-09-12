@@ -8,7 +8,7 @@ Quick links:
 - [CLI Reference](cli.md) -- command-line tools for running scenarios
 - [Auto-Generated API Reference](api-full.md) -- complete class and method documentation
 
-A curated guide to NetGraph's Python API, organized by typical usage patterns.
+The Python API, organized by how it is typically used.
 
 ## 1. Programmatic Quickstart
 
@@ -203,7 +203,7 @@ Max-flow, shortest paths, and edge sensitivity.
 
 **When to use:** Measuring capacity between source and sink groups, under a choice of flow placement policy and with nodes or links excluded to model failures.
 
-**Performance:** Max-flow computation executes in C++ with the GIL released for concurrent execution. The algorithm uses successive shortest paths on the residual graph, pushing a blocking flow across the full ECMP/WCMP shortest-path DAG at each augmentation step until no augmenting path remains. Worst case is `O(E * (V^2 E + (V+E) log V))`; in practice the phase count equals the small number of cost tiers actually used, and the `kMinFlow` tolerance caps phases at `F / kMinFlow` for total flow `F`. See [Design](design.md) for the derivation.
+Max-flow runs in C++ with the GIL released. The algorithm and its complexity bounds are described in [Design](design.md).
 
 ```python
 from ngraph import analyze, Mode, FlowPlacement
@@ -239,7 +239,7 @@ print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volu
 
 - **Mode.COMBINE:** Aggregate sources into one super-source, sinks into one super-sink; returns single total flow
 - **Mode.PAIRWISE:** Compute flow for each (source_group, sink_group) pair independently
-- **FlowPlacement.PROPORTIONAL (WCMP):** Split flow proportional to edge capacity
+- **FlowPlacement.PROPORTIONAL (WCMP):** Split flow across parallel edges in proportion to residual capacity
 - **FlowPlacement.EQUAL_BALANCED (ECMP):** Equal split across parallel paths
 - **shortest_path=True:** Restricts flow to lowest-cost paths only (IP/IGP routing semantics)
 - **shortest_path=False:** Uses all paths progressively (TE/SDN semantics)
@@ -489,6 +489,9 @@ entry.destination   # Destination label
 entry.demand        # Requested demand
 entry.placed        # Actually placed
 entry.dropped       # Unmet demand
+entry.cost_distribution  # Dict[cost, placed volume] with include_flow_details
+entry.data          # Optional details: edges/edges_kind with include_used_edges,
+                    # dropped_edges (volume lost per link) for lossy presets
 
 # FlowSummary - Aggregated statistics
 summary.total_demand    # Sum of all demands
@@ -547,12 +550,6 @@ for pair, impacts in sensitivity.items():
 
 ## 9. Performance Notes
 
-NetGraph uses a hybrid Python+C++ architecture:
+Network, Scenario and the workflow steps are Python. Shortest paths, max-flow and k-shortest paths run in C++ (NetGraph-Core) with the GIL released. Public APIs take and return Python types; the C++ layer is only reached through `netgraph_core` when you call it yourself, as in the NetworkX section above.
 
-- **High-level APIs** (Network, Scenario, Workflow) are pure Python
-- **Core algorithms** (shortest paths, max-flow, K-shortest paths) execute in optimized C++ via NetGraph-Core
-- **GIL released** during algorithm execution for parallel processing
-- **Transparent integration**: You work with Python objects; Core acceleration is automatic
-
-All public APIs accept and return Python types (Network, Node, Link, FlowSummary, etc.).
-The C++ layer is an implementation detail you generally don't interact with directly.
+Threads help only when an iteration spends its time inside the C++ engine (max-flow, the LSP presets). Demand placement for the hop-by-hop presets is Python-bound between short engine calls, which is why `TrafficMatrixPlacement` resolves `parallelism: auto` to 1 for those demand sets.

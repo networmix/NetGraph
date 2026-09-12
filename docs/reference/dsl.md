@@ -1290,10 +1290,12 @@ Semantics:
 - One flow per route, created in the order listed. How volume divides depends
   on the preset: proportional presets such as `SHORTEST_PATHS_WCMP` fill the
   routes in the order you list them, so a volume smaller than the first
-  route's bottleneck never reaches the second; equal-balanced presets give
+  route's bottleneck never reaches the second; `SHORTEST_PATHS_ECMP` gives
   every surviving route the same share, so total placement is limited by the
-  smallest surviving route. Route order is therefore significant under
-  proportional presets.
+  smallest surviving route; `SHORTEST_PATHS_ECMP_LOSSY` offers every surviving
+  route the same share and each carries what fits, so `placed` is the
+  delivered total (per-link drops are not reported for pinned routes). Route
+  order is therefore significant under proportional presets.
 - A route whose nodes or links are excluded carries nothing. Traffic does not
   move to another route, which is what makes this different from ordinary
   routing.
@@ -1321,7 +1323,11 @@ The `source` and `target` fields accept either:
 
 Controls how source and target node sets are paired:
 
-- `combine`: Aggregate all sources into one virtual source, all targets into one virtual target. Produces a single flow.
+- `combine`: Aggregate all sources into one virtual source and all targets into one virtual target. Produces a single flow entry. The virtual source is a pool of the selected sources:
+    - With a `TE_*` preset, capacity decides which sources originate the traffic. This answers "what is the largest volume this group can deliver to that group".
+    - With a `SHORTEST_PATHS_*` preset, every source that can reach a target originates an even share and routes it to its nearest targets, because hop-by-hop routing cannot choose where traffic originates. A source with no path (its links or node failed) drops out of the split.
+    - Under `SHORTEST_PATHS_ECMP` the pool is admitted as one demand with its split fixed, so a source that can carry only part of its share throttles the others too. Two equal-cost sources of capacity 100 and 10 admit 20 of a 110 demand without loss; `SHORTEST_PATHS_ECMP_LOSSY` delivers 65 and drops 45 at the small source.
+    - For a fixed per-source matrix, where an isolated source's share is unserved rather than moved to the others, expand per source (`group_by: name` with `group_mode: per_group`) or use `pairwise`.
 - `pairwise`: Create individual flows between all source-target node pairs. Volume is distributed across pairs.
 
 **Overlapping selections in `combine` mode:** Nodes selected by both `source` and `target` are excluded from the target side, so overlapping selections cannot route volume through a zero-cost pseudo-node bypass; placement is bounded by real network capacity. With `group_mode: flatten`, a demand whose source and target selections fully overlap leaves no targets after exclusion and expands to nothing; if no demand in the whole expansion produces anything, analysis fails with `No demands could be expanded`.
@@ -1362,8 +1368,9 @@ In `per_group`, `group_pairwise`, and `pairwise` expansions the configured volum
 
 ### Flow Policies
 
-- `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths
-- `SHORTEST_PATHS_WCMP`: IP/IGP routing with weighted ECMP; proportional split by link capacity
+- `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths, admitted without loss. `placed` is what the network carries with no drops; a next hop filled by an earlier demand blocks later demands hashed onto it
+- `SHORTEST_PATHS_ECMP_LOSSY`: the same routing, forwarded best-effort. Every link carries what fits and drops the rest; `placed` is what arrives and `dropped` what was lost. With `include_flow_details` each entry reports `dropped_edges`, the lost volume per link
+- `SHORTEST_PATHS_WCMP`: IP/IGP routing with weighted ECMP; proportional split by residual capacity (equal to link capacity on an unloaded network)
 - `TE_WCMP_UNLIM`: MPLS-TE / SDN with capacity-aware WCMP; unlimited tunnels
 - `TE_ECMP_16_LSP`: MPLS-TE with exactly 16 ECMP LSPs per demand
 - `TE_ECMP_UP_TO_256_LSP`: MPLS-TE with up to 256 ECMP LSPs per demand

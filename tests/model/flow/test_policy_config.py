@@ -157,3 +157,70 @@ def test_flow_policy_preset_from_name():
 
     preset = FlowPolicyPreset["TE_ECMP_16_LSP"]
     assert preset == FlowPolicyPreset.TE_ECMP_16_LSP
+
+
+# ---------------------------------------------------------------------------
+# preset_config: the single mapping both placement engines read from
+# ---------------------------------------------------------------------------
+
+
+def test_preset_config_hop_by_hop_presets_are_cost_only_single_pass():
+    """IGP presets route on cost alone and place once, in both engines."""
+    from ngraph.model.flow.policy_config import HOP_BY_HOP_PRESETS, preset_config
+
+    expected_placement = {
+        FlowPolicyPreset.SHORTEST_PATHS_ECMP: netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED,
+        FlowPolicyPreset.SHORTEST_PATHS_WCMP: netgraph_core.FlowPlacement.PROPORTIONAL,
+        FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY: netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY,
+    }
+    assert set(expected_placement) == set(HOP_BY_HOP_PRESETS)
+    for preset, placement in expected_placement.items():
+        cfg = preset_config(preset)
+        assert cfg.require_capacity is False, preset
+        assert cfg.selection.require_capacity is False, preset
+        assert cfg.shortest_path is True, preset
+        assert cfg.max_flow_count == 1, preset
+        assert cfg.flow_placement == placement, preset
+
+
+def test_preset_config_te_presets_are_capacity_aware():
+    from ngraph.model.flow.policy_config import preset_config
+
+    for preset in (
+        FlowPolicyPreset.TE_WCMP_UNLIM,
+        FlowPolicyPreset.TE_ECMP_16_LSP,
+        FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP,
+    ):
+        cfg = preset_config(preset)
+        assert cfg.require_capacity is True, preset
+        assert cfg.selection.require_capacity is True, preset
+        assert cfg.shortest_path is False, preset
+    assert preset_config(FlowPolicyPreset.TE_WCMP_UNLIM).max_flow_count is None
+    assert preset_config(FlowPolicyPreset.TE_ECMP_16_LSP).min_flow_count == 16
+    assert preset_config(FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP).max_flow_count == 256
+
+
+def test_preset_config_returns_a_fresh_object():
+    from ngraph.model.flow.policy_config import preset_config
+
+    a = preset_config(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+    a.max_flow_count = 7
+    assert preset_config(FlowPolicyPreset.SHORTEST_PATHS_ECMP).max_flow_count == 1
+
+
+def test_lossy_preset_value_and_policy(simple_graph):
+    algs, graph_handle, _ = simple_graph
+    assert FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY == 6
+    policy = create_flow_policy(
+        algs, graph_handle, FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY
+    )
+    assert policy is not None
+
+
+def test_static_paths_disable_single_pass_mode(simple_graph):
+    """Core rejects shortest_path with pinned routes, so the factory clears it."""
+    algs, graph_handle, _ = simple_graph
+    policy = create_flow_policy(
+        algs, graph_handle, FlowPolicyPreset.SHORTEST_PATHS_ECMP, static_path_count=2
+    )
+    assert policy is not None

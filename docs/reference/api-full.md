@@ -12,7 +12,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Generated from source code on: August 24, 2026 at 01:58 UTC
+Generated from source code on: September 12, 2026 at 22:35 UTC
 
 Modules auto-discovered: 54
 
@@ -909,8 +909,11 @@ Raises:
 
 Flow policy preset configurations for NetGraph.
 
-Named routing presets and the factory that materializes them as NetGraph-Core
-FlowPolicy objects built from a FlowPolicyConfig.
+Named routing presets, the single mapping from a preset to a NetGraph-Core
+``FlowPolicyConfig``, and the factory that materializes a preset as a Core
+``FlowPolicy``. Both placement engines (the SPF-cached fast path in
+``ngraph.analysis.placement`` and Core's FlowPolicy) read their edge selection
+and placement mode from ``preset_config`` so the two cannot drift.
 
 ### FlowPolicyPreset
 
@@ -918,6 +921,11 @@ Enumerates common flow policy presets for traffic routing.
 
 These presets map to specific combinations of path algorithms, flow placement
 strategies, and edge selection modes provided by NetGraph-Core.
+
+The ``SHORTEST_PATHS_*`` presets model hop-by-hop IP/IGP forwarding: routes
+follow link costs alone and each demand is placed in one pass on the
+cost-only shortest-path DAG. The ``TE_*`` presets model a controller that
+selects paths with knowledge of residual capacity.
 
 ### create_flow_policy(algorithms: 'netgraph_core.Algorithms', graph: 'netgraph_core.Graph', preset: 'FlowPolicyPreset', node_mask=None, edge_mask=None, static_path_count: 'Optional[int]' = None) -> 'netgraph_core.FlowPolicy'
 
@@ -927,7 +935,7 @@ Args:
     algorithms: NetGraph-Core Algorithms instance.
     graph: NetGraph-Core Graph handle.
     preset: Preset whose path algorithm, placement, edge selection, and
-        flow-count bounds to apply.
+        flow-count bounds to apply (see ``preset_config``).
     node_mask: Optional numpy bool array for node exclusions (True = include).
     edge_mask: Optional numpy bool array for edge exclusions (True = include).
     static_path_count: Number of routes the caller will pin with
@@ -945,6 +953,28 @@ Example:
     >>> algs = netgraph_core.Algorithms(backend)
     >>> graph = algs.build_graph(strict_multidigraph)
     >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+
+### preset_config(preset: 'FlowPolicyPreset') -> 'netgraph_core.FlowPolicyConfig'
+
+Build the Core ``FlowPolicyConfig`` a preset stands for.
+
+This is the single source of the preset semantics. The SPF-cached
+placement engine reads ``selection`` and ``flow_placement`` from it, and
+``create_flow_policy`` materializes it as a Core ``FlowPolicy``.
+
+Hop-by-hop presets set ``require_capacity=False`` (routes follow costs
+only) and ``shortest_path=True`` (one placement on the cost-only DAG), so
+a FlowPolicy built from them places exactly what the cached engine
+places.
+
+Args:
+    preset: Preset to describe.
+
+Returns:
+    A fresh ``FlowPolicyConfig``; callers may adjust it further.
+
+Raises:
+    ValueError: If an unknown FlowPolicyPreset value is provided.
 
 ### serialize_policy_preset(cfg: 'Any') -> 'Optional[str]'
 
@@ -1739,7 +1769,7 @@ Attributes:
     max_bracket_iters: Maximum iterations for bracketing phase.
     max_bisect_iters: Maximum iterations for bisection phase.
     placement_rounds: Deprecated; accepted for backward compatibility but
-        has no effect (placement optimization is handled by the core engine).
+        has no effect (each demand is placed in one deterministic pass).
 
 **Attributes:**
 
@@ -1879,9 +1909,13 @@ Attributes:
     failure_policy: Failure policy name in scenario.failure_policy_set.
         If None, no failure policy is applied.
     iterations: Number of failure iterations to run; must be >= 0.
-    parallelism: Worker thread count, or "auto" for the CPU count.
+    parallelism: Worker thread count, or "auto". Auto uses the CPU count
+        when iterations can run concurrently (an LSP preset in the demand
+        set, or a free-threaded interpreter) and 1 otherwise, because
+        cacheable presets are Python-bound under the GIL and threads only
+        slow them down. See ``resolve_placement_parallelism``.
     placement_rounds: Deprecated; accepted for backward compatibility but
-        has no effect (placement optimization is handled by the core engine).
+        has no effect (each demand is placed in one deterministic pass).
     seed: Optional seed for reproducibility.
     store_failure_patterns: Record the failure trace on each result.
         Iterations are deduplicated, so a trace describes the first
@@ -1915,6 +1949,30 @@ Attributes:
 
 - `execute(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step with logging and metadata storage.
 - `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
+
+### resolve_placement_parallelism(parallelism: 'int | str', demands: 'Iterable[TrafficDemand]') -> 'int'
+
+Resolve the worker count for demand placement iterations.
+
+An explicit integer is used as given. ``"auto"`` becomes the CPU count
+only when iterations can run concurrently: on a free-threaded interpreter,
+or when the demand set uses a preset outside ``CACHEABLE_PRESETS`` (the
+LSP presets), whose placement runs inside the core engine with the GIL
+released. Iterations for cacheable presets are dominated by Python-side
+work between very short engine calls, so on a GIL interpreter threads
+only add contention and ``"auto"`` resolves to 1.
+
+Args:
+    parallelism: Positive worker count or ``"auto"``.
+    demands: Demands of the set to place; unset presets count as the
+        default ``SHORTEST_PATHS_ECMP``.
+
+Returns:
+    Positive worker count.
+
+Raises:
+    ValueError: If ``parallelism`` is neither a positive integer nor
+        ``"auto"``.
 
 ---
 
@@ -2960,6 +3018,10 @@ Attributes:
     policy_preset: FlowPolicy configuration preset.
     static_paths: Routes this demand is pinned to, empty when it is
         routed by the policy.
+    src_members: Real source node names behind a combine-mode pseudo
+        source, in selection order; empty for pairwise demands. Hop-by-hop
+        presets originate an even share of the volume at each member that
+        can reach a target instead of routing from the pseudo source.
 
 **Attributes:**
 
@@ -2969,6 +3031,7 @@ Attributes:
 - `priority` (int)
 - `policy_preset` (FlowPolicyPreset)
 - `static_paths` (Tuple[StaticPath, ...]) = ()
+- `src_members` (Tuple[str, ...]) = ()
 
 ### expand_demands(network: 'Network', traffic_demands: 'List[TrafficDemand]', default_policy_preset: 'FlowPolicyPreset' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 1>) -> 'DemandExpansion'
 
@@ -3131,14 +3194,23 @@ Steps:
 
    pre-computed expansion)
 
-3. Place each demand using SPF caching for cacheable policies.
+3. Place each demand using SPF caching for cacheable policies, in priority
 
-   SHORTEST_PATHS_* presets admit flow onto the cost-only shortest paths
-   of the base topology and drop overflow (IGP semantics); TE_* presets
+   order and input order within a priority; nothing is revisited.
+   SHORTEST_PATHS_* presets place in one pass on the cost-only shortest
+   paths of the base topology: ``_ECMP`` admits what the equal-cost next
+   hops carry without loss, ``_ECMP_LOSSY`` delivers what survives
+   per-link drops, ``_WCMP`` splits by residual capacity. A combine-mode
+   demand is a virtual source: with one of these presets every source
+   that can reach a target originates an even share, and under
+   ``_ECMP`` the pool is admitted at one global scale. TE_* presets
    reroute remaining volume onto residual-capacity paths.
 
 4. Fall back to FlowPolicy for presets outside CACHEABLE_PRESETS
-5. Aggregate results into FlowIterationResult
+5. Aggregate results into FlowIterationResult. With
+
+   ``include_flow_details`` a lossy demand's entry carries
+   ``data["dropped_edges"]``, the dropped volume per ``link_id:direction``.
 
 SPF Caching Optimization:
     For cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are
@@ -3230,6 +3302,19 @@ Core demand placement with SPF caching.
 
 Single demand placement result.
 
+Attributes:
+    src_name: Source node name (real or pseudo).
+    dst_name: Destination node name (real or pseudo).
+    priority: Priority class.
+    volume: Requested volume.
+    placed: Placed volume. For ``SHORTEST_PATHS_ECMP_LOSSY`` this is the
+        volume delivered to the destination.
+    cost_distribution: Placed volume by path cost, when requested.
+    used_edges: ``link_id:direction`` of every edge carrying this demand,
+        when requested.
+    dropped_edges: Dropped volume by ``link_id:direction``, when requested;
+        only lossy presets drop.
+
 **Attributes:**
 
 - `src_name` (str)
@@ -3239,6 +3324,7 @@ Single demand placement result.
 - `placed` (float)
 - `cost_distribution` (dict[float, float]) = {}
 - `used_edges` (set[str]) = set()
+- `dropped_edges` (dict[str, float]) = {}
 
 ### PlacementResult
 
@@ -3258,14 +3344,39 @@ Attributes:
 
 Aggregated placement totals.
 
+Attributes:
+    total_demand: Sum of demand volumes.
+    total_placed: Sum of placed volumes.
+    max_shortfall: Largest ``volume - placed`` over all demands.
+    unserved_demands: Demands with positive volume that placed nothing.
+
 **Attributes:**
 
 - `total_demand` (float)
 - `total_placed` (float)
+- `max_shortfall` (float) = 0.0
+- `unserved_demands` (int) = 0
 
-### place_demands(demands: "Sequence['ExpandedDemand']", volumes: 'Sequence[float]', flow_graph: 'netgraph_core.FlowGraph', ctx: "'AnalysisContext'", node_mask: 'np.ndarray', edge_mask: 'np.ndarray', *, resolved_ids: 'Sequence[tuple[int, int]] | None' = None, collect_entries: 'bool' = False, include_cost_distribution: 'bool' = False, include_used_edges: 'bool' = False, dag_cache: 'dict[tuple[int, bool], tuple[np.ndarray, Any]] | None' = None) -> 'PlacementResult'
+### place_demands(demands: "Sequence['ExpandedDemand']", volumes: 'Sequence[float]', flow_graph: 'netgraph_core.FlowGraph', ctx: "'AnalysisContext'", node_mask: 'np.ndarray', edge_mask: 'np.ndarray', *, resolved_ids: 'Sequence[tuple[int, int]] | None' = None, collect_entries: 'bool' = False, include_cost_distribution: 'bool' = False, include_used_edges: 'bool' = False, dag_cache: 'dict[tuple, tuple[np.ndarray, Any]] | None' = None) -> 'PlacementResult'
 
 Place demands on a flow graph with SPF caching.
+
+Demands are placed one at a time in the given order (callers sort by
+priority), each seeing the residual left by the ones before it. Nothing
+is revisited, so within a priority class earlier demands win contended
+capacity and the totals of rerouting presets depend on demand order.
+
+Hop-by-hop presets (``HOP_BY_HOP_PRESETS``) place each demand in one pass
+on the cost-only shortest-path DAG of its source. A combine-mode demand is
+a virtual source, a pool of the selected sources: with such a preset
+(``ExpandedDemand.src_members`` set) every member that can reach a target
+originates an even share of the volume, since hop-by-hop routing has no
+controller that could choose where traffic originates, and each share is
+routed to that member's nearest targets. Under lossless ECMP the pool is
+admitted as one demand at a single scale. TE presets keep the aggregated
+pseudo source and let capacity decide which members originate. A fixed
+per-source matrix is a different question, answered by pairwise or
+per-group expansion.
 
 Args:
     demands: Expanded demands (policy_preset, priority, names).
@@ -3280,11 +3391,13 @@ Args:
     resolved_ids: Pre-resolved (src_id, dst_id) pairs. Computed from the
         demand names if None.
     collect_entries: If True, populate result.entries.
-    include_cost_distribution: Include cost distribution in entries.
+    include_cost_distribution: Include cost distribution and, for lossy
+        presets, dropped volume per link in entries.
     include_used_edges: Include used edges in entries.
-    dag_cache: Optional persistent SPF DAG cache keyed by
-        (src_id, uses_capacity_aware_selection). Base DAGs depend only on
-        the static graph and masks, so repeated calls with the same
+    dag_cache: Optional persistent SPF DAG cache. Base DAGs are keyed by
+        ``(src_id, uses_capacity_aware_selection)`` and combine-mode
+        fan-out DAGs by ``(dst_id, "fanout")``. All of them depend only
+        on the static graph and masks, so repeated calls with the same
         context and masks (e.g. MSD probes) can share one cache.
 
 Returns:

@@ -241,3 +241,37 @@ for pair, path_list in k_paths.items():
     for i, path in enumerate(path_list, 1):
         print(f"  {i}. Cost: {path.cost}")
 ```
+
+## Demand Placement
+
+Max-flow asks how much the network could carry. Demand placement asks how much of a given volume it does carry under a routing model. The same 6 units from A to C give a different answer under each preset:
+
+```python
+from ngraph.analysis.functions import demand_placement_analysis
+
+for preset in ("SHORTEST_PATHS_ECMP", "SHORTEST_PATHS_ECMP_LOSSY",
+               "SHORTEST_PATHS_WCMP", "TE_WCMP_UNLIM"):
+    result = demand_placement_analysis(
+        network,
+        excluded_nodes=set(),
+        excluded_links=set(),
+        demands_config=[{"source": "^A$", "target": "^C$", "volume": 6,
+                         "mode": "pairwise", "flow_policy": preset}],
+        include_flow_details=True,
+    )
+    entry = result.flows[0]
+    print(f"{preset}: placed={entry.placed:g} dropped={entry.dropped:g} "
+          f"by_cost={entry.cost_distribution} {entry.data}")
+
+# SHORTEST_PATHS_ECMP: placed=2 dropped=4 by_cost={2.0: 2.0} {}
+# SHORTEST_PATHS_ECMP_LOSSY: placed=2.5 dropped=3.5 by_cost={2.0: 2.5} {'dropped_edges': {'A|B|0:fwd': 2.0, 'A|B|1:fwd': 1.0, 'B|C|0:fwd': 0.5}}
+# SHORTEST_PATHS_WCMP: placed=3 dropped=3 by_cost={2.0: 3.0} {}
+# TE_WCMP_UNLIM: placed=6 dropped=0 by_cost={2.0: 3.0, 4.0: 3.0} {}
+```
+
+- `SHORTEST_PATHS_ECMP` hashes 3 units onto each parallel link of the cost-2 path. The capacity-1 link admits only 1 without loss, so the whole demand is admitted at that scale: 2 units.
+- `SHORTEST_PATHS_ECMP_LOSSY` sends the same 3 and 3, and each link carries what fits. 2.5 units arrive; `dropped_edges` says where the other 3.5 were lost.
+- `SHORTEST_PATHS_WCMP` splits by capacity, so the cost-2 path carries its full 3 units. The demand does not leave the shortest path, so 3 units are unmet.
+- `TE_WCMP_UNLIM` reroutes the remainder onto the cost-4 path and places everything.
+
+In a scenario file the same choice is the demand's `flow_policy`; see the [Tutorial](../getting-started/tutorial.md) for placement inside a workflow.

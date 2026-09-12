@@ -72,7 +72,7 @@ The Python layer uses the `analyze()` function and `AnalysisContext` class (`ngr
 3. Execute analysis methods (max_flow, shortest_paths, sensitivity) with boolean masking
 4. Translate results (costs, flows, paths) back to scenario-level objects
 
-Core algorithms release the GIL during execution, so concurrent Python threads run analysis in parallel with minimal Python-level overhead.
+Core algorithms release the GIL, so Python threads can run them concurrently. Whether that helps depends on how much of an iteration is spent inside Core; see Failure Manager below.
 
 **Primary API:**
 
@@ -317,7 +317,7 @@ are not mapped back to scenario links in results.
 
 NetGraph's core algorithms execute in C++ via NetGraph-Core. They operate on the immutable StrictMultiDiGraph and support masking (runtime exclusions via boolean arrays), so repeated analysis under different failure scenarios needs no graph reconstruction.
 
-All Core algorithms release the Python GIL during execution, so multiple Python threads run them concurrently without GIL contention.
+All Core algorithms release the Python GIL while they run.
 
 ### Shortest-Path First (SPF) Algorithm
 
@@ -535,9 +535,9 @@ Traditional IP routing with Interior Gateway Protocols (OSPF, IS-IS):
 
 - Routes computed based on link costs/metrics only, ignoring available capacity
 - Single SPF computation determines equal-cost paths; forwarding is fixed until topology/cost change
-- Traffic follows predetermined paths even as links saturate
-- Models best-effort forwarding with potential packet loss when demand exceeds capacity
+- Traffic follows predetermined paths even as links saturate: a next hop that an earlier demand filled stays in the hash, it does not get skipped
 - No iterative augmentation: flow placed in single pass over fixed equal-cost DAG
+- Two readings of what happens when demand exceeds capacity, chosen per demand by preset: lossless admission (`SHORTEST_PATHS_ECMP`: how much can be carried with no drops, the planning question) or best-effort delivery (`SHORTEST_PATHS_ECMP_LOSSY`: how much arrives when every link carries what fits and drops the rest, the failure-impact question)
 - Use case: Simulating production IP networks, validating IGP designs
 
 **SDN/TE Semantics (`require_capacity=true` + `shortest_path=false`, default):**
@@ -549,7 +549,8 @@ Software-Defined Networking and Traffic Engineering:
 - Iterative augmentation continues until max-flow achieved or capacity exhausted
 - Flow placement respects capacity constraints, never oversubscribing links
 - Models centralized traffic engineering with real-time capacity awareness
-- Use case: Optimal demand placement, capacity planning, failure impact analysis
+- Placement is greedy and sequential: demands are placed one at a time in priority order (input order within a priority) and never revisited, so an earlier demand keeps capacity a later one would have used, and totals under contention depend on demand order. It is not a global optimum
+- Use case: Capacity-aware demand placement, capacity planning, failure impact analysis
 
 This distinction is fundamental: IP networks route on cost alone with fixed forwarding tables (congestion managed via queuing/drops), while TE systems route dynamically on both cost and available capacity (congestion avoided via admission control). The `require_capacity` parameter controls whether SPF filters to available capacity; `shortest_path` controls whether routes are recomputed iteratively or fixed after initial SPF.
 
@@ -569,7 +570,18 @@ Beyond routing semantics, NetGraph controls how flow splits across equal-cost pa
   - Example: Two 100G links get 50/50; one 100G + one 10G still attempt 50/50 (10G saturates first)
   - Models IP hash-based load balancing (5-tuple hashing distributes flows uniformly)
   - Single-pass admission: computes one global scale factor to avoid oversubscription
+  - The split set is the DAG edges that still have residual, so a later placement on the same DAG hashes only over the members that are not yet full (progressive behaviour, which is what `place_max_flow` and the LSP policies rely on)
   - For IP ECMP simulation: use with `require_capacity=false` + `shortest_path=true`
+
+- **EQUAL_BALANCED_FIXED** (lossless ECMP admission with a load-blind forwarding table):
+  - Same equal split and global scale, but the split set is every DAG edge with capacity, saturated or not
+  - A member filled by an earlier demand therefore drives the scale to 0: any further traffic hashed onto it would be lost, so nothing more is admitted losslessly
+  - Backs the `SHORTEST_PATHS_ECMP` preset
+
+- **EQUAL_BALANCED_LOSSY** (best-effort ECMP forwarding):
+  - Same split set, no scale: every edge carries `min(share, residual)` and drops the rest; a deficit propagates downstream and the placed amount is what reaches the sink
+  - Example: one 100G + one 10G offered 100G deliver 60G and drop 40G on the 10G link
+  - The dropped volume per edge is reported (`FlowGraph.place_with_drops`); backs the `SHORTEST_PATHS_ECMP_LOSSY` preset
 
 `FlowState.place_on_dag` implements placement over a fixed SPF DAG (the DAG never changes within a call):
 
@@ -605,28 +617,33 @@ For traffic matrix placement, `FlowPolicyPreset` values bundle the routing seman
 
 | Preset | Behavior | Use Case |
 | -------- | ---------- | ---------- |
-| `SHORTEST_PATHS_ECMP` | IP/IGP with hash-based ECMP | Traditional routers (OSPF/IS-IS), equal splits across equal-cost paths |
-| `SHORTEST_PATHS_WCMP` | IP/IGP with weighted ECMP | Routers with WCMP support, proportional splits based on link capacity |
+| `SHORTEST_PATHS_ECMP` | IP/IGP with hash-based ECMP, lossless admission | Traditional routers (OSPF/IS-IS); `placed` is what the network carries with no drops |
+| `SHORTEST_PATHS_ECMP_LOSSY` | IP/IGP with hash-based ECMP, best-effort delivery | Same routers under overload; `placed` is what arrives, `dropped` is lost on the way, per-link drops reported with flow details |
+| `SHORTEST_PATHS_WCMP` | IP/IGP with weighted ECMP | Routers with WCMP support, proportional splits by residual capacity (equal to link capacity on an unloaded network) |
 | `TE_WCMP_UNLIM` | MPLS-TE / SDN with WCMP | Capacity-aware TE with unlimited tunnels, iterative placement |
 | `TE_ECMP_16_LSP` | MPLS-TE with 16 LSPs | Fixed 16 ECMP tunnels per demand, models RSVP-TE with LSP limits |
 | `TE_ECMP_UP_TO_256_LSP` | MPLS-TE with up to 256 LSPs | Scalable TE with tunnel limit, models SR-TE or large-scale RSVP |
 
 **Detailed Configuration Mapping (preset internals):**
 
-| Preset | `require_capacity` | `multi_edge` | `max_flow_count` | `flow_placement` |
-| -------- | -------------------- | -------------- | ------------------ | ------------------ |
-| `SHORTEST_PATHS_ECMP` | `false` | `true` | `1` | `EQUAL_BALANCED` |
-| `SHORTEST_PATHS_WCMP` | `false` | `true` | `1` | `PROPORTIONAL` |
-| `TE_WCMP_UNLIM` | `true` | `true` | unlimited | `PROPORTIONAL` |
-| `TE_ECMP_16_LSP` | `true` | `false` | `16` | `EQUAL_BALANCED` |
-| `TE_ECMP_UP_TO_256_LSP` | `true` | `false` | `256` | `EQUAL_BALANCED` |
+`ngraph.model.flow.policy_config.preset_config` is the single source of these values; the SPF-cached placement engine and Core's `FlowPolicy` both read from it.
+
+| Preset | `require_capacity` | `shortest_path` | `multi_edge` | `max_flow_count` | `flow_placement` |
+| -------- | -------------------- | ----------------- | -------------- | ------------------ | ------------------ |
+| `SHORTEST_PATHS_ECMP` | `false` | `true` | `true` | `1` | `EQUAL_BALANCED_FIXED` |
+| `SHORTEST_PATHS_ECMP_LOSSY` | `false` | `true` | `true` | `1` | `EQUAL_BALANCED_LOSSY` |
+| `SHORTEST_PATHS_WCMP` | `false` | `true` | `true` | `1` | `PROPORTIONAL` |
+| `TE_WCMP_UNLIM` | `true` | `false` | `true` | unlimited | `PROPORTIONAL` |
+| `TE_ECMP_16_LSP` | `true` | `false` | `false` | `16` | `EQUAL_BALANCED` |
+| `TE_ECMP_UP_TO_256_LSP` | `true` | `false` | `false` | `256` | `EQUAL_BALANCED` |
 
 **Key parameters (preset-managed):**
 
 - `require_capacity`: When `false`, paths are selected based on link costs alone (models IP/IGP routing). When `true`, paths adapt to residual capacity during placement (models SDN/TE). See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) for details.
+- `shortest_path`: When `true`, each demand is placed in a single pass on its cost-only shortest-path DAG and the remainder is dropped; when `false`, the remainder is rerouted tier by tier on residual-aware paths.
 - `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics).
 - `max_flow_count`: Internal per-preset limit on flows/LSPs for TE presets; not a user-facing parameter.
-- `flow_placement`: `EQUAL_BALANCED` splits equally across paths; `PROPORTIONAL` splits by residual capacity.
+- `flow_placement`: `EQUAL_BALANCED_FIXED` splits equally over the topology's next hops and admits losslessly; `EQUAL_BALANCED_LOSSY` splits the same way and drops what does not fit; `EQUAL_BALANCED` splits equally over next hops with headroom (progressive, used by the LSP presets); `PROPORTIONAL` splits by residual capacity.
 
 **Example: Modeling IP vs MPLS Networks**
 
@@ -721,7 +738,7 @@ The flow tolerance constant `kMinFlow` (1/4096 ≈ 2.4e-4) determines when flow 
 
 Each augmentation phase performs one SPF \(O((V+E) \log V)\) and one placement pass over the tier's predecessor DAG. For EQUAL_BALANCED the placement is a single topological pass \(O(V+E)\); for PROPORTIONAL it is a complete Dinic max-flow over the tier DAG (repeated BFS level construction, level-restricted blocking-flow DFS, and a group rebuild from the updated residual), worst case \(O(V^2 E)\). The tier loop never removes placed flow, so each phase permanently saturates at least one edge before the next SPF runs, bounding the number of phases by \(O(E)\); with PROPORTIONAL placement the tier's path cost also strictly increases between phases, so phases are further bounded by the number of distinct path-cost values. The resulting loose worst-case bound is \(O(E \cdot (V^2 E + (V+E) \log V))\). The completion phase that follows is Edmonds-Karp at \(O(V E^2)\), which this bound dominates.
 
-Practical performance is significantly better than these worst-case bounds: iteration stops as soon as the residual network disconnects source from sink, the phase count in practice equals the small number of cost tiers actually used, and the `kMinFlow` threshold additionally caps the number of phases at \(F / k_{MinFlow}\) for total flow \(F\).
+In practice the loop stops as soon as the residual network disconnects source from sink, the number of phases equals the number of cost tiers actually used, and the `kMinFlow` threshold caps phases at \(F / k_{MinFlow}\) for total flow \(F\).
 
 ### Managers and Workflow Orchestration
 
@@ -731,21 +748,24 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 
 - Deterministic expansion: node selection follows the network's stable node ordering; no randomization
 - Supports `combine` mode (aggregate via pseudo source/sink nodes attached with large-capacity, zero-cost augmentation edges) and `pairwise` mode (individual (src,dst) pairs, self-pairs excluded, volume split evenly across pairs)
+- In `combine` mode the pseudo source is a virtual source, a pool of the selected sources. A TE preset lets capacity decide which members originate: the aggregate is carried by whichever sources have room. Hop-by-hop presets (`SHORTEST_PATHS_*`) cannot steer where traffic originates, so every member that can reach a target originates an even share of the volume and routes it to its nearest targets through the pseudo sink; a member with no path to any target is not part of the split, and the result is still reported as one demand. A plain SPF from the pseudo source would keep only the sources closest to the targets, which is not a routing property of the network, so the DAG is built with Core's reverse SPF (`spf_to`) toward the pseudo sink with every attachment edge forced into it
+- Under `SHORTEST_PATHS_ECMP` the pool is admitted as one demand: the fan-out DAG is placed in a single equal-balanced pass, so the split ratios stay fixed and one global scale applies. A member that can carry only part of its share throttles every member alike: two equal-cost sources of capacity 100 and 10 admit 20 of a 110 demand. `SHORTEST_PATHS_ECMP_LOSSY` and `SHORTEST_PATHS_WCMP` carry each member's share independently (65 of 110 in that example); their totals and per-link drops equal those of a simultaneous pass, and shared links are attributed to members in selection order
+- A fixed per-source traffic matrix, where each source's share is its own and an isolated source's share is unserved rather than moved to the others, is a different question: expand per source with `group_mode: per_group` and `group_by: name`, or use `pairwise`
 - `group_mode` controls grouping: `flatten` (default, merge all groups then apply mode), `per_group`, and `group_pairwise`; volume is split evenly across groups or group pairs
 - In combine mode, nodes selected on both sides are excluded from the target set (prevents a zero-cost pseudo-node bypass); a demand or group whose target set empties is skipped
 - Validation: duplicate demand ids and pseudo-endpoint collisions raise `ValueError` (either would silently merge distinct demands' attachment edges)
-- Demands sorted by ascending priority before placement (lower value = higher priority)
-- Placement uses SPF caching for simple policies (ECMP, WCMP, TE_WCMP_UNLIM), FlowPolicy for complex multi-flow policies
+- Demands sorted by ascending priority before placement (lower value = higher priority); within a priority they keep input order, and each demand sees the residual left by the ones before it. Nothing is revisited, so contended capacity goes to the earlier demand and the totals of rerouting presets depend on demand order
+- Placement uses SPF caching for the hop-by-hop presets and `TE_WCMP_UNLIM`, FlowPolicy for the LSP presets
 - Non-mutating: operates on Core flow graphs with exclusions; Network remains unmodified
 
 **Failure Manager** (`ngraph.analysis.failure_manager`): Applies a `FailurePolicy` to compute exclusion sets and runs analyses with those exclusions.
 
-- Parallel execution via `ThreadPoolExecutor` with zero-copy network sharing across worker threads; nothing is pickled, so functions defined in `__main__` or notebooks run at full parallelism
+- Parallel execution via `ThreadPoolExecutor` with zero-copy network sharing across worker threads; nothing is pickled, so functions defined in `__main__` or notebooks can run in parallel. Threads only pay off when an iteration spends most of its time inside the core engine with the GIL released (max-flow, the LSP presets): a demand placement iteration for the hop-by-hop presets or `TE_WCMP_UNLIM` is mostly Python work around microsecond engine calls, and adding threads makes it slower on a GIL interpreter. `TrafficMatrixPlacement` therefore resolves `parallelism: auto` to 1 for such demand sets and to the CPU count when an LSP preset is present or the interpreter is free-threaded
 - Deterministic results when seed is provided (each iteration derives `seed + iteration_index`); with `seed=None`, the failure policy's own seed is used as a fallback when present
 - Baseline execution: a no-failure baseline is always run first as a separate reference for comparing degraded vs. intact capacity
 - Deduplication: identical exclusion patterns execute once and are weighted by multiplicity (`occurrence_count` on results; `metadata["occurrence_counts"]` aligned with the results list). Stored failure traces describe each pattern's representative (first) iteration; this weighting assumes deterministic analysis functions (the built-ins are)
 - Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
-- Automatic graph pre-building: Before parallel iterations, the engine calls the analysis function's `prepare_inputs(network, kwargs)` hook (carried by all built-in analysis functions) once per run and merges the returned kwargs — typically a pre-built `AnalysisContext`, plus the precomputed demand expansion and resolved IDs for demand placement — into every iteration's call; per-iteration exclusions are applied via O(|excluded|) mask operations. Custom analysis functions opt in by setting a `prepare_inputs` attribute; functions without it run with their kwargs unchanged, and passing `context` explicitly skips the hook.
+- Graph pre-building: before the iterations start, the engine calls the analysis function's `prepare_inputs(network, kwargs)` hook once per run and merges what it returns into every iteration's call. The built-in functions return a pre-built `AnalysisContext`, and demand placement also returns the expanded demands and resolved node ids. Each iteration then only builds masks, O(|excluded|). Custom analysis functions opt in by setting a `prepare_inputs` attribute; functions without it run with their kwargs unchanged, and passing `context` explicitly skips the hook.
 
 Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
 
@@ -779,9 +799,9 @@ This design ensures consistency (every step has metadata and data keys) and JSON
 
 ### Design Elements and Comparisons
 
-NetGraph's design includes several features that differentiate it from traditional network analysis tools:
+Design choices worth knowing about:
 
-- Declarative Scenario DSL: A YAML DSL with blueprints and programmatic expansion allows abstract definitions (e.g., a fully meshed Clos) to be expanded into concrete nodes and links. Strict schema validation ensures that scenarios are well-formed and rejects unknown or invalid fields.
+- Declarative Scenario DSL: A YAML DSL with blueprints and expansion rules turns abstract definitions (e.g., a fully meshed Clos) into concrete nodes and links. Schema validation rejects unknown or invalid fields before expansion.
 
 - Runtime Exclusions vs graph copying: Analysis-time exclusions avoid copying large structures for each scenario. The design separates static topology from dynamic failure states.
 
@@ -820,12 +840,13 @@ Graph construction involves Python processing, NumPy array creation, and C++ obj
 
 **SPF Caching for Demand Placement:**
 
-Both TrafficMatrixPlacement and MaximumSupportedDemand (MSD) use a unified placement function (`place_demands()` in `ngraph.analysis.placement`) with SPF caching for cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM):
+Both TrafficMatrixPlacement and MaximumSupportedDemand (MSD) use a unified placement function (`place_demands()` in `ngraph.analysis.placement`) with SPF caching for cacheable policies (the `SHORTEST_PATHS_*` presets and `TE_WCMP_UNLIM`):
 
-- Initial SPF computed once per unique source; subsequent demands from the same source reuse the cached DAG
-- For TE policies, DAG is recomputed when capacity constraints require alternate paths
+- One SPF per unique source per mask state; later demands from the same source reuse the cached DAG. A combine-mode demand under `SHORTEST_PATHS_ECMP` uses one reverse SPF toward its pseudo sink instead; under the other hop-by-hop presets it is placed per source and shares each source's cache entry
+- For TE policies, DAG is recomputed when capacity constraints require alternate paths. Each recomputation either saturates an edge of the tier it placed on or makes no progress, so the loop is bounded by the edge count rather than by a fixed iteration cap
 - Complex multi-flow policies (TE_ECMP_16_LSP, TE_ECMP_UP_TO_256_LSP) use FlowPolicy directly
 - MSD additionally pre-resolves node IDs once at cache build time and reuses them across all alpha probes
+- MSD calls a scale feasible when every demand is placed to the engine's numeric resolution (a shortfall of at most 1/4096, the smallest flow the engine places) and no demand with volume placed nothing; an exact-match rule would call a demand spread over many LSPs infeasible at every scale
 
 This reduces SPF computations from O(demands) to O(unique_sources) for workloads where many demands share the same source nodes. MSD gains the most, since it evaluates many alpha values during binary search.
 
@@ -837,44 +858,9 @@ common failure policies.
 
 **Complexity:**
 
-- SPF: \(O((V+E) \log V)\) using binary heap
-- Max-flow: \(O(E \cdot (V^2 E + (V+E) \log V))\) worst case for the successive-shortest-paths scheme with blocking-flow placement (derived in "Maximum Flow Algorithm" above)
-  - Practical performance is far better: the number of augmentation phases equals the small number of cost tiers actually used, and the `kMinFlow` threshold caps phases at \(F / k_{MinFlow}\) for total flow \(F\)
-  - Early termination when the residual network disconnects source from sink provides significant speedup in typical networks
-
-**Scalability:**
-
-Benchmarks on structured topologies (Clos, grid) and realistic network graphs demonstrate scalability to networks with thousands of nodes and tens of thousands of edges. C++ execution with CSR adjacency and GIL release provides order-of-magnitude speedups over pure Python graph libraries for compute-intensive analysis.
-
-## Summary
-
-NetGraph's hybrid architecture combines:
-
-**Python Layer:**
-
-- Declarative scenario DSL with schema validation
-- Domain model (Network, Node, Link, RiskGroup)
-- Runtime exclusions for non-destructive failure simulation
-- Workflow orchestration and result aggregation
-- Managers for demand expansion and failure enumeration
-
-**C++ Layer:**
-
-- Native C++ graph algorithms (SPF, K-shortest paths, max-flow)
-- Immutable StrictMultiDiGraph with CSR adjacency
-- Configurable flow placement policies (ECMP/WCMP simulation)
-- Runtime masking for repeated analysis without graph rebuilds
-
-**Integration:**
-
-- `AnalysisContext` builds Core graphs, manages name/ID mapping, and bridges Python ↔ C++
-- Stable node/edge ID mapping for result traceability
-- Zero-copy NumPy array interface for data transfer
-- GIL release during computation for concurrent thread execution
-
-This design adapts standard algorithms to network engineering use cases (flow splitting,
-failure simulation, cost-aware routing), running them in native C++ while keeping the
-scenario, workflow, and result interfaces in Python.
+- SPF: \(O((V+E) \log V)\) with a binary heap
+- Max-flow: \(O(E \cdot (V^2 E + (V+E) \log V))\) worst case; see "Maximum Flow Algorithm" for the derivation and the much smaller practical phase count
+- Demand placement: one cached SPF per source per mask state plus one placement call per demand for the hop-by-hop presets; `TE_WCMP_UNLIM` adds one residual-aware SPF per cost tier it spills into; the LSP presets run Core's FlowPolicy per demand, which is one to two orders of magnitude more work per demand
 
 ## Cross-references
 

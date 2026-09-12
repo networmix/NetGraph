@@ -88,7 +88,7 @@ class MaximumSupportedDemand(WorkflowStep):
         max_bracket_iters: Maximum iterations for bracketing phase.
         max_bisect_iters: Maximum iterations for bisection phase.
         placement_rounds: Deprecated; accepted for backward compatibility but
-            has no effect (placement optimization is handled by the core engine).
+            has no effect (each demand is placed in one deterministic pass).
     """
 
     demand_set: str = "default"
@@ -106,7 +106,7 @@ class MaximumSupportedDemand(WorkflowStep):
         if self.placement_rounds != "auto":
             logger.warning(
                 "MaximumSupportedDemand 'placement_rounds' is deprecated and has "
-                "no effect; placement optimization is handled by the core engine."
+                "no effect; each demand is placed in one deterministic pass."
             )
         try:
             self.alpha_start = float(self.alpha_start)
@@ -200,7 +200,7 @@ class MaximumSupportedDemand(WorkflowStep):
         start_alpha = float(self.alpha_start)
         g = float(self.growth_factor)
 
-        feasible0, _ = probe(start_alpha)
+        feasible0, details0 = probe(start_alpha)
         lower: float | None = None
         upper: float | None = None
 
@@ -231,11 +231,13 @@ class MaximumSupportedDemand(WorkflowStep):
         else:
             upper = start_alpha
             alpha = start_alpha
+            best_ratio = float(details0.get("placement_ratio", 0.0))
             for _ in range(self.max_bracket_iters):
                 alpha = max(alpha / g, self.alpha_min)
                 if alpha == upper:
                     break
-                feas, _ = probe(alpha)
+                feas, details = probe(alpha)
+                best_ratio = max(best_ratio, float(details.get("placement_ratio", 0.0)))
                 if feas:
                     lower = alpha
                     break
@@ -244,12 +246,22 @@ class MaximumSupportedDemand(WorkflowStep):
                 # Mirror the upward branch: bracket iterations can run out
                 # before the halving sequence reaches alpha_min (e.g. a large
                 # alpha_start), so probe alpha_min directly before giving up.
-                if upper <= self.alpha_min:
-                    raise ValueError("No feasible alpha found above alpha_min")
-                feas, _ = probe(self.alpha_min)
-                if not feas:
-                    raise ValueError("No feasible alpha found above alpha_min")
-                lower = self.alpha_min
+                if upper > self.alpha_min:
+                    feas, details = probe(self.alpha_min)
+                    best_ratio = max(
+                        best_ratio, float(details.get("placement_ratio", 0.0))
+                    )
+                    if feas:
+                        lower = self.alpha_min
+                if lower is None:
+                    raise ValueError(
+                        f"No feasible alpha found above alpha_min={self.alpha_min:g} "
+                        f"(best placement ratio over probes {best_ratio:.6f}). Some "
+                        "demand cannot be placed fully at any scale: check that "
+                        "every source reaches its targets, that no required "
+                        "element is disabled, and that demand volumes are not "
+                        "orders of magnitude below link capacities."
+                    )
 
         assert lower is not None and upper is not None and lower < upper
 
@@ -302,6 +314,12 @@ class MaximumSupportedDemand(WorkflowStep):
 
         Uses pre-built cache; only scales demand volumes by alpha.
         Placement is deterministic so a single evaluation is sufficient.
+
+        Feasible means every demand is placed to the core engine's numeric
+        resolution (``PlacementSummary.is_feasible``): the engine never
+        places less than 1/4096 on a flow, so a demand spread over many LSPs
+        can come back short by a fraction of that even on an empty network,
+        and an exact-match rule would call it infeasible at every scale.
         """
         ctx = cache.ctx
         volumes = [d.volume * alpha for d in cache.base_expanded]
