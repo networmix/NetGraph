@@ -570,13 +570,8 @@ Beyond routing semantics, NetGraph controls how flow splits across equal-cost pa
   - Example: Two 100G links get 50/50; one 100G + one 10G still attempt 50/50 (10G saturates first)
   - Models IP hash-based load balancing (5-tuple hashing distributes flows uniformly)
   - Single-pass admission: computes one global scale factor to avoid oversubscription
-  - The split set is the DAG edges that still have residual, so a later placement on the same DAG hashes only over the members that are not yet full (progressive behaviour, which is what `place_max_flow` and the LSP policies rely on)
-  - For IP ECMP simulation: use with `require_capacity=false` + `shortest_path=true`
-
-- **EQUAL_BALANCED_FIXED** (lossless ECMP admission with a load-blind forwarding table):
-  - Same equal split and global scale, but the split set is every DAG edge with capacity, saturated or not
-  - A member filled by an earlier demand therefore drives the scale to 0: any further traffic hashed onto it would be lost, so nothing more is admitted losslessly
-  - Backs the `SHORTEST_PATHS_ECMP` preset
+  - The split set is every DAG edge with capacity, full or not, because a forwarding table does not react to load. A member filled by an earlier demand drives the scale to 0: any further traffic hashed onto it would be lost, so nothing more is admitted losslessly on that DAG. `place_max_flow` and the LSP policies progress past a full member by recomputing the DAG with a residual-aware SPF
+  - Backs the `SHORTEST_PATHS_ECMP` preset; for IP ECMP simulation use `require_capacity=false` + `shortest_path=true`
 
 - **EQUAL_BALANCED_LOSSY** (best-effort ECMP forwarding):
   - Same split set, no scale: every edge carries `min(share, residual)` and drops the rest; a deficit propagates downstream and the placed amount is what reaches the sink
@@ -630,7 +625,7 @@ For traffic matrix placement, `FlowPolicyPreset` values bundle the routing seman
 
 | Preset | `require_capacity` | `shortest_path` | `multi_edge` | `max_flow_count` | `flow_placement` |
 | -------- | -------------------- | ----------------- | -------------- | ------------------ | ------------------ |
-| `SHORTEST_PATHS_ECMP` | `false` | `true` | `true` | `1` | `EQUAL_BALANCED_FIXED` |
+| `SHORTEST_PATHS_ECMP` | `false` | `true` | `true` | `1` | `EQUAL_BALANCED` |
 | `SHORTEST_PATHS_ECMP_LOSSY` | `false` | `true` | `true` | `1` | `EQUAL_BALANCED_LOSSY` |
 | `SHORTEST_PATHS_WCMP` | `false` | `true` | `true` | `1` | `PROPORTIONAL` |
 | `TE_WCMP_UNLIM` | `true` | `false` | `true` | unlimited | `PROPORTIONAL` |
@@ -643,7 +638,7 @@ For traffic matrix placement, `FlowPolicyPreset` values bundle the routing seman
 - `shortest_path`: When `true`, each demand is placed in a single pass on its cost-only shortest-path DAG and the remainder is dropped; when `false`, the remainder is rerouted tier by tier on residual-aware paths.
 - `multi_edge`: When `true`, uses all parallel equal-cost edges (hop-by-hop ECMP); when `false`, each flow uses a single path (tunnel/LSP semantics).
 - `max_flow_count`: Internal per-preset limit on flows/LSPs for TE presets; not a user-facing parameter.
-- `flow_placement`: `EQUAL_BALANCED_FIXED` splits equally over the topology's next hops and admits losslessly; `EQUAL_BALANCED_LOSSY` splits the same way and drops what does not fit; `EQUAL_BALANCED` splits equally over next hops with headroom (progressive, used by the LSP presets); `PROPORTIONAL` splits by residual capacity.
+- `flow_placement`: `EQUAL_BALANCED` splits equally over the topology's next hops and admits losslessly; `EQUAL_BALANCED_LOSSY` splits the same way and drops what does not fit; `PROPORTIONAL` splits by residual capacity.
 
 **Example: Modeling IP vs MPLS Networks**
 

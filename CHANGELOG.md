@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-09-13
+
+### Changed
+
+- Minimum `netgraph-core` raised to 0.10.0. Core's `EQUAL_BALANCED` now keeps every next hop with capacity in the split, the load-blind behaviour that 0.23.0 obtained from a separate Core mode, and that mode is gone. `SHORTEST_PATHS_ECMP` and the `TE_ECMP_*` presets place exactly as in 0.23.0. The one difference is `max_flow` with `flow_placement=EQUAL_BALANCED`, `shortest_path=False` and `require_capacity=False`: it filled the cost-only DAG in several passes and now places once, the single-pass answer that cost-only routing is documented to give. Use `require_capacity=True` for the residual-aware fill
+
 ## [0.23.0] - 2026-09-13
 
 ### Fixed

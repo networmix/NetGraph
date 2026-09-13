@@ -150,7 +150,7 @@ def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
         config.min_flow_count = 1
         config.max_flow_count = 1
         if preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP:
-            config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED
+            config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
         elif preset == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY:
             config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY
         else:

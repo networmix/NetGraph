@@ -191,7 +191,7 @@ class TestHelperFunctions:
 
         placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
         # Lossless hash-ECMP admission with a load-blind next-hop set.
-        assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED
+        assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED
 
     def test_get_placement_for_wcmp(self) -> None:
         """Test FlowPlacement for WCMP preset."""

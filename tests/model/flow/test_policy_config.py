@@ -169,7 +169,7 @@ def test_preset_config_hop_by_hop_presets_are_cost_only_single_pass():
     from ngraph.model.flow.policy_config import HOP_BY_HOP_PRESETS, preset_config
 
     expected_placement = {
-        FlowPolicyPreset.SHORTEST_PATHS_ECMP: netgraph_core.FlowPlacement.EQUAL_BALANCED_FIXED,
+        FlowPolicyPreset.SHORTEST_PATHS_ECMP: netgraph_core.FlowPlacement.EQUAL_BALANCED,
         FlowPolicyPreset.SHORTEST_PATHS_WCMP: netgraph_core.FlowPlacement.PROPORTIONAL,
         FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY: netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY,
     }
