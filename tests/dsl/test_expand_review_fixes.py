@@ -1,4 +1,4 @@
-"""Regression tests for DSL blueprint expansion review fixes.
+"""Regression tests for DSL blueprint expansion.
 
 Covers:
 - Full variable substitution in link expand blocks (attrs, risk_groups,
@@ -18,12 +18,8 @@ import pytest
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.loader import load_scenario_yaml
-from ngraph.dsl.selectors import flatten_link_attrs, flatten_node_attrs
 from ngraph.model.network import Link, Node
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Link expand block: full variable substitution
-# ──────────────────────────────────────────────────────────────────────────────
+from ngraph.model.selectors import flatten_link_attrs, flatten_node_attrs
 
 
 class TestLinkExpandFullSubstitution:
@@ -197,11 +193,6 @@ class TestLinkExpandFullSubstitution:
         assert pairs == [("dc1/gw", "dc2/gw"), ("dc2/gw", "dc1/gw")]
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Parent path regex escaping in blueprint links
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestBlueprintParentPathEscaping:
     """Literal parent paths are escaped before regex compilation."""
 
@@ -247,11 +238,6 @@ class TestBlueprintParentPathEscaping:
             assert link.target.startswith("agg+core/")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Blueprint params override validation
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestBlueprintParamsValidation:
     """params override keys must address an existing blueprint subgroup."""
 
@@ -278,7 +264,7 @@ class TestBlueprintParamsValidation:
             expand_network_dsl(data)
 
     def test_deep_dotted_nested_params_raises(self) -> None:
-        """'group.params.sub.field' no longer silently no-ops."""
+        """'group.params.sub.field' raises instead of silently no-oping."""
         data = {
             "blueprints": {
                 "inner": {"nodes": {"spine": {"count": 2, "template": "s-{n}"}}},
@@ -390,11 +376,6 @@ class TestBlueprintParamsValidation:
         assert len(plane_nodes) == 4
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# link_rules source/target requirement
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestLinkRulesSourceTargetRequired:
     """link_rules entries must declare both source and target."""
 
@@ -425,11 +406,6 @@ network:
             expand_network_dsl(data)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Malformed rules sections raise
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestMalformedRulesSectionsRaise:
     """Non-list node_rules/link_rules raise instead of being ignored."""
 
@@ -458,11 +434,6 @@ class TestMalformedRulesSectionsRaise:
         data = {"network": {"nodes": {"A": {}}}}
         net = expand_network_dsl(data)
         assert "A" in net.nodes
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Deterministic flattened risk_groups
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestFlattenedRiskGroupsSorted:

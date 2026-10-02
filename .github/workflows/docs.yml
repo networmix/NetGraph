@@ -14,7 +14,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install '.[dev]'
-      - name: Generate auto-generated API documentation
+      - name: Generate the API reference
         run: python dev/generate_api_docs.py --write-file
       - name: Deploy documentation
         run: mkdocs gh-deploy --force --clean

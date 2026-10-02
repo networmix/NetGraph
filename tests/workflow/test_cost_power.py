@@ -184,10 +184,9 @@ def test_cost_power_optics_ignored_when_endpoint_has_no_hw() -> None:
 def test_cost_power_runs_despite_hardware_capacity_violation() -> None:
     """CostPower aggregates costs even when hardware validation would fail.
 
-    Previously the step built a NetworkExplorer with strict validation as a
-    side effect, so a node whose attached link capacity exceeded its hardware
-    capacity crashed the cost aggregation. The step must not depend on the
-    explorer and must complete regardless of hardware violations.
+    The step must not depend on a strict-validation NetworkExplorer: a node
+    whose attached link capacity exceeds its hardware capacity must not stop
+    the cost aggregation.
     """
     net = Network()
     net.add_node(
@@ -207,8 +206,8 @@ def test_cost_power_runs_despite_hardware_capacity_violation() -> None:
 
     comps = _build_simple_components()
 
-    # Sanity check: explorer strict validation rejects this network, which is
-    # exactly what made the old CostPower implementation crash.
+    # Sanity check: explorer strict validation rejects this network, so the
+    # step cannot be relying on it.
     with pytest.raises(ValueError, match="exceeds hardware"):
         NetworkExplorer.explore_network(net, components_library=comps)
 

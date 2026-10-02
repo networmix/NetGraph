@@ -30,8 +30,7 @@ def create_mock_components_library() -> ComponentsLibrary:
 @pytest.fixture
 def caplog_info_level():
     """
-    Pytest fixture to set the logger level to INFO and capture logs.
-    Ensures we can see warning messages in tests.
+    Set the 'explorer' logger to INFO for the test, then restore its level.
     """
     logger = logging.getLogger("explorer")
     old_level = logger.level
@@ -94,20 +93,17 @@ def test_explore_single_node_with_slashes():
     assert len(ssw_node.children) == 1
     leaf = ssw_node.children["ssw-1"]
 
-    # Check stats
     assert leaf.subtree_nodes == {"dc1/plane1/ssw/ssw-1"}
     assert leaf.stats.node_count == 1
 
 
 def test_explore_network_with_links():
     """
-    Test a network with multiple nodes and links (internal + external),
-    verifying the stats are aggregated correctly.
+    Test a network with internal and external links: the built hierarchy and
+    the link and cost stats aggregated at root and at dc1.
     """
-    # Setup network
     network = Network()
 
-    # Create some nodes
     # "dc1/plane1/ssw-1" and "dc1/plane1/ssw-2" share a common prefix, so they are in the same subtree
     network.nodes["dc1/plane1/ssw-1"] = Node(
         name="dc1/plane1/ssw-1",
@@ -137,13 +133,11 @@ def test_explore_network_with_links():
         capacity=200.0,
     )
 
-    # Explore
     lib = create_mock_components_library()
     explorer = NetworkExplorer.explore_network(network, components_library=lib)
     root = explorer.root_node
     assert root is not None
 
-    # Validate that the hierarchy is built
     dc1_node = root.children.get("dc1")
     assert dc1_node is not None
     plane1_node = dc1_node.children.get("plane1")
@@ -160,7 +154,6 @@ def test_explore_network_with_links():
     ssw_3_node = plane2_node.children.get("ssw-3")
     assert ssw_3_node is not None
 
-    # Check aggregated stats for the root
     # By default, from the root's perspective, both links connect nodes in its subtree => both internal
     assert root.stats.node_count == 3
     assert (
@@ -213,7 +206,7 @@ def test_unknown_hw_warnings(caplog, caplog_info_level):
 
 def test_print_tree_basic(capsys):
     """
-    Basic test of print_tree output with skip_leaves=False, detailed=False.
+    print_tree with skip_leaves=False, detailed=False prints root and both nodes.
     """
     network = Network()
     network.nodes["n1"] = Node(name="n1")

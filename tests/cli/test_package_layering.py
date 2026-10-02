@@ -17,6 +17,6 @@ def test_import_ngraph_does_not_import_cli() -> None:
 
 
 def test_from_ngraph_import_cli_still_works() -> None:
-    """``from ngraph import cli`` resolves via submodule import fallback."""
+    """``from ngraph import cli`` imports the submodule on demand."""
     code = "from ngraph import cli; assert callable(cli.main)"
     subprocess.run([sys.executable, "-c", code], check=True)

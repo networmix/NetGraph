@@ -1,7 +1,4 @@
-"""Comprehensive tests validating IP and TE flow placement semantics with ECMP and WCMP.
-
-This test suite validates that NetGraph correctly implements the distinct behavioral
-semantics of IP routing vs Traffic Engineering, and ECMP vs WCMP flow placement.
+"""IP vs TE routing and ECMP vs WCMP flow placement semantics.
 
 Key distinctions tested:
 1. IP routing (shortest_path=True): Uses only lowest-cost paths
@@ -9,8 +6,8 @@ Key distinctions tested:
 3. ECMP (EQUAL_BALANCED): Equal splitting across equal-cost paths
 4. WCMP (PROPORTIONAL): Capacity-proportional splitting across equal-cost paths
 
-Tests use a shared topology where different settings produce measurably different results,
-validating actual placement behavior (not just API correctness).
+Shared topologies make each setting place a different volume, so the tests
+check actual placement, not only the API surface.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ from ngraph import FlowPlacement, Link, Mode, Network, Node, analyze
 def _unbalanced_parallel_paths() -> Network:
     """Create network with parallel paths of equal cost but different capacities.
 
-    This topology is specifically designed to expose differences between:
+    Exposes differences between:
     - ECMP vs WCMP: Different capacities mean WCMP can utilize more flow
     - IP vs TE: Multiple augmentations will behave differently
 
@@ -161,7 +158,6 @@ class TestECMPvsWCMPSemantics:
             f"Expected WCMP ({wcmp_flow}) to be 3x ECMP ({ecmp_flow})"
         )
 
-        # Verify specific values
         assert ecmp_flow == pytest.approx(30.0, abs=1e-6)
         assert wcmp_flow == pytest.approx(90.0, abs=1e-6)
 
@@ -474,7 +470,7 @@ class TestTrueIPSemantics:
 
 
 class TestAccountingValidation:
-    """Validate that flow accounting is correct across all modes."""
+    """Cost distribution totals and run-to-run determinism across all modes."""
 
     @pytest.mark.parametrize("shortest_path", [True, False])
     @pytest.mark.parametrize(
@@ -569,7 +565,6 @@ class TestTELSPLimits:
 
         # Create TE LSP config with custom max_flow_count
         config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
         config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
         config.selection = netgraph_core.EdgeSelection(
             multi_edge=False,
@@ -624,7 +619,6 @@ class TestTELSPLimits:
         algs = ctx.algorithms
 
         config = netgraph_core.FlowPolicyConfig()
-        config.path_alg = netgraph_core.PathAlg.SPF
         config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
         config.selection = netgraph_core.EdgeSelection(
             multi_edge=False,
@@ -656,7 +650,7 @@ class TestTELSPLimits:
 
 
 class TestContextReuse:
-    """Test that AnalysisContext can be reused efficiently."""
+    """One AnalysisContext serves repeated max_flow calls."""
 
     def test_multiple_flow_calls_same_context(self):
         """Test that the same context can compute multiple flows."""

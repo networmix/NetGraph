@@ -1,7 +1,6 @@
 """Tests for running NetGraph as a module (`python -m ngraph`).
 
-These tests exercise the `ngraph.__main__` entrypoint to improve coverage
-for the module execution path.
+These tests exercise the `ngraph.__main__` entrypoint.
 """
 
 from __future__ import annotations

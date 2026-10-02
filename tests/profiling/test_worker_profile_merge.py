@@ -1,8 +1,8 @@
 """Regression tests for worker-profile merging.
 
-merge_child_profiles() previously globbed ``*_worker_*.pstats`` while workers
-in analysis/failure_manager.py write ``{analysis_name}_thread_{tid}_{uuid}.pstats``,
-so worker profiles were never merged into step profiles.
+merge_child_profiles() must pick up the ``{analysis_name}_thread_{tid}_{uuid}.pstats``
+files that workers in analysis/failure_manager.py write, so worker profiles
+end up merged into step profiles.
 """
 
 import cProfile

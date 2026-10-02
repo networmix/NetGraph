@@ -1,9 +1,10 @@
 """Workflow step for basic node and link statistics.
 
-Computes and stores network statistics including node/link counts,
-capacity distributions, cost distributions, and degree distributions. Excluded
-entities are filtered out without modifying the base network; disabled nodes
-and links are excluded too unless `include_disabled` is set.
+Computes node and link counts plus mean, median, min, and max of link
+capacity, link cost, and node degree. Excluded entities are filtered out
+without modifying the base network; disabled nodes and links are excluded too
+unless `include_disabled` is set. A link counts only when both endpoints
+remain.
 
 YAML Configuration Example:
     ```yaml
@@ -15,7 +16,7 @@ YAML Configuration Example:
         excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
     ```
 
-Results stored in `scenario.results`:
+Results stored in `scenario.results` under `data`:
     - Node statistics: node_count
     - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
       min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
@@ -41,7 +42,7 @@ logger = get_logger(__name__)
 class NetworkStats(WorkflowStep):
     """Compute basic node and link statistics for the network.
 
-    Supports optional exclusion simulation without modifying the base network.
+    Exclusions apply to this computation only; the network is not modified.
 
     Attributes:
         include_disabled: If True, include disabled nodes and links in statistics.
@@ -57,14 +58,8 @@ class NetworkStats(WorkflowStep):
     def run(self, scenario: Scenario) -> None:
         """Compute and store network statistics.
 
-        If `excluded_nodes` or `excluded_links` are specified, filters them out
-        without modifying the base network.
-
         Args:
             scenario: The scenario containing the network to analyze.
-
-        Returns:
-            None
         """
         logger.info("Starting NetworkStats: name=%s", self.name)
 
@@ -72,7 +67,6 @@ class NetworkStats(WorkflowStep):
         excluded_nodes_set = set(self.excluded_nodes) if self.excluded_nodes else set()
         excluded_links_set = set(self.excluded_links) if self.excluded_links else set()
 
-        # Filter nodes based on disabled status and exclusions
         if self.include_disabled:
             nodes = {
                 name: node
@@ -86,7 +80,7 @@ class NetworkStats(WorkflowStep):
                 if not node.disabled and name not in excluded_nodes_set
             }
 
-        # Filter links based on disabled status, exclusions, and node availability
+        # A link counts only if both endpoints survived node filtering.
         if self.include_disabled:
             links = {
                 link_id: link
@@ -126,7 +120,6 @@ class NetworkStats(WorkflowStep):
             min_cost_val = min(costs)
             max_cost_val = max(costs)
 
-        # Compute degree statistics over the selected node set
         mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
         if nodes:
             degrees: Dict[str, int] = {name: 0 for name in nodes}
@@ -143,7 +136,6 @@ class NetworkStats(WorkflowStep):
             min_degree_val = min(degree_values)
             max_degree_val = max(degree_values)
 
-        # Store results
         scenario.results.put("metadata", {})
         scenario.results.put(
             "data",
@@ -175,5 +167,4 @@ class NetworkStats(WorkflowStep):
         )
 
 
-# Register the class after definition to avoid decorator ordering issues
 register_workflow_step("NetworkStats")(NetworkStats)

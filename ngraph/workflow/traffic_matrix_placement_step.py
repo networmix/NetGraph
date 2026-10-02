@@ -1,7 +1,8 @@
 """TrafficMatrixPlacement workflow step.
 
-Runs Monte Carlo demand placement using a named demand set and produces
-unified `flow_results` per iteration under `data.flow_results`.
+Runs Monte Carlo demand placement using a named demand set. Writes one
+`FlowIterationResult` dict per unique failure pattern under
+`data.flow_results` and the no-failure result under `data.baseline`.
 
 Baseline (no failures) always runs first as a separate reference; `iterations`
 counts failure scenarios only.
@@ -31,7 +32,7 @@ from ngraph.analysis.failure_manager import FailureManager
 from ngraph.analysis.placement import CACHEABLE_PRESETS
 from ngraph.logging import get_logger
 from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
+from ngraph.model.flow.policy_config import DEFAULT_PRESET
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
@@ -81,7 +82,7 @@ def resolve_placement_parallelism(
         return resolved
     if _python_is_free_threaded():
         return resolved
-    presets = {td.flow_policy or FlowPolicyPreset.SHORTEST_PATHS_ECMP for td in demands}
+    presets = {td.flow_policy or DEFAULT_PRESET for td in demands}
     if presets - CACHEABLE_PRESETS:
         return resolved
     return 1
@@ -106,16 +107,14 @@ class TrafficMatrixPlacement(WorkflowStep):
             set, or a free-threaded interpreter) and 1 otherwise, because
             cacheable presets are Python-bound under the GIL and threads only
             slow them down. See ``resolve_placement_parallelism``.
-        placement_rounds: Deprecated; accepted for backward compatibility but
-            has no effect (each demand is placed in one deterministic pass).
         seed: Optional seed for reproducibility.
         store_failure_patterns: Record the failure trace on each result.
             Iterations are deduplicated, so a trace describes the first
             iteration of its pattern, not every matching iteration.
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
-        alpha: Numeric scale for demands in the set; must be > 0.0. Ignored
-            when alpha_from_step is set.
+        alpha: Numeric scale for demands in the set; must be > 0.0. Defaults
+            to 1.0; cannot be combined with alpha_from_step.
         alpha_from_step: Optional producer step name to read alpha from; it
             must run before this step.
         alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
@@ -125,26 +124,22 @@ class TrafficMatrixPlacement(WorkflowStep):
     failure_policy: str | None = None
     iterations: int = 1
     parallelism: int | str = "auto"
-    placement_rounds: int | str = "auto"
-    seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
     include_used_edges: bool = False
-    alpha: float = 1.0
+    alpha: float | None = None
     alpha_from_step: str | None = None
     alpha_from_field: str = "data.alpha_star"
 
     def __post_init__(self) -> None:
-        if self.placement_rounds != "auto":
-            logger.warning(
-                "TrafficMatrixPlacement 'placement_rounds' is deprecated and has "
-                "no effect; each demand is placed in one deterministic pass."
-            )
         if self.iterations < 0:
             raise ValueError("iterations must be >= 0")
         resolve_parallelism(self.parallelism)  # validate at construction
-        if not (float(self.alpha) > 0.0):
-            raise ValueError("alpha must be > 0.0")
+        if self.alpha is not None:
+            if self.alpha_from_step:
+                raise ValueError("Set either alpha or alpha_from_step, not both")
+            if not (float(self.alpha) > 0.0):
+                raise ValueError("alpha must be > 0.0")
 
     def run(self, scenario: "Scenario") -> None:
         if not self.demand_set:
@@ -162,7 +157,6 @@ class TrafficMatrixPlacement(WorkflowStep):
             self.alpha,
         )
 
-        # Extract and serialize demand set
         try:
             td_list = scenario.demand_set.get_set(self.demand_set)
         except KeyError as exc:
@@ -170,28 +164,15 @@ class TrafficMatrixPlacement(WorkflowStep):
                 f"Demand set '{self.demand_set}' not found in scenario."
             ) from exc
 
-        # Resolve alpha
-        effective_alpha = self._resolve_alpha(scenario)
-        alpha_src = getattr(self, "_alpha_source", None) or "explicit"
-        logger.info(
-            "Using alpha: value=%.6g source=%s",
-            float(effective_alpha),
-            str(alpha_src),
-        )
+        effective_alpha, alpha_source = self._resolve_alpha(scenario)
+        logger.info("Using alpha: value=%.6g source=%s", effective_alpha, alpha_source)
 
-        # base_demands: canonical serialized form for output (unscaled).
-        # demands_config: analysis wire format (scaled volume, raw preset).
+        # base_demands is the unscaled output form; demands_config scales it.
         base_demands: list[dict[str, Any]] = [td.to_dict() for td in td_list]
         demands_config: list[dict[str, Any]] = [
-            {
-                **td.to_dict(),
-                "volume": float(td.volume) * float(effective_alpha),
-                "flow_policy": td.flow_policy,
-            }
-            for td in td_list
+            {**d, "volume": d["volume"] * effective_alpha} for d in base_demands
         ]
 
-        # Run via FailureManager
         fm = FailureManager(
             network=scenario.network,
             failure_policy_set=scenario.failure_policy_set,
@@ -220,13 +201,9 @@ class TrafficMatrixPlacement(WorkflowStep):
             raw.get("metadata", {}).get("unique_patterns", 0),
         )
 
-        # Store outputs
         scenario.results.put("metadata", raw.get("metadata", {}))
 
         baseline_dict, flow_results = serialize_monte_carlo_results(raw)
-
-        alpha_value = float(effective_alpha)
-        alpha_source_value = getattr(self, "_alpha_source", "explicit")
 
         scenario.results.put(
             "data",
@@ -238,8 +215,8 @@ class TrafficMatrixPlacement(WorkflowStep):
                     "include_flow_details": self.include_flow_details,
                     "include_used_edges": self.include_used_edges,
                     "base_demands": base_demands,
-                    "alpha": alpha_value,
-                    "alpha_source": alpha_source_value,
+                    "alpha": effective_alpha,
+                    "alpha_source": alpha_source,
                 },
             },
         )
@@ -249,20 +226,21 @@ class TrafficMatrixPlacement(WorkflowStep):
             "TrafficMatrixPlacement completed: name=%s alpha=%.6g failure_iters=%d "
             "unique_patterns=%d workers=%d duration=%.3fs",
             self.name,
-            alpha_value,
+            effective_alpha,
             metadata.get("iterations", self.iterations),
             metadata.get("unique_patterns", 0),
             metadata.get("parallelism", effective_parallelism),
             time.perf_counter() - t0,
         )
 
-    def _resolve_alpha(self, scenario: "Scenario") -> float:
+    def _resolve_alpha(self, scenario: "Scenario") -> tuple[float, str]:
+        """Return the demand scale and its source ("explicit" or a step name)."""
         if self.alpha_from_step:
             step = scenario.results.get_step(self.alpha_from_step)
             # Results.get_step returns {} for unknown or not-yet-run steps.
             if not step:
                 raise ValueError(
-                    f"alpha_from_step '{self.alpha_from_step}' has no results - "
+                    f"alpha_from_step '{self.alpha_from_step}' has no results; "
                     "check the step name and that it runs before this step"
                 )
             parts = [p for p in str(self.alpha_from_field).split(".") if p]
@@ -281,9 +259,8 @@ class TrafficMatrixPlacement(WorkflowStep):
                 ) from exc
             if not (value > 0.0):
                 raise ValueError("alpha_from_step produced non-positive alpha")
-            self._alpha_source = self.alpha_from_step
-            return value
-        return float(self.alpha)
+            return value, self.alpha_from_step
+        return (1.0 if self.alpha is None else float(self.alpha)), "explicit"
 
 
 register_workflow_step("TrafficMatrixPlacement")(TrafficMatrixPlacement)

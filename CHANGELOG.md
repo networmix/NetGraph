@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Bill-of-materials counts for `exclusive: true` link ends round up as documented (a fractional count was truncated, so an exclusive half optic counted as none)
+- `ngraph inspect --detail` shows enum step parameters by name (`PROPORTIONAL`, not `1`)
+- `ngraph inspect` reports errors on stderr, as `run` does
+
+### Removed
+
+- **BREAKING**: `placement_rounds` (`MaximumSupportedDemand`, `TrafficMatrixPlacement`) and `acceptance_rule` (`MaximumSupportedDemand`)
+- **BREAKING**: integer, numeric-string and blank `flow_policy` values; use the preset name
+- **BREAKING**: `ngraph.dsl.selectors` re-exports; import selector types and evaluation from `ngraph.model.selectors`
+- **BREAKING**: `edge_select` on `shortest_path_cost` and `k_shortest_paths`, where it had no effect
+- **BREAKING**: `include_flow_summary` on `FailureManager.run_max_flow_monte_carlo`; use `include_flow_details`
+- **BREAKING**: `CapacityEnvelope` flow-summary aggregation (`from_values(flow_summaries=...)`, `flow_summary_stats`), which nothing produced
+- `serialize_policy_preset`, `DemandSet.get_default_set` and `FailureManager.run_single_failure_scenario`
+- `enable_debug_logging`/`disable_debug_logging`; use `set_global_log_level`
+- `expand_demands(default_policy_preset=...)`; unset presets use `DEFAULT_PRESET`
+- Re-exports `ngraph.analysis.LARGE_CAPACITY` and `ngraph.dsl.blueprints.parser.expand_name_patterns`; `check_no_extra_keys` moved to `ngraph.utils.yaml_utils`
+- The always-true third element of `resolve_link_end_components`, and `ngraph inspect --output`
+- Result fields without information: workflow `active_seed` (equal to `step_seed`), MSD context `acceptance_rule`, failure-trace `expansion.risk_groups`
+- The implicit `type: node` attribute on YAML-defined nodes
+
+### Changed
+
+Inputs that were silently ignored or replaced now raise, `ValueError` unless noted.
+
+- Unknown keys in any scenario builder, from demands and failure policies to selectors, components and workflow steps
+- `mode` on a bound `AnalysisContext` call, or on `analyze()`/`from_network()` without `source` and `sink`
+- `alpha` together with `alpha_from_step` on `TrafficMatrixPlacement`; `alpha` defaults to 1.0
+- A `parallelism` that is not an integer or `"auto"` (floats were truncated)
+- A hardware `count` that is not a finite positive number (it became 1)
+- Duplicate top-level risk-group names (the last one silently won)
+- An unbound `context` passed to `max_flow_analysis` or `sensitivity_analysis`
+- A `run_demand_placement_monte_carlo` input that is not a list of demand configs or a `DemandSet` (`TypeError`)
+- A non-`FlowPolicyPreset` `TrafficDemand.flow_policy`, and a `to_networkx` node map missing an index (`KeyError`)
+- CLI: an unknown `--keys` step, `--profile-memory` without `--profile`, and non-JSON results (were stringified)
+
+Other changes.
+
+- Selector contexts follow the DSL sections: `link` and `rule` replace `adjacency` and `override`
+- Monte Carlo keeps `None` results from custom analysis functions in `results`
+- `PerformanceProfiler.save_detailed_profile` requires `step_name`
+- Dependencies: `pandas` dropped, `numpy` declared; dev extras drop pytest-benchmark, pytest-mock, pdoc and pandas-stubs
+- Bundled `TrafficMatrixPlacement` scenarios use `parallelism: auto`
+- Internal: removed impossible-state fallbacks, required-import guards, test-only helpers and unused test scaffolding
+
 ## [0.23.1] - 2026-09-13
 
 ### Changed

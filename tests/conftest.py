@@ -6,10 +6,6 @@ import pytest
 
 from ngraph import Link, Network, Node
 
-# -----------------------------------------------------------------------------
-# Shared Network Fixtures
-# -----------------------------------------------------------------------------
-
 
 @pytest.fixture
 def diamond_network() -> Network:
@@ -68,15 +64,6 @@ def make_asymmetric_diamond(
     net.add_link(Link("C", "D", capacity=3.0, cost=2.0))
 
     return net
-
-
-@pytest.fixture
-def asymmetric_diamond() -> Network:
-    """Asymmetric diamond network with different cost tiers.
-
-    Shortcut fixture for make_asymmetric_diamond() with defaults.
-    """
-    return make_asymmetric_diamond()
 
 
 @pytest.fixture

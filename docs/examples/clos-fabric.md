@@ -1,12 +1,10 @@
 # Clos Fabric Analysis
 
-Analysis of a 3-tier Clos fabric. For production use, run the bundled scenario and generate metrics via CLI, then iterate in Python if needed.
+Maximum flow between two 3-tier Clos fabrics, comparing ECMP and WCMP placement with and without failures. The [Tutorial](../getting-started/tutorial.md) covers running the bundled scenarios from the CLI.
 
-Refer to [Tutorial](../getting-started/tutorial.md) for running bundled scenarios via CLI.
+## Scenario
 
-## Scenario Overview
-
-Two separate 3-tier Clos networks, with maximum flow capacity measured between them. The scenario nests blueprints inside blueprints, wires the tiers with `mesh` and `one_to_one` link patterns, and compares flow placement policies.
+Two 3-tier Clos networks joined spine to spine. The scenario nests blueprints inside blueprints and wires the tiers with `mesh` and `one_to_one` link patterns.
 
 ## Programmatic scenario
 
@@ -74,11 +72,11 @@ network:
       cost: 1
 """
 
-# Create and analyze the scenario
+# Build the network
 scenario = Scenario.from_yaml(scenario_yaml)
 network = scenario.network
 
-# Calculate maximum flow with ECMP (Equal Cost Multi-Path)
+# Maximum flow with ECMP
 max_flow_ecmp = analyze(network).max_flow(
     r"my_clos1.*(b[0-9]*)/t1",
     r"my_clos2.*(b[0-9]*)/t1",
@@ -91,7 +89,7 @@ print(f"Maximum flow with ECMP: {max_flow_ecmp}")
 # Result: {('b1|b2', 'b1|b2'): 256.0}
 ```
 
-## Understanding the Results
+## Reading the result
 
 The result `{('b1|b2', 'b1|b2'): 256.0}` means:
 
@@ -99,24 +97,16 @@ The result `{('b1|b2', 'b1|b2'): 256.0}` means:
 - **Target**: All t1 nodes in both b1 and b2 segments of my_clos2
 - **Capacity**: Maximum flow of 256.0 units
 
-## ECMP vs WCMP: Impact of Link Failures
+## ECMP versus WCMP with uneven links
 
-NetGraph supports different flow placement policies:
+Two placement policies split flow across equal-cost paths: `FlowPlacement.EQUAL_BALANCED` gives every path the same share (ECMP) and `FlowPlacement.PROPORTIONAL` weights the shares by capacity (WCMP). With `shortest_path=True` both stay on the equal-cost paths; with `shortest_path=False` placement spills onto costlier paths as capacity runs out, which is traffic engineering.
 
-- `FlowPlacement.EQUAL_BALANCED`: Equal split across equal-cost paths
-- `FlowPlacement.PROPORTIONAL`: Capacity-weighted split across equal-cost paths
+The example above pairs `EQUAL_BALANCED` with `shortest_path=True`, which is ECMP. Compare it with `PROPORTIONAL` under two conditions:
 
-Combined with the path selection settings (shortest_path=True|False), we can achieve different flow placement policies emulating ECMP, WCMP, and TE behavior in IP/MPLS networks.
+- Symmetric parallel inter-spine links: ECMP and WCMP both give 256.0.
+- Uneven capacities within each equal-cost bundle: WCMP carries more, because ECMP is capped by the equal split.
 
-The example above pairs `FlowPlacement.EQUAL_BALANCED` with `shortest_path=True` to emulate ECMP. Compare it against `FlowPlacement.PROPORTIONAL` (WCMP) under two conditions:
-
-- Baseline: symmetric parallel inter-spine links -> ECMP = WCMP (256.0).
-- Uneven links: capacities differ within each equal-cost bundle -> WCMP
-  achieves higher throughput than ECMP, which is limited by equal splitting.
-
-Partial inter-spine degradation is emulated by making capacities uneven across the
-4 parallel spine-to-spine links per pair while keeping costs equal, which isolates
-the effect of the splitting policy.
+The code below makes the 4 parallel spine-to-spine links of each pair uneven while keeping their costs equal, so only the splitting policy differs.
 
 ```python
 from ngraph import analyze, Mode, FlowPlacement
@@ -205,7 +195,7 @@ Uneven ECMP: {('b1|b2', 'b1|b2'): 64.0}
 Uneven WCMP: {('b1|b2', 'b1|b2'): 248.0}
 ```
 
-As expected, WCMP achieves higher throughput than ECMP when parallel links within equal-cost bundles have uneven capacities. ECMP is limited by the link with the lowest capacity in the equal-cost group.
+Uneven links drop ECMP to 64 while WCMP keeps 248. ECMP gives every member of a bundle the same share, so the smallest link caps the bundle.
 
 ## Failure Analysis
 
@@ -256,20 +246,15 @@ PROPORTIONAL baseline 256.0 under failure {248.0: 100}
 
 Losing two spines removes 8 of 256 inter-spine links. WCMP loses exactly that capacity in every iteration. ECMP loses 32, or 64 when both failed spines serve the same t2 switch, because the surviving equal-cost next hops still receive equal shares and the smallest one caps the whole split.
 
-## Network Structure Analysis
+## Network structure
 
-We can also analyze the network structure using the NetworkExplorer:
+`NetworkExplorer` prints the node hierarchy with node, link and capacity statistics per subtree:
 
 ```python
 from ngraph.explorer import NetworkExplorer
 
-# Explore the network topology
 explorer = NetworkExplorer.explore_network(network)
-explorer.print_tree(skip_leaves=True, detailed=False)
-
-# The explorer shows hierarchical structure and connectivity patterns
-# For detailed path analysis, use max_flow_detailed to get flow details
-# including cost distribution and path information
+explorer.print_tree(skip_leaves=True, detailed=False)  # skip_leaves hides individual nodes
 ```
 
 ## Next Steps
@@ -277,4 +262,4 @@ explorer.print_tree(skip_leaves=True, detailed=False)
 - **[Bundled Scenarios](bundled-scenarios.md)** - Ready-to-run examples
 - **[Workflow Reference](../reference/workflow.md)** - Analysis workflows and Monte Carlo simulation
 - **[DSL Reference](../reference/dsl.md)** - YAML syntax reference
-- **[API Reference](../reference/api.md)** - Explore the Python API in detail
+- **[API Reference](../reference/api.md)** - Python API

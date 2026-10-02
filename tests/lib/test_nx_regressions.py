@@ -1,4 +1,4 @@
-"""Regression tests for ngraph.lib.nx conversion fixes.
+"""Regression tests for ngraph.lib.nx conversion.
 
 Covers:
 - Fractional edge costs raise ValueError instead of silent int() truncation.
@@ -122,7 +122,7 @@ class TestUndirectedDefaultBidirectional:
         assert len(edge_map) == 1
 
     def test_directed_explicit_true_adds_reverse(self):
-        """Explicit bidirectional=True still works for directed inputs."""
+        """Explicit bidirectional=True adds a reverse arc for directed inputs."""
         G = nx.DiGraph()
         G.add_edge("A", "B", capacity=10.0, cost=1)
 
@@ -146,7 +146,7 @@ class TestUndirectedDefaultBidirectional:
 
 
 class TestDocstringExampleSemantics:
-    """Pin the corrected from_networkx docstring example outputs."""
+    """Pin the from_networkx docstring example outputs."""
 
     def test_node_indices_sorted_edge_refs_original_orientation(self):
         """Node indices follow sorted names; edge refs keep (u, v, key)."""

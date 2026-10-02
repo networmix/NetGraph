@@ -2,16 +2,7 @@
 
 import pytest
 
-import ngraph.types
 from ngraph.types import FlowPlacement, Mode
-
-
-def test_min_cap_min_flow_removed() -> None:
-    """Dead MIN_CAP/MIN_FLOW constants are no longer exported."""
-    assert not hasattr(ngraph.types, "MIN_CAP")
-    assert not hasattr(ngraph.types, "MIN_FLOW")
-    assert "MIN_CAP" not in ngraph.types.__all__
-    assert "MIN_FLOW" not in ngraph.types.__all__
 
 
 def test_mode_from_string_valid() -> None:
@@ -28,7 +19,7 @@ def test_mode_from_string_invalid() -> None:
 
 
 def test_flow_placement_from_string_still_works() -> None:
-    """FlowPlacement.from_string remains the parsing counterpart."""
+    """FlowPlacement.from_string parses known names and rejects unknown ones."""
     assert FlowPlacement.from_string("proportional") is FlowPlacement.PROPORTIONAL
     with pytest.raises(ValueError, match="Invalid flow_placement"):
         FlowPlacement.from_string("bogus")

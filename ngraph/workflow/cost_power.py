@@ -14,7 +14,8 @@ root (path ""), and higher levels correspond to prefixes of node names split by
     - etc.
 
 Disabled handling:
-- When include_disabled is False, only enabled nodes and links are considered.
+- When include_disabled is False, only enabled nodes and links are considered,
+  and a link's optics count only when both endpoint nodes are enabled.
 - Optics are counted only when the endpoint node has platform hardware.
 
 YAML Configuration Example:
@@ -159,23 +160,18 @@ class CostPower(WorkflowStep):
                 if not node_enabled(network.nodes[lk.target]):
                     continue
 
-            (src_end, dst_end, per_end) = resolve_link_end_components(lk.attrs, library)
-            if not per_end:
-                continue
+            src_end, dst_end = resolve_link_end_components(lk.attrs, library)
 
-            # Source endpoint
             src_comp, src_cnt, _src_excl = src_end
             if src_comp is not None and node_has_hw.get(lk.source, False):
                 capex, power, _ = totals_with_multiplier(src_comp, src_cnt)
                 add_values(lk.source, 0.0, 0.0, float(capex), float(power))
 
-            # Destination endpoint
             dst_comp, dst_cnt, _dst_excl = dst_end
             if dst_comp is not None and node_has_hw.get(lk.target, False):
                 capex, power, _ = totals_with_multiplier(dst_comp, dst_cnt)
                 add_values(lk.target, 0.0, 0.0, float(capex), float(power))
 
-        # Build payload
         levels_payload: Dict[int, List[Dict[str, Any]]] = {}
         for lvl, mapping in levels.items():
             out_list: List[Dict[str, Any]] = []
@@ -194,7 +190,6 @@ class CostPower(WorkflowStep):
                 )
             levels_payload[lvl] = out_list
 
-        # Store results
         scenario.results.put("metadata", {})
         scenario.results.put(
             "data",
@@ -207,7 +202,6 @@ class CostPower(WorkflowStep):
             },
         )
 
-        # Log root summary
         root_items = levels_payload.get(0, [])
         root = root_items[0] if root_items else {}
         logger.info(

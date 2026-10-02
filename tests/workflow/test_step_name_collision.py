@@ -1,7 +1,7 @@
 """Regression tests for workflow step-name collision detection.
 
-Programmatic scenarios with two unnamed steps of the same type previously
-wrote to the same results namespace, silently dropping the first step's data.
+Two unnamed steps of the same type in a programmatic scenario must not share
+a results namespace, which would silently drop the first step's data.
 """
 
 from __future__ import annotations

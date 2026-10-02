@@ -1,6 +1,6 @@
-"""Validation tests for DSL features to document in skill reference.
+"""Behavior checks for DSL features described in the skill reference.
 
-These tests verify the behavior of DSL features to ensure documentation accuracy.
+Each test pins a documented behavior so the reference stays accurate.
 """
 
 import jsonschema
@@ -33,11 +33,9 @@ network:
         scenario = Scenario.from_yaml(yaml_str)
         net = scenario.network
 
-        # Check link costs
         costs = [link.cost for link in net.links.values()]
         assert sorted(costs) == [1, 99], f"Expected [1, 99], got {sorted(costs)}"
 
-        # Verify only the high-capacity link was updated
         for link in net.links.values():
             if link.capacity >= 400:
                 assert link.cost == 99, "High-capacity link should have cost 99"
@@ -270,12 +268,11 @@ risk_groups:
             "Env_development should not exist"
         )
 
-        # Check membership
         assert "Env_production" in net.nodes["prod_srv1"].risk_groups
         assert "Env_production" in net.nodes["prod_srv2"].risk_groups
 
     def test_path_filters_links_in_generate(self):
-        """path filter works on links in generate blocks."""
+        """path filter narrows links before generating risk groups."""
         yaml_str = """
 network:
   nodes:
@@ -305,7 +302,7 @@ class TestInlineFlowPolicyObjects:
     """Validate inline flow_policy objects - custom policy configs."""
 
     def test_flow_policy_preset_string(self):
-        """Preset string flow_policy should work."""
+        """Preset string flow_policy parses to a FlowPolicyPreset enum."""
         yaml_str = """
 network:
   nodes:
@@ -324,7 +321,6 @@ demands:
         scenario = Scenario.from_yaml(yaml_str)
         demands = scenario.demand_set.sets.get("test", [])
         assert len(demands) == 1
-        # flow_policy should be a FlowPolicyPreset enum
         from ngraph.model.flow.policy_config import FlowPolicyPreset
 
         assert demands[0].flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
@@ -350,6 +346,3 @@ demands:
 """
         with pytest.raises((jsonschema.ValidationError, ValueError)):
             Scenario.from_yaml(yaml_str)
-
-
-# Run with: pytest tests/dsl/test_dsl_features_validation.py -v

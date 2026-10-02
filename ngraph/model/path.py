@@ -1,4 +1,4 @@
-"""Lightweight representation of a single routing path.
+"""Representation of a single routing path.
 
 ``Path`` stores a sequence of (node, parallel edges) elements plus a numeric
 cost. Paths sort by cost, compare by structure and cost, and support sub-path
@@ -17,7 +17,7 @@ from ngraph.types.dto import EdgeRef
 
 @dataclass
 class Path:
-    """Represents a single path in the network.
+    """Routing path as a sequence of nodes and the parallel edges leaving each.
 
     Attributes:
         path: Sequence of (node_name, (edge_refs...)) tuples representing the path.
@@ -47,10 +47,10 @@ class Path:
         """Return the (node, parallel_edges) tuple at the specified index.
 
         Args:
-            idx: The index of the desired path element.
+            idx: Element index; negative values count from the end.
 
         Returns:
-            A tuple containing the node name and its associated parallel edge refs.
+            The node name and the parallel edge refs leaving it.
         """
         return self.path[idx]
 
@@ -109,19 +109,11 @@ class Path:
         return (self.path == other.path) and (self.cost == other.cost)
 
     def __hash__(self) -> int:
-        """Compute a hash based on the (path, cost) tuple.
-
-        Returns:
-            The hash value of this Path.
-        """
+        """Hash the (path, cost) tuple, consistent with ``__eq__``."""
         return hash((self.path, self.cost))
 
     def __repr__(self) -> str:
-        """Return a string representation of the path including its tuple and cost.
-
-        Returns:
-            A debug-friendly string representation.
-        """
+        """Return ``Path(<elements>, cost=<cost>)``."""
         return f"Path({self.path}, cost={self.cost})"
 
     @cached_property
@@ -148,15 +140,15 @@ class Path:
     def get_sub_path(self, dst_node: str) -> Path:
         """Create a sub-path ending at the specified destination node.
 
-        The sub-path is formed by truncating the original path at the first occurrence
-        of `dst_node` and ensuring that the final element has an empty tuple of edges.
+        The original path is truncated at the first occurrence of `dst_node`,
+        and the final element gets an empty edge tuple.
 
         Args:
             dst_node: The node at which to truncate the path.
 
         Returns:
-            A new Path instance representing the sub-path from the original source
-            to `dst_node`. Cost is set to infinity to indicate recalculation needed.
+            A new Path from the original source to `dst_node`. Its cost is
+            infinity, signalling that the caller must recompute it.
 
         Raises:
             ValueError: If `dst_node` is not found in the current path.
@@ -167,7 +159,6 @@ class Path:
         for node, parallel_edges in self.path:
             if node == dst_node:
                 found = True
-                # Append the target node with an empty edge tuple.
                 new_elements.append((node, ()))
                 break
 
@@ -176,6 +167,6 @@ class Path:
         if not found:
             raise ValueError(f"Node '{dst_node}' not found in path.")
 
-        # Cost set to infinity to explicitly signal recalculation is needed.
-        # EdgeRef-based cost calculation requires mapping back to graph edges.
+        # Infinite cost signals that recalculation is needed: computing cost
+        # from EdgeRefs requires mapping back to graph edges.
         return Path(tuple(new_elements), float("inf"))

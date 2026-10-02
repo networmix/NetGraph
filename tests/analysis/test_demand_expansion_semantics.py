@@ -137,11 +137,10 @@ class TestPerGroupPairwise:
 class TestCombineOverlapExclusion:
     """Combine mode excludes nodes selected on both sides.
 
-    Regression: overlapping source/target selections previously attached
-    shared nodes to both pseudo endpoints, creating a zero-cost
-    pseudo_src -> node -> pseudo_snk bypass over two LARGE_CAPACITY
-    augmentation edges that absorbed the entire demand without touching
-    the real network.
+    Attaching a shared node to both pseudo endpoints would create a
+    zero-cost pseudo_src -> node -> pseudo_snk bypass over two
+    LARGE_CAPACITY augmentation edges that absorbs the entire demand
+    without touching the real network.
     """
 
     @staticmethod
@@ -197,7 +196,7 @@ class TestCombineOverlapExclusion:
             # Each group's combine demand is a virtual source: A/2 and B/2
             # have no path at all and leave the pool, so A/1 -> B/1 and
             # B/1 -> A/1 each carry the single capacity-1.0 link's worth
-            # whatever the preset. The bypass previously placed all 100.
+            # whatever the preset; a bypass would place all 100.
             ("SHORTEST_PATHS_ECMP", 2.0),
             ("SHORTEST_PATHS_ECMP_LOSSY", 2.0),
             ("SHORTEST_PATHS_WCMP", 2.0),

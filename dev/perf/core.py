@@ -15,12 +15,11 @@ class BenchmarkTask(Enum):
     SHORTEST_PATH = auto()
     SHORTEST_PATH_NETWORKX = auto()
     MAX_FLOW = auto()
-    # Add more tasks as they are implemented
 
 
 @dataclass
 class ComplexityModel:
-    """Lightweight complexity model for performance analysis."""
+    """Named scaling model with an expected power-law exponent."""
 
     name: str
     expected_exponent: float
@@ -36,7 +35,11 @@ class ComplexityModel:
         baseline_size: int,
         target_size: int,
     ) -> float:
-        """Calculate expected runtime for target_size given this complexity model."""
+        """Scale ``baseline_time`` from ``baseline_size`` to ``target_size``.
+
+        Raises:
+            ValueError: If either size is not positive.
+        """
         if baseline_size <= 0 or target_size <= 0:
             raise ValueError("sizes must be positive")
 
@@ -57,9 +60,9 @@ class ComplexityModel:
             return baseline_time * (ratio**self.expected_exponent)
 
     def interpret_exponent(self, empirical_exponent: float) -> str:
-        """Interpret empirical exponent into human-readable complexity description.
+        """Map a fitted exponent to a complexity label.
 
-        Thresholds based on common algorithmic complexity classes:
+        Thresholds:
         - < 1.2: near-linear (close to O(n))
         - 1.2-1.8: sub-quadratic (between O(n) and O(n^2))
         - 1.8-2.5: quadratic (close to O(n^2))
@@ -71,7 +74,6 @@ class ComplexityModel:
         Returns:
             Human-readable complexity description.
         """
-        # Complexity interpretation thresholds
         LINEAR_THRESHOLD = 1.2
         QUADRATIC_THRESHOLD = 1.8
         SUPER_QUADRATIC_THRESHOLD = 2.5
@@ -86,7 +88,6 @@ class ComplexityModel:
             return "super-quadratic"
 
 
-# Predefined complexity models
 LINEAR = ComplexityModel("linear", 1.0, "Linear O(n)")
 N_LOG_N = ComplexityModel("n_log_n", 1.1, "n log n")
 QUADRATIC = ComplexityModel("quadratic", 2.0, "Quadratic O(n^2)")
@@ -124,9 +125,8 @@ class BenchmarkCase:
             raise ValueError("case.name must not be empty")
 
     def numeric_problem_size(self) -> float:
-        """Get the numeric value of problem_size.
+        """Evaluate ``problem_size`` as a math expression.
 
-        Supports simple math expressions using standard functions.
         Examples: "100", "10 * log(10)", "2 ** 8", "sqrt(100)"
 
         Returns:
@@ -138,12 +138,11 @@ class BenchmarkCase:
         if not isinstance(self.problem_size, str):
             raise ValueError(f"problem_size must be str, got {type(self.problem_size)}")
 
-        # Validate expression contains only allowed characters
         allowed_chars = set("0123456789+-*/.() abcdefghijklmnopqrstuvwxyz_")
         if not all(c in allowed_chars for c in self.problem_size.lower()):
             raise ValueError(f"Invalid characters in problem_size: {self.problem_size}")
 
-        # Create restricted namespace - only math functions, no builtins
+        # eval sees only math names; builtins are removed.
         safe_globals = {
             "__builtins__": {},
             "math": math,
@@ -174,7 +173,7 @@ class BenchmarkCase:
 
 @dataclass
 class BenchmarkProfile:
-    """A logical benchmark suite (scaling series or batch)."""
+    """Named set of benchmark cases analyzed together, usually a scaling series."""
 
     name: str
     cases: list[BenchmarkCase]
@@ -194,7 +193,7 @@ class BenchmarkProfile:
 
 @dataclass
 class BenchmarkSample:
-    """Concrete measurement produced by executing a case."""
+    """Timing statistics, in seconds, from running one case."""
 
     case: BenchmarkCase
     problem_size: str
@@ -218,12 +217,12 @@ class BenchmarkSample:
 
     @property
     def time_ms(self) -> float:
-        """Convert mean time from seconds to milliseconds."""
+        """Mean time in milliseconds."""
         SECONDS_TO_MS = 1000
         return self.mean_time * SECONDS_TO_MS
 
     def numeric_problem_size(self) -> float:
-        """Get the numeric value of problem_size."""
+        """Evaluate the case's ``problem_size`` expression."""
         return self.case.numeric_problem_size()
 
 
@@ -258,7 +257,10 @@ class BenchmarkResult:
         return sum(s.rounds for s in self.samples)
 
     def total_execution_time(self) -> float:
-        """Calculate total benchmark execution time in seconds."""
+        """Estimate measured time in seconds as mean time times rounds.
+
+        Excludes warm-up calls and setup.
+        """
         return sum(s.mean_time * s.rounds for s in self.samples)
 
 
@@ -268,7 +270,7 @@ def calculate_expected_time(
     target_size: int,
     complexity: str,
 ) -> float:
-    """Calculate expected runtime for target_size given baseline performance.
+    """Predict runtime at target_size from a baseline measurement.
 
     Args:
         baseline_time: Measured time at baseline_size

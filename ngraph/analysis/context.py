@@ -53,8 +53,7 @@ class AugmentationEdge:
     """Edge specification for graph augmentation.
 
     Augmentation edges are added to the graph as-is (unidirectional).
-    Nodes referenced in augmentations that don't exist in the network
-    are automatically treated as pseudo/virtual nodes.
+    Endpoints that are not network nodes become pseudo nodes.
 
     Attributes:
         source: Source node name (real or pseudo)
@@ -154,19 +153,6 @@ class _EdgeMapper:
         direction = "rev" if dir_bit else "fwd"
         return EdgeRef(link_id=link_id, direction=direction)
 
-    def to_ref(
-        self, core_edge_id: int, multidigraph: netgraph_core.StrictMultiDiGraph
-    ) -> Optional[EdgeRef]:
-        ext_edge_ids = multidigraph.ext_edge_ids_view()
-        ext_id = ext_edge_ids[core_edge_id]
-        return self.decode_ext_id(int(ext_id))
-
-    def to_name(self, ext_id: int) -> Optional[str]:
-        if ext_id == -1:
-            return None
-        edge_ref = self.decode_ext_id(ext_id)
-        return edge_ref.link_id if edge_ref else None
-
 
 @dataclass
 class _PseudoNodeContext:
@@ -191,7 +177,7 @@ class AnalysisContext:
 
     Wraps the Core graph infrastructure. Two usage patterns:
 
-    **Unbound** - source/sink given per call:
+    **Unbound** (source/sink given per call):
 
         ctx = AnalysisContext.from_network(network)
         cost = ctx.shortest_path_cost("A", "B")
@@ -201,7 +187,7 @@ class AnalysisContext:
     context, which rebuilds the graph from scratch; bind the context instead
     for repeated flow analysis.
 
-    **Bound** - source/sink fixed at construction, reused across calls:
+    **Bound** (source/sink fixed at construction, reused across calls):
 
         ctx = AnalysisContext.from_network(
             network,
@@ -223,7 +209,7 @@ class AnalysisContext:
         is_bound: True if source/sink groups are pre-configured.
     """
 
-    # Public read-only reference
+    # Exposed read-only through the `network` property
     _network: "Network"
 
     # Core infrastructure (internal). Built eagerly for bound contexts and
@@ -244,10 +230,22 @@ class AnalysisContext:
         default_factory=threading.Lock, repr=False, compare=False
     )
 
+    # Resolved pinned-route DAGs, keyed by (src, dst, routes); see
+    # ngraph.analysis.static_paths.build_static_path_bundles.
+    _static_path_cache: Dict[tuple, List[netgraph_core.PredDAG]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+
     @property
     def network(self) -> "Network":
-        """Reference to source network (read-only)."""
+        """Network this context was built from (read-only)."""
         return self._network
+
+    @property
+    def _bound_pseudo(self) -> _PseudoNodeContext:
+        """Pseudo-node pairs of a bound context (set whenever it is bound)."""
+        assert self._pseudo_context is not None, "context is not bound"
+        return self._pseudo_context
 
     @property
     def is_bound(self) -> bool:
@@ -297,7 +295,6 @@ class AnalysisContext:
                 if core is None:
                     core = _build_graph_core(
                         self._network,
-                        add_reverse=True,
                         augmentations=(
                             list(self._augmentations) if self._augmentations else None
                         ),
@@ -396,24 +393,27 @@ class AnalysisContext:
         *,
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         augmentations: Optional[List[AugmentationEdge]] = None,
     ) -> "AnalysisContext":
-        """Create analysis context from network.
+        """Build a context for a network, bound when source and sink are given.
 
         Args:
             network: Network topology to analyze.
             source: Optional source node selector (string path or selector dict).
                     If provided with sink, creates bound context with pre-built pseudo-nodes.
             sink: Optional sink node selector (string path or selector dict).
-            mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
-            augmentations: Optional custom augmentation edges.
+            mode: Group mode of a bound context: COMBINE (default) or
+                PAIRWISE. Unbound calls choose the mode per method call.
+            augmentations: Extra edges added to the graph as-is (see
+                AugmentationEdge).
 
         Returns:
             AnalysisContext ready for analysis.
 
         Raises:
-            ValueError: If only one of source/sink is provided.
+            ValueError: If only one of source/sink is provided, or mode is
+                given without them.
             ValueError: If bound and no matching nodes found.
             ValueError: If any link capacity is at or above LARGE_CAPACITY
                 (1e15, the internal pseudo-edge capacity), since such a link
@@ -431,18 +431,22 @@ class AnalysisContext:
         """
         if (source is None) != (sink is None):
             raise ValueError("source and sink must both be provided or both None")
+        if source is None and mode is not None:
+            raise ValueError(
+                "mode applies to a bound context; pass it with source and "
+                "sink, or per call on an unbound context"
+            )
+        bound_mode = Mode.COMBINE if mode is None else mode
 
-        # Collect all augmentations
         all_augmentations: List[AugmentationEdge] = []
         if augmentations:
             all_augmentations.extend(augmentations)
 
-        # Build pseudo node augmentations if source/sink provided
         pseudo_pairs: Optional[Dict[Tuple[str, str], Tuple[str, str]]] = None
         expected_pairs: Tuple[Tuple[str, str], ...] = ()
         if source is not None and sink is not None:
             pseudo_augmentations, pseudo_pairs, expected_pairs = (
-                _build_pseudo_node_augmentations(network, source, sink, mode)
+                _build_pseudo_node_augmentations(network, source, sink, bound_mode)
             )
             all_augmentations.extend(pseudo_augmentations)
 
@@ -453,11 +457,9 @@ class AnalysisContext:
         if all_augmentations or source is not None:
             core = _build_graph_core(
                 network,
-                add_reverse=True,
                 augmentations=all_augmentations if all_augmentations else None,
             )
 
-        # Create pseudo context if bound
         pseudo_context: Optional[_PseudoNodeContext] = None
         if source is not None and sink is not None:
             assert core is not None  # Bound contexts always build eagerly
@@ -481,7 +483,7 @@ class AnalysisContext:
             _core=core,
             _source=source,
             _sink=sink,
-            _mode=mode if source is not None else None,
+            _mode=bound_mode if source is not None else None,
             _pseudo_context=pseudo_context,
             _augmentations=tuple(augmentations) if augmentations else (),
         )
@@ -494,22 +496,23 @@ class AnalysisContext:
         self,
         source: Optional[Union[str, Dict[str, Any]]],
         sink: Optional[Union[str, Dict[str, Any]]],
+        mode: Optional[Mode] = None,
     ) -> bool:
-        """Validate source/sink against the binding state of this context.
+        """Validate source/sink/mode against the binding state of this context.
 
         Returns:
             True when the context is bound (dispatch to the *_bound path);
             False when unbound (source and sink are then non-None).
 
         Raises:
-            ValueError: If bound and source/sink are provided, or unbound
-                and source/sink are missing.
+            ValueError: If bound and source/sink/mode are provided, or
+                unbound and source/sink are missing.
         """
         if self.is_bound:
-            if source is not None or sink is not None:
+            if source is not None or sink is not None or mode is not None:
                 raise ValueError(
-                    "Bound context: source/sink already configured. "
-                    "Create new context for different groups."
+                    "Bound context: source/sink/mode already configured. "
+                    "Create a new context for different groups."
                 )
             return True
         if source is None or sink is None:
@@ -521,7 +524,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -538,13 +541,13 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             shortest_path: If True, use only shortest paths (IP/IGP mode).
             require_capacity: If True (default), path selection considers
                 available capacity. If False, path selection is cost-only
-                (true IP/IGP semantics where saturated paths still receive
-                traffic). For true IP simulation, use shortest_path=True
-                with require_capacity=False.
+                (IP/IGP semantics: saturated paths still receive traffic).
+                To model IP routing, use shortest_path=True with
+                require_capacity=False.
             flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
             excluded_nodes: Nodes to exclude from this analysis.
             excluded_links: Links to exclude from this analysis.
@@ -554,9 +557,9 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
-        if self._dispatch_bound(source, sink):
+        if self._dispatch_bound(source, sink, mode):
             return self._max_flow_bound(
                 shortest_path=shortest_path,
                 require_capacity=require_capacity,
@@ -568,7 +571,7 @@ class AnalysisContext:
         return self._max_flow_unbound(
             source=source,
             sink=sink,
-            mode=mode,
+            mode=Mode.COMBINE if mode is None else mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
             flow_placement=flow_placement,
@@ -581,7 +584,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -598,19 +601,23 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             shortest_path: If True, restricts flow to shortest paths.
             require_capacity: If True (default), path selection considers
                 available capacity. If False, path selection is cost-only.
-            flow_placement: Flow placement strategy.
+            flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
             excluded_nodes: Nodes to exclude from this analysis.
             excluded_links: Links to exclude from this analysis.
             include_min_cut: If True, compute and include min-cut edges.
 
         Returns:
             Dict mapping (source_label, sink_label) to MaxFlowResult.
+
+        Raises:
+            ValueError: If unbound and source/sink not provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
-        if self._dispatch_bound(source, sink):
+        if self._dispatch_bound(source, sink, mode):
             return self._max_flow_detailed_bound(
                 shortest_path=shortest_path,
                 require_capacity=require_capacity,
@@ -623,7 +630,7 @@ class AnalysisContext:
         return self._max_flow_detailed_unbound(
             source=source,
             sink=sink,
-            mode=mode,
+            mode=Mode.COMBINE if mode is None else mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
             flow_placement=flow_placement,
@@ -637,7 +644,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -656,18 +663,22 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             shortest_path: If True, use shortest-path-only flow (IP/IGP mode).
             require_capacity: If True (default), path selection considers
                 available capacity. If False, path selection is cost-only.
-            flow_placement: Flow placement strategy.
+            flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
             excluded_nodes: Nodes to exclude from this analysis.
             excluded_links: Links to exclude from this analysis.
 
         Returns:
             Dict mapping (source_label, sink_label) to {link_id:direction: flow_reduction}.
+
+        Raises:
+            ValueError: If unbound and source/sink not provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
-        if self._dispatch_bound(source, sink):
+        if self._dispatch_bound(source, sink, mode):
             return self._sensitivity_bound(
                 shortest_path=shortest_path,
                 require_capacity=require_capacity,
@@ -679,7 +690,7 @@ class AnalysisContext:
         return self._sensitivity_unbound(
             source=source,
             sink=sink,
-            mode=mode,
+            mode=Mode.COMBINE if mode is None else mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
             flow_placement=flow_placement,
@@ -692,7 +703,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         shortest_path: bool = False,
         require_capacity: bool = True,
         flow_placement: FlowPlacement = FlowPlacement.PROPORTIONAL,
@@ -713,11 +724,11 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             shortest_path: If True, use shortest-path-only flow (IP/IGP mode).
             require_capacity: If True (default), path selection considers
                 available capacity. If False, path selection is cost-only.
-            flow_placement: Flow placement strategy.
+            flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
             excluded_nodes: Nodes to exclude from this analysis.
             excluded_links: Links to exclude from this analysis.
 
@@ -727,9 +738,9 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
-        if self._dispatch_bound(source, sink):
+        if self._dispatch_bound(source, sink, mode):
             return self._sensitivity_with_flow_bound(
                 shortest_path=shortest_path,
                 require_capacity=require_capacity,
@@ -741,7 +752,7 @@ class AnalysisContext:
         return self._sensitivity_with_flow_unbound(
             source=source,
             sink=sink,
-            mode=mode,
+            mode=Mode.COMBINE if mode is None else mode,
             shortest_path=shortest_path,
             require_capacity=require_capacity,
             flow_placement=flow_placement,
@@ -758,8 +769,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
-        edge_select: EdgeSelect = EdgeSelect.ALL_MIN_COST,
+        mode: Optional[Mode] = None,
         excluded_nodes: Optional[Set[str]] = None,
         excluded_links: Optional[Set[str]] = None,
     ) -> Dict[Tuple[str, str], float]:
@@ -772,8 +782,7 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
-            edge_select: SPF edge selection strategy.
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             excluded_nodes: Nodes to exclude from this analysis.
             excluded_links: Links to exclude from this analysis.
 
@@ -782,18 +791,17 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
             ValueError: If no source nodes match source pattern.
             ValueError: If no sink nodes match sink pattern.
         """
         resolved_source, resolved_sink, resolved_mode = self._resolve_source_sink(
-            source, sink, mode
+            source, sink, mode, Mode.COMBINE
         )
         return self._shortest_path_costs_impl(
             source=resolved_source,
             sink=resolved_sink,
             mode=resolved_mode,
-            edge_select=edge_select,
             excluded_nodes=excluded_nodes,
             excluded_links=excluded_links,
         )
@@ -803,7 +811,7 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.COMBINE,
+        mode: Optional[Mode] = None,
         edge_select: EdgeSelect = EdgeSelect.ALL_MIN_COST,
         split_parallel_edges: bool = False,
         excluded_nodes: Optional[Set[str]] = None,
@@ -818,7 +826,7 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: COMBINE or PAIRWISE (ignored if bound).
+            mode: COMBINE (default) or PAIRWISE; unbound contexts only.
             edge_select: SPF edge selection strategy.
             split_parallel_edges: Expand parallel edges into distinct paths.
             excluded_nodes: Nodes to exclude from this analysis.
@@ -829,10 +837,10 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
         resolved_source, resolved_sink, resolved_mode = self._resolve_source_sink(
-            source, sink, mode
+            source, sink, mode, Mode.COMBINE
         )
         return self._shortest_paths_impl(
             source=resolved_source,
@@ -849,9 +857,8 @@ class AnalysisContext:
         source: Optional[Union[str, Dict[str, Any]]] = None,
         sink: Optional[Union[str, Dict[str, Any]]] = None,
         *,
-        mode: Mode = Mode.PAIRWISE,
+        mode: Optional[Mode] = None,
         max_k: int = 3,
-        edge_select: EdgeSelect = EdgeSelect.ALL_MIN_COST,
         max_path_cost: float = float("inf"),
         max_path_cost_factor: Optional[float] = None,
         split_parallel_edges: bool = False,
@@ -867,14 +874,10 @@ class AnalysisContext:
             source: Source node selector (required if unbound); see the class
                 docstring for the accepted selector forms.
             sink: Sink node selector (required if unbound).
-            mode: PAIRWISE (default) or COMBINE (ignored if bound).
-            max_k: Maximum paths per pair.
-            edge_select: SPF/KSP edge selection strategy. Note: it governs
-                only the pruning SPF pass; Core's KSP enumeration uses a
-                fixed internal selection (all parallel min-cost edges,
-                capacity-blind, deterministic tie-break), so SINGLE_MIN_COST
-                may yield one path per parallel edge where `shortest_paths`
-                returns one.
+            mode: PAIRWISE (default) or COMBINE; unbound contexts only.
+            max_k: Maximum paths per pair. Core's KSP enumeration keeps all
+                parallel min-cost edges (capacity-blind, deterministic
+                tie-break).
             max_path_cost: Absolute cost threshold.
             max_path_cost_factor: Relative threshold versus best path.
             split_parallel_edges: Expand parallel edges into distinct paths.
@@ -886,17 +889,16 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
         resolved_source, resolved_sink, resolved_mode = self._resolve_source_sink(
-            source, sink, mode
+            source, sink, mode, Mode.PAIRWISE
         )
         return self._k_shortest_paths_impl(
             source=resolved_source,
             sink=resolved_sink,
             mode=resolved_mode,
             max_k=max_k,
-            edge_select=edge_select,
             max_path_cost=max_path_cost,
             max_path_cost_factor=max_path_cost_factor,
             split_parallel_edges=split_parallel_edges,
@@ -912,14 +914,16 @@ class AnalysisContext:
         self,
         source: Optional[Union[str, Dict[str, Any]]],
         sink: Optional[Union[str, Dict[str, Any]]],
-        mode: Mode,
+        mode: Optional[Mode],
+        default_mode: Mode,
     ) -> Tuple[Union[str, Dict[str, Any]], Union[str, Dict[str, Any]], Mode]:
         """Resolve source/sink from arguments or bound context.
 
         Args:
             source: Source selector from method call (or None).
             sink: Sink selector from method call (or None).
-            mode: Mode from method call.
+            mode: Mode from method call (or None).
+            default_mode: Mode of an unbound call that passes none.
 
         Returns:
             Tuple of (resolved_source, resolved_sink, resolved_mode).
@@ -927,13 +931,12 @@ class AnalysisContext:
 
         Raises:
             ValueError: If unbound and source/sink not provided.
-            ValueError: If bound and source/sink are provided.
+            ValueError: If bound and source/sink/mode are provided.
         """
-        if self._dispatch_bound(source, sink):
-            # Use bound values (can be str or dict)
+        if self._dispatch_bound(source, sink, mode):
             return self._source, self._sink, self._mode  # type: ignore[return-value]
         assert source is not None and sink is not None
-        return source, sink, mode
+        return source, sink, default_mode if mode is None else mode
 
     def build_node_mask(self, excluded_nodes: Optional[Set[str]] = None) -> np.ndarray:
         """Build a node inclusion mask for Core algorithms.
@@ -982,8 +985,8 @@ class AnalysisContext:
 
         Returns:
             Boolean numpy array of shape (num_edges,) where True means
-            included. There is one entry per Core edge - forward and reverse
-            direction of each link, plus any augmentation edges - not one
+            included. There is one entry per Core edge (forward and reverse
+            direction of each link, plus any augmentation edges), not one
             entry per link.
         """
         num_edges = self._multidigraph.num_edges()
@@ -1042,7 +1045,7 @@ class AnalysisContext:
         node_mask = self.build_node_mask(excluded_nodes)
         edge_mask = self.build_edge_mask(excluded_links)
 
-        pseudo_node_pairs = self._pseudo_context.pairs if self._pseudo_context else {}
+        pseudo_node_pairs = self._bound_pseudo.pairs
         results: Dict[Tuple[str, str], float] = {}
 
         for pair_key, (pseudo_src_id, pseudo_snk_id) in pseudo_node_pairs.items():
@@ -1058,7 +1061,7 @@ class AnalysisContext:
             )
             results[pair_key] = flow_value
 
-        # Fill missing pairs (overlapping src/snk)
+        # Pairs skipped at build time (empty or overlapping groups) get 0.0
         self._fill_missing_pairs_bound(results, lambda: 0.0)
         return results
 
@@ -1118,7 +1121,7 @@ class AnalysisContext:
         edge_mask = self.build_edge_mask(excluded_links)
         ext_edge_ids = self._multidigraph.ext_edge_ids_view()
 
-        pseudo_node_pairs = self._pseudo_context.pairs if self._pseudo_context else {}
+        pseudo_node_pairs = self._bound_pseudo.pairs
         results: Dict[Tuple[str, str], MaxFlowResult] = {}
 
         for pair_key, (pseudo_src_id, pseudo_snk_id) in pseudo_node_pairs.items():
@@ -1149,7 +1152,6 @@ class AnalysisContext:
                 flow_value, core_summary, min_cut_edges
             )
 
-        # Fill missing pairs
         self._fill_missing_pairs_bound(results, lambda: _construct_max_flow_result(0.0))
         return results
 
@@ -1203,7 +1205,7 @@ class AnalysisContext:
         edge_mask = self.build_edge_mask(excluded_links)
         ext_edge_ids = self._multidigraph.ext_edge_ids_view()
 
-        pseudo_node_pairs = self._pseudo_context.pairs if self._pseudo_context else {}
+        pseudo_node_pairs = self._bound_pseudo.pairs
         results: Dict[Tuple[str, str], Dict[str, float]] = {}
 
         for pair_key, (pseudo_src_id, pseudo_snk_id) in pseudo_node_pairs.items():
@@ -1266,7 +1268,7 @@ class AnalysisContext:
         edge_mask = self.build_edge_mask(excluded_links)
         ext_edge_ids = self._multidigraph.ext_edge_ids_view()
 
-        pseudo_node_pairs = self._pseudo_context.pairs if self._pseudo_context else {}
+        pseudo_node_pairs = self._bound_pseudo.pairs
         results: Dict[Tuple[str, str], Tuple[float, Dict[str, float]]] = {}
 
         for pair_key, (pseudo_src_id, pseudo_snk_id) in pseudo_node_pairs.items():
@@ -1324,16 +1326,14 @@ class AnalysisContext:
     def _fill_missing_pairs_bound(
         self, results: Dict, default_factory: Callable[[], Any]
     ) -> None:
-        """Fill results for pairs not in the graph (e.g., overlapping).
+        """Fill results for pairs skipped at build time (empty or overlapping groups).
 
         Uses pair keys precomputed at bind time; no node selection is
         re-run (the context is immutable after creation). The factory is
         called once per missing pair so mutable defaults (dicts, result
         objects) are never aliased across pairs.
         """
-        if not self._pseudo_context:
-            return
-        for pair_key in self._pseudo_context.expected_pairs:
+        for pair_key in self._bound_pseudo.expected_pairs:
             if pair_key not in results:
                 results[pair_key] = default_factory()
 
@@ -1343,16 +1343,18 @@ class AnalysisContext:
         source: Union[str, Dict[str, Any]],
         sink: Union[str, Dict[str, Any]],
         mode: Mode,
-        edge_select: EdgeSelect,
         excluded_nodes: Optional[Set[str]],
         excluded_links: Optional[Set[str]],
     ) -> Dict[Tuple[str, str], float]:
-        """Implementation of shortest_path_cost."""
+        """Implementation of shortest_path_cost.
+
+        Only SPF distances are read, which do not depend on edge selection.
+        """
         src_groups, snk_groups = _resolve_selector_groups(self._network, source, sink)
 
         node_mask = self.build_node_mask(excluded_nodes)
         edge_mask = self.build_edge_mask(excluded_links)
-        core_edge_select = self._map_edge_select(edge_select)
+        core_edge_select = self._map_edge_select(EdgeSelect.ALL_MIN_COST)
 
         def _best_cost_for_groups(src_names: List[str], snk_names: List[str]) -> float:
             if not src_names or not snk_names:
@@ -1504,7 +1506,6 @@ class AnalysisContext:
         sink: Union[str, Dict[str, Any]],
         mode: Mode,
         max_k: int,
-        edge_select: EdgeSelect,
         max_path_cost: float,
         max_path_cost_factor: Optional[float],
         split_parallel_edges: bool,
@@ -1516,7 +1517,7 @@ class AnalysisContext:
 
         node_mask = self.build_node_mask(excluded_nodes)
         edge_mask = self.build_edge_mask(excluded_links)
-        core_edge_select = self._map_edge_select(edge_select)
+        core_edge_select = self._map_edge_select(EdgeSelect.ALL_MIN_COST)
 
         def _ksp_for_groups(src_names: List[str], snk_names: List[str]) -> List[Path]:
             if not src_names or not snk_names:
@@ -1655,8 +1656,7 @@ def _path_sort_key(path: Path) -> Tuple[Any, ...]:
     directions). Any two distinct paths differ in the key, so sorted
     output and equal-cost truncation (e.g., k_shortest_paths max_k) are
     independent of hash order. Paths that differ only in which parallel
-    link they traverse still order by link id, which embeds a build-time
-    UUID; node-sequence-level selection is stable across runs.
+    link they traverse order by link id (`src|dst|seq`).
     """
     return (
         path.cost,
@@ -1778,7 +1778,7 @@ def _build_pseudo_node_augmentations(
 
 @dataclass
 class _GraphBuildResult:
-    """Intermediate result from _build_graph_core."""
+    """Core graph and lookup tables built by _build_graph_core."""
 
     _handle: netgraph_core.Graph
     _multidigraph: netgraph_core.StrictMultiDiGraph
@@ -1793,13 +1793,18 @@ class _GraphBuildResult:
 def _build_graph_core(
     network: "Network",
     *,
-    add_reverse: bool = True,
     augmentations: Optional[List[AugmentationEdge]] = None,
 ) -> _GraphBuildResult:
-    """Build Core graph infrastructure from Network."""
+    """Build the Core graph, ID mappers and disabled-element lookups.
+
+    Raises:
+        ValueError: If a link capacity is at or above LARGE_CAPACITY, or a
+            link or augmentation cost is negative or non-integer, or the
+            total of all edge costs reaches 2**62.
+    """
     real_node_names = set(network.nodes.keys())
 
-    # Infer pseudo nodes from augmentations
+    # Augmentation endpoints that are not network nodes become pseudo nodes
     pseudo_node_names: Set[str] = set()
     if augmentations:
         for aug_edge in augmentations:
@@ -1826,22 +1831,14 @@ def _build_graph_core(
         src_id = node_mapper.to_id(link.source)
         dst_id = node_mapper.to_id(link.target)
 
-        # Forward edge
-        src_list.append(src_id)
-        dst_list.append(dst_id)
-        capacity_list.append(link.capacity)
-        cost_list.append(link.cost)
+        # Forward and reverse edge: links are bidirectional
+        src_list.extend((src_id, dst_id))
+        dst_list.extend((dst_id, src_id))
+        capacity_list.extend((link.capacity, link.capacity))
+        cost_list.extend((link.cost, link.cost))
         ext_edge_id_list.append(edge_mapper.encode_ext_id(link_id, "fwd"))
+        ext_edge_id_list.append(edge_mapper.encode_ext_id(link_id, "rev"))
 
-        # Reverse edge
-        if add_reverse:
-            src_list.append(dst_id)
-            dst_list.append(src_id)
-            capacity_list.append(link.capacity)
-            cost_list.append(link.cost)
-            ext_edge_id_list.append(edge_mapper.encode_ext_id(link_id, "rev"))
-
-    # Add augmentation edges
     if augmentations:
         for aug_edge in augmentations:
             src_id = node_mapper.to_id(aug_edge.source)
@@ -1886,7 +1883,7 @@ def _build_graph_core(
         )
     if not np.array_equal(cost_f, np.trunc(cost_f)):
         bad_indices = np.nonzero(cost_f != np.trunc(cost_f))[0]
-        edges_per_link = 2 if add_reverse else 1
+        edges_per_link = 2  # forward and reverse edge per link
         num_link_edges = len(link_ids) * edges_per_link
         offenders: List[str] = []
         for idx in bad_indices:
@@ -1919,18 +1916,15 @@ def _build_graph_core(
     algorithms = netgraph_core.Algorithms(backend)
     handle = algorithms.build_graph(multidigraph)
 
-    # Pre-compute disabled node IDs
     disabled_node_ids: Set[int] = set()
     for node_name, node in network.nodes.items():
         if node.disabled and node_name in node_mapper.node_id_of:
             disabled_node_ids.add(node_mapper.node_id_of[node_name])
 
-    # Pre-compute disabled link IDs
     disabled_link_ids: Set[str] = {
         link_id for link_id, link in network.links.items() if link.disabled
     }
 
-    # Pre-compute link_id -> edge indices mapping
     ext_edge_ids = multidigraph.ext_edge_ids_view()
     link_id_to_edge_indices: Dict[str, List[int]] = {}
     for edge_idx in range(len(ext_edge_ids)):
@@ -1962,7 +1956,7 @@ def _construct_max_flow_result(
     core_summary=None,
     min_cut: Optional[Tuple[EdgeRef, ...]] = None,
 ) -> MaxFlowResult:
-    """Construct MaxFlowResult from Core results."""
+    """Build a MaxFlowResult; without core_summary the cost distribution is empty."""
     cost_dist: Dict[float, float] = {}
     if core_summary is not None and len(core_summary.costs) > 0:
         cost_dist = {
@@ -1986,7 +1980,7 @@ def _extract_paths_from_pred_dag(
     multidigraph: netgraph_core.StrictMultiDiGraph,
     split_parallel_edges: bool,
 ) -> List[Path]:
-    """Extract Path objects from a PredDAG."""
+    """Resolve src->snk paths in a PredDAG to Path objects, dropping pseudo edges."""
     src_id = node_mapper.to_id(src_name)
     snk_id = node_mapper.to_id(snk_name)
 
@@ -2018,7 +2012,7 @@ def _extract_paths_from_pred_dag(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Module-level utilities for advanced/workflow use
+# Public entry point
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -2027,7 +2021,7 @@ def analyze(
     *,
     source: Optional[Union[str, Dict[str, Any]]] = None,
     sink: Optional[Union[str, Dict[str, Any]]] = None,
-    mode: Mode = Mode.COMBINE,
+    mode: Optional[Mode] = None,
     augmentations: Optional[List[AugmentationEdge]] = None,
 ) -> AnalysisContext:
     """Create an analysis context for the network.
@@ -2040,15 +2034,17 @@ def analyze(
                 If provided with sink, creates a bound context whose pseudo
                 nodes are pre-built once and reused by every flow call.
         sink: Optional sink node selector (string path or selector dict).
-        mode: Group mode (COMBINE or PAIRWISE). Only used if bound.
-        augmentations: Optional custom augmentation edges.
+        mode: Group mode of a bound context: COMBINE (default) or PAIRWISE.
+            Unbound calls choose the mode per method call.
+        augmentations: Extra edges added to the graph as-is (see
+            AugmentationEdge).
 
     Returns:
         AnalysisContext ready for analysis calls.
 
     Raises:
-        ValueError: If only one of source/sink is provided, or if a bound
-            selector matches no nodes.
+        ValueError: If only one of source/sink is provided, if mode is given
+            without them, or if a bound selector matches no nodes.
         ValueError: If any link capacity is at or above LARGE_CAPACITY (1e15,
             the internal pseudo-edge capacity), since such a link would be
             silently clamped by the pseudo attachment edges in combine-mode

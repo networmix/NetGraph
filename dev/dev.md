@@ -3,12 +3,17 @@
 ## Essential Commands
 
 ```bash
-make dev         # Complete dev environment setup
-make check         # Run all quality checks + tests
+make dev           # Create venv, install package with dev deps and hooks
+make check         # Pre-commit with auto-fix, schema check, tests, then lint
+make check-ci      # Non-mutating lint, schema check, and tests (CI)
 make test          # Run tests with coverage
-make docs          # Generate API documentation
+make docs          # Generate API documentation and diagram SVGs
 make docs-serve    # Serve docs locally
 ```
+
+`make docs` renders `docs/assets/diagrams/*.dot` with Graphviz; install it
+with `brew install graphviz` (macOS) or `apt-get install graphviz` (Debian/Ubuntu).
+Without it the diagram step is skipped and the committed SVGs stay as they are.
 
 ## Publishing
 
@@ -24,14 +29,14 @@ make docs-serve    # Serve docs locally
 pyproject.toml              # Package config, dependencies, tool settings
 Makefile                    # Development commands
 .pre-commit-config.yaml     # Code quality hooks
-dev/run-checks.sh           # Manual code quality checks
+dev/run-checks.sh           # Script behind make check
 ```
 
-## Git Workflows
+## GitHub Workflows
 
 ```text
 .github/workflows/
 ├── python-test.yml         # CI: tests, linting, type checking
-├── docs.yml                # Auto-deploy documentation
-└── publish.yml             # Auto-publish to PyPI on releases
+├── docs.yml                # Build and deploy docs on push to main
+└── publish.yml             # Publish to PyPI on release; Test PyPI on manual run
 ```

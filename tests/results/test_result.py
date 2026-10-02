@@ -44,7 +44,7 @@ def test_get_with_default_missing_step():
 
 def test_get_all_single_key_multiple_steps():
     """
-    Ensure both steps present under steps map.
+    Each step's data is exported under its own key in the steps map.
     """
     results = Results()
     results.put_step_metadata("Step1", "Dummy", 0)
@@ -98,7 +98,6 @@ def test_empty_results():
 
 def test_results_to_dict_includes_workflow_and_step_data():
     results = Results()
-    # Simulate metadata
     results.put_step_metadata("stepA", "DummyStep", 0)
     results.enter_step("stepA")
     results.put("metadata", {})

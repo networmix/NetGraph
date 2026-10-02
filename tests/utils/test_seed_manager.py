@@ -1,10 +1,10 @@
-"""Tests for seed management functionality."""
+"""Tests for SeedManager."""
 
 from ngraph.utils.seed_manager import SeedManager
 
 
 class TestSeedManager:
-    """Test SeedManager functionality."""
+    """Tests for SeedManager seed derivation."""
 
     def test_init_with_master_seed(self):
         """Test SeedManager initialization with master seed."""
@@ -53,7 +53,7 @@ class TestSeedManager:
         assert seed1 != seed2
 
     def test_derive_seed_various_component_types(self):
-        """Test seed derivation with various component types."""
+        """Test that str, int and mixed components each derive distinct seeds."""
         seed_mgr = SeedManager(42)
 
         # Test with strings
@@ -82,10 +82,9 @@ class TestSeedManager:
         assert seed1 == seed2
 
     def test_seed_distribution(self):
-        """Test that derived seeds have good distribution."""
+        """Test that 1000 derived seeds are nearly all unique."""
         seed_mgr = SeedManager(42)
 
-        # Generate many seeds
         seeds = []
         for i in range(1000):
             seed = seed_mgr.derive_seed("test", i)

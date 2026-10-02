@@ -1,6 +1,6 @@
-"""Schema definitions for unified node selection.
+"""Selector schema dataclasses.
 
-Dataclasses shared by network rules, demands, and workflow steps.
+Shared by network rules, demands, failure policies, and workflow steps.
 """
 
 from __future__ import annotations
@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, List, Literal, Optional, get_args
 
-# Type alias for entity scope used in condition-based selection
 EntityScope = Literal["node", "link", "risk_group"]
 """Type of network entity for condition-based selection."""
 
@@ -60,7 +59,7 @@ class Condition:
 
 @dataclass
 class MatchSpec:
-    """Specification for filtering nodes by attribute conditions.
+    """Attribute conditions combined with "and" or "or" logic.
 
     Attributes:
         conditions: List of conditions to evaluate.
@@ -73,7 +72,7 @@ class MatchSpec:
 
 @dataclass
 class NodeSelector:
-    """Unified node selection specification.
+    """Node selection by name regex, attribute conditions, and grouping.
 
     Evaluation order:
     1. Select nodes matching `path` regex (default ".*" if omitted)

@@ -1,7 +1,7 @@
 """Tests for AnalysisContext internal infrastructure.
 
-Tests verify that disabled nodes/links are properly tracked and that
-the context provides correct access to Core graph components.
+Checks that disabled nodes and links are tracked and that the context
+exposes the Core graph components.
 """
 
 from ngraph import Link, Network, Node
@@ -34,7 +34,6 @@ def test_disabled_node_tracked():
 
     ctx = AnalysisContext.from_network(net)
 
-    # Disabled node B should be tracked
     assert len(ctx.disabled_node_ids) == 1
 
 
@@ -47,5 +46,4 @@ def test_disabled_link_tracked():
 
     ctx = AnalysisContext.from_network(net)
 
-    # Disabled link should be tracked
     assert len(ctx.disabled_link_ids) == 1

@@ -190,7 +190,7 @@ workflow:
 def extra_param_yaml() -> str:
     """
     Returns a YAML string that attempts to pass an unsupported 'extra_param'
-    to a known workflow step type, which should raise a TypeError.
+    to a known workflow step type, which should raise a ValueError.
     """
     return """
 network:
@@ -219,7 +219,7 @@ workflow:
 def minimal_scenario_yaml() -> str:
     """
     Returns a YAML string with only a single workflow step, no network,
-    no failure_policy, and no traffic_matrix_set. Should be valid but minimal.
+    no failures, and no demands. Should be valid but minimal.
     """
     return """
 workflow:
@@ -233,7 +233,7 @@ workflow:
 def empty_yaml() -> str:
     """
     Returns an empty YAML string; from_yaml should still construct
-    a Scenario object but with none/empty fields if possible.
+    a Scenario object with empty fields.
     """
     return ""
 
@@ -241,8 +241,8 @@ def empty_yaml() -> str:
 def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     """
     Tests that a Scenario can be constructed from a valid YAML string.
-    Ensures that:
-      - Network has correct nodes/links
+    Checks that:
+      - Network has the expected nodes/links
       - FailurePolicy is set with multiple rules
       - TrafficDemands are parsed
       - Workflow steps are instantiated
@@ -297,7 +297,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert r1.scope == "node" and r1.mode == "choice" and r1.count == 1
     assert r2.scope == "link" and r2.mode == "all"
 
-    # Check traffic matrix set
+    # Check demand set
     assert len(scenario.demand_set.sets) == 1
     assert "default" in scenario.demand_set.sets
     default_demands = scenario.demand_set.sets["default"]
@@ -322,7 +322,6 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert step2.name == "Step2"
     assert cast(DoSmthElse, step2).factor == 2.0
 
-    # Check results
     assert isinstance(scenario.results, Results)
 
 
@@ -365,10 +364,10 @@ def test_scenario_from_yaml_unrecognized_step_type(
 
 def test_scenario_from_yaml_unsupported_param(extra_param_yaml: str) -> None:
     """
-    Tests that Scenario.from_yaml raises TypeError if a workflow step
+    Tests that Scenario.from_yaml names the step and key when a workflow step
     has an unsupported parameter in the YAML.
     """
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError, match="workflow step .*: extra_param"):
         Scenario.from_yaml(extra_param_yaml)
 
 
@@ -382,7 +381,7 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
 
-    # If no failure_policy_set block, scenario.failure_policy_set has no policies
+    # Without a failures block, failure_policy_set has no policies
     assert len(scenario.failure_policy_set.get_all_policies()) == 0
 
     assert len(scenario.demand_set.sets) == 0
@@ -457,18 +456,12 @@ risk_groups:
 """
     with pytest.raises(ValueError) as excinfo:
         Scenario.from_yaml(scenario_yaml)
-    # The loader now validates for string, dict with 'name', or dict with 'generate'
+    # Entries must be a string, a dict with 'name', or a dict with 'generate'
     assert "RiskGroup entry must be" in str(excinfo.value)
 
 
-## Removed two tests that depended on docstring-extracted YAML and a private
-## builder API. These were brittle and tested documentation rather than
-## functionality. Coverage for failure policy parsing and behavior remains in
-## other tests within this module and in schema validation tests.
-
-
 def test_yaml_anchors_and_aliases():
-    """Test that YAML anchors and aliases work correctly with the vars section."""
+    """Test that YAML anchors in vars resolve into node attrs and link capacity."""
     scenario_yaml = """
 vars:
   default_capacity: &default_cap 100
@@ -497,10 +490,8 @@ demands:
   default: []
 """
 
-    # Should load without errors
     scenario = Scenario.from_yaml(scenario_yaml)
 
-    # Verify the anchors were properly expanded
     n1_attrs = scenario.network.nodes["N1"].attrs
     n2_attrs = scenario.network.nodes["N2"].attrs
 
@@ -520,15 +511,11 @@ demands:
     assert link.capacity == 100
 
 
-## Removed redundant anchor test without assertions on attribute merging. The
-## remaining anchor test validates both anchors and attribute overrides.
-
-
 def test_scenario_snapshot_serialization_format():
     """Scenario snapshot must serialize policies in YAML format and presets by name.
 
     Regression tests: the snapshot delegates failure-policy serialization to
-    FailurePolicy.to_dict (conditions nested under "match", no expand_children)
+    FailurePolicy.to_dict (conditions nested under "match")
     and stores flow_policy as the preset name string instead of a raw IntEnum.
     """
     import json
@@ -569,7 +556,6 @@ demands:
 
     # Failure policies use the parser-compatible to_dict shape
     policy_dict = snapshot["failures"]["default"]
-    assert "expand_children" not in policy_dict
     assert "seed" not in policy_dict
     rule_dict = policy_dict["modes"][0]["rules"][0]
     assert rule_dict["match"]["logic"] == "and"
@@ -581,3 +567,31 @@ demands:
 
     # The whole export must be JSON-serializable
     json.dumps(exported)
+
+
+def test_scenario_seed_rejects_float() -> None:
+    """The schema admits 5.0 as an integer; the loader must not."""
+    yaml_str = """
+network:
+  nodes:
+    A: {}
+seed: 5.0
+"""
+    with pytest.raises(ValueError, match="'seed' must be an integer"):
+        Scenario.from_yaml(yaml_str)
+
+
+def test_duplicate_risk_group_names_raise() -> None:
+    """A repeated top-level risk group would silently replace the first one."""
+    yaml_str = """
+network:
+  nodes:
+    A: {}
+risk_groups:
+  - name: RG1
+    attrs: {kind: a}
+  - name: RG1
+    attrs: {kind: b}
+"""
+    with pytest.raises(ValueError, match="Duplicate risk group name 'RG1'"):
+        Scenario.from_yaml(yaml_str)

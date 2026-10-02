@@ -1,6 +1,6 @@
 # Bundled Scenarios
 
-NetGraph ships with ready-to-run scenarios that demonstrate the DSL, workflow steps, and results export. Use these to validate your environment and as starting points for your own models.
+Three scenarios under `scenarios/` exercise the DSL, the workflow steps and the results export. They double as a check of a fresh installation and as starting points for your own models.
 
 ## How to run
 
@@ -19,7 +19,7 @@ You can filter output by workflow step names with `--keys` (see each scenario se
 ## `scenarios/square_mesh.yaml`
 
 - **Purpose**: Toy 4-node full mesh to exercise MSD search, TM placement, and pairwise MaxFlow.
-- **Highlights**:
+- **Contents**:
 
   - Failure policy: single link choice (`failures.single_link_failure`)
   - Demand set: pairwise demands across all nodes (`baseline_traffic_matrix`)
@@ -38,7 +38,7 @@ ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
 ## `scenarios/backbone_clos.yml`
 
 - **Purpose**: Small Clos/metro fabric with components, SRLG-like risk groups, and multi-step workflow.
-- **Highlights**:
+- **Contents**:
 
   - Uses `blueprints`, attribute-based link selectors, and hardware component attrs
   - Failure policy: weighted multi-mode (`failures.weighted_modes`)
@@ -58,9 +58,9 @@ ngraph run scenarios/backbone_clos.yml --keys network_statistics tm_placement --
 ## `scenarios/nsfnet.yaml`
 
 - **Purpose**: Historic NSFNET T3 (1992) backbone with parallel circuits and SRLG-style risk groups.
-- **Highlights**:
+- **Contents**:
 
-  - Explicit nodes/links with capacities and costs; rich `risk_groups`
+  - Explicit nodes and links with capacities and costs; one risk group per circuit pair
   - Failure policies: single-link and availability-based random failures
   - Workflow steps: `node_to_node_capacity_matrix_1`, `node_to_node_capacity_matrix_2`
 
@@ -111,4 +111,4 @@ The `square_mesh` placement output looks like this (1000 iterations, six single-
 
 ## Notes on results
 
-All runs emit a consistent JSON shape with `workflow`, `steps`, and `scenario` sections. Steps like `MaxFlow` and `TrafficMatrixPlacement` store a list under `data.flow_results` with one entry per unique failure pattern - patterns are deduplicated across iterations, so the list holds at most `iterations` entries and usually far fewer - alongside a single unfailed entry under `data.baseline`; with no `failure_policy`, `flow_results` is empty. Each entry carries a `summary` and per-flow `flows` entries whose `cost_distribution` is populated when `include_flow_details` is set (and `{}` otherwise), and with `include_min_cut` the min-cut edges appear under a flow entry's `data` (`edges` plus `edges_kind: "min_cut"`). See Reference -> Workflow for the exact schema.
+Every run writes the same JSON shape: `workflow`, `steps` and `scenario` sections. `MaxFlow` and `TrafficMatrixPlacement` store the no-failure run under `data.baseline` and one entry per distinct failure pattern under `data.flow_results`. Patterns are deduplicated across iterations, so the list is usually much shorter than `iterations`; without a `failure_policy` it is empty. Each entry carries a `summary` and per-flow `flows`. A flow's `cost_distribution` is filled when `include_flow_details` is set and is `{}` otherwise; with `include_min_cut`, the min-cut edges appear under the flow's `data` as `edges` with `edges_kind: "min_cut"`. The [Workflow Reference](../reference/workflow.md) has the full schema.

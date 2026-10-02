@@ -1,8 +1,8 @@
 """Profiling for NetGraph workflow execution.
 
-Provides CPU and wall-clock timing per workflow step using ``cProfile`` and
-optionally peak memory via ``tracemalloc``. Aggregates results into structured
-summaries and identifies time-dominant steps (bottlenecks).
+Times each workflow step (CPU and wall clock) with ``cProfile`` and can record
+peak memory with ``tracemalloc``. Steps that take more than 10% of total wall
+time are reported as bottlenecks.
 """
 
 from __future__ import annotations
@@ -22,18 +22,33 @@ from ngraph.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _top_functions(stats: pstats.Stats, limit: int) -> List[Tuple[str, float, int]]:
+    """Return (function, total_time, call_count) for the `limit` costliest functions.
+
+    Reads the `stats` mapping of pstats (values are (cc, nc, tt, ct, callers)),
+    which typeshed does not declare, hence the getattr.
+    """
+    stats_data = getattr(stats, "stats", {})
+    ranked = sorted(stats_data.items(), key=lambda item: item[1][2], reverse=True)
+    return [
+        (f"{func[0]}:{func[1]}({func[2]})", stat[2], stat[0])
+        for func, stat in ranked[:limit]
+    ]
+
+
 @dataclass
 class StepProfile:
     """Performance profile data for a single workflow step.
 
     Attributes:
         step_name: Name of the workflow step.
-        step_type: Type/class name of the workflow step.
+        step_type: Class name of the workflow step.
         wall_time: Total wall-clock time in seconds.
-        cpu_time: CPU time spent in step execution.
+        cpu_time: CPU time in seconds (sum of cProfile internal times).
         function_calls: Number of function calls during execution.
-        memory_peak: Peak memory usage during step in bytes (if available).
-        cprofile_stats: Detailed cProfile statistics object.
+        memory_peak: Peak traced memory in bytes; None unless memory
+            tracking ran for this step.
+        cprofile_stats: cProfile statistics, including merged worker profiles.
         worker_profiles_merged: Number of worker profiles merged into this step.
     """
 
@@ -57,7 +72,7 @@ class ProfileResults:
         total_cpu_time: Total CPU time across all steps.
         total_function_calls: Total function calls across all steps.
         bottlenecks: List of performance bottlenecks (>10% execution time).
-        analysis_summary: Performance metrics and statistics.
+        analysis_summary: Aggregate metrics computed by ``analyze_performance``.
     """
 
     step_profiles: List[StepProfile] = field(default_factory=list)
@@ -87,12 +102,15 @@ class PerformanceProfiler:
         self._track_memory: bool = bool(track_memory)
 
     def start_scenario(self) -> None:
-        """Start profiling for the entire scenario execution."""
+        """Record the scenario start time."""
         self._scenario_start_time = time.perf_counter()
         logger.debug("Started scenario-level profiling")
 
     def end_scenario(self) -> None:
-        """End profiling for the entire scenario execution."""
+        """Record total wall time and sum CPU time and calls across steps.
+
+        Logs a warning and returns early if ``start_scenario`` was not called.
+        """
         if self._scenario_start_time is None:
             logger.warning(
                 "Scenario profiling ended without start - timing may be inaccurate"
@@ -104,7 +122,6 @@ class PerformanceProfiler:
             self._scenario_end_time - self._scenario_start_time
         )
 
-        # Calculate aggregate statistics
         self.results.total_cpu_time = sum(
             p.cpu_time for p in self.results.step_profiles
         )
@@ -120,11 +137,13 @@ class PerformanceProfiler:
     def profile_step(
         self, step_name: str, step_type: str
     ) -> Generator[None, None, None]:
-        """Context manager for profiling individual workflow steps.
+        """Profile the enclosed block as one workflow step.
+
+        A StepProfile is appended when the block exits, including on error.
 
         Args:
             step_name: Name of the workflow step being profiled.
-            step_type: Type/class name of the workflow step.
+            step_type: Class name of the workflow step.
 
         Yields:
             None
@@ -135,15 +154,17 @@ class PerformanceProfiler:
         profiler = cProfile.Profile()
         profiler.enable()
 
-        # Per-step tracemalloc, when requested, to capture peak memory
-        mem_tracing_started = False
-        if self._track_memory:
-            try:
-                tracemalloc.start()
-                mem_tracing_started = True
-            except RuntimeError:
-                # Another tracemalloc session might be active; skip memory tracking
-                mem_tracing_started = False
+        # Per-step tracemalloc, when requested, to capture peak memory. Skipped
+        # while another session is tracing, since stopping ours would end it.
+        track_memory = self._track_memory and not tracemalloc.is_tracing()
+        if track_memory:
+            tracemalloc.start()
+        elif self._track_memory:
+            logger.warning(
+                "tracemalloc is already tracing; peak memory for step %s is not "
+                "recorded",
+                step_name,
+            )
 
         try:
             yield
@@ -156,31 +177,17 @@ class PerformanceProfiler:
             stats_stream = io.StringIO()
             stats = pstats.Stats(profiler, stream=stats_stream)
 
-            # Extract CPU time and function call counts
-            # Access stats data through the stats attribute (pstats internal structure)
+            # pstats keeps per-function tuples (cc, nc, tt, ct, callers) in an
+            # undeclared `stats` attribute: primitive calls, total calls,
+            # internal time, cumulative time. CPU time sums tt; calls sum cc.
             stats_data = getattr(stats, "stats", {})
-            # stats_data values are tuples: (cc, nc, tt, ct, callers)
-            # cc=call count, nc=number of calls, tt=total time, ct=cumulative time
-            cpu_time = sum(
-                stat_tuple[2] for stat_tuple in stats_data.values()
-            )  # tt = total time
-            function_calls = sum(
-                stat_tuple[0] for stat_tuple in stats_data.values()
-            )  # cc = call count
+            cpu_time = sum(stat_tuple[2] for stat_tuple in stats_data.values())
+            function_calls = sum(stat_tuple[0] for stat_tuple in stats_data.values())
 
-            memory_peak_bytes: Optional[int] = None
-            if mem_tracing_started:
-                try:
-                    current, peak = tracemalloc.get_traced_memory()
-                    memory_peak_bytes = int(peak)
-                except Exception as exc:
-                    logger.debug("Failed to get traced memory: %s", exc)
-                    memory_peak_bytes = None
-                finally:
-                    try:
-                        tracemalloc.stop()
-                    except Exception as exc:
-                        logger.debug("Failed to stop tracemalloc: %s", exc)
+            memory_peak: Optional[float] = None
+            if track_memory:
+                memory_peak = float(tracemalloc.get_traced_memory()[1])
+                tracemalloc.stop()
 
             step_profile = StepProfile(
                 step_name=step_name,
@@ -188,9 +195,7 @@ class PerformanceProfiler:
                 wall_time=wall_time,
                 cpu_time=cpu_time,
                 function_calls=function_calls,
-                memory_peak=float(memory_peak_bytes)
-                if memory_peak_bytes is not None
-                else None,
+                memory_peak=memory_peak,
                 cprofile_stats=stats,
             )
 
@@ -203,6 +208,10 @@ class PerformanceProfiler:
 
     def merge_child_profiles(self, profile_dir: Path, step_name: str) -> None:
         """Merge child worker profiles into the parent step profile.
+
+        Adds every ``*_thread_*.pstats`` file in ``profile_dir`` to the step's
+        stats, recounts calls, and deletes the merged files. Merge errors are
+        logged as warnings, not raised.
 
         Args:
             profile_dir: Directory containing worker profile files.
@@ -234,7 +243,6 @@ class PerformanceProfiler:
                 logger.debug(f"Merged worker profile: {worker_file.name}")
                 merged_count += 1
 
-            # Update function call count after merge
             stats_data = getattr(step_profile.cprofile_stats, "stats", {})
             step_profile.function_calls = sum(
                 stat_tuple[0] for stat_tuple in stats_data.values()
@@ -245,7 +253,6 @@ class PerformanceProfiler:
                 f"Merged {len(worker_files)} worker profiles into step '{step_name}'"
             )
 
-            # Clean up worker files after successful merge
             for worker_file in worker_files:
                 try:
                     worker_file.unlink()
@@ -258,9 +265,9 @@ class PerformanceProfiler:
             logger.warning(f"Failed to merge worker profiles: {type(e).__name__}: {e}")
 
     def analyze_performance(self) -> None:
-        """Analyze profiling results and identify bottlenecks.
+        """Flag steps above 10% of total wall time and fill ``analysis_summary``.
 
-        Calculates timing percentages and identifies steps consuming >10% of execution time.
+        Call after ``end_scenario``, which sets the total wall time.
         """
         if not self.results.step_profiles:
             logger.warning("No step profiles available for analysis")
@@ -280,7 +287,6 @@ class PerformanceProfiler:
                 percentage = (step.wall_time / total_time) * 100
                 step_percentages.append((step, percentage))
 
-        # Identify bottlenecks (steps taking >10% of total time)
         bottlenecks = []
         for step, percentage in step_percentages:
             if percentage > 10.0:
@@ -323,14 +329,15 @@ class PerformanceProfiler:
     def get_top_functions(
         self, step_name: str, limit: int = 10
     ) -> List[Tuple[str, float, int]]:
-        """Get the top CPU-consuming functions for a specific step.
+        """Return the step's functions with the highest internal time.
 
         Args:
             step_name: Name of the workflow step to analyze.
             limit: Maximum number of functions to return.
 
         Returns:
-            List of tuples containing (function_name, cpu_time, call_count).
+            List of (function_name, cpu_time, call_count) tuples; empty when
+            the step has no profile.
         """
         step_profile = next(
             (p for p in self.results.step_profiles if p.step_name == step_name), None
@@ -338,57 +345,27 @@ class PerformanceProfiler:
         if not step_profile or not step_profile.cprofile_stats:
             return []
 
-        stats = step_profile.cprofile_stats
+        return _top_functions(step_profile.cprofile_stats, limit)
 
-        # Sort by total time and extract top functions
-        # Access stats data through the stats attribute (pstats internal structure)
-        stats_data = getattr(stats, "stats", {})
-        # stats_data values are tuples: (cc, nc, tt, ct, callers)
-        sorted_stats = sorted(
-            stats_data.items(),
-            key=lambda x: x[1][2],
-            reverse=True,  # Sort by total time (tt)
-        )
-
-        top_functions = []
-        for func_info, stat_tuple in sorted_stats[:limit]:
-            func_name = f"{func_info[0]}:{func_info[1]}({func_info[2]})"
-            # stat_tuple = (cc, nc, tt, ct, callers)
-            top_functions.append(
-                (func_name, stat_tuple[2], stat_tuple[0])
-            )  # (name, total_time, call_count)
-
-        return top_functions
-
-    def save_detailed_profile(
-        self, output_path: Path, step_name: Optional[str] = None
-    ) -> None:
-        """Save detailed profiling data to a file.
+    def save_detailed_profile(self, output_path: Path, step_name: str) -> None:
+        """Save one step's cProfile data to a file.
 
         Args:
-            output_path: Path where the profile data should be saved.
-            step_name: Optional step name to save profile for specific step only.
+            output_path: Destination for the ``pstats`` dump.
+            step_name: Step whose profile to save. Logs a warning if the step
+                has no profile.
         """
-        if step_name:
-            step_profile = next(
-                (p for p in self.results.step_profiles if p.step_name == step_name),
-                None,
+        step_profile = next(
+            (p for p in self.results.step_profiles if p.step_name == step_name),
+            None,
+        )
+        if step_profile and step_profile.cprofile_stats:
+            step_profile.cprofile_stats.dump_stats(str(output_path))
+            logger.info(
+                f"Detailed profile for step '{step_name}' saved to: {output_path}"
             )
-            if step_profile and step_profile.cprofile_stats:
-                step_profile.cprofile_stats.dump_stats(str(output_path))
-                logger.info(
-                    f"Detailed profile for step '{step_name}' saved to: {output_path}"
-                )
-            else:
-                logger.warning(
-                    f"No detailed profile data available for step: {step_name}"
-                )
         else:
-            raise NotImplementedError(
-                "Combined profile saving requires a step_name argument. "
-                "To save all step profiles, iterate over step_profiles and call "
-                "save_detailed_profile for each step."
-            )
+            logger.warning(f"No detailed profile data available for step: {step_name}")
 
 
 class PerformanceReporter:
@@ -401,46 +378,37 @@ class PerformanceReporter:
         """Initialize the performance reporter.
 
         Args:
-            results: ProfileResults object containing profiling data to report.
+            results: Profiling data, after ``analyze_performance`` has run.
         """
         self.results = results
 
     def generate_report(self) -> str:
-        """Generate performance report.
+        """Render the full report.
+
+        Sections: summary, step timings, bottlenecks (when any), and top
+        functions per bottleneck step.
 
         Returns:
-            Formatted performance report string.
+            Report text, or a one-line message when no steps were profiled.
         """
         if not self.results.step_profiles:
             return "No profiling data available to report."
 
         report_lines = []
-
-        # Report header
         report_lines.extend(
             ["=" * 80, "NETGRAPH PERFORMANCE PROFILING REPORT", "=" * 80, ""]
         )
-
-        # Summary
         report_lines.extend(self._generate_summary())
-
-        # Step-by-step timing analysis
         report_lines.extend(self._generate_timing_analysis())
-
-        # Bottleneck analysis
         if self.results.bottlenecks:
             report_lines.extend(self._generate_bottleneck_analysis())
-
-        # Detailed function analysis
         report_lines.extend(self._generate_detailed_analysis())
-
-        # Report footer
         report_lines.extend(["", "=" * 80, "END OF PERFORMANCE REPORT", "=" * 80])
 
         return "\n".join(report_lines)
 
     def _generate_summary(self) -> List[str]:
-        """Generate summary section of the report."""
+        """Return section 1: totals, CPU efficiency, and call rate."""
         summary = self.results.analysis_summary
 
         lines = [
@@ -465,15 +433,13 @@ class PerformanceReporter:
         return lines
 
     def _generate_timing_analysis(self) -> List[str]:
-        """Generate step-by-step timing analysis section."""
+        """Return section 2: one table row per step, slowest first."""
         lines = ["2. WORKFLOW STEP TIMING ANALYSIS", "-" * 40, ""]
 
-        # Sort steps by execution time
         sorted_steps = sorted(
             self.results.step_profiles, key=lambda p: p.wall_time, reverse=True
         )
 
-        # Create formatted table
         headers = [
             "Step Name",
             "Type",
@@ -485,7 +451,6 @@ class PerformanceReporter:
             "Workers",
         ]
 
-        # Calculate column widths
         col_widths = [len(h) for h in headers]
 
         table_data = []
@@ -495,7 +460,6 @@ class PerformanceReporter:
                 if self.results.total_wall_time > 0
                 else 0
             )
-            # Format memory column if available
             mem_str = "-"
             if step.memory_peak is not None:
                 mem_mb = float(step.memory_peak) / (1024 * 1024)
@@ -515,11 +479,9 @@ class PerformanceReporter:
             ]
             table_data.append(row)
 
-            # Update column widths
             for i, cell in enumerate(row):
                 col_widths[i] = max(col_widths[i], len(cell))
 
-        # Format table
         separator = "  "
         header_line = separator.join(
             h.ljust(col_widths[i]) for i, h in enumerate(headers)
@@ -537,13 +499,13 @@ class PerformanceReporter:
         return lines
 
     def _generate_bottleneck_analysis(self) -> List[str]:
-        """Generate bottleneck analysis section."""
+        """Return section 3, classifying each bottleneck by CPU/wall ratio."""
         lines = ["3. PERFORMANCE BOTTLENECK ANALYSIS", "-" * 40, ""]
 
         for i, bottleneck in enumerate(self.results.bottlenecks, 1):
             efficiency = bottleneck["efficiency_ratio"]
 
-            # Classify workload type and generate specific recommendation
+            # A low CPU/wall ratio means the step spent most of its time waiting.
             if efficiency < 0.3:
                 workload_type = "I/O-bound workload"
                 recommendation = "Investigate I/O operations, external dependencies, or process coordination"
@@ -571,10 +533,9 @@ class PerformanceReporter:
         return lines
 
     def _generate_detailed_analysis(self) -> List[str]:
-        """Generate detailed function-level analysis section."""
+        """Return section 4: top five functions per bottleneck step."""
         lines = ["4. DETAILED FUNCTION ANALYSIS", "-" * 40, ""]
 
-        # Show top functions for each bottleneck step
         for bottleneck in self.results.bottlenecks:
             step_name = bottleneck["step_name"]
             lines.append(f"Top CPU-consuming functions in '{step_name}':")
@@ -586,24 +547,11 @@ class PerformanceReporter:
                     break
 
             if profiler and profiler.cprofile_stats:
-                # Access stats data through the stats attribute (pstats internal structure)
-                stats_data = getattr(profiler.cprofile_stats, "stats", {})
-
-                # Sort by total time and get top 5
-                # stats_data values are tuples: (cc, nc, tt, ct, callers)
-                sorted_funcs = sorted(
-                    stats_data.items(),
-                    key=lambda x: x[1][2],
-                    reverse=True,  # Sort by total time (tt)
-                )[:5]
-
-                for func_info, stat_tuple in sorted_funcs:
-                    func_name = f"{func_info[0]}:{func_info[1]}({func_info[2]})"
+                for func_name, total_time, calls in _top_functions(
+                    profiler.cprofile_stats, 5
+                ):
                     lines.append(f"   {func_name}")
-                    # stat_tuple = (cc, nc, tt, ct, callers)
-                    lines.append(
-                        f"      Time: {stat_tuple[2]:.4f}s, Calls: {stat_tuple[0]:,}"
-                    )
+                    lines.append(f"      Time: {total_time:.4f}s, Calls: {calls:,}")
 
                 lines.append("")
             else:

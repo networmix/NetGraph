@@ -17,6 +17,7 @@ from ngraph.dsl.blueprints import parser as _bp_parse
 from ngraph.dsl.expansion import (
     ExpansionSpec,
     expand_block,
+    expand_name_patterns,
     expand_risk_group_refs,
 )
 from ngraph.dsl.selectors import normalize_selector
@@ -27,6 +28,7 @@ from ngraph.model.selectors import (
     parse_match_spec,
     select_nodes,
 )
+from ngraph.utils.yaml_utils import check_no_extra_keys
 
 
 @dataclass
@@ -49,13 +51,13 @@ class Blueprint:
 
 @dataclass
 class DSLExpansionContext:
-    """Carries the blueprint definitions and the final Network instance
-    to be populated during DSL expansion.
+    """Blueprint definitions and the Network populated during DSL expansion.
 
     Attributes:
         blueprints: Dictionary of blueprint-name -> Blueprint.
         network: The Network into which expanded nodes/links are inserted.
-        pending_bp_links: Deferred blueprint link expansions.
+        pending_bp_links: (link definition, parent path) pairs for blueprint
+            links, expanded after node rules run.
     """
 
     blueprints: Dict[str, Blueprint]
@@ -64,7 +66,7 @@ class DSLExpansionContext:
 
 
 def expand_network_dsl(data: Dict[str, Any]) -> Network:
-    """Expands a combined blueprint + network DSL into a complete Network object.
+    """Expand a combined blueprint + network DSL into a Network.
 
     Overall flow:
       1) Parse "blueprints" into Blueprint objects.
@@ -80,10 +82,10 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
       7) Process link rules (in order if multiple rules match).
 
     Field validation rules:
-      - Only certain top-level fields are permitted in each structure.
+      - Each structure rejects unrecognized keys.
       - Link properties are flat (capacity, cost, etc. at link level).
-      - For node definitions: count, template, attrs, disabled, risk_groups,
-        or blueprint for blueprint-based nodes.
+      - Node definitions accept count, template, attrs, disabled, risk_groups,
+        nodes (nested groups), or blueprint and params (blueprint instances).
 
     Args:
         data: The YAML-parsed dictionary containing optional "blueprints" + "network".
@@ -101,7 +103,7 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
                 raise ValueError(
                     f"Blueprint definition for '{bp_name}' must be a dict."
                 )
-            _bp_parse.check_no_extra_keys(
+            check_no_extra_keys(
                 bp_data,
                 allowed={"nodes", "links"},
                 context=f"blueprint '{bp_name}'",
@@ -231,14 +233,12 @@ def _expand_node_group(
     group_def: Dict[str, Any],
     inherited_risk_groups: Optional[Set[str]] = None,
 ) -> None:
-    """Expands a single node definition into either:
-      - Another blueprint's nodes, or
-      - Nested nodes (inline hierarchy), or
-      - A direct node group (with count, etc.),
-      - Possibly replicating itself if group_name has bracket expansions.
+    """Expand one node group definition into nodes.
 
-    A 'blueprint' key expands that blueprint; a 'nodes' key recurses for nested
-    groups; otherwise nodes are created directly.
+    A 'blueprint' key instantiates that blueprint, a 'nodes' key recurses into
+    nested groups, and otherwise nodes are created directly. A group_name with
+    bracket expressions like "fa[1-2]" replicates group_def once per expanded
+    name.
 
     For blueprint usage:
       Allowed keys: {"blueprint", "params", "attrs", "disabled", "risk_groups"}.
@@ -247,24 +247,22 @@ def _expand_node_group(
 
     For nested nodes:
       Allowed keys: {"nodes", "attrs", "disabled", "risk_groups"}.
+      The parent's 'attrs', 'disabled', and 'risk_groups' are merged into
+      each nested definition.
 
     For direct node groups (no 'blueprint', no 'nodes'):
       Allowed keys: {"count", "template", "attrs", "disabled", "risk_groups"}.
 
-    If group_name includes bracket expansions like "fa[1-2]", it replicates the
-    same group_def for each expanded name.
-
     Args:
         ctx: The context containing blueprint info and the Network.
-        parent_path: The parent path in the hierarchy.
-        group_name: The current group's name (may have bracket expansions).
+        parent_path: Path of the enclosing group ("" at top level).
+        group_name: The current group's name (may have bracket expressions).
         group_def: The node definition (count, template, etc.).
         inherited_risk_groups: Risk groups inherited from a higher-level group.
     """
     if inherited_risk_groups is None:
         inherited_risk_groups = set()
-    expanded_names = _bp_parse.expand_name_patterns(group_name)
-    # If bracket expansions exist, replicate for each expansion
+    expanded_names = expand_name_patterns(group_name)
     if len(expanded_names) > 1 or expanded_names[0] != group_name:
         for expanded_name in expanded_names:
             _expand_node_group(
@@ -272,15 +270,13 @@ def _expand_node_group(
             )
         return
 
-    # Compute the full path for this group
     if parent_path:
         effective_path = f"{parent_path}/{group_name}"
     else:
         effective_path = group_name
 
     if "blueprint" in group_def:
-        # Blueprint usage => recognized keys
-        _bp_parse.check_no_extra_keys(
+        check_no_extra_keys(
             group_def,
             allowed={"blueprint", "params", "attrs", "disabled", "risk_groups"},
             context=f"node '{group_name}' using blueprint",
@@ -325,8 +321,6 @@ def _expand_node_group(
                 )
             override_to_group[override_key] = matched_group
 
-        # For each node in the blueprint, apply param overrides and
-        # merge parent's attrs/disabled/risk_groups
         for bp_sub_name, bp_sub_def in bp.nodes.items():
             # _apply_parameters returns a deep copy, safe to mutate
             merged_def = _apply_parameters(
@@ -340,7 +334,6 @@ def _expand_node_group(
                 parent_risk_groups,
             )
 
-            # Recursively expand
             _expand_node_group(
                 ctx,
                 parent_path=effective_path,
@@ -354,8 +347,7 @@ def _expand_node_group(
             ctx.pending_bp_links.append((link_def, effective_path))
 
     elif "nodes" in group_def:
-        # Nested nodes => recognized keys
-        _bp_parse.check_no_extra_keys(
+        check_no_extra_keys(
             group_def,
             allowed={"nodes", "attrs", "disabled", "risk_groups"},
             context=f"nested node '{group_name}'",
@@ -365,7 +357,6 @@ def _expand_node_group(
             group_def, group_name, inherited_risk_groups
         )
 
-        # Recursively process nested nodes
         nested_nodes = group_def["nodes"]
         if not isinstance(nested_nodes, dict):
             raise ValueError(f"'nodes' must be a dict in '{group_name}'.")
@@ -393,8 +384,7 @@ def _expand_node_group(
             )
 
     else:
-        # Direct node group => recognized keys
-        _bp_parse.check_no_extra_keys(
+        check_no_extra_keys(
             group_def,
             allowed={"count", "template", "attrs", "disabled", "risk_groups"},
             context=f"node '{group_name}'",
@@ -403,22 +393,19 @@ def _expand_node_group(
             group_def, group_name, inherited_risk_groups
         )
 
-        # Check if this is a simple single node (no count, no template)
         has_count = "count" in group_def
         has_template = "template" in group_def
 
         if not has_count and not has_template:
-            # Simple single node - use effective_path as the node name
+            # Without count or template, the group path is the node name.
             node = Node(
                 name=effective_path,
                 disabled=group_disabled,
                 attrs=copy.deepcopy(combined_attrs),
             )
-            node.attrs.setdefault("type", "node")
             node.risk_groups = final_risk_groups.copy()
             ctx.network.add_node(node)
         else:
-            # Node group with count/template - create numbered nodes
             count = group_def.get("count", 1)
             template = group_def.get("template", f"{group_name}-{{n}}")
             if not isinstance(count, int) or count < 1:
@@ -433,7 +420,6 @@ def _expand_node_group(
                     disabled=group_disabled,
                     attrs=copy.deepcopy(combined_attrs),
                 )
-                node.attrs.setdefault("type", "node")
                 node.risk_groups = final_risk_groups.copy()
                 ctx.network.add_node(node)
 
@@ -445,8 +431,8 @@ def _join_parent(base: str, rel: str) -> str:
     instantiation path), not a regex, so its metacharacters (e.g. '.' in
     group names like 'dc.1') must be escaped before the joined path is
     compiled as a regex. re.escape("") == "" so top-level links (base="")
-    are unaffected, and "/" is never escaped so multi-level parents join
-    cleanly.
+    are unaffected, and re.escape leaves "/" alone, so multi-level parents
+    still join on "/".
 
     Args:
         base: Literal parent path prefix.
@@ -466,7 +452,7 @@ def _normalize_link_selector(sel: Any, base: str) -> Dict[str, Any]:
         base: Parent path to prepend.
 
     Returns:
-        Normalized selector dict.
+        Selector dict with the regex-escaped parent prefix joined onto 'path'.
     """
     if isinstance(sel, str):
         return {"path": _join_parent(base, sel)}
@@ -533,9 +519,9 @@ def _expand_link_with_variables(
     """Expand a link definition once per combination in its 'expand' block.
 
     Substitutes $var or ${var} variables in all string fields of the link
-    definition - source/target selectors (including match condition values),
-    attrs, and risk_groups - yielding one full link definition per variable
-    combination, consistent with node_rules/link_rules expansion.
+    definition (source/target selectors including match condition values,
+    attrs, and risk_groups), yielding one full link definition per variable
+    combination, as node_rules/link_rules expansion does.
 
     Args:
         ctx: The DSL expansion context.
@@ -566,7 +552,7 @@ def _expand_link_pattern(
     link_def: Dict[str, Any],
     count: int = 1,
 ) -> None:
-    """Generates Link objects for the chosen link pattern among matched nodes.
+    """Create links between the matched nodes using the chosen pattern.
 
     Supported Patterns:
       * "mesh": Connect every source node to every target node.
@@ -640,10 +626,10 @@ def _expand_link_pattern(
 
 
 def _select_link_nodes(network: Network, selector: Any) -> List[Node]:
-    """Select nodes for link creation based on selector.
+    """Select link endpoint nodes.
 
-    Uses the unified selector system. For links, active_only defaults
-    to False (links to disabled nodes are created).
+    For links, active_only defaults to False (links to disabled nodes are
+    created).
 
     Args:
         network: The network to select from.
@@ -652,7 +638,7 @@ def _select_link_nodes(network: Network, selector: Any) -> List[Node]:
     Returns:
         List of matching nodes (flattened from all groups).
     """
-    normalized = normalize_selector(selector, context="adjacency")
+    normalized = normalize_selector(selector, context="link")
     groups = select_nodes(network, normalized, default_active_only=False)
     return [node for nodes in groups.values() for node in nodes]
 
@@ -664,16 +650,14 @@ def _create_link(
     link_def: Dict[str, Any],
     count: int = 1,
 ) -> None:
-    """Create and add one or more Links to the network.
-
-    Link properties are flat in link_def (capacity, cost, disabled,
-    risk_groups, attrs).
+    """Add `count` parallel links between source and target.
 
     Args:
         net: The network to which the new link(s) will be added.
         source: Source node name for the link.
         target: Target node name for the link.
-        link_def: Dict with flat link properties.
+        link_def: Flat link properties (capacity, cost, disabled, risk_groups,
+            attrs). Capacity and cost default to 1.0.
         count: Number of parallel links to create between source and target.
     """
     for _ in range(count):
@@ -696,15 +680,15 @@ def _create_link(
 
 
 def _process_node_rules(net: Network, network_data: Dict[str, Any]) -> None:
-    """Process the 'node_rules' section of the network DSL, updating
-    existing nodes with new attributes in bulk. Rules are applied in order
-    if multiple items match the same node.
+    """Apply the 'node_rules' section of the network DSL to existing nodes.
 
-    Each rule must have {"path"} plus optionally {"attrs", "disabled", "risk_groups"}.
+    Rules apply in list order, so a later rule wins where several match the
+    same node. Each rule may have {"path", "match", "attrs", "disabled",
+    "risk_groups", "expand"}; "path" defaults to every node.
 
     - "disabled" sets node.disabled.
     - "risk_groups" *replaces* the node's risk_groups.
-    - Everything else merges into node.attrs.
+    - "attrs" merges into node.attrs.
 
     Args:
         net: The Network whose nodes will be updated.
@@ -717,7 +701,7 @@ def _process_node_rules(net: Network, network_data: Dict[str, Any]) -> None:
     for rule in node_rules:
         if not isinstance(rule, dict):
             raise ValueError("Each node_rule must be a dict.")
-        _bp_parse.check_no_extra_keys(
+        check_no_extra_keys(
             rule,
             allowed={"path", "attrs", "disabled", "risk_groups", "match", "expand"},
             context="node rule",
@@ -748,12 +732,12 @@ def _apply_node_rule(net: Network, rule: Dict[str, Any]) -> None:
 
 
 def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
-    """Processes the 'link_rules' section of the network DSL, updating
-    existing links with new parameters. Rules are applied in order if
-    multiple items match the same link.
+    """Apply the 'link_rules' section of the network DSL to existing links.
 
-    Each rule must contain {"source", "target"} plus optionally
-    {"bidirectional", "capacity", "cost", "disabled", "risk_groups", "attrs", "expand"}.
+    Rules apply in list order, so a later rule wins where several match the
+    same link. Each rule must contain {"source", "target"} plus optionally
+    {"bidirectional", "capacity", "cost", "disabled", "risk_groups", "attrs",
+    "expand", "link_match"}.
 
     If risk_groups is given, it *replaces* the link's existing risk_groups.
 
@@ -768,7 +752,7 @@ def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
     for link_rule in link_rules:
         if not isinstance(link_rule, dict):
             raise ValueError("Each link_rule must be a dict.")
-        _bp_parse.check_no_extra_keys(
+        check_no_extra_keys(
             link_rule,
             allowed={
                 "source",
@@ -811,13 +795,12 @@ def _update_links(
     rule: Dict[str, Any],
     bidirectional: bool = True,
 ) -> None:
-    """Update all Link objects between nodes matching source and target selectors
-    with new parameters (capacity, cost, disabled, risk_groups, attrs).
+    """Update links between nodes selected by source and target.
 
-    If bidirectional=True, both (source->target) and (target->source) links
-    are updated if present.
-
-    If risk_groups is given, it *replaces* the link's existing risk_groups.
+    Sets capacity, cost, disabled, risk_groups, and attrs from the rule. If
+    bidirectional=True, links in both directions are updated. A 'link_match'
+    in the rule further filters links by their attributes. If risk_groups is
+    given, it *replaces* the link's existing risk_groups.
 
     Args:
         net: The network whose links should be updated.
@@ -826,8 +809,8 @@ def _update_links(
         rule: Rule dict with flat link properties.
         bidirectional: If True, also update reversed direction links.
     """
-    src_sel = normalize_selector(source, context="override")
-    tgt_sel = normalize_selector(target, context="override")
+    src_sel = normalize_selector(source, context="rule")
+    tgt_sel = normalize_selector(target, context="rule")
 
     source_node_groups = select_nodes(net, src_sel, default_active_only=False)
     target_node_groups = select_nodes(net, tgt_sel, default_active_only=False)
@@ -845,7 +828,6 @@ def _update_links(
     new_risk_groups = rule.get("risk_groups", None)
     new_attrs = rule.get("attrs", {})
 
-    # Parse link_match for filtering by link attributes
     link_match_raw = rule.get("link_match")
     link_match = parse_match_spec(link_match_raw) if link_match_raw else None
 
@@ -859,7 +841,6 @@ def _update_links(
         if not (forward_match or reverse_match):
             continue
 
-        # Apply link_match filter if specified
         if link_match is not None:
             link_attrs = flatten_link_attrs(link, link_id)
             if not evaluate_conditions(
@@ -867,7 +848,6 @@ def _update_links(
             ):
                 continue
 
-        # Apply updates
         if new_capacity is not None:
             link.capacity = new_capacity
         if new_cost is not None:
@@ -888,25 +868,22 @@ def _update_nodes(
     disabled_val: Any = None,
     risk_groups_val: Any = None,
 ) -> None:
-    """Updates attributes on all nodes matching a path pattern and optional match conditions.
-
-    - If 'disabled_val' is not None, sets node.disabled to that boolean value.
-    - If 'risk_groups_val' is not None, *replaces* the node's risk_groups with that new set.
-    - Everything else in 'attrs' is merged into node.attrs.
+    """Update nodes matching a path pattern and optional match conditions.
 
     Args:
         net: The network containing the nodes.
         path: A path pattern identifying which node group(s) to modify.
         match_spec: Optional match conditions dict (with 'conditions' and 'logic').
-        attrs: A dictionary of new attributes to set/merge.
-        disabled_val: Boolean or None for disabling or enabling nodes.
-        risk_groups_val: List or set or None for replacing node.risk_groups.
+        attrs: Attributes merged into node.attrs.
+        disabled_val: New node.disabled value, or None to leave it unchanged.
+        risk_groups_val: Names that *replace* node.risk_groups, or None to
+            leave them unchanged.
     """
     selector_dict: Dict[str, Any] = {"path": path}
     if match_spec:
         selector_dict["match"] = match_spec
 
-    normalized = normalize_selector(selector_dict, context="override")
+    normalized = normalize_selector(selector_dict, context="rule")
     node_groups = select_nodes(net, normalized, default_active_only=False)
 
     for _, nodes in node_groups.items():
@@ -943,7 +920,7 @@ def _apply_parameters(
     params_overrides: Dict[str, Any],
     override_to_group: Dict[str, str],
 ) -> Dict[str, Any]:
-    """Applies user-provided parameter overrides to a blueprint subgroup.
+    """Apply blueprint `params` overrides to one subgroup definition.
 
     Example:
         If 'spine.count' = 6 is in params_overrides,
@@ -976,8 +953,9 @@ def _apply_parameters(
 def _apply_nested_path(
     node_def: Dict[str, Any], path_parts: List[str], value: Any
 ) -> None:
-    """Recursively applies a path like ["attrs", "role"] to set node_def["attrs"]["role"] = value.
-    Creates intermediate dicts as needed.
+    """Set a nested field, e.g. ["attrs", "role"] sets node_def["attrs"]["role"].
+
+    Creates intermediate dicts as needed, replacing non-dict values on the path.
 
     Args:
         node_def (Dict[str, Any]): The dictionary to update.

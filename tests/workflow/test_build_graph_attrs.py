@@ -1,10 +1,10 @@
 """Regression tests for BuildGraph with reserved-key collisions in attrs.
 
-BuildGraph previously crashed with TypeError ("got multiple values for
-keyword argument") when node attrs contained "disabled" or link attrs
-contained "id", "capacity", "cost", or "disabled". Reserved keys must win
-over user attrs, matching the precedence documented for flatten_node_attrs
-and flatten_link_attrs.
+Node attrs containing "disabled", or link attrs containing "id",
+"capacity", "cost" or "disabled", must not make BuildGraph fail with
+TypeError ("got multiple values for keyword argument"). Reserved keys must
+win over user attrs, matching the precedence documented for
+flatten_node_attrs and flatten_link_attrs.
 """
 
 from unittest.mock import MagicMock
@@ -102,7 +102,7 @@ def test_reserved_link_keys_win_over_user_attrs(scenario_with_reserved_attrs):
 
 
 def test_build_graph_without_reserved_keys_unchanged():
-    """Plain attrs still pass through unchanged."""
+    """Attrs without reserved keys pass through unchanged."""
     scenario = MagicMock()
     scenario.seed = None
     scenario._execution_counter = 0

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # ---------------------------------------------------------------------
@@ -32,8 +32,8 @@ classifiers = [
 # Runtime deps
 dependencies = [
     "networkx>=3.0",
+    "numpy>=1.23.2",
     "pyyaml>=6.0",
-    "pandas>=2.0",
     "jsonschema>=4.0",
     "netgraph-core>=0.10.0",
 ]
@@ -47,29 +47,21 @@ dev = [
     # testing
     "pytest>=8",
     "pytest-cov",
-    "pytest-benchmark",
-    "pytest-mock",
     "pytest-timeout",
-    # perf/visualization
-    "numpy",
+    # perf/visualization (dev/perf)
     "matplotlib",
     "seaborn",
     # docs
     "mkdocs-material",
-    "pdoc",
     # style + type checking
     "ruff==0.11.13",
     "pyright==1.1.401",
-    # type stubs
-    "pandas-stubs",
     # pre-commit hooks
     "pre-commit",
     # build
     "build",
     # publishing
     "twine",
-    # schema validation
-    "jsonschema",
 ]
 
 [project.scripts]
@@ -78,19 +70,14 @@ ngraph = "ngraph.cli:main"
 # ---------------------------------------------------------------------
 # Pytest flags
 [tool.pytest.ini_options]
-addopts = "--cov=./ngraph --cov-fail-under=75 --cov-report term-missing --benchmark-disable-gc --benchmark-min-rounds=5 --benchmark-warmup=on"
+addopts = "--cov=./ngraph --cov-fail-under=75 --cov-report term-missing"
 timeout = 30
 markers = [
     "slow: marks integration tests as slow (deselect with '-m \"not slow\"')",
-    "benchmark: marks tests as performance benchmarks (run with '-m benchmark')",
 ]
 
 # ---------------------------------------------------------------------
-# Coverage configuration
-[tool.coverage.run]
-source = ["."]
-omit = ["*/tests/*", "*/test_*", "*/conftest.py"]
-
+# Coverage configuration (source is set by --cov in addopts)
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
@@ -103,7 +90,6 @@ exclude_lines = [
 # Package discovery
 [tool.setuptools.packages.find]
 include = ["ngraph*"]
-exclude = ["tests*", "notebooks*", "examples*", "dev*"]
 
 # Include schema files in the package for runtime validation
 [tool.setuptools.package-data]

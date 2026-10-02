@@ -2,25 +2,25 @@
 
 Quick links:
 
-- [Design](design.md) — architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) — YAML syntax for scenario definition
-- [Workflow Reference](workflow.md) — analysis workflow configuration and execution
-- [API Reference](api.md) — Python API for programmatic scenario creation
-- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
+- [Design](design.md) - architecture, model, algorithms, workflow
+- [DSL Reference](dsl.md) - YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) - analysis workflow configuration and execution
+- [API Reference](api.md) - Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
 
-The `ngraph` command inspects, runs, and analyzes scenarios from the terminal.
+The `ngraph` command inspects and runs scenarios from the terminal.
 
 ## Basic Usage
 
 Two commands:
 
-- `inspect`: Analyze and validate scenario files without running them
-- `run`: Execute scenario files and generate results
+- `inspect`: Load and validate a scenario and print its structure without running the workflow
+- `run`: Run the workflow and write results
 
 **Global options** (must be placed before the command):
 
 - `--verbose`, `-v`: Enable debug logging
-- `--quiet`: Suppress console output (logs only)
+- `--quiet`: Show only warnings and errors in logs (command output is still printed)
 
 ### Quick Start
 
@@ -37,7 +37,7 @@ ngraph run scenarios/square_mesh.yaml
 
 ### `inspect`
 
-Analyze and validate a NetGraph scenario file without executing it.
+Load and validate a scenario and print its structure without running the workflow.
 
 **Syntax:**
 
@@ -52,11 +52,10 @@ ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 **Options:**
 
 - `--detail`, `-d`: Show detailed information including complete node/link tables and step parameters
-- `--output`, `-o`: Output directory for generated artifacts (accepted for CLI consistency; `inspect` itself writes no files)
 
-**What it does:**
+**Output:**
 
-Loads and validates the scenario file, then reports:
+After loading and validating the scenario file, `inspect` reports:
 
 - **Scenario metadata**: seed, and whether the run is reproducible
 - **Network structure**: node/link counts, enabled vs. disabled, hierarchy
@@ -66,8 +65,6 @@ Loads and validates the scenario file, then reports:
 - **Failure policies**: each policy's mode count (modes and rules in detail mode)
 - **Demand sets**: demand patterns and volumes, capacity-vs-demand summary
 - **Workflow steps**: the steps that would run, in order
-
-In detail mode (`--detail`), shows complete tables for all nodes and links with capacity and connectivity information.
 
 **Examples:**
 
@@ -84,7 +81,7 @@ ngraph --verbose inspect scenarios/square_mesh.yaml
 
 ### `run`
 
-Execute a NetGraph scenario file.
+Run the workflow of a scenario file and write the results.
 
 **Syntax:**
 
@@ -101,10 +98,10 @@ ngraph [--verbose|--quiet] run <scenario_file> [options]
 - `--results`, `-r`: Path to export results as JSON (default: `<scenario_name>.results.json`; relative paths are placed under `--output` when provided)
 - `--no-results`: Disable results file generation
 - `--stdout`: Print results to stdout in addition to saving file. Log output, status banners, the `--profile` performance report, and run error messages all go to stderr, so stdout contains only the JSON results (safe to pipe to `jq`)
-- `--keys`, `-k`: Space-separated list of workflow step names to include in output
-- `--profile`: Enable performance profiling with CPU analysis and bottleneck detection
-- `--profile-memory`: Also track peak memory per step
-- `--output`, `-o`: Output directory for generated artifacts
+- `--keys`, `-k`: Space-separated list of workflow step names to include in output; an unknown name is an error
+- `--profile`: Profile the run and print a per-step CPU report to stderr
+- `--profile-memory`: Also track peak memory per step (requires `--profile`)
+- `--output`, `-o`: Output directory for generated artifacts: the results file and, with `--profile`, the `<scenario_name>.profiles` directory of worker profiles
 
 ## Examples
 
@@ -126,7 +123,7 @@ ngraph run scenarios/nsfnet.yaml --no-results
 
 ### Filtering Results by Step Names
 
-`--keys` restricts the `steps` section to the named workflow steps; the `workflow` metadata section still lists every step that ran:
+`--keys` restricts the `steps` section to the named workflow steps; the `workflow` metadata section lists every step that ran. Unknown step names abort the run before any step executes:
 
 ```bash
 # Only include results from the MSD step
@@ -139,21 +136,11 @@ ngraph run scenarios/backbone_clos.yml --keys network_statistics tm_placement --
 ngraph run scenarios/backbone_clos.yml --keys network_statistics --stdout
 ```
 
-The `--keys` option filters by the `name` field of workflow steps defined in your scenario YAML file. For example, if your scenario has:
-
-```yaml
-workflow:
-  - type: NetworkStats
-    name: network_statistics
-  - type: MaximumSupportedDemand
-    name: msd_baseline
-```
-
-Then `--keys network_statistics` will include only the results from the NetworkStats step, and `--keys msd_baseline` will include only the MaximumSupportedDemand results.
+The names are the `name` fields of the steps in the scenario's `workflow` section.
 
 ### Performance Profiling
 
-Enable performance profiling to identify bottlenecks and analyze execution time:
+`--profile` reports where the run spends its time:
 
 ```bash
 # Run scenario with profiling
@@ -162,7 +149,7 @@ ngraph run scenarios/backbone_clos.yml --profile
 # Combine profiling with results export
 ngraph run scenarios/backbone_clos.yml --profile --results analysis.json
 
-# Profile specific workflow steps and track memory
+# Track memory too, and export only the tm_placement step's results
 ngraph run scenarios/backbone_clos.yml --profile --profile-memory --keys tm_placement
 ```
 
@@ -197,12 +184,13 @@ The CLI outputs results as JSON with a fixed top-level shape:
 | `ngraph run scenario.yaml --stdout` | `<scenario_name>.results.json` | yes |
 | `ngraph run scenario.yaml --results out.json --stdout` | `out.json` | yes |
 | `ngraph run scenario.yaml --no-results` | nothing | no |
+| `ngraph run scenario.yaml --no-results --stdout` | nothing | yes |
 
-Logs and status messages go to stderr in every case.
+`run` writes logs and status messages to stderr in every case. Exit status is 0 on success, 1 when the scenario cannot be loaded or run, and 2 for invalid command-line arguments.
 
 ## Debugging Scenarios
 
-`ngraph run` executes every workflow step in order. Inspect a scenario before running it, and use `--verbose` with `--detail` when blueprint expansion does not produce the nodes or links you expect:
+Inspect a scenario before running it. When blueprint expansion does not produce the nodes or links you expect, add `--verbose` and `--detail`:
 
 ```bash
 ngraph inspect scenarios/square_mesh.yaml
@@ -210,10 +198,4 @@ ngraph --verbose inspect scenarios/backbone_clos.yml --detail
 ngraph inspect scenarios/backbone_clos.yml --detail | grep -A 5 "WORKFLOW STEPS"
 ```
 
-`inspect` catches common issues:
-
-- Invalid YAML syntax
-- Missing blueprint references
-- Incorrect node/link patterns
-- Workflow step configuration errors
-- Risk group and policy definition problems
+`inspect` reports YAML and schema errors, unknown blueprint or risk-group references and invalid workflow step parameters, and its node and demand tables show whether selectors matched what you expected.

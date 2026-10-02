@@ -1,11 +1,4 @@
-"""
-Tests for node selection and pattern matching in the network module.
-
-This module contains tests for:
-- Node selection by path patterns (exact, prefix, wildcard, regex)
-- Link finding by source/target patterns
-- Network traversal and search operations
-"""
+"""Tests for node selection by path pattern and link lookup by endpoint."""
 
 import pytest
 
@@ -97,8 +90,8 @@ class TestNodeSelection:
         # Should have groups for each combination found
         assert len(node_groups) >= 2
 
-    # For attribute-based grouping, use the unified selector system with
-    # {"group_by": "attr_name"} dict selectors via normalize_selector/select_nodes.
+    # Attribute-based grouping uses {"group_by": "attr_name"} dict selectors
+    # via normalize_selector/select_nodes, not path patterns.
 
 
 class TestLinkUtilities:
@@ -148,17 +141,14 @@ class TestLinkUtilities:
         assert len(all_links) == 2
         assert set(link.id for link in all_links) == {link_a_c.id, link_b_c.id}
 
-        # Filter by source regex
         src_a_links = net.find_links(source_regex="srcA")
         assert len(src_a_links) == 1
         assert src_a_links[0].id == link_a_c.id
 
-        # Filter by target regex
         to_c_links = net.find_links(target_regex="C")
         assert len(to_c_links) == 2
         assert set(link.id for link in to_c_links) == {link_a_c.id, link_b_c.id}
 
-        # Filter by both source and target
         specific_links = net.find_links(source_regex="srcB", target_regex="C")
         assert len(specific_links) == 1
         assert specific_links[0].id == link_b_c.id
@@ -213,12 +203,11 @@ class TestLinkUtilities:
         links = net.find_links()
         assert len(links) == 2  # Still finds both links
 
-        # Verify one is disabled and one is not
         found_states = [link.disabled for link in links]
         assert True in found_states and False in found_states
 
     def test_find_links_regex_patterns(self):
-        """Test find_links with various regex patterns."""
+        """find_links with wildcard source or target patterns and an exact pair."""
         net = Network()
         nodes = ["router-1", "router-2", "switch-1", "switch-2"]
         for node in nodes:
@@ -232,14 +221,11 @@ class TestLinkUtilities:
                 net.add_link(link)
                 links.append(link)
 
-        # Find all links from routers
         router_links = net.find_links(source_regex="router-.*")
         assert len(router_links) == 4
 
-        # Find all links to switches
         switch_links = net.find_links(target_regex="switch-.*")
         assert len(switch_links) == 4
 
-        # Find specific router to specific switch
         specific = net.find_links(source_regex="router-1", target_regex="switch-2")
         assert len(specific) == 1

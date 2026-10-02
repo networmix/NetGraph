@@ -1,33 +1,10 @@
-"""Unit tests for CapacityEnvelope aggregation and deserialization edge cases."""
+"""Unit tests for CapacityEnvelope.from_dict frequency-key handling."""
 
 from __future__ import annotations
-
-from collections import namedtuple
 
 import pytest
 
 from ngraph.results.artifacts import CapacityEnvelope
-
-
-def test_aggregate_frequencies_count_duplicates() -> None:
-    """Frequency counting (Counter-based) matches duplicate volumes exactly."""
-    Summary = namedtuple("Summary", ["cost_distribution", "min_cut"])
-    summaries = [
-        Summary(cost_distribution={1.0: 5.0}, min_cut=[]),
-        Summary(cost_distribution={1.0: 5.0}, min_cut=[]),
-        Summary(cost_distribution={1.0: 7.0}, min_cut=[]),
-    ]
-
-    env = CapacityEnvelope.from_values(
-        source_pattern="S",
-        sink_pattern="T",
-        mode="combine",
-        values=[1.0, 2.0, 3.0],
-        flow_summaries=summaries,
-    )
-
-    freqs = env.flow_summary_stats["cost_distribution_stats"][1.0]["frequencies"]
-    assert freqs == {5.0: 2, 7.0: 1}
 
 
 def test_from_dict_rejects_non_numeric_frequency_key() -> None:

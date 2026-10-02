@@ -258,6 +258,46 @@
         "target"
       ],
       "additionalProperties": false
+    },
+    "component": {
+      "type": "object",
+      "properties": {
+        "component_type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "capex": {
+          "type": "number"
+        },
+        "power_watts": {
+          "type": "number"
+        },
+        "power_watts_max": {
+          "type": "number"
+        },
+        "capacity": {
+          "type": "number"
+        },
+        "ports": {
+          "type": "integer"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "attrs": {
+          "type": "object"
+        },
+        "children": {
+          "type": "object",
+          "description": "Nested child components by name",
+          "additionalProperties": {
+            "$ref": "#/$defs/component"
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -535,7 +575,7 @@
           },
           "expand_groups": {
             "type": "boolean",
-            "description": "Whether to fail risk groups"
+            "description": "Also fail every entity sharing a risk group with a failed entity"
           },
           "modes": {
             "type": "array",
@@ -660,17 +700,10 @@
               "$ref": "#/$defs/expandBlock"
             },
             "flow_policy": {
-              "description": "Routing policy configuration (preset name or integer)",
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
+              "description": "Routing preset name (FlowPolicyPreset member, case-insensitive)",
+              "type": [
+                "string",
+                "null"
               ]
             },
             "attrs": {
@@ -737,46 +770,9 @@
     },
     "components": {
       "type": "object",
-      "description": "Hardware component library (preserved as-is)",
+      "description": "Hardware component library: component name -> definition",
       "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "component_type": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "capex": {
-            "type": "number"
-          },
-          "power_watts": {
-            "type": "number"
-          },
-          "power_watts_max": {
-            "type": "number"
-          },
-          "capacity": {
-            "type": "number"
-          },
-          "ports": {
-            "type": "integer"
-          },
-          "count": {
-            "type": "integer"
-          },
-          "attrs": {
-            "type": "object"
-          },
-          "children": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "object",
-              "additionalProperties": true
-            }
-          }
-        },
-        "additionalProperties": false
+        "$ref": "#/$defs/component"
       }
     },
     "workflow": {

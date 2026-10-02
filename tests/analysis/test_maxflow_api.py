@@ -108,13 +108,12 @@ def test_empty_selection_raises() -> None:
 def test_shortest_path_vs_full_max_flow() -> None:
     """Test that shortest_path mode uses all equal-cost shortest paths.
 
-    This is a regression test for a critical bug that was fixed in NetGraph-Core.
-    The bug (flow_state.cpp line 233) caused shortest_path=True to break after
-    one DFS push, using only 1 of N parallel equal-cost paths instead of saturating
-    the entire equal-cost DAG.
+    Guards against the Core failure mode where shortest_path=True stops after
+    one DFS push and uses only 1 of N parallel equal-cost paths instead of
+    saturating the entire equal-cost DAG.
 
-    This test ensures shortest_path=True correctly saturates all equal-cost paths
-    in the lowest-cost tier without going to higher-cost tiers.
+    shortest_path=True must saturate all equal-cost paths in the lowest-cost
+    tier without going to higher-cost tiers.
     """
     net = _simple_network()
     full = analyze(net).max_flow("^S$", "^T$", mode=Mode.COMBINE, shortest_path=False)
@@ -165,7 +164,6 @@ def test_max_flow_with_details_include_min_cut() -> None:
     cut_capacity = sum(net.links[e.link_id].capacity for e in summary.min_cut)
     assert pytest.approx(cut_capacity, rel=0, abs=1e-9) == 2.0
 
-    # Verify total flow is still correct
     assert pytest.approx(summary.total_flow, rel=0, abs=1e-9) == 2.0
 
 
@@ -175,8 +173,8 @@ def test_network_dc_to_dc_reverse_edge_first_hop() -> None:
     Nodes: A/dc, A/leaf, B/leaf, B/dc. Links (forward):
       A/leaf->A/dc (10), A/leaf->B/leaf (10), B/leaf->B/dc (10)
 
-    The graph builder creates a StrictMultiDiGraph with add_reverse=True, creating
-    reverse DC->leaf edges, so A/dc can reach B/dc via DC->leaf->leaf->DC.
+    The graph builder adds a reverse edge for every link, including DC->leaf,
+    so A/dc can reach B/dc via DC->leaf->leaf->DC.
 
     Expect positive flow (10.0) in combine mode.
     """
@@ -215,7 +213,7 @@ def _two_cost_tier_network() -> Network:
 
 
 def test_sensitivity_shortest_path_parameter_accepted() -> None:
-    """Test that sensitivity analysis correctly uses shortest_path parameter.
+    """Sensitivity analysis honors the shortest_path parameter.
 
     The shortest_path parameter controls routing semantics:
     - shortest_path=False (default): Full max-flow (SDN/TE mode). Reports all

@@ -1,8 +1,8 @@
 """
 Error case tests for scenario processing and validation.
 
-Tests malformed YAML scenarios, invalid configurations, edge cases, and error
-handling to ensure error reporting and graceful degradation.
+Covers malformed YAML, invalid configurations, and degenerate topologies
+(empty, single node, self-loops, parallel and zero-capacity links).
 """
 
 import pytest
@@ -18,7 +18,7 @@ class TestMalformedYAML:
     """Tests for malformed YAML and parsing errors."""
 
     def test_invalid_yaml_syntax(self):
-        """Test that invalid YAML syntax raises appropriate error."""
+        """Test that invalid YAML syntax raises ParserError."""
         # Use raw YAML for syntax error testing (can't build with builder)
         invalid_yaml = """
         network:
@@ -30,12 +30,11 @@ class TestMalformedYAML:
             Scenario.from_yaml(invalid_yaml)
 
     def test_missing_required_fields(self):
-        """Test scenarios with missing required fields."""
+        """Test that an empty builder scenario loads with a network object."""
         # Empty scenario using builder
         builder = ScenarioDataBuilder()
         scenario = builder.build_scenario()
 
-        # Empty scenario should be handled gracefully
         assert scenario.network is not None
 
     def test_invalid_node_definitions(self):
@@ -49,7 +48,7 @@ class TestMalformedYAML:
               disabled: "not_a_boolean"  # Should be boolean
         """
 
-        # Schema validation now catches invalid keys
+        # Schema validation rejects unknown node keys
         import jsonschema.exceptions
 
         with pytest.raises(
@@ -57,11 +56,6 @@ class TestMalformedYAML:
             match="Additional properties are not allowed",
         ):
             _scenario = Scenario.from_yaml(invalid_node_yaml)
-
-    def test_invalid_link_definitions(self):
-        """Test invalid link definitions."""
-        # Removed: behavior varies by validation layer and produced flaky outcomes.
-        assert True
 
     def test_nonexistent_link_endpoints(self):
         """Test links referencing nonexistent nodes are silently skipped."""
@@ -130,12 +124,7 @@ class TestBlueprintErrors:
             scenario = builder.build_scenario()
             scenario.run()
 
-    def test_invalid_blueprint_parameters(self):
-        """Test invalid blueprint parameter overrides."""
-        # Removed: behavior varies by validation layer and produced flaky outcomes.
-        assert True
-
-    def test_malformed_adjacency_patterns(self):
+    def test_malformed_link_patterns(self):
         """Test malformed link patterns."""
         import jsonschema.exceptions
 
@@ -188,7 +177,7 @@ class TestWorkflowErrors:
 
 @pytest.mark.slow
 class TestEdgeCases:
-    """Tests for edge cases and boundary conditions."""
+    """Degenerate topologies and extreme parameter values."""
 
     def test_empty_network(self):
         """Test scenario with no nodes or links."""
@@ -276,7 +265,6 @@ class TestEdgeCases:
         scenario = builder.build_scenario()
         scenario.run()
 
-        # Should handle parallel links correctly
         exported = scenario.results.to_dict()
         graph_data = exported["steps"]["build_graph"]["data"]["graph"]
         assert len(graph_data.get("nodes", [])) == 2
@@ -306,7 +294,6 @@ class TestEdgeCases:
         scenario = builder.build_scenario()
         scenario.run()
 
-        # Should handle zero capacity links appropriately
         exported = scenario.results.to_dict()
         graph_data = exported["steps"]["build_graph"]["data"]["graph"]
         assert len(graph_data.get("nodes", [])) == 2
@@ -345,7 +332,6 @@ class TestEdgeCases:
         scenario = builder.build_scenario()
         scenario.run()
 
-        # Verify all nodes were created
         exported = scenario.results.to_dict()
         graph_data = exported["steps"]["build_graph"]["data"]["graph"]
         nodes = graph_data.get("nodes", [])

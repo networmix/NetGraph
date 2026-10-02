@@ -17,15 +17,14 @@ class TestPerformanceProfiler:
     """Test the PerformanceProfiler class."""
 
     def test_scenario_end_without_start(self):
-        """Test ending scenario profiling without starting."""
+        """end_scenario() without start_scenario() leaves total_wall_time at 0."""
         profiler = PerformanceProfiler()
 
-        # Should handle gracefully
         profiler.end_scenario()
         assert profiler.results.total_wall_time == 0.0
 
     def test_step_profiling_basic(self):
-        """Test basic step profiling."""
+        """profile_step records step name, type, wall time and call counts."""
         profiler = PerformanceProfiler()
 
         with profiler.profile_step("test_step", "TestStep"):
@@ -55,7 +54,6 @@ class TestPerformanceProfiler:
     @patch("cProfile.Profile")
     def test_step_profiling_detail(self, mock_profile_class):
         """Test step profiling with detail mode."""
-        # Setup mock cProfile
         mock_profiler = MagicMock()
         mock_profile_class.return_value = mock_profiler
 
@@ -117,7 +115,6 @@ class TestPerformanceProfiler:
         assert bottleneck["step_name"] == "slow_step"
         assert bottleneck["percentage"] == 80.0
 
-        # Check analysis summary
         summary = profiler.results.analysis_summary
         assert summary["total_steps"] == 2
         assert summary["slowest_step"] == "slow_step"
@@ -198,12 +195,10 @@ class TestPerformanceReporter:
         results.total_cpu_time = 4.5
         results.total_function_calls = 1000
 
-        # Add step profiles
         step1 = StepProfile("step1", "Step1", 2.0, 1.8, 400)
         step2 = StepProfile("step2", "Step2", 3.0, 2.7, 600)
         results.step_profiles = [step1, step2]
 
-        # Setup analysis summary
         results.analysis_summary = {
             "total_steps": 2,
             "slowest_step": "step2",
@@ -231,12 +226,10 @@ class TestPerformanceReporter:
         results = ProfileResults()
         results.total_wall_time = 10.0
 
-        # Add step profiles
         step1 = StepProfile("fast_step", "FastStep", 1.0, 0.9, 100)
         step2 = StepProfile("slow_step", "SlowStep", 8.0, 7.5, 800)
         results.step_profiles = [step1, step2]
 
-        # Add bottleneck
         bottleneck = {
             "step_name": "slow_step",
             "step_type": "SlowStep",
@@ -248,7 +241,6 @@ class TestPerformanceReporter:
         }
         results.bottlenecks = [bottleneck]
 
-        # Setup analysis summary
         results.analysis_summary = {
             "bottleneck_count": 1,
             "cpu_efficiency": 0.84,
@@ -288,7 +280,6 @@ class TestPerformanceReporter:
         )
         results.step_profiles = [step_profile]
 
-        # Add bottleneck
         bottleneck = {
             "step_name": "slow_step",
             "step_type": "SlowStep",
@@ -343,29 +334,24 @@ class TestProfilerIntegration:
     """Integration tests for the profiling system."""
 
     def test_end_to_end_profiling(self):
-        """Test complete profiling workflow."""
+        """Test start, two profiled steps, end, analysis, and report."""
         profiler = PerformanceProfiler()
 
-        # Start scenario profiling
         profiler.start_scenario()
 
-        # Profile some steps
         with profiler.profile_step("step1", "Step1"):
             time.sleep(0.01)
 
         with profiler.profile_step("step2", "Step2"):
             time.sleep(0.02)
 
-        # End scenario profiling
         profiler.end_scenario()
         profiler.analyze_performance()
 
-        # Verify results
         assert len(profiler.results.step_profiles) == 2
         assert profiler.results.total_wall_time > 0
         assert profiler.results.analysis_summary["total_steps"] == 2
 
-        # Generate report
         reporter = PerformanceReporter(profiler.results)
         report = reporter.generate_report()
         assert "step1" in report

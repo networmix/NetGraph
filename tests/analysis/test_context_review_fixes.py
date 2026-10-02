@@ -1,4 +1,4 @@
-"""Regression tests for AnalysisContext review fixes.
+"""Regression tests for AnalysisContext.
 
 Covers:
 - Fractional link costs raise ValueError instead of silent int64 truncation.
@@ -176,9 +176,9 @@ class TestFillMissingPairsPrecomputed:
     def test_missing_pair_defaults_are_not_aliased(self) -> None:
         """Each missing pair gets a fresh default object.
 
-        Regression: one mutable default (dict, MaxFlowResult) was stored
-        under every missing pair key, so mutating one entry of a public
-        API result would silently mutate the others.
+        Regression: one mutable default (dict, MaxFlowResult) shared by every
+        missing pair key would let a mutation of one entry of a public API
+        result silently change the others.
         """
         net = Network()
         for name in ["A", "B"]:
@@ -254,7 +254,7 @@ class TestSensitivityWithFlow:
         bound = analyze(net, source="^A$", sink="^B$")
         unbound = analyze(net)
 
-        with pytest.raises(ValueError, match="source/sink already configured"):
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
             bound.sensitivity_with_flow("^A$", "^B$")
         with pytest.raises(ValueError, match="source and sink are required"):
             unbound.sensitivity_with_flow()
@@ -305,7 +305,7 @@ class TestPairwisePseudoEdgeDeduplication:
 
         # 2 links x 2 directions = 4 real edges; pseudo edges: one per
         # member per participating group = (3 + 3) groups * 2 members = 12
-        # (previously duplicated once per opposing group: 24).
+        # (not duplicated once per opposing group, which would give 24).
         assert ctx.edge_count == 4 + 12
 
     def test_pairwise_flows_unchanged(self) -> None:

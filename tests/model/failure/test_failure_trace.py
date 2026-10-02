@@ -12,16 +12,12 @@ from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node
 from ngraph.model.selectors import Condition
 
-# -----------------------------------------------------------------------------
-# FailurePolicy.apply_failures trace tests
-# -----------------------------------------------------------------------------
-
 
 class TestFailureTracePolicyLevel:
     """Test failure_trace capture in FailurePolicy.apply_failures."""
 
     def test_trace_captures_mode_index(self) -> None:
-        """Test that mode_index is correctly captured."""
+        """mode_index and mode_attrs come from the selected positive-weight mode."""
         rule = FailureRule(scope="node", mode="all")
         policy = FailurePolicy(
             modes=[
@@ -49,7 +45,6 @@ class TestFailureTracePolicyLevel:
         policy.apply_failures({"N1": {}}, {}, failure_trace=trace)
 
         assert trace["mode_attrs"] == attrs
-        # Verify it's a copy, not a reference
         assert trace["mode_attrs"] is not attrs
 
     def test_trace_captures_selection_fields(self) -> None:
@@ -157,34 +152,9 @@ class TestFailureTracePolicyLevel:
         assert trace1 == trace2
 
 
-# -----------------------------------------------------------------------------
-# FailureManager integration tests
-# -----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def network_with_risk_groups() -> Network:
-    """Create a network with risk groups for expansion testing."""
-    network = Network()
-    n1 = Node("N1", attrs={"type": "router"})
-    n1.risk_groups = ["rg1"]
-    n2 = Node("N2", attrs={"type": "router"})
-    n2.risk_groups = ["rg1"]
-    n3 = Node("N3", attrs={"type": "server"})
-    network.add_node(n1)
-    network.add_node(n2)
-    network.add_node(n3)
-
-    link = Link("N1", "N2", capacity=100.0)
-    link.risk_groups = ["rg1"]
-    network.add_link(link)
-    network.add_link(Link("N2", "N3", capacity=100.0))
-    return network
-
-
 @pytest.fixture
 def simple_network() -> Network:
-    """Create a simple network for testing."""
+    """Chain N1-N2-N3: two routers and one server."""
     network = Network()
     network.add_node(Node("N1", attrs={"type": "router"}))
     network.add_node(Node("N2", attrs={"type": "router"}))
@@ -310,10 +280,8 @@ class TestFailureTraceManagerIntegration:
             seed=42,
         )
 
-        # Compare unique patterns count
         assert len(result1["results"]) == len(result2["results"])
 
-        # Compare metadata
         assert (
             result1["metadata"]["unique_patterns"]
             == result2["metadata"]["unique_patterns"]

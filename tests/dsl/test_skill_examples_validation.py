@@ -1,7 +1,6 @@
-"""Comprehensive validation of all 19 examples from EXAMPLES.md in the Claude skill.
+"""Validation of the 19 examples in the Claude skill's EXAMPLES.md.
 
-This test file validates that every example in the Claude skill documentation
-parses correctly and produces the expected results.
+Each example must parse and match the "Expected:" line in its docstring.
 """
 
 import pytest
@@ -9,9 +8,6 @@ import pytest
 from ngraph.scenario import Scenario
 
 
-# =============================================================================
-# Example 1: Simple Data Center
-# =============================================================================
 def test_example_1_simple_data_center():
     """Example 1: Simple Data Center - leaf-spine topology with traffic analysis.
 
@@ -69,7 +65,6 @@ workflow:
         f"Expected 8 links, got {len(scenario.network.links)}"
     )
 
-    # Validate node names
     expected_nodes = [
         "leaf/leaf1",
         "leaf/leaf2",
@@ -81,19 +76,14 @@ workflow:
     for name in expected_nodes:
         assert name in scenario.network.nodes, f"Missing node: {name}"
 
-    # Validate demands
-    demands = scenario.demand_set.get_default_set()
+    demands = scenario.demand_set.get_set("default")
     assert len(demands) == 1
 
-    # Validate failure policy
     policy = scenario.failure_policy_set.get_policy("single_link")
     assert policy is not None
     assert len(policy.modes) == 1
 
 
-# =============================================================================
-# Example 2: Multi-Pod with Blueprint
-# =============================================================================
 def test_example_2_multi_pod_blueprint():
     """Example 2: Multi-Pod with Blueprint - two pods sharing a blueprint.
 
@@ -150,9 +140,6 @@ network:
     )
 
 
-# =============================================================================
-# Example 3: Backbone with Risk Groups
-# =============================================================================
 def test_example_3_backbone_risk_groups():
     """Example 3: Backbone with Risk Groups - WAN with shared-risk link groups.
 
@@ -204,17 +191,14 @@ failures:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 3, (
         f"Expected 3 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate link count
     assert len(scenario.network.links) == 3, (
         f"Expected 3 links, got {len(scenario.network.links)}"
     )
 
-    # Validate risk groups
     assert len(scenario.network.risk_groups) == 2, (
         f"Expected 2 risk groups, got {len(scenario.network.risk_groups)}"
     )
@@ -222,9 +206,6 @@ failures:
     assert "RG_CHI_LA" in scenario.network.risk_groups
 
 
-# =============================================================================
-# Example 4: Variable Expansion at Scale
-# =============================================================================
 def test_example_4_variable_expansion():
     """Example 4: Variable Expansion at Scale - large fabric.
 
@@ -274,9 +255,6 @@ network:
     )
 
 
-# =============================================================================
-# Example 5: Full Mesh Topology
-# =============================================================================
 def test_example_5_full_mesh():
     """Example 5: Full Mesh Topology - 4-node full mesh for testing.
 
@@ -340,7 +318,6 @@ workflow:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 4, (
         f"Expected 4 nodes, got {len(scenario.network.nodes)}"
     )
@@ -350,13 +327,9 @@ workflow:
         f"Expected 6 links, got {len(scenario.network.links)}"
     )
 
-    # Validate seed
     assert scenario.seed == 42
 
 
-# =============================================================================
-# Example 6: Attribute-Based Selectors
-# =============================================================================
 def test_example_6_attribute_selectors():
     """Example 6: Attribute-Based Selectors - using match conditions.
 
@@ -419,9 +392,6 @@ network:
     )
 
 
-# =============================================================================
-# Example 7: Blueprint with Parameter Overrides
-# =============================================================================
 def test_example_7_blueprint_params():
     """Example 7: Blueprint with Parameter Overrides.
 
@@ -446,7 +416,6 @@ network:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Find the leaf node
     leaf_nodes = [n for n in scenario.network.nodes if "leaf" in n]
     assert len(leaf_nodes) == 1, f"Expected 1 leaf node, got {len(leaf_nodes)}"
 
@@ -456,9 +425,6 @@ network:
     )
 
 
-# =============================================================================
-# Example 8: Node and Link Rules
-# =============================================================================
 def test_example_8_node_link_rules():
     """Example 8: Node and Link Rules - modifying topology after creation.
 
@@ -505,7 +471,6 @@ network:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate switches 1 and 3 are disabled
     switch1 = scenario.network.nodes.get("my_clos1/switches/switch1")
     switch3 = scenario.network.nodes.get("my_clos1/switches/switch3")
     switch2 = scenario.network.nodes.get("my_clos1/switches/switch2")
@@ -516,7 +481,6 @@ network:
         "switch2 should not be disabled"
     )
 
-    # Validate link rule applied
     upgraded_link = None
     for link in scenario.network.links.values():
         if link.source == "group1/node1" and link.target == "group2/node1":
@@ -530,9 +494,6 @@ network:
     assert upgraded_link.cost == 5, f"Expected cost 5, got {upgraded_link.cost}"
 
 
-# =============================================================================
-# Example 9: Complete Traffic Analysis
-# =============================================================================
 def test_example_9_traffic_analysis():
     """Example 9: Complete Traffic Analysis - full workflow with MSD and placement.
 
@@ -597,21 +558,15 @@ workflow:
         f"Expected 40 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate workflow steps
     assert len(scenario.workflow) == 1
 
-    # Run workflow
     scenario.run()
 
-    # Check stats were computed
     results = scenario.results.to_dict()
     assert "network_statistics" in results["steps"]
     assert results["steps"]["network_statistics"]["data"]["node_count"] == 40
 
 
-# =============================================================================
-# Example 10: Group-By Selectors
-# =============================================================================
 def test_example_10_group_by():
     """Example 10: Group-By Selectors - grouping nodes by attribute.
 
@@ -643,24 +598,18 @@ demands:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 4, (
         f"Expected 4 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate link count
     assert len(scenario.network.links) == 2, (
         f"Expected 2 links, got {len(scenario.network.links)}"
     )
 
-    # Validate demands
     demands = scenario.demand_set.get_set("inter_dc")
     assert len(demands) == 1
 
 
-# =============================================================================
-# Example 11: Advanced Failure Policies
-# =============================================================================
 def test_example_11_advanced_failures():
     """Example 11: Advanced Failure Policies - weighted modes with conditions.
 
@@ -749,30 +698,23 @@ failures:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 5, (
         f"Expected 5 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate link count
     assert len(scenario.network.links) == 4, (
         f"Expected 4 links, got {len(scenario.network.links)}"
     )
 
-    # Validate risk groups
     assert len(scenario.network.risk_groups) == 3, (
         f"Expected 3 risk groups, got {len(scenario.network.risk_groups)}"
     )
 
-    # Validate failure policy modes
     policy = scenario.failure_policy_set.get_policy("mixed_failures")
     assert len(policy.modes) == 4, f"Expected 4 modes, got {len(policy.modes)}"
     assert policy.expand_groups is True
 
 
-# =============================================================================
-# Example 12: Hardware Components and Cost Analysis
-# =============================================================================
 def test_example_12_hardware_components():
     """Example 12: Hardware Components and Cost Analysis.
 
@@ -858,16 +800,12 @@ workflow:
         f"Expected 16 links, got {len(scenario.network.links)}"
     )
 
-    # Validate components library
     assert len(scenario.components_library.components) == 3
     assert scenario.components_library.get("SpineRouter") is not None
     assert scenario.components_library.get("LeafRouter") is not None
     assert scenario.components_library.get("Optic400G") is not None
 
 
-# =============================================================================
-# Example 13: YAML Anchors for Reuse
-# =============================================================================
 def test_example_13_yaml_anchors():
     """Example 13: YAML Anchors for Reuse.
 
@@ -927,9 +865,6 @@ network:
     assert spine_node.attrs["tier"] == 2
 
 
-# =============================================================================
-# Example 14: One-to-One Pattern and Zip Expansion
-# =============================================================================
 def test_example_14_one_to_one_zip():
     """Example 14: One-to-One Pattern and Zip Expansion.
 
@@ -972,13 +907,9 @@ network:
         f"Expected 6 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate links were created
     assert len(scenario.network.links) > 0, "Expected links to be created"
 
 
-# =============================================================================
-# Example 15: Traffic Demands with Variable Expansion and Group Modes
-# =============================================================================
 def test_example_15_demand_variables():
     """Example 15: Traffic Demands with Variable Expansion and Group Modes.
 
@@ -1023,7 +954,6 @@ demands:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 5, (
         f"Expected 5 nodes, got {len(scenario.network.nodes)}"
     )
@@ -1034,14 +964,10 @@ demands:
         f"Expected 2 inter_dc demands, got {len(inter_dc_demands)}"
     )
 
-    # Validate grouped demands
     grouped_demands = scenario.demand_set.get_set("grouped")
     assert len(grouped_demands) == 1
 
 
-# =============================================================================
-# Example 16: Hierarchical Risk Groups
-# =============================================================================
 def test_example_16_hierarchical_risk_groups():
     """Example 16: Hierarchical Risk Groups - nested risk group structure.
 
@@ -1098,7 +1024,6 @@ failures:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 4, (
         f"Expected 4 nodes, got {len(scenario.network.nodes)}"
     )
@@ -1113,14 +1038,10 @@ failures:
     rack1 = scenario.network.risk_groups["Rack1"]
     assert len(rack1.children) == 2, f"Expected 2 children, got {len(rack1.children)}"
 
-    # Validate failure policy
     policy = scenario.failure_policy_set.get_policy("hierarchical")
     assert policy.expand_groups is True
 
 
-# =============================================================================
-# Example 17: Risk Group Membership Rules
-# =============================================================================
 def test_example_17_membership_rules():
     """Example 17: Risk Group Membership Rules - dynamic assignment by attributes.
 
@@ -1175,12 +1096,10 @@ risk_groups:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 4, (
         f"Expected 4 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate risk groups
     assert "CoreTier3" in scenario.network.risk_groups
     assert "BackboneLinks" in scenario.network.risk_groups
     assert "ManualGroup1" in scenario.network.risk_groups
@@ -1195,7 +1114,6 @@ risk_groups:
         f"core2 should have CoreTier3, has {core2.risk_groups}"
     )
 
-    # Validate link membership
     backbone_link = None
     for link in scenario.network.links.values():
         if link.source == "core1" and link.target == "core2":
@@ -1208,9 +1126,6 @@ risk_groups:
     )
 
 
-# =============================================================================
-# Example 18: Generated Risk Groups
-# =============================================================================
 def test_example_18_generated_risk_groups():
     """Example 18: Generated Risk Groups - create from unique attribute values.
 
@@ -1258,7 +1173,6 @@ risk_groups:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 3, (
         f"Expected 3 nodes, got {len(scenario.network.nodes)}"
     )
@@ -1285,9 +1199,6 @@ risk_groups:
     )
 
 
-# =============================================================================
-# Example 19: Additional Selector Operators
-# =============================================================================
 def test_example_19_selector_operators():
     """Example 19: Additional Selector Operators - all condition operators.
 
@@ -1355,17 +1266,14 @@ demands:
 """
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Validate node count
     assert len(scenario.network.nodes) == 4, (
         f"Expected 4 nodes, got {len(scenario.network.nodes)}"
     )
 
-    # Validate link count
     assert len(scenario.network.links) == 3, (
         f"Expected 3 links, got {len(scenario.network.links)}"
     )
 
-    # Validate demands were parsed
     demands = scenario.demand_set.get_set("filtered")
     assert len(demands) == 3, f"Expected 3 demands, got {len(demands)}"
 

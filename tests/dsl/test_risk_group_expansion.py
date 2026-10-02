@@ -138,17 +138,15 @@ risk_groups:
       - name: "Room_R[1,2]"
 """
         scenario = Scenario.from_yaml(yaml_content)
-        # Should have Building_DC1 and Building_DC2
         assert "Building_DC1" in scenario.network.risk_groups
         assert "Building_DC2" in scenario.network.risk_groups
-        # Each should have Room_R1 and Room_R2 children
         for dc_name in ["Building_DC1", "Building_DC2"]:
             dc = scenario.network.risk_groups[dc_name]
             child_names = {c.name for c in dc.children}
             assert child_names == {"Room_R1", "Room_R2"}
 
     def test_no_expansion_needed(self) -> None:
-        """Literal names work unchanged."""
+        """Names without brackets pass through unchanged."""
         yaml_content = """
 network:
   nodes:
@@ -312,7 +310,7 @@ risk_groups:
         }
 
     def test_empty_risk_groups_array(self) -> None:
-        """Empty risk_groups array works correctly."""
+        """Empty risk_groups array yields an empty membership set."""
         yaml_content = """
 network:
   nodes:
@@ -325,7 +323,7 @@ network:
 
 
 class TestRiskGroupExpansionEdgeCases:
-    """Edge cases and error handling for risk group expansion."""
+    """Deduplication, inheritance and cross-references in risk group expansion."""
 
     def test_overlapping_patterns_deduplicated(self) -> None:
         """Overlapping patterns in membership array are deduplicated."""
@@ -349,7 +347,7 @@ risk_groups:
         }
 
     def test_inherited_plus_own_risk_groups(self) -> None:
-        """Parent and child risk groups combine correctly via blueprint."""
+        """Blueprint child nodes get their own plus the parent's risk groups."""
         yaml_content = """
 blueprints:
   rack:
@@ -379,7 +377,7 @@ risk_groups:
             }
 
     def test_blueprint_risk_groups_expansion(self) -> None:
-        """Risk groups in blueprint nodes expand correctly."""
+        """Bracket patterns in blueprint node risk_groups expand on every instance."""
         yaml_content = """
 blueprints:
   fabric:
@@ -490,7 +488,7 @@ risk_groups:
         )
 
     def test_multiple_string_shorthands(self) -> None:
-        """Multiple string entries work correctly."""
+        """Each string shorthand entry defines its own risk group."""
         yaml_content = """
 network:
   nodes:

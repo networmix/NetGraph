@@ -54,7 +54,7 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
             self._store[self._active][key] = value
 
         def get_all_step_metadata(self):
-            # Return empty mapping; caller code should handle gracefully
+            # Empty mapping: the step must not depend on prior step metadata
             return {}
 
     class _FailurePolicySetStub:
@@ -65,7 +65,6 @@ def test_tm_basic_behavior_unchanged(monkeypatch):
     step = TrafficMatrixPlacement(
         demand_set="default",
         iterations=2,
-        placement_rounds="auto",
         include_flow_details=False,
     )
     step.name = "tm_placement"

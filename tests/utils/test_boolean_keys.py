@@ -1,4 +1,4 @@
-"""Test YAML boolean key handling - both utility functions and integration tests."""
+"""Tests for YAML boolean keys: normalize_yaml_dict_keys and demand set names."""
 
 import textwrap
 
@@ -45,7 +45,7 @@ def test_normalize_yaml_dict_keys_all_strings():
 
 
 def test_normalize_yaml_dict_keys_empty_dict():
-    """Test that empty dictionary is handled correctly."""
+    """Test that an empty dictionary maps to an empty dictionary."""
     result = normalize_yaml_dict_keys({})
     assert result == {}
 
@@ -72,7 +72,7 @@ def test_normalize_yaml_dict_keys_preserves_values():
 
 
 # =============================================================================
-# Integration Tests for traffic_matrix_set boolean key handling
+# Integration Tests for boolean keys under demands
 # =============================================================================
 
 

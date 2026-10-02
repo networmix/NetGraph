@@ -5,17 +5,51 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ngraph.model.demand.spec import TrafficDemand
+from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.results.store import Results
 from ngraph.workflow.traffic_matrix_placement_step import (
     TrafficMatrixPlacement,
 )
 
 
+def _iteration(
+    placed: float = 10.0, demand: float = 10.0, data: dict | None = None
+) -> FlowIterationResult:
+    """One A->B placement iteration as FailureManager returns it."""
+    entry = FlowEntry(
+        source="A",
+        destination="B",
+        priority=0,
+        demand=demand,
+        placed=placed,
+        dropped=demand - placed,
+        data=data or {},
+    )
+    return FlowIterationResult(
+        flows=[entry],
+        summary=FlowSummary(
+            total_demand=demand,
+            total_placed=placed,
+            overall_ratio=placed / demand,
+            dropped_flows=int(placed < demand),
+            num_flows=1,
+        ),
+    )
+
+
+def _raw(results: list[FlowIterationResult]) -> dict:
+    """FailureManager Monte Carlo output around the given failure iterations."""
+    return {
+        "baseline": _iteration(),
+        "results": results,
+        "metadata": {"iterations": len(results), "unique_patterns": len(results)},
+    }
+
+
 @patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
 def test_traffic_matrix_placement_stores_core_outputs(
     mock_failure_manager_class,
 ) -> None:
-    # Prepare mock scenario with traffic matrix and results store
     mock_scenario = MagicMock()
     mock_td = TrafficDemand(
         source="A",
@@ -26,62 +60,7 @@ def test_traffic_matrix_placement_stores_core_outputs(
     mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value: baseline separate, failure iterations in results
-    mock_raw = {
-        "baseline": {
-            "demands": [
-                {
-                    "src": "A",
-                    "dst": "B",
-                    "priority": 0,
-                    "offered_gbps": 10.0,
-                    "placed_gbps": 10.0,
-                    "placement_ratio": 1.0,
-                }
-            ],
-            "summary": {
-                "total_offered_gbps": 10.0,
-                "total_placed_gbps": 10.0,
-                "overall_ratio": 1.0,
-            },
-        },
-        "results": [
-            {
-                "demands": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_gbps": 10.0,
-                        "placed_gbps": 8.0,
-                        "placement_ratio": 0.8,
-                    }
-                ],
-                "summary": {
-                    "total_offered_gbps": 10.0,
-                    "total_placed_gbps": 8.0,
-                    "overall_ratio": 0.8,
-                },
-            },
-            {
-                "demands": [
-                    {
-                        "src": "A",
-                        "dst": "B",
-                        "priority": 0,
-                        "offered_gbps": 10.0,
-                        "placed_gbps": 10.0,
-                        "placement_ratio": 1.0,
-                    }
-                ],
-                "summary": {
-                    "total_offered_gbps": 10.0,
-                    "total_placed_gbps": 10.0,
-                    "overall_ratio": 1.0,
-                },
-            },
-        ],
-        "metadata": {"iterations": 2, "unique_patterns": 1},
-    }
+    mock_raw = _raw([_iteration(placed=8.0), _iteration()])
     mock_failure_manager = MagicMock()
     mock_failure_manager_class.return_value = mock_failure_manager
     mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
@@ -94,12 +73,10 @@ def test_traffic_matrix_placement_stores_core_outputs(
     mock_scenario.results = Results()
     step.execute(mock_scenario)
 
-    # Verify schema outputs exist and have expected shapes
     exported = mock_scenario.results.to_dict()
     data = exported["steps"]["tm_step"]["data"]
     assert isinstance(data, dict)
     assert "flow_results" in data and isinstance(data["flow_results"], list)
-    # example iteration-level sanity: ensure summaries present
     for it in data["flow_results"]:
         assert "summary" in it
 
@@ -108,7 +85,6 @@ def test_traffic_matrix_placement_stores_core_outputs(
 def test_traffic_matrix_placement_flow_details_edges(
     mock_failure_manager_class,
 ) -> None:
-    # Prepare mock scenario with traffic matrix and results store
     mock_scenario = MagicMock()
     mock_td = TrafficDemand(
         source="A",
@@ -119,72 +95,12 @@ def test_traffic_matrix_placement_flow_details_edges(
     mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value with edges used (baseline separate)
-    mock_raw = {
-        "baseline": {
-            "failure_id": "",
-            "failure_state": None,
-            "flows": [],
-            "summary": {
-                "total_demand": 10.0,
-                "total_placed": 10.0,
-                "overall_ratio": 1.0,
-                "dropped_flows": 0,
-                "num_flows": 0,
-            },
-            "data": {},
-        },
-        "results": [
-            {
-                "failure_id": "",
-                "failure_state": None,
-                "flows": [
-                    {
-                        "source": "A",
-                        "destination": "B",
-                        "priority": 0,
-                        "volume": 10.0,
-                        "placed": 8.0,
-                        "dropped": 2.0,
-                        "cost_distribution": {},
-                        "data": {"edges": ["(u,v,k1)", "(x,y,k2)"]},
-                    }
-                ],
-                "summary": {
-                    "total_demand": 10.0,
-                    "total_placed": 8.0,
-                    "overall_ratio": 0.8,
-                    "dropped_flows": 1,
-                    "num_flows": 1,
-                },
-                "data": {},
-            },
-            {
-                "failure_id": "",
-                "failure_state": None,
-                "flows": [
-                    {
-                        "source": "A",
-                        "destination": "B",
-                        "priority": 0,
-                        "volume": 10.0,
-                        "placed": 10.0,
-                        "dropped": 0.0,
-                        "cost_distribution": {},
-                        "data": {"edges": ["(u,v,k1)"]},
-                    }
-                ],
-                "summary": {
-                    "total_demand": 10.0,
-                    "total_placed": 10.0,
-                    "overall_ratio": 1.0,
-                    "dropped_flows": 0,
-                    "num_flows": 1,
-                },
-                "data": {},
-            },
-        ],
-        "metadata": {"iterations": 2, "unique_patterns": 1},
-    }
+    mock_raw = _raw(
+        [
+            _iteration(placed=8.0, data={"edges": ["(u,v,k1)", "(x,y,k2)"]}),
+            _iteration(data={"edges": ["(u,v,k1)"]}),
+        ]
+    )
     mock_failure_manager = MagicMock()
     mock_failure_manager_class.return_value = mock_failure_manager
     mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
@@ -199,7 +115,6 @@ def test_traffic_matrix_placement_flow_details_edges(
     mock_scenario.results = Results()
     step.execute(mock_scenario)
 
-    # Verify edges presence can be found in flow_results entries
     exported = mock_scenario.results.to_dict()
     data = exported["steps"]["tm_step"]["data"]
     flow_results = data["flow_results"]
@@ -211,7 +126,6 @@ def test_traffic_matrix_placement_flow_details_edges(
 def test_traffic_matrix_placement_alpha_scales_demands(
     mock_failure_manager_class,
 ) -> None:
-    # Prepare mock scenario with a single traffic demand
     mock_scenario = MagicMock()
     mock_td = TrafficDemand(
         source="S",
@@ -222,24 +136,11 @@ def test_traffic_matrix_placement_alpha_scales_demands(
     mock_scenario.demand_set.get_set.return_value = [mock_td]
 
     # Mock FailureManager return value (minimal valid structure)
-    mock_raw = {
-        "results": [
-            {
-                "demands": [],
-                "summary": {
-                    "total_offered_gbps": 0.0,
-                    "total_placed_gbps": 0.0,
-                    "overall_ratio": 1.0,
-                },
-            }
-        ],
-        "metadata": {"iterations": 1, "unique_patterns": 1},
-    }
+    mock_raw = _raw([_iteration()])
     mock_failure_manager = MagicMock()
     mock_failure_manager_class.return_value = mock_failure_manager
     mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
 
-    # Run with alpha scaling
     step = TrafficMatrixPlacement(
         name="tm_step_alpha",
         demand_set="default",
@@ -272,19 +173,7 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
     )
     mock_scenario.demand_set.get_set.return_value = [mock_td]
 
-    mock_raw = {
-        "results": [
-            {
-                "demands": [],
-                "summary": {
-                    "total_offered_gbps": 0.0,
-                    "total_placed_gbps": 0.0,
-                    "overall_ratio": 1.0,
-                },
-            }
-        ],
-        "metadata": {"iterations": 1, "baseline": False, "unique_patterns": 1},
-    }
+    mock_raw = _raw([_iteration()])
     mock_failure_manager = MagicMock()
     mock_failure_manager_class.return_value = mock_failure_manager
     mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
@@ -298,7 +187,6 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
     mock_scenario.results = Results()
     step.execute(mock_scenario)
 
-    # Find data.context and assert it contains alpha
     exported = mock_scenario.results.to_dict()
     ctx = exported["steps"]["tm_step_meta"]["data"]["context"]
     assert ctx.get("alpha") == 3.0
@@ -308,7 +196,6 @@ def test_traffic_matrix_placement_metadata_includes_alpha(
 def test_traffic_matrix_placement_alpha_auto_uses_msd(
     mock_failure_manager_class,
 ) -> None:
-    # Scenario with one TD
     mock_scenario = MagicMock()
     td = TrafficDemand(
         source="S",
@@ -318,8 +205,7 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
     )
     mock_scenario.demand_set.get_set.return_value = [td]
 
-    # Populate results metadata: prior MSD step
-    # Provide MSD step data in Results store
+    # Data from a prior MSD step in the results store
     mock_scenario.results = Results()
     mock_scenario.results.enter_step("msd1")
     mock_scenario.results.put("metadata", {})
@@ -327,7 +213,7 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
         "data",
         {
             "alpha_star": 2.0,
-            "context": {"matrix_name": "default", "placement_rounds": "auto"},
+            "context": {"demand_set": "default"},
             "base_demands": [
                 {
                     "source": "S",
@@ -343,19 +229,7 @@ def test_traffic_matrix_placement_alpha_auto_uses_msd(
     mock_scenario.results.exit_step()
 
     # Minimal MC results
-    mock_raw = {
-        "results": [
-            {
-                "demands": [],
-                "summary": {
-                    "total_offered_gbps": 0.0,
-                    "total_placed_gbps": 0.0,
-                    "overall_ratio": 1.0,
-                },
-            }
-        ],
-        "metadata": {"iterations": 1, "unique_patterns": 1},
-    }
+    mock_raw = _raw([_iteration()])
     mock_failure_manager = MagicMock()
     mock_failure_manager_class.return_value = mock_failure_manager
     mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
@@ -418,7 +292,6 @@ def test_traffic_matrix_placement_failure_trace_on_results(
     )
     mock_scenario.demand_set.get_set.return_value = [mock_td]
 
-    # Create mock result with failure_trace and occurrence_count
     mock_result = MagicMock()
     mock_result.failure_id = "abc123"
     mock_result.failure_state = {"excluded_nodes": [], "excluded_links": ["L1"]}
@@ -434,7 +307,7 @@ def test_traffic_matrix_placement_failure_trace_on_results(
                 "selected_ids": ["L1"],
             }
         ],
-        "expansion": {"nodes": [], "links": [], "risk_groups": []},
+        "expansion": {"nodes": [], "links": []},
     }
     mock_result.occurrence_count = 2
     mock_result.summary = MagicMock()
@@ -454,7 +327,6 @@ def test_traffic_matrix_placement_failure_trace_on_results(
         },
     }
 
-    # Mock baseline
     mock_baseline = MagicMock()
     mock_baseline.to_dict.return_value = {
         "failure_id": "",
@@ -489,7 +361,6 @@ def test_traffic_matrix_placement_failure_trace_on_results(
     mock_scenario.results = Results()
     step.execute(mock_scenario)
 
-    # Verify flow_results contains failure_trace
     exported = mock_scenario.results.to_dict()
     data = exported["steps"]["tm_patterns"]["data"]
 
@@ -499,7 +370,7 @@ def test_traffic_matrix_placement_failure_trace_on_results(
     assert result["failure_trace"]["mode_index"] == 0
     assert result["occurrence_count"] == 2
 
-    # Verify baseline is stored separately in data
+    # Baseline is stored separately from flow_results
     assert "baseline" in data
     assert data["baseline"]["failure_id"] == ""
 
@@ -539,6 +410,7 @@ def test_traffic_matrix_placement_no_trace_when_disabled(
     }
 
     mock_raw = {
+        "baseline": _iteration(),
         "results": [mock_result],
         "metadata": {"iterations": 1, "parallelism": 1, "unique_patterns": 1},
     }
@@ -555,7 +427,6 @@ def test_traffic_matrix_placement_no_trace_when_disabled(
     mock_scenario.results = Results()
     step.execute(mock_scenario)
 
-    # Verify flow_results exist but have no trace
     exported = mock_scenario.results.to_dict()
     data = exported["steps"]["tm_no_patterns"]["data"]
     assert len(data["flow_results"]) == 1

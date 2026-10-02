@@ -101,7 +101,7 @@ class TestBuildRiskGroupsChildRejection:
             build_risk_groups(rg_data)
 
     def test_child_generate_rejected(self):
-        """A 'generate' block on a child raises (existing behavior)."""
+        """A 'generate' block on a child raises."""
         rg_data = [
             {
                 "name": "Parent",
@@ -113,7 +113,7 @@ class TestBuildRiskGroupsChildRejection:
             build_risk_groups(rg_data)
 
     def test_top_level_membership_and_disabled_still_accepted(self):
-        """Top-level entries keep full support for membership and disabled."""
+        """Top-level entries accept membership and disabled."""
         rg_data = [
             {
                 "name": "Parent",

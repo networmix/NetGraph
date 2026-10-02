@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analysis engine for NetGraph performance benchmarks."""
+"""Complexity fitting and regression reporting for benchmark results."""
 
 from __future__ import annotations
 
@@ -7,14 +7,11 @@ import math
 from pathlib import Path
 from typing import Any
 
-from .core import BenchmarkResult, BenchmarkSample, BenchmarkTask
+from .core import BenchmarkResult, BenchmarkSample
 
 
 def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
-    """Fit power law to benchmark samples using least squares regression.
-
-    Performs linear regression in log space to fit y = a * x^b model.
-    Calculates R^2 goodness of fit metric.
+    """Fit y = a * x^b to mean times by least squares in log space.
 
     Args:
         samples: List of benchmark samples with problem sizes and timings.
@@ -29,11 +26,9 @@ def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
     if len(samples) < 2:
         raise ValueError("Need at least 2 samples for power law fitting")
 
-    # Convert to log space for linear regression
     log_sizes = [math.log(s.numeric_problem_size()) for s in samples]
     log_times = [math.log(s.mean_time) for s in samples]
 
-    # Least squares regression in log space
     n = len(samples)
     sum_x = sum(log_sizes)
     sum_y = sum(log_times)
@@ -42,7 +37,7 @@ def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
 
     slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
 
-    # Calculate R^2
+    # R^2 of the fit, in log space
     y_mean = sum_y / n
     ss_tot = sum((y - y_mean) ** 2 for y in log_times)
     ss_res = sum(
@@ -55,7 +50,7 @@ def _fit_power_law(samples: list[BenchmarkSample]) -> tuple[float, float]:
 
 
 class PerformanceAnalyzer:
-    """Processes benchmark results and detects performance regressions."""
+    """Report timing, complexity fit, and regressions for benchmark runs."""
 
     def __init__(self, results_dir: Path | None = None):
         self.results_dir = results_dir or Path("dev/perf_results")
@@ -78,7 +73,7 @@ class PerformanceAnalyzer:
         self.runs.extend(results)
 
     def print_analysis_report(self) -> None:
-        """Print analysis report to stdout."""
+        """Print a summary per run, plus a complexity fit if plots are enabled."""
         if not self.runs:
             print("No benchmark results to analyze")
             return
@@ -100,7 +95,6 @@ class PerformanceAnalyzer:
         print(f"  Iterations per case: {run.profile.iterations}")
         print(f"  Expected complexity: {run.profile.analysis.expected.display_name}")
 
-        # Calculate statistics across all samples
         SECONDS_TO_MS = 1000
         all_times = [s.mean_time * SECONDS_TO_MS for s in samples]
         size_ratio = (
@@ -133,7 +127,6 @@ class PerformanceAnalyzer:
                 f"{cv_pct:>7.1f}% {status:>12}"
             )
 
-        # Add interpretation note for high CV values
         high_cv_samples = [
             s
             for s in samples
@@ -154,13 +147,11 @@ class PerformanceAnalyzer:
             print("\n✗ Insufficient samples for complexity analysis")
             return
 
-        # Fit power law
         try:
             empirical_exponent, r_squared = _fit_power_law(samples)
 
             print("\nComplexity Analysis:")
 
-            # Model comparison
             expected_exp = run.profile.analysis.expected.expected_exponent
             deviation_pct = abs(empirical_exponent - expected_exp) / expected_exp * 100
             interpreted = run.profile.analysis.expected.interpret_exponent(
@@ -174,7 +165,6 @@ class PerformanceAnalyzer:
             print(
                 f"    Measured:   {interpreted} (exponent = {empirical_exponent:.3f})"
             )
-            # R^2 quality assessment thresholds
             EXCELLENT_R2_THRESHOLD = 0.99
             GOOD_R2_THRESHOLD = 0.95
 
@@ -187,7 +177,6 @@ class PerformanceAnalyzer:
 
             print(f"    Fit quality: R^2 = {r_squared:.4f} {quality}")
 
-            # Pass/fail assessment
             if deviation_pct <= run.profile.analysis.fit_tol_pct:
                 print("\n  ✓ Performance matches expected complexity")
                 print(
@@ -199,7 +188,6 @@ class PerformanceAnalyzer:
                     f"    Deviation: {deviation_pct:.1f}% (exceeds {run.profile.analysis.fit_tol_pct:.0f}% tolerance)"
                 )
 
-            # Regression check with size mapping
             if run.profile.analysis.should_scan_regressions():
                 regressions = self._find_performance_regressions(run, samples)
                 if regressions:
@@ -209,7 +197,7 @@ class PerformanceAnalyzer:
                     )
                     print("    Violations:")
 
-                    # Map numeric sizes back to expressions for clarity
+                    # Label violations with the original size expressions.
                     size_to_expr = {
                         int(s.numeric_problem_size()): s.problem_size for s in samples
                     }
@@ -232,10 +220,9 @@ class PerformanceAnalyzer:
     def _find_performance_regressions(
         self, run: BenchmarkResult, samples: list[BenchmarkSample]
     ) -> list[tuple[int, float]]:
-        """Find performance regressions against expected model.
+        """Return samples slower than the model predicts by more than the tolerance.
 
-        Compares actual performance against expected complexity model.
-        Identifies samples that exceed regression tolerance threshold.
+        Predictions scale the smallest sample's time by the expected model.
 
         Args:
             run: Benchmark result containing profile and analysis configuration.
@@ -251,12 +238,10 @@ class PerformanceAnalyzer:
         for sample in samples[1:]:
             sample_size = int(sample.numeric_problem_size())
 
-            # Calculate expected time based on model
             expected_time = run.profile.analysis.expected.calculate_expected_time(
                 baseline.mean_time, baseline_size, sample_size
             )
 
-            # Check if actual time exceeds expected by tolerance
             performance_ratio = sample.mean_time / expected_time
             if performance_ratio > 1 + run.profile.analysis.regression_tol_pct / 100:
                 deviation_pct = (performance_ratio - 1) * 100
@@ -264,48 +249,31 @@ class PerformanceAnalyzer:
 
         return regressions
 
-    def get_samples_by_task(self, task: BenchmarkTask) -> list[BenchmarkSample]:
-        """Get all samples for a specific task across all runs."""
-        samples = []
-        for run in self.runs:
-            if task in run.profile.tasks:
-                samples.extend(run.samples)
-        return samples
+    def get_complexity_summary(self, run: BenchmarkResult) -> dict[str, Any]:
+        """Return the power-law fit for one run's samples.
 
-    def get_complexity_summary(self, task: BenchmarkTask) -> dict[str, Any]:
-        """Get complexity analysis summary for a task."""
-        samples = self.get_samples_by_task(task)
-        if len(samples) < 2:
+        Each run is fitted on its own: profiles that share a task (the Clos and
+        grid SPF profiles) scale differently and must not be pooled.
+
+        Empty when the run has fewer than two samples or the fit fails.
+        """
+        sorted_samples = sorted(run.samples, key=lambda s: s.numeric_problem_size())
+        if len(sorted_samples) < 2:
             return {}
-
-        sorted_samples = sorted(samples, key=lambda s: s.numeric_problem_size())
 
         try:
             empirical_exponent, r_squared = _fit_power_law(sorted_samples)
-
-            first_size = sorted_samples[0].numeric_problem_size()
-            last_size = sorted_samples[-1].numeric_problem_size()
-
-            # Get the expected complexity model from the first run containing this task
-            expected_model = None
-            for run in self.runs:
-                if task in run.profile.tasks:
-                    expected_model = run.profile.analysis.expected
-                    break
-
-            result = {
-                "empirical_exponent": empirical_exponent,
-                "r_squared": r_squared,
-                "size_range": f"{first_size:.0f}-{last_size:.0f}",
-                "samples": len(sorted_samples),
-            }
-
-            # Add interpreted complexity if we have a model
-            if expected_model:
-                result["interpreted_complexity"] = expected_model.interpret_exponent(
-                    empirical_exponent
-                )
-
-            return result
         except (ValueError, ZeroDivisionError, OverflowError):
             return {}
+
+        first_size = sorted_samples[0].numeric_problem_size()
+        last_size = sorted_samples[-1].numeric_problem_size()
+        return {
+            "empirical_exponent": empirical_exponent,
+            "r_squared": r_squared,
+            "size_range": f"{first_size:.0f}-{last_size:.0f}",
+            "samples": len(sorted_samples),
+            "interpreted_complexity": run.profile.analysis.expected.interpret_exponent(
+                empirical_exponent
+            ),
+        }

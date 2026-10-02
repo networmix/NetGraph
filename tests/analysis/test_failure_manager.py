@@ -1,7 +1,7 @@
-"""High-value tests for `FailureManager` public behavior and APIs.
+"""Tests for `FailureManager` public behavior.
 
-Focus on functional outcomes and API semantics. Tests core functionality,
-policy management, exclusion computation, and convenience methods.
+Covers initialization, policy lookup, exclusion computation (including
+risk-group expansion), Monte Carlo entry points, and sensitivity aggregation.
 """
 
 from typing import Any
@@ -66,7 +66,7 @@ class TestFailureManagerInitialization:
     def test_initialization(
         self, simple_network: Network, failure_policy_set: FailurePolicySet
     ) -> None:
-        """Test basic initialization."""
+        """The constructor stores the network, policy set, and policy name."""
         fm = FailureManager(
             network=simple_network,
             failure_policy_set=failure_policy_set,
@@ -201,9 +201,14 @@ class TestFailureManagerExclusionComputation:
                 self.failed_group = failed_group
                 self.modes: list[Any] = []
 
+            expand_groups = False
+
             def prepare_matches(
                 self, *args: Any, **kwargs: Any
             ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def prepare_weights(self, *args: Any, **kwargs: Any) -> dict:
                 return {}
 
             def apply_failures_typed(
@@ -249,15 +254,20 @@ class TestFailureManagerExclusionComputation:
                     "selected_ids": [parent.name],
                 }
             ],
-            "expansion": {"nodes": [], "links": [], "risk_groups": [child.name]},
+            "expansion": {"nodes": [], "links": []},
         }
 
         class TracedRiskGroupPolicy:
             modes: list[Any] = []
 
+            expand_groups = False
+
             def prepare_matches(
                 self, *args: Any, **kwargs: Any
             ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def prepare_weights(self, *args: Any, **kwargs: Any) -> dict:
                 return {}
 
             def apply_failures_typed(
@@ -305,9 +315,14 @@ class TestFailureManagerExclusionComputation:
         class FixedRiskGroupPolicy:
             modes: list[Any] = []
 
+            expand_groups = False
+
             def prepare_matches(
                 self, *args: Any, **kwargs: Any
             ) -> dict[int, tuple[str, ...]]:
+                return {}
+
+            def prepare_weights(self, *args: Any, **kwargs: Any) -> dict:
                 return {}
 
             def apply_failures_typed(
@@ -330,13 +345,12 @@ class TestFailureManagerExclusionComputation:
 
 
 class TestFailureManagerTopLevelMatching:
-    """Test compute_exclusions merged attribute view correctness."""
+    """compute_exclusions matches rules on top-level fields (disabled, capacity)."""
 
     def test_node_matching_on_disabled_attribute(
         self, simple_network: Network, failure_policy_set: FailurePolicySet
     ) -> None:
         """Test node matching on disabled attribute."""
-        # Mark one node as disabled
         simple_network.nodes["node1"].disabled = True
 
         rule = FailureRule(
@@ -398,7 +412,6 @@ class TestFailureManagerMonteCarloValidation:
             policy_name=None,
         )
 
-        # Mock analysis function
         def mock_analysis_func(*args: Any, **kwargs: Any) -> dict[str, Any]:
             return {"result": "mock"}
 
@@ -414,7 +427,6 @@ class TestFailureManagerMonteCarloValidation:
     def test_baseline_always_present(self, failure_manager: FailureManager) -> None:
         """Test that baseline is always present in results."""
 
-        # Mock analysis function
         def mock_analysis_func(*args: Any, **kwargs: Any) -> dict[str, Any]:
             return {"result": "mock"}
 
@@ -454,19 +466,28 @@ class TestFailureManagerConvenienceMethods:
     def test_run_demand_placement_monte_carlo_delegates(
         self, mock_mc_analysis: MagicMock, failure_manager: FailureManager
     ) -> None:
-        """Test run_demand_placement_monte_carlo delegates correctly."""
+        """run_demand_placement_monte_carlo delegates to run_monte_carlo_analysis."""
         mock_mc_analysis.return_value = {
             "results": [],
             "metadata": {"iterations": 1},
         }
 
-        mock_demands = MagicMock()
         result = failure_manager.run_demand_placement_monte_carlo(
-            demands_config=mock_demands, iterations=1, parallelism=1
+            demands_config=[], iterations=1, parallelism=1
         )
 
         assert mock_mc_analysis.called
         assert result == mock_mc_analysis.return_value
+
+    def test_run_demand_placement_monte_carlo_rejects_other_inputs(
+        self, failure_manager: FailureManager
+    ) -> None:
+        """Inputs other than a list or DemandSet raise instead of placing nothing."""
+        with pytest.raises(TypeError, match="list of demand configs or a DemandSet"):
+            failure_manager.run_demand_placement_monte_carlo(
+                demands_config=({"source": "A", "target": "B", "volume": 1.0},),
+                iterations=1,
+            )
 
     def test_flow_placement_string_conversion_max_flow(
         self, failure_manager: FailureManager
@@ -524,18 +545,17 @@ class TestFailureManagerConvenienceMethods:
 
 
 class TestFailureManagerErrorHandling:
-    """Test error handling and edge cases."""
+    """Errors raised during Monte Carlo execution."""
 
     @patch("ngraph.analysis.failure_manager.ThreadPoolExecutor")
     def test_parallel_execution_error_propagation(
         self, mock_pool_executor: MagicMock, failure_manager: FailureManager
     ) -> None:
-        """Test that parallel execution errors propagate correctly."""
+        """An error from the thread pool propagates to the caller unchanged."""
         mock_pool = MagicMock()
         mock_pool_executor.return_value.__enter__.return_value = mock_pool
         mock_pool.map.side_effect = RuntimeError("Parallel execution failed")
 
-        # Mock analysis function
         def mock_analysis_func(*args: Any, **kwargs: Any) -> dict[str, Any]:
             return {"result": "mock"}
 
@@ -557,7 +577,7 @@ class TestSensitivityResultsProcessing:
     def test_process_sensitivity_results_weights_by_occurrence_count(
         self, failure_manager: FailureManager
     ) -> None:
-        """Verify weighted statistics calculation uses occurrence_count correctly."""
+        """Weighted statistics weight each pattern by its occurrence_count."""
         from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 
         # Pattern A: score=0.8, occurred 5 times
@@ -614,7 +634,7 @@ class TestSensitivityResultsProcessing:
     def test_process_sensitivity_results_single_pattern(
         self, failure_manager: FailureManager
     ) -> None:
-        """Single pattern with occurrence_count > 1 should have correct count."""
+        """A single pattern's count equals its occurrence_count."""
         from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 
         summary = FlowSummary(

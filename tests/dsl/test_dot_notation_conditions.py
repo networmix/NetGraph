@@ -1,6 +1,6 @@
 """Tests for dot-notation attribute access in conditions."""
 
-from ngraph.dsl.selectors import Condition, evaluate_condition, resolve_attr_path
+from ngraph.model.selectors import Condition, evaluate_condition, resolve_attr_path
 
 
 class TestResolveAttrPath:
@@ -21,7 +21,7 @@ class TestResolveAttrPath:
         assert value == "Acme"
 
     def test_deeply_nested(self):
-        """Multiple levels of nesting work."""
+        """Three-level dot path resolves to the leaf value."""
         attrs = {"level1": {"level2": {"level3": "deep_value"}}}
         found, value = resolve_attr_path(attrs, "level1.level2.level3")
         assert found is True
@@ -49,7 +49,7 @@ class TestResolveAttrPath:
         assert value is None
 
     def test_empty_attrs(self):
-        """Empty attrs dict handles any path."""
+        """Any path on an empty attrs dict returns (False, None)."""
         found, value = resolve_attr_path({}, "any.path")
         assert found is False
         assert value is None
@@ -114,7 +114,7 @@ class TestEvaluateConditionWithDotNotation:
         assert evaluate_condition(attrs, cond) is True
 
     def test_simple_attribute_path(self):
-        """Simple (non-dotted) attribute paths work correctly."""
+        """Non-dotted attribute path matches with ==."""
         attrs = {"role": "spine", "tier": 2}
         cond = Condition(attr="role", op="==", value="spine")
         assert evaluate_condition(attrs, cond) is True
@@ -130,7 +130,7 @@ class TestDeeplyNestedDotNotation:
     """Tests for deeply nested attribute paths (4+ levels)."""
 
     def test_four_level_nesting(self):
-        """Four levels of nesting work correctly."""
+        """Four-level dot path resolves to the leaf value."""
         attrs = {"infrastructure": {"facility": {"building": {"floor": "3"}}}}
         found, value = resolve_attr_path(
             attrs, "infrastructure.facility.building.floor"
@@ -139,7 +139,7 @@ class TestDeeplyNestedDotNotation:
         assert value == "3"
 
     def test_five_level_nesting(self):
-        """Five levels of nesting work correctly."""
+        """Five-level dot path resolves to the leaf value."""
         attrs = {"topology": {"fiber": {"path": {"segment": {"conduit_id": "C-001"}}}}}
         found, value = resolve_attr_path(
             attrs, "topology.fiber.path.segment.conduit_id"
@@ -148,7 +148,7 @@ class TestDeeplyNestedDotNotation:
         assert value == "C-001"
 
     def test_deep_nesting_condition_evaluation(self):
-        """Condition evaluation works with deeply nested paths."""
+        """== condition matches on a five-level dot path."""
         attrs = {"facility": {"datacenter": {"room": {"rack": {"pdu_zone": "A"}}}}}
         cond = Condition(
             attr="facility.datacenter.room.rack.pdu_zone", op="==", value="A"

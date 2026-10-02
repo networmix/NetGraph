@@ -1,4 +1,4 @@
-"""Tests for FailureManager core functionality and integration."""
+"""Tests for FailureManager exclusions, Monte Carlo runs, and failure traces."""
 
 import pytest
 
@@ -11,7 +11,7 @@ from ngraph.results.flow import FlowIterationResult, FlowSummary
 
 
 class TestFailureManagerCore:
-    """Test core FailureManager functionality."""
+    """FailureManager on a 3-node network: policies, exclusions, runs, and traces."""
 
     @pytest.fixture
     def simple_network(self):
@@ -112,7 +112,6 @@ class TestFailureManagerCore:
         """Test Monte Carlo analysis execution."""
         manager = FailureManager(simple_network, failure_policy_set, "single_failures")
 
-        # Run analysis with max flow function
         results = manager.run_monte_carlo_analysis(
             analysis_func=max_flow_analysis,
             iterations=5,  # Small number for testing
@@ -156,11 +155,10 @@ class TestFailureManagerCore:
         """Test parallel execution of Monte Carlo analysis."""
         manager = FailureManager(simple_network, failure_policy_set, "single_failures")
 
-        # Run with multiple workers
         results = manager.run_monte_carlo_analysis(
             analysis_func=max_flow_analysis,
             iterations=4,
-            parallelism=2,  # Multiple workers
+            parallelism=2,
             seed=42,
             source="A",
             target="C",
@@ -235,7 +233,6 @@ class TestFailureManagerCore:
             assert "selections" in trace, "Trace field 'selections' missing"
             assert "expansion" in trace, "Trace field 'expansion' missing"
 
-            # Verify selections structure
             assert isinstance(trace["selections"], list)
             if trace["selections"]:
                 sel = trace["selections"][0]
@@ -245,10 +242,9 @@ class TestFailureManagerCore:
                 assert "matched_count" in sel
                 assert "selected_ids" in sel
 
-            # Verify expansion structure
             assert "nodes" in trace["expansion"]
             assert "links" in trace["expansion"]
-            assert "risk_groups" in trace["expansion"]
+            assert set(trace["expansion"]) == {"nodes", "links"}
 
     def test_failure_trace_not_present_when_disabled(
         self, simple_network, failure_policy_set
@@ -260,7 +256,7 @@ class TestFailureManagerCore:
             analysis_func=max_flow_analysis,
             iterations=5,
             parallelism=1,
-            store_failure_patterns=False,  # Disabled
+            store_failure_patterns=False,
             seed=42,
             source="A",
             target="C",
@@ -378,31 +374,27 @@ class TestFailureManagerCore:
 
 
 class TestFailureManagerIntegration:
-    """Test FailureManager integration with workflow systems."""
+    """FailureManager end to end with real and failing analysis functions."""
 
     def test_capacity_envelope_analysis_integration(self):
         """Test integration with capacity analysis workflow producing FlowIterationResult."""
-        # Create larger network for meaningful analysis
+        # 2-spine, 3-leaf fabric
         from ngraph.model.network import Link, Node
 
         network = Network()
         network.attrs["name"] = "spine_leaf"
 
-        # Add spine nodes
         network.add_node(Node("spine1"))
         network.add_node(Node("spine2"))
 
-        # Add leaf nodes
         network.add_node(Node("leaf1"))
         network.add_node(Node("leaf2"))
         network.add_node(Node("leaf3"))
 
-        # Add spine-leaf connections
         for spine in ["spine1", "spine2"]:
             for leaf in ["leaf1", "leaf2", "leaf3"]:
                 network.add_link(Link(spine, leaf, capacity=10.0, cost=1))
 
-        # Create failure policy
         policy_set = FailurePolicySet()
         rule = FailureRule(
             scope="link",
@@ -416,7 +408,6 @@ class TestFailureManagerIntegration:
 
         manager = FailureManager(network, policy_set, "dual_link_failures")
 
-        # Run capacity analysis
         results = manager.run_monte_carlo_analysis(
             analysis_func=max_flow_analysis,
             iterations=10,
@@ -427,7 +418,6 @@ class TestFailureManagerIntegration:
             mode="pairwise",
         )
 
-        # Verify meaningful results
         assert "results" in results
         assert "metadata" in results
 
@@ -437,7 +427,7 @@ class TestFailureManagerIntegration:
         total_occurrences = sum(r.occurrence_count for r in results["results"])
         assert total_occurrences == 10
 
-        # Each result is a FlowIterationResult; ensure flows present
+        # Each result is a FlowIterationResult with a flows list
         for iter_res in results["results"]:
             assert isinstance(iter_res, FlowIterationResult)
             assert hasattr(iter_res, "summary")
@@ -445,8 +435,7 @@ class TestFailureManagerIntegration:
             assert iter_res.occurrence_count >= 1
 
     def test_error_handling_in_analysis(self):
-        """Test error handling during analysis execution."""
-        # Create test network
+        """An exception raised by the analysis function propagates to the caller."""
         from ngraph.model.network import Link, Node
 
         network = Network()
@@ -467,7 +456,6 @@ class TestFailureManagerIntegration:
 
         manager = FailureManager(network, policy_set, "no_failures")
 
-        # Analysis should handle worker errors gracefully
         with pytest.raises(ValueError):  # Should propagate the specific error
             manager.run_monte_carlo_analysis(
                 analysis_func=failing_analysis_func,

@@ -1,11 +1,7 @@
-"""
-Tests for risk group management in the network module.
+"""Tests for enabling and disabling Network risk groups.
 
-This module contains tests for:
-- Risk group creation and hierarchy
-- Enabling/disabling risk groups (recursive and non-recursive)
-- Multi-membership risk group scenarios
-- Risk group effects on nodes and links
+Covers recursive and non-recursive disabling, nested hierarchies, and nodes
+or links that belong to several groups.
 """
 
 from ngraph.model.network import Link, Network, Node, RiskGroup
@@ -38,7 +34,6 @@ class TestRiskGroups:
             "top", children=[RiskGroup("child1"), RiskGroup("child2")]
         )
 
-        # Disable top group recursively
         net.disable_risk_group("top", recursive=True)
 
         assert net.nodes["A"].disabled is True
@@ -109,7 +104,6 @@ class TestRiskGroups:
             "level1", children=[RiskGroup("level2", children=[RiskGroup("level3")])]
         )
 
-        # Disable top level recursively
         net.disable_risk_group("level1", recursive=True)
 
         assert net.nodes["A"].disabled is True

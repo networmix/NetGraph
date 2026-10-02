@@ -70,9 +70,6 @@ def expand_risk_group_refs(
 ) -> Set[str]:
     """Expand bracket patterns in a list of risk group references.
 
-    Takes a list, set, or tuple of risk group names (possibly containing
-    bracket expressions) and returns a set of all expanded names.
-
     Args:
         rg_list: List, set, or tuple of risk group name patterns. Other
             iterables (including bare strings and generators) are rejected.
@@ -130,7 +127,6 @@ def _parse_range_expr(expr: str) -> List[str]:
     for part in parts:
         if "-" in part:
             start_str, end_str = part.split("-", 1)
-            # Validate that both endpoints are numeric
             try:
                 start = int(start_str)
             except ValueError:
@@ -147,7 +143,6 @@ def _parse_range_expr(expr: str) -> List[str]:
                     f"Ranges only support integers (e.g., [1-3]). "
                     f"For alphabetic values, use comma-separated lists (e.g., [a,b,c])."
                 ) from None
-            # Validate that range is not inverted
             if start > end:
                 raise ValueError(
                     f"Invalid range '{part}': start ({start}) is greater than end ({end}). "

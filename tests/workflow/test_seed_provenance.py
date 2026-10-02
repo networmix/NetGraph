@@ -1,6 +1,6 @@
 """Regression tests for seed provenance metadata in WorkflowStep.execute().
 
-The recorded seed_source/active_seed must reflect the seed the step actually
+The recorded seed_source must reflect the seed the step actually
 uses (self.seed), not the scenario-level seed it never consumes.
 """
 
@@ -39,7 +39,6 @@ def test_unseeded_step_with_scenario_seed_reports_none() -> None:
     assert md.scenario_seed == 42
     assert md.step_seed is None
     assert md.seed_source == "none"
-    assert md.active_seed is None
 
 
 def test_directly_seeded_step_reports_explicit() -> None:
@@ -51,7 +50,6 @@ def test_directly_seeded_step_reports_explicit() -> None:
     assert md.scenario_seed is None
     assert md.step_seed == 99
     assert md.seed_source == "explicit-step"
-    assert md.active_seed == 99
 
 
 def test_scenario_derived_seed_reports_derived() -> None:
@@ -65,4 +63,3 @@ def test_scenario_derived_seed_reports_derived() -> None:
     assert md.scenario_seed == 7
     assert md.step_seed == 1234
     assert md.seed_source == "scenario-derived"
-    assert md.active_seed == 1234

@@ -12,38 +12,34 @@ from typing import Optional
 
 
 def scenario_prefix_from_path(scenario_path: Path) -> str:
-    """Return a safe prefix derived from a scenario file path.
+    """Return the artifact filename prefix for a scenario file.
 
     Args:
         scenario_path: The scenario YAML file path.
 
     Returns:
-        The scenario filename stem, trimmed of extensions.
+        The filename without its final extension (``Path.stem``).
     """
     return scenario_path.stem
 
 
 def ensure_parent_dir(path: Path) -> None:
-    """Ensure the parent directory exists for a file path."""
+    """Create the parent directory of ``path`` if it is missing."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def build_artifact_path(output_dir: Optional[Path], prefix: str, suffix: str) -> Path:
+def build_artifact_path(output_dir: Path, prefix: str, suffix: str) -> Path:
     """Compose an artifact path as output_dir / (prefix + suffix).
 
-    If ``output_dir`` is None, the path is created relative to the current
-    working directory.
-
     Args:
-        output_dir: Base directory for outputs; if None, use CWD.
+        output_dir: Base directory for outputs.
         prefix: Filename prefix; usually derived from scenario or results stem.
         suffix: Per-artifact suffix including the dot (e.g. ".results.json").
 
     Returns:
         The composed path.
     """
-    base = output_dir if output_dir is not None else Path.cwd()
-    return base / f"{prefix}{suffix}"
+    return output_dir / f"{prefix}{suffix}"
 
 
 def resolve_override_path(
@@ -66,10 +62,8 @@ def resolve_override_path(
         return None
     if override.is_absolute():
         return override
-    # Compose relative to the output directory if available
     if output_dir is not None:
         return (output_dir / override).resolve()
-    # Otherwise, leave as relative to CWD
     return override
 
 
@@ -112,7 +106,8 @@ def profiles_dir_for_run(scenario_path: Path, output_dir: Optional[Path]) -> Pat
         output_dir: Optional base output directory.
 
     Returns:
-        Directory path where worker profiles should be stored.
+        ``output_dir/<prefix>.profiles``, or ``worker_profiles`` in the
+        current directory when ``output_dir`` is None.
     """
     prefix = scenario_prefix_from_path(scenario_path)
     if output_dir is None:

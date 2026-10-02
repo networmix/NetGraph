@@ -35,7 +35,7 @@ def test_format_table() -> None:
         ["H1", "H2"], [["abc", "1"], ["defghi", "2"]], max_col_width=5
     )
     assert "H1" in table and "H2" in table
-    # Ensure clipping with ASCII ellipsis (max_col_width=5 -> keep 2 chars + '...')
+    # Clipped with an ASCII ellipsis: max_col_width=5 keeps 2 chars + '...'
     assert "de..." in table
 
 
@@ -45,7 +45,6 @@ def test_collect_and_summarize_node_matches() -> None:
     summary = cli_mod._summarize_node_matches(step, net)
     # Only *_path and *_regex fields considered
     assert set(summary.keys()) == {"src_path", "dst_regex"}
-    # Each entry should include expected keys
     for v in summary.values():
         assert set(v.keys()) >= {
             "pattern",

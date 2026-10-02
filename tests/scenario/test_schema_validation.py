@@ -3,16 +3,15 @@
 import json
 from pathlib import Path
 
+import jsonschema
 import pytest
 import yaml
 
 from ngraph.scenario import Scenario
 
-jsonschema = pytest.importorskip("jsonschema")
-
 
 class TestSchemaValidation:
-    """Tests for JSON schema validation functionality."""
+    """Tests that validate scenario data against the JSON schema."""
 
     @pytest.fixture
     def schema(self):
@@ -66,12 +65,11 @@ failures:
 workflow:
   - type: BuildGraph
     name: build_graph
-  - type: CapacityEnvelopeAnalysis
+  - type: MaxFlow
     name: capacity_test
     source: "A"
     target: "C"
     iterations: 1
-    baseline: false
     failure_policy: null
     mode: "combine"
 """
@@ -101,7 +99,7 @@ workflow:
             jsonschema.validate(invalid_data, schema)
 
     def test_schema_validates_risk_groups_structure(self, schema):
-        """Test that the schema correctly validates risk groups structure."""
+        """Test that the schema accepts risk groups with attrs and children."""
         valid_data = {
             "network": {"nodes": {}, "links": []},
             "risk_groups": [
@@ -393,12 +391,11 @@ network:
 workflow:
   - type: BuildGraph
     name: build_graph
-  - type: CapacityEnvelopeAnalysis
+  - type: MaxFlow
     name: capacity_test
     source: "spine1"
     target: "leaf1"
     iterations: 1
-    baseline: false
     failure_policy: null
     mode: "combine"
 """
@@ -442,8 +439,7 @@ workflow:
         jsonschema.validate(data, schema)
 
     def test_schema_consistency_with_netgraph_validation(self, schema):
-        """Test that schema validation is consistent with NetGraph's validation."""
-        # Test data that should be valid for both schema and NetGraph
+        """Test that a scenario valid under the schema also loads in NetGraph."""
         valid_yaml = """
 network:
   name: Test Network
@@ -466,7 +462,6 @@ workflow:
 """
         data = yaml.safe_load(valid_yaml)
 
-        # Should validate with both our schema and NetGraph
         jsonschema.validate(data, schema)
         scenario = Scenario.from_yaml(valid_yaml)
         assert scenario is not None

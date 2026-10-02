@@ -1,8 +1,8 @@
 """Regression tests for TrafficMatrixPlacement._resolve_alpha error reporting.
 
-A missing/misordered producer step must be reported as such, instead of the
+A missing/misordered producer step must be reported as such, instead of a
 misleading alpha_from_field error (Results.get_step returns {} for unknown
-steps, so the old isinstance guard was dead code).
+steps, so an isinstance guard alone cannot detect it).
 """
 
 from __future__ import annotations
@@ -59,3 +59,11 @@ def test_missing_field_in_existing_step_reports_field_error() -> None:
     )
     with pytest.raises(ValueError, match="alpha_from_field 'data.alpha_star' missing"):
         step.execute(scenario)
+
+
+def test_alpha_and_alpha_from_step_are_exclusive() -> None:
+    """An explicit alpha next to alpha_from_step would be ignored, so it raises."""
+    with pytest.raises(ValueError, match="either alpha or alpha_from_step"):
+        TrafficMatrixPlacement(
+            name="tm", demand_set="default", alpha=2.0, alpha_from_step="msd"
+        )

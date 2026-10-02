@@ -17,7 +17,6 @@ Usage:
 
 from __future__ import annotations
 
-from ngraph.analysis.context import LARGE_CAPACITY as LARGE_CAPACITY
 from ngraph.analysis.context import (
     AnalysisContext,
     AugmentationEdge,

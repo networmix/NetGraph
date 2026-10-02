@@ -1,7 +1,6 @@
 """Selector parsing and normalization.
 
-Single entry point for converting raw selector values (strings or dicts)
-into NodeSelector objects.
+Converts raw selector values (strings or dicts) into NodeSelector objects.
 """
 
 from __future__ import annotations
@@ -10,16 +9,14 @@ from dataclasses import replace
 from typing import Any, Dict, Union
 
 from ngraph.model.selectors import NodeSelector, parse_match_spec
+from ngraph.utils.yaml_utils import check_no_extra_keys
 
-__all__ = [
-    "normalize_selector",
-    "parse_match_spec",
-]
+__all__ = ["normalize_selector"]
 
-# Context-aware defaults for active_only
+# Default active_only for each selector usage context
 _ACTIVE_ONLY_DEFAULTS: Dict[str, bool] = {
-    "adjacency": False,
-    "override": False,
+    "link": False,
+    "rule": False,
     "demand": True,
     "workflow": True,
 }
@@ -35,14 +32,16 @@ def normalize_selector(
 
     Args:
         raw: Either a regex string, selector dict, or existing NodeSelector.
-        context: Usage context ("adjacency", "demand", "override", "workflow").
+        context: Usage context ("link", "rule", "demand", "workflow").
             Determines the default for active_only.
 
     Returns:
-        Normalized NodeSelector instance.
+        NodeSelector with active_only set, from the selector or the context
+        default.
 
     Raises:
-        ValueError: If selector format is invalid or context is unknown.
+        ValueError: If the selector is neither a string nor a dict, a selector
+            dict carries an unrecognized key, or the context is unknown.
     """
     default_active_only = _ACTIVE_ONLY_DEFAULTS.get(context)
     if default_active_only is None:
@@ -71,6 +70,7 @@ def _parse_dict(raw: Dict[str, Any], default_active_only: bool) -> NodeSelector:
     NodeSelector.__post_init__ validates that at least one selection
     mechanism (path, group_by, or match) is present.
     """
+    check_no_extra_keys(raw, {"path", "group_by", "match", "active_only"}, "selector")
     match_spec = None
     if "match" in raw:
         match_spec = parse_match_spec(raw["match"])

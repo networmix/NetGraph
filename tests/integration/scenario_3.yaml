@@ -1,5 +1,5 @@
 # Test scenario 3: Complex 3-tier Clos network with nested blueprints
-# Tests advanced blueprint nesting, node/link overrides, and capacity probing
+# Tests advanced blueprint nesting, node/link rules, and max-flow analysis
 seed: 3003
 
 blueprints:
@@ -80,7 +80,7 @@ network:
           source: {component: "400G-LR4", count: 1}
           target: {component: "400G-LR4", count: 1}
 
-  # Node overrides for facility-based risk groups
+  # Node rules for facility-based risk groups
   node_rules:
     - path: my_clos1/b1/t1
       risk_groups: ["PowerZone_Clos1_B1_PZA"]
@@ -160,7 +160,7 @@ workflow:
   - type: BuildGraph
     name: build_graph
 
-  # Forward direction analysis - equivalent to capacity_probe
+  # Forward direction, PROPORTIONAL placement
   - type: MaxFlow
     name: capacity_analysis_forward
     source: my_clos1/b.*/t1
@@ -171,7 +171,7 @@ workflow:
     iterations: 1
     failure_policy: null
 
-  # Reverse direction analysis - equivalent to capacity_probe with probe_reverse
+  # Reverse direction, PROPORTIONAL placement
   - type: MaxFlow
     name: capacity_analysis_reverse
     source: my_clos2/b.*/t1
@@ -182,7 +182,7 @@ workflow:
     iterations: 1
     failure_policy: null
 
-  # Forward direction with EQUAL_BALANCED - equivalent to capacity_probe2
+  # Forward direction, EQUAL_BALANCED placement
   - type: MaxFlow
     name: capacity_analysis_forward_balanced
     source: my_clos1/b.*/t1
@@ -193,7 +193,7 @@ workflow:
     iterations: 1
     failure_policy: null
 
-  # Reverse direction with EQUAL_BALANCED - equivalent to capacity_probe2 with probe_reverse
+  # Reverse direction, EQUAL_BALANCED placement
   - type: MaxFlow
     name: capacity_analysis_reverse_balanced
     source: my_clos2/b.*/t1

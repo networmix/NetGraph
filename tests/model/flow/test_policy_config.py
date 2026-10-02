@@ -1,11 +1,7 @@
 """Tests for flow policy preset configurations."""
 
+import netgraph_core
 import pytest
-
-try:
-    import netgraph_core
-except ImportError:
-    pytest.skip("netgraph_core not available", allow_module_level=True)
 
 from ngraph.model.flow.policy_config import FlowPolicyPreset, create_flow_policy
 
@@ -41,7 +37,7 @@ def simple_graph():
 
 
 def test_flow_policy_preset_enum_values():
-    """Test that FlowPolicyPreset enum has expected values."""
+    """FlowPolicyPreset members have integer values 1 through 5."""
     assert FlowPolicyPreset.SHORTEST_PATHS_ECMP == 1
     assert FlowPolicyPreset.SHORTEST_PATHS_WCMP == 2
     assert FlowPolicyPreset.TE_WCMP_UNLIM == 3

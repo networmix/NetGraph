@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Literal
 
+from ngraph.utils.yaml_utils import check_no_extra_keys
+
 from .schema import Condition, MatchSpec
 
 
@@ -21,7 +23,7 @@ def parse_match_spec(
 ) -> MatchSpec:
     """Parse a match specification from raw dict.
 
-    Shared by adjacency, demands, membership rules, and failure policies.
+    Shared by link definitions, demands, membership rules, and failure policies.
 
     Args:
         raw: Dict with 'conditions' list and optional 'logic'. Both keys are
@@ -34,10 +36,12 @@ def parse_match_spec(
         Parsed MatchSpec.
 
     Raises:
-        ValueError: If 'logic' is not 'and'/'or', 'conditions' is not a list,
-            a condition is not a dict or lacks 'attr'/'op', 'in'/'not_in' is
+        ValueError: If the spec or a condition carries an unrecognized key,
+            'logic' is not 'and'/'or', 'conditions' is not a list, a
+            condition is not a dict or lacks 'attr'/'op', 'in'/'not_in' is
             given a non-list value, or conditions are required but empty.
     """
+    check_no_extra_keys(raw, {"conditions", "logic"}, context)
     logic = raw.get("logic", default_logic)
     if logic not in ("and", "or"):
         raise ValueError(
@@ -58,6 +62,9 @@ def parse_match_spec(
             )
         if "attr" not in cond_dict or "op" not in cond_dict:
             raise ValueError(f"Condition in {context} must have 'attr' and 'op'")
+        check_no_extra_keys(
+            cond_dict, {"attr", "op", "value"}, f"condition in {context}"
+        )
         if cond_dict["op"] in ("in", "not_in") and not isinstance(
             cond_dict.get("value"), list
         ):

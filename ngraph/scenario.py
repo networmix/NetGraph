@@ -54,10 +54,9 @@ class Scenario:
     results: Results = field(default_factory=Results)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
     seed: Optional[int] = None
-    # Per-instance execution counter for thread-safe step ordering
+    # Per-instance step execution counter, reset by run()
     _execution_counter: int = field(default=0, init=False, repr=False)
 
-    # Module-level logger
     _logger = get_logger(__name__)
 
     def run(
@@ -77,7 +76,6 @@ class Scenario:
         """
         # Reject duplicate effective step names before executing anything.
         validate_unique_step_names(self.workflow)
-        # Reset instance execution counter for this run
         self._execution_counter = 0
         for step in self.workflow:
             if step_hook is None:
@@ -122,9 +120,6 @@ class Scenario:
         If no 'workflow' key is provided, the scenario has no steps to run.
         If 'failures' is omitted, scenario.failure_policy_set is empty.
         If 'components' is provided, it is merged with default_components.
-        If 'seed' is provided, it enables reproducible random operations.
-        If 'vars' is provided, it can contain YAML anchors and aliases for reuse.
-        If any unrecognized top-level key is found, a ValueError is raised.
 
         Args:
             yaml_str (str): The YAML string that defines the scenario.
@@ -136,26 +131,27 @@ class Scenario:
 
         Raises:
             ValueError: If the YAML is malformed or missing required sections,
-                or if there are any unrecognized top-level keys.
-            TypeError: If a workflow step's arguments are invalid for the step class.
+                has unrecognized keys in any section, defines two top-level
+                risk groups with the same name, or gives a workflow step a
+                key its step class does not define.
+            jsonschema.ValidationError: If the YAML does not match the
+                packaged schema, including unrecognized top-level keys.
         """
         data = load_scenario_yaml(yaml_str)
 
-        # Extract seed first as it may be used by other components
+        # Extract seed first as it may be used by other components. The schema's
+        # draft-07 "integer" also admits floats with no fraction (5.0).
         seed = data.get("seed")
         if seed is not None and not isinstance(seed, int):
             raise ValueError("'seed' must be an integer if provided.")
 
-        # 1) Build the network using blueprint expansion logic
+        # 1) Expand blueprints and the network section into a Network
         network_obj = expand_network_dsl(data)
-        if network_obj is None:
-            network_obj = Network()
-        else:
-            Scenario._logger.debug(
-                "Expanded network: nodes=%d, links=%d",
-                len(network_obj.nodes),
-                len(network_obj.links),
-            )
+        Scenario._logger.debug(
+            "Expanded network: nodes=%d, links=%d",
+            len(network_obj.nodes),
+            len(network_obj.links),
+        )
 
         # 2) Build the failure policy set
         seed_manager = SeedManager(seed)
@@ -193,7 +189,7 @@ class Scenario:
             workflow_data,
             derive_seed=lambda name: seed_manager.derive_seed("workflow_step", name),
         )
-        labels = [step.name or step.__class__.__name__ for step in workflow_steps]
+        labels = [step.name for step in workflow_steps]
         Scenario._logger.debug(
             "Built workflow: steps=%d%s",
             len(workflow_steps),
@@ -223,6 +219,11 @@ class Scenario:
         if rg_data:
             risk_groups, generate_specs_raw = build_risk_groups(rg_data)
             for rg in risk_groups:
+                if rg.name in network_obj.risk_groups:
+                    raise ValueError(
+                        f"Duplicate risk group name '{rg.name}'; each top-level "
+                        "risk group must have a unique name."
+                    )
                 network_obj.risk_groups[rg.name] = rg
             Scenario._logger.debug(
                 "Attached risk groups: %d", len(network_obj.risk_groups)
@@ -264,8 +265,7 @@ class Scenario:
             if rg.disabled:
                 network_obj.disable_risk_group(rg.name, recursive=True)
 
-        # 10) Validate risk group references
-        # Ensures all risk group names referenced by nodes/links are defined
+        # 10) Check that every risk group named on a node or link is defined
         validate_risk_group_references(network_obj)
 
         scenario_obj = Scenario(
@@ -278,17 +278,13 @@ class Scenario:
         )
 
         # Attach minimal scenario snapshot to results for export
-        try:
-            scenario_obj.results.set_scenario_snapshot(
-                build_scenario_snapshot(
-                    seed=seed,
-                    failure_policy_set=failure_policy_set,
-                    demand_set=ds,
-                )
+        scenario_obj.results.set_scenario_snapshot(
+            build_scenario_snapshot(
+                seed=seed,
+                failure_policy_set=failure_policy_set,
+                demand_set=ds,
             )
-        except Exception as exc:
-            # Snapshot should never block scenario construction
-            Scenario._logger.debug("Failed to attach scenario snapshot: %s", exc)
+        )
 
         Scenario._logger.debug(
             "Scenario constructed: nodes=%d, links=%d, policies=%d, demand_sets=%d, steps=%d",

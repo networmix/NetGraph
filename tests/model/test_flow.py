@@ -1,7 +1,4 @@
-"""Tests for flow analysis using the AnalysisContext API.
-
-This module tests maximum flow calculations using the new analyze() API.
-"""
+"""Tests for max flow calculations through analyze() and AnalysisContext."""
 
 import pytest
 
@@ -99,7 +96,7 @@ class TestMaxFlow:
             assert val >= 0.0
 
     def test_max_flow_overlap_detection_coverage(self):
-        """Test specific overlap detection logic in max_flow combine mode for coverage."""
+        """Combine mode returns 0 flow when source and sink groups overlap."""
         net = Network()
         net.add_node(Node("A"))
         net.add_node(Node("B"))
@@ -107,7 +104,6 @@ class TestMaxFlow:
         net.add_link(Link("A", "B", capacity=5.0))
         net.add_link(Link("B", "C", capacity=3.0))
 
-        # Create a scenario where there are valid groups but they overlap
         flow_result = analyze(net).max_flow(
             r"^(A|B)$",  # Matches A and B
             r"^(B|C)$",  # Matches B and C (B overlaps!)
@@ -119,7 +115,7 @@ class TestMaxFlow:
         assert list(flow_result.values())[0] == 0.0
 
     def test_max_flow_disabled_nodes_coverage(self):
-        """Test max_flow with disabled source nodes for coverage."""
+        """max_flow raises when the only matching source node is disabled."""
         net = Network()
         net.add_node(Node("A", disabled=True))  # Disabled source
         net.add_node(Node("B"))
@@ -132,7 +128,7 @@ class TestMaxFlow:
             analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
 
     def test_max_flow_disabled_link_coverage(self):
-        """Test max_flow with disabled links for coverage."""
+        """A disabled link on the only path yields 0 flow."""
         net = Network()
         net.add_node(Node("A"))
         net.add_node(Node("B"))
@@ -270,7 +266,7 @@ class TestExclusions:
                 ab_link_id = link_id
                 break
 
-        # Exclude A->B link
+        # Without A->B only the A-C-D path (capacity 3) remains
         reduced_flow = analyze(net).max_flow(
             "^A$", "^D$", mode=Mode.COMBINE, excluded_links={ab_link_id}
         )

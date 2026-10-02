@@ -19,11 +19,9 @@ class TestMaxFlowAnalysis:
     def simple_network(self) -> Network:
         """Create a simple test network with multiple paths."""
         network = Network()
-        # Add nodes
         for node in ["datacenter1", "datacenter2", "edge1", "edge2", "router"]:
             network.add_node(Node(node))
 
-        # Add links to create a network with capacity
         network.add_link(Link("datacenter1", "router", capacity=100.0, cost=1.0))
         network.add_link(Link("datacenter2", "router", capacity=80.0, cost=1.0))
         network.add_link(Link("router", "edge1", capacity=120.0, cost=1.0))
@@ -31,8 +29,24 @@ class TestMaxFlowAnalysis:
 
         return network
 
+    def test_max_flow_analysis_rejects_unbound_context(
+        self, simple_network: Network
+    ) -> None:
+        """An unbound context cannot serve a max-flow analysis; it raises."""
+        from ngraph.analysis import analyze
+
+        with pytest.raises(ValueError, match="Provided context is unbound"):
+            max_flow_analysis(
+                network=simple_network,
+                excluded_nodes=set(),
+                excluded_links=set(),
+                source="datacenter.*",
+                target="edge.*",
+                context=analyze(simple_network),
+            )
+
     def test_max_flow_analysis_basic(self, simple_network: Network) -> None:
-        """Test basic max_flow_analysis functionality."""
+        """Combine mode returns one flow whose demand equals the placed max flow."""
         result = max_flow_analysis(
             network=simple_network,
             excluded_nodes=set(),
@@ -42,7 +56,6 @@ class TestMaxFlowAnalysis:
             mode="combine",
         )
 
-        # Verify return format
         assert isinstance(result, FlowIterationResult)
         assert len(result.flows) == 1
         # In combine mode, we get one aggregated flow
@@ -94,7 +107,7 @@ class TestMaxFlowAnalysis:
         assert isinstance(result, FlowIterationResult)
         # In pairwise mode with 2 datacenters and 2 edges, we get 4 pairs
         assert len(result.flows) >= 1
-        # Check that all flows have proper source/destination matching the regex
+        # Every flow's endpoints come from the source and target selectors
         for flow in result.flows:
             assert flow.source.startswith("datacenter")
             assert flow.destination.startswith("edge")
@@ -115,7 +128,7 @@ class TestMaxFlowAnalysis:
 
     def test_max_flow_analysis_empty_result(self, simple_network: Network) -> None:
         """Test max_flow_analysis with no matching nodes raises an error."""
-        # In NetGraph-Core, non-matching nodes raise ValueError (better UX than silent empty)
+        # Unmatched selectors raise ValueError instead of returning an empty result
         with pytest.raises(ValueError, match="No source nodes found"):
             max_flow_analysis(
                 network=simple_network,
@@ -132,8 +145,7 @@ class TestDemandPlacementAnalysis:
     # Uses diamond_network fixture from conftest.py
 
     def test_demand_placement_analysis_basic(self, diamond_network: Network) -> None:
-        """Test basic demand_placement_analysis functionality."""
-        # Use a smaller demand that should definitely fit
+        """A 50-unit pairwise demand on the diamond network is fully placed."""
         demands_config = [
             {
                 "source": "A",
@@ -151,7 +163,6 @@ class TestDemandPlacementAnalysis:
             demands_config=demands_config,
         )
 
-        # Verify results structure
         assert isinstance(result, FlowIterationResult)
         assert len(result.flows) == 1
 
@@ -219,7 +230,6 @@ class TestDemandPlacementWithContextCaching:
         # Build context once
         ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
-        # Use context for analysis
         result = demand_placement_analysis(
             network=diamond_network,
             excluded_nodes=set(),
@@ -248,7 +258,7 @@ class TestDemandPlacementWithContextCaching:
         # Build context once
         ctx, _, _ = build_demand_placement_inputs(diamond_network, demands_config)
 
-        # Use context for analysis - this is where the bug manifested
+        # Combine mode needs the pre-built context's pseudo nodes to match this run
         result = demand_placement_analysis(
             network=diamond_network,
             excluded_nodes=set(),
@@ -292,10 +302,10 @@ class TestDemandPlacementWithContextCaching:
     def test_context_caching_without_id_works(self, diamond_network: Network) -> None:
         """Context caching works without explicit IDs (deterministic ids).
 
-        Regression: configs without "id" previously got a fresh uuid on
-        every reconstruction, so pseudo node names diverged from the
-        pre-built context and analysis crashed with KeyError. IDs derived
-        from source/target/position keep them stable.
+        A config without "id" must not get a fresh uuid on every
+        reconstruction: pseudo node names would diverge from the pre-built
+        context and analysis would fail with KeyError. IDs derived from
+        source/target/position keep them stable.
         """
         from ngraph.analysis.functions import build_demand_placement_inputs
 
@@ -337,7 +347,7 @@ class TestSensitivityAnalysis:
         return network
 
     def test_sensitivity_analysis_basic(self, simple_network: Network) -> None:
-        """Test basic sensitivity_analysis functionality."""
+        """A 2-link chain reports max flow 10 and both saturated links as critical."""
         result = sensitivity_analysis(
             network=simple_network,
             excluded_nodes=set(),
@@ -351,14 +361,12 @@ class TestSensitivityAnalysis:
         assert isinstance(result, FlowIterationResult)
         assert len(result.flows) == 1
 
-        # Check flow entry structure
         entry = result.flows[0]
         assert entry.source == "A"
         assert entry.destination == "C"
         assert entry.demand == entry.placed == 10.0  # max flow value
         assert entry.dropped == 0.0
 
-        # Check sensitivity data in entry.data
         assert "sensitivity" in entry.data
         sensitivity = entry.data["sensitivity"]
         assert isinstance(sensitivity, dict)
@@ -403,7 +411,7 @@ class TestSensitivityAnalysis:
             context=ctx,
         )
 
-        # Previously two full passes (max_flow + sensitivity) built two masks.
+        # One combined pass (max_flow + sensitivity) builds a single mask.
         assert calls["node_mask"] == 1
         entry = result.flows[0]
         assert entry.demand == entry.placed == 10.0

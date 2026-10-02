@@ -50,7 +50,7 @@ def test_msd_basic_bracket_and_bisect(
     alpha_star = exported["steps"]["msd_step"]["data"]["alpha_star"]
     assert abs(alpha_star - 1.3) <= 0.02
     ctx = exported["steps"]["msd_step"]["data"].get("context", {})
-    assert ctx.get("acceptance_rule") == "hard"
+    assert ctx.get("demand_set") == "default"
     base = exported["steps"]["msd_step"]["data"].get("base_demands", [])
     assert base and base[0]["source"] == "A"
 
@@ -147,7 +147,7 @@ def test_msd_end_to_end_single_link() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Edge-case tests for _binary_search: all-feasible / bracket-exhaustion bugs
+# _binary_search boundaries: every probe feasible, bracket iterations exhausted
 # ---------------------------------------------------------------------------
 
 
@@ -203,7 +203,7 @@ def test_msd_bracket_exhausted_alpha_max_feasible() -> None:
     """Bracket iters exhaust before alpha_max, but alpha_max IS feasible -> return alpha_max."""
     step = _make_step(alpha_max=1e6, max_bracket_iters=4)
     # With 4 iters: probes 1,2,4,8,16 -> lower=16, upper=None
-    # Fix probes alpha_max=1e6 directly -> feasible -> returns 1e6
+    # Then alpha_max=1e6 is probed directly -> feasible -> returns 1e6
     result = step._binary_search(_threshold_probe(threshold=None))
     assert result == 1e6
 
@@ -213,7 +213,7 @@ def test_msd_bracket_exhausted_alpha_max_infeasible() -> None:
     threshold = 500.0
     step = _make_step(alpha_max=1e6, max_bracket_iters=4, resolution=0.01)
     # With 4 iters: probes 1,2,4,8,16 -> lower=16, upper=None
-    # Fix probes alpha_max=1e6 -> infeasible -> bracket [16, 1e6] -> bisect to ~500
+    # Then alpha_max=1e6 is probed -> infeasible -> bracket [16, 1e6] -> bisect to ~500
     result = step._binary_search(_threshold_probe(threshold=threshold))
     assert abs(result - threshold) <= 0.02
 
@@ -223,47 +223,3 @@ def test_msd_threshold_exactly_at_alpha_max() -> None:
     step = _make_step(alpha_max=10.0)
     result = step._binary_search(_threshold_probe(threshold=10.0))
     assert result == 10.0
-
-
-def test_msd_auto_vs_one_equivalence_single_link() -> None:
-    """Test that MSD with auto vs 1 placement rounds produces equivalent results."""
-    from ngraph.workflow.maximum_supported_demand_step import (
-        MaximumSupportedDemand as MSD,
-    )
-    from tests.integration.helpers import ScenarioDataBuilder
-
-    # Same single-link scenario; compare auto vs 1 rounds
-    scenario = (
-        ScenarioDataBuilder()
-        .with_simple_nodes(["A", "B"])
-        .with_simple_links([("A", "B", 10.0)])
-        .with_traffic_demand("A", "B", 5.0, demand_set="default")
-        .build_scenario()
-    )
-
-    step_auto = MSD(
-        name="msd_auto",
-        demand_set="default",
-        alpha_start=1.0,
-        growth_factor=2.0,
-        resolution=0.01,
-        placement_rounds="auto",
-    )
-    step_one = MSD(
-        name="msd_one",
-        demand_set="default",
-        alpha_start=1.0,
-        growth_factor=2.0,
-        resolution=0.01,
-        placement_rounds=1,
-    )
-
-    scenario.results = Results()
-    step_auto.execute(scenario)
-    step_one.execute(scenario)
-
-    exported = scenario.results.to_dict()
-    alpha_auto = float(exported["steps"]["msd_auto"]["data"]["alpha_star"])
-    alpha_one = float(exported["steps"]["msd_one"]["data"]["alpha_star"])
-    # Both should find approximately the same alpha* for this simple case
-    assert abs(alpha_auto - alpha_one) <= 0.02

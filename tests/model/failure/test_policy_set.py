@@ -52,7 +52,6 @@ class TestFailurePolicySet:
         """Test serialization to dictionary."""
         fps = FailurePolicySet()
 
-        # Create a policy with some rules and attributes
         rule = FailureRule(scope="node", mode="choice", count=1)
         from ngraph.model.failure.policy import FailureMode
 
@@ -70,10 +69,8 @@ class TestFailurePolicySet:
         assert "modes" in result["test"]
         assert "attrs" in result["test"]
         assert result["test"]["expand_groups"] is True
-        # Modes present
         assert "modes" in result["test"] and len(result["test"]["modes"]) == 1
 
-        # Check rule serialization inside modes
         mode = result["test"]["modes"][0]
         assert len(mode["rules"]) == 1
         rule_dict = mode["rules"][0]

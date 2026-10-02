@@ -1,19 +1,16 @@
-# NetGraph Development Makefile
-# This Makefile provides convenient shortcuts for common development tasks
+# NetGraph development tasks. Run `make help` for the list.
 
 .PHONY: help venv clean-venv dev install check check-ci lint format test qt build clean check-dist publish-test publish info hooks check-python docs docs-serve docs-diagrams validate perf
 
-# Default target - show help
 .DEFAULT_GOAL := help
 
 # --------------------------------------------------------------------------
 # Python interpreter detection
 # --------------------------------------------------------------------------
-# VENV_BIN: path to local virtualenv bin directory
 VENV_BIN := $(PWD)/venv/bin
 
-# PY_BEST: scan for newest supported Python (used when creating new venvs)
-# Supports 3.11-3.14 to match requires-python >=3.11
+# PY_BEST: newest of python3.14..python3.11 on PATH, else python3 or python;
+# used to create venvs (requires-python >=3.11)
 PY_BEST := $(shell for v in 3.14 3.13 3.12 3.11; do command -v python$$v >/dev/null 2>&1 && { echo python$$v; exit 0; }; done; command -v python3 2>/dev/null || command -v python 2>/dev/null)
 
 # PY_PATH: active python3/python on PATH (respects CI setup-python and activated venvs)
@@ -26,7 +23,7 @@ PY_PATH := $(shell command -v python3 2>/dev/null || command -v python 2>/dev/nu
 #   4. Final fallback to 'python3' literal for clear error messages
 PYTHON ?= $(if $(wildcard $(VENV_BIN)/python),$(VENV_BIN)/python,$(if $(PY_PATH),$(PY_PATH),$(if $(PY_BEST),$(PY_BEST),python3)))
 
-# Derived tool commands (always use -m to ensure correct environment)
+# Run tools with -m so they come from $(PYTHON)'s environment
 PIP := $(PYTHON) -m pip
 PYTEST := $(PYTHON) -m pytest
 RUFF := $(PYTHON) -m ruff
@@ -46,9 +43,9 @@ help:
 	@echo "  make check-ci      - Run non-mutating checks and tests (CI entrypoint)"
 	@echo "  make lint          - Run only linting (non-mutating: ruff + pyright)"
 	@echo "  make format        - Auto-format code with ruff"
-	@echo "  make test          - Run tests with coverage (includes slow and benchmark)"
-	@echo "  make qt            - Run quick tests only (excludes slow and benchmark)"
-	@echo "  make perf          - Run performance analysis with comprehensive reports and plots"
+	@echo "  make test          - Run tests with coverage (includes slow tests)"
+	@echo "  make qt            - Run quick tests only (excludes slow tests)"
+	@echo "  make perf          - Run the performance benchmarks and write reports and plots"
 	@echo "  make validate      - Validate YAML schemas"
 	@echo ""
 	@echo "Documentation:"
@@ -83,7 +80,7 @@ dev:
 			echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
 			exit 1; \
 		fi; \
-		$(VENV_BIN)/python -m pip install -U pip setuptools wheel; \
+		$(VENV_BIN)/python -m pip install -U pip setuptools; \
 	fi
 	@echo "📦 Installing dev dependencies..."
 	@$(VENV_BIN)/python -m pip install -e .'[dev]'
@@ -103,7 +100,7 @@ venv:
 		echo "❌ Error: venv creation failed - $(VENV_BIN)/python not found"; \
 		exit 1; \
 	fi
-	@$(VENV_BIN)/python -m pip install -U pip setuptools wheel
+	@$(VENV_BIN)/python -m pip install -U pip setuptools
 	@echo "✅ venv ready. Activate with: source venv/bin/activate"
 
 clean-venv:
@@ -136,12 +133,12 @@ format:
 	@$(RUFF) format .
 
 test:
-	@echo "🧪 Running tests with coverage (includes slow and benchmark)..."
+	@echo "🧪 Running tests with coverage (includes slow tests)..."
 	@$(PYTEST)
 
 qt:
-	@echo "⚡ Running quick tests only (excludes slow and benchmark)..."
-	@$(PYTEST) --no-cov -m "not slow and not benchmark"
+	@echo "⚡ Running quick tests only (excludes slow tests)..."
+	@$(PYTEST) --no-cov -m "not slow"
 
 perf:
 	@echo "📊 Running performance analysis with tables and graphs..."
@@ -149,11 +146,7 @@ perf:
 
 validate:
 	@echo "📋 Validating YAML schemas..."
-	@if $(PYTHON) -c "import jsonschema" >/dev/null 2>&1; then \
-		$(PYTHON) -c "import json, yaml, jsonschema, pathlib; from importlib import resources as res; f=res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); schema=json.load(f); f.close(); scenario_files=sorted(set(pathlib.Path('scenarios').rglob('*.yaml')) | set(pathlib.Path('scenarios').rglob('*.yml'))); integration_files=sorted(set(pathlib.Path('tests/integration').glob('*.yaml')) | set(pathlib.Path('tests/integration').glob('*.yml'))); all_files=scenario_files+integration_files; [jsonschema.validate(yaml.safe_load(open(fp)), schema) for fp in all_files]; print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"; \
-	else \
-		echo "⚠️  jsonschema not installed. Skipping schema validation"; \
-	fi
+	@$(PYTHON) -c "import json, yaml, jsonschema, pathlib; from importlib import resources as res; f=res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); schema=json.load(f); f.close(); scenario_files=sorted(set(pathlib.Path('scenarios').rglob('*.yaml')) | set(pathlib.Path('scenarios').rglob('*.yml'))); integration_files=sorted(set(pathlib.Path('tests/integration').glob('*.yaml')) | set(pathlib.Path('tests/integration').glob('*.yml'))); all_files=scenario_files+integration_files; [jsonschema.validate(yaml.safe_load(open(fp)), schema) for fp in all_files]; print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"
 
 # Documentation
 docs:
@@ -197,7 +190,7 @@ build:
 clean:
 	@echo "🧹 Cleaning build artifacts and cache files..."
 	@rm -rf build/ dist/ *.egg-info/
-	@rm -rf .pytest_cache .ruff_cache .mypy_cache htmlcov .coverage coverage.xml coverage-*.xml .benchmarks .pytest-benchmark || true
+	@rm -rf .pytest_cache .ruff_cache htmlcov .coverage coverage.xml coverage-*.xml || true
 	@find . -path "./venv" -prune -o -type f -name "*.pyc" -delete 2>/dev/null || true
 	@find . -path "./venv" -prune -o -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@find . -path "./venv" -prune -o -type f -name "*.pyo" -delete 2>/dev/null || true

@@ -73,7 +73,6 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
     op = cond.op
     expected = cond.value
 
-    # Existence operators
     if op == "exists":
         return has_attr and attr_value is not None
     if op == "not_exists":
@@ -83,13 +82,12 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
     if attr_value is None:
         return False
 
-    # Equality operators
     if op == "==":
         return attr_value == expected
     if op == "!=":
         return attr_value != expected
 
-    # Numeric comparisons
+    # Ordering compares as floats; non-numeric operands never match.
     if op in ("<", "<=", ">", ">="):
         try:
             left = float(attr_value)
@@ -105,7 +103,8 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
         if op == ">=":
             return left >= right
 
-    # String/collection containment
+    # Substring test on strings, membership test on list/tuple/set. Other
+    # types never "contain", so not_contains is True for them.
     if op == "contains":
         if isinstance(attr_value, str):
             return str(expected) in attr_value
@@ -120,7 +119,6 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
             return expected not in attr_value
         return True
 
-    # List membership operators
     if op == "in":
         if not isinstance(expected, (list, tuple, set)):
             raise ValueError(f"'in' operator requires list value, got {type(expected)}")

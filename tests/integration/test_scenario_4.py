@@ -1,7 +1,7 @@
 """
 Integration tests for scenario 4: Advanced DSL features demonstration.
 
-This module tests the most advanced NetGraph capabilities including:
+Covers:
 - Component system for hardware modeling with cost/power calculations
 - Variable expansion in adjacency rules (cartesian and zip modes)
 - Bracket expansion in group names for multiple pattern matching
@@ -11,13 +11,10 @@ This module tests the most advanced NetGraph capabilities including:
 - NetworkExplorer integration for hierarchy analysis
 - Large-scale network topology with realistic data center structure
 
-Scenario 4 represents the most complex test of NetGraph's DSL capabilities,
-validating the framework's ability to handle enterprise-scale network definitions
-with complex relationships and advanced analysis requirements.
-
-Uses the modular testing approach with validation helpers from the
-integration.helpers module.
+Validation helpers come from integration.helpers.
 """
+
+import re
 
 import pytest
 
@@ -35,7 +32,7 @@ from .helpers import create_scenario_helper, load_scenario_from_file
 
 @pytest.mark.slow
 class TestScenario4:
-    """Tests for scenario 4 using modular validation approach."""
+    """Tests for scenario 4."""
 
     @pytest.fixture(scope="module")
     def scenario_4(self):
@@ -66,10 +63,9 @@ class TestScenario4:
         helper.validate_network_structure(SCENARIO_4_EXPECTATIONS)
 
     def test_components_system_integration(self, helper):
-        """Test that components system works correctly with hardware modeling."""
+        """Test component count and the type/capex/power of each component."""
         components_lib = helper.scenario.components_library
 
-        # Validate component library has expected components
         expected_components = SCENARIO_4_COMPONENT_EXPECTATIONS
 
         assert len(components_lib.components) == expected_components["total_components"]
@@ -94,8 +90,8 @@ class TestScenario4:
         assert server.capex == 12000.0
 
     def test_component_references_in_nodes(self, helper):
-        """Test that nodes correctly reference components from the library."""
-        # Test ToR switch nodes have correct component references
+        """Test that ToR and server nodes reference their hardware components."""
+        # ToR switch nodes reference ToRSwitch48p
         tor_nodes = [
             node
             for node in helper.network.nodes.values()
@@ -110,7 +106,7 @@ class TestScenario4:
             ) == "ToRSwitch48p"
             assert tor_node.attrs.get("role") == "top_of_rack"
 
-        # Test server nodes have correct component references
+        # Server nodes reference ServerNode
         server_nodes = [
             node
             for node in helper.network.nodes.values()
@@ -127,7 +123,7 @@ class TestScenario4:
 
     def test_bracket_expansion_functionality(self, helper):
         """Test that bracket expansion creates expected node hierarchies."""
-        # Test DC bracket expansion: dc[1-2] - look for actual node patterns
+        # DC bracket expansion: dc[1-2]
         all_nodes = list(helper.network.nodes.keys())
 
         dc1_nodes = [node for node in all_nodes if node.startswith("dc1")]
@@ -140,7 +136,7 @@ class TestScenario4:
             f"dc2 bracket expansion should create nodes. Found nodes: {all_nodes[:10]}"
         )
 
-        # Test pod bracket expansion: pod[a,b] - look for actual patterns
+        # Pod bracket expansion: pod[a,b]
         poda_nodes = [node for node in all_nodes if "poda" in node]
         podb_nodes = [node for node in all_nodes if "podb" in node]
 
@@ -151,50 +147,41 @@ class TestScenario4:
             f"podb should have nodes from bracket expansion. Found: {podb_nodes[:5]}"
         )
 
-        # Test rack bracket expansion: rack[01-02] - check actual rack names with underscore
+        # Rack bracket expansion: rack[01-02] (names contain "_rack")
         rack_nodes = [node for node in all_nodes if "_rack" in node]
         assert len(rack_nodes) > 0, (
             f"racks should have nodes from bracket expansion. Found: {rack_nodes[:5]}"
         )
 
-    def test_variable_expansion_adjacency(self, helper):
-        """Test that variable expansion in adjacency rules creates correct connections."""
-        # Test leaf-spine connections created by variable expansion in blueprint
-        leaf_spine_links = helper.network.find_links(
-            source_regex=r".*/fabric/leaf/.*", target_regex=r".*/fabric/spine/.*"
-        )
+    def test_variable_expansion_links(self, helper):
+        """Test fabric and rack-to-fabric links created by variable expansion."""
+        links = helper.network.links.values()
 
-        # Check if any leaf-spine links exist at all
-        if len(leaf_spine_links) == 0:
-            # Try alternative patterns - the fabric might be flattened
-            fabric_links = helper.network.find_links(
-                source_regex=r".*fabric.*", target_regex=r".*fabric.*"
-            )
-            assert len(fabric_links) > 0, (
-                f"Should have some fabric-related links from variable expansion. "
-                f"All links: {[(link.source, link.target) for link in list(helper.network.links.values())[:10]]}"
-            )
-        else:
-            # Verify some links have expected attributes if they exist
-            for link in leaf_spine_links[:5]:  # Check first few
-                assert link.capacity == 400.0
-                assert link.attrs.get("media_type") == "fiber"
-                assert link.attrs.get("link_type") == "leaf_spine"
+        # Blueprint expand block: 2 leaves x 2 spines in each of the 2 fabrics.
+        leaf_spine = [
+            link for link in links if link.attrs.get("link_type") == "leaf_spine"
+        ]
+        assert len(leaf_spine) == 8
+        for link in leaf_spine:
+            assert re.fullmatch(r"dc[12]_fabric/leaf/leaf-[12]", link.source)
+            assert re.fullmatch(r"dc[12]_fabric/spine/spine-[12]", link.target)
+            assert link.source.split("/")[0] == link.target.split("/")[0]
+            assert link.capacity == 400.0
+            assert link.attrs.get("media_type") == "fiber"
 
-        # Test rack-to-fabric connections from top-level variable expansion
-        rack_fabric_links = helper.network.find_links(
-            source_regex=r".*rack.*tor.*", target_regex=r".*fabric.*"
-        )
+        # Top-level expand block: 8 racks, each ToR wired to both leaves of its DC.
+        rack_fabric = [
+            link
+            for link in links
+            if link.attrs.get("connection_type") == "rack_to_fabric"
+        ]
+        assert len(rack_fabric) == 16
+        for link in rack_fabric:
+            assert re.fullmatch(r"dc[12]_pod[ab]_rack[12]/tor/tor-1", link.source)
+            assert link.target.startswith(link.source[:3] + "_fabric/leaf/")
 
-        # If no rack-fabric links, at least verify basic connectivity
-        if len(rack_fabric_links) == 0:
-            total_links = len(helper.network.links)
-            assert total_links > 0, (
-                "Should have some connections from variable expansion"
-            )
-
-    def test_complex_node_overrides(self, helper):
-        """Test complex node override patterns and cleaned-up attributes."""
+    def test_complex_node_rules(self, helper):
+        """Test GPU server node_rules and role/hardware attrs on servers and ToRs."""
         # Test GPU server overrides for specific nodes
         gpu_server_groups = helper.network.select_node_groups_by_path(
             r"dc1_pod[ab]_rack[12]/servers/srv-[1-4]"
@@ -233,7 +220,7 @@ class TestScenario4:
             assert tor.attrs.get("role") == "top_of_rack"
             assert (tor.attrs.get("hardware") or {}).get("component") == "ToRSwitch48p"
 
-    def test_complex_link_overrides(self, helper):
+    def test_complex_link_rules(self, helper):
         """Test complex link override patterns with regex."""
         # Test inter-DC link capacity overrides
         inter_dc_links = helper.network.find_links(
@@ -257,11 +244,10 @@ class TestScenario4:
             assert link.capacity == 200.0
 
     def test_risk_groups_integration(self, helper):
-        """Test that risk groups are correctly configured and hierarchical."""
+        """Test risk group names, Building_DC1 children, and spine membership."""
         risk_groups = helper.scenario.network.risk_groups
         expected_groups = SCENARIO_4_RISK_GROUP_EXPECTATIONS["risk_groups"]
 
-        # Validate expected risk groups exist
         risk_group_names = {rg.name for rg in risk_groups.values()}
         for expected_group in expected_groups:
             assert expected_group in risk_group_names, (
@@ -290,7 +276,7 @@ class TestScenario4:
         )
 
     def test_traffic_matrix_configuration(self, helper):
-        """Test that traffic matrices are correctly configured."""
+        """Test demand set sizes and the mode used for each traffic_type."""
         traffic_expectations = SCENARIO_4_TRAFFIC_EXPECTATIONS
 
         # Test default matrix
@@ -312,10 +298,9 @@ class TestScenario4:
                 assert demand.mode == "combine"
 
     def test_failure_policy_configuration(self, helper):
-        """Test that failure policies are correctly configured."""
+        """Test the policy count and the single-rule link and node failure policies."""
         failure_expectations = SCENARIO_4_FAILURE_POLICY_EXPECTATIONS
 
-        # Test total number of policies
         all_policies = helper.scenario.failure_policy_set.policies
         assert len(all_policies) == failure_expectations["total_policies"]
 
@@ -333,57 +318,46 @@ class TestScenario4:
         assert sum(len(m.rules) for m in single_node_policy.modes) == 1
 
     def test_advanced_workflow_steps(self, helper):
-        """Test that advanced workflow steps executed correctly."""
-        results = helper.scenario.results
+        """Test the capacities the MaxFlow steps report.
 
-        # Test BuildGraph step - correct API usage with two arguments
-        exported = results.to_dict()
-        # graph = node_link_to_graph(
-        #     exported["steps"]["build_graph"]["data"].get("graph")
-        # )
-        # assert graph is not None
+        Every rack has 8 servers on 25-unit links, which bind before any uplink:
+        pod-to-pod inside dc1 is 16 servers x 25 = 400 in either direction, and
+        dc1 to dc2 is limited by dc2's 3 enabled racks (dc2_podb_rack2 is
+        disabled) to 24 x 25 = 600. A single failure removes at most one
+        server's 25 units.
+        """
+        steps = helper.scenario.results.to_dict()["steps"]
 
-        # Test MaxFlow results - check baseline (no failure policy) or flow_results
-        intra_dc = (
-            exported["steps"].get("intra_dc_capacity_forward", {}).get("data", {})
-        )
-        intra_result = (
-            intra_dc.get("baseline") or (intra_dc.get("flow_results", []) or [None])[0]
-        )
-        assert intra_result, (
-            "Intra-DC forward capacity analysis should have baseline or flow_results"
-        )
-        assert float(intra_result["summary"].get("total_placed", 0.0)) >= 0.0
+        def baseline_total(step: str) -> float:
+            return steps[step]["data"]["baseline"]["summary"]["total_placed"]
 
-        inter_dc = (
-            exported["steps"].get("inter_dc_capacity_forward", {}).get("data", {})
-        )
-        inter_result = (
-            inter_dc.get("baseline") or (inter_dc.get("flow_results", []) or [None])[0]
-        )
-        assert inter_result, (
-            "Inter-DC forward capacity analysis should have baseline or flow_results"
-        )
-        assert float(inter_result["summary"].get("total_placed", 0.0)) >= 0.0
+        def failure_totals(step: str) -> list[float]:
+            return [
+                r["summary"]["total_placed"]
+                for r in steps[step]["data"]["flow_results"]
+            ]
 
-        rack_failure = (
-            exported["steps"].get("rack_failure_analysis", {}).get("data", {})
-        )
-        rack_result = (
-            rack_failure.get("baseline")
-            or (rack_failure.get("flow_results", []) or [None])[0]
-        )
-        assert rack_result, "Rack failure analysis should have baseline or flow_results"
+        assert baseline_total("intra_dc_capacity_forward") == pytest.approx(400.0)
+        assert baseline_total("intra_dc_capacity_reverse") == pytest.approx(400.0)
+        assert baseline_total("inter_dc_capacity_forward") == pytest.approx(600.0)
+        assert baseline_total("inter_dc_capacity_reverse") == pytest.approx(600.0)
+
+        assert baseline_total("rack_failure_analysis") == pytest.approx(400.0)
+        rack = failure_totals("rack_failure_analysis")
+        assert rack and all(375.0 - 1e-9 <= t <= 400.0 + 1e-9 for t in rack)
+
+        assert baseline_total("spine_failure_analysis") == pytest.approx(600.0)
+        spine = failure_totals("spine_failure_analysis")
+        assert spine and all(575.0 - 1e-9 <= t <= 600.0 + 1e-9 for t in spine)
 
     def test_network_explorer_integration(self, helper):
-        """Test NetworkExplorer functionality with complex hierarchy."""
+        """Test NetworkExplorer totals: at least 80 nodes, positive capex and power."""
         explorer = NetworkExplorer.explore_network(
             helper.network, helper.scenario.components_library
         )
 
         assert explorer.root_node is not None
 
-        # Verify reasonable network size for test scenario
         assert (
             explorer.root_node.stats.node_count >= 80
         )  # Should have substantial node count
@@ -393,10 +367,9 @@ class TestScenario4:
         assert explorer.root_node.stats.total_power > 0
 
     def test_topology_semantic_correctness(self, helper):
-        """Test semantic correctness of the complex topology."""
+        """Test edge attributes and that the graph has at most 20 weak components."""
         helper.validate_topology_semantics()
 
-        # Additional semantic checks for advanced scenario
         # Allow for disconnected components due to disabled nodes and variable expansion
         import networkx as nx
 
@@ -411,8 +384,7 @@ class TestScenario4:
             )
 
     def test_blueprint_nesting_depth(self, helper):
-        """Test that blueprint nesting works correctly."""
-        # Verify that nested node names are correct (adjusted for actual structure)
+        """Test that nested nodes have at least three path levels starting with dc."""
         all_nodes = list(helper.network.nodes.keys())
         nested_nodes = [
             node
@@ -424,7 +396,6 @@ class TestScenario4:
             f"Should have nested nodes. Found: {all_nodes[:10]}"
         )
 
-        # Verify naming convention is consistent
         for node_name in nested_nodes[:10]:  # Check first few
             parts = node_name.split("/")
             assert len(parts) >= 3  # dc/pod/rack or similar
@@ -432,10 +403,9 @@ class TestScenario4:
 
     def test_regex_pattern_matching_complexity(self, helper):
         """Test complex regex patterns in overrides and selections."""
-        # Test complex node selection patterns using available API
         all_nodes = list(helper.network.nodes.keys())
 
-        # Find GPU pattern nodes manually since select_nodes_by_path doesn't exist
+        # Substring filter for dc1 rack server nodes
         gpu_pattern_nodes = [
             node
             for node in all_nodes
@@ -453,18 +423,16 @@ class TestScenario4:
         assert len(inter_dc_pattern_links) > 0, "Complex link patterns should match"
 
     def test_edge_case_handling(self, helper):
-        """Test edge cases and boundary conditions in complex scenario."""
-        # Test disabled node handling (may be enabled by workflow steps)
-        # Test disabled node handling
-        # Test empty group handling (if any)
-        all_nodes = list(helper.network.nodes.keys())
-        assert len(all_nodes) > 0, "Should have some nodes"
+        """Test that the exported graph keeps disabled nodes, flagged as disabled.
 
-        # Test node count consistency - allow for larger differences due to disabled nodes and workflow operations
-        total_nodes = len(helper.network.nodes)
-        graph_nodes = len(helper.graph.nodes)
-        node_diff = abs(total_nodes - graph_nodes)
-        assert node_diff <= 15, (
-            f"Network ({total_nodes}) and graph ({graph_nodes}) node counts should be close. "
-            f"Difference: {node_diff} (some nodes may be disabled and excluded from graph)"
-        )
+        BuildGraph exports every node; the 9 nodes of dc2_podb_rack2 (ToR plus
+        8 servers) carry ``disabled: True``.
+        """
+        network_nodes = helper.network.nodes
+        assert set(helper.graph.nodes) == set(network_nodes)
+
+        disabled = {name for name, node in network_nodes.items() if node.disabled}
+        assert len(disabled) == 9
+        assert all(name.startswith("dc2_podb_rack2/") for name in disabled)
+        for name in network_nodes:
+            assert helper.graph.nodes[name]["disabled"] is (name in disabled)

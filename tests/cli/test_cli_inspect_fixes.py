@@ -1,11 +1,9 @@
-"""Regression tests for `ngraph inspect` output fixes.
+"""Regression tests for `ngraph inspect` output.
 
 Covers:
 - Single-pass per-node capacity/link-count aggregation in
-  ``_print_network_structure`` (previously O(V*E) nested scans), including
-  self-loop semantics.
-- "Top demands (by offered volume)" sorting by the ``volume`` attribute
-  (previously keyed on a nonexistent ``demand`` attribute).
+  ``_print_network_structure``, including self-loop semantics.
+- "Top demands (by offered volume)" sorting by the ``volume`` attribute.
 """
 
 from __future__ import annotations

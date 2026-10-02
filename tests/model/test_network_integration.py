@@ -1,11 +1,4 @@
-"""Tests for integration scenarios and complex network operations.
-
-This module contains tests for:
-- Complex multi-component network scenarios
-- Integration between different network features
-- End-to-end workflow testing
-- Performance and scalability edge cases
-"""
+"""Integration tests combining network features with flow analysis."""
 
 import pytest
 
@@ -13,7 +6,7 @@ from ngraph import Link, Mode, Network, Node, RiskGroup, analyze
 
 
 class TestNetworkIntegration:
-    """Tests for complex integration scenarios."""
+    """Network features combined with flow analysis."""
 
     @pytest.fixture
     def diamond_network(self):
@@ -29,7 +22,7 @@ class TestNetworkIntegration:
         return net
 
     def test_risk_group_with_flow_analysis(self):
-        """Test integration of risk groups with flow analysis."""
+        """Disabling an all-node risk group blocks max flow; re-enabling restores it."""
         net = Network()
         nodes = ["A", "B", "C", "D"]
         for node in nodes:
@@ -41,7 +34,7 @@ class TestNetworkIntegration:
 
         net.risk_groups["critical"] = RiskGroup("critical")
 
-        # Flow should work normally when risk group is enabled
+        # Risk group enabled: the unit-capacity chain carries 1.0
         flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
         assert flow[("^A$", "^D$")] == 1.0
 

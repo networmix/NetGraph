@@ -12,6 +12,6 @@ def new_base64_uuid() -> str:
     characters.
 
     Returns:
-        A 22-character URL-safe Base64 representation of a UUID4, unpadded.
+        22-character ASCII string.
     """
     return base64.urlsafe_b64encode(uuid.uuid4().bytes)[:-2].decode("ascii")

@@ -1,19 +1,14 @@
 """
 Integration tests for scenario 2: Hierarchical DSL with blueprints and multi-node expansions.
 
-This module tests advanced NetGraph features including:
+Covers:
 - Network blueprints with nested hierarchies
-- Blueprint parameter overrides and customization
+- Blueprint parameter overrides
 - Mesh pattern connectivity between blueprint groups
 - Sub-topology composition and reuse
 - Hierarchical DSL path resolution
 
-Scenario 2 validates that NetGraph's blueprint system can create network
-topologies with proper expansion, naming, and connectivity patterns.
-It demonstrates the hierarchical DSL for defining reusable network components.
-
-Uses the modular testing approach with validation helpers from the
-integration.helpers module.
+Validation helpers come from integration.helpers.
 """
 
 import pytest
@@ -24,7 +19,7 @@ from .helpers import create_scenario_helper, load_scenario_from_file
 
 @pytest.mark.slow
 class TestScenario2:
-    """Tests for scenario 2 using modular validation approach."""
+    """Tests for scenario 2."""
 
     @pytest.fixture
     def scenario_2(self):
@@ -76,7 +71,7 @@ class TestScenario2:
         )
 
     def test_hierarchical_node_naming(self, helper):
-        """Test that hierarchical node naming from blueprints works correctly."""
+        """Test that expanded nodes get hierarchical group/subgroup/template names."""
         # Test specific expanded node names from the blueprint hierarchy
         expected_nodes = {
             "SEA/clos_instance/spine/myspine-6",  # Overridden spine with custom naming
@@ -90,7 +85,7 @@ class TestScenario2:
                 f"Expected hierarchical node '{node_name}' not found"
             )
 
-    def test_mesh_pattern_adjacency(self, helper):
+    def test_mesh_link_pattern(self, helper):
         """Test that mesh patterns create full connectivity between groups."""
         # In the clos_2tier blueprint, leaf should mesh with spine
         # With 4 leaf and 6 spine nodes, we expect 4 * 6 = 24 connections
@@ -102,8 +97,8 @@ class TestScenario2:
             f"Expected 24 leaf-to-spine mesh links, found {len(leaf_to_spine_links)}"
         )
 
-    def test_blueprint_parameter_overrides(self, helper):
-        """Test that blueprint parameter overrides work correctly."""
+    def test_blueprint_parameters(self, helper):
+        """Test that params override the SEA spine count (6) and name template."""
         # The city_cloud blueprint overrides spine.node_count to 6 and spine.name_template
         spine_nodes = [
             node
@@ -169,7 +164,7 @@ class TestScenario2:
         )
 
     def test_link_capacities_and_costs(self, helper):
-        """Test that link parameters from blueprints and direct definitions are correct."""
+        """Test capacity and cost on blueprint mesh links and on direct links."""
         # Test blueprint-generated links
         leaf_spine_links = helper.network.find_links(
             source_regex=r"SEA/clos_instance/leaf/.*",
@@ -199,11 +194,11 @@ class TestScenario2:
         )
 
     def test_traffic_demands_configuration(self, helper):
-        """Test traffic demands are correctly configured."""
+        """Test that the default demand set holds the four 50-unit demands."""
         helper.validate_traffic_demands(expected_count=4)
 
         # Same traffic demands as scenario 1
-        default_demands = helper.scenario.demand_set.get_default_set()
+        default_demands = helper.scenario.demand_set.get_set("default")
         demands_dict = {
             (demand.source, demand.target): demand.volume for demand in default_demands
         }
@@ -230,11 +225,11 @@ class TestScenario2:
         helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
     def test_topology_semantic_correctness(self, helper):
-        """Test that the expanded network topology is semantically correct."""
+        """Test that all edges have non-negative capacity and cost."""
         helper.validate_topology_semantics()
 
     def test_blueprint_nesting_structure(self, helper):
-        """Test that nested blueprint references work correctly."""
+        """Test that a blueprint nested in another expands to leaf-1..leaf-4."""
         # city_cloud blueprint contains clos_instance which uses clos_2tier blueprint
         # Verify the full nesting path exists
         nested_leaf_nodes = [
@@ -251,13 +246,22 @@ class TestScenario2:
             )
 
     def test_node_coordinate_attributes(self, helper):
-        """Test that node coordinate attributes are preserved through blueprint expansion."""
-        # The SEA group should have coordinates that propagate to expanded nodes
-        # (This depends on the implementation - may need adjustment based on actual behavior)
-        sea_nodes = [node for node in helper.network.nodes if node.startswith("SEA/")]
-
-        # At minimum, check that SEA-related nodes exist and have some structure
-        assert len(sea_nodes) > 0, "SEA blueprint expansion should create nodes"
-
-
-# Removed redundant smoke test; class-based tests already cover these checks.
+        """Test that group coords reach every node a blueprint expands into."""
+        expected_coords = {
+            "SEA/": [47.6062, -122.3321],
+            "SFO/": [37.7749, -122.4194],
+            "DEN": [39.7392, -104.9903],
+            "DFW": [32.8998, -97.0403],
+            "JFK": [40.641766, -73.780968],
+            "DCA": [38.907192, -77.036871],
+        }
+        nodes = helper.network.nodes
+        for prefix, coords in expected_coords.items():
+            matched = [name for name in nodes if name.startswith(prefix)]
+            assert matched, f"No nodes under {prefix}"
+            for name in matched:
+                assert nodes[name].attrs.get("coords") == coords, (
+                    f"{name} has coords {nodes[name].attrs.get('coords')}, "
+                    f"expected {coords}"
+                )
+        assert len([n for n in nodes if n.startswith("SEA/")]) == 14

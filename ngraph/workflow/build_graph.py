@@ -1,8 +1,8 @@
-"""Graph building workflow component.
+"""BuildGraph workflow step.
 
-Validates the network topology and exports it as a NetworkX node-link
-representation for inspection. Graph building for analysis happens in the
-analysis functions, not here.
+Exports the network topology as a NetworkX node-link representation for
+inspection. Analysis functions build their own graphs and do not read this
+one.
 
 YAML Configuration Example:
     ```yaml
@@ -17,7 +17,7 @@ With `add_reverse: true` (the default), each Link(A→B) gets both a forward
 `false` for directed-only graphs.
 
 Results stored in `scenario.results` under the step name as two keys:
-    - metadata: Step-level execution metadata (node/link counts)
+    - metadata: node_count and link_count (graph edges, including reverse edges)
     - data: { graph: node-link JSON dict, context: { add_reverse: bool } }
 """
 
@@ -39,44 +39,36 @@ logger = get_logger(__name__)
 
 @dataclass
 class BuildGraph(WorkflowStep):
-    """Validates network topology and stores node-link representation.
-
-    The stored representation is JSON-serializable NetworkX node-link data.
-    Core graph building for analysis happens in analysis functions as needed.
+    """Stores the network as JSON-serializable NetworkX node-link data.
 
     Attributes:
-        add_reverse: If True, adds reverse edges for bidirectional connectivity.
-                     Defaults to True.
+        add_reverse: If True, adds a reverse edge (id "<link_id>_reverse") for
+            every link. Defaults to True.
     """
 
     add_reverse: bool = True
 
     def run(self, scenario: Scenario) -> None:
-        """Validate network and store node-link representation.
+        """Store the network's node-link representation.
 
         Args:
             scenario: Scenario containing the network model.
-
-        Returns:
-            None
         """
         logger.info("Starting BuildGraph: name=%s", self.name)
         network = scenario.network
 
-        # Build NetworkX MultiDiGraph from Network
         graph = nx.MultiDiGraph()
 
-        # Add nodes with attributes. Reserved keys win over user attrs to
-        # avoid kwarg collisions when attrs contain e.g. "disabled".
+        # Reserved keys win over user attrs to avoid kwarg collisions when
+        # attrs contain e.g. "disabled".
         for node_name in sorted(network.nodes.keys()):
             node = network.nodes[node_name]
             graph.add_node(node_name, **{**node.attrs, "disabled": node.disabled})
 
-        # Add edges (links) with attributes. Reserved keys (id, capacity,
-        # cost, disabled) win over user attrs with the same names.
+        # Reserved keys (id, capacity, cost, disabled) win over user attrs
+        # with the same names.
         for link_id in sorted(network.links.keys()):
             link = network.links[link_id]
-            # Add forward edge
             graph.add_edge(
                 link.source,
                 link.target,
@@ -88,7 +80,6 @@ class BuildGraph(WorkflowStep):
                     "disabled": link.disabled,
                 },
             )
-            # Add reverse edge if configured (for bidirectional connectivity)
             if self.add_reverse:
                 reverse_id = f"{link_id}_reverse"
                 graph.add_edge(
@@ -103,7 +94,6 @@ class BuildGraph(WorkflowStep):
                     },
                 )
 
-        # Convert to node-link format for serialization
         graph_dict = nx.node_link_data(graph, edges="edges")
 
         scenario.results.put(
@@ -129,5 +119,4 @@ class BuildGraph(WorkflowStep):
         )
 
 
-# Register the class after definition to avoid decorator ordering issues
 register_workflow_step("BuildGraph")(BuildGraph)

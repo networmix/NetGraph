@@ -6,7 +6,7 @@ Network modeling and analysis framework: Python front end, C++ graph algorithms.
 
 ## What It Does
 
-NetGraph lets you model network topologies, traffic demands, and failure scenarios - then analyze capacity and resilience. Define networks in Python or declarative YAML, run max-flow and failure simulations, and export reproducible JSON results. Compute-intensive algorithms run in C++ with the GIL released.
+NetGraph models network topologies, traffic demands and failure scenarios, and analyzes capacity and resilience. Networks are defined in Python or in YAML; max-flow and failure simulations export reproducible JSON.
 
 ## Install
 
@@ -19,7 +19,7 @@ pip install ngraph
 ```python
 from ngraph import Network, Node, Link, analyze, Mode
 
-# Build a simple network
+# Three nodes in a line
 network = Network()
 network.add_node(Node("A"))
 network.add_node(Node("B"))
@@ -108,25 +108,25 @@ ngraph run scenario.yml --output results/
 jq '.steps.max_demand.data.alpha_star' results/scenario.results.json
 ```
 
-This scenario builds a dual-site Clos fabric from blueprints, finds the maximum supportable demand, then runs 100 Monte Carlo iterations with random link failures - exporting results to JSON.
+The scenario builds two Clos sites from one blueprint, finds the largest demand multiplier the network carries, then places that demand under 100 random single-link failures and writes the results to JSON.
 
 See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/) for more.
 
 ## Capabilities
 
-- **Declarative scenarios** with schema validation, reusable blueprints, and strict multigraph representation
-- **Failure analysis** via policy engine with weighted modes, risk groups, and non-destructive runtime exclusions
-- **Routing modes** for IP routing (cost-based) and traffic engineering (capacity-aware)
-- **Flow placement** strategies for ECMP and WCMP with max-flow and capacity envelopes
-- **Reproducible results** via seeded randomness and stable edge IDs
+- **Declarative scenarios**: schema-validated YAML, reusable blueprints, a strict multigraph model
+- **Failure analysis**: weighted failure modes, risk groups, and analysis-time exclusions that leave the base topology untouched
+- **Routing models**: cost-only IP routing and capacity-aware traffic engineering
+- **Flow placement**: ECMP and WCMP splits, max-flow and demand placement
+- **Reproducible results**: seeded randomness and stable link ids
 - **C++ algorithms** with the GIL released, via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
 
 ## Documentation
 
-- [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/) - Getting started guide
-- [**Examples**](https://networmix.github.io/NetGraph/examples/clos-fabric/) - Clos fabric, failure analysis, and more
+- [**Tutorial**](https://networmix.github.io/NetGraph/getting-started/tutorial/) - Running a scenario from the CLI and from Python
+- [**Examples**](https://networmix.github.io/NetGraph/examples/clos-fabric/) - Clos fabric capacity and failure analysis
 - [**DSL Reference**](https://networmix.github.io/NetGraph/reference/dsl/) - YAML scenario syntax
-- [**API Reference**](https://networmix.github.io/NetGraph/reference/api/) - Python API docs
+- [**API Reference**](https://networmix.github.io/NetGraph/reference/api/) - Python API
 
 ## License
 

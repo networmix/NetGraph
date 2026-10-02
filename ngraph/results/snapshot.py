@@ -25,12 +25,6 @@ def build_scenario_snapshot(
     Returns:
         Dict containing: seed, failures (policy snapshots), demands (demand snapshots).
     """
-    # Delegate policy serialization to FailurePolicy.to_dict so the snapshot
-    # matches the scenario YAML format (rule conditions nested under "match").
-    snapshot_failure_policies: Dict[str, Any] = {
-        name: policy.to_dict() for name, policy in failure_policy_set.policies.items()
-    }
-
     snapshot_demands: Dict[str, list[dict[str, Any]]] = {
         sname: [d.to_dict() for d in demands]
         for sname, demands in demand_set.sets.items()
@@ -38,6 +32,7 @@ def build_scenario_snapshot(
 
     return {
         "seed": seed,
-        "failures": snapshot_failure_policies,
+        # Scenario YAML format (rule conditions nested under "match").
+        "failures": failure_policy_set.to_dict(),
         "demands": snapshot_demands,
     }

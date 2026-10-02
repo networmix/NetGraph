@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Topology generators for performance benchmarking.
 
-This module provides topology generators that create Network instances with
-predefined structures and known node/link counts. Each topology validates
-that the generated network matches expected dimensions to ensure benchmark
-consistency across runs.
-
-The base Topology class defines the interface for all generators, requiring
-subclasses to implement _build() and declare expected node/link counts.
-Concrete implementations include Clos fabrics and 2D grid topologies.
+Each generator builds a Network with known node and link counts.
+``create_network`` rejects a network whose counts differ, so a benchmark size
+always refers to the same graph. Subclasses implement ``_build()`` and set the
+expected counts. Included: a 2-tier Clos fabric and a 2D grid or torus.
 """
 
 from __future__ import annotations
@@ -35,21 +31,18 @@ class Topology(ABC):
 
     @abstractmethod
     def _build(self, seed: int) -> Network:
-        """Build network topology.
+        """Build the network without checking counts.
 
         Args:
             seed: Random seed for deterministic generation.
 
         Returns:
-            Network instance with topology-specific structure.
+            The generated network.
         """
         ...
 
     def create_network(self, *, seed: int = 42) -> Network:
-        """Create network from topology configuration.
-
-        This method builds the network and validates that it matches the
-        expected node and link counts to ensure benchmark consistency.
+        """Build the network and check it against the expected counts.
 
         Args:
             seed: Random seed for network generation.
@@ -77,31 +70,26 @@ class Topology(ABC):
 class Clos2TierTopology(Topology):
     """2-tier Clos (leaf-spine) fabric topology.
 
-    Creates a standard leaf-spine network with full mesh connectivity
-    between leaf and spine tiers.
+    Every leaf connects to every spine.
     """
 
     leaf_count: int = 4
     spine_count: int = 4
     link_capacity: float = 100.0
 
-    # Computed fields set during initialization to avoid repeated calculations
+    # Set by __post_init__ from the parameters above.
     name: str = ""
     expected_nodes: int = 0
     expected_links: int = 0
 
     def __post_init__(self) -> None:
-        """Calculate topology dimensions and naming.
-
-        Sets name, expected_nodes, and expected_links based on leaf/spine
-        counts to enable validation during network creation.
-        """
+        """Derive ``name`` and the expected node and link counts."""
         self.name = f"clos_{self.leaf_count}x{self.spine_count}"
         self.expected_nodes = self.leaf_count + self.spine_count
         self.expected_links = self.leaf_count * self.spine_count
 
     def _build(self, seed: int) -> Network:
-        """Build Clos fabric using scenario YAML generation.
+        """Build the fabric from a generated scenario YAML.
 
         Args:
             seed: Random seed for deterministic generation.
@@ -114,20 +102,21 @@ class Clos2TierTopology(Topology):
             seed: {seed}
             network:
               name: "{self.name}"
-              groups:
+              nodes:
                 leaf:
-                  node_count: {self.leaf_count}
-                  name_template: "leaf/leaf{{node_num:02d}}"
+                  count: {self.leaf_count}
+                  template: "leaf{{n:02d}}"
                   attrs: {{layer: leaf, site_type: core}}
                 spine:
-                  node_count: {self.spine_count}
-                  name_template: "spine/spine{{node_num:02d}}"
+                  count: {self.spine_count}
+                  template: "spine{{n:02d}}"
                   attrs: {{layer: spine, site_type: core}}
-              adjacency:
+              links:
                 - source: /leaf
                   target: /spine
                   pattern: mesh
-                  link_params: {{capacity: {self.link_capacity}, cost: 1}}
+                  capacity: {self.link_capacity}
+                  cost: 1
             """
         ).strip()
         return Scenario.from_yaml(yaml).network
@@ -153,16 +142,13 @@ class Grid2DTopology(Topology):
     link_capacity: float = 100.0
     link_cost: float = 1.0
 
-    # Computed fields set during initialization to avoid repeated calculations
+    # Set by __post_init__ from the parameters above.
     name: str = ""
     expected_nodes: int = 0
     expected_links: int = 0
 
     def __post_init__(self) -> None:
-        """Calculate grid dimensions and link counts.
-
-        Validates grid parameters and computes expected node/link counts
-        based on grid dimensions and connectivity options.
+        """Validate the grid size and derive ``name`` and expected counts.
 
         Raises:
             ValueError: If rows or cols are less than 2.
@@ -172,12 +158,12 @@ class Grid2DTopology(Topology):
         self.name = f"{'torus' if self.wrap else 'grid'}_{self.rows}x{self.cols}"
         self.expected_nodes = self.rows * self.cols
 
-        # Calculate expected links by simulating the generation logic
-        # This ensures the count matches what _build() actually creates
+        # Replay _build()'s edge rules so wrap-around duplicates are dropped
+        # the same way.
         expected_edges: set[tuple[str, str]] = set()
 
         for r, c in product(range(self.rows), range(self.cols)):
-            # Add orthogonal connections (right and down)
+            # Right and down neighbors
             c_next = self._idx(c + 1, self.cols)
             r_next = self._idx(r + 1, self.rows)
 
@@ -191,7 +177,6 @@ class Grid2DTopology(Topology):
                 v = f"n{r_next:03d}_{c:03d}"
                 expected_edges.add((u, v))
 
-            # Add diagonal connections if enabled
             if self.diag:
                 # Diagonal down-right
                 if r_next is not None and c_next is not None:
@@ -213,7 +198,7 @@ class Grid2DTopology(Topology):
 
         Args:
             i: Grid coordinate to convert.
-            limit: Maximum coordinate value.
+            limit: Dimension size; valid coordinates are 0 to limit - 1.
 
         Returns:
             Wrapped coordinate if wrap is enabled, or None if out of bounds.
@@ -231,22 +216,19 @@ class Grid2DTopology(Topology):
         """
         net = Network()
 
-        # Create nodes with grid coordinates as attributes
         for r, c in product(range(self.rows), range(self.cols)):
             name = f"n{r:03d}_{c:03d}"
             net.add_node(Node(name, attrs={"row": r, "col": c}))
 
-        # Track added edges to prevent duplicates
+        # With wrap, diag, and rows == 2, both diagonals yield the same edge.
         added_edges: set[tuple[str, str]] = set()
 
-        # Helper to add bidirectional links with bounds checking
         def add_edge(r1: int, c1: int, r2: int | None, c2: int | None) -> None:
             if r2 is None or c2 is None:
                 return  # Skip out-of-bounds connections when wrap is disabled
             u = f"n{r1:03d}_{c1:03d}"
             v = f"n{r2:03d}_{c2:03d}"
 
-            # Prevent duplicate edges
             if (u, v) in added_edges:
                 return
             added_edges.add((u, v))
@@ -261,18 +243,17 @@ class Grid2DTopology(Topology):
             )
 
         for r, c in product(range(self.rows), range(self.cols)):
-            # Add orthogonal connections (right and down)
+            # Right and down neighbors, then the two right-hand diagonals
             add_edge(r, c, r, self._idx(c + 1, self.cols))
             add_edge(r, c, self._idx(r + 1, self.rows), c)
 
-            # Add diagonal connections if enabled
             if self.diag:
                 add_edge(r, c, self._idx(r + 1, self.rows), self._idx(c + 1, self.cols))
                 add_edge(r, c, self._idx(r - 1, self.rows), self._idx(c + 1, self.cols))
         return net
 
 
-# Export all available topology classes
+# Topology classes listed by `perf show topology`
 ALL_TOPOLOGIES = [
     Clos2TierTopology,
     Grid2DTopology,

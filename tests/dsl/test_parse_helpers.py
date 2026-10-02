@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from ngraph.dsl.blueprints.parser import (
-    check_link_keys,
-    check_no_extra_keys,
-    expand_name_patterns,
-    join_paths,
-)
+from ngraph.dsl.blueprints.parser import check_link_keys, join_paths
+from ngraph.dsl.expansion import expand_name_patterns
+from ngraph.utils.yaml_utils import check_no_extra_keys
 
 
 def test_expand_name_patterns_no_brackets_returns_same() -> None:

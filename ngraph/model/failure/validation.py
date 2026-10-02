@@ -1,9 +1,8 @@
 """Risk group reference validation.
 
 Validates that all risk group references in nodes and links resolve to
-defined risk groups. Catches typos and missing definitions early.
-
-Also provides cycle detection for risk group hierarchies.
+defined risk groups, catching typos and missing definitions early, and
+detects cycles in risk group hierarchies.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def validate_risk_group_references(network: "Network") -> None:
-    """Ensure every risk group named by a node or link is defined.
+    """Check that every risk group named by a node or link is defined.
 
     Names are checked against network.risk_groups; typos and missing
     definitions would otherwise cause silent failures in simulations.
@@ -64,7 +63,6 @@ def validate_risk_group_hierarchy(network: "Network") -> None:
     Raises:
         ValueError: If a cycle is detected, with details about the cycle path.
     """
-    # Build adjacency from parent -> children names
     children_map: Dict[str, List[str]] = {}
     for rg_name, rg in network.risk_groups.items():
         children_map[rg_name] = [child.name for child in rg.children]
@@ -80,10 +78,10 @@ def validate_risk_group_hierarchy(network: "Network") -> None:
         color[node] = GRAY
         for child in children_map.get(node, []):
             if child not in color:
-                # Child not in risk_groups (shouldn't happen after validation)
+                # Nested groups are not registered top-level; nothing to visit
                 continue
             if color[child] == GRAY:
-                # Found cycle - reconstruct path
+                # A GRAY child is a back edge; walk parents to rebuild the cycle.
                 cycle = [child, node]
                 current = node
                 while parent.get(current) and parent[current] != child:
@@ -106,10 +104,7 @@ def validate_risk_group_hierarchy(network: "Network") -> None:
             if cycle:
                 cycle_str = " -> ".join(cycle) + f" -> {cycle[0]}"
                 raise ValueError(
-                    f"Circular reference detected in risk group hierarchy:\n"
-                    f"  {cycle_str}\n\n"
-                    f"Risk groups cannot form cycles in their parent-child relationships. "
-                    f"This may be caused by membership rules with scope='risk_group' "
-                    f"that create mutual parent-child relationships. Review the membership "
-                    f"rules for these groups and adjust conditions to break the cycle."
+                    f"Circular reference in risk group hierarchy: {cycle_str}. "
+                    "Check the children lists and any membership rules with "
+                    "scope 'risk_group' that add these groups to each other."
                 )

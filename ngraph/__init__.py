@@ -5,7 +5,7 @@ Python+C++ architecture.
 
 Primary API:
     analyze() - Create an analysis context for network queries
-    AnalysisContext - Prepared state for efficient repeated analysis
+    AnalysisContext - Prepared graph state reused across queries
     Network, Node, Link - Network topology model
     from_networkx() - Convert NetworkX graph to internal format
     to_networkx() - Convert internal format back to NetworkX
@@ -22,7 +22,7 @@ Example:
     # One-off analysis
     flow = analyze(net).max_flow("^A$", "^B$")
 
-    # Efficient repeated analysis
+    # Bound context: graph built once, reused across queries
     ctx = analyze(net, source="^A$", sink="^B$")
     baseline = ctx.max_flow()
     degraded = ctx.max_flow(excluded_links=failed_links)
