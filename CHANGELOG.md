@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.24.0] - 2026-10-02
 
 ### Fixed
 
@@ -46,7 +46,7 @@ Inputs that were silently ignored or replaced now raise, `ValueError` unless not
 
 Other changes.
 
-- Selector contexts follow the DSL sections: `link` and `rule` replace `adjacency` and `override`
+- **BREAKING**: selector contexts follow the DSL sections: `link` and `rule` replace `adjacency` and `override`
 - Monte Carlo keeps `None` results from custom analysis functions in `results`
 - `PerformanceProfiler.save_detailed_profile` requires `step_name`
 - Dependencies: `pandas` dropped, `numpy` declared; dev extras drop pytest-benchmark, pytest-mock, pdoc and pandas-stubs
