@@ -24,36 +24,31 @@ from .topology import Topology
 
 
 def _time_func(func: Callable[[], Any], runs: int) -> dict[str, float]:
-    """Time function execution over multiple runs.
+    """Time ``func`` over ``runs`` calls after up to 10 untimed warm-up calls.
 
-    Includes GC control to reduce variance from garbage collection.
-    Performs warm-up runs before timing to reduce JIT compilation effects.
+    Automatic GC is off while timing, to reduce variance.
 
     Args:
-        func: Function to time (should take no arguments).
+        func: Zero-argument callable to time.
         runs: Number of timing runs to perform.
 
     Returns:
         Dictionary with timing statistics: mean, median, std, min, max, rounds.
     """
-    # Disable GC during timing to reduce variance
     gc_was_enabled = gc.isenabled()
     gc.disable()
 
     try:
-        # Force collection before timing
         gc.collect()
 
-        # Warm-up runs to reduce JIT compilation and cache effects
         WARMUP_RUNS = 10
         for _ in range(min(WARMUP_RUNS, runs)):
             func()
 
-        # Actual timing runs
         samples = []
         NANOSECONDS_TO_SECONDS = 1e9
         for _ in range(runs):
-            # Force minor collection between runs to prevent buildup
+            # Collect gen 0 between runs so garbage does not pile up with GC off.
             gc.collect(0)
 
             start = time.perf_counter_ns()
@@ -69,16 +64,14 @@ def _time_func(func: Callable[[], Any], runs: int) -> dict[str, float]:
             "rounds": len(samples),
         }
     finally:
-        # Re-enable GC if it was enabled before
         if gc_was_enabled:
             gc.enable()
 
 
 def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSample:
-    """Execute SPF benchmark for a given case using NetGraph-Core.
+    """Time NetGraph-Core SPF from node 0 over all min-cost edges.
 
-    Creates network and Core graph once outside timing loop to reduce variance.
-    Uses the first node as the source for shortest path calculation.
+    The network and Core graph are built once, outside the timed loop.
 
     Args:
         case: Benchmark case containing topology and configuration.
@@ -88,29 +81,21 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
         BenchmarkSample with timing statistics and metadata.
     """
     topology: Topology = case.inputs["topology"]
-
-    # Create network and Core graph once outside timing loop
     network = topology.create_network()
     ctx = AnalysisContext.from_network(network)
-
-    # Use context's algorithms instance
     algs = ctx.algorithms
-
-    # Use first node (ID 0) as source for SPF
     source_id = 0
 
-    # Create edge selection for all min-cost edges
+    # All parallel min-cost edges; capacity is ignored.
     edge_selection = netgraph_core.EdgeSelection(
         multi_edge=True,
         require_capacity=False,
         tie_break=netgraph_core.EdgeTieBreak.DETERMINISTIC,
     )
 
-    # Create a closure that captures the context and source
     def run_spf():
         return algs.spf(ctx.handle, source_id, selection=edge_selection)
 
-    # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)
 
     return BenchmarkSample(
@@ -129,13 +114,10 @@ def _execute_spf_benchmark(case: BenchmarkCase, iterations: int) -> BenchmarkSam
 def _execute_spf_networkx_benchmark(
     case: BenchmarkCase, iterations: int
 ) -> BenchmarkSample:
-    """Execute SPF benchmark using NetworkX for comparison.
+    """Time NetworkX ``dijkstra_predecessor_and_distance`` as a baseline for Core SPF.
 
-    Creates network and NetworkX MultiDiGraph once outside timing loop to reduce
-    variance. Uses the first node as the source for shortest path calculation.
-
-    Note: This benchmarks NetworkX's dijkstra_predecessor_and_distance for
-    direct comparison with NetGraph-Core's SPF implementation.
+    The network and NetworkX MultiDiGraph are built once, outside the timed
+    loop. The source is the first node.
 
     Args:
         case: Benchmark case containing topology and configuration.
@@ -145,38 +127,28 @@ def _execute_spf_networkx_benchmark(
         BenchmarkSample with timing statistics and metadata.
     """
     topology: Topology = case.inputs["topology"]
-
-    # Create network once outside timing loop
     network = topology.create_network()
 
-    # Build NetworkX MultiDiGraph manually for NetworkX algorithms
     nx_graph = nx.MultiDiGraph()
-
-    # Add nodes
     for node_name, node in network.nodes.items():
         if not node.disabled:
             nx_graph.add_node(node_name)
 
-    # Add edges (with reverse edges for bidirectional connectivity)
+    # Links are bidirectional; add one edge per direction.
     for _, link in network.links.items():
         if not link.disabled:
-            # Forward edge
             nx_graph.add_edge(
                 link.source, link.target, capacity=link.capacity, cost=link.cost
             )
-            # Reverse edge
             nx_graph.add_edge(
                 link.target, link.source, capacity=link.capacity, cost=link.cost
             )
 
-    # Use first node as source for SPF
     source = next(iter(nx_graph.nodes))
 
-    # Create a closure that captures the graph and source
     def run_spf():
         return nx.dijkstra_predecessor_and_distance(nx_graph, source, weight="cost")
 
-    # Time the SPF execution
     timing_stats = _time_func(run_spf, iterations)
 
     return BenchmarkSample(
@@ -195,10 +167,10 @@ def _execute_spf_networkx_benchmark(
 def _execute_max_flow_benchmark(
     case: BenchmarkCase, iterations: int
 ) -> BenchmarkSample:
-    """Execute max flow benchmark using NetGraph-Core.
+    """Time NetGraph-Core max flow from the first node ID to the last.
 
-    Creates network and Core graph once outside timing loop to reduce variance.
-    Uses first node as source and last node as sink for maximum path length.
+    Uses proportional placement over all paths (``shortest_path=False``). The
+    network and Core graph are built once, outside the timed loop.
 
     Args:
         case: Benchmark case containing topology and configuration.
@@ -210,15 +182,10 @@ def _execute_max_flow_benchmark(
     topology: Topology = case.inputs["topology"]
     network = topology.create_network()
     ctx = AnalysisContext.from_network(network)
-
-    # Use context's algorithms instance
     algs = ctx.algorithms
-
-    # Use first node as source and last node as sink for maximum path length
     source_id = 0
     sink_id = ctx.multidigraph.num_nodes() - 1
 
-    # Create a closure that captures the context handle and node IDs
     def run_max_flow():
         flow_value, _ = algs.max_flow(
             ctx.handle,
@@ -229,7 +196,6 @@ def _execute_max_flow_benchmark(
         )
         return flow_value
 
-    # Time the max flow execution
     timing_stats = _time_func(run_max_flow, iterations)
 
     return BenchmarkSample(

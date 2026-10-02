@@ -1,12 +1,11 @@
 # Installation
 
-NetGraph is a hybrid Python+C++ framework. The Python package (`ngraph`) automatically installs
-the C++ performance layer (`netgraph-core`) as a dependency.
+The `ngraph` package depends on `netgraph-core`, the C++ engine; `pip install ngraph` installs both.
 
 ## Requirements
 
 - Python 3.11 or higher
-- C++ compiler (for building netgraph-core from source if needed)
+- A C++ compiler, only when no pre-built `netgraph-core` wheel exists for the platform
   - Linux: GCC 10+ or Clang 12+
   - macOS: Xcode Command Line Tools (Apple Clang)
   - Windows: Visual Studio 2019+ with C++ tools
@@ -30,7 +29,7 @@ This installs:
 
 1. The Python `ngraph` package
 2. `netgraph-core` (pre-built wheels for common platforms, or builds from source)
-3. Dependencies (networkx, pyyaml, pandas, jsonschema)
+3. Dependencies (networkx, numpy, pyyaml, jsonschema)
 
 Verify installation:
 
@@ -40,7 +39,7 @@ ngraph --help
 
 ## From Source
 
-For development or if you need the latest changes:
+For development, or to install from the repository:
 
 ```bash
 # Clone both repositories

@@ -2,8 +2,8 @@
 
 The runtime selector engine lives in ``ngraph.model.selectors`` so that the
 model layer (failure policies in particular) evaluates selectors without
-importing the DSL package. ``ngraph.dsl.selectors`` keeps YAML-facing parsing
-and re-exports the moved names for backward compatibility.
+importing the DSL package. ``ngraph.dsl.selectors`` keeps only YAML-facing
+parsing.
 
 The subprocess tests stub parent packages with path-only modules so that
 importing a model module does not execute ``ngraph/__init__.py`` (which pulls
@@ -89,18 +89,3 @@ def test_model_packages_do_not_load_dsl_selectors() -> None:
         """
     )
     _run_python(code)
-
-
-def test_dsl_selectors_reexports_model_selector_names() -> None:
-    """ngraph.dsl.selectors re-exports the moved names for backward compatibility."""
-    import ngraph.dsl.selectors as dsl_selectors
-    import ngraph.model.selectors as model_selectors
-
-    for name in model_selectors.__all__:
-        assert getattr(dsl_selectors, name) is getattr(model_selectors, name), (
-            f"ngraph.dsl.selectors.{name} is not the ngraph.model.selectors object"
-        )
-
-    # Parsing entry points remain in the DSL layer.
-    assert callable(dsl_selectors.normalize_selector)
-    assert callable(dsl_selectors.parse_match_spec)

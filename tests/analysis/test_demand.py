@@ -194,7 +194,6 @@ class TestExpandDemandsCombine:
         )
         expansion = expand_demands(simple_network, [td])
 
-        # Check augmentation edges
         aug_edges = [(a.source, a.target) for a in expansion.augmentations]
 
         # Pseudo source -> real sources
@@ -261,7 +260,7 @@ class TestExpandDemandsIdConsistency:
 
 
 class TestExpandDemandsEdgeCases:
-    """Test edge cases for expand_demands."""
+    """expand_demands with empty input, unmatched selectors, and mixed modes."""
 
     def test_empty_demands_raises(self, simple_network: Network) -> None:
         """Empty demands list raises ValueError."""
@@ -279,7 +278,7 @@ class TestExpandDemandsEdgeCases:
             expand_demands(simple_network, [td])
 
     def test_multiple_demands_mixed_modes(self, simple_network: Network) -> None:
-        """Multiple demands with different modes expand correctly."""
+        """A pairwise and a combine demand expand to one demand each."""
         td_pairwise = TrafficDemand(
             source="A",
             target="B",
@@ -339,11 +338,8 @@ class TestDictSelectors:
         )
         expansion = expand_demands(network_with_attrs, [td])
 
-        # With group_by=dc and pairwise mode, we get:
-        # dc1->dc2 and dc2->dc1 (excluding self-pairs)
-        # Each group has 4 nodes, so 16 pairs per direction = 32 total
-        # But wait, pairwise is between individual nodes, not groups
-        # Actually pairwise still creates per-node pairs
+        # group_mode defaults to "flatten": both dc groups merge into one set of
+        # 8 nodes, and pairwise creates every non-self node pair (8 * 7 = 56).
         assert len(expansion.demands) > 0
         # Volume is distributed across pairs
         total_volume = sum(d.volume for d in expansion.demands)
@@ -442,7 +438,7 @@ class TestTrafficDemandFieldPreservation:
         assert reconstructed.priority == original.priority
 
     def test_default_values_for_new_fields(self) -> None:
-        """New fields have sensible defaults when not specified."""
+        """group_mode defaults to "flatten" when not specified."""
         td = TrafficDemand(
             source="^A$",
             target="^B$",

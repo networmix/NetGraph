@@ -1,7 +1,8 @@
 """MaxFlow workflow step.
 
 Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
-Produces unified `flow_results` per iteration under `data.flow_results`.
+Writes one `FlowIterationResult` dict per unique failure pattern under
+`data.flow_results` and the no-failure result under `data.baseline`.
 
 Baseline (no failures) always runs first as a separate reference; `iterations`
 counts failure scenarios only.
@@ -85,7 +86,6 @@ class MaxFlow(WorkflowStep):
     shortest_path: bool = False
     require_capacity: bool = True
     flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL
-    seed: int | None = None
     store_failure_patterns: bool = False
     include_flow_details: bool = False
     include_min_cut: bool = False
@@ -134,7 +134,7 @@ class MaxFlow(WorkflowStep):
             flow_placement=self.flow_placement,
             seed=self.seed,
             store_failure_patterns=self.store_failure_patterns,
-            include_flow_summary=self.include_flow_details,
+            include_flow_details=self.include_flow_details,
             include_min_cut=self.include_min_cut,
         )
 

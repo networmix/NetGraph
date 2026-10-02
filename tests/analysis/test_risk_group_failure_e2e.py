@@ -1,8 +1,8 @@
 """End-to-end test for risk group scoped failures.
 
-Verifies the full pipeline: FailureManager.compute_exclusions →
-FailurePolicy.apply_failures → match_entity_ids correctly matches
-risk group attributes and excludes member links.
+Covers the full pipeline FailureManager.compute_exclusions →
+FailurePolicy.apply_failures → match_entity_ids: risk group attributes
+are matched and member links are excluded.
 """
 
 from __future__ import annotations

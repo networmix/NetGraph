@@ -2,27 +2,27 @@
 
 from __future__ import annotations
 
+import math
+import numbers
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
-from ngraph.logging import get_logger
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
-
-LOGGER = get_logger(__name__)
 
 
 @dataclass
 class Component:
-    """A generic component that can represent chassis, line cards, optics, etc.
-    Components can have nested children, each with their own capex, power, etc.
+    """Hardware component such as a chassis, line card, or optic.
+
+    Components can nest children, each with its own capex, power, and count.
 
     Attributes:
         name (str): Name of the component (e.g., "SpineChassis" or "400G-LR4").
-        component_type (str): A string label (e.g., "chassis", "linecard", "optic").
-        description (str): A human-readable description of this component.
+        component_type (str): Free-form label (e.g., "chassis", "linecard", "optic").
+        description (str): Free-form human-readable description.
         capex (float): Monetary capex of a single instance of this component.
         power_watts (float): Typical/nominal power usage (watts) for one instance.
         power_watts_max (float): Maximum/peak power usage (watts) for one instance.
@@ -39,8 +39,8 @@ class Component:
     description: str = ""
     capex: float = 0.0
 
-    power_watts: float = 0.0  # Typical power usage
-    power_watts_max: float = 0.0  # Peak power usage
+    power_watts: float = 0.0
+    power_watts_max: float = 0.0
 
     capacity: float = 0.0
     ports: int = 0
@@ -50,7 +50,7 @@ class Component:
     children: Dict[str, Component] = field(default_factory=dict)
 
     def total_capex(self) -> float:
-        """Computes total capex including children, multiplied by count."""
+        """Return capex of this component and all descendants, times ``count``."""
         single_instance_capex = self.capex
         for child in self.children.values():
             single_instance_capex += child.total_capex()
@@ -112,7 +112,7 @@ class Component:
             "capacity": self.capacity,
             "ports": self.ports,
             "count": self.count,
-            "attrs": dict(self.attrs),  # shallow copy
+            "attrs": dict(self.attrs),
         }
         if include_children:
             data["children"] = {
@@ -124,8 +124,9 @@ class Component:
 
 @dataclass
 class ComponentsLibrary:
-    """Holds a collection of named Components. Each entry is a top-level "template"
-    that can be referenced for cost/power/capacity lookups, possibly with nested children.
+    """Named Component templates for capex, power, and capacity lookups.
+
+    Each entry is a top-level template and may have nested children.
 
     Example (YAML-like):
         components:
@@ -187,7 +188,8 @@ class ComponentsLibrary:
         """Creates a deep copy of this ComponentsLibrary.
 
         Returns:
-            ComponentsLibrary: A new, cloned library instance.
+            ComponentsLibrary: Independent copy; changes to it do not affect
+                this library.
         """
         return ComponentsLibrary(components=deepcopy(self.components))
 
@@ -200,6 +202,10 @@ class ComponentsLibrary:
 
         Returns:
             ComponentsLibrary: A newly constructed library.
+
+        Raises:
+            ValueError: If a definition has an unrecognized key or a ``name``
+                that disagrees with its mapping key.
         """
         # Normalize dictionary keys to handle YAML boolean keys
         normalized_data = normalize_yaml_dict_keys(data)
@@ -214,11 +220,15 @@ class ComponentsLibrary:
 
         Args:
             name (str): Name to give the constructed component.
-            definition_data (Dict[str, Any]): Component definition. Recognized
-                keys map to fields; anything else is folded into ``attrs``.
+            definition_data (Dict[str, Any]): Component definition; custom
+                data belongs under ``attrs``.
 
         Returns:
             Component: The constructed Component instance.
+
+        Raises:
+            ValueError: If the definition has keys other than the component
+                fields.
         """
         comp_type = definition_data.get("component_type", "generic")
         capex = float(definition_data.get("capex", 0.0))
@@ -236,6 +246,7 @@ class ComponentsLibrary:
             children_map[child_name] = cls._build_component(child_name, child_data)
 
         recognized_keys = {
+            "name",
             "component_type",
             "capex",
             "power_watts",
@@ -247,24 +258,21 @@ class ComponentsLibrary:
             "count",
             "description",
         }
-        attrs: Dict[str, Any] = dict(definition_data.get("attrs", {}))
-        # Normalize attrs keys to handle YAML boolean keys
-        attrs = normalize_yaml_dict_keys(attrs)
-        leftover_keys = {
-            k: v for k, v in definition_data.items() if k not in recognized_keys
-        }
-        # Normalize leftover keys too
-        leftover_keys = normalize_yaml_dict_keys(leftover_keys)
-        if "cost" in leftover_keys:
-            # Likely confusion with link 'cost'; without 'capex' the component
-            # contributes 0 to capex totals.
-            LOGGER.warning(
-                "Component '%s' defines unrecognized key 'cost'; it is stored "
-                "in attrs and ignored by capex calculations. Use 'capex' for "
-                "monetary cost.",
-                name,
+        # ``as_dict`` output carries the name; it must agree with the mapping key.
+        if definition_data.get("name", name) != name:
+            raise ValueError(
+                f"Component '{name}' has mismatched name "
+                f"'{definition_data['name']}' in its definition"
             )
-        attrs.update(leftover_keys)
+        unknown = sorted(str(k) for k in definition_data if k not in recognized_keys)
+        if unknown:
+            hint = " Use 'capex' for monetary cost." if "cost" in unknown else ""
+            raise ValueError(
+                f"Component '{name}' has unrecognized key(s): {', '.join(unknown)}. "
+                f"Put custom data under 'attrs'.{hint}"
+            )
+        # Normalize attrs keys to handle YAML boolean keys
+        attrs = normalize_yaml_dict_keys(dict(definition_data.get("attrs", {})))
 
         return Component(
             name=name,
@@ -282,9 +290,10 @@ class ComponentsLibrary:
 
     @classmethod
     def from_yaml(cls, yaml_str: str) -> ComponentsLibrary:
-        """Constructs a ComponentsLibrary from a YAML string. If the YAML contains
-        a top-level 'components' key, that key is used; otherwise the entire
-        top-level is treated as component definitions.
+        """Constructs a ComponentsLibrary from a YAML string.
+
+        If the YAML has a top-level 'components' key, its value is used;
+        otherwise the whole top level is treated as component definitions.
 
         Args:
             yaml_str (str): A YAML-formatted string of component definitions.
@@ -313,14 +322,32 @@ class ComponentsLibrary:
 
 
 # ----------------------------- Helper utilities -----------------------------
+def _positive_count(value: Any) -> float:
+    """Return a hardware ``count`` as a finite positive float.
+
+    Raises:
+        ValueError: If ``value`` is not a finite number greater than zero.
+    """
+    count = (
+        float(value)
+        if isinstance(value, numbers.Real) and not isinstance(value, bool)
+        else float("nan")
+    )
+    if not (count > 0 and math.isfinite(count)):
+        raise ValueError(
+            f"Hardware 'count' must be a finite positive number, got {value!r}"
+        )
+    return count
+
+
 def resolve_node_hardware(
     attrs: Dict[str, Any], library: ComponentsLibrary
 ) -> Tuple[Optional[Component], float]:
     """Resolve node hardware from ``attrs['hardware']``.
 
     Expects the mapping: ``{"hardware": {"component": NAME, "count": N}}``.
-    ``count`` defaults to 1 if missing or invalid. If ``component`` is missing
-    or unknown, returns ``(None, 1.0)``.
+    ``count`` defaults to 1. If ``component`` is missing or unknown, the
+    component is None.
 
     Args:
         attrs: Node attributes mapping.
@@ -328,25 +355,17 @@ def resolve_node_hardware(
 
     Returns:
         Tuple of (component or None, positive multiplier).
+
+    Raises:
+        ValueError: If ``count`` is not a finite positive number.
     """
     hw = attrs.get("hardware")
     if not isinstance(hw, dict):
         return None, 1.0
 
     name_raw = hw.get("component")
-    name = str(name_raw) if name_raw is not None else None
-    raw_count = hw.get("count", 1)
-
-    try:
-        hw_count = float(raw_count)
-    except Exception:
-        hw_count = 1.0
-
-    if hw_count <= 0:
-        hw_count = 1.0
-
-    comp = library.get(name) if name else None
-    return comp, hw_count
+    comp = library.get(str(name_raw)) if name_raw else None
+    return comp, _positive_count(hw.get("count", 1))
 
 
 def totals_with_multiplier(
@@ -367,32 +386,12 @@ def totals_with_multiplier(
     return capex, power, capacity
 
 
-# ------------------------- Link endpoint HW helpers -------------------------
-def _coerce_positive_float(value: Any, default: float = 1.0) -> float:
-    """Return ``value`` coerced to a positive float, else ``default``.
-
-    Args:
-        value: Arbitrary value to parse as float.
-        default: Returned when parsing fails or the result is <= 0.
-
-    Returns:
-        The parsed float when it is > 0, otherwise ``default`` (so the result
-        is strictly positive only when ``default`` is).
-    """
-    try:
-        out = float(value)
-    except Exception:
-        return default
-    return out if out > 0 else default
-
-
 def resolve_link_end_components(
     attrs: Dict[str, Any],
     library: ComponentsLibrary,
 ) -> tuple[
     tuple[Optional[Component], float, bool],
     tuple[Optional[Component], float, bool],
-    bool,
 ]:
     """Resolve per-end hardware components for a link.
 
@@ -400,17 +399,20 @@ def resolve_link_end_components(
     ``hardware`` key only:
       ``{"hardware": {"source": {"component": NAME, "count": N},
                        "target": {"component": NAME, "count": N}}}``
-    An optional ``exclusive: true`` per end indicates unsharable usage; for
-    exclusive ends, validation and BOM counting round counts up to integers.
+    An optional ``exclusive: true`` per end indicates unsharable usage; BOM
+    counting rounds the count of an exclusive end up to an integer.
 
     Args:
         attrs: Link attributes mapping.
         library: Components library for lookups.
 
     Returns:
-        ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive), per_end_specified)
-        where components may be ``None`` if name is absent/unknown. ``per_end_specified``
-        is True when a structured per-end mapping is present.
+        ((src_comp, src_count, src_exclusive), (dst_comp, dst_count, dst_exclusive))
+        where a component is ``None`` when the end or its name is absent or
+        unknown.
+
+    Raises:
+        ValueError: If an end's ``count`` is not a finite positive number.
     """
 
     def _from_mapping(
@@ -420,14 +422,12 @@ def resolve_link_end_components(
         count_val = mapping.get("count", 1)
         exclusive = bool(mapping.get("exclusive", False))
         comp = library.get(str(comp_name)) if comp_name is not None else None
-        return comp, _coerce_positive_float(count_val, 1.0), exclusive
+        return comp, _positive_count(count_val), exclusive
 
-    # 1) Structured under "hardware": {source: {...}, target: {...}}
     hw_struct = attrs.get("hardware")
-    if isinstance(hw_struct, dict):
-        src_map = hw_struct.get("source", {})
-        dst_map = hw_struct.get("target", {})
-        return _from_mapping(src_map), _from_mapping(dst_map), True
-
-    # Only structured source/target format is supported.
-    return (None, 1.0, False), (None, 1.0, False), False
+    if not isinstance(hw_struct, dict):
+        return (None, 1.0, False), (None, 1.0, False)
+    return (
+        _from_mapping(hw_struct.get("source", {})),
+        _from_mapping(hw_struct.get("target", {})),
+    )

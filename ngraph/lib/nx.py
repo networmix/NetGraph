@@ -24,17 +24,13 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Hashable, List, Optional, Tuple, Union
+from typing import Any, Dict, Hashable, List, Optional, Tuple, Union
 
 import netgraph_core
+import networkx as nx
 import numpy as np
 
-if TYPE_CHECKING:
-    import networkx as nx
-
-    NxGraph = Union[nx.DiGraph, nx.MultiDiGraph, nx.Graph, nx.MultiGraph]
-else:
-    NxGraph = Any
+NxGraph = Union[nx.DiGraph, nx.MultiDiGraph, nx.Graph, nx.MultiGraph]
 
 
 @dataclass
@@ -43,8 +39,7 @@ class NodeMap:
 
     When converting a NetworkX graph to the internal representation, node names
     (which can be any hashable type) are mapped to contiguous integer indices
-    starting from 0. This class preserves the mapping for result interpretation
-    and back-conversion.
+    starting from 0. Keep the map to interpret results and convert back.
 
     Attributes:
         to_index: Maps original node names to integer indices
@@ -90,8 +85,8 @@ class EdgeMap:
     """Bidirectional mapping between internal edge IDs and original edge references.
 
     When converting a NetworkX graph, each edge is assigned an internal integer ID
-    (ext_edge_id). This class preserves the mapping for interpreting algorithm
-    results and updating the original graph.
+    (ext_edge_id). Keep the map to interpret algorithm results and write them
+    back to the original graph.
 
     Attributes:
         to_ref: Maps internal edge ID to original (source, target, key) tuple
@@ -170,8 +165,6 @@ def from_networkx(
         >>> edge_map.to_ref[0]  # edge refs preserve original (u, v, key)
         ('src', 'dst', 0)
     """
-    import networkx as nx
-
     if not isinstance(G, (nx.DiGraph, nx.MultiDiGraph, nx.Graph, nx.MultiGraph)):
         raise TypeError(
             f"Expected NetworkX graph (DiGraph, MultiDiGraph, Graph, MultiGraph), "
@@ -190,7 +183,6 @@ def from_networkx(
     node_map = NodeMap.from_names(node_names)
     num_nodes = len(node_names)
 
-    # Collect edges and build edge mapping
     src_list: List[int] = []
     dst_list: List[int] = []
     capacity_list: List[float] = []
@@ -203,7 +195,7 @@ def from_networkx(
     edge_id = 0
     is_multigraph = isinstance(G, (nx.MultiDiGraph, nx.MultiGraph))
 
-    # Iterate edges based on graph type
+    # Simple graphs have no edge keys; key 0 keeps every ref a (u, v, key) triple.
     if is_multigraph:
         edges_iter = G.edges(keys=True, data=True)
     else:
@@ -225,7 +217,6 @@ def from_networkx(
         cst = int(cost_f)
         edge_ref: NxEdgeTuple = (u, v, key)
 
-        # Forward edge
         src_list.append(src_idx)
         dst_list.append(dst_idx)
         capacity_list.append(cap)
@@ -235,7 +226,6 @@ def from_networkx(
         ref_to_edges.setdefault(edge_ref, []).append(edge_id)
         edge_id += 1
 
-        # Reverse edge (if bidirectional)
         if bidirectional:
             src_list.append(dst_idx)
             dst_list.append(src_idx)
@@ -249,27 +239,13 @@ def from_networkx(
 
     edge_map = EdgeMap(to_ref=edge_to_ref, from_ref=ref_to_edges)
 
-    # Graphs with nodes but no edges still need correctly typed empty arrays.
-    if not src_list:
-        src_arr = np.array([], dtype=np.int32)
-        dst_arr = np.array([], dtype=np.int32)
-        capacity_arr = np.array([], dtype=np.float64)
-        cost_arr = np.array([], dtype=np.int64)
-        ext_id_arr = np.array([], dtype=np.int64)
-    else:
-        src_arr = np.array(src_list, dtype=np.int32)
-        dst_arr = np.array(dst_list, dtype=np.int32)
-        capacity_arr = np.array(capacity_list, dtype=np.float64)
-        cost_arr = np.array(cost_list, dtype=np.int64)
-        ext_id_arr = np.array(ext_id_list, dtype=np.int64)
-
     graph = netgraph_core.StrictMultiDiGraph.from_arrays(
         num_nodes=num_nodes,
-        src=src_arr,
-        dst=dst_arr,
-        capacity=capacity_arr,
-        cost=cost_arr,
-        ext_edge_ids=ext_id_arr,
+        src=np.array(src_list, dtype=np.int32),
+        dst=np.array(dst_list, dtype=np.int32),
+        capacity=np.array(capacity_list, dtype=np.float64),
+        cost=np.array(cost_list, dtype=np.int64),
+        ext_edge_ids=np.array(ext_id_list, dtype=np.int64),
     )
 
     return graph, node_map, edge_map
@@ -281,12 +257,12 @@ def to_networkx(
     *,
     capacity_attr: str = "capacity",
     cost_attr: str = "cost",
-) -> "nx.MultiDiGraph":
+) -> nx.MultiDiGraph:
     """Convert ngraph's internal graph format back to NetworkX MultiDiGraph.
 
-    Reconstructs a NetworkX graph from the internal representation. If a
-    NodeMap is provided, original node names are restored; otherwise, nodes
-    are labeled with integer indices.
+    Each Core edge becomes one NetworkX edge carrying only capacity and cost,
+    so reverse arcs added by ``from_networkx(bidirectional=True)`` come back as
+    separate edges.
 
     Args:
         graph: netgraph_core.StrictMultiDiGraph to convert
@@ -298,6 +274,9 @@ def to_networkx(
     Returns:
         nx.MultiDiGraph with edges and attributes from the internal graph
 
+    Raises:
+        KeyError: If ``node_map`` lacks an entry for a node index of ``graph``
+
     Example:
         >>> graph, node_map, edge_map = from_networkx(G)
         >>> # ... run algorithms ...
@@ -305,20 +284,15 @@ def to_networkx(
         >>> list(G_out.nodes())
         ['A', 'B', 'C']
     """
-    import networkx as nx
-
     G = nx.MultiDiGraph()
     num_nodes = graph.num_nodes()
 
-    # Add nodes with original names if available
     if node_map is not None:
         for idx in range(num_nodes):
-            name = node_map.to_name.get(idx, idx)
-            G.add_node(name)
+            G.add_node(node_map.to_name[idx])
     else:
         G.add_nodes_from(range(num_nodes))
 
-    # Extract edge data from graph views
     src_arr = graph.edge_src_view()
     dst_arr = graph.edge_dst_view()
     capacity_arr = graph.capacity_view()
@@ -330,8 +304,8 @@ def to_networkx(
         dst_idx = int(dst_arr[i])
 
         if node_map is not None:
-            src_name = node_map.to_name.get(src_idx, src_idx)
-            dst_name = node_map.to_name.get(dst_idx, dst_idx)
+            src_name = node_map.to_name[src_idx]
+            dst_name = node_map.to_name[dst_idx]
         else:
             src_name = src_idx
             dst_name = dst_idx

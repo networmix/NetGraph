@@ -151,7 +151,6 @@ class TestShortestPaths:
         paths = results[("^A$", "^C$")]
         assert len(paths) >= 1
 
-        # Check first path structure
         path = paths[0]
         assert path.cost == 2.0  # A->B->C
         assert len(path.path) == 3  # A, B, C (path attribute is the sequence)
@@ -288,9 +287,9 @@ class TestKShortestPaths:
     def test_multi_node_groups_merge_paths_across_pairs(self) -> None:
         """KSP between multi-node groups merges paths from all node pairs.
 
-        Regression: KSP previously ran only between the single best (src,
-        snk) node pair, silently omitting cheaper paths from other pairs
-        (here the cost-11 x2->y2 path lost to the cost-15 x1->m->y1 path).
+        Running KSP only between the single best (src, snk) node pair would
+        silently omit cheaper paths from other pairs (here the cost-11
+        x2->y2 path versus the cost-15 x1->m->y1 path).
         """
         net = self._multi_member_group_network()
 
@@ -340,9 +339,9 @@ class TestKShortestPaths:
     def test_multi_node_groups_prune_pairs_beyond_kth_best_cost(self) -> None:
         """Per-pair KSP stops once later pairs cannot reach the top-k.
 
-        Regression: every reachable node pair previously ran a full KSP
-        (100 runs here) even though only the cheapest few pairs can
-        contribute paths that survive the max_k truncation.
+        A full KSP per reachable node pair (100 runs here) is wasted work:
+        only the cheapest few pairs can contribute paths that survive the
+        max_k truncation.
         """
         net = self._many_pair_group_network()
         ctx = analyze(net)
@@ -371,8 +370,8 @@ class TestKShortestPaths:
     def test_equal_cost_truncation_is_deterministic(self) -> None:
         """Equal-cost ties beyond max_k truncate by structural path order.
 
-        Regression: with more equal-cost paths than max_k, truncation
-        previously kept a set-iteration-order (hash-dependent) subset.
+        With more equal-cost paths than max_k, truncation must not keep a
+        set-iteration-order (hash-dependent) subset.
         """
         net = Network()
         for name in ["S1", "S2", "M1", "M2", "M3", "T1", "T2"]:
@@ -400,8 +399,8 @@ class TestKShortestPaths:
     def test_equal_cost_truncation_stable_across_hash_seeds(self) -> None:
         """Truncated path selection is identical across PYTHONHASHSEED values.
 
-        Regression: the selected subset of equal-cost paths previously
-        varied across processes with different string-hash seeds.
+        The selected subset of equal-cost paths must not vary across
+        processes with different string-hash seeds.
         """
         script = textwrap.dedent(
             """
@@ -444,7 +443,7 @@ class TestDictSelectorsWithShortestPaths:
     """Tests for dict-based selectors with shortest path methods.
 
     Verifies that shortest_path_cost, shortest_paths, and k_shortest_paths
-    correctly handle dict selectors (group_by, match) in both unbound and
+    handle dict selectors (group_by, match) in both unbound and
     bound context modes.
     """
 
@@ -554,7 +553,6 @@ class TestBoundModePathMethods:
         """Test shortest_path_cost works with bound context."""
         net = _simple_path_network()
 
-        # Create bound context
         ctx = analyze(net, source="^A$", sink="^C$")
 
         # Call without source/sink - should use bound values
@@ -606,14 +604,29 @@ class TestBoundModePathMethods:
         net = _simple_path_network()
         ctx = analyze(net, source="^A$", sink="^C$")
 
-        with pytest.raises(ValueError, match="source/sink already configured"):
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
             ctx.shortest_path_cost(source="^X$", sink="^Y$")
 
-        with pytest.raises(ValueError, match="source/sink already configured"):
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
             ctx.shortest_paths(source="^X$", sink="^Y$")
 
-        with pytest.raises(ValueError, match="source/sink already configured"):
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
             ctx.k_shortest_paths(source="^X$", sink="^Y$")
+
+    def test_bound_context_rejects_mode(self) -> None:
+        """A bound context fixes its mode; passing one per call raises."""
+        net = _simple_path_network()
+        ctx = analyze(net, source="^A$", sink="^C$")
+
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
+            ctx.shortest_paths(mode=Mode.PAIRWISE)
+        with pytest.raises(ValueError, match="source/sink/mode already configured"):
+            ctx.max_flow(mode=Mode.COMBINE)
+
+    def test_mode_without_binding_raises(self) -> None:
+        """analyze(mode=...) without source/sink would be ignored, so it raises."""
+        with pytest.raises(ValueError, match="mode applies to a bound context"):
+            analyze(_simple_path_network(), mode=Mode.PAIRWISE)
 
     def test_unbound_mode_requires_source_sink(self) -> None:
         """Test that unbound context requires source/sink arguments."""

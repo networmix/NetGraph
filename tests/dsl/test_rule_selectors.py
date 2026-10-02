@@ -1,6 +1,6 @@
-"""Tests for enhanced rule selector support in link_rules and node_rules.
+"""Tests for selector support in link_rules and node_rules.
 
-Tests that:
+Covers:
 - link_rules supports full selectors (path + match) for source/target
 - link_rules supports link_match for filtering by link attributes
 - node_rules supports match conditions for filtering by node attributes
@@ -14,10 +14,6 @@ from ngraph.dsl.blueprints.expand import (
     expand_network_dsl,
 )
 from ngraph.model.network import Link, Network, Node
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
@@ -45,18 +41,13 @@ def network_with_roles() -> Network:
     return net
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# link_rules Full Selector Tests
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestLinkRulesFullSelectors:
     """Tests for full selector support in link_rules source/target."""
 
     def test_link_rules_string_selector_still_works(
         self, network_with_roles: Network
     ) -> None:
-        """String selectors in link_rules work as expected."""
+        """String source/target regexes in link_rules select links by endpoint name."""
         scenario = {
             "network": {
                 "nodes": {},
@@ -71,7 +62,6 @@ class TestLinkRulesFullSelectors:
             }
         }
 
-        # Apply rules to existing network
         _process_link_rules(network_with_roles, scenario["network"])
 
         # Links from spine_1 should have updated capacity
@@ -131,11 +121,6 @@ class TestLinkRulesFullSelectors:
                 and tgt_node.attrs.get("role") == "leaf"
             ):
                 assert link.attrs.get("tagged") is True
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# link_match Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestLinkMatch:
@@ -198,7 +183,7 @@ class TestLinkMatch:
     def test_link_match_combined_with_endpoint_selectors(
         self, network_with_roles: Network
     ) -> None:
-        """link_match works with endpoint selectors."""
+        """link_match and endpoint selectors both filter the matched links."""
         scenario = {
             "network": {
                 "link_rules": [
@@ -228,11 +213,6 @@ class TestLinkMatch:
                 assert link.attrs.get("high_cap_spine1") is True
             else:
                 assert link.attrs.get("high_cap_spine1") is None
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# node_rules match Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestNodeRulesMatch:
@@ -268,7 +248,7 @@ class TestNodeRulesMatch:
                 assert node.attrs.get("is_spine") is None
 
     def test_node_rules_match_with_tier(self, network_with_roles: Network) -> None:
-        """node_rules match works with numeric comparison."""
+        """node_rules match compares numeric attributes."""
         scenario = {
             "network": {
                 "node_rules": [
@@ -320,16 +300,11 @@ class TestNodeRulesMatch:
                 assert node.attrs.get("leaf_tier1") is None
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Integration: Full Network Expansion with Rules
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestRulesIntegration:
     """Integration tests for rules with full network expansion."""
 
     def test_full_scenario_with_rules(self) -> None:
-        """Full scenario with node_rules and link_rules works end-to-end."""
+        """Rules apply to nodes and links created in the same expansion."""
         scenario = {
             "network": {
                 "nodes": {
@@ -365,12 +340,10 @@ class TestRulesIntegration:
 
         net = expand_network_dsl(scenario)
 
-        # Verify spine nodes have critical attr
         for node in net.nodes.values():
             if node.attrs.get("role") == "spine":
                 assert node.attrs.get("critical") is True
 
-        # Verify high capacity links have the attr
         for link in net.links.values():
             if link.capacity >= 100:
                 assert link.attrs.get("high_capacity") is True

@@ -11,18 +11,18 @@ from __future__ import annotations
 import os
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
 from ngraph.logging import get_logger
 
 if TYPE_CHECKING:
-    # Only imported for type-checking; not at runtime, so no circular import occurs.
+    # Type-checking import only; a runtime import would be circular.
     from ngraph.scenario import Scenario
 
 logger = get_logger(__name__)
 
-# Registry for workflow step classes
+# Maps YAML step `type` names to WorkflowStep subclasses
 WORKFLOW_STEP_REGISTRY: Dict[str, Type["WorkflowStep"]] = {}
 
 
@@ -82,49 +82,38 @@ def resolve_parallelism(parallelism: Union[int, str]) -> int:
         Positive integer worker count (minimum 1).
 
     Raises:
-        ValueError: If parallelism is a string other than "auto", or an
-            integer < 1.
+        ValueError: If parallelism is neither "auto" nor an integer >= 1.
     """
-    if isinstance(parallelism, str):
-        if parallelism != "auto":
-            raise ValueError("parallelism must be an integer or 'auto'")
-        return max(1, int(os.cpu_count() or 1))
-    if int(parallelism) < 1:
+    if parallelism == "auto":
+        return max(1, os.cpu_count() or 1)
+    if isinstance(parallelism, bool) or not isinstance(parallelism, int):
+        raise ValueError(
+            f"parallelism must be an integer or 'auto', got {parallelism!r}"
+        )
+    if parallelism < 1:
         raise ValueError("parallelism must be >= 1")
-    return int(parallelism)
+    return parallelism
 
 
-def serialize_monte_carlo_results(raw: Dict[str, Any]) -> tuple[Any, list[dict]]:
+def serialize_monte_carlo_results(raw: Dict[str, Any]) -> tuple[dict, list[dict]]:
     """Convert FailureManager Monte Carlo output into JSON-safe dicts.
 
     Args:
-        raw: Dict with optional "baseline" entry and "results" list, whose
-            items expose to_dict() (e.g. FlowIterationResult) or are already
-            plain dicts.
+        raw: ``run_monte_carlo_analysis`` output whose "baseline" and
+            "results" items are FlowIterationResult objects.
 
     Returns:
-        Tuple of (baseline_dict, flow_results): the baseline iteration (or
-        None) and the failure iterations, converted via to_dict() when
-        available.
+        Tuple of (baseline_dict, flow_results).
     """
-
-    def _to_dict(item: Any) -> Any:
-        to_dict = getattr(item, "to_dict", None)
-        return to_dict() if callable(to_dict) else item
-
-    baseline = raw.get("baseline")
-    baseline_dict = _to_dict(baseline) if baseline is not None else None
-    flow_results = [_to_dict(item) for item in raw.get("results", [])]
-    return baseline_dict, flow_results
+    return raw["baseline"].to_dict(), [item.to_dict() for item in raw["results"]]
 
 
 @dataclass
 class WorkflowStep(ABC):
     """Base class for all workflow steps.
 
-    Every step is logged with execution timing, supports seeding for
-    reproducible random operations, and has its metadata stored in
-    scenario.results for analysis.
+    `execute()` logs each step with its duration and records step metadata in
+    scenario.results. A step seed makes random operations reproducible.
 
     YAML Configuration:
         ```yaml
@@ -140,32 +129,31 @@ class WorkflowStep(ABC):
             used for logging and result storage. When empty, the class name
             is used instead.
         seed: Optional seed for reproducible random operations. If None,
-            random operations will be non-deterministic.
+            random operations are non-deterministic.
     """
 
     name: str = ""
     seed: Optional[int] = None
-    # Internal: seed provenance, one of "explicit-step", "scenario-derived", "none".
-    _seed_source: str = ""
+    # Provenance of a set seed: "explicit-step", or "scenario-derived" when
+    # the workflow parser derived it from the scenario seed.
+    _seed_source: str = field(default="explicit-step", init=False, repr=False)
 
     def execute(self, scenario: "Scenario") -> None:
-        """Execute the workflow step with logging and metadata storage.
+        """Run the step inside its results namespace and record metadata.
 
-        Wraps `run()` with timing, logging, and metadata storage for the
-        analysis registry system.
+        Wraps `run()`: enters the step's results scope, stores step metadata
+        (type, execution order, seeds), logs start and end, and adds
+        `duration_sec` to the step metadata on success.
 
         Args:
             scenario: The scenario to execute the step on.
-
-        Returns:
-            None
 
         Raises:
             Exception: Re-raises any exception raised by `run()` after logging
                 duration and context.
         """
         step_type = self.__class__.__name__
-        # Guarantee a stable results namespace even when name is not provided
+        # An unnamed step uses its class name as the results namespace.
         step_name = self.name or step_type
 
         # Determine seed provenance from the seed the step actually uses.
@@ -173,23 +161,11 @@ class WorkflowStep(ABC):
         # concrete step seed means the step runs unseeded.
         scenario_seed = scenario.seed
         step_seed = self.seed
-        if step_seed is not None:
-            explicit_source = getattr(self, "_seed_source", None)
-            seed_source = (
-                explicit_source
-                if explicit_source in ("explicit-step", "scenario-derived")
-                else "explicit-step"
-            )
-            active_seed = step_seed
-        else:
-            seed_source = "none"
-            active_seed = None
+        seed_source = self._seed_source if step_seed is not None else "none"
 
-        # Get execution order from scenario instance (thread-safe)
         execution_order = scenario._execution_counter
         scenario._execution_counter += 1
 
-        # Enter step scope and store workflow metadata
         scenario.results.enter_step(step_name)
         scenario.results.put_step_metadata(
             step_name=step_name,
@@ -198,7 +174,6 @@ class WorkflowStep(ABC):
             scenario_seed=scenario_seed,
             step_seed=step_seed,
             seed_source=seed_source,
-            active_seed=active_seed,
         )
 
         if self.seed is not None:
@@ -215,7 +190,8 @@ class WorkflowStep(ABC):
             self.run(scenario)
             end_time = time.time()
             duration = end_time - start_time
-            # Persist step duration into step-scoped metadata for downstream analysis
+            # Merge duration_sec into the step's 'metadata' entry (created
+            # if run() stored none).
             existing_md = scenario.results.get("metadata", {})
             if not isinstance(existing_md, dict):
                 raise TypeError("Results metadata must be a dict")
@@ -226,35 +202,22 @@ class WorkflowStep(ABC):
                 f"Completed workflow step: {step_name} ({step_type}) "
                 f"in {duration:.3f} seconds"
             )
-            try:
-                keys = ", ".join(sorted(scenario.results.get_step(step_name).keys()))
-            except Exception as exc:
-                logger.debug(
-                    "Failed to read results keys for step %s: %s", step_name, exc
-                )
-                keys = "-"
             logger.debug(
                 "Step %s finished: duration=%.3fs, results_keys=%s",
                 step_name,
                 duration,
-                keys or "-",
+                ", ".join(sorted(scenario.results.get_step(step_name))) or "-",
             )
         except Exception as e:
             end_time = time.time()
             duration = end_time - start_time
             logger.error(
                 f"Failed workflow step: {step_name} ({step_type}) "
-                f"after {duration:.3f} seconds - {type(e).__name__}: {e}"
+                f"after {duration:.3f} seconds: {type(e).__name__}: {e}"
             )
             raise
         finally:
-            # Always exit step scope
-            try:
-                scenario.results.exit_step()
-            except Exception as exc:
-                logger.warning(
-                    "Failed to exit step scope cleanly for %s: %s", step_name, exc
-                )
+            scenario.results.exit_step()
 
     @abstractmethod
     def run(self, scenario: "Scenario") -> None:
@@ -265,8 +228,5 @@ class WorkflowStep(ABC):
 
         Args:
             scenario: The scenario to execute the step on.
-
-        Returns:
-            None
         """
         pass

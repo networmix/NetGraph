@@ -1,16 +1,17 @@
 """Generic results store for workflow steps and their metadata.
 
 `Results` organizes outputs by workflow step name and records
-`WorkflowStepMetadata` for execution context. Storage is strictly
-step-scoped: steps must write two keys under their namespace:
+`WorkflowStepMetadata` for execution context. Storage is step-scoped, and a
+step may write only two keys under its namespace:
 
 - ``metadata``: step-level metadata (dict)
 - ``data``: step-specific payload (dict)
 
-Export with :meth:`Results.to_dict`, which returns a JSON-safe structure
-with shape ``{workflow, steps, scenario}``. During export, objects with a
-``to_dict()`` method are converted, dictionary keys are coerced to strings,
-tuples are emitted as lists, and only JSON primitives are produced.
+Export with :meth:`Results.to_dict`, which returns a structure with shape
+``{workflow, steps, scenario}``. During export, objects with a ``to_dict()``
+method are converted, dictionary keys are coerced to strings, and tuples are
+emitted as lists. Other values pass through unchanged, so steps must store
+JSON-compatible values.
 """
 
 from dataclasses import dataclass, field
@@ -59,9 +60,8 @@ class WorkflowStepMetadata:
             - "scenario-derived": seed was derived from scenario.seed
             - "explicit-step": seed was explicitly provided for the step
             - "none": no seed provided/active for this step
-        active_seed: The effective base seed used by the step, if any. For steps
-            that use Monte Carlo execution, per-iteration seeds are derived from
-            active_seed (e.g., active_seed + iteration_index).
+            Monte Carlo steps derive per-iteration seeds from step_seed
+            (step_seed + iteration_index).
     """
 
     step_type: str
@@ -70,7 +70,6 @@ class WorkflowStepMetadata:
     scenario_seed: Optional[int] = None
     step_seed: Optional[int] = None
     seed_source: str = "none"
-    active_seed: Optional[int] = None
 
 
 @dataclass
@@ -95,7 +94,6 @@ class Results:
     # Scenario snapshot
     _scenario: Dict[str, Any] = field(default_factory=dict)
 
-    # ---- Scope management -------------------------------------------------
     def enter_step(self, step_name: str) -> None:
         """Enter step scope. Subsequent put/get are scoped to this step."""
         self._active_step = step_name
@@ -103,15 +101,14 @@ class Results:
             self._store[step_name] = {}
 
     def exit_step(self) -> None:
-        """Exit step scope."""
+        """Exit step scope; put/get raise until the next enter_step."""
         self._active_step = None
 
-    # ---- Step-scoped accessors -------------------------------------------
     def put(self, key: str, value: Any) -> None:
         """Store a value in the active step under an allowed key.
 
-        Allowed keys are strictly "metadata" and "data". Both are expected to be
-        dictionaries at export time.
+        Allowed keys are "metadata" and "data". `to_dict()` requires both to be
+        dicts (or None).
         """
         if self._active_step is None:
             raise RuntimeError("Results.put() called without active step scope")
@@ -140,7 +137,6 @@ class Results:
         scenario_seed: Optional[int] = None,
         step_seed: Optional[int] = None,
         seed_source: str = "none",
-        active_seed: Optional[int] = None,
     ) -> None:
         """Store metadata for a workflow step.
 
@@ -151,7 +147,6 @@ class Results:
             scenario_seed: Scenario-level seed from YAML, if any.
             step_seed: Seed attached to this step (explicit or derived), if any.
             seed_source: Source of step seed ("scenario-derived", "explicit-step", or "none").
-            active_seed: Effective base seed used by the step, if any.
         """
         self._metadata[step_name] = WorkflowStepMetadata(
             step_type=step_type,
@@ -160,7 +155,6 @@ class Results:
             scenario_seed=scenario_seed,
             step_seed=step_seed,
             seed_source=seed_source,
-            active_seed=active_seed,
         )
 
     def get_step_metadata(self, step_name: str) -> Optional[WorkflowStepMetadata]:
@@ -198,7 +192,6 @@ class Results:
 
     def to_dict(self) -> Dict[str, Any]:
         """Return exported results with shape: {workflow, steps, scenario}."""
-        # Workflow metadata
         workflow: Dict[str, Any] = {
             step_name: {
                 "step_type": md.step_type,
@@ -207,15 +200,12 @@ class Results:
                 "scenario_seed": md.scenario_seed,
                 "step_seed": md.step_seed,
                 "seed_source": md.seed_source,
-                "active_seed": md.active_seed,
             }
             for step_name, md in self._metadata.items()
         }
 
-        # Steps data with validation and to_dict() conversion
         steps: Dict[str, Dict[str, Any]] = {}
         for step_name, data in self._store.items():
-            # Enforce explicit keys
             if not set(data.keys()).issubset({"metadata", "data"}):
                 invalid = ", ".join(sorted(set(data.keys()) - {"metadata", "data"}))
                 raise ValueError(

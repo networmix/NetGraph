@@ -125,7 +125,7 @@ risk_groups:
 
 
 def test_disabled_group_still_disables_direct_members() -> None:
-    """Moving the cascade later keeps direct-member disabling intact."""
+    """Direct members of a disabled group are disabled as well."""
     yaml_content = """
 network:
   nodes:

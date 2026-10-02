@@ -26,7 +26,7 @@ digraph SystemPipeline {
       label=""; style=invis;
       engine [label="Scenario.run()"];
       steps [label="WorkflowSteps"];
-      exec [label="Execution\n·FailureManager\n·DemandBuilder\n·Flow Solvers"];
+      exec [label="Execution\n·FailureManager\n·Demand Expansion\n·Flow Solvers"];
       engine -> steps -> exec;
     }
 

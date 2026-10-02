@@ -1,18 +1,14 @@
 """
 Integration tests for scenario 1: Basic 6-node L3 US backbone network.
 
-This module tests the fundamental building blocks of NetGraph integration:
-- Basic network definition with explicit nodes and links
-- Single link failure scenario configuration
-- Traffic matrix setup and validation
-- Network topology correctness verification
+Covers:
+- Network definition with explicit nodes and links
+- Single link failure policy
+- Traffic demand set
+- Link topology, attributes and graph connectivity
 
-Scenario 1 serves as the baseline test for the integration framework,
-validating that simple network topologies work correctly before testing
-more complex blueprint-based scenarios.
-
-Uses the modular testing approach with validation helpers from the
-integration.helpers module.
+Scenario 1 is the baseline for the integration suite: explicit nodes and
+links, no blueprints. Validation helpers come from integration.helpers.
 """
 
 import pytest
@@ -23,7 +19,7 @@ from .helpers import create_scenario_helper, load_scenario_from_file
 
 @pytest.mark.slow
 class TestScenario1:
-    """Tests for scenario 1 using modular validation approach."""
+    """Tests for scenario 1."""
 
     @pytest.fixture
     def scenario_1(self):
@@ -105,7 +101,7 @@ class TestScenario1:
 
     def test_link_capacities_and_costs(self, helper):
         """Test that links have expected capacities and costs from YAML."""
-        # Test a few specific links to ensure YAML parsing worked correctly
+        # Spot-check a few links against values in scenario_1.yaml
         test_cases = [
             ("SEA", "DEN", 200, 6846),
             ("SFO", "DEN", 200, 7754),
@@ -130,13 +126,11 @@ class TestScenario1:
             )
 
     def test_traffic_demands_configuration(self, helper):
-        """Test that traffic demands are correctly configured."""
+        """Test that the default demand set holds the four 50-unit demands."""
         helper.validate_traffic_demands(expected_count=4)
 
-        # Verify specific demands from the YAML
-        default_demands = helper.scenario.demand_set.get_default_set()
+        default_demands = helper.scenario.demand_set.get_set("default")
 
-        # Convert to a more testable format
         demands_dict = {
             (demand.source, demand.target): demand.volume for demand in default_demands
         }
@@ -159,13 +153,11 @@ class TestScenario1:
             )
 
     def test_failure_policy_configuration(self, helper):
-        """Test that failure policy is correctly configured."""
+        """Test the single link-choice rule and description of the failure policy."""
         helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
-        # Additional validation of the specific rule
         policies = helper.scenario.failure_policy_set.get_all_policies()
-        policy = policies[0]  # Get first policy for validation
-        # Access first rule via modes-based API
+        policy = policies[0]
         rule = policy.modes[0].rules[0]
 
         assert rule.logic == "or", f"Expected rule logic 'or', found '{rule.logic}'"
@@ -181,15 +173,15 @@ class TestScenario1:
         )
 
     def test_topology_semantic_correctness(self, helper):
-        """Test that the network topology is semantically correct."""
+        """Test that all edges have non-negative capacity and cost."""
         helper.validate_topology_semantics()
 
     def test_graph_connectivity(self, helper):
-        """Test that the graph has expected connectivity properties."""
+        """Test that the graph is weakly connected with no isolated nodes."""
         # For this backbone network, all nodes should be reachable from any other node
         import networkx as nx
 
-        # Check weak connectivity (appropriate for directed graphs)
+        # Weak connectivity, since the graph is directed
         assert nx.is_weakly_connected(helper.graph), (
             "Network should be weakly connected"
         )
@@ -199,7 +191,7 @@ class TestScenario1:
         assert len(isolated_nodes) == 0, f"Found isolated nodes: {isolated_nodes}"
 
     def test_node_attributes_from_yaml(self, helper):
-        """Test that node attributes from YAML are correctly parsed."""
+        """Test that node coords from the YAML are parsed."""
         # Test coordinate attributes for a few nodes
         test_nodes = {
             "SEA": [47.6062, -122.3321],
@@ -211,7 +203,7 @@ class TestScenario1:
             helper.validate_node_attributes(node_name, {"coords": expected_coords})
 
     def test_link_attributes_from_yaml(self, helper):
-        """Test that link attributes from YAML are correctly parsed."""
+        """Test that link distance_km values from the YAML are parsed."""
         # Test distance attributes for specific links
         helper.validate_link_attributes(
             source_pattern="^SEA$",
@@ -224,6 +216,3 @@ class TestScenario1:
             target_pattern="^DEN$",
             expected_attrs={"distance_km": 1550.77},
         )
-
-
-# Removed redundant smoke test; class-based tests already cover these checks.

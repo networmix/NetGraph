@@ -1,9 +1,8 @@
 """Regression tests for the library logging pattern (NullHandler at import).
 
-Importing ngraph must not install stream handlers or set levels: a bare
-``import ngraph`` previously attached a StreamHandler(sys.stdout) to the
-'ngraph' logger, duplicating records in host applications and corrupting
-machine-readable stdout (``ngraph run --stdout``).
+Importing ngraph must not install stream handlers or set levels: a
+StreamHandler(sys.stdout) on the 'ngraph' logger would duplicate records in
+host applications and corrupt machine-readable stdout (``ngraph run --stdout``).
 """
 
 import io

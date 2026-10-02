@@ -1,8 +1,5 @@
 """
-Example tests demonstrating the use of modular test data templates.
-
-Shows how the template system improves test data organization, reduces
-duplication, and enables rapid creation of test scenarios.
+Tests for the scenario data templates in test_data_templates.
 """
 
 import pytest
@@ -27,7 +24,7 @@ from .test_data_templates import (
 
 @pytest.mark.slow
 class TestNetworkTemplates:
-    """Keep only a minimal sanity check for templates; detailed tests belong to unit level."""
+    """Shape checks for the topology templates."""
 
     def test_linear_network_template_minimal(self):
         nodes = ["A", "B", "C", "D"]
@@ -36,12 +33,11 @@ class TestNetworkTemplates:
         assert len(network_data["links"]) == 3
 
     def test_star_network_template(self):
-        """Test star network template creates correct topology."""
+        """Test that the star template links the center to each leaf."""
         center = "HUB"
         leaves = ["A", "B", "C"]
         network_data = NetworkTemplates.star_network(center, leaves, link_capacity=20.0)
 
-        # Validate structure
         assert len(network_data["nodes"]) == 4  # center + 3 leaves
         assert len(network_data["links"]) == 3  # center connected to each leaf
 
@@ -56,7 +52,6 @@ class TestNetworkTemplates:
         nodes = ["A", "B", "C"]
         network_data = NetworkTemplates.mesh_network(nodes, link_capacity=5.0)
 
-        # Validate structure
         assert len(network_data["nodes"]) == 3
         assert len(network_data["links"]) == 6  # 3 nodes = 3*2 = 6 directed links
 
@@ -159,38 +154,30 @@ class TestTemplateComposition:
 
     def test_combining_multiple_templates(self):
         """Test combining different template types in one scenario."""
-        # Create a complex scenario using multiple templates
         builder = ScenarioTemplateBuilder("complex_test", "1.0")
 
-        # Add a linear backbone
         backbone_nodes = ["A", "B", "C"]
         backbone_data = NetworkTemplates.linear_network(backbone_nodes, 50.0)
         builder.builder.data["network"] = backbone_data
         builder.builder.data["network"]["name"] = "complex_test"
         builder.builder.data["network"]["version"] = "1.0"
 
-        # Add Clos fabric blueprint
         clos_blueprint = BlueprintTemplates.two_tier_blueprint(4, 4, "mesh", 25.0)
         builder.builder.with_blueprint("clos", clos_blueprint)
 
-        # Add traffic demands
         demands = TrafficDemandTemplates.all_to_all_uniform(backbone_nodes, 10.0)
         builder.builder.data["demands"] = {"default": demands}
 
-        # Add failure policy
         policy = FailurePolicyTemplates.single_link_failure()
         builder.builder.with_failure_policy("single_link", policy)
 
-        # Add workflow
         workflow = WorkflowTemplates.capacity_analysis_workflow("A", "C")
         builder.builder.data["workflow"] = workflow
 
-        # Build and test
         yaml_content = builder.build()
         scenario = Scenario.from_yaml(yaml_content)
         scenario.run()
 
-        # Validate the complex scenario works
         helper = create_scenario_helper(scenario)
         exported = scenario.results.to_dict()
         graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
@@ -203,7 +190,7 @@ class TestTemplateComposition:
         assert len(scenario.failure_policy_set.get_all_policies()) > 0
 
     def test_template_parameterization(self):
-        """Test that templates can be easily parameterized for different scales."""
+        """Test linear backbones at three sizes: node count and link capacity."""
         scales = [
             {"nodes": 3, "capacity": 10.0},
             {"nodes": 5, "capacity": 50.0},
@@ -213,14 +200,13 @@ class TestTemplateComposition:
         for scale in scales:
             nodes = [f"N{i}" for i in range(scale["nodes"])]
 
-            # Build scenario with explicit workflow step
             builder = ScenarioTemplateBuilder(f"scale_test_{scale['nodes']}", "1.0")
             builder.with_linear_backbone(
                 nodes, scale["capacity"], add_coordinates=False
             )
             builder.with_uniform_traffic(nodes, demand_value=scale["capacity"] / 10)
 
-            # Ensure BuildGraph step is included
+            # build_yaml adds BuildGraph only to a non-empty workflow
             builder.builder.with_workflow_step("BuildGraph", "build_graph")
 
             yaml_content = builder.build()
@@ -238,19 +224,17 @@ class TestTemplateComposition:
             )
             assert len(graph.nodes) == scale["nodes"]
 
-            # Validate link capacities match scale
             for _u, _v, data in graph.edges(data=True):
                 assert data.get("capacity") == scale["capacity"]
 
 
 @pytest.mark.slow
 class TestTemplateValidation:
-    """Tests for template validation and error handling."""
+    """Template behavior for degenerate parameters and repeated calls."""
 
     def test_template_parameter_validation(self):
-        """Test that templates validate parameters appropriately."""
-        # Test edge case parameters that should work (NetGraph is permissive)
-        # Empty node list should work (creates empty network)
+        """Test that templates accept empty, zero and negative parameters as given."""
+        # Empty node list gives an empty network
         network_empty = NetworkTemplates.linear_network([])
         assert network_empty["nodes"] == {}
         assert network_empty["links"] == []
@@ -259,18 +243,16 @@ class TestTemplateValidation:
         blueprint_zero = BlueprintTemplates.two_tier_blueprint(tier1_count=0)
         assert blueprint_zero["nodes"]["tier1"]["count"] == 0
 
-        # Negative demands might be allowed in NetGraph - test actual behavior
+        # Templates pass negative volumes through unchanged
         demands_negative = TrafficDemandTemplates.all_to_all_uniform(
             ["A", "B"], demand_value=-5.0
         )
-        # Should create demands but with negative values
         assert len(demands_negative) == 2  # A->B and B->A
         for demand in demands_negative:
             assert demand["volume"] == -5.0
 
     def test_template_consistency(self):
-        """Test that templates produce consistent results."""
-        # Same parameters should produce same results
+        """Test that templates are deterministic for equal parameters."""
         nodes = ["X", "Y", "Z"]
 
         network1 = NetworkTemplates.linear_network(nodes, 15.0)
@@ -289,8 +271,7 @@ class TestMainScenarioVariants:
     """Template-based variants of main scenarios for testing different configurations."""
 
     def test_scenario_1_template_variant(self):
-        """Template-based recreation of scenario 1 functionality."""
-        # Recreate scenario 1 using templates
+        """Rebuild scenario 1 from templates; check SCENARIO_1_EXPECTATIONS."""
         backbone_nodes = ["SEA", "SFO", "DEN", "DFW", "JFK", "DCA"]
 
         builder = ScenarioTemplateBuilder("scenario_1_template", "1.0")
@@ -360,11 +341,9 @@ class TestMainScenarioVariants:
         )
         builder.builder.with_failure_policy("single_link", policy)
 
-        # Add workflow
         workflow = WorkflowTemplates.basic_build_workflow()
         builder.builder.data["workflow"] = workflow
 
-        # Test the template-based scenario
         scenario = builder.builder.build_scenario()
         scenario.run()
 
@@ -376,12 +355,11 @@ class TestMainScenarioVariants:
         graph = nx.node_link_graph(graph_dict, edges="edges")
         helper.set_graph(graph)
 
-        # Validate it matches scenario 1 expectations
         helper.validate_network_structure(SCENARIO_1_EXPECTATIONS)
         helper.validate_traffic_demands(4)
 
     def test_scenario_2_template_variant(self):
-        """Template-based recreation of scenario 2 blueprint functionality."""
+        """Rebuild scenario 2's blueprints from templates; check expanded size."""
         builder = ScenarioTemplateBuilder("scenario_2_template", "1.0")
 
         # Create blueprints matching scenario 2
@@ -525,7 +503,6 @@ class TestMainScenarioVariants:
         workflow = WorkflowTemplates.basic_build_workflow()
         builder.builder.data["workflow"] = workflow
 
-        # Test the template-based scenario
         scenario = builder.builder.build_scenario()
         scenario.run()
 
@@ -536,12 +513,12 @@ class TestMainScenarioVariants:
 
         graph = nx.node_link_graph(graph_dict, edges="edges")
 
-        # Validate basic structure (exact match would require complex blueprint logic)
+        # Loose bound: the template blueprints do not reproduce scenario 2 exactly
         assert len(graph.nodes) > 15  # Should have many nodes from blueprint expansion
         helper.validate_traffic_demands(4)
 
     def test_scenario_3_template_variant(self):
-        """Template-based recreation of scenario 3 Clos functionality."""
+        """Rebuild scenario 3's Clos blueprints; check SCENARIO_3_EXPECTATIONS."""
         builder = ScenarioTemplateBuilder("scenario_3_template", "1.0")
 
         # Create brick_2tier blueprint
@@ -636,7 +613,6 @@ class TestMainScenarioVariants:
         ]
         builder.builder.data["workflow"] = workflow
 
-        # Test the template-based scenario
         scenario = builder.builder.build_scenario()
         scenario.run()
 
@@ -648,7 +624,6 @@ class TestMainScenarioVariants:
         graph = nx.node_link_graph(graph_dict, edges="edges")
         helper.set_graph(graph)
 
-        # Validate basic structure matches scenario 3
         helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
         helper.validate_traffic_demands(0)  # No traffic demands in scenario 3
 
@@ -679,7 +654,6 @@ class TestMainScenarioVariants:
             scenario = Scenario.from_yaml(scenario_yaml)
             scenario.run()
 
-            # Validate each configuration
             helper = create_scenario_helper(scenario)
             exported = scenario.results.to_dict()
             graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
@@ -687,7 +661,6 @@ class TestMainScenarioVariants:
 
             graph = nx.node_link_graph(graph_dict, edges="edges")
 
-            # Check for None graph and provide better error message
             assert graph is not None, (
                 f"Build graph failed for configuration {i}: {config}"
             )
@@ -700,6 +673,5 @@ class TestMainScenarioVariants:
             assert len(graph.nodes) == expected_nodes
             assert len(graph.edges) == expected_edges
 
-            # Validate link capacities
             for _u, _v, data in graph.edges(data=True):
                 assert data.get("capacity") == config["capacity"]

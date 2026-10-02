@@ -1,4 +1,4 @@
-"""Integration modules for external libraries (currently NetworkX)."""
+"""Conversion between NetworkX graphs and NetGraph-Core graphs."""
 
 from ngraph.lib.nx import EdgeMap, NodeMap, from_networkx, to_networkx
 

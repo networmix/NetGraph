@@ -1,8 +1,6 @@
 # Basic Example
 
-A tiny topology defined inline, used here to walk through the analysis APIs. For real analysis, run a bundled scenario through the CLI and generate metrics from that.
-
-See [Tutorial](../getting-started/tutorial.md) for CLI usage and bundled scenarios.
+A four-node topology defined inline, used to walk through the analysis API. The [Tutorial](../getting-started/tutorial.md) covers the CLI and the bundled scenarios.
 
 ## Creating a Simple Network
 
@@ -27,7 +25,7 @@ from ngraph import analyze, Mode, FlowPlacement
 
 # Define network topology with parallel paths
 scenario_yaml = """
-seed: 1234  # Optional: ensures reproducible results
+seed: 1234  # Optional; makes randomized steps reproducible
 
 network:
   name: "fundamentals_example"
@@ -81,7 +79,7 @@ This spells out every node and link individually. The optional `seed` makes rand
 
 ### Flow Analysis Variants
 
-Now let's run MaxFlow using the `analyze()` API:
+Run MaxFlow using the `analyze()` API:
 
 ```python
 # 1. "True" maximum flow (uses all available paths)
@@ -117,7 +115,7 @@ print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
 - **Shortest Path**: Only uses paths with the minimum cost
 - **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The total flow can be limited by the smallest capacity path.
 
-`EQUAL_BALANCED` flow placement is typically used with `shortest_path=True` to simulate traditional ECMP behavior, where flows are split equally across equal-cost paths.
+Paired with `shortest_path=True`, `EQUAL_BALANCED` models ECMP: an equal split across the equal-cost paths.
 
 ## Cost Distribution
 
@@ -165,9 +163,9 @@ max_latency = max(cost_dist.keys())
 print(f"Latency range: {min_latency} - {max_latency}")  # 2.0 - 4.0
 ```
 
-## Efficient Repeated Analysis
+## Repeated Analysis with a Bound Context
 
-For scenarios requiring multiple analyses with different exclusions (e.g., failure testing), use a bound context:
+To analyze the same source and sink under many exclusion sets, bind them once:
 
 ```python
 # Create bound context - graph built once
@@ -177,7 +175,7 @@ ctx = analyze(network, source="^A$", sink="^C$", mode=Mode.COMBINE)
 baseline = ctx.max_flow()
 print(f"Baseline: {baseline}")
 
-# Test various failure scenarios
+# Exclude one node at a time
 for node in ["B", "D"]:
     degraded = ctx.max_flow(excluded_nodes={node})
     print(f"Without {node}: {degraded}")
@@ -190,7 +188,7 @@ for node in ["B", "D"]:
 
 ## Sensitivity Analysis
 
-Identify which edges are critical for the flow:
+Which edges limit the flow, and by how much:
 
 ```python
 # Get sensitivity analysis
@@ -209,7 +207,7 @@ for pair, edge_impacts in sensitivity.items():
 
 ## Shortest Paths
 
-Get actual path objects for routing analysis:
+Path objects rather than costs:
 
 ```python
 from ngraph import EdgeSelect

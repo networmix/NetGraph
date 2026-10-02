@@ -15,7 +15,6 @@ class _ScenarioStub:
 
 
 def test_msd_deterministic_evaluation(monkeypatch):
-    # Build a tiny scenario
     from ngraph.model.demand.matrix import DemandSet
     from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.network import Link, Network, Node
@@ -36,7 +35,6 @@ def test_msd_deterministic_evaluation(monkeypatch):
 
     scenario = _ScenarioStub(net, demand_set, Results())
 
-    # Run MSD with a simple scenario
     msd = MaximumSupportedDemand(
         demand_set="default",
         alpha_start=1.0,

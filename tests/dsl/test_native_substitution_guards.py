@@ -1,7 +1,7 @@
 """Guards for non-string values leaking out of native-type variable substitution.
 
 Whole-string ``${var}`` placeholders substitute the variable's native type
-(so match conditions compare correctly against numeric attrs). String-only
+(so match conditions compare numerically against numeric attrs). String-only
 positions must reject non-string values with a clear ValueError instead of
 crashing later with a context-free TypeError.
 """

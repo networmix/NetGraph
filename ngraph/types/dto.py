@@ -1,7 +1,4 @@
-"""Types and data structures for algorithm analytics.
-
-Defines immutable summary containers for algorithm outputs.
-"""
+"""Immutable edge references and result containers for algorithm outputs."""
 
 from __future__ import annotations
 
@@ -33,8 +30,6 @@ class EdgeRef:
 @dataclass(frozen=True)
 class MaxFlowResult:
     """Result of max-flow computation between a source/sink pair.
-
-    Captures total flow, cost distribution, and optionally min-cut edges.
 
     Attributes:
         total_flow: Maximum flow value achieved.

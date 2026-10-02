@@ -1,20 +1,14 @@
 """
 Integration tests for scenario 3: 3-tier Clos network with nested blueprints.
 
-This module tests the most advanced NetGraph capabilities including:
+Covers:
 - Deep blueprint nesting with multiple levels of hierarchy
 - 3-tier Clos fabric topology with brick-spine-spine architecture
-- Node and link override mechanisms for customization
-- Capacity probing with different flow placement algorithms
-- Network analysis workflows with multiple steps
-- Risk group assignment and validation
+- Node and link rules
+- Max-flow probing with PROPORTIONAL and EQUAL_BALANCED placement
+- Risk group assignment
 
-Scenario 3 represents the most complex network topology in the test suite,
-validating NetGraph's ability to handle large network definitions with
-relationships and analysis requirements.
-
-Uses the modular testing approach with validation helpers from the
-integration.helpers module.
+Validation helpers come from integration.helpers.
 """
 
 import pytest
@@ -25,7 +19,7 @@ from .helpers import create_scenario_helper, load_scenario_from_file
 
 @pytest.mark.slow
 class TestScenario3:
-    """Tests for scenario 3 using modular validation approach."""
+    """Tests for scenario 3."""
 
     @pytest.fixture
     def scenario_3(self):
@@ -56,7 +50,7 @@ class TestScenario3:
         helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
 
     def test_nested_blueprint_structure(self, helper):
-        """Test complex nested blueprint expansions work correctly."""
+        """Test that each nested Clos blueprint instance expands to 32 nodes."""
         # Each 3-tier Clos should have 32 nodes total
         clos1_nodes = [
             node for node in helper.network.nodes if node.startswith("my_clos1/")
@@ -102,25 +96,22 @@ class TestScenario3:
             f"my_clos1/spine should have 16 nodes, found {len(spine_nodes)}"
         )
 
-    def test_one_to_one_pattern_adjacency(self, helper):
-        """Test that one_to_one patterns create correct pairings."""
-        # b1/t2 to spine - check actual behavior (4 t2 nodes * 16 spine nodes in one_to_one pattern)
+    def test_one_to_one_link_pattern(self, helper):
+        """Test one_to_one links from b1/t2 to spine and between the two Clos spines."""
+        # b1/t2 (4 nodes) to spine (16 nodes) with one_to_one
         b1_t2_to_spine_links = helper.network.find_links(
             source_regex=r"my_clos1/b1/t2/.*", target_regex=r"my_clos1/spine/.*"
         )
 
-        # Count unique t2 source nodes
         t2_sources = {link.source for link in b1_t2_to_spine_links}
 
-        # Verify that we have 4 t2 sources (from brick_2tier blueprint)
+        # 4 t2 sources from the brick_2tier blueprint
         assert len(t2_sources) == 4, (
             f"Expected 4 t2 source nodes, found {len(t2_sources)}"
         )
 
-        # Verify that we have links (actual implementation may connect to all spine nodes)
         assert len(b1_t2_to_spine_links) > 0, "Should have b1/t2->spine connections"
 
-        # Verify each t2 node connects to spine nodes
         for t2_node in t2_sources:
             t2_links = [link for link in b1_t2_to_spine_links if link.source == t2_node]
             assert len(t2_links) > 0, f"t2 node {t2_node} should connect to spine nodes"
@@ -134,7 +125,7 @@ class TestScenario3:
         )
 
     def test_mesh_pattern_in_nested_blueprints(self, helper):
-        """Test that mesh patterns work within nested blueprints."""
+        """Test that the t1-t2 mesh inside a nested brick blueprint yields 16 links."""
         # Within each brick_2tier blueprint, t1 should mesh with t2
         # Each brick has 4 t1 and 4 t2 nodes, so 4 * 4 = 16 mesh links per brick
         b1_t1_to_t2_links = helper.network.find_links(
@@ -144,8 +135,8 @@ class TestScenario3:
             f"Expected 16 mesh links in b1 brick, found {len(b1_t1_to_t2_links)}"
         )
 
-    def test_node_overrides_application(self, helper):
-        """Test that node overrides are correctly applied."""
+    def test_node_rules_application(self, helper):
+        """Test that node_rules set risk_groups and hw_component on matched nodes."""
         # Test specific node override from YAML
         # Uses facility domain model for risk groups
         helper.validate_node_attributes(
@@ -164,8 +155,8 @@ class TestScenario3:
             {"risk_groups": {"Room_Clos1_Spine"}, "hw_component": "SpineHW"},
         )
 
-    def test_link_overrides_application(self, helper):
-        """Test that link overrides are correctly applied."""
+    def test_link_rules_application(self, helper):
+        """Test link_rules: t3-1 capacity and t3-2 risk_groups on spine links."""
         # Test specific capacity override
         override_links = helper.network.find_links(
             source_regex="my_clos1/spine/t3-1$", target_regex="my_clos2/spine/t3-1$"
@@ -187,7 +178,7 @@ class TestScenario3:
         )
 
     def test_link_capacity_configuration(self, helper):
-        """Test that links have correct capacities from blueprint definitions."""
+        """Test blueprint link capacities: 100 inside bricks, 400 between spines."""
         # Brick internal links should have capacity 100.0 Gb/s
         brick_internal_links = helper.network.find_links(
             source_regex=r"my_clos1/b1/t1/.*", target_regex=r"my_clos1/b1/t2/.*"
@@ -209,15 +200,15 @@ class TestScenario3:
             )
 
     def test_no_traffic_demands(self, helper):
-        """Test that this scenario has no traffic demands as expected."""
+        """Test that this scenario defines no traffic demands."""
         helper.validate_traffic_demands(expected_count=0)
 
     def test_no_failure_policy(self, helper):
-        """Test that this scenario has no failure policy as expected."""
+        """Test that this scenario defines no failure policy."""
         helper.validate_failure_policy(expected_rules=0)
 
     def test_capacity_envelope_proportional_flow_results(self, helper):
-        """Test capacity envelope results with PROPORTIONAL flow placement."""
+        """Test that PROPORTIONAL max flow is ~3200 in both directions."""
         # Test forward direction (MaxFlow returns baseline separately, flow_results for failures)
         exported = helper.scenario.results.to_dict()
         fwd = exported["steps"].get("capacity_analysis_forward", {}).get("data", {})
@@ -243,7 +234,7 @@ class TestScenario3:
         )
 
     def test_capacity_envelope_equal_balanced_flow_results(self, helper):
-        """Test capacity envelope results with EQUAL_BALANCED flow placement."""
+        """Test that EQUAL_BALANCED max flow is ~3200 in both directions."""
         exported = helper.scenario.results.to_dict()
         fwd = (
             exported["steps"]
@@ -270,46 +261,38 @@ class TestScenario3:
         rev_total = float(rev_result.get("summary", {}).get("total_placed", 0.0))
         assert abs(rev_total - 3200.0) < 0.1
 
-    def test_flow_conservation_properties(self, helper):
-        """Test that flow results satisfy conservation principles."""
-        all_flows: dict[str, float] = {}
+    def test_max_flow_totals_are_consistent(self, helper):
+        """Every MaxFlow step reports 3200, within the inter-fabric capacity.
 
+        Forward and reverse runs agree because the fabrics are symmetric, and
+        PROPORTIONAL and EQUAL_BALANCED agree because the equal-cost links have
+        equal capacity. Each step's per-flow placements sum to its summary.
+        """
         exported = helper.scenario.results.to_dict()
+        steps = [
+            "capacity_analysis_forward",
+            "capacity_analysis_reverse",
+            "capacity_analysis_forward_balanced",
+            "capacity_analysis_reverse_balanced",
+        ]
+        inter_fabric_capacity = sum(
+            link.capacity
+            for link in helper.network.links.values()
+            if link.source.startswith("my_clos1/")
+            != link.target.startswith("my_clos1/")
+        )
 
-        def total_placed(step: str) -> float | None:
-            data = exported["steps"].get(step, {}).get("data", {})
-            # Check baseline first (no failure policy), then flow_results
-            result = data.get("baseline") or (data.get("flow_results", []) or [None])[0]
-            if not result:
-                return None
-            return float(result.get("summary", {}).get("total_placed", 0.0))
-
-        fp = total_placed("capacity_analysis_forward")
-        if fp is not None:
-            all_flows["forward_proportional"] = fp
-
-        rp = total_placed("capacity_analysis_reverse")
-        if rp is not None:
-            all_flows["reverse_proportional"] = rp
-
-        fb = total_placed("capacity_analysis_forward_balanced")
-        if fb is not None:
-            all_flows["forward_balanced"] = fb
-
-        rb = total_placed("capacity_analysis_reverse_balanced")
-        if rb is not None:
-            all_flows["reverse_balanced"] = rb
-
-        assert len(all_flows) > 0, "Should have at least some capacity analysis results"
-
-        expected_flow = 3200.0
-        for name, value in all_flows.items():
-            assert abs(value - expected_flow) < 0.1, (
-                f"Flow {name} = {value}, expected ~{expected_flow}"
-            )
+        for step in steps:
+            baseline = exported["steps"][step]["data"]["baseline"]
+            total = baseline["summary"]["total_placed"]
+            assert total == pytest.approx(3200.0), f"{step} placed {total}"
+            assert sum(f["placed"] for f in baseline["flows"]) == pytest.approx(
+                total
+            ), f"{step} flows do not sum to the summary"
+            assert total <= inter_fabric_capacity
 
     def test_topology_semantic_correctness(self, helper):
-        """Test that the complex nested topology is semantically correct."""
+        """Test that all edges have non-negative capacity and cost."""
         helper.validate_topology_semantics()
 
     def test_inter_clos_connectivity(self, helper):
@@ -328,8 +311,8 @@ class TestScenario3:
                 f"Inter-Clos link target should be spine: {link.target}"
             )
 
-    def test_regex_pattern_matching_in_overrides(self, helper):
-        """Test that regex patterns in overrides work correctly."""
+    def test_regex_pattern_matching_in_rules(self, helper):
+        """Test that node_rules regex my_clos1/spine/t3.* assigns Room_Clos1_Spine."""
         # The node override "my_clos1/spine/t3.*" should match all spine nodes
         spine_nodes_clos1 = [
             node
@@ -346,23 +329,21 @@ class TestScenario3:
             )
 
     def test_workflow_step_execution_order(self, scenario_3_executed):
-        """Test that workflow steps executed in correct order."""
-        # Should have results from BuildGraph step
-        exported2 = scenario_3_executed.results.to_dict()
-        graph_result = exported2["steps"]["build_graph"]["data"].get("graph")
-        assert graph_result is not None, "BuildGraph step should have executed"
-
-        # Should have results from MaxFlow analysis steps (flow_results present)
-        assert (
-            exported2["steps"]["capacity_analysis_forward"]["data"].get("flow_results")
-            is not None
+        """Steps run in the order the workflow lists them, and each stored data."""
+        exported = scenario_3_executed.results.to_dict()
+        expected_order = [
+            "build_graph",
+            "capacity_analysis_forward",
+            "capacity_analysis_reverse",
+            "capacity_analysis_forward_balanced",
+            "capacity_analysis_reverse_balanced",
+        ]
+        recorded = sorted(
+            exported["workflow"],
+            key=lambda name: exported["workflow"][name]["execution_order"],
         )
-        assert (
-            exported2["steps"]["capacity_analysis_forward_balanced"]["data"].get(
-                "flow_results"
-            )
-            is not None
-        )
+        assert recorded == expected_order
 
-
-# Removed redundant smoke test; class-based tests already cover these checks.
+        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
+        for step in expected_order[1:]:
+            assert exported["steps"][step]["data"].get("baseline") is not None

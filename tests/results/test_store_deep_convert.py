@@ -1,7 +1,7 @@
 """Regression tests for Results.to_dict deep conversion.
 
-Covers recursion into ``to_dict()`` output and conversion of the scenario
-snapshot section, which previously escaped JSON-safe normalization.
+Covers recursion into ``to_dict()`` output and JSON-safe normalization of
+the scenario snapshot section.
 """
 
 from __future__ import annotations

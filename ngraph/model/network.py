@@ -14,10 +14,7 @@ from ngraph.utils.ids import new_base64_uuid
 
 @dataclass
 class Node:
-    """Represents a node in the network.
-
-    Each node is uniquely identified by its name, which is used as
-    the key in the Network's node dictionary.
+    """Network node, keyed by its unique name in ``Network.nodes``.
 
     Attributes:
         name (str): Unique identifier for the node.
@@ -34,7 +31,7 @@ class Node:
 
 @dataclass
 class Link:
-    """Represents one directed link between two nodes.
+    """One directed link between two nodes.
 
     The model stores a single direction (``source`` -> ``target``). When the
     analysis graph is built (via ``AnalysisContext`` / netgraph-core), a reverse
@@ -76,7 +73,7 @@ class Link:
 
 @dataclass
 class RiskGroup:
-    """Represents a shared-risk or failure domain, which may have nested children.
+    """Shared-risk or failure domain, optionally with nested children.
 
     Risk groups model correlated failures: when a risk group fails, all entities
     (nodes, links) in that group fail together. Hierarchical children enable
@@ -105,12 +102,12 @@ class RiskGroup:
 
 @dataclass
 class Network:
-    """A container for network nodes and links.
+    """Scenario-level topology: nodes, links, and risk groups.
 
-    Network represents the scenario-level topology with persistent state (nodes/links
-    that are disabled in the scenario configuration). For temporary exclusion of
-    nodes/links during analysis (e.g., failure simulation), use node_mask and edge_mask
-    parameters when calling NetGraph-Core algorithms.
+    Holds persistent state only (nodes and links disabled in the scenario
+    configuration). For temporary exclusion of nodes or links during analysis
+    (e.g., failure simulation), pass node_mask and edge_mask to NetGraph-Core
+    algorithms.
 
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
@@ -194,8 +191,8 @@ class Network:
         - With capturing groups: label is "|"-joined non-None captures.
         - Without captures: label is the original pattern string.
 
-        Note: For attribute-based grouping, use the unified selector system
-        with ``{"group_by": "attr_name"}`` dict selectors.
+        For attribute-based grouping, use a selector dict such as
+        ``{"group_by": "attr_name"}``.
 
         Args:
             path: Regex pattern for node name.
@@ -205,8 +202,8 @@ class Network:
             objects themselves are shared, so mutating the returned mapping or
             lists does not affect the internal selection cache.
         """
-        # Check cache first. A shallow copy protects the cache from caller
-        # mutation (groups map and lists are fresh; Node objects are shared).
+        # Cache hits return a shallow copy so callers cannot mutate the cache
+        # (groups map and lists are fresh; Node objects are shared).
         cached = self._selection_cache.get(path)
         if cached is not None:
             return {label: list(nodes) for label, nodes in cached.items()}
@@ -389,12 +386,9 @@ class Network:
     def enable_risk_group(self, name: str, recursive: bool = True) -> None:
         """Enable every node/link that has 'name' in its risk_groups.
 
-        Unknown group names are ignored.
-
-        Note:
-            If a node or link is in multiple risk groups, enabling this group
-            will re-enable that node/link even if other groups containing it
-            remain disabled.
+        Unknown group names are ignored. A node or link in several risk
+        groups is re-enabled even if other groups containing it remain
+        disabled.
 
         Args:
             name (str): Name of the risk group to enable.

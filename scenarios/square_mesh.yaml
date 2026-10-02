@@ -50,7 +50,6 @@ workflow:
   - type: MaximumSupportedDemand
     name: msd_baseline
     demand_set: baseline_traffic_matrix
-    acceptance_rule: hard
     alpha_start: 1.0
     growth_factor: 2.0
     alpha_min: 0.001
@@ -63,7 +62,7 @@ workflow:
     demand_set: baseline_traffic_matrix
     failure_policy: single_link_failure
     iterations: 1000
-    parallelism: 8
+    parallelism: auto
     seed: 42
     store_failure_patterns: true
     include_flow_details: true

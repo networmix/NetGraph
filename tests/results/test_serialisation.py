@@ -20,10 +20,8 @@ def test_results_to_dict_converts_objects():
 
     d = res.to_dict()
 
-    # Check scalar value is preserved
     assert d["steps"]["S"]["data"]["scalar"] == 1.23
 
-    # Check that CapacityEnvelope was converted to dict
     assert isinstance(d["steps"]["S"]["data"]["env"], dict)
     assert d["steps"]["S"]["data"]["env"]["max"] == 4
     assert d["steps"]["S"]["data"]["env"]["source"] == "X"
@@ -64,7 +62,6 @@ def test_results_to_dict_json_serializable():
     assert parsed["steps"]["Analysis"]["data"]["envelope"]["source"] == "src"
     assert parsed["steps"]["Analysis"]["metadata"]["version"] == "1.0"
 
-    # Construct an envelope back from dict and validate
     env2 = CapacityEnvelope.from_dict(parsed["steps"]["Analysis"]["data"]["envelope"])
     assert env2.source_pattern == "src"
     assert env2.sink_pattern == "dst"

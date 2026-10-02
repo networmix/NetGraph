@@ -2,20 +2,20 @@
 
 NetGraph's internal design: scenario DSL, data models, execution flow, algorithms, manager components, and result handling.
 
-## Overview
+## Architecture
 
-NetGraph is a network scenario analysis engine using a **hybrid Python+C++ architecture**. It takes a scenario (defined in a YAML DSL) as input, builds a directed multigraph model of the network, and runs a configurable workflow of analysis steps (like traffic placement or max-flow capacity) to produce structured results.
+NetGraph is a Python front end over a C++ engine. It takes a scenario written in a YAML DSL, builds a directed multigraph model of the network, and runs a workflow of analysis steps (traffic placement, max-flow capacity) that produce structured results.
 
-### Architecture Layers
+### Layers
 
 **Python Layer (NetGraph):**
 
 - CLI and API: Entry points to load scenarios and invoke analyses
 - Scenario DSL Parser: Validates and expands the YAML scenario into an internal model
-- Domain Model: In-memory representation of nodes, links, risk groups, etc., with selection and grouping utilities
-- Managers: Orchestrators for higher-level behaviors (demand expansion, failure enumeration)
-- Workflow Engine: Composes steps into end-to-end analyses, storing outputs in a results store
-- Results Store: Collects outputs and metadata from each step, enabling structured JSON export
+- Domain Model: In-memory representation of nodes, links and risk groups, with selection and grouping utilities
+- Managers: Demand expansion and failure sampling
+- Workflow Engine: Runs the steps in order
+- Results Store: Per-step outputs and metadata, exported as JSON
 - Analysis bridge: `AnalysisContext` builds Core graphs from the model, manages name/ID mapping, and executes Core algorithms
 - NetworkExplorer: Network hierarchy traversal and hardware cost/power aggregation
 
@@ -56,12 +56,12 @@ types, utils  ->  model  ->  dsl  ->  analysis  ->  workflow  ->  scenario  ->  
 
 Two deliberate exceptions:
 
-- `model` may use the dependency-free string-expansion helpers in `ngraph.dsl.expansion` (bracket patterns in risk-group references and demand `expand:` blocks). No other `model -> dsl` import is allowed; selector schema types and evaluation live in `ngraph.model.selectors`, and `ngraph.dsl.selectors` re-exports them for backward compatibility. Enforced by `tests/model/test_layering.py`.
+- `model` may use the dependency-free string-expansion helpers in `ngraph.dsl.expansion` (bracket patterns in risk-group references and demand `expand:` blocks). No other `model -> dsl` import is allowed; selector schema types and evaluation live in `ngraph.model.selectors`. Enforced by `tests/model/test_layering.py`.
 - `workflow` references `Scenario` only under `TYPE_CHECKING` (workflow steps execute against a `Scenario`); the runtime import goes downward, from `scenario` to `workflow`.
 
 The package root also does not eagerly import `ngraph.cli` (enforced by `tests/cli/test_package_layering.py`); the console entry point and `python -m ngraph` import it explicitly.
 
-Deferred (function-local) imports are used for optional dependencies (networkx, jsonschema), opt-in profiling, and a few narrow internal cases (`ngraph.model.failure.parser` defers `ngraph.dsl.expansion`; `FailureManager._process_sensitivity_results` defers `ngraph.results.flow`) — not as a general layering workaround; outside those cases, if a module needs a lower layer, it imports it at module level.
+Deferred (function-local) imports are used only for opt-in profiling and one narrow internal case (`ngraph.model.failure.parser` defers `ngraph.dsl.expansion`), not as a general layering workaround; if a module needs a lower layer, it imports it at module level.
 
 ### Integration Points
 
@@ -92,7 +92,7 @@ degraded = ctx.max_flow(excluded_links=failed_links)
 
 ### Execution Flow
 
-The diagram below traces a scenario from input through both layers to final results: the Python layer loads the scenario, orchestrates the workflow, and aggregates results, while compute-intensive graph algorithms execute in C++ with the GIL released.
+From scenario file to results, across both layers:
 
 ![NetGraph execution flow](../assets/diagrams/system_pipeline.dot.svg)
 
@@ -100,29 +100,29 @@ The diagram below traces a scenario from input through both layers to final resu
 
 NetGraph scenarios are defined in YAML using a declarative DSL (see [DSL Reference](dsl.md)) covering network topologies, traffic demands, failure policies, and analysis workflows. Before execution, scenario files are validated against a JSON Schema, so unknown keys and type mismatches fail early.
 
-Key elements of the DSL include:
+Elements of the DSL:
 
-- **Seed**: A master random seed for the scenario to ensure deterministic behavior across runs.
+- **Seed**: A master random seed from which every random draw in the scenario derives, so runs are reproducible.
 
-- **Blueprints**: Reusable templates for subsets of the topology. A blueprint defines internal node types, roles, and optional internal links. Blueprints enable defining a complex multi-node topology once and instantiating it multiple times with different parameters.
+- **Blueprints**: Reusable templates for parts of the topology. A blueprint defines node groups and the links between them, and is instantiated many times with different parameters.
 
 - **Node Groups**: Definitions of node groups in the topology, either explicitly or via patterns. Groups can use a blueprint (`blueprint`) with parameters (`params`), or define a number of nodes (`count`) with a naming template (`template`).
 
-- **Links**: Rules to generate links between node groups. Instead of enumerating every link, a link rule specifies source and target selectors (by path pattern), a wiring pattern (e.g. mesh for full mesh or one_to_one for paired links), number of parallel links (`count`), and link properties (capacity, cost, attributes like distance, hardware, risk group tags, etc.). Link properties are specified at the top level, not inside a wrapper. Matching can also filter nodes by attributes with logical conditions (AND/OR) so a rule applies to selected nodes only. A single rule can thus expand into many concrete links.
+- **Links**: Rules to generate links between node groups. Instead of enumerating every link, a link rule specifies source and target selectors (by path pattern), a wiring pattern (e.g. mesh for full mesh or one_to_one for paired links), number of parallel links (`count`), and link properties (capacity, cost, attributes such as distance or hardware, risk group tags). Matching can also filter nodes by attribute conditions (AND/OR) so a rule applies to selected nodes only. A single rule can thus expand into many concrete links.
 
-- **Rules**: Optional modifications applied after the initial expansion. `node_rules` or `link_rules` can match specific nodes or links (by path or endpoints) and change their attributes or disable them. This allows fine-tuning or simulating removals without changing the base definitions.
+- **Rules**: Optional modifications applied after the initial expansion. `node_rules` or `link_rules` can match specific nodes or links (by path or endpoints) and change their attributes or disable them, without editing the definitions that generated them.
 
 - **Risk Groups**: Named shared-risk groups (potentially nested) that nodes or links can belong to. These are used in failure scenarios to correlate failures (e.g. all links in a risk group fail together).
 
-- **Demands**: Traffic demand definitions specifying source node sets, target node sets (by regex or attribute path selectors), and volume. Each demand can also include priority or custom flow placement policy.
+- **Demands**: Traffic demand definitions specifying source node sets, target node sets (by regex or attribute path selectors), and volume. Each demand can also set a priority and a flow policy preset.
 
-- **Failure Policies**: Definitions of failure scenarios or modes, possibly with weights (probabilities). For example, a policy might say "with 5% chance, fail any single core node" or "fail all links in risk_group X". The failure manager uses these policies to generate specific failure combinations for simulation.
+- **Failure Policies**: Weighted modes, each a set of rules selecting nodes, links or risk groups to fail. One mode is drawn per iteration in proportion to its weight, and the failure manager turns the drawn rules into concrete exclusion sets.
 
-- **Workflow**: An ordered list of analysis steps to execute. Each step has a `type` (the analysis to perform, such as "MaxFlow" or "TrafficMatrixPlacement"), a unique name, and parameters (like number of iterations, etc.). The workflow definition orchestrates the analysis pipeline.
+- **Workflow**: An ordered list of analysis steps to execute. Each step has a `type` (the analysis to perform, such as "MaxFlow" or "TrafficMatrixPlacement"), a unique name, and parameters such as the number of iterations.
 
 ### DSL Expansion Process
 
-The loader validates and expands DSL definitions into concrete nodes and links. Unknown fields or schema violations cause an immediate error before any expansion. After schema validation, blueprints are resolved (each blueprint group becomes actual Node objects), group name patterns are expanded into individual names, and adjacency rules are iterated over matching source-target node sets to create Link objects. The resulting nodes and links are then checked at runtime for duplicate node names and missing link endpoints.
+The loader validates and expands DSL definitions into concrete nodes and links. Unknown fields or schema violations cause an immediate error before any expansion. After schema validation, blueprints are resolved (each blueprint group becomes actual Node objects), group name patterns are expanded into individual names, and link definitions are iterated over matching source-target node sets to create Link objects. The resulting nodes and links are then checked at runtime for duplicate node names and missing link endpoints.
 
 ## Data Model
 
@@ -148,7 +148,7 @@ A Link represents a directed link between a source and target node. Each link ha
 
 - capacity (float, e.g. in some bandwidth unit),
 
-- cost (float, e.g. distance or latency metric),
+- cost (float holding a non-negative integer value, e.g. distance or latency metric),
 
 - disabled flag,
 
@@ -158,7 +158,7 @@ A Link represents a directed link between a source and target node. Each link ha
 
 - a unique id assigned when the link is added to a Network
 
-The id is deterministic: `Network.add_link` assigns "source|target|<seq>", where <seq> is a per-(source, target) insertion sequence number, so ids and their sort order are stable across identical scenario builds (a provisional uuid-suffixed id exists only on links never added to a Network). The model stores each link as directed (source -> target). When the analysis graph is built, a reverse edge is added by default so algorithms see bidirectional connectivity.
+The id is deterministic: `Network.add_link` assigns "source|target|<seq>", where <seq> is a per-(source, target) insertion sequence number, so ids and their sort order are stable across identical scenario builds (a provisional uuid-suffixed id exists only on links never added to a Network). The model stores each link as directed (source -> target). When the analysis graph is built, each link also gets a reverse edge, so algorithms see both directions.
 
 ### RiskGroup
 
@@ -188,7 +188,7 @@ Network enforces invariants during construction: adding a link validates that so
 
 ### Node and Link Selection
 
-A single selector system picks groups of nodes by structured name or by attribute; algorithms use it to choose source/sink sets. Selector evaluation (schema types, condition evaluation, node selection, attribute flattening) lives in `ngraph.model.selectors`; `ngraph.dsl.selectors` provides YAML-facing parsing and re-exports the evaluation names for backward compatibility.
+A single selector system picks groups of nodes by structured name or by attribute; algorithms use it to choose source/sink sets. Selector evaluation (schema types, condition evaluation, node selection, attribute flattening) lives in `ngraph.model.selectors`; `ngraph.dsl.selectors` provides YAML-facing parsing (`normalize_selector`).
 
 **Selector Forms:**
 
@@ -230,11 +230,11 @@ Workflow steps and API calls therefore refer to nodes by readable pattern instea
 
 ### Disabled Elements
 
-Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but analysis functions filter them out when selecting active nodes. This preserves topology information — the link still exists, it is just turned off — and re-enabling it is a flag change.
+Nodes or links marked as disabled=True represent elements present in the design but out of service for the analysis. The base model keeps them in the collection but analysis functions filter them out when selecting active nodes. The link still exists, it is just turned off, and re-enabling it is a flag change.
 
 ### Filtered Analysis (Exclusions)
 
-To simulate failures or other what-if scenarios without modifying the base network, NetGraph uses analysis-time exclusions. Instead of creating a stateful view object, you pass sets of excluded nodes and links directly to analysis functions.
+Failures and other what-if cases are expressed as sets of excluded nodes and links passed to analysis functions; the base network is never modified.
 
 ```python
 # Analyze with specific exclusions
@@ -242,15 +242,13 @@ results = analyze(network).max_flow(
     "^A$",
     "^B$",
     excluded_nodes={"Node5"},
-    excluded_links={"A|B|xyz123"}
+    excluded_links={"A|B|0"}
 )
 ```
 
-This approach avoids mutating the base graph when simulating failures (e.g., deleting nodes or toggling flags). It separates the static scenario (base network) from dynamic conditions (exclusions), enabling thread-safe parallel analyses and eliminating deep copies for each failure scenario.
+Because the base network stays static, analyses with different exclusion sets can run in parallel threads, and no failure scenario needs a copy of the network.
 
-**Implementation:** Exclusions are applied via boolean masks passed to Core algorithms. The graph is built once without exclusions, and masks disable specific elements at algorithm execution time. For repeated analysis (Monte Carlo, FailureManager) this enables O(|excluded|) mask updates rather than O(V+E) graph rebuilding. One-off calls on an unbound context build a temporary bound context per call and apply exclusions the same way.
-
-Multiple concurrent analyses can run on the same base network with different exclusion sets, which is what makes parallel Monte Carlo over many failure combinations practical.
+**Implementation:** Exclusions are applied via boolean masks passed to Core algorithms. The graph is built once without exclusions, and masks disable specific elements at algorithm execution time. For repeated analysis (Monte Carlo, FailureManager) each iteration builds masks (a vectorized array fill plus O(|excluded|) updates) instead of rebuilding the graph. One-off calls on an unbound context build a temporary bound context per call and apply exclusions the same way.
 
 ### Graph Construction
 
@@ -268,7 +266,7 @@ There is one construction method:
 - Assigns stable node IDs (sorted by name for determinism)
 - Encodes link_id + direction as ext_edge_id (packed int64)
 - Constructs NumPy arrays (src, dst, capacity, cost, ext_edge_ids)
-- Validates inputs: link capacities must be below the internal pseudo-edge capacity `LARGE_CAPACITY` (1e15), and costs must be non-negative integers whose total across all edges stays below 2^62. Core SPF accumulates path costs in int64 with INT64_MAX as the unreachable sentinel, so accumulated path costs — not just per-edge values — must stay in range; bounding the total of all edge costs bounds every path. Violations raise `ValueError` instead of silently corrupting results
+- Validates inputs: link capacities must be below the internal pseudo-edge capacity `LARGE_CAPACITY` (1e15), and costs must be non-negative integers whose total across all edges stays below 2^62. Core SPF accumulates path costs in int64 with INT64_MAX as the unreachable sentinel, so accumulated path costs, not just per-edge values, must stay in range; bounding the total of all edge costs bounds every path. Violations raise `ValueError` instead of silently corrupting results
 - Supports augmentation edges (e.g., pseudo-source/sink for multi-source max-flow)
 
 **AnalysisContext Internals:**
@@ -279,14 +277,10 @@ There is one construction method:
 - `_node_mapper`, `_edge_mapper`: Name ↔ ID translation
 - `_algorithms`: Core Algorithms instance
 - `_disabled_node_ids`, `_disabled_link_ids`: Pre-computed disabled topology
-- `_link_id_to_edge_indices`: Pre-computed mapping for O(|excluded|) mask building
+- `_link_id_to_edge_indices`: Pre-computed link-to-edge mapping for mask building
 - `_pseudo_context`: Optional context for pseudo source/sink node mappings
 
-When analyzing many failure scenarios, the graph is built once via `AnalysisContext.from_network()` and exclusions are applied via boolean masks. The public mask builders (`build_node_mask`/`build_edge_mask`, also usable by custom analysis functions that call Core primitives directly) automatically include disabled nodes/links, ensuring disabled topology is always excluded. Nothing is rebuilt per iteration, which is where the Monte Carlo speedup comes from.
-
-**Disabled Topology Handling:**
-
-Disabled nodes and links from the Network are pre-computed during `AnalysisContext.from_network()` and stored in the context. The mask builders automatically include these disabled elements alongside any per-iteration exclusions.
+Disabled nodes and links are computed once in `AnalysisContext.from_network()`. The public mask builders (`build_node_mask`/`build_edge_mask`, also usable by custom analysis functions that call Core primitives directly) add them to every mask, so disabled topology is always excluded.
 
 **C++ Side (`netgraph_core.StrictMultiDiGraph`):**
 
@@ -299,13 +293,12 @@ Disabled nodes and links from the Network are pre-computed during `AnalysisConte
 
 **Edge Direction Handling:**
 
-If `add_reverse=True` (default), graph construction creates bidirectional edges for each network link:
+Graph construction creates two directed edges for each network link:
 
 - Forward edge: original link direction with ext_edge_id encoding (link_id, 'fwd')
 - Reverse edge: opposite direction with ext_edge_id encoding (link_id, 'rev')
 
-This allows algorithms to consider traffic flowing in both directions on physical links.
-The Core graph itself is always directed; bidirectionality is achieved by explicit reverse edges.
+The Core graph is directed; the reverse edges give each physical link both directions.
 
 **Augmentation Support:**
 
@@ -315,9 +308,7 @@ are not mapped back to scenario links in results.
 
 ### Analysis Algorithms
 
-NetGraph's core algorithms execute in C++ via NetGraph-Core. They operate on the immutable StrictMultiDiGraph and support masking (runtime exclusions via boolean arrays), so repeated analysis under different failure scenarios needs no graph reconstruction.
-
-All Core algorithms release the Python GIL while they run.
+The algorithms below run in NetGraph-Core on the immutable StrictMultiDiGraph. They accept node and edge masks and release the GIL while they run.
 
 ### Shortest-Path First (SPF) Algorithm
 
@@ -337,18 +328,18 @@ The algorithm evaluates parallel edges per neighbor using `EdgeSelection` config
 
 **Capacity-Aware Tie-Breaking:**
 
-When multiple nodes or edges have equal cost, SPF uses residual capacity for tie-breaking to improve flow distribution:
+When nodes or edges tie on cost, SPF breaks the tie by residual capacity:
 
-- **Node-level**: Priority queue ordered by (cost, -residual, node). Among equal-cost nodes, prefers paths with higher bottleneck capacity. This naturally guides flow toward higher-capacity routes.
+- **Node-level**: Priority queue ordered by (cost, -residual, node). Among equal-cost nodes, prefers paths with higher bottleneck capacity.
 - **Edge-level**: When `multi_edge=false` and `tie_break=PreferHigherResidual`, selects the parallel edge with most available capacity among equal-cost options.
 
-This tie-breaking is applied even in IP/IGP mode (`require_capacity=false`) using static capacities, improving flow distribution without altering routing topology.
+The tie-breaking also applies in IP/IGP mode (`require_capacity=false`), using static capacities; it does not change which paths are shortest.
 
 **Multipath Support:**
 
-With `multipath=True`, SPF stores all minimal-cost predecessors forming a DAG:
-`pred[node] = {predecessor: [edge_ids...]}`. This DAG captures all equal-cost paths
-in a compact form, used by max-flow for flow splitting.
+With `multipath=True`, SPF stores every minimal-cost predecessor, regardless of residual capacity, forming a DAG:
+`pred[node] = {predecessor: [edge_ids...]}`. The DAG holds all equal-cost paths
+and is what max-flow splits flow over.
 
 **Early Termination:**
 
@@ -460,16 +451,6 @@ function tiebreak_edge(current_edges, new_edge, tie_break, new_residual):
         return [min(new_edge, current_edges[0])]
 ```
 
-**Key Tie-Breaking Mechanisms:**
-
-1. **Node-level tie-breaking**: When multiple nodes have equal cost in the priority queue, prefer nodes reachable via paths with higher bottleneck (residual) capacity. This naturally distributes flows across equal-cost paths based on available capacity.
-
-2. **Edge-level tie-breaking** (when `multi_edge=false`):
-   - `PreferHigherResidual`: Among parallel equal-cost edges (u,v), select the one with highest residual capacity
-   - `Deterministic`: Select edge with smallest ID for reproducible results
-
-3. **Multipath behavior**: When `multipath=true`, all equal-cost predecessors are retained without capacity-based filtering, enabling flow splitting across all equal-cost paths.
-
 ### Maximum Flow Algorithm
 
 Implemented in C++ (`netgraph::core::max_flow`), using successive shortest paths with
@@ -486,7 +467,7 @@ configurable flow splitting across equal-cost parallel edges.
 - `require_capacity=true` + `shortest_path=false` (SDN/TE): SPF filters to edges with residual capacity, routes adapt iteratively during placement
 - `require_capacity=false` + `shortest_path=true` (IP/IGP): SPF uses all edges based on cost, single-pass flow placement over fixed equal-cost paths
 
-See "Routing Semantics: IP/IGP vs SDN/TE" section for detailed explanation.
+See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) below.
 
 The residual network is maintained via `FlowState`, which tracks per-edge flow and computes residual capacities on demand. For each edge u→v:
 
@@ -495,7 +476,7 @@ The residual network is maintained via `FlowState`, which tracks per-edge flow a
 
 SPF operates over the residual graph by requesting edges with `require_capacity=true`, which filters to edges with positive residual capacity. The `FlowState` provides a residual capacity view without graph mutation.
 
-Note: Reverse residual arcs are distinct from physical reverse edges added via `add_reverse=True` during graph construction. Physical reverse edges model bidirectional links with independent capacity; reverse residual arcs are bookkeeping over a single edge's flow. The cost-tier SPF loop traverses forward residual edges only, so it cannot cancel an earlier placement and may stop below the true maximum. A completion phase then runs BFS augmentation over the full residual graph, traversing arcs backwards to return previously placed flow, which makes the result a true maximum flow whose min-cut matches it. The completion phase applies only to max-flow semantics — `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`; `EQUAL_BALANCED` (ECMP admission) and `require_capacity=False` (fixed-cost IP routing) are placement models rather than max-flow computations and keep the tier-loop result. Dinic-style reverse edges additionally allow redistribution within a single tier's placement.
+Reverse residual arcs are distinct from physical reverse edges added during graph construction. Physical reverse edges model bidirectional links with independent capacity; reverse residual arcs are bookkeeping over a single edge's flow. The cost-tier SPF loop traverses forward residual edges only, so it cannot cancel an earlier placement and may stop below the true maximum. A completion phase then runs BFS augmentation over the full residual graph, traversing arcs backwards to return previously placed flow, which makes the result a true maximum flow whose min-cut matches it. The completion phase applies only to max-flow semantics: `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`; `EQUAL_BALANCED` (ECMP admission) and `require_capacity=False` (fixed-cost IP routing) are placement models rather than max-flow computations and keep the tier-loop result. Dinic-style reverse edges additionally allow redistribution within a single tier's placement.
 
 The core loop finds augmenting paths using the cost-aware SPF described above:
 
@@ -523,15 +504,13 @@ After the loop, the C++ algorithm computes a FlowSummary which includes:
 
 - cost_distribution: flow volume keyed by cost. Tier-loop entries are the cost of the shortest-path DAG the flow was placed on; completion-phase entries are marginal costs (the augmenting path's forward edge costs minus the cost of the flow it cancels), so a key need not correspond to any traversable path. Core returns parallel arrays (`costs`, `flows`); AnalysisContext converts these to the `Dict[Cost, Flow]` mapping in `MaxFlowResult.cost_distribution`.
 
-The summary is returned along with the total flow value.
-
 ### Routing Semantics: IP/IGP vs SDN/TE
 
-NetGraph models two fundamentally different routing paradigms through the `require_capacity` and `shortest_path` parameters:
+Two routing models are selected through `require_capacity` and `shortest_path`:
 
 **IP/IGP Semantics (`require_capacity=false` + `shortest_path=true`):**
 
-Traditional IP routing with Interior Gateway Protocols (OSPF, IS-IS):
+IP routing with an interior gateway protocol (OSPF, IS-IS):
 
 - Routes computed based on link costs/metrics only, ignoring available capacity
 - Single SPF computation determines equal-cost paths; forwarding is fixed until topology/cost change
@@ -544,15 +523,15 @@ Traditional IP routing with Interior Gateway Protocols (OSPF, IS-IS):
 
 Software-Defined Networking and Traffic Engineering:
 
-- Routes adapt dynamically to residual link capacities during flow placement
+- Routes follow residual link capacity during placement
 - SPF recomputed after each flow placement iteration, excluding saturated links
 - Iterative augmentation continues until max-flow achieved or capacity exhausted
 - Flow placement respects capacity constraints, never oversubscribing links
-- Models centralized traffic engineering with real-time capacity awareness
+- Models a controller that places traffic knowing the residual capacity of every link
 - Placement is greedy and sequential: demands are placed one at a time in priority order (input order within a priority) and never revisited, so an earlier demand keeps capacity a later one would have used, and totals under contention depend on demand order. It is not a global optimum
 - Use case: Capacity-aware demand placement, capacity planning, failure impact analysis
 
-This distinction is fundamental: IP networks route on cost alone with fixed forwarding tables (congestion managed via queuing/drops), while TE systems route dynamically on both cost and available capacity (congestion avoided via admission control). The `require_capacity` parameter controls whether SPF filters to available capacity; `shortest_path` controls whether routes are recomputed iteratively or fixed after initial SPF.
+IP networks route on cost alone with fixed forwarding tables and manage congestion by queuing and drops; TE systems route on cost and available capacity and avoid congestion by admission control. The `require_capacity` parameter controls whether SPF filters to available capacity; `shortest_path` controls whether routes are recomputed iteratively or fixed after initial SPF.
 
 ### Flow Placement Strategies
 
@@ -565,7 +544,7 @@ Beyond routing semantics, NetGraph controls how flow splits across equal-cost pa
   - Used in networks with heterogeneous link speeds (common in fabrics with multi-generation hardware)
   - Can be used iteratively (e.g., successive max-flow augmentations)
 
-- **EQUAL_BALANCED** (models traditional ECMP):
+- **EQUAL_BALANCED** (models ECMP):
   - Splits flow equally across all parallel equal-cost edges regardless of capacity
   - Example: Two 100G links get 50/50; one 100G + one 10G still attempt 50/50 (10G saturates first)
   - Models IP hash-based load balancing (5-tuple hashing distributes flows uniformly)
@@ -608,7 +587,7 @@ analyze(network).max_flow(src, dst,
 
 ### Flow Policy Presets
 
-For traffic matrix placement, `FlowPolicyPreset` values bundle the routing semantics above into named configurations that map to real-world network behaviors:
+For traffic matrix placement, `FlowPolicyPreset` values bundle the routing semantics above into named configurations:
 
 | Preset | Behavior | Use Case |
 | -------- | ---------- | ---------- |
@@ -632,7 +611,7 @@ For traffic matrix placement, `FlowPolicyPreset` values bundle the routing seman
 | `TE_ECMP_16_LSP` | `true` | `false` | `false` | `16` | `EQUAL_BALANCED` |
 | `TE_ECMP_UP_TO_256_LSP` | `true` | `false` | `false` | `256` | `EQUAL_BALANCED` |
 
-**Key parameters (preset-managed):**
+**Parameters set by the preset:**
 
 - `require_capacity`: When `false`, paths are selected based on link costs alone (models IP/IGP routing). When `true`, paths adapt to residual capacity during placement (models SDN/TE). See [Routing Semantics](#routing-semantics-ipigp-vs-sdnte) for details.
 - `shortest_path`: When `true`, each demand is placed in a single pass on its cost-only shortest-path DAG and the remainder is dropped; when `false`, the remainder is rerouted tier by tier on residual-aware paths.
@@ -737,7 +716,7 @@ In practice the loop stops as soon as the residual network disconnects source fr
 
 ### Managers and Workflow Orchestration
 
-Managers handle scenario dynamics and prepare inputs for algorithmic steps.
+Two components turn scenario definitions into concrete inputs for the algorithms: demand expansion and the failure manager.
 
 **Demand Expansion** (`ngraph.analysis.demand`): Expands `TrafficDemand` specs (built from DSL definitions by `ngraph.model.demand.builder`) into concrete placement demands, resolving source/target selectors into node groups.
 
@@ -759,22 +738,19 @@ Managers handle scenario dynamics and prepare inputs for algorithmic steps.
 - Deterministic results when seed is provided (each iteration derives `seed + iteration_index`); with `seed=None`, the failure policy's own seed is used as a fallback when present
 - Baseline execution: a no-failure baseline is always run first as a separate reference for comparing degraded vs. intact capacity
 - Deduplication: identical exclusion patterns execute once and are weighted by multiplicity (`occurrence_count` on results; `metadata["occurrence_counts"]` aligned with the results list). Stored failure traces describe each pattern's representative (first) iteration; this weighting assumes deterministic analysis functions (the built-ins are)
-- Thread-safe analysis: Network shared by reference; exclusion sets passed per-iteration
-- Graph pre-building: before the iterations start, the engine calls the analysis function's `prepare_inputs(network, kwargs)` hook once per run and merges what it returns into every iteration's call. The built-in functions return a pre-built `AnalysisContext`, and demand placement also returns the expanded demands and resolved node ids. Each iteration then only builds masks, O(|excluded|). Custom analysis functions opt in by setting a `prepare_inputs` attribute; functions without it run with their kwargs unchanged, and passing `context` explicitly skips the hook.
-
-Both the demand expansion logic and failure manager separate policy (how to expand demands or pick failures) from core algorithms. They prepare concrete inputs (expanded demands or exclusion sets) for each workflow iteration.
+- Graph pre-building: before the iterations start, the engine calls the analysis function's `prepare_inputs(network, kwargs)` hook once per run and merges what it returns into every iteration's call. The built-in functions return a pre-built `AnalysisContext`, and demand placement also returns the expanded demands and resolved node ids. Each iteration then only builds masks. Custom analysis functions opt in by setting a `prepare_inputs` attribute; functions without it run with their kwargs unchanged, and passing `context` explicitly skips the hook.
 
 ### Workflow Engine and Steps
 
-A NetGraph workflow (see Workflow Reference) is an ordered recipe of analysis steps. Each step is a pure function: it takes the current model and possibly prior results, performs an analysis, and stores its outputs. The workflow engine runs the steps in sequence and records their data in a Results store.
+A workflow (see [Workflow Reference](workflow.md)) is an ordered list of analysis steps. Each step reads the model and possibly earlier results, runs one analysis, and writes its output; it never modifies the Network. The engine runs the steps in sequence and records their data in a Results store.
 
 Common built-in steps:
 
-- BuildGraph: validates network topology and stores node-link JSON representation via NetworkX `MultiDiGraph`. Stores graph structure under `data.graph` and parameters under `data.context`. Primarily for validation and export; Core graph building happens in analysis functions.
+- BuildGraph: exports the network as node-link JSON via NetworkX `MultiDiGraph`. Stores graph structure under `data.graph` and parameters under `data.context`. For export only; Core graph building happens in analysis functions.
 
 - NetworkStats: computes node/link counts, capacity statistics, cost statistics, and degree statistics. Supports optional `excluded_nodes`/`excluded_links` and `include_disabled`.
 
-- TrafficMatrixPlacement: runs Monte Carlo placement using a named demand set and the Failure Manager; a no-failure baseline always runs first. Supports `iterations`, `parallelism`, `store_failure_patterns`, `include_flow_details`, `include_used_edges`, and `alpha` or `alpha_from_step` (default field `data.alpha_star`). Produces `data.baseline` and `data.flow_results` (unique failure patterns with `occurrence_count`). (`placement_rounds` is deprecated and accepted only as a no-op for backward compatibility.)
+- TrafficMatrixPlacement: runs Monte Carlo placement using a named demand set and the Failure Manager; a no-failure baseline always runs first. Supports `iterations`, `parallelism`, `store_failure_patterns`, `include_flow_details`, `include_used_edges`, and `alpha` or `alpha_from_step` (default field `data.alpha_star`). Produces `data.baseline` and `data.flow_results` (unique failure patterns with `occurrence_count`).
 
 - MaxFlow: runs Monte Carlo maximum-flow analysis between node groups using the Failure Manager; a no-failure baseline always runs first. Supports `mode` (combine/pairwise), `iterations`, `parallelism`, `shortest_path`, `require_capacity`, `flow_placement`, and optional `include_flow_details`/`include_min_cut`. Produces `data.baseline` and `data.flow_results` (unique failure patterns with `occurrence_count`).
 
@@ -782,45 +758,15 @@ Common built-in steps:
 
 - CostPower: aggregates platform and per-end optics capex/power by hierarchy level (0..N). Respects `include_disabled` and `aggregation_level`. Stores `data.levels` and `data.context`. Performs no hardware capacity/ports validation and completes even on networks the explorer's strict validation would reject; hardware validation is available via `NetworkExplorer` (strict validation) or the `ngraph inspect` command.
 
-Each step is implemented in the `ngraph.workflow` module and has a corresponding `type` name. Steps do not modify the Network. Their inputs often include references to prior steps' results: a placement step might need the value of alpha* from an MSD step, and the workflow definition names that link.
+Each step is implemented in `ngraph.workflow` and registered under its `type` name. Their inputs often include references to prior steps' results: a placement step might need the value of alpha* from an MSD step, and the workflow definition names that link.
 
 ### Results storage
 
-The Results object is a container that the workflow passes through steps. When a step runs, it "enters" a scope in the Results (by step name) and writes any outputs to either metadata or data within that scope.
+The Results object is passed through the steps. A running step enters a scope named after it and writes its outputs to `metadata` or `data` within that scope: a MaxFlow step named "maxflow_between_metros" puts its flows under `results.steps["maxflow_between_metros"]["data"]`, with its parameters in `data.context`. The store also records each step's execution metadata (order, type, seeds) in a workflow registry, and `Results.to_dict()` exports everything as one nested dictionary.
 
-For example, the MaxFlow step named "maxflow_between_metros" will put the total flow and details under `results.steps["maxflow_between_metros"]["data"]` and perhaps record parameters in metadata. The Results store also captures each step's execution metadata (like step order, type, seeds) in a workflow registry. At the end of the workflow, a single nested dictionary can be exported via Results.to_dict() containing all step outputs in a structured way.
-
-This design ensures consistency (every step has metadata and data keys) and JSON serialization (handles custom objects via to_dict() when available, converts keys to strings). The results often include artifacts like tables or lists of flows for reporting.
-
-### Design Elements and Comparisons
-
-Design choices worth knowing about:
-
-- Declarative Scenario DSL: A YAML DSL with blueprints and expansion rules turns abstract definitions (e.g., a fully meshed Clos) into concrete nodes and links. Schema validation rejects unknown or invalid fields before expansion.
-
-- Runtime Exclusions vs graph copying: Analysis-time exclusions avoid copying large structures for each scenario. The design separates static topology from dynamic failure states.
-
-- Deterministic link IDs: `Network.add_link` assigns each link a unique ID (`source|target|<seq>`, a per-endpoint-pair insertion sequence) that is stable across identical scenario builds and throughout analysis, simplifying correlation of results to original links and keeping seeded failure sampling reproducible.
-
-- Dual routing semantics: Models both IP/IGP (cost-only, fixed paths via `require_capacity=false` + `shortest_path=true`) and SDN/TE (capacity-aware, iterative via `require_capacity=true` + `shortest_path=false`)
-
-- Configurable flow placement: Proportional (WCMP-style, capacity-weighted) and Equal-Balanced (ECMP-style, uniform) splitting across parallel equal-cost edges
-
-- Cost-aware augmentation: Prefer cheapest capacity first via successive shortest paths. The cost-tier loop does not re-route previously placed flow; the max-flow completion phase may cancel earlier placements to reach the true maximum.
-
-- Deterministic simulation with seeding: Random aspects (e.g., failure sampling) are controlled by explicit seeds that propagate through steps. Runs are reproducible given the same scenario and seed.
-
-- Structured results store: Collects results with metadata in a consistent format for JSON export and downstream analysis.
+Every step has `metadata` and `data` keys. Export converts custom objects through their `to_dict()` and keys to strings, so the document is JSON-serializable.
 
 ### Performance Considerations
-
-**C++ Algorithm Implementation:**
-
-- Native C++ execution with optimized data structures (CSR adjacency, flat arrays)
-- GIL released during algorithm execution, enabling concurrent analysis across Python threads
-- Zero-copy NumPy integration for array inputs/outputs (via buffer protocol)
-- Deterministic edge ordering for reproducible results
-- Cache-friendly CSR representation for neighbor traversal
 
 **Graph Building and Reuse:**
 
@@ -828,7 +774,7 @@ For Monte Carlo analysis with many failure iterations, graph construction is amo
 
 - Context built once before iterations begin (includes all nodes and augmentation edges)
 - Per-iteration exclusions applied via boolean masks rather than graph rebuilding
-- Mask building is O(|excluded|) using pre-computed `link_id_to_edge_indices` mapping
+- Mask building is a vectorized array fill plus O(|excluded|) updates via the pre-computed `link_id_to_edge_indices` mapping
 - FailureManager automatically pre-builds the `AnalysisContext` before parallel execution (via the analysis function's `prepare_inputs` hook)
 
 Graph construction involves Python processing, NumPy array creation, and C++ object initialization. Building the graph once keeps that work off the per-iteration critical path, leaving the GIL-releasing C++ algorithms to run with minimal Python overhead.

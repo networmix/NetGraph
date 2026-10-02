@@ -1,6 +1,6 @@
 # Tutorial
 
-The fastest way to run a scenario from the CLI, plus a minimal programmatic example. See the Examples section for fuller scenarios and for flow placement and failure policies.
+Running a scenario from the CLI, and a small workflow in Python. The Examples section has larger scenarios and covers flow placement and failure policies.
 
 ## CLI: run and inspect
 

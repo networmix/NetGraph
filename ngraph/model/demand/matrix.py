@@ -45,32 +45,6 @@ class DemandSet:
         """
         return self.sets[name]
 
-    def get_default_set(self) -> list[TrafficDemand]:
-        """Get default demand set.
-
-        Prefers the set named 'default'. Falls back to the sole set when
-        exactly one exists, and to an empty list when there are none.
-
-        Returns:
-            List of TrafficDemand objects for the default set.
-
-        Raises:
-            ValueError: If multiple sets exist without a 'default' set.
-        """
-        if not self.sets:
-            return []
-
-        if "default" in self.sets:
-            return self.sets["default"]
-
-        if len(self.sets) == 1:
-            return next(iter(self.sets.values()))
-
-        raise ValueError(
-            f"Multiple demand sets exist ({list(self.sets.keys())}) but no 'default' set. "
-            f"Please specify which set to use or add a 'default' set."
-        )
-
     def get_all_demands(self) -> list[TrafficDemand]:
         """Get all traffic demands from all sets combined.
 

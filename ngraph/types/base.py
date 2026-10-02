@@ -1,11 +1,11 @@
-"""Base classes and enums for network analysis algorithms."""
+"""Cost alias and enums shared by network analysis algorithms."""
 
 from __future__ import annotations
 
 from enum import IntEnum
 from typing import Union
 
-#: Represents numeric cost in the network (e.g. distance, latency, etc.).
+#: Numeric cost of a link or path (e.g. distance or latency).
 Cost = Union[int, float]
 
 

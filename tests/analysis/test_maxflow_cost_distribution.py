@@ -1,7 +1,6 @@
 """Tests for cost distribution in max-flow results.
 
-These tests verify that max_flow_detailed correctly computes and reports
-the distribution of flow across different cost tiers.
+max_flow_detailed reports how much flow is placed at each path cost.
 """
 
 from __future__ import annotations
@@ -49,10 +48,10 @@ def _single_path_network() -> Network:
 
 
 class TestCostDistributionBasic:
-    """Basic cost distribution tests."""
+    """Cost distribution on multi-tier, equal-cost, and single-path networks."""
 
     def test_multi_tier_distribution(self) -> None:
-        """Test that flow is distributed across cost tiers correctly."""
+        """The asymmetric diamond places 5 at cost 2 and 3 at cost 4."""
         net = make_asymmetric_diamond()
 
         result = analyze(net).max_flow_detailed("^A$", "^D$", mode=Mode.COMBINE)
@@ -159,7 +158,7 @@ class TestFlowPlacement:
 
 
 class TestEdgeCases:
-    """Edge case tests for cost distribution."""
+    """Cost distribution with no flow and with zero-capacity paths."""
 
     def test_no_flow_empty_distribution(self) -> None:
         """Test that zero flow results in empty distribution."""

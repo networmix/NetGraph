@@ -1,53 +1,31 @@
 """
-Test helpers for scenario-based integration testing.
+Helpers for scenario-based integration tests.
 
-This module provides reusable utilities for validating NetGraph scenarios,
-creating test data, and performing semantic correctness checks on network
-topologies and flow results.
-
-Key Components:
-- NetworkExpectations: Structured expectations for network validation
-- ScenarioTestHelper: Main validation class with modular test methods
-- ScenarioDataBuilder: Builder pattern for programmatic scenario creation
-- Utility functions: File loading, helper creation, and pytest fixtures
-
-The validation approach emphasizes:
-- Modular, focused validation methods
-- Clear error messages with context
-- Semantic correctness beyond simple counts
-- Reusable patterns for common test scenarios
+- NetworkExpectations: expected node/edge counts and named elements
+- ScenarioTestHelper: validation methods over a scenario and its built graph
+- ScenarioDataBuilder: programmatic construction of scenario YAML
+- load_scenario_from_file, create_scenario_helper: loading and setup
 """
 
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import pytest
-
 from ngraph.scenario import Scenario
 
-# Validation constants for test consistency
-DEFAULT_FLOW_TOLERANCE = 1e-9  # Default tolerance for flow value comparisons
-MIN_CONNECTIVITY_COMPONENTS = (
-    1  # Expected minimum connected components for valid networks
-)
+# Validation constants
 DEFAULT_LINK_COST = 1  # Default cost value for validation
 MIN_CAPACITY_VALUE = 0.0  # Minimum valid capacity (inclusive)
 MIN_COST_VALUE = 0.0  # Minimum valid cost (inclusive)
 
 # Network validation thresholds
 MAX_EXPECTED_COMPONENTS_WARNING = 1  # Warn if more than this many components
-LARGE_NETWORK_NODE_THRESHOLD = 1000  # Threshold for "large network" optimizations
 
 
 @dataclass
 class NetworkExpectations:
     """
     Expected characteristics of a network after scenario processing.
-
-    This dataclass encapsulates all the expected properties that should be
-    validated after a scenario runs, including structural properties,
-    specific network elements, and blueprint expansion results.
 
     Attributes:
         count: Expected total number of nodes in the final network
@@ -64,7 +42,7 @@ class NetworkExpectations:
     blueprint_expansions: Optional[Dict[str, int]] = None
 
     def __post_init__(self) -> None:
-        """Initialize default values for optional fields to prevent None access."""
+        """Replace None optional fields with empty containers."""
         if self.specific_nodes is None:
             self.specific_nodes = set()
         if self.specific_links is None:
@@ -73,38 +51,9 @@ class NetworkExpectations:
             self.blueprint_expansions = {}
 
 
-@dataclass
-class ScenarioValidationConfig:
-    """
-    Configuration options for controlling scenario validation behavior.
-
-    This allows tests to selectively enable/disable different types of validation
-    based on the specific requirements of each test scenario.
-
-    Attributes:
-        validate_topology: Whether to perform basic topology validation
-        validate_flows: Whether to validate flow calculation results
-        validate_attributes: Whether to check node/link attribute correctness
-        validate_semantics: Whether to perform deep semantic validation
-        check_risk_groups: Whether to validate risk group assignments
-        check_disabled_elements: Whether to check for disabled nodes/links
-    """
-
-    validate_topology: bool = True
-    validate_flows: bool = True
-    validate_attributes: bool = True
-    validate_semantics: bool = True
-    check_risk_groups: bool = True
-    check_disabled_elements: bool = True
-
-
 class ScenarioTestHelper:
     """
-    Helper class for scenario testing with modular validation utilities.
-
-    This class provides a high-level interface for validating NetGraph scenarios,
-    encapsulating common validation patterns and providing clear error messages.
-    It follows the builder pattern for configurable validation.
+    Validation methods for a scenario and its built graph.
 
     Usage:
         helper = ScenarioTestHelper(scenario)
@@ -137,9 +86,7 @@ class ScenarioTestHelper:
         """
         Validate that basic network structure matches expectations.
 
-        Performs fundamental structural validation including node count, edge count,
-        and presence of specific network elements. This is typically the first
-        validation performed after scenario execution.
+        Checks node count, edge count, and the presence of specific nodes and links.
 
         Args:
             expectations: Expected network characteristics to validate against
@@ -150,7 +97,6 @@ class ScenarioTestHelper:
         if self.graph is None:
             raise ValueError("Graph must be set before validation using set_graph()")
 
-        # Validate node count with detailed context
         actual_nodes = len(self.graph.nodes)
         assert actual_nodes == expectations.count, (
             f"Network node count mismatch: expected {expectations.count}, "
@@ -158,7 +104,6 @@ class ScenarioTestHelper:
             f"Graph nodes: {sorted(list(self.graph.nodes)[:10])}{'...' if actual_nodes > 10 else ''}"
         )
 
-        # Validate edge count with bidirectional context
         actual_edges = len(self.graph.edges)
         assert actual_edges == expectations.edge_count, (
             f"Network edge count mismatch: expected {expectations.edge_count}, "
@@ -166,10 +111,7 @@ class ScenarioTestHelper:
             f"Note: NetGraph typically creates bidirectional edges (physical_links * 2)"
         )
 
-        # Validate presence of specific nodes
         self._validate_specific_nodes(expectations.specific_nodes)
-
-        # Validate presence of specific links
         self._validate_specific_links(expectations.specific_links)
 
     def _validate_specific_nodes(self, expected_nodes: Optional[Set[str]]) -> None:
@@ -204,8 +146,7 @@ class ScenarioTestHelper:
         """
         Validate that blueprint expansions created expected node counts.
 
-        This method checks that NetGraph's blueprint expansion mechanism
-        produced the correct number of nodes for each blueprint pattern.
+        Counts the nodes whose name starts with each blueprint path.
 
         Args:
             expectations: Network expectations containing blueprint expansion counts
@@ -217,7 +158,6 @@ class ScenarioTestHelper:
             return
 
         for blueprint_path, expected_count in expectations.blueprint_expansions.items():
-            # Find all nodes matching the blueprint path pattern
             matching_nodes = [
                 node for node in self.network.nodes if node.startswith(blueprint_path)
             ]
@@ -239,7 +179,7 @@ class ScenarioTestHelper:
         Raises:
             AssertionError: If traffic demand count doesn't match expectations
         """
-        default_demands = self.scenario.demand_set.get_default_set()
+        default_demands = self.scenario.demand_set.get_all_demands()
         actual_count = len(default_demands)
 
         assert actual_count == expected_count, (
@@ -274,13 +214,12 @@ class ScenarioTestHelper:
             )
             return
 
-        # Policy exists - validate rule count (modes-based API)
+        # Count rules across all modes
         actual_rules = sum(len(mode.rules) for mode in getattr(policy, "modes", []))
         assert actual_rules == expected_rules, (
             f"Failure policy rule count mismatch: expected {expected_rules}, found {actual_rules}"
         )
 
-        # Validate rule scopes if specified
         if expected_scopes:
             actual_scopes = [
                 rule.scope
@@ -361,51 +300,16 @@ class ScenarioTestHelper:
                     f"expected {expected_value}, found {actual_value}"
                 )
 
-    def validate_flow_results(
-        self,
-        step_name: str,
-        flow_label: str,
-        expected_flow: float,
-        tolerance: float = DEFAULT_FLOW_TOLERANCE,
-    ) -> None:
-        """
-        Validate flow calculation results.
-
-        Args:
-            step_name: Name of the workflow step that produced the flow
-            flow_label: Label identifying the specific flow result
-            expected_flow: Expected flow value
-            tolerance: Numerical tolerance for flow comparison
-
-        Raises:
-            AssertionError: If flow results don't match expectations within tolerance
-        """
-        exported = self.scenario.results.to_dict()
-        step_data = exported.get("steps", {}).get(step_name, {}).get("data", {})
-        actual_flow = step_data.get(flow_label)
-        assert actual_flow is not None, (
-            f"Flow result '{flow_label}' not found for step '{step_name}'"
-        )
-
-        flow_difference = abs(actual_flow - expected_flow)
-        assert flow_difference <= tolerance, (
-            f"Flow value mismatch for '{flow_label}': "
-            f"expected {expected_flow}, found {actual_flow} "
-            f"(difference: {flow_difference}, tolerance: {tolerance})"
-        )
-
     def validate_topology_semantics(self) -> None:
         """
-        Validate semantic correctness of network topology.
+        Check edge attributes and report topology warnings.
 
-        Performs deep validation of network properties including:
-        - Edge attribute validity (non-negative capacity/cost)
-        - Self-loop detection and reporting
-        - Basic connectivity analysis
-        - Structural consistency checks
+        Asserts that every edge has non-negative capacity and cost. Self-loops
+        and multiple weakly connected components are printed as warnings, not
+        failures.
 
         Raises:
-            AssertionError: If semantic validation fails
+            AssertionError: If an edge has negative capacity or cost
         """
         if self.graph is None:
             raise ValueError("Graph must be set before topology validation")
@@ -420,19 +324,16 @@ class ScenarioTestHelper:
         if len(self.graph.nodes) > 1:
             self._validate_network_connectivity()
 
-        # Validate edge attributes for semantic correctness
         self._validate_edge_attributes()
 
     def _validate_network_connectivity(self) -> None:
-        """Validate network connectivity properties."""
+        """Print a warning when the graph is not weakly connected."""
         import networkx as nx
 
-        # Ensure graph is available for connectivity checks
         assert self.graph is not None, (
             "Graph must be set before connectivity validation"
         )
 
-        # Check weak connectivity for directed graphs
         is_connected = nx.is_weakly_connected(self.graph)
         if not is_connected:
             components = list(nx.weakly_connected_components(self.graph))
@@ -443,8 +344,7 @@ class ScenarioTestHelper:
                 )
 
     def _validate_edge_attributes(self) -> None:
-        """Validate edge attributes for semantic correctness."""
-        # Ensure graph is available for edge validation
+        """Assert non-negative capacity and cost on every edge."""
         assert self.graph is not None, (
             "Graph must be set before edge attribute validation"
         )
@@ -455,13 +355,11 @@ class ScenarioTestHelper:
             capacity = data.get("capacity", 0)
             cost = data.get("cost", 0)
 
-            # Check for invalid capacity values
             if capacity < MIN_CAPACITY_VALUE:
                 invalid_edges.append(
                     f"Edge ({u}, {v}, {key}) has invalid capacity: {capacity}"
                 )
 
-            # Check for invalid cost values
             if cost < MIN_COST_VALUE:
                 invalid_edges.append(f"Edge ({u}, {v}, {key}) has invalid cost: {cost}")
 
@@ -471,44 +369,10 @@ class ScenarioTestHelper:
             + ("..." if len(invalid_edges) > 5 else "")
         )
 
-    def validate_flow_conservation(self, flow_results: Dict[str, float]) -> None:
-        """
-        Validate that flow results satisfy basic conservation principles.
-
-        Args:
-            flow_results: Dictionary mapping flow labels to flow values
-
-        Raises:
-            AssertionError: If flow conservation principles are violated
-        """
-        # Check for negative flows (usually invalid)
-        negative_flows = {
-            label: flow for label, flow in flow_results.items() if flow < 0
-        }
-        assert not negative_flows, (
-            f"Found negative flows (usually invalid): {negative_flows}"
-        )
-
-        # Check self-loop flows (should typically be zero)
-        self_loop_flows = {
-            label: flow
-            for label, flow in flow_results.items()
-            if "->" in label
-            and label.split("->")[0].strip() == label.split("->")[1].strip()
-        }
-
-        for label, flow in self_loop_flows.items():
-            assert flow == 0.0, f"Self-loop flow should be zero: {label} = {flow}"
-
 
 class ScenarioDataBuilder:
     """
-    Builder pattern implementation for creating test scenario data.
-
-    This class provides a fluent interface for programmatically constructing
-    NetGraph scenario YAML data with composable components. It simplifies
-    the creation of test scenarios by providing convenient methods for
-    common network elements.
+    Fluent builder for scenario YAML data used in tests.
 
     Usage:
         builder = ScenarioDataBuilder()
@@ -527,19 +391,6 @@ class ScenarioDataBuilder:
             "demands": {},
             "workflow": [],
         }
-
-    def with_seed(self, seed: int) -> "ScenarioDataBuilder":
-        """
-        Add deterministic seed to scenario for reproducible results.
-
-        Args:
-            seed: Random seed value for scenario execution
-
-        Returns:
-            Self for method chaining
-        """
-        self.data["seed"] = seed
-        return self
 
     def with_simple_nodes(self, node_names: List[str]) -> "ScenarioDataBuilder":
         """
@@ -606,13 +457,13 @@ class ScenarioDataBuilder:
         self, source: str, target: str, volume: float, demand_set: str = "default"
     ) -> "ScenarioDataBuilder":
         """
-        Add a traffic demand to the specified traffic matrix.
+        Add a traffic demand to the named demand set.
 
         Args:
             source: Source node/pattern for traffic demand
             target: Target node/pattern for traffic demand
             volume: Traffic demand volume
-            demand_set: Name of traffic matrix (default: "default")
+            demand_set: Name of the demand set (default: "default")
 
         Returns:
             Self for method chaining
@@ -626,20 +477,19 @@ class ScenarioDataBuilder:
         return self
 
     def with_failure_policy(
-        self, name: str, policy_data: Dict[str, Any], policy_name: str = "default"
+        self, name: str, policy_data: Dict[str, Any]
     ) -> "ScenarioDataBuilder":
         """
         Add a failure policy to the scenario.
 
         Args:
-            name: Human-readable name for the policy
+            name: Policy name under the scenario's ``failures`` section
             policy_data: Policy configuration dictionary
-            policy_name: Internal policy identifier (default: "default")
 
         Returns:
             Self for method chaining
         """
-        self.data["failures"][policy_name] = policy_data
+        self.data["failures"][name] = policy_data
         return self
 
     def with_workflow_step(
@@ -649,7 +499,7 @@ class ScenarioDataBuilder:
         Add a workflow step to the scenario execution plan.
 
         Args:
-            type: Type of workflow step (e.g., "BuildGraph", "CapacityEnvelopeAnalysis")
+            type: Type of workflow step (e.g., "BuildGraph", "MaxFlow")
             name: Unique name for this step instance
             **kwargs: Additional step-specific parameters
 
@@ -665,15 +515,13 @@ class ScenarioDataBuilder:
         """
         Build YAML string from scenario data.
 
-        Automatically ensures that a BuildGraph workflow step is included
-        if workflow exists but lacks one.
+        Prepends a BuildGraph step when the workflow is non-empty and lacks one.
 
         Returns:
             YAML string representation of the scenario
         """
         import yaml
 
-        # Ensure BuildGraph workflow step is included if workflow exists but lacks one
         workflow_steps = self.data.get("workflow", [])
         if workflow_steps and not any(
             step.get("type") == "BuildGraph" for step in workflow_steps
@@ -692,9 +540,6 @@ class ScenarioDataBuilder:
         """
         yaml_content = self.build_yaml()
         return Scenario.from_yaml(yaml_content)
-
-
-# Utility functions for common operations
 
 
 def load_scenario_from_file(filename: str) -> Scenario:
@@ -743,43 +588,3 @@ def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
         graph = graph_dict
     helper.set_graph(graph)
     return helper
-
-
-# Pytest fixtures for common test data and patterns
-
-
-@pytest.fixture
-def scenario_builder() -> ScenarioDataBuilder:
-    """Pytest fixture providing a fresh scenario data builder."""
-    return ScenarioDataBuilder()
-
-
-@pytest.fixture
-def minimal_scenario() -> Scenario:
-    """Pytest fixture providing a minimal valid scenario for testing."""
-    return (
-        ScenarioDataBuilder()
-        .with_simple_nodes(["A", "B", "C"])
-        .with_simple_links([("A", "B", 10), ("B", "C", 20)])
-        .with_workflow_step("BuildGraph", "build_graph")
-        .build_scenario()
-    )
-
-
-@pytest.fixture
-def basic_failure_scenario() -> Scenario:
-    """Pytest fixture providing a scenario with failure policies configured."""
-    builder = (
-        ScenarioDataBuilder()
-        .with_simple_nodes(["A", "B", "C"])
-        .with_simple_links([("A", "B", 10), ("B", "C", 20)])
-        .with_failure_policy(
-            "single_link_failure",
-            {
-                "attrs": {"description": "Single link failure"},
-                "rules": [{"scope": "link", "mode": "choice", "count": 1}],
-            },
-        )
-        .with_workflow_step("BuildGraph", "build_graph")
-    )
-    return builder.build_scenario()

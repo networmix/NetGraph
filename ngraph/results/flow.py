@@ -1,16 +1,12 @@
-"""Unified flow result containers for failure-analysis iterations.
+"""Flow result containers for failure-analysis iterations.
 
-Defines small, serializable dataclasses that capture per-iteration outcomes
-for capacity and demand-placement style analyses in a unit-agnostic form.
+Serializable dataclasses for per-iteration outcomes of capacity and
+demand-placement analyses. Values are unit-agnostic.
 
 Objects expose `to_dict()` that returns JSON-safe primitives. Float-keyed
-distributions are normalized to string keys via `_fmt_float_key()`, and
-arbitrary `data` payloads are sanitized. These dicts are written under
-`data.flow_results` by steps.
-
-Utilities:
-    _fmt_float_key: Formats floats as stable string keys for JSON serialization,
-        in fixed-point notation with trailing zeros stripped.
+distributions are normalized to fixed-point string keys via
+`_fmt_float_key()`, and `data` payloads are checked by `_ensure_json_safe()`.
+Steps write these dicts under `data.flow_results`.
 """
 
 from __future__ import annotations
@@ -27,8 +23,8 @@ logger = get_logger(__name__)
 def _fmt_float_key(x: float, places: int = 9) -> str:
     """Format a float as a canonical string key for JSON serialization.
 
-    Uses fixed-point notation (never exponential) with trailing zeros stripped.
-    This ensures stable, human-readable keys for cost distributions.
+    Uses fixed-point notation (never exponential) with trailing zeros stripped,
+    so cost-distribution keys are stable and human-readable.
 
     Args:
         x: Float value to format.
@@ -38,9 +34,7 @@ def _fmt_float_key(x: float, places: int = 9) -> str:
         Canonical string representation of the float in fixed-point notation.
     """
     rounded = round(float(x), places)
-    # Use 'f' format for fixed-point (never exponential), then strip trailing zeros
     formatted = f"{rounded:.{places}f}"
-    # Strip trailing zeros after decimal point, then trailing decimal point if any
     if "." in formatted:
         formatted = formatted.rstrip("0").rstrip(".")
     return formatted
@@ -94,7 +88,6 @@ class FlowEntry:
             )
             raise TypeError("FlowEntry.priority must be a non-negative int")
 
-        # Basic numeric validation
         for name, value in (
             ("demand", self.demand),
             ("placed", self.placed),
@@ -168,15 +161,13 @@ class FlowEntry:
         Builds dict directly from known fields instead of using asdict() to avoid
         the overhead of recursive _asdict_inner calls (significant for large result sets).
         """
-        # Canonicalize cost_distribution keys as strings to avoid float artifacts
-        # and ensure stable JSON. Use decimal quantization for determinism.
-        normalized_costs: Dict[str, float] = {}
-        for k, v in self.cost_distribution.items():
-            try:
-                key_str = _fmt_float_key(float(k))
-                normalized_costs[key_str] = float(v)
-            except Exception:  # pragma: no cover - defensive
-                normalized_costs[str(k)] = float(v)
+        # Canonicalize cost_distribution keys as fixed-point strings rounded
+        # to 9 places, so JSON keys are stable across float artifacts.
+        # __post_init__ guarantees finite numeric keys and values.
+        normalized_costs: Dict[str, float] = {
+            _fmt_float_key(float(k)): float(v)
+            for k, v in self.cost_distribution.items()
+        }
 
         return {
             "source": self.source,
@@ -311,7 +302,6 @@ class FlowIterationResult:
         Raises:
             ValueError: If summary/flow counts mismatch or failure_state invalid.
         """
-        # Validate occurrence_count
         if not isinstance(self.occurrence_count, int) or self.occurrence_count < 1:
             logger.error(
                 "FlowIterationResult.occurrence_count must be a positive int: %r",
@@ -319,7 +309,6 @@ class FlowIterationResult:
             )
             raise ValueError("occurrence_count must be a positive int")
 
-        # Validate failure_state structure if present
         if self.failure_state is not None:
             if not isinstance(self.failure_state, dict):
                 logger.error(
@@ -334,13 +323,11 @@ class FlowIterationResult:
                     logger.error("failure_state.%s must be a list[str]", key)
                     raise ValueError("failure_state lists must be list[str]")
 
-        # Validate contained flow entries
         for entry in self.flows:
             if not isinstance(entry, FlowEntry):
                 logger.error("flows must contain FlowEntry instances: %r", type(entry))
                 raise TypeError("flows must contain FlowEntry instances")
 
-        # Summary consistency with flow count
         if self.summary.num_flows != len(self.flows):
             logger.error(
                 "FlowIterationResult summary.num_flows (%d) != len(flows) (%d)",
@@ -367,9 +354,16 @@ class FlowIterationResult:
 
 
 def _ensure_json_safe(obj: Any, depth: int = 4) -> Any:
-    """Return an equivalent object composed of JSON primitives (or raise).
+    """Return obj rebuilt from JSON primitives, or raise.
 
-    This defends against silently serializing non-JSON-safe structures.
+    Raises instead of silently serializing non-JSON-safe values. Dict keys
+    become strings. Values nested more than `depth` levels below obj are
+    returned unchecked.
+
+    Raises:
+        ValueError: On a non-finite float.
+        TypeError: On a type other than None, str, bool, int, float, list,
+            or dict.
     """
     if depth < 0:
         return obj

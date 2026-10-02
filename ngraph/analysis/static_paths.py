@@ -8,7 +8,7 @@ links between them picks one of those links (see `StaticPath`).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, List, Sequence, Tuple
 
 import netgraph_core
 
@@ -18,12 +18,6 @@ if TYPE_CHECKING:
     from ngraph.analysis.context import AnalysisContext
 
 __all__ = ["build_static_path_bundles"]
-
-# Bundles depend only on the static graph, not on the per-iteration masks
-# (Core prunes them against the masks itself), so they are resolved once per
-# context and reused across Monte Carlo iterations and MSD probes. The cache
-# lives on the context so it dies with it.
-_CACHE_ATTR = "_static_path_bundle_cache"
 
 
 def _disabled_edge_ids(ctx: "AnalysisContext") -> frozenset:
@@ -113,13 +107,13 @@ def _edges_from_links(
                 f"Static path names unknown link {link_id!r}; "
                 f"route was {list(path.links)}"
             )
-        # A link has a forward and (for bidirectional links) a reverse edge;
-        # pick whichever leaves the node the route has reached.
         if link_id in ctx.disabled_link_ids:
             raise ValueError(
                 f"Static path names disabled link {link_id!r}; a route pinned to "
                 "a disabled link can never carry traffic"
             )
+        # Each link has a forward and a reverse edge; pick the one that
+        # leaves the node the route has reached.
         chosen = next(
             (int(e) for e in candidates if int(edge_src[int(e)]) == current), None
         )
@@ -160,13 +154,11 @@ def build_static_path_bundles(
             reached, does not run from `src_name` to `dst_name`, or revisits
             a node (a pinned route must be a simple path).
     """
+    # Bundles depend only on the static graph, not on the per-iteration masks
+    # (Core prunes them against the masks itself), so they are resolved once
+    # per context and reused across Monte Carlo iterations and MSD probes.
     cache_key = (src_name, dst_name, tuple(paths))
-    per_ctx: Optional[Dict[tuple, List[netgraph_core.PredDAG]]] = getattr(
-        ctx, _CACHE_ATTR, None
-    )
-    if per_ctx is None:
-        per_ctx = {}
-        setattr(ctx, _CACHE_ATTR, per_ctx)
+    per_ctx = ctx._static_path_cache
     cached = per_ctx.get(cache_key)
     if cached is not None:
         return cached

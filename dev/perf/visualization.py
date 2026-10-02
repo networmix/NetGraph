@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Visualization utilities for NetGraph performance analysis."""
+"""Complexity plots and JSON export for benchmark results."""
 
 from __future__ import annotations
 
@@ -7,25 +7,19 @@ import json
 import math
 from pathlib import Path
 
-try:
-    import matplotlib
+import matplotlib
 
-    matplotlib.use("Agg")  # Use non-interactive backend for plot generation
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import seaborn as sns
-except ImportError as e:
-    raise ImportError(
-        "Visualization requires matplotlib, numpy, and seaborn. "
-        "Install with: pip install matplotlib numpy seaborn"
-    ) from e
+matplotlib.use("Agg")  # Headless backend; must be set before importing pyplot
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import seaborn as sns  # noqa: E402
 
 from .analysis import PerformanceAnalyzer, _fit_power_law
-from .core import BenchmarkResult, BenchmarkTask
+from .core import BenchmarkResult
 
 
 class PerformanceVisualizer:
-    """Generates performance analysis charts and reports."""
+    """Write complexity plots and the results JSON for benchmark runs."""
 
     def __init__(self, plots_dir: Path = Path("dev/perf_plots")):
         self.plots_dir = plots_dir
@@ -37,7 +31,6 @@ class PerformanceVisualizer:
         sns.set_theme(style="whitegrid", palette="deep")
         sns.set_context("paper", font_scale=1.2)
 
-        # Set matplotlib parameters for output
         plt.rcParams.update(
             {
                 "figure.dpi": 300,
@@ -58,57 +51,46 @@ class PerformanceVisualizer:
     def create_summary_report(
         self, analyzer: PerformanceAnalyzer, timestamp: str
     ) -> None:
-        """Generate plots for benchmark results that require visualization.
+        """Write a complexity plot for each run whose profile enables plots.
 
         Args:
             analyzer: Performance analyzer with benchmark results.
-            timestamp: Timestamp string for consistent file naming.
+            timestamp: Suffix shared by the plot file names of one run.
         """
         if not analyzer.runs:
             print("No benchmark results to visualize")
             return
 
-        # Generate plots for each task that requires them
         for run in analyzer.runs:
-            task = run.profile.tasks[0]
             if run.profile.analysis.generates_plots():
-                self.plot_complexity_analysis(
-                    analyzer, task, run.profile.name, timestamp
-                )
+                self.plot_complexity_analysis(run, timestamp)
 
-    def plot_complexity_analysis(
-        self,
-        analyzer: PerformanceAnalyzer,
-        task: BenchmarkTask,
-        profile_name: str,
-        timestamp: str,
-    ) -> None:
-        """Create complexity analysis plot for a specific task.
+    def plot_complexity_analysis(self, run: BenchmarkResult, timestamp: str) -> None:
+        """Plot measured times, the expected model, and a power-law fit.
+
+        Writes ``{task}_{profile_name}_{timestamp}_complexity.png`` under
+        ``plots_dir``. Only this run's samples are plotted and fitted.
 
         Args:
-            analyzer: Performance analyzer with benchmark results.
-            task: The benchmark task to plot.
-            profile_name: Name of the benchmark profile.
-            timestamp: Timestamp string for consistent file naming.
+            run: Benchmark result of one profile.
+            timestamp: Suffix shared by the plot file names of one run.
         """
-        samples = analyzer.get_samples_by_task(task)
+        task = run.task
+        profile_name = run.profile.name
+        samples = run.samples
         if len(samples) < 2:
             print(f"Insufficient samples for {task.name} complexity plot")
             return
 
-        # Sort samples by problem size
         sorted_samples = sorted(samples, key=lambda s: s.numeric_problem_size())
 
-        # Extract data for plotting
         SECONDS_TO_MS = 1000
         sizes = np.array([s.numeric_problem_size() for s in sorted_samples])
         times = np.array([s.mean_time * SECONDS_TO_MS for s in sorted_samples])
         errors = np.array([s.std_dev * SECONDS_TO_MS for s in sorted_samples])
 
-        # Create figure with seaborn styling
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        # Plot measured data with error bars
         ax.errorbar(
             sizes,
             times,
@@ -122,16 +104,13 @@ class PerformanceVisualizer:
             color=sns.color_palette("deep")[0],
         )
 
-        # Get theoretical complexity curve
-        run = next(run for run in analyzer.runs if task in run.profile.tasks)
         model = run.profile.analysis.expected
 
-        # Generate smooth theoretical curve
+        # Anchor the expected curve at the smallest measured size.
         baseline_size = sizes[0]
         baseline_time = times[0]
 
-        # Generate smooth curve for theoretical model
-        CURVE_SAMPLES = 200  # Number of points for smooth curve
+        CURVE_SAMPLES = 200
         curve_sizes = np.linspace(min(sizes), max(sizes), CURVE_SAMPLES)
         theory_times = np.array(
             [
@@ -143,7 +122,6 @@ class PerformanceVisualizer:
             ]
         )
 
-        # Plot theoretical curve
         ax.plot(
             curve_sizes,
             theory_times,
@@ -154,19 +132,15 @@ class PerformanceVisualizer:
             color=sns.color_palette("deep")[1],
         )
 
-        # Add empirical fit line
         try:
             empirical_exponent, r_squared = _fit_power_law(sorted_samples)
 
-            # Calculate empirical fit curve: y = a * x^b
-            # Using first data point as baseline for the constant 'a'
+            # y = a * x^b with a chosen so the curve passes through the
+            # smallest sample; the fit's own intercept is not used.
             baseline_log_size = math.log(baseline_size)
             baseline_log_time = math.log(baseline_time / SECONDS_TO_MS)
-
-            # Calculate the constant 'a' from the fitted line
             log_constant = baseline_log_time - empirical_exponent * baseline_log_size
 
-            # Generate empirical fit curve
             empirical_times = np.array(
                 [
                     math.exp(log_constant + empirical_exponent * math.log(size))
@@ -189,7 +163,6 @@ class PerformanceVisualizer:
         except Exception as e:
             print(f"    Warning: Unexpected error generating empirical fit: {e}")
 
-        # Configure plot
         ax.set_xlabel("Problem Size", fontweight="bold")
         ax.set_ylabel("Runtime (ms)", fontweight="bold")
         ax.set_title(
@@ -198,11 +171,8 @@ class PerformanceVisualizer:
             pad=20,
         )
 
-        # Add grid and legend
         ax.grid(True, alpha=0.3)
         ax.legend(frameon=True, fancybox=True, shadow=True)
-
-        # Improve layout and save
         plt.tight_layout()
 
         plot_path = (
@@ -219,15 +189,16 @@ class PerformanceVisualizer:
         profile_results: list[tuple[str, BenchmarkResult]],
         filepath: Path,
     ) -> None:
-        """Export benchmark results to JSON format."""
+        """Write per-profile samples, settings, and fits to ``filepath``.
+
+        Also prints a summary table of all profiles.
+        """
         data = {"profiles": []}
 
         for _, result in profile_results:
-            # Get analysis results for this profile
-            task = result.profile.tasks[0]
-            complexity_summary = analyzer.get_complexity_summary(task)
+            task = result.task
+            complexity_summary = analyzer.get_complexity_summary(result)
 
-            # Build profile data with embedded analysis
             profile_data = {
                 "name": result.profile.name,
                 "task": task.name,
@@ -245,7 +216,6 @@ class PerformanceVisualizer:
                 },
             }
 
-            # Add sample data
             for sample in result.samples:
                 profile_data["samples"].append(
                     {
@@ -262,7 +232,6 @@ class PerformanceVisualizer:
                     }
                 )
 
-            # Add analysis results if available
             if complexity_summary:
                 profile_data["analysis_results"] = {
                     "complexity_analysis": complexity_summary,
@@ -279,18 +248,15 @@ class PerformanceVisualizer:
             json.dump(data, f, indent=2)
 
         print(f"  • Results JSON: {filepath}")
-        # Show file size in KB for user feedback
         KB_BYTES = 1024
         print(f"    Size: {filepath.stat().st_size / KB_BYTES:.1f} KB")
 
-        # Print a quick summary table
         self._print_results_summary(profile_results)
 
     def _print_results_summary(
         self, profile_results: list[tuple[str, BenchmarkResult]]
     ) -> None:
         """Print a summary table of all benchmark results."""
-        # Calculate dynamic column width for profile names
         profile_names = [name for name, _ in profile_results]
         profile_width = max(len(name) for name in profile_names + ["Profile", "Total"])
 
@@ -308,7 +274,6 @@ class PerformanceVisualizer:
             wall_time = result.total_execution_time()
             total_wall_time += wall_time
 
-            # Calculate aggregate statistics
             SECONDS_TO_MS = 1000
             all_times = [s.mean_time * SECONDS_TO_MS for s in result.samples]
             min_time = min(all_times)
@@ -324,4 +289,4 @@ class PerformanceVisualizer:
             f"  {'-' * profile_width} {'-' * 10} {'-' * 12} {'-' * 10} {'-' * 10} {'-' * 10}"
         )
         print(f"  {'Total':>{profile_width}} {' ':>10} {total_wall_time:>10.2f}s")
-        print("\n  Note: Wall time includes warm-up runs and measurement overhead")
+        print("\n  Wall time is mean time x rounds; warm-up calls are excluded")

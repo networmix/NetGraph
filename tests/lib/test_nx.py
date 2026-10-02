@@ -189,7 +189,6 @@ class TestFromNetworkx:
         assert graph.num_edges() == 2  # forward + reverse
         assert len(edge_map) == 2  # Both map to same original ref
 
-        # Verify both directions exist
         src_arr = graph.edge_src_view()
         dst_arr = graph.edge_dst_view()
         edges = set(zip(src_arr.tolist(), dst_arr.tolist(), strict=True))
@@ -292,7 +291,6 @@ class TestToNetworkx:
         assert set(G_out.nodes()) == set(G_in.nodes())
         assert G_out.number_of_edges() == G_in.number_of_edges()
 
-        # Check edge attributes
         assert G_out["A"]["B"][0]["capacity"] == 100.0
         assert G_out["A"]["B"][0]["cost"] == 10
         assert G_out["B"]["C"][0]["capacity"] == 50.0
@@ -363,7 +361,7 @@ class TestToNetworkx:
 
 
 class TestMappingCorrectness:
-    """Tests that verify mappings are functionally correct."""
+    """NodeMap and EdgeMap agree with Core graph node indices and edge IDs."""
 
     def test_node_map_matches_core_graph_indices(self):
         """NodeMap indices correspond to actual Core graph node indices."""
@@ -373,7 +371,6 @@ class TestMappingCorrectness:
 
         graph, node_map, edge_map = from_networkx(G)
 
-        # Get actual edge data from Core graph
         src_arr = graph.edge_src_view()
         dst_arr = graph.edge_dst_view()
 
@@ -387,7 +384,6 @@ class TestMappingCorrectness:
         assert len(xy_edge_ids) == 1
         xy_core_idx = xy_edge_ids[0]
 
-        # Verify Core graph has correct src/dst for this edge
         assert int(src_arr[xy_core_idx]) == x_idx
         assert int(dst_arr[xy_core_idx]) == y_idx
 
@@ -410,9 +406,7 @@ class TestMappingCorrectness:
         # Each ext_edge_id should be the key in edge_map.to_ref
         for core_idx in range(graph.num_edges()):
             ext_id = int(ext_ids[core_idx])
-            # ext_id should exist in edge_map.to_ref
             assert ext_id in edge_map.to_ref
-            # And should point back to valid edge reference
             u, v, key = edge_map.to_ref[ext_id]
             assert G.has_edge(u, v)
 
@@ -433,10 +427,8 @@ class TestMappingCorrectness:
         for core_idx in range(graph.num_edges()):
             ext_id = int(graph.ext_edge_ids_view()[core_idx])
             u, v, key = edge_map.to_ref[ext_id]
-            # Write some computed value back
             G.edges[u, v, key]["computed_capacity"] = float(capacity_arr[core_idx])
 
-        # Verify values were written correctly
         assert G.edges["S", "A", 0]["computed_capacity"] == 100.0
         assert G.edges["A", "T", 0]["computed_capacity"] == 100.0
         assert G.edges["S", "B", 0]["computed_capacity"] == 50.0
@@ -449,10 +441,8 @@ class TestMappingCorrectness:
 
         graph, node_map, edge_map = from_networkx(G, bidirectional=True)
 
-        # Both edges should map to same original edge
         assert graph.num_edges() == 2
 
-        # Get src/dst for both edges
         src_arr = graph.edge_src_view()
         dst_arr = graph.edge_dst_view()
 
@@ -486,7 +476,6 @@ class TestIntegrationWithAlgorithms:
         """SPF algorithm works on converted graph."""
         import netgraph_core
 
-        # Create NetworkX graph
         G = nx.DiGraph()
         G.add_edge("A", "B", capacity=100.0, cost=10)
         G.add_edge("B", "C", capacity=100.0, cost=10)
@@ -494,7 +483,6 @@ class TestIntegrationWithAlgorithms:
 
         graph, node_map, _ = from_networkx(G)
 
-        # Run SPF
         backend = netgraph_core.Backend.cpu()
         algorithms = netgraph_core.Algorithms(backend)
         handle = algorithms.build_graph(graph)
@@ -511,7 +499,6 @@ class TestIntegrationWithAlgorithms:
         """Max flow algorithm works on converted graph."""
         import netgraph_core
 
-        # Create NetworkX graph with capacity constraints
         G = nx.DiGraph()
         G.add_edge("S", "A", capacity=10.0, cost=1)
         G.add_edge("S", "B", capacity=10.0, cost=1)
@@ -520,7 +507,6 @@ class TestIntegrationWithAlgorithms:
 
         graph, node_map, _ = from_networkx(G)
 
-        # Run max flow
         backend = netgraph_core.Backend.cpu()
         algorithms = netgraph_core.Algorithms(backend)
         handle = algorithms.build_graph(graph)
@@ -564,14 +550,12 @@ class TestIntegrationWithAlgorithms:
         """EdgeMap enables flow attribution back to original edges."""
         import netgraph_core
 
-        # Create NetworkX graph
         G = nx.MultiDiGraph()
         G.add_edge("S", "T", capacity=100.0, cost=1, key="link1")
         G.add_edge("S", "T", capacity=50.0, cost=2, key="link2")
 
         graph, node_map, edge_map = from_networkx(G)
 
-        # Run max flow
         backend = netgraph_core.Backend.cpu()
         algorithms = netgraph_core.Algorithms(backend)
         handle = algorithms.build_graph(graph)
@@ -598,7 +582,6 @@ class TestIntegrationWithAlgorithms:
                 ref = edge_map.to_ref[edge_id]
                 flow_by_ref[ref] = flow
 
-        # Verify we can identify which original edges got flow
         assert len(flow_by_ref) > 0
         for ref in flow_by_ref:
             u, v, key = ref

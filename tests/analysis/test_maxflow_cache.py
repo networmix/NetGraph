@@ -1,13 +1,8 @@
-"""Tests for AnalysisContext caching and masking functionality.
+"""Tests for AnalysisContext masking of disabled topology.
 
-This module tests that AnalysisContext correctly handles:
-- Disabled nodes (pre-computed in context, applied via masks)
-- Disabled links (pre-computed in context, applied via masks)
-- Combination of disabled topology and explicit exclusions
-- Reuse of context for repeated analysis (bound vs unbound patterns)
-
-These tests validate that disabled topology elements are correctly
-masked out in analysis results.
+Covers disabled nodes and links (precomputed in the context and applied via
+masks), their combination with explicit exclusions, and context reuse in
+bound and unbound patterns.
 """
 
 from __future__ import annotations
@@ -210,7 +205,6 @@ class TestCombinedExclusions:
 
         ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
 
-        # Exclude node B explicitly
         result = ctx.max_flow(excluded_nodes={"B"})
 
         # Should only flow through C
@@ -275,7 +269,7 @@ class TestPairwiseMode:
 
 
 class TestContextReuse:
-    """Tests for efficient context reuse with different exclusions."""
+    """Tests for context reuse with different exclusions."""
 
     def test_multiple_exclusion_scenarios(self) -> None:
         """Same context should work with different exclusion sets."""
@@ -287,11 +281,9 @@ class TestContextReuse:
         baseline = ctx.max_flow()
         assert pytest.approx(baseline[("^A$", "^D$")], abs=1e-9) == 8.0
 
-        # Exclude B
         exclude_b = ctx.max_flow(excluded_nodes={"B"})
         assert pytest.approx(exclude_b[("^A$", "^D$")], abs=1e-9) == 3.0
 
-        # Exclude C
         exclude_c = ctx.max_flow(excluded_nodes={"C"})
         assert pytest.approx(exclude_c[("^A$", "^D$")], abs=1e-9) == 5.0
 

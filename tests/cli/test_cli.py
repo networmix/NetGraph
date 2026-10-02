@@ -8,7 +8,7 @@ import pytest
 
 from ngraph import cli
 
-# High-value CLI run command tests
+# run command
 
 
 def test_run_writes_results_file_and_contains_build_graph(tmp_path: Path) -> None:
@@ -129,16 +129,19 @@ def test_run_filter_by_step_names_subsets_results(tmp_path: Path, monkeypatch) -
     )
 
 
-def test_run_filter_nonexistent_step_produces_empty_results(
-    tmp_path: Path, monkeypatch
+def test_run_filter_nonexistent_step_fails_before_running(
+    tmp_path: Path, monkeypatch, capsys
 ) -> None:
     scenario = Path("tests/integration/scenario_3.yaml").resolve()
     out_path = tmp_path / "empty.json"
     monkeypatch.chdir(tmp_path)
 
-    cli.main(["run", str(scenario), "--results", str(out_path), "--keys", "missing"])
-    data = json.loads(out_path.read_text())
-    assert data.get("steps", {}) == {}
+    with pytest.raises(SystemExit):
+        cli.main(
+            ["run", str(scenario), "--results", str(out_path), "--keys", "missing"]
+        )
+    assert "Unknown step name(s) in --keys: missing" in capsys.readouterr().err
+    assert not out_path.exists()
 
 
 def test_run_profile_flag_writes_results(tmp_path: Path, monkeypatch) -> None:
@@ -169,7 +172,14 @@ workflow:
     assert "steps" in data and "stats" in data["steps"]
 
 
-# Logging behavior (value assertions, not implementation details)
+# Flag validation and logging levels
+
+
+def test_run_profile_memory_requires_profile(capsys) -> None:
+    scenario = Path("tests/integration/scenario_1.yaml")
+    with pytest.raises(SystemExit):
+        cli.main(["run", str(scenario), "--no-results", "--profile-memory"])
+    assert "--profile-memory requires --profile" in capsys.readouterr().err
 
 
 def test_logging_levels_default_verbose_quiet(
@@ -206,7 +216,7 @@ workflow:
     assert len(info_records) < 5
 
 
-# Inspect command tests (functional output presence)
+# inspect command
 
 
 def test_inspect_happy_path_prints_sections(tmp_path: Path) -> None:
@@ -381,7 +391,6 @@ workflow:
 
 
 def test_run_profile_uses_output_dir_profiles(tmp_path: Path, monkeypatch) -> None:
-    # Minimal scenario
     scenario_file = tmp_path / "p.yaml"
     scenario_file.write_text(
         """

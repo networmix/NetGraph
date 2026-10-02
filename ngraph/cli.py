@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 from contextlib import contextmanager
+from enum import Enum
 from pathlib import Path
 from statistics import median
 from time import perf_counter
@@ -49,11 +50,9 @@ def _format_table(
     if not rows:
         return ""
 
-    # Optionally clip cells to max_col_width for visual consistency
     def clip(val: Any) -> str:
         s = str(val)
         if max_col_width is not None and len(s) > max_col_width:
-            # Use ASCII ellipsis for consistency
             return s[: max_col_width - 3] + "..."
         return s
 
@@ -81,31 +80,23 @@ def _format_table(
     return "\n".join(lines)
 
 
-def _format_cost(value: Any) -> str:
+def _format_cost(value: float) -> str:
     """Return cost formatted with up to three decimals.
 
     Uses thousands separators, trims trailing zeros and the decimal point when
-    not needed. Falls back to ``str(value)`` if the input cannot be parsed as a
-    float.
+    not needed.
 
     Examples:
         0.1 -> "0.1"; 10.0 -> "10"; 1234.567 -> "1,234.567".
     """
-    try:
-        v = float(value)
-    except Exception:
-        return str(value)
-
-    s = f"{v:,.3f}"
+    s = f"{float(value):,.3f}"
     if "." in s:
         s = s.rstrip("0").rstrip(".")
     return s
 
 
 def _format_duration(seconds: float) -> str:
-    """Return a concise human-readable duration string.
-
-    Uses ASCII units and keeps output short for logs.
+    """Format seconds as a short ASCII duration for logs.
 
     Examples:
         0.123 -> "123.0 ms"; 1.234 -> "1.23 s"; 75.2 -> "1m 15.2s".
@@ -120,11 +111,13 @@ def _format_duration(seconds: float) -> str:
 
 
 def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
-    """Return (field, pattern) pairs for fields that represent node selectors.
+    """Return (field, pattern) pairs for a step's node selector fields.
 
-    Fields considered:
-    - `source` and `target` selector fields with string values
-    - names ending with "_path" or "_regex" with non-empty string values
+    Fields considered, when their value is a non-empty string:
+    - `source` and `target`
+    - names ending with "_path" or "_regex"
+
+    Private fields (leading underscore) are skipped.
     """
     fields: list[tuple[str, str]] = []
     for key, value in step.__dict__.items():
@@ -134,7 +127,6 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
             continue
         if not value.strip():
             continue
-        # Selector fields or pattern fields
         if (
             key in ("source", "target")
             or key.endswith("_path")
@@ -145,9 +137,12 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
 
 
 def _summarize_pattern(pattern: str, net: Any) -> Dict[str, Any]:
-    """Summarize node matches for a given pattern against a network.
+    """Count the node groups and nodes that a selector pattern matches.
 
-    Returns dict with keys: pattern, groups, nodes, enabled_nodes, labels (preview) or error.
+    Returns:
+        Dict with ``pattern``, ``groups``, ``nodes``, ``enabled_nodes`` and
+        ``labels`` (first five group labels), or ``pattern`` and ``error``
+        when selection raises.
     """
     try:
         groups = net.select_node_groups_by_path(pattern)
@@ -169,7 +164,7 @@ def _summarize_pattern(pattern: str, net: Any) -> Dict[str, Any]:
 
 
 def _summarize_node_matches(step: Any, net: Any) -> Dict[str, Dict[str, Any]]:
-    """Summarize all path-like fields for a workflow step against a network."""
+    """Map each node selector field of a workflow step to its match summary."""
     summary: Dict[str, Dict[str, Any]] = {}
     fields = _collect_step_path_fields(step)
     if not fields:
@@ -185,9 +180,10 @@ def _print_network_structure(
     """Print network structure summary and return total enabled link capacity.
 
     Args:
-        network: Network model instance.
+        network: Network to summarize.
         components_library: Components library used for hierarchy analysis.
-        detail: Whether to show detailed tables.
+        detail: Print the full hierarchy, every violation, and per-node and
+            per-link tables instead of previews.
 
     Returns:
         Total capacity across enabled links as a float. Returns 0.0 when
@@ -229,7 +225,6 @@ def _print_network_structure(
     if disabled_links:
         print(f"   Disabled Links: {len(disabled_links):,}")
 
-    # Network hierarchy analysis
     if nodes:
         pkg_logger = logging.getLogger("ngraph")
         original_level = pkg_logger.level
@@ -242,7 +237,7 @@ def _print_network_structure(
             )
             print("\n   Network Hierarchy:")
             print(
-                "   Legend: counts are for enabled (active) nodes/links; cost/power are\n"
+                "   Legend: counts include disabled nodes/links; cost/power are\n"
                 "           aggregated from components if defined."
             )
             # Keep the printed tree shallow in non-detailed mode for readability
@@ -258,13 +253,12 @@ def _print_network_structure(
         finally:
             pkg_logger.setLevel(original_level)
 
-        # Hardware utilization and validation summary (non-fatal)
+        # Best effort: a failure here is logged at debug level and skipped.
         try:
             if explorer is not None:
                 node_utils = explorer.get_node_utilization()
                 link_issues = explorer.get_link_issues()
 
-                # Node capacity violations
                 cap_viol = [u for u in node_utils if u.capacity_violation]
                 port_viol = [u for u in node_utils if u.ports_violation]
 
@@ -273,7 +267,6 @@ def _print_network_structure(
                     f"     nodes with capacity violations: {len(cap_viol):,}; ports violations: {len(port_viol):,}"
                 )
 
-                # Show over-capacity nodes table (top N by utilization)
                 if cap_viol:
                     cap_viol_sorted = sorted(
                         cap_viol,
@@ -310,7 +303,6 @@ def _print_network_structure(
                     if not detail and len(cap_viol_sorted) > len(top):
                         print(f"       ... and {len(cap_viol_sorted) - len(top)} more")
 
-                # Optional port violations table
                 if detail and port_viol:
                     port_sorted = sorted(
                         port_viol,
@@ -344,7 +336,6 @@ def _print_network_structure(
                     )
                     print("\n".join(f"       {ln}" for ln in tbl2.split("\n")))
 
-                # Link issues
                 if link_issues:
                     issues = link_issues if detail else link_issues[:10]
                     rows3: list[list[str]] = []
@@ -368,12 +359,9 @@ def _print_network_structure(
                     if not detail and len(link_issues) > len(issues):
                         print(f"       ... and {len(link_issues) - len(issues)} more")
         except Exception as exc:
-            # Non-fatal
             logger.debug("Failed to display hardware utilization: %s", exc)
 
-    # Show complete node and link tables in detail mode
     if detail:
-        # Nodes table
         if nodes:
             print("\n   Nodes:")
             node_rows = []
@@ -395,25 +383,13 @@ def _print_network_structure(
             )
             print(node_table)
 
-        # Links table
         if links:
             print("\n   Links:")
             link_rows = []
             for _link_id, link in links.items():
                 status = "disabled" if link.disabled else "enabled"
                 capacity = f"{link.capacity:,.0f}"
-
-                # Get cost if available
-                cost_val: Any | None = None
-                if hasattr(link, "cost"):
-                    cost_val = link.cost
-                elif (
-                    hasattr(link, "attrs")
-                    and isinstance(link.attrs, dict)
-                    and "cost" in link.attrs
-                ):
-                    cost_val = link.attrs["cost"]
-                cost = _format_cost(cost_val) if cost_val is not None else ""
+                cost = _format_cost(link.cost)
 
                 link_rows.append([link.source, link.target, status, capacity, cost])
 
@@ -422,7 +398,6 @@ def _print_network_structure(
             )
             print(link_table)
 
-    # Link capacity analysis as table
     total_enabled_link_capacity: float = 0.0
     if links:
         link_caps = [float(link.capacity) for link in enabled_links]
@@ -441,7 +416,6 @@ def _print_network_structure(
             )
             print(cap_table)
 
-    # Node capacity analysis
     if nodes and links:
         print("\n   Node Capacity Statistics:")
         # Only include nodes with enabled links attached
@@ -464,7 +438,7 @@ def _print_network_structure(
 
 
 def _print_risk_groups(network: Any, detail: bool) -> None:
-    """Print a concise summary of defined risk groups.
+    """Print the risk group count and names (first five unless ``detail``).
 
     Args:
         network: Network instance containing optional ``risk_groups`` mapping.
@@ -491,7 +465,7 @@ def _print_risk_groups(network: Any, detail: bool) -> None:
 
 
 def _print_components_library(components_library: Any, detail: bool) -> None:
-    """Print a summary of available components in the library.
+    """Print the component count and names (first five unless ``detail``).
 
     Args:
         components_library: Components library with ``components`` mapping.
@@ -519,7 +493,8 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
 
     Args:
         failure_policy_set: Collection of failure policies under ``policies``.
-        detail: When True, show modes and rule previews; else, a brief count.
+        detail: When True, also show the first three modes of each policy
+            and the first three rules of each mode.
     """
     print("\n5. FAILURE POLICIES")
     print("-" * 30)
@@ -528,7 +503,7 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
     if failure_policy_set.policies:
         policy_items = list(failure_policy_set.policies.items())[:5]
         for policy_name, policy in policy_items:
-            mode_count = len(getattr(policy, "modes", []) or [])
+            mode_count = len(policy.modes)
             print(
                 f"     {policy_name}: {mode_count} mode{'s' if mode_count != 1 else ''}"
             )
@@ -540,10 +515,10 @@ def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
                     )
                     for ri, rule in enumerate(mode.rules[:3]):
                         extra = (
-                            f" count={getattr(rule, 'count', '')}"
+                            f" count={rule.count}"
                             if rule.mode == "choice"
                             else (
-                                f" p={getattr(rule, 'probability', '')}"
+                                f" p={rule.probability}"
                                 if rule.mode == "random"
                                 else ""
                             )
@@ -563,7 +538,7 @@ def _print_demand_sets(
 
     Args:
         network: Network instance for node pattern summarization.
-        ds: DemandSet with defined sets.
+        ds: Demand set collection to summarize.
         detail: Whether to print detailed tables.
         total_enabled_link_capacity: Sum of capacities of enabled links.
     """
@@ -574,7 +549,7 @@ def _print_demand_sets(
     if not ds.sets:
         return
 
-    # Capacity vs Demand summary across all sets (shown first for visibility)
+    # Totals across all sets print before the per-set breakdown.
     try:
         grand_total_demand = 0.0
         grand_demand_count = 0
@@ -668,7 +643,6 @@ def _print_demand_sets(
                 )
                 print("\n".join(f"         {line}" for line in table.split("\n")))
 
-            # Optional: Top N demands by offered volume for quick understanding
             try:
                 top_n = 5
                 sorted_demands = sorted(
@@ -701,7 +675,7 @@ def _print_demand_sets(
                 logger.debug("Failed to display top demands: %s", exc)
 
             if demands:
-                for i, demand in enumerate(demands[:3]):  # Show first 3 demands
+                for i, demand in enumerate(demands[:3]):
                     src = (
                         demand.source
                         if isinstance(demand.source, str)
@@ -805,7 +779,8 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
             param_rows = []
             for key, value in step_dict.items():
                 if key not in ["name", "seed"] and not key.startswith("_"):
-                    param_rows.append([key, str(value)])
+                    shown = value.name if isinstance(value, Enum) else str(value)
+                    param_rows.append([key, shown])
 
             if param_rows:
                 param_table = _format_table(["Parameter", "Value"], param_rows)
@@ -856,37 +831,37 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
 
 
 def _inspect_scenario(path: Path, detail: bool = False) -> None:
-    """Inspect a scenario file, validate it, and show key characteristics.
+    """Load and validate a scenario file, then print a sectioned summary.
+
+    Exits with status 1 when the file is missing or fails to load.
 
     Args:
         path: Scenario YAML file.
-        detail: Whether to show detailed information including sample node names.
+        detail: Include full node and link tables, all names, and step
+            parameters.
     """
     logger.info(f"Inspecting scenario from: {path}")
     _start_time = perf_counter()
 
     try:
-        # Load and validate scenario
         yaml_text = path.read_text()
-        logger.info("✓ YAML file loaded successfully")
+        logger.info("✓ YAML file loaded")
 
         scenario = Scenario.from_yaml(yaml_text)
         logger.debug(
             "Scenario loaded: nodes=%d, links=%d, steps=%d, policies=%d, demand_sets=%d",
-            len(getattr(scenario.network, "nodes", {})),
-            len(getattr(scenario.network, "links", {})),
+            len(scenario.network.nodes),
+            len(scenario.network.links),
             len(scenario.workflow),
-            len(getattr(scenario.failure_policy_set, "policies", {})),
-            len(getattr(scenario.demand_set, "sets", {})),
+            len(scenario.failure_policy_set.policies),
+            len(scenario.demand_set.sets),
         )
-        logger.info("✓ Scenario validated and loaded successfully")
+        logger.info("✓ Scenario validated")
 
-        # Show scenario metadata
         print("\n" + "=" * 60)
         print("NETGRAPH SCENARIO INSPECTION")
         print("=" * 60)
 
-        # Overview: quick summary for fast scanning
         try:
             network = scenario.network
             nodes = network.nodes
@@ -899,7 +874,6 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 sum(float(lk.capacity) for lk in enabled_links)
             )
 
-            # Demand sets
             ds = scenario.demand_set
             set_count = len(ds.sets)
             total_demands = 0
@@ -915,17 +889,13 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 else 0.0
             )
 
-            # Risk groups quick count
-            rg_total = (
-                len(network.risk_groups) if getattr(network, "risk_groups", None) else 0
-            )
+            rg_total = len(network.risk_groups)
             rg_disabled = (
                 sum(1 for rg in network.risk_groups.values() if rg.disabled)
                 if rg_total
                 else 0
             )
 
-            # Workflow steps count
             wf_steps = len(scenario.workflow)
 
             print("\nOVERVIEW")
@@ -949,7 +919,7 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
             print(overview_table)
         except Exception as exc:
-            # Non-fatal; proceed with normal sections
+            # Best effort; the numbered sections below still print.
             logger.debug("Failed to display overview section: %s", exc)
 
         print("\n1. SCENARIO METADATA")
@@ -963,31 +933,18 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             print("   Seed: None (non-deterministic)")
             print("   Workflow step seeds will be random on each run")
 
-        # Network Analysis
         print("\n2. NETWORK STRUCTURE")
         print("-" * 30)
         network = scenario.network
         total_enabled_link_capacity = _print_network_structure(
             network, scenario.components_library, detail
         )
-
-        # (details printed by helper)
-
-        # Risk Groups Analysis
         _print_risk_groups(network, detail)
-
-        # Components Library
         _print_components_library(scenario.components_library, detail)
-
-        # Failure Policies Analysis
         _print_failure_policies(scenario.failure_policy_set, detail)
-
-        # Demand Sets Analysis
         _print_demand_sets(
             network, scenario.demand_set, detail, total_enabled_link_capacity
         )
-
-        # Workflow Analysis
         _print_workflow_steps(scenario, detail, network)
 
         print("\n" + "=" * 60)
@@ -1001,22 +958,17 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             print(f"Usage: python -m ngraph run {path}")
         else:
             print("\nNo workflow steps defined")
-            print(
-                "This scenario can be used for network analysis but has no automated workflow"
-            )
 
         _elapsed = perf_counter() - _start_time
-        logger.info(
-            f"Scenario inspection completed successfully in {_format_duration(_elapsed)}"
-        )
+        logger.info(f"Scenario inspection completed in {_format_duration(_elapsed)}")
 
     except FileNotFoundError:
-        print(f"❌ ERROR: Scenario file not found: {path}")
+        print(f"❌ ERROR: Scenario file not found: {path}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to inspect scenario: {e}")
-        print("❌ ERROR: Failed to inspect scenario")
-        print(f"  {type(e).__name__}: {e}")
+        print("❌ ERROR: Failed to inspect scenario", file=sys.stderr)
+        print(f"  {type(e).__name__}: {e}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -1032,16 +984,19 @@ def _run_scenario(
 ) -> None:
     """Run a scenario file and export results as JSON by default.
 
+    Exits with status 1 on any failure.
+
     Args:
         path: Scenario YAML file.
         results_override: Optional explicit path for JSON results. When ``None``,
             the path is derived from the scenario name under ``output_dir``.
-        no_results: Whether to disable results file generation.
-        stdout: Whether to also print results to stdout.
+        no_results: Skip writing the results file.
+        stdout: Print the results JSON to stdout.
         keys: Optional list of workflow step names to include. When ``None`` all steps are
             exported.
-        profile: Whether to enable performance profiling with CPU analysis.
-        profile_memory: Whether the profiler also tracks memory usage.
+        profile: Profile each step with cProfile and print a report to stderr.
+        profile_memory: Also record peak memory per step with tracemalloc.
+            Only takes effect with ``profile``.
         output_dir: Base directory for derived output paths (results, profiles).
     """
     logger.info(f"Loading scenario from: {path}")
@@ -1050,6 +1005,14 @@ def _run_scenario(
     try:
         yaml_text = path.read_text()
         scenario = Scenario.from_yaml(yaml_text)
+        if keys:
+            step_names = [step.name for step in scenario.workflow]
+            unknown = sorted(set(keys) - set(step_names))
+            if unknown:
+                raise ValueError(
+                    f"Unknown step name(s) in --keys: {', '.join(unknown)}; "
+                    f"workflow steps: {', '.join(step_names)}"
+                )
 
         if profile:
             logger.info("Performance profiling enabled")
@@ -1058,7 +1021,7 @@ def _run_scenario(
 
             logger.info("Starting scenario execution with profiling")
 
-            # Enable worker-thread profiling for parallel workflows
+            # FailureManager worker threads write per-worker .pstats files here.
             child_profile_dir = profiles_dir_for_run(path, output_dir)
             child_profile_dir.mkdir(parents=True, exist_ok=True)
             prev_profile_dir = os.environ.get("NGRAPH_PROFILE_DIR")
@@ -1070,13 +1033,12 @@ def _run_scenario(
                 """Wrap step execution with profiling and worker-profile merge.
 
                 Worker profiles are merged only after the profiled block exits
-                cleanly; exceptions raised by the step propagate unchanged and
+                normally; exceptions raised by the step propagate unchanged and
                 skip the merge.
                 """
                 step_name = step.name or step.__class__.__name__
                 with profiler.profile_step(step_name, step.__class__.__name__):
                     yield
-                # Merge any worker profiles generated by this step
                 if child_profile_dir.exists():
                     profiler.merge_child_profiles(child_profile_dir, step_name)
 
@@ -1090,12 +1052,12 @@ def _run_scenario(
                 else:
                     os.environ["NGRAPH_PROFILE_DIR"] = prev_profile_dir
 
-            logger.info("Scenario execution completed successfully")
+            logger.info("Scenario execution completed")
 
             profiler.end_scenario()
             profiler.analyze_performance()
 
-            # Clean up any remaining worker profile files
+            # merge_child_profiles deletes the files it merges; remove leftovers.
             if child_profile_dir.exists():
                 remaining_files = list(child_profile_dir.glob("*.pstats"))
                 if remaining_files:
@@ -1124,10 +1086,8 @@ def _run_scenario(
         else:
             logger.info("Starting scenario execution")
             scenario.run()
-            logger.info("Scenario execution completed successfully")
             print("✅ Scenario execution completed", file=sys.stderr)
 
-        # Export JSON results by default unless disabled
         if not no_results or stdout:
             logger.info("Serializing results to JSON")
             results_dict: Dict[str, Any] = scenario.results.to_dict()
@@ -1136,14 +1096,13 @@ def _run_scenario(
                 # Filter only the steps subsection; keep workflow/scenario intact
                 steps_map = results_dict.get("steps", {})
                 filtered_steps: Dict[str, Any] = {
-                    step: steps_map[step] for step in keys if step in steps_map
+                    step: steps_map[step] for step in keys
                 }
                 results_dict["steps"] = filtered_steps
 
-            json_str = json.dumps(results_dict, indent=2, default=str)
+            json_str = json.dumps(results_dict, indent=2)
 
             if not no_results:
-                # Derive default results file path using output directory policy
                 effective_output = results_path_for_run(
                     scenario_path=path,
                     output_dir=output_dir,
@@ -1151,19 +1110,14 @@ def _run_scenario(
                 )
 
                 ensure_parent_dir(effective_output)
-                logger.info(f"Writing results to: {effective_output}")
                 effective_output.write_text(json_str)
-                logger.info("Results written successfully")
                 print(f"✅ Results written to: {effective_output}", file=sys.stderr)
 
             if stdout:
                 print(json_str)
 
-        # Final success duration log
         _elapsed = perf_counter() - _start_time
-        logger.info(
-            f"Scenario run completed successfully in {_format_duration(_elapsed)}"
-        )
+        logger.info(f"Scenario run completed in {_format_duration(_elapsed)}")
 
     except FileNotFoundError:
         logger.error(f"Scenario file not found: {path}")
@@ -1181,21 +1135,22 @@ def _run_scenario(
 def main(argv: Optional[List[str]] = None) -> None:
     """Entry point for the ``ngraph`` command.
 
+    Prints help and exits with status 0 when no arguments are given.
+
     Args:
-        argv: Optional list of command-line arguments. If ``None``, ``sys.argv``
-            is used.
+        argv: Arguments without the program name. If ``None``,
+            ``sys.argv[1:]`` is used.
     """
     parser = argparse.ArgumentParser(
         prog="ngraph",
         description="Run and analyze network scenarios.",
     )
 
-    # Global options
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable debug logging"
     )
     parser.add_argument(
-        "--quiet", action="store_true", help="Suppress console output (logs only)"
+        "--quiet", action="store_true", help="Show only warnings and errors in logs"
     )
 
     subparsers = parser.add_subparsers(
@@ -1206,7 +1161,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Available commands",
     )
 
-    # Run command
     run_parser = subparsers.add_parser("run", help="Run a scenario")
     run_parser.add_argument("scenario", type=Path, help="Path to scenario YAML")
     run_parser.add_argument(
@@ -1238,7 +1192,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     run_parser.add_argument(
         "--profile",
         action="store_true",
-        help="Enable performance profiling with CPU analysis and bottleneck detection",
+        help="Profile the run and print a per-step CPU report to stderr",
     )
     run_parser.add_argument(
         "--profile-memory",
@@ -1246,7 +1200,6 @@ def main(argv: Optional[List[str]] = None) -> None:
         help="Also track peak memory per step (via tracemalloc)",
     )
 
-    # Inspect command
     inspect_parser = subparsers.add_parser(
         "inspect", help="Inspect and validate a scenario"
     )
@@ -1257,31 +1210,26 @@ def main(argv: Optional[List[str]] = None) -> None:
         action="store_true",
         help="Show detailed information including complete node/link tables and step parameters",
     )
-    # Global output directory for all commands
-    for p in (run_parser, inspect_parser):
-        p.add_argument(
-            "--output",
-            "-o",
-            type=Path,
-            default=None,
-            help=(
-                "Output directory for generated artifacts. When provided,"
-                " all files will be written under this folder using a"
-                " consistent '<prefix>.<suffix>' naming convention."
-            ),
-        )
+    run_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help=(
+            "Directory for the results file and, with --profile, the"
+            " worker profile directory"
+        ),
+    )
 
-    # Determine effective arguments (support both direct calls and module entrypoint)
     effective_args = sys.argv[1:] if argv is None else argv
-
-    # If no arguments are provided, show help and exit cleanly
     if not effective_args:
         parser.print_help()
         raise SystemExit(0)
 
     args = parser.parse_args(effective_args)
+    if args.command == "run" and args.profile_memory and not args.profile:
+        parser.error("--profile-memory requires --profile")
 
-    # Configure logging based on arguments
     setup_root_logger()
     if args.verbose:
         set_global_log_level(logging.DEBUG)

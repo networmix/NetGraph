@@ -1,9 +1,9 @@
-"""Regression tests for FailureManager review fixes.
+"""Regression tests for FailureManager.
 
 Covers:
 - Demand-placement Monte Carlo with id-less demand configs (stable demand ids).
 - Seed fallback to policy.seed when FailureManager seed is None.
-- Context injection gated on the analysis function declaring 'context'.
+- Context injection only through a prepare_inputs hook.
 - Prepared-matches cache identity check (id() address-reuse hazard).
 - No forced serial execution for __main__-defined analysis functions.
 - Transitive risk-group exclusions across a 3-level hierarchy.
@@ -109,7 +109,7 @@ class TestIdlessDemandConfigs:
         assert len(set(ids_first)) == len(ids_first)
 
     def test_prebuilt_context_without_expansion_idless_config(self) -> None:
-        """Fallback path: context provided but expansion absent must still work."""
+        """Pre-built context without expansion: an id-less config places its volume."""
         network = _chain_network()
         config = [{"source": "^A$", "target": "^C$", "volume": 5.0, "mode": "combine"}]
         ctx, _, _ = build_demand_placement_inputs(network, config)
@@ -228,7 +228,7 @@ class TestContextInjectionGating:
         assert all("context" not in kwargs for kwargs in captured)
 
     def test_declared_context_without_hook_gets_no_injection(self) -> None:
-        # Declaring a `context` parameter is no longer enough on its own;
+        # Declaring a `context` parameter is not enough on its own;
         # only a prepare_inputs hook opts a function into pre-building.
         fm = _manager_without_policy(_chain_network())
 

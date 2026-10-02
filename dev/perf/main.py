@@ -21,12 +21,14 @@ PERF_PLOTS_DIR = Path("dev/perf_plots")
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run command implementation."""
+    """Run profiles, print the analysis, and write plots and a results JSON.
+
+    Returns 0 on success and 1 on error.
+    """
     try:
         print("Initializing performance analysis...\n")
         PERF_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Get profiles to run
         if args.profile:
             try:
                 profile = get_profile_by_name(args.profile)
@@ -42,7 +44,6 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         print(f"Selected {len(profiles)} profile(s) for benchmarking")
 
-        # Run benchmarks
         print("\n[ BENCHMARKING ]")
         print("-" * 60)
         runner = BenchmarkRunner()
@@ -58,18 +59,15 @@ def cmd_run(args: argparse.Namespace) -> int:
             results.append((profile.name, result))
             print(f"    ✓ Completed in {result.total_execution_time():.2f}s")
 
-        # Analyze results
         print("\n\n[ ANALYSIS ]")
         print("-" * 60)
         analyzer = PerformanceAnalyzer(results_dir=PERF_RESULTS_DIR)
         analyzer.add_runs([result for _, result in results])
         analyzer.print_analysis_report()
 
-        # Save results to disk
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         results_file = PERF_RESULTS_DIR / f"benchmark_results_{timestamp}.json"
 
-        # Generate plots and export data
         print("\n[ RESULTS & ARTIFACTS ]")
         print("-" * 60)
         if any(result.profile.analysis.generates_plots() for _, result in results):
@@ -79,7 +77,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             viz.create_summary_report(analyzer, timestamp)
             viz.export_results_json(analyzer, results, results_file)
         else:
-            # Even if no plots are generated, still export the raw data
+            # Export the raw data even without plots.
             viz = PerformanceVisualizer(plots_dir=PERF_PLOTS_DIR)
             print("Generated:")
             viz.export_results_json(analyzer, results, results_file)
@@ -93,9 +91,8 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_show_profile(args: argparse.Namespace) -> int:
-    """Show profile configuration."""
+    """Print one profile's settings and cases, or list profiles if none is named."""
     try:
-        # If no profile name provided, list available profiles
         if not args.profile_name:
             print("Available benchmark profiles:")
             print("-" * 60)
@@ -124,7 +121,6 @@ def cmd_show_profile(args: argparse.Namespace) -> int:
             print(f"  {i}. {case.name}")
             print(f"     Problem size: {case.problem_size}")
 
-            # Show topology information generically
             topology = case.inputs.get("topology")
             if topology:
                 print(f"     Topology: {topology.__class__.__name__}")
@@ -151,9 +147,8 @@ def cmd_show_profile(args: argparse.Namespace) -> int:
 
 
 def cmd_show_topology(args: argparse.Namespace) -> int:
-    """Show topology configuration and expected dimensions."""
+    """Print a topology's parameters and expected size, or list topology types."""
     try:
-        # If no topology type provided, list available topologies
         if not args.topology_type:
             print("Available topology types:")
             print("-" * 60)
@@ -161,7 +156,6 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
             for i, topology_class in enumerate(ALL_TOPOLOGIES, 1):
                 print(f"{i}. {topology_class.__name__}")
 
-                # Get parameter information from dataclass fields
                 if dataclasses.is_dataclass(topology_class):
                     fields = dataclasses.fields(topology_class)
                     param_fields = [
@@ -174,10 +168,8 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
                 print()
             return 0
 
-        # Parse topology type and parameters
         topology_type = args.topology_type
 
-        # Find the topology class by name
         topology_class = None
         for topo_class in ALL_TOPOLOGIES:
             if topo_class.__name__ == topology_type:
@@ -190,7 +182,6 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
             print(f"Available types: {', '.join(available_types)}")
             return 1
 
-        # Parse parameter key=value pairs
         params = {}
         for param in args.parameters:
             if "=" not in param:
@@ -200,7 +191,7 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
 
             key, value = param.split("=", 1)
 
-            # Try to parse value as appropriate type
+            # Coerce to bool, then int, then float; otherwise keep the string.
             if value.lower() in ("true", "false"):
                 params[key] = value.lower() == "true"
             elif value.isdigit():
@@ -211,7 +202,6 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
                 except ValueError:
                     params[key] = value
 
-        # Create topology by direct instantiation
         topology = topology_class(**params)
 
         print(f"Topology: {topology.__class__.__name__}")
@@ -241,7 +231,7 @@ def cmd_show_topology(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    """Main entry point."""
+    """Parse arguments, dispatch to a subcommand, and return the exit code."""
     parser = argparse.ArgumentParser(
         prog="perf",
         description="NetGraph performance benchmarking & analysis",
@@ -251,17 +241,14 @@ def main() -> int:
     run_p = sub.add_parser("run", help="Run benchmarks then analyze")
     run_p.add_argument("--profile", help="Run a single profile")
 
-    # Add show command with subcommands
     show_p = sub.add_parser("show", help="Show configuration details")
     show_sub = show_p.add_subparsers(dest="show_command")
 
-    # Show profile subcommand
     profile_p = show_sub.add_parser("profile", help="Show profile configuration")
     profile_p.add_argument(
         "profile_name", nargs="?", help="Name of the profile to show"
     )
 
-    # Show topology subcommand
     topology_p = show_sub.add_parser("topology", help="Show topology dimensions")
     topology_p.add_argument(
         "topology_type", nargs="?", help="Type of topology (e.g., Grid2DTopology)"

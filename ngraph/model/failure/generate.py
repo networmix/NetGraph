@@ -18,6 +18,7 @@ from ngraph.model.selectors import (
     link_path_key,
     resolve_attr_path,
 )
+from ngraph.utils.yaml_utils import check_no_extra_keys
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
@@ -49,7 +50,8 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     """Generate risk groups from unique attribute values.
 
     For each unique value of the specified attribute, creates a new risk
-    group and adds all matching entities to it.
+    group and adds its name to the `risk_groups` set of every matching
+    entity, in place. The caller registers the returned groups.
 
     Args:
         network: Network with nodes and links populated.
@@ -61,9 +63,6 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
     Raises:
         ValueError: If `group_by` resolves to an unhashable value, or if the
             name template renders the same group name for two distinct values.
-
-    Note:
-        Modifies entity risk_groups sets in place.
     """
     path_pattern = re.compile(spec.path) if spec.path else None
 
@@ -79,7 +78,7 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
             for link_id, link in network.links.items()
         ]
 
-    # Apply path filter if specified
+    # Nodes match `path` against the node name, links against link_path_key.
     if path_pattern:
         if spec.scope == "node":
             entities = [
@@ -94,7 +93,7 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
                 if path_pattern.match(link_path_key(attrs))
             ]
 
-    # Group by attribute value
+    # Entities lacking the attribute, or holding None, join no group.
     groups: Dict[Any, List] = defaultdict(list)
     for entity_id, entity, attrs in entities:
         found, value = resolve_attr_path(attrs, spec.group_by)
@@ -108,7 +107,6 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
                     f"'{entity_id}'; group_by requires scalar attribute values"
                 ) from exc
 
-    # Create risk groups
     result: List[RiskGroup] = []
     seen_names: Dict[str, Any] = {}
     for value, members in groups.items():
@@ -151,10 +149,13 @@ def parse_generate_spec(raw: Dict[str, Any]) -> GenerateSpec:
         Parsed GenerateSpec.
 
     Raises:
-        ValueError: If 'scope' is missing or is neither 'node' nor 'link', if
-            'group_by' or 'name' is missing, or if 'name' omits the '${value}'
-            placeholder.
+        ValueError: If the block carries an unrecognized key, 'scope' is
+            missing or is neither 'node' nor 'link', 'group_by' or 'name' is
+            missing, or 'name' omits the '${value}' placeholder.
     """
+    check_no_extra_keys(
+        raw, {"scope", "path", "group_by", "name", "attrs"}, "generate block"
+    )
     scope = raw.get("scope")
     if not scope:
         raise ValueError("generate requires 'scope' field (node or link)")

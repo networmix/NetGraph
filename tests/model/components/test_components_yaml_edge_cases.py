@@ -1,10 +1,12 @@
 """Edge-case tests for ComponentsLibrary YAML parsing.
 
 Covers presence-based dispatch of the top-level 'components' key and the
-warning emitted when a component definition uses 'cost' instead of 'capex'.
+rejection of keys outside the component fields.
 """
 
 import logging
+
+import pytest
 
 from ngraph.model.components import ComponentsLibrary
 
@@ -32,28 +34,20 @@ other_section:
     assert lib.components == {}
 
 
-def test_build_component_warns_on_cost_key(caplog) -> None:
-    """A leftover 'cost' key logs a warning and contributes 0 to capex."""
+def test_build_component_rejects_unknown_keys() -> None:
+    """Keys outside the component fields raise; 'cost' gets a capex hint."""
     yaml_str = """
 components:
   Switch:
     component_type: chassis
     cost: 20000
 """
-    with caplog.at_level(logging.WARNING, logger="ngraph.model.components"):
-        lib = ComponentsLibrary.from_yaml(yaml_str)
+    with pytest.raises(ValueError, match="unrecognized key.*cost.*Use 'capex'"):
+        ComponentsLibrary.from_yaml(yaml_str)
 
-    comp = lib.get("Switch")
-    assert comp is not None
-    assert comp.capex == 0.0
-    assert comp.attrs["cost"] == 20000
-    assert any(
-        "'cost'" in record.message
-        and "Switch" in str(record.args or ())
-        or "Switch" in record.getMessage()
-        for record in caplog.records
-    )
-    assert any("capex" in record.getMessage() for record in caplog.records)
+    nested = {"Chassis": {"children": {"Card": {"vendor": "x"}}}}
+    with pytest.raises(ValueError, match="Component 'Card'.*vendor"):
+        ComponentsLibrary.from_dict(nested)
 
 
 def test_build_component_no_warning_with_capex(caplog) -> None:

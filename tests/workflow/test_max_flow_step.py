@@ -8,6 +8,7 @@ from ngraph.model.failure.policy import FailurePolicy, FailureRule
 from ngraph.model.failure.policy_set import FailurePolicySet
 from ngraph.model.network import Link, Network, Node
 from ngraph.results import Results
+from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.scenario import Scenario
 from ngraph.types.base import FlowPlacement
 from ngraph.workflow.max_flow_step import MaxFlow
@@ -15,7 +16,7 @@ from ngraph.workflow.max_flow_step import MaxFlow
 
 @pytest.fixture
 def simple_network() -> Network:
-    """Create a simple test network."""
+    """A -> B (cap 10) -> C (cap 5)."""
     network = Network()
     network.add_node(Node("A"))
     network.add_node(Node("B"))
@@ -44,12 +45,11 @@ def simple_failure_policy() -> FailurePolicy:
 
 @pytest.fixture
 def mock_scenario(simple_network, simple_failure_policy) -> Scenario:
-    """Create a mock scenario for testing."""
+    """MagicMock Scenario with simple_network and failure policy 'test_policy'."""
     scenario = MagicMock(spec=Scenario)
     scenario.network = simple_network
     scenario.results = Results()
 
-    # Create failure policy set
     policy_set = FailurePolicySet()
     policy_set.add("test_policy", simple_failure_policy)
     scenario.failure_policy_set = policy_set
@@ -105,18 +105,22 @@ class TestMaxFlowStep:
         assert step.include_flow_details is True
 
     def test_validation_errors(self):
-        """Test parameter validation."""
+        """Invalid iterations, parallelism and mode raise ValueError."""
         with pytest.raises(ValueError, match="iterations must be >= 0"):
             MaxFlow(source="^A", target="^C", iterations=-1)
 
         with pytest.raises(ValueError, match="parallelism must be >= 1"):
             MaxFlow(source="^A", target="^C", parallelism=0)
 
+        for bad in (2.5, True, "4"):
+            with pytest.raises(ValueError, match="integer or 'auto'"):
+                MaxFlow(source="^A", target="^C", parallelism=bad)
+
         with pytest.raises(ValueError, match="Invalid mode"):
             MaxFlow(source="^A", target="^C", mode="invalid")
 
     def test_flow_placement_enum_usage(self):
-        """Test that FlowPlacement enum is used correctly."""
+        """flow_placement keeps the FlowPlacement enum value passed in."""
         step = MaxFlow(
             source="^A", target="^C", flow_placement=FlowPlacement.PROPORTIONAL
         )
@@ -127,43 +131,34 @@ class TestMaxFlowStep:
         self, mock_failure_manager_class, mock_scenario
     ):
         """Test running the workflow step with mocked FailureManager."""
-        # Setup mock FailureManager
         mock_failure_manager = MagicMock()
         mock_failure_manager_class.return_value = mock_failure_manager
 
-        # Mock the convenience method results returning unified flow_results
-        # Baseline is separate, results contains only failure iterations
+        # Baseline is separate; results holds only failure iterations
+        entry = FlowEntry(
+            source="A",
+            destination="C",
+            priority=0,
+            demand=5.0,
+            placed=5.0,
+            dropped=0.0,
+        )
         mock_raw = {
-            "baseline": {
-                "failure_id": "",
-                "failure_state": {"excluded_nodes": [], "excluded_links": []},
-                "failure_trace": None,
-                "flows": [
-                    {
-                        "source": "A",
-                        "destination": "C",
-                        "priority": 0,
-                        "demand": 5.0,
-                        "placed": 5.0,
-                        "dropped": 0.0,
-                        "cost_distribution": {},
-                        "data": {},
-                    }
-                ],
-                "summary": {
-                    "total_demand": 5.0,
-                    "total_placed": 5.0,
-                    "overall_ratio": 1.0,
-                    "dropped_flows": 0,
-                    "num_flows": 1,
-                },
-            },
+            "baseline": FlowIterationResult(
+                flows=[entry],
+                summary=FlowSummary(
+                    total_demand=5.0,
+                    total_placed=5.0,
+                    overall_ratio=1.0,
+                    dropped_flows=0,
+                    num_flows=1,
+                ),
+            ),
             "results": [],  # No failure iterations for this test
             "metadata": {"iterations": 1, "parallelism": 1},
         }
         mock_failure_manager.run_max_flow_monte_carlo.return_value = mock_raw
 
-        # Create and run the step
         step = MaxFlow(
             source="^A",
             target="^C",
@@ -174,14 +169,12 @@ class TestMaxFlowStep:
         step.name = "envelope"
         step.execute(mock_scenario)
 
-        # Verify FailureManager was created correctly
         mock_failure_manager_class.assert_called_once_with(
             network=mock_scenario.network,
             failure_policy_set=mock_scenario.failure_policy_set,
             policy_name="test_policy",
         )
 
-        # Verify convenience method was called with correct parameters
         _, kwargs = mock_failure_manager.run_max_flow_monte_carlo.call_args
         assert kwargs["source"] == "^A"
         assert kwargs["target"] == "^C"
@@ -192,9 +185,8 @@ class TestMaxFlowStep:
         assert kwargs["flow_placement"] == step.flow_placement
         assert kwargs["seed"] is None
         assert kwargs["store_failure_patterns"] is False
-        assert kwargs["include_flow_summary"] is False
+        assert kwargs["include_flow_details"] is False
 
-        # Verify results were processed into metadata + data with flow_results
         exported = mock_scenario.results.to_dict()
         data = exported["steps"]["envelope"]["data"]
         assert isinstance(data, dict)
@@ -205,42 +197,23 @@ class TestMaxFlowStep:
     @patch("ngraph.workflow.max_flow_step.FailureManager")
     def test_run_with_failure_patterns(self, mock_failure_manager_class, mock_scenario):
         """Test running with failure pattern storage enabled."""
-        # Setup mock FailureManager
         mock_failure_manager = MagicMock()
         mock_failure_manager_class.return_value = mock_failure_manager
 
-        # Mock raw results with failure_trace on each result
         mock_raw = {
+            "baseline": FlowIterationResult(),
             "results": [
-                MagicMock(
+                FlowIterationResult(
                     failure_id="deadbeef",
                     failure_state={"excluded_nodes": ["node1"], "excluded_links": []},
                     failure_trace={"mode_index": 0},
                     occurrence_count=2,
-                    to_dict=lambda: {
-                        "failure_id": "deadbeef",
-                        "failure_state": {
-                            "excluded_nodes": ["node1"],
-                            "excluded_links": [],
-                        },
-                        "failure_trace": {"mode_index": 0},
-                        "occurrence_count": 2,
-                        "flows": [],
-                        "summary": {
-                            "total_demand": 0.0,
-                            "total_placed": 0.0,
-                            "overall_ratio": 1.0,
-                            "dropped_flows": 0,
-                            "num_flows": 0,
-                        },
-                    },
                 )
             ],
             "metadata": {"iterations": 2, "parallelism": 1, "unique_patterns": 1},
         }
         mock_failure_manager.run_max_flow_monte_carlo.return_value = mock_raw
 
-        # Create and run the step with failure pattern storage
         step = MaxFlow(
             source="^A",
             target="^C",
@@ -250,13 +223,12 @@ class TestMaxFlowStep:
         )
         step.execute(mock_scenario)
 
-        # Verify parameters passed
         _, kwargs = mock_failure_manager.run_max_flow_monte_carlo.call_args
         assert kwargs["store_failure_patterns"] is True
-        assert kwargs["include_flow_summary"] is False
+        assert kwargs["include_flow_details"] is False
 
     def test_capacity_envelope_with_failures_mocked(self):
-        """Test capacity envelope step with mocked FailureManager."""
+        """MaxFlow in a real Scenario stores metadata and data."""
         step = MaxFlow(
             source="^A",
             target="^C",
@@ -273,44 +245,21 @@ class TestMaxFlowStep:
             results=Results(),
         )
 
-        # Mock the convenience method call results (unified flow_results)
-        # Baseline is separate, results contains only failures
+        # Baseline is separate; results holds only failure iterations
         mock_raw = {
-            "baseline": {
-                "failure_id": "",
-                "failure_state": {"excluded_nodes": [], "excluded_links": []},
-                "failure_trace": None,
-                "flows": [],
-                "summary": {
-                    "total_demand": 0.0,
-                    "total_placed": 0.0,
-                    "overall_ratio": 1.0,
-                    "dropped_flows": 0,
-                    "num_flows": 0,
-                },
-            },
+            "baseline": FlowIterationResult(
+                failure_state={"excluded_nodes": [], "excluded_links": []}
+            ),
             "results": [
-                {
-                    "failure_id": "abc123",
-                    "failure_state": {
-                        "excluded_nodes": [],
-                        "excluded_links": ["link1"],
-                    },
-                    "failure_trace": {"mode_index": 0},
-                    "flows": [],
-                    "summary": {
-                        "total_demand": 0.0,
-                        "total_placed": 0.0,
-                        "overall_ratio": 1.0,
-                        "dropped_flows": 0,
-                        "num_flows": 0,
-                    },
-                }
+                FlowIterationResult(
+                    failure_id="abc123",
+                    failure_state={"excluded_nodes": [], "excluded_links": ["link1"]},
+                    failure_trace={"mode_index": 0},
+                )
             ],
             "metadata": {"iterations": 2, "parallelism": 1},
         }
 
-        # Mock the FailureManager class and its convenience method
         with patch("ngraph.workflow.max_flow_step.FailureManager") as mock_fm_class:
             mock_fm_instance = mock_fm_class.return_value
             mock_fm_instance.run_max_flow_monte_carlo.return_value = mock_raw
@@ -318,55 +267,43 @@ class TestMaxFlowStep:
             step.name = "envelope"
             step.execute(scenario)
 
-        # Check that results were stored under metadata/data keys
         exported = scenario.results.to_dict()
         assert exported["steps"]["envelope"]["metadata"] is not None
         assert exported["steps"]["envelope"]["data"] is not None
 
     @patch("ngraph.workflow.max_flow_step.FailureManager")
-    def test_include_flow_summary_functionality(
+    def test_include_flow_details_functionality(
         self, mock_failure_manager_class, mock_scenario
     ):
-        """Test that include_flow_details parameter is passed through correctly."""
-        # Setup mock FailureManager
+        """include_flow_details=True is forwarded to run_max_flow_monte_carlo."""
         mock_failure_manager = MagicMock()
         mock_failure_manager_class.return_value = mock_failure_manager
 
         # Mock results with flow details (cost_distribution and min_cut edges)
+        entry = FlowEntry(
+            source="A",
+            destination="C",
+            priority=0,
+            demand=5.0,
+            placed=5.0,
+            dropped=0.0,
+            cost_distribution={3.0: 5.0},
+            data={"edges": ["A|B|0:fwd"], "edges_kind": "min_cut"},
+        )
+        summary = FlowSummary(
+            total_demand=5.0,
+            total_placed=5.0,
+            overall_ratio=1.0,
+            dropped_flows=0,
+            num_flows=1,
+        )
         mock_raw = {
-            "results": [
-                {
-                    "failure_id": "",
-                    "failure_state": {"excluded_nodes": [], "excluded_links": []},
-                    "flows": [
-                        {
-                            "source": "A",
-                            "destination": "C",
-                            "priority": 0,
-                            "demand": 5.0,
-                            "placed": 5.0,
-                            "dropped": 0.0,
-                            "cost_distribution": {"3": 5.0},
-                            "data": {
-                                "edges": ["('A','B','k')"],
-                                "edges_kind": "min_cut",
-                            },
-                        }
-                    ],
-                    "summary": {
-                        "total_demand": 5.0,
-                        "total_placed": 5.0,
-                        "overall_ratio": 1.0,
-                        "dropped_flows": 0,
-                        "num_flows": 1,
-                    },
-                }
-            ],
-            "metadata": {"iterations": 1, "parallelism": 1, "baseline": False},
+            "baseline": FlowIterationResult(flows=[entry], summary=summary),
+            "results": [FlowIterationResult(flows=[entry], summary=summary)],
+            "metadata": {"iterations": 1, "parallelism": 1, "unique_patterns": 1},
         }
         mock_failure_manager.run_max_flow_monte_carlo.return_value = mock_raw
 
-        # Test with include_flow_details=True
         step = MaxFlow(
             source="^A",
             target="^C",
@@ -376,11 +313,8 @@ class TestMaxFlowStep:
         )
         step.execute(mock_scenario)
 
-        # Verify the parameter was passed through correctly
         _, kwargs = mock_failure_manager.run_max_flow_monte_carlo.call_args
-        assert kwargs["include_flow_summary"] is True
-
-        # Verify run without error; detailed stats are embedded in flow_results entries
+        assert kwargs["include_flow_details"] is True
 
     @patch("ngraph.workflow.max_flow_step.FailureManager")
     def test_failure_trace_persisted_on_results(
@@ -389,7 +323,6 @@ class TestMaxFlowStep:
         """Test that failure_trace is persisted on flow_results."""
         mock_failure_manager = mock_failure_manager_class.return_value
 
-        # Create mock result with failure_trace
         mock_result = MagicMock()
         mock_result.failure_id = "abc123"
         mock_result.failure_state = {"excluded_nodes": [], "excluded_links": ["link1"]}
@@ -405,7 +338,7 @@ class TestMaxFlowStep:
                     "selected_ids": ["link1"],
                 }
             ],
-            "expansion": {"nodes": [], "links": [], "risk_groups": []},
+            "expansion": {"nodes": [], "links": []},
         }
         mock_result.occurrence_count = 2
         mock_result.to_dict.return_value = {
@@ -423,7 +356,6 @@ class TestMaxFlowStep:
             },
         }
 
-        # Mock baseline
         mock_baseline = MagicMock()
         mock_baseline.to_dict.return_value = {
             "failure_id": "",
@@ -457,18 +389,16 @@ class TestMaxFlowStep:
         )
         step.execute(mock_scenario)
 
-        # Verify results are persisted
         exported = mock_scenario.results.to_dict()
         data = exported["steps"]["test_step"]["data"]
 
-        # Verify flow_results contains failure_trace
         assert len(data["flow_results"]) == 1
         result = data["flow_results"][0]
         assert result["failure_id"] == "abc123"
         assert result["failure_trace"]["mode_index"] == 0
         assert result["occurrence_count"] == 2
 
-        # Verify baseline is stored separately in data
+        # Baseline is stored separately from flow_results
         assert "baseline" in data
         assert data["baseline"]["failure_id"] == ""
 
@@ -498,6 +428,7 @@ class TestMaxFlowStep:
         }
 
         mock_raw = {
+            "baseline": FlowIterationResult(),
             "results": [mock_result],
             "metadata": {"iterations": 1, "parallelism": 1, "unique_patterns": 1},
         }
@@ -513,7 +444,6 @@ class TestMaxFlowStep:
         )
         step.execute(mock_scenario)
 
-        # Verify flow_results exist but have no trace
         exported = mock_scenario.results.to_dict()
         data = exported["steps"]["test_step_disabled"]["data"]
         assert len(data["flow_results"]) == 1

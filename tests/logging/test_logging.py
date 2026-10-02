@@ -1,4 +1,4 @@
-"""Tests for centralized logging behavior and configuration."""
+"""Tests for ngraph.logging configuration and handler setup."""
 
 import logging
 from io import StringIO
@@ -6,8 +6,6 @@ from io import StringIO
 import pytest
 
 from ngraph.logging import (
-    disable_debug_logging,
-    enable_debug_logging,
     get_logger,
     reset_logging,
     set_global_log_level,
@@ -45,14 +43,14 @@ def test_effective_levels_enable_disable():
     assert "debug-1" not in capture.getvalue()
 
     # After enabling debug, DEBUG should pass
-    enable_debug_logging()
+    set_global_log_level(logging.DEBUG)
     logger.debug("debug-2")
     assert "debug-2" in capture.getvalue()
 
     # After disabling debug, DEBUG should be filtered again
     capture.seek(0)
     capture.truncate(0)
-    disable_debug_logging()
+    set_global_log_level(logging.INFO)
     logger.debug("debug-3")
     assert "debug-3" not in capture.getvalue()
 
@@ -97,7 +95,7 @@ def test_setup_root_logger_idempotent_no_duplicate_handlers():
 
 def test_custom_format_string_applied():
     """Custom format string is respected by the root handler."""
-    # Ensure clean state, then install a custom format and handler
+    # Install a custom format and handler
     capture = StringIO()
     handler = logging.StreamHandler(capture)
     fmt = "LEVEL:%(levelname)s|NAME:%(name)s|MSG:%(message)s"

@@ -20,7 +20,7 @@ BENCHMARK_PROFILES: list[BenchmarkProfile] = [
                 name="spf_clos2tier_10_10",
                 task=BenchmarkTask.SHORTEST_PATH,
                 inputs={"topology": Clos2TierTopology(leaf_count=10, spine_count=10)},
-                problem_size="100 * log(20)",  # This is Dijkstra, so E log V
+                problem_size="100 * log(20)",  # Dijkstra: O(E log V)
             ),
             BenchmarkCase(
                 name="spf_clos2tier_100_100",
@@ -56,7 +56,7 @@ BENCHMARK_PROFILES: list[BenchmarkProfile] = [
                 name="spf_grid2d_10_10",
                 task=BenchmarkTask.SHORTEST_PATH,
                 inputs={"topology": Grid2DTopology(rows=10, cols=10)},
-                problem_size="180 * log(100)",  # This is Dijkstra, so E log V
+                problem_size="180 * log(100)",  # Dijkstra: O(E log V)
             ),
             BenchmarkCase(
                 name="spf_grid2d_100_100",
@@ -86,7 +86,7 @@ BENCHMARK_PROFILES: list[BenchmarkProfile] = [
                 name="spf_clos2tier_10_10",
                 task=BenchmarkTask.SHORTEST_PATH_NETWORKX,
                 inputs={"topology": Clos2TierTopology(leaf_count=10, spine_count=10)},
-                problem_size="100 * log(20)",  # This is Dijkstra, so E log V
+                problem_size="100 * log(20)",  # Dijkstra: O(E log V)
             ),
             BenchmarkCase(
                 name="spf_clos2tier_100_100",
@@ -122,7 +122,7 @@ BENCHMARK_PROFILES: list[BenchmarkProfile] = [
                 name="spf_grid2d_10_10_networkx",
                 task=BenchmarkTask.SHORTEST_PATH_NETWORKX,
                 inputs={"topology": Grid2DTopology(rows=10, cols=10)},
-                problem_size="180 * log(100)",  # This is Dijkstra, so E log V
+                problem_size="180 * log(100)",  # Dijkstra: O(E log V)
             ),
             BenchmarkCase(
                 name="spf_grid2d_100_100_networkx",
@@ -209,7 +209,7 @@ BENCHMARK_PROFILES: list[BenchmarkProfile] = [
 
 
 def get_profile_by_name(name: str) -> BenchmarkProfile:
-    """Get benchmark profile by name."""
+    """Return the profile named ``name``; raise KeyError if none matches."""
     for profile in BENCHMARK_PROFILES:
         if profile.name == name:
             return profile

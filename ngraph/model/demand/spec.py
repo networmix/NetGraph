@@ -8,7 +8,7 @@ or pinned to explicit routes with `StaticPath`.
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, Union
 
-from ngraph.model.flow.policy_config import FlowPolicyPreset, serialize_policy_preset
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.types.base import Mode
 from ngraph.utils.ids import new_base64_uuid
 
@@ -47,7 +47,7 @@ class StaticPath:
 
 @dataclass
 class TrafficDemand:
-    """Traffic demand specification using unified selectors.
+    """Traffic demand between selector-matched source and target nodes.
 
     Attributes:
         source: Source node selector (string path or selector dict).
@@ -57,7 +57,8 @@ class TrafficDemand:
         mode: Node pairing mode ("combine" or "pairwise").
         group_mode: How grouped nodes produce demands
             ("flatten", "per_group", "group_pairwise").
-        flow_policy: Policy preset for routing.
+        flow_policy: Routing preset; None uses ``DEFAULT_PRESET``
+            (SHORTEST_PATHS_ECMP).
         static_paths: Explicit routes to pin this demand to. When set, the
             demand is placed only on these routes: one flow per route, and a
             route broken by a failure carries nothing rather than rerouting.
@@ -78,7 +79,13 @@ class TrafficDemand:
     id: str = ""
 
     def __post_init__(self) -> None:
-        """Validate mode fields and generate id if not provided."""
+        """Validate field values and generate an id if not provided.
+
+        Raises:
+            ValueError: If ``mode`` or ``group_mode`` is not a known value,
+                ``flow_policy`` is not a FlowPolicyPreset or None, or a
+                ``static_paths`` entry is not a StaticPath.
+        """
         if self.mode not in _VALID_MODES:
             raise ValueError(
                 f"Unknown demand mode '{self.mode}'. "
@@ -89,6 +96,13 @@ class TrafficDemand:
                 f"Unknown demand group_mode '{self.group_mode}'. "
                 f"Expected one of: {', '.join(_VALID_GROUP_MODES)}"
             )
+        if self.flow_policy is not None and not isinstance(
+            self.flow_policy, FlowPolicyPreset
+        ):
+            raise ValueError(
+                f"flow_policy must be a FlowPolicyPreset or None, got "
+                f"{self.flow_policy!r}"
+            )
         for path in self.static_paths:
             if not isinstance(path, StaticPath):
                 raise ValueError(
@@ -96,17 +110,17 @@ class TrafficDemand:
                     f"{type(path).__name__}"
                 )
         if not self.id:
-            # Build a stable identifier from source/target
+            # Source/target prefix for readability; the UUID suffix keeps ids
+            # unique across demands with the same selectors.
             src_key = self.source if isinstance(self.source, str) else str(self.source)
             tgt_key = self.target if isinstance(self.target, str) else str(self.target)
             self.id = f"{src_key}|{tgt_key}|{new_base64_uuid()}"
 
     def to_dict(self) -> Dict[str, Any]:
-        """Return the canonical serialized form (results output, snapshots).
+        """Return the canonical serialized form.
 
-        The flow policy is serialized to its preset name; use the raw
-        `flow_policy` attribute for analysis wire formats that expect the
-        preset object.
+        Used for results output, snapshots, and the demand configs analysis
+        functions accept. The flow policy is serialized to its preset name.
         """
         return {
             "id": self.id,
@@ -116,7 +130,9 @@ class TrafficDemand:
             "priority": int(self.priority),
             "mode": self.mode,
             "group_mode": self.group_mode,
-            "flow_policy": serialize_policy_preset(self.flow_policy),
+            "flow_policy": (
+                self.flow_policy.name if self.flow_policy is not None else None
+            ),
             "static_paths": [
                 {"nodes": list(p.nodes)} if p.nodes else {"links": list(p.links)}
                 for p in self.static_paths

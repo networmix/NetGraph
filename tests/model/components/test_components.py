@@ -99,7 +99,6 @@ def test_component_as_dict() -> None:
         attrs={"location": "rack1"},
     )
 
-    # Include children
     parent_dict_incl = parent.as_dict(include_children=True)
     assert parent_dict_incl["name"] == "Parent"
     assert parent_dict_incl["capex"] == 100.0
@@ -110,28 +109,24 @@ def test_component_as_dict() -> None:
     assert parent_dict_incl["children"]["Child"]["name"] == "Child"
     assert parent_dict_incl["children"]["Child"]["capex"] == 10.0
 
-    # Exclude children
     parent_dict_excl = parent.as_dict(include_children=False)
     assert parent_dict_excl["name"] == "Parent"
     assert "children" not in parent_dict_excl
 
 
-def test_components_library_from_yaml_attrs_and_leftovers() -> None:
-    """Unknown component fields are merged into attrs; YAML path covered."""
+def test_components_library_from_yaml_attrs() -> None:
+    """Custom data lives under attrs; YAML path covered."""
     yaml_str = """
 components:
   Mod:
     component_type: module
-    cost: 3
     attrs:
       vendor: acme
-    custom_field: value
     """
     lib = ComponentsLibrary.from_yaml(yaml_str)
     comp = lib.get("Mod")
     assert comp is not None
-    assert comp.attrs["vendor"] == "acme"
-    assert comp.attrs["custom_field"] == "value"
+    assert comp.attrs == {"vendor": "acme"}
 
 
 def test_components_library_merge_override_true() -> None:
@@ -156,11 +151,9 @@ def test_components_library_merge_override_true() -> None:
     )
 
     lib1.merge(lib2, override=True)
-    # The "Overlap" component is replaced by lib2's version (cost=200).
+    # The "Overlap" component is replaced by lib2's version (capex=200).
     assert lib1.get("Overlap") is new_comp
-    # The merged library includes components from lib2.
     assert "UniqueLib2" in lib1.components
-    # The original unique component remains.
     assert "UniqueLib1" in lib1.components
 
 
@@ -186,9 +179,8 @@ def test_components_library_merge_override_false() -> None:
     )
 
     lib1.merge(lib2, override=False)
-    # The "Overlap" component remains the original (cost=100).
+    # The "Overlap" component remains the original (capex=100).
     assert lib1.get("Overlap") is original_comp
-    # The merged library includes components from lib2.
     assert "UniqueLib2" in lib1.components
 
 
@@ -367,9 +359,8 @@ components:
     assert my_chassis is not None
     assert my_chassis.capex == 1000
 
-    # All true-like YAML values become "True" component (last one wins)
-    # NOTE: When multiple YAML keys collapse to the same boolean value,
-    # only the last one wins (standard YAML/dict behavior)
+    # All true-like YAML values become the "True" component. When several keys
+    # collapse to the same boolean, the last one wins (standard YAML/dict behavior).
     true_comp = lib.get("True")
     assert true_comp is not None
     assert true_comp.component_type == "module"  # from 'on:', the last true-like key
@@ -383,7 +374,7 @@ components:
 
 
 def test_components_library_yaml_boolean_child_keys():
-    """Test that YAML boolean keys in child components are handled correctly."""
+    """YAML boolean keys in child components become "True"/"False" names."""
     yaml_str = """
 components:
   ParentChassis:
@@ -435,7 +426,7 @@ components:
 
 
 def test_helper_resolve_and_totals_with_multiplier() -> None:
-    """Helpers return component and apply count multiplier correctly."""
+    """Helpers resolve the node's component and multiply its totals by count."""
     from ngraph.model.components import resolve_node_hardware, totals_with_multiplier
 
     lib = ComponentsLibrary()
@@ -450,3 +441,32 @@ def test_helper_resolve_and_totals_with_multiplier() -> None:
     assert capex == 15.0
     assert power == 6.0
     assert capacity == 30.0
+
+
+@pytest.mark.parametrize("count", [0, -1, "2", True, float("inf"), float("nan")])
+def test_hardware_count_must_be_positive_number(count) -> None:
+    """Invalid hardware counts raise instead of silently becoming 1."""
+    from ngraph.model.components import (
+        resolve_link_end_components,
+        resolve_node_hardware,
+    )
+
+    lib = ComponentsLibrary()
+    with pytest.raises(ValueError, match="must be a finite positive number"):
+        resolve_node_hardware({"hardware": {"component": "box", "count": count}}, lib)
+    with pytest.raises(ValueError, match="must be a finite positive number"):
+        resolve_link_end_components(
+            {"hardware": {"source": {"component": "o", "count": count}}}, lib
+        )
+
+
+def test_as_dict_round_trips_through_from_dict() -> None:
+    """as_dict output (which carries 'name') loads back via from_dict."""
+    child = Component(name="Card", capex=5.0)
+    parent = Component(name="Chassis", capex=10.0, children={"Card": child})
+    lib = ComponentsLibrary.from_dict({"Chassis": parent.as_dict()})
+    rebuilt = lib.get("Chassis")
+    assert rebuilt is not None
+    assert rebuilt.total_capex() == parent.total_capex()
+    with pytest.raises(ValueError, match="mismatched name"):
+        ComponentsLibrary.from_dict({"Other": parent.as_dict()})

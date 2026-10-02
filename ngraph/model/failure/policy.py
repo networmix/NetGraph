@@ -83,7 +83,7 @@ class FailureRule:
 
 @dataclass
 class FailureMode:
-    """A weighted mode that encapsulates a set of rules applied together.
+    """Weighted set of rules applied together.
 
     Exactly one mode is selected per failure iteration according to the
     mode weights. Within a mode, all contained rules are applied and their
@@ -103,7 +103,7 @@ class FailureMode:
 
 @dataclass
 class FailurePolicy:
-    """A container for failure modes plus optional metadata in `attrs`.
+    """Weighted failure modes plus optional metadata in `attrs`.
 
     The main entry point is `apply_failures_typed`, which:
       1) Builds a single RNG for the entire call (from `seed` or `self.seed`).
@@ -148,11 +148,11 @@ class FailurePolicy:
         """Identify which entities fail for this iteration, typed by scope.
 
         A single ``random.Random`` instance is created from the effective seed
-        (``seed`` if given, else ``self.seed``).  All random draws -- mode
-        selection followed by per-rule entity selection -- are sequential from
-        this one stream, ensuring that rules are statistically independent.
-        When no seed is available, an unseeded ``Random()`` instance is used so
-        that results are isolated from the global ``random`` module state.
+        (``seed`` if given, else ``self.seed``). All random draws (mode
+        selection, then per-rule entity selection) come in sequence from this
+        one stream, so rules are statistically independent. When no seed is
+        available, an unseeded ``Random()`` instance is used so that results
+        are isolated from the global ``random`` module state.
 
         Args:
             network_nodes: Mapping of node_id -> flattened attribute dict.
@@ -161,7 +161,7 @@ class FailurePolicy:
             seed: Optional deterministic seed for selection.  Overrides
                 ``self.seed`` when provided.
             failure_trace: Optional dict to populate with trace data (mode selection,
-                rule selections, expansion). If provided, will be mutated in-place.
+                rule selections, expansion). Mutated in place when given.
             prepared_matches: Optional mapping from ``id(rule)`` to already-sorted
                 candidate IDs. Used by FailureManager to avoid repeated matching.
             prepared_weights: Optional per-rule weight splits from
@@ -190,20 +190,19 @@ class FailurePolicy:
         failed_links: Set[str] = set()
         failed_risk_groups: Set[str] = set()
 
-        # Initialize trace structure if requested
         if failure_trace is not None:
             failure_trace.update(
                 {
                     "mode_index": None,
                     "mode_attrs": {},
                     "selections": [],
-                    "expansion": {"nodes": [], "links": [], "risk_groups": []},
+                    "expansion": {"nodes": [], "links": []},
                 }
             )
 
-        # Build a single RNG for this entire apply_failures call.
-        # All random draws (mode selection, entity selection across rules)
-        # come from this one stream, ensuring statistical independence.
+        # One RNG for the whole call. All random draws (mode selection, then
+        # entity selection for each rule) come from this one stream, which
+        # keeps rules statistically independent.
         effective_seed = seed if seed is not None else self.seed
         rng = (
             _random.Random(effective_seed)
@@ -222,7 +221,6 @@ class FailurePolicy:
                     failure_trace["mode_index"] = mode_index
                     failure_trace["mode_attrs"] = dict(self.modes[mode_index].attrs)
 
-        # Collect matched from each rule, then select
         for idx, rule in enumerate(rules_to_apply):
             matched_ids: Sequence[str] | Set[str]
             if prepared_matches is not None and id(rule) in prepared_matches:
@@ -251,7 +249,6 @@ class FailurePolicy:
                 weight_split=weight_split,
             )
 
-            # Record selection in trace if non-empty
             if failure_trace is not None and selected:
                 failure_trace["selections"].append(
                     {
@@ -292,13 +289,10 @@ class FailurePolicy:
                 rg_members=prepared_rg_members,
             )
 
-        # Capture expansion in trace
         if failure_trace is not None:
             failure_trace["expansion"] = {
                 "nodes": sorted(failed_nodes - pre_nodes),
                 "links": sorted(failed_links - pre_links),
-                # Expansion adds member nodes/links; the group set never grows.
-                "risk_groups": [],
             }
 
         return failed_nodes, failed_links, failed_risk_groups
@@ -349,7 +343,7 @@ class FailurePolicy:
         """Prepare stable ordered candidate pools for all rules in this policy.
 
         Pre-computes the set of matching entity IDs for each rule so that
-        ``apply_failures`` can skip per-iteration condition evaluation.
+        ``apply_failures_typed`` can skip per-iteration condition evaluation.
 
         Args:
             network_nodes: Mapping of node_id -> flattened attribute dict.
@@ -425,18 +419,9 @@ class FailurePolicy:
                         network_links if rule.scope == "link" else network_risk_groups
                     )
                 )
-                positives: Dict[str, float] = {}
-                zeros: list[str] = []
-                for eid in prepared_matches[rule_key]:
-                    w = FailurePolicy._extract_weight(
-                        entity_map.get(eid), rule.weight_by
-                    )
-                    w = float(w) if isinstance(w, (int, float)) else 0.0
-                    if w <= 0.0:
-                        zeros.append(eid)
-                    else:
-                        positives[eid] = w
-                prepared[rule_key] = (positives, tuple(zeros))
+                prepared[rule_key] = FailurePolicy._split_by_weight(
+                    prepared_matches[rule_key], entity_map, rule.weight_by
+                )
         return prepared
 
     def _match_scope(
@@ -485,8 +470,8 @@ class FailurePolicy:
         """Select entities for failure per rule.
 
         For mode="choice" and rule.weight_by set, perform weighted sampling
-        without replacement according to the specified attribute. If all weights
-        are non-positive or missing, fallback to uniform sampling.
+        without replacement according to the specified attribute. Entities
+        with zero or missing weight fill any remaining picks uniformly.
 
         Args:
             entity_ids: Candidate entity IDs. Accepts a pre-sorted sequence
@@ -501,9 +486,9 @@ class FailurePolicy:
         if not entity_ids:
             return set()
 
-        # Ensure deterministic mapping from RNG draws to entity IDs. Prepared
-        # matches are already ordered (used as-is, no copy); sets must still
-        # be sorted here.
+        # Sorted order makes the mapping from RNG draws to entity IDs
+        # deterministic. Prepared matches are already ordered (used as-is, no
+        # copy); sets are sorted here.
         ordered_ids: Sequence[str] = (
             entity_ids if isinstance(entity_ids, (tuple, list)) else sorted(entity_ids)
         )
@@ -527,21 +512,13 @@ class FailurePolicy:
             # positive/zero split is static per rule; use the precomputed one
             # (see prepare_weights) when the caller supplies it.
             if rule.weight_by:
-                if weight_split is not None:
-                    positives, zeros = weight_split
-                else:
-                    positives = {}
-                    zeros_list: list[str] = []
-                    for eid in ordered_ids:
-                        w = FailurePolicy._extract_weight(
-                            entity_map.get(eid), rule.weight_by
-                        )
-                        w = float(w) if isinstance(w, (int, float)) else 0.0
-                        if w <= 0.0:
-                            zeros_list.append(eid)
-                        else:
-                            positives[eid] = w
-                    zeros = tuple(zeros_list)
+                positives, zeros = (
+                    weight_split
+                    if weight_split is not None
+                    else FailurePolicy._split_by_weight(
+                        ordered_ids, entity_map, rule.weight_by
+                    )
+                )
 
                 selected: set[str] = set()
                 if positives:
@@ -549,7 +526,7 @@ class FailurePolicy:
                     selected |= FailurePolicy._weighted_sample_without_replacement(
                         positives, k, rng
                     )
-                # If we still need more picks, fill uniformly from zero-weight items
+                # Fill any remaining picks uniformly from zero-weight items.
                 remaining = count - len(selected)
                 if remaining > 0 and zeros:
                     # zeros already follow ordered_ids order; preserve that
@@ -558,11 +535,28 @@ class FailurePolicy:
                         selected |= set(rng.sample(pool, k=min(remaining, len(pool))))
                 return selected
 
-            # Uniform sampling when no weighting is requested
             return set(rng.sample(ordered_ids, k=count))
 
         # mode == "all" (validated in FailureRule.__post_init__)
         return set(ordered_ids)
+
+    @staticmethod
+    def _split_by_weight(
+        entity_ids: Sequence[str], entity_map: Dict[str, Any], weight_by: str
+    ) -> Tuple[Dict[str, float], Tuple[str, ...]]:
+        """Split ids into positive weights (id -> weight) and zero/missing ones.
+
+        Both parts keep the order of ``entity_ids``.
+        """
+        positives: Dict[str, float] = {}
+        zeros: List[str] = []
+        for eid in entity_ids:
+            w = FailurePolicy._extract_weight(entity_map.get(eid), weight_by)
+            if w <= 0.0:
+                zeros.append(eid)
+            else:
+                positives[eid] = w
+        return positives, tuple(zeros)
 
     @staticmethod
     def _extract_weight(entity: Optional[Dict[str, Any]], attr_name: str) -> float:
@@ -595,7 +589,7 @@ class FailurePolicy:
         Returns:
             Set of selected item ids.
         """
-        # Sort by item id to ensure a stable order of RNG draws per item
+        # Sort by item id so RNG draws map to items in a stable order.
         positive_items: List[Tuple[str, float]] = sorted(
             [(k, w) for k, w in weights.items() if w > 0.0], key=lambda x: x[0]
         )
@@ -606,12 +600,12 @@ class FailurePolicy:
         # monotone transform of u ** (1/w), so the ranking is identical where
         # the linear form is exact, but the log form neither underflows to 0.0
         # for tiny weights (~1e-5, e.g. per-hour failure rates) nor saturates
-        # to 1.0 for huge ones -- both of which silently degenerated selection
-        # into descending-id order regardless of weights.
+        # to 1.0 for huge ones. Either would degenerate selection into
+        # descending-id order regardless of weights.
         scored: List[Tuple[float, str]] = []
         for item_id, w in positive_items:
             u = rng.random()
-            # Guard against u=0.0 -> use minimal positive number
+            # random() can return 0.0, and log(0.0) is undefined.
             if u <= 0.0:
                 u = 1e-12
             scored.append((math.log(u) / w, item_id))
@@ -638,7 +632,6 @@ class FailurePolicy:
             if float(m.weight) > 0.0
         ]
         if not effective:
-            # Degenerate: no positive weights -> no mode is selected
             return None
         total = sum(w for _, w in effective)
         r = rng.random() * total
@@ -690,8 +683,9 @@ class FailurePolicy:
         network_risk_groups: Optional[Dict[str, Any]] = None,
         rg_members: Optional[Dict[str, Tuple[frozenset, frozenset]]] = None,
     ) -> None:
-        """Expand failures among any node/link that shares a risk group
-        with a failed entity. BFS until no new failures.
+        """Fail every node or link that shares a risk group with a failed entity.
+
+        Runs breadth-first until no new failures appear.
 
         When ``failed_risk_groups`` is given, the members of those groups
         (transitively through child groups) seed the expansion as well, so a

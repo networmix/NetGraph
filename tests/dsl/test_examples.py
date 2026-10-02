@@ -282,7 +282,7 @@ demands:
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    default_demands = scenario.demand_set.get_default_set()
+    default_demands = scenario.demand_set.get_set("default")
     assert len(default_demands) == 1
     demand = default_demands[0]
     assert demand.source == "source.*"
@@ -351,16 +351,15 @@ workflow:
     assert len(scenario.workflow) == 1
     assert scenario.workflow[0].__class__.__name__ == "BuildGraph"
 
-    # Test running the workflow
     scenario.run()
-    # Check that build_graph step was executed (default unique name assigned)
+    # The unnamed step gets a default unique name
     step_name = scenario.workflow[0].name
     exp = scenario.results.to_dict()
     assert exp["steps"][step_name]["data"].get("graph") is not None
 
 
 def test_node_overrides_example():
-    """Test node overrides functionality."""
+    """node_rules disable nodes matched by a path regex."""
     yaml_content = """
 blueprints:
   test_bp:
@@ -384,7 +383,6 @@ network:
 
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Check that switches 1 and 3 are disabled
     disabled_nodes = [
         name for name, node in scenario.network.nodes.items() if node.disabled
     ]
@@ -394,7 +392,7 @@ network:
 
 
 def test_link_overrides_example():
-    """Test link overrides functionality."""
+    """link_rules override capacity and cost on one link of a mesh."""
     yaml_content = """
 network:
   nodes:
@@ -421,7 +419,6 @@ network:
 
     scenario = Scenario.from_yaml(yaml_content)
 
-    # Find the specific overridden link
     overridden_link = None
     for _link_id, link in scenario.network.links.items():
         if link.source == "group1/node-1" and link.target == "group2/node-1":
@@ -621,9 +618,8 @@ def test_group_by_selector_inside_blueprint():
     """Test group_by selector in blueprint adjacency.
 
     When a blueprint adjacency uses a selector with group_by, nodes are
-    grouped by that attribute value regardless of path prefix. This test
-    ensures the expansion connects leaf->spine using attribute-based
-    selectors inside the blueprint.
+    grouped by that attribute value regardless of path prefix. The expansion
+    connects leaf->spine using attribute-based selectors inside the blueprint.
     """
     yaml_content = """
 blueprints:
@@ -673,8 +669,7 @@ network:
 def test_group_by_with_variable_expansion():
     """Test group_by selector combined with variable expansion.
 
-    Validates that group_by selectors work correctly when the attribute
-    name is generated via variable expansion using $var syntax.
+    group_by selects by an attribute name generated via $var expansion.
     """
     yaml_content = """
 blueprints:

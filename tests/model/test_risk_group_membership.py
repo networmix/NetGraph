@@ -11,7 +11,7 @@ from ngraph.scenario import Scenario
 
 
 class TestMembershipRulesBasic:
-    """Basic tests for membership rule resolution."""
+    """Membership rules assign nodes, links, and child risk groups."""
 
     def test_node_membership_simple(self) -> None:
         """Nodes matching facility.power_zone are added to power zone risk group."""
@@ -96,7 +96,6 @@ risk_groups:
 """
         scenario = Scenario.from_yaml(yaml_content)
 
-        # Find links and check membership
         for link in scenario.network.links.values():
             if link.attrs.get("fiber", {}).get("conduit_id") == "NYC-CHI-C1":
                 assert "Conduit_NYC_CHI_C1" in link.risk_groups
@@ -288,10 +287,10 @@ risk_groups:
 
 
 class TestMembershipRulesEdgeCases:
-    """Edge cases for membership rules."""
+    """Membership with no rule, no matches, self-reference, and explicit assignment."""
 
     def test_no_membership_rule(self) -> None:
-        """Risk groups without membership rules work normally with explicit assignment."""
+        """Risk groups without membership rules keep explicitly assigned members."""
         yaml_content = """
 network:
   nodes:
@@ -386,7 +385,7 @@ risk_groups:
 
 
 class TestMembershipRulesOperators:
-    """Tests for various operators in membership conditions."""
+    """contains, in, and numeric comparison operators in membership conditions."""
 
     def test_contains_operator(self) -> None:
         """Contains operator for list attributes like fiber pair IDs."""
@@ -600,7 +599,7 @@ risk_groups:
         assert "circular" in error_msg.lower() or "cycle" in error_msg.lower()
 
     def test_valid_hierarchy_no_cycle(self) -> None:
-        """Valid tree hierarchy without cycles works correctly."""
+        """An acyclic hierarchy loads and attaches matching groups as children."""
         yaml_content = """
 network:
   nodes:

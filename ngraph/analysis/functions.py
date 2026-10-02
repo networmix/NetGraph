@@ -1,19 +1,14 @@
-"""Flow analysis functions for network evaluation.
+"""Flow analysis functions for FailureManager.
 
-These functions are designed for use with FailureManager. Each analysis function
-takes a Network, exclusion sets, and analysis-specific parameters, returning
-results of type FlowIterationResult.
+Each function takes a Network, exclusion sets, and analysis-specific
+parameters, and returns a FlowIterationResult.
 
-Parameters should ideally be hashable so FailureManager can deduplicate
-identical failure patterns before dispatch; non-hashable objects are keyed
-by memory address.
+Graph caching builds the graph once and applies each exclusion set as a
+boolean mask (a vectorized array fill plus O(|excluded|) updates) instead of
+rebuilding.
 
-Graph caching builds the graph once and applies each exclusion set as an
-O(|excluded|) mask instead of rebuilding.
-
-SPF caching computes shortest paths once per unique source node rather than
-once per demand. For networks with many demands sharing the same sources, this
-can reduce SPF computations by an order of magnitude.
+SPF caching computes the base shortest-path DAG once per unique source node
+rather than once per demand, so SPF runs scale with unique sources.
 """
 
 from __future__ import annotations
@@ -27,7 +22,6 @@ from ngraph.analysis.demand import DemandExpansion, expand_demands
 from ngraph.analysis.placement import place_demands
 from ngraph.model.demand.builder import coerce_flow_policy
 from ngraph.model.demand.spec import StaticPath, TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
 from ngraph.types.base import FlowPlacement, Mode
 
@@ -75,7 +69,7 @@ def _reconstruct_traffic_demands(
 
     Field defaults match TrafficDemand's own defaults (mode="combine",
     group_mode="flatten"), so a config produced by `TrafficDemand.to_dict`
-    round-trips faithfully.
+    round-trips.
 
     Args:
         demands_config: List of demand configurations with fields:
@@ -156,6 +150,40 @@ def _prepare_maxflow_inputs(
     }
 
 
+def _pair_context(
+    network: "Network",
+    source: str | dict[str, Any],
+    target: str | dict[str, Any],
+    mode: str,
+    context: Optional[AnalysisContext],
+) -> AnalysisContext:
+    """Return `context`, or a context bound to source/target/mode.
+
+    A supplied context must be bound to the same source/target/mode; silently
+    ignoring mismatched arguments would return results for the wrong pair.
+    """
+    mode_enum = Mode.from_string(mode)
+    if context is None:
+        return analyze(network, source=source, sink=target, mode=mode_enum)
+    if not context.is_bound:
+        raise ValueError(
+            "Provided context is unbound; build it with build_maxflow_context "
+            "(or analyze(..., source=, sink=, mode=)) for these arguments."
+        )
+    if (
+        context.bound_source != source
+        or context.bound_sink != target
+        or context.bound_mode != mode_enum
+    ):
+        raise ValueError(
+            "Provided context is bound to "
+            f"source={context.bound_source!r}, sink={context.bound_sink!r}, "
+            f"mode={context.bound_mode}, which differs from the analysis "
+            "arguments; rebuild the context or pass matching arguments."
+        )
+    return context
+
+
 @_with_prepare_inputs(_prepare_maxflow_inputs)
 def max_flow_analysis(
     network: "Network",
@@ -174,7 +202,7 @@ def max_flow_analysis(
     """Analyze maximum flow capacity between node groups.
 
     Args:
-        network: Network instance.
+        network: Network to analyze.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
         source: Source node selector (string path or selector dict).
@@ -183,37 +211,23 @@ def max_flow_analysis(
         shortest_path: If True, use single-tier shortest-path flow (IP/IGP
             mode) instead of full iterative max-flow.
         require_capacity: If True (default), path selection considers available
-            capacity. If False, path selection is cost-only (true IP/IGP semantics).
+            capacity. If False, path selection is cost-only (IP/IGP semantics).
         flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
-        include_flow_details: Whether to collect cost distribution and similar details.
+        include_flow_details: Whether to fill each entry's cost_distribution.
         include_min_cut: Whether to include min-cut edge list in entry data.
-        context: Pre-built AnalysisContext reused across calls. Must be
-            unbound or bound to these same source/target/mode arguments.
+        context: Pre-built AnalysisContext reused across calls, bound to
+            these same source/target/mode arguments (see
+            ``build_maxflow_context``).
 
     Returns:
-        FlowIterationResult describing this iteration.
-    """
-    # Convert string mode to Mode enum (raises on invalid values)
-    mode_enum = Mode.from_string(mode)
+        FlowIterationResult with one entry per source/sink pair; demand and
+        placed both equal the max flow.
 
-    # Use provided context or create a new one. A bound context carries its
-    # own source/sink/mode; silently ignoring mismatched arguments would
-    # return results for the wrong pair, so reject the mismatch loudly.
-    if context is not None:
-        ctx = context
-        if ctx.is_bound and (
-            ctx.bound_source != source
-            or ctx.bound_sink != target
-            or ctx.bound_mode != mode_enum
-        ):
-            raise ValueError(
-                "Provided context is bound to "
-                f"source={ctx.bound_source!r}, sink={ctx.bound_sink!r}, "
-                f"mode={ctx.bound_mode}, which differs from the analysis "
-                "arguments; rebuild the context or pass matching arguments."
-            )
-    else:
-        ctx = analyze(network, source=source, sink=target, mode=mode_enum)
+    Raises:
+        ValueError: If ``context`` is unbound or bound to different
+            source/target/mode arguments.
+    """
+    ctx = _pair_context(network, source, target, mode, context)
 
     flow_entries: list[FlowEntry] = []
     total_demand = 0.0
@@ -324,48 +338,39 @@ def demand_placement_analysis(
        ``include_flow_details`` a lossy demand's entry carries
        ``data["dropped_edges"]``, the dropped volume per ``link_id:direction``.
 
-    SPF Caching Optimization:
-        For cacheable policies (ECMP, WCMP, TE_WCMP_UNLIM), SPF results are
-        cached by source node. This reduces SPF computations from O(demands)
-        to O(unique_sources), typically a 5-10x reduction for workloads with
-        many demands sharing the same sources.
+    SPF Caching:
+        For cacheable presets (the hop-by-hop ``SHORTEST_PATHS_*`` presets and
+        ``TE_WCMP_UNLIM``), base SPF DAGs are cached by source node, which
+        cuts SPF runs from O(demands) to O(unique_sources).
 
     Args:
-        network: Network instance.
+        network: Network to analyze.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
         demands_config: List of demand configurations (serializable dicts).
         include_flow_details: When True, include cost_distribution per flow.
         include_used_edges: When True, include set of used edges per demand in entry data.
         context: Pre-built AnalysisContext, reused across calls. Must be built
-            from this same demands_config - pseudo node names embed demand
+            from this same demands_config: pseudo node names embed demand
             ids, so a context built from a different config raises ValueError
             during endpoint resolution. See build_demand_placement_inputs.
         expansion: Pre-computed DemandExpansion matching demands_config. When
             provided, per-call demand reconstruction and expansion are skipped.
             Must be built together with ``context`` (pseudo node names embed
-            demand ids) - see build_demand_placement_inputs.
+            demand ids); see build_demand_placement_inputs.
         resolved_ids: Pre-resolved (src_id, dst_id) pairs aligned with
             expansion.demands. Only valid together with ``context``.
 
     Returns:
-        FlowIterationResult describing this iteration.
+        FlowIterationResult with one entry per expanded demand.
     """
     if expansion is None:
         traffic_demands = _reconstruct_traffic_demands(demands_config)
+        expansion = expand_demands(network, traffic_demands)
 
-        # Phase 1: Expand demands (pure logic, returns names + augmentations)
-        expansion = expand_demands(
-            network,
-            traffic_demands,
-            default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-        )
-
-    # Phase 2: Use cached context infrastructure or build fresh
     if context is not None:
         ctx = context
     else:
-        # Build fresh context with augmentations
         ctx = AnalysisContext.from_network(
             network, augmentations=expansion.augmentations
         )
@@ -374,7 +379,6 @@ def demand_placement_analysis(
     edge_mask = ctx.build_edge_mask(excluded_links)
     flow_graph = netgraph_core.FlowGraph(ctx.multidigraph)
 
-    # Phase 3: Place demands using unified placement module
     result = place_demands(
         expansion.demands,
         [d.volume for d in expansion.demands],
@@ -388,7 +392,6 @@ def demand_placement_analysis(
         include_used_edges=include_used_edges,
     )
 
-    # Phase 4: Convert to FlowEntry format
     flow_entries = []
     for e in result.entries or []:
         data: dict[str, Any] = {}
@@ -440,11 +443,11 @@ def sensitivity_analysis(
     caused by removing each one. Returns a FlowIterationResult where each
     FlowEntry represents a source/target pair with:
     - demand/placed = max flow value (the capacity being analyzed)
-    - dropped = 0.0 (baseline analysis, no failures applied)
+    - dropped = 0.0 (the max flow is reported as fully placed)
     - data["sensitivity"] = {link_id:direction: flow_reduction} for critical edges
 
     Args:
-        network: Network instance.
+        network: Network to analyze.
         excluded_nodes: Set of node names to exclude temporarily.
         excluded_links: Set of link IDs to exclude temporarily.
         source: Source node selector (string path or selector dict).
@@ -454,36 +457,21 @@ def sensitivity_analysis(
             Reports only edges used under ECMP routing. If False (default), use
             full iterative max-flow (SDN/TE mode) and report all saturated edges.
         flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
-        context: Pre-built AnalysisContext reused across calls. Must be
-            unbound or bound to these same source/target/mode arguments.
+        context: Pre-built AnalysisContext reused across calls, bound to
+            these same source/target/mode arguments (see
+            ``build_maxflow_context``).
 
     Returns:
         FlowIterationResult with sensitivity data in each FlowEntry.data.
+
+    Raises:
+        ValueError: If ``context`` is unbound or bound to different
+            source/target/mode arguments.
     """
-    # Convert string mode to Mode enum (raises on invalid values)
-    mode_enum = Mode.from_string(mode)
+    ctx = _pair_context(network, source, target, mode, context)
 
-    # Use provided context or create a new one. A bound context carries its
-    # own source/sink/mode; silently ignoring mismatched arguments would
-    # return results for the wrong pair, so reject the mismatch loudly.
-    if context is not None:
-        ctx = context
-        if ctx.is_bound and (
-            ctx.bound_source != source
-            or ctx.bound_sink != target
-            or ctx.bound_mode != mode_enum
-        ):
-            raise ValueError(
-                "Provided context is bound to "
-                f"source={ctx.bound_source!r}, sink={ctx.bound_sink!r}, "
-                f"mode={ctx.bound_mode}, which differs from the analysis "
-                "arguments; rebuild the context or pass matching arguments."
-            )
-    else:
-        ctx = analyze(network, source=source, sink=target, mode=mode_enum)
-
-    # Get max flow and sensitivity (critical edges) for each pair in a
-    # single pass: masks are built once and the pairs are walked once.
+    # One pass for both results: masks are built once and the pairs are
+    # walked once.
     combined = ctx.sensitivity_with_flow(
         shortest_path=shortest_path,
         flow_placement=flow_placement,
@@ -491,7 +479,6 @@ def sensitivity_analysis(
         excluded_links=excluded_links,
     )
 
-    # Build FlowEntry for each pair
     flow_entries: list[FlowEntry] = []
     total_flow = 0.0
 
@@ -508,7 +495,6 @@ def sensitivity_analysis(
         flow_entries.append(entry)
         total_flow += flow_value
 
-    # Build summary
     summary = FlowSummary(
         total_demand=total_flow,
         total_placed=total_flow,
@@ -533,7 +519,7 @@ def build_demand_placement_inputs(
     (derived from demand ids) match the context's graph.
 
     Args:
-        network: Network instance.
+        network: Network to analyze.
         demands_config: List of demand configurations (same format as
             demand_placement_analysis).
 
@@ -543,17 +529,10 @@ def build_demand_placement_inputs(
     """
     traffic_demands = _reconstruct_traffic_demands(demands_config)
 
-    # Expand demands once to get augmentations and concrete demands
-    expansion = expand_demands(
-        network,
-        traffic_demands,
-        default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-    )
+    expansion = expand_demands(network, traffic_demands)
 
-    # Build context with augmentations
     context = analyze(network, augmentations=expansion.augmentations)
 
-    # Pre-resolve node IDs once
     resolved_ids = [
         (context.node_mapper.to_id(d.src_name), context.node_mapper.to_id(d.dst_name))
         for d in expansion.demands
@@ -570,10 +549,10 @@ def build_maxflow_context(
     """Build an AnalysisContext for repeated max-flow analysis.
 
     Pre-computes the graph with pseudo source/target nodes for all source/target
-    pairs, enabling O(|excluded|) mask building per iteration.
+    pairs, so each iteration only builds exclusion masks.
 
     Args:
-        network: Network instance.
+        network: Network to analyze.
         source: Source node selector (string path or selector dict).
         target: Target node selector (string path or selector dict).
         mode: Flow analysis mode ("combine" or "pairwise").

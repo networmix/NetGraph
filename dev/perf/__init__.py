@@ -1,32 +1,29 @@
 #!/usr/bin/env python3
-"""NetGraph Performance Analysis Module.
+"""Benchmarks for NetGraph operations, with complexity fits and plots.
 
-This module benchmarks and processes NetGraph network modeling operations.
-
-Core Components:
-- BenchmarkProfile: Direct topology configuration
-- BenchmarkSample: Single benchmark measurement
-- BenchmarkResult: Collection of samples from one profile
-- PerformanceAnalyzer: Analysis and reporting engine
-- BenchmarkRunner: Execution engine
-- PerformanceVisualizer: Chart and plot generation
+Main components:
+- BenchmarkProfile: Named set of cases analyzed together
+- BenchmarkSample: Timing statistics for one case
+- BenchmarkResult: Samples from one profile run
+- PerformanceAnalyzer: Prints summaries, complexity fits, and regressions
+- BenchmarkRunner: Runs profiles and collects samples
+- PerformanceVisualizer: Writes plots and the results JSON
 
 Usage:
     from dev.perf import BenchmarkRunner, BENCHMARK_PROFILES
 
     runner = BenchmarkRunner()
-    profile = BENCHMARK_PROFILES[0]  # Get first profile
+    profile = BENCHMARK_PROFILES[0]
     result = runner.run_profile(profile)
 
-    # Analyze performance
     from dev.perf import PerformanceAnalyzer
     analyzer = PerformanceAnalyzer()
     analyzer.add_run(result)
+    analyzer.print_analysis_report()
 
-    # Generate plots
     from dev.perf import PerformanceVisualizer
     viz = PerformanceVisualizer()
-    viz.plot_complexity_analysis(analyzer, "shortest_path")
+    viz.create_summary_report(analyzer, timestamp="manual")
 """
 
 from __future__ import annotations

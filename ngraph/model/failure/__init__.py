@@ -1,8 +1,7 @@
 """Failure modeling package.
 
-Provides primitives to define failure selection rules for Monte Carlo
-failure analyses. The `policy` module defines data classes for expressing
-selection logic over nodes, links, and risk groups.
+Rules that select which nodes, links, and risk groups fail in Monte Carlo
+failure analyses.
 
 Public entry points:
 

@@ -22,7 +22,7 @@ __all__ = [
 # Pattern to match $var or ${var} placeholders
 _VAR_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}|\$([a-zA-Z_][a-zA-Z0-9_]*)")
 
-# Expansion limits
+# Maximum number of copies one expand: block may produce
 MAX_TEMPLATE_EXPANSIONS = 10_000
 
 
@@ -55,7 +55,7 @@ def _substitute_string(template: str, var_dict: Dict[str, Any]) -> str:
 
 
 def substitute_vars(obj: Any, var_dict: Dict[str, Any]) -> Any:
-    """Recursively substitute ${var} in all strings within obj.
+    """Recursively substitute $var and ${var} in all strings within obj.
 
     A string consisting of exactly one placeholder (e.g. "${t}") is replaced
     by the variable's native value, preserving its type. This keeps match
@@ -68,8 +68,8 @@ def substitute_vars(obj: Any, var_dict: Dict[str, Any]) -> Any:
         var_dict: Mapping of variable names to values.
 
     Returns:
-        Object with variables substituted: whole-placeholder strings replaced
-        by the variable's native value, other strings interpolated as text.
+        obj with placeholders substituted. Dicts and lists are rebuilt, not
+        mutated.
 
     Raises:
         KeyError: If a placeholder names a variable absent from var_dict.
@@ -114,7 +114,6 @@ def _generate_combinations(
         combos: Iterator[tuple[Any, ...]] = zip(*var_values, strict=True)
         expansion_size = lengths[0] if lengths else 0
     else:
-        # Cartesian product
         expansion_size = 1
         for v in var_values:
             expansion_size *= len(v)

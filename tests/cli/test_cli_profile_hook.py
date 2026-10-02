@@ -26,7 +26,7 @@ workflow:
 def test_run_profile_prints_performance_report(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
-    """``ngraph run --profile`` still emits the per-step performance report."""
+    """``ngraph run --profile`` emits the per-step performance report."""
     scenario_file = tmp_path / "p.yaml"
     scenario_file.write_text(_SCENARIO_YAML)
     monkeypatch.chdir(tmp_path)
@@ -50,8 +50,8 @@ def test_run_profile_restores_profile_dir_env(tmp_path: Path, monkeypatch) -> No
 
     cli.main(["run", str(scenario_file), "--profile", "--no-results"])
 
-    # Previously unset, so it must be removed (not left pointing at a stale
-    # directory that would silently re-enable worker profiling later).
+    # Unset before the run, so it must be removed afterwards (not left
+    # pointing at a stale directory that would re-enable worker profiling).
     assert "NGRAPH_PROFILE_DIR" not in os.environ
 
 

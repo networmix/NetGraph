@@ -1,8 +1,8 @@
 """Failure policy containers.
 
-Provides `FailurePolicySet`, a named collection of `FailurePolicy` objects
-used as input to failure analysis workflows. This module contains input
-containers, not analysis results.
+`FailurePolicySet` is a named collection of `FailurePolicy` objects used as
+input to failure analysis workflows. These are input containers, not analysis
+results.
 """
 
 from __future__ import annotations

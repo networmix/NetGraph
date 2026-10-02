@@ -7,11 +7,12 @@ from typing import Any, Optional
 
 
 class SeedManager:
-    """Manages deterministic seed derivation for isolated component reproducibility.
+    """Derives per-component seeds from one master seed.
 
-    Global random.seed() creates order dependencies and component interference.
-    SeedManager derives unique seeds per component from a master seed using SHA-256,
-    ensuring reproducible results regardless of execution order or parallelism.
+    A global random.seed() makes each component's random draws depend on what
+    ran before it. SeedManager hashes the master seed with component
+    identifiers (SHA-256), so a component's seed does not depend on execution
+    order or parallelism.
 
     Usage:
         seed_mgr = SeedManager(42)
@@ -23,7 +24,7 @@ class SeedManager:
 
         Args:
             master_seed: Master seed for deterministic operations. If None,
-                        seed derivation will return None (non-deterministic).
+                        derive_seed() returns None (non-deterministic).
         """
         self.master_seed = master_seed
 
@@ -38,7 +39,7 @@ class SeedManager:
                         uniquely identify the component needing a seed.
 
         Returns:
-            Derived seed as positive integer, or None if no master seed set.
+            Derived seed in [0, 2**31 - 1], or None if no master seed is set.
 
         Example:
             seed_mgr = SeedManager(42)
@@ -48,10 +49,8 @@ class SeedManager:
         if self.master_seed is None:
             return None
 
-        # Create a deterministic hash from master seed and components
         seed_input = f"{self.master_seed}:" + ":".join(str(c) for c in components)
         hash_digest = hashlib.sha256(seed_input.encode()).digest()
 
-        # Convert first 4 bytes to a positive integer
         seed_value = int.from_bytes(hash_digest[:4], byteorder="big")
-        return seed_value & 0x7FFFFFFF  # Ensure positive 32-bit integer
+        return seed_value & 0x7FFFFFFF  # Clear the sign bit: non-negative 31-bit value

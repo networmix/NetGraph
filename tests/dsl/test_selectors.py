@@ -1,32 +1,22 @@
-"""Comprehensive tests for the unified selector system.
-
-Tests for ngraph.dsl.selectors modules:
-- normalize_selector: parsing and normalization
-- select_nodes: node selection with all stages
-- conditions: all condition operators
-"""
+"""Tests for the selector system in ngraph.dsl.selectors and ngraph.model.selectors."""
 
 import pytest
 
-from ngraph.dsl.selectors import (
+from ngraph.dsl.selectors import normalize_selector
+from ngraph.model.network import Network, Node
+from ngraph.model.selectors import (
     Condition,
     MatchSpec,
     NodeSelector,
     evaluate_condition,
     evaluate_conditions,
-    normalize_selector,
     select_nodes,
 )
-from ngraph.model.network import Network, Node
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 @pytest.fixture
 def simple_network() -> Network:
-    """A simple network with 4 nodes for basic testing."""
+    """Four nodes A-D without attributes."""
     network = Network()
     for name in ["A", "B", "C", "D"]:
         network.add_node(Node(name))
@@ -35,7 +25,7 @@ def simple_network() -> Network:
 
 @pytest.fixture
 def attributed_network() -> Network:
-    """Network with nodes having various attributes for selector testing."""
+    """Two datacenters with dc/role/tier attrs; dc2_leaf_2 is disabled."""
     network = Network()
 
     # Datacenter 1: 2 leafs, 1 spine
@@ -57,11 +47,6 @@ def attributed_network() -> Network:
     )
 
     return network
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# NodeSelector Schema Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestNodeSelectorSchema:
@@ -102,11 +87,6 @@ class TestNodeSelectorSchema:
         """NodeSelector with no fields raises ValueError."""
         with pytest.raises(ValueError, match="at least one of"):
             NodeSelector()
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# normalize_selector Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestNormalizeSelector:
@@ -202,25 +182,20 @@ class TestNormalizeSelector:
         sel = normalize_selector("^A$", "workflow")
         assert sel.active_only is True
 
-    def test_adjacency_context_active_only_false(self) -> None:
-        """Adjacency context defaults active_only to False."""
-        sel = normalize_selector("^A$", "adjacency")
+    def test_link_context_active_only_false(self) -> None:
+        """Link context defaults active_only to False."""
+        sel = normalize_selector("^A$", "link")
         assert sel.active_only is False
 
-    def test_override_context_active_only_false(self) -> None:
-        """Override context defaults active_only to False."""
-        sel = normalize_selector("^A$", "override")
+    def test_rule_context_active_only_false(self) -> None:
+        """Rule context defaults active_only to False."""
+        sel = normalize_selector("^A$", "rule")
         assert sel.active_only is False
 
     def test_explicit_active_only_overrides_default(self) -> None:
         """Explicit active_only in dict overrides context default."""
         sel = normalize_selector({"path": "^A$", "active_only": False}, "demand")
         assert sel.active_only is False
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# select_nodes Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestSelectNodesByPath:
@@ -372,7 +347,6 @@ class TestSelectNodesByGroupBy:
 
     def test_group_by_disabled_field(self, attributed_network: Network) -> None:
         """group_by can use top-level fields like disabled."""
-        # Disable one node for testing
         attributed_network.nodes["dc1_leaf_1"].disabled = True
 
         sel = NodeSelector(path=".*", group_by="disabled")
@@ -380,10 +354,8 @@ class TestSelectNodesByGroupBy:
 
         assert "True" in groups
         assert "False" in groups
-        # Verify disabled node is in the True group
         disabled_names = [n.name for n in groups["True"]]
         assert "dc1_leaf_1" in disabled_names
-        # Verify enabled nodes are in the False group
         enabled_names = [n.name for n in groups["False"]]
         assert len(enabled_names) > 0
         assert "dc1_leaf_1" not in enabled_names
@@ -416,11 +388,6 @@ class TestSelectNodesMatchOnly:
         all_nodes = [n for nodes in groups.values() for n in nodes]
         assert len(all_nodes) == 2
         assert all(n.attrs["tier"] == 2 for n in all_nodes)
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Condition Operators Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestConditionOperators:
@@ -590,3 +557,9 @@ class TestEvaluateConditions:
         conds = [Condition("x", "==", 1)]
         with pytest.raises(ValueError, match="Unsupported logic"):
             evaluate_conditions({}, conds, "xor")
+
+
+def test_selector_dict_rejects_unknown_keys() -> None:
+    """A misspelled selector key raises instead of being ignored."""
+    with pytest.raises(ValueError, match="Unrecognized key.*selector: grop_by"):
+        normalize_selector({"path": "^A$", "grop_by": "role"}, "demand")

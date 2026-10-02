@@ -1,8 +1,7 @@
 """YAML loader + schema validation for Scenario DSL.
 
-A single entrypoint parses a YAML string, normalizes keys where needed,
-validates against the packaged JSON schema, and returns a canonical
-dictionary suitable for downstream expansion/parsing.
+`load_scenario_yaml` parses a YAML string, validates it against the packaged
+JSON schema, and returns the dictionary for expansion and parsing.
 """
 
 from __future__ import annotations
@@ -11,29 +10,28 @@ import json
 from importlib import resources
 from typing import Any, Dict
 
+import jsonschema
 import yaml
-
-from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
 
 
 def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
-    """Load, normalize, and validate a Scenario YAML string.
+    """Load and validate a Scenario YAML string.
 
-    Returns a canonical dictionary representation that downstream parsers can
-    consume without worrying about YAML-specific quirks (e.g., boolean-like
-    keys) and with schema shape already enforced.
+    Returns the parsed dictionary with schema shape enforced. Section builders
+    normalize YAML-specific quirks such as boolean-like keys.
+
+    Raises:
+        ValueError: If the top level is not a mapping, or a network, link, or
+            risk group entry has the wrong shape (checked before the schema
+            for clearer messages).
+        jsonschema.ValidationError: If the data does not match the packaged
+            schema, including unrecognized top-level keys.
     """
     data = yaml.safe_load(yaml_str)
     if data is None:
         data = {}
     if not isinstance(data, dict):
         raise ValueError("The provided YAML must map to a dictionary at top-level.")
-
-    # Normalize known sections that suffer from YAML key ambiguities
-    if isinstance(data.get("demands"), dict):
-        data["demands"] = normalize_yaml_dict_keys(
-            data["demands"]  # type: ignore[arg-type]
-        )
 
     # Early shape checks give better error messages than schema validation would
     network_section = data.get("network")
@@ -71,45 +69,12 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
                     "or dict with 'generate' field"
                 )
 
-    # JSON Schema validation
-    try:
-        import jsonschema  # type: ignore
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(
-            "jsonschema is required for scenario validation. Install dev extras or add 'jsonschema' to dependencies."
-        ) from exc
-
-    try:
-        with (
-            resources.files("ngraph.schemas")
-            .joinpath("scenario.json")
-            .open("r", encoding="utf-8")
-        ) as f:  # type: ignore[attr-defined]
-            schema_data = json.load(f)
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(
-            "Failed to locate packaged NetGraph scenario schema 'ngraph/schemas/scenario.json'."
-        ) from exc
-
-    jsonschema.validate(data, schema_data)  # type: ignore[arg-type]
-
-    # Enforce allowed top-level keys
-    recognized_keys = {
-        "vars",
-        "blueprints",
-        "components",
-        "network",
-        "risk_groups",
-        "demands",
-        "failures",
-        "workflow",
-        "seed",
-    }
-    extra = set(data.keys()) - recognized_keys
-    if extra:
-        raise ValueError(
-            f"Unrecognized top-level key(s) in scenario: {', '.join(sorted(extra))}. "
-            f"Allowed keys are {sorted(recognized_keys)}"
-        )
+    # JSON Schema validation (also rejects unknown top-level keys)
+    schema_text = (
+        resources.files("ngraph.schemas")
+        .joinpath("scenario.json")
+        .read_text(encoding="utf-8")
+    )
+    jsonschema.validate(data, json.loads(schema_text))
 
     return data

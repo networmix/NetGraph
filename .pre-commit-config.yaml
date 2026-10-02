@@ -11,7 +11,7 @@ repos:
     hooks:
       - id: pyright
         args: [--project, pyproject.toml]
-        additional_dependencies: ['networkx', 'pyyaml', 'pandas', 'pandas-stubs', 'netgraph-core']
+        additional_dependencies: ['networkx', 'numpy', 'pyyaml', 'jsonschema', 'netgraph-core']
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -31,5 +31,5 @@ repos:
         name: Validate YAML schemas
         entry: make validate
         language: system
-        files: ^scenarios/.*\.yaml$
+        files: ^(scenarios/.*|tests/integration/.*)\.ya?ml$|^ngraph/schemas/scenario\.json$
         pass_filenames: false

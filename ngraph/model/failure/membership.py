@@ -21,6 +21,7 @@ from ngraph.model.selectors import (
     match_entity_ids,
     parse_match_spec,
 )
+from ngraph.utils.yaml_utils import check_no_extra_keys
 
 if TYPE_CHECKING:
     from ngraph.model.network import Link, Network, Node, RiskGroup
@@ -54,12 +55,11 @@ def resolve_membership_rules(network: "Network") -> None:
     - If scope is "risk_group": adds matched risk groups as children
       of this risk group (hierarchical membership).
 
+    Modifies entities in place. Call after all risk groups are registered
+    but before validation.
+
     Args:
         network: Network with risk_groups, nodes, and links populated.
-
-    Note:
-        Modifies entities in place. Call after all risk groups are registered
-        but before validation.
     """
     # Flattened attribute maps are shared by all membership rules; build each
     # lazily once instead of re-flattening every entity per rule.
@@ -99,17 +99,14 @@ def resolve_membership_rules(network: "Network") -> None:
 
         matched_count = 0
         if spec.scope == "risk_group":
-            # Hierarchical: add matched groups as children
             matched_rgs = _select_risk_groups(network, spec, _flat("risk_group"))
             for matched_rg in matched_rgs:
-                # Don't add self-reference
+                # A group never becomes its own child (a one-node cycle).
                 if matched_rg.name != rg_name:
-                    # Avoid duplicates
                     if matched_rg not in rg.children:
                         rg.children.append(matched_rg)
                         matched_count += 1
         else:
-            # Add rg_name to each matched entity's risk_groups
             matched_entities = _select_entities(network, spec, _flat(spec.scope))
             matched_count = len(matched_entities)
             for entity in matched_entities:
@@ -133,9 +130,11 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
         Parsed MembershipSpec.
 
     Raises:
-        ValueError: If 'scope' is missing or is not one of node/link/
-            risk_group, or if neither 'path' nor 'match' is given.
+        ValueError: If the rule carries an unrecognized key, 'scope' is
+            missing or is not one of node/link/risk_group, or neither 'path'
+            nor 'match' is given.
     """
+    check_no_extra_keys(raw, {"scope", "path", "match"}, "membership rule")
     scope = raw.get("scope")
     if not scope:
         raise ValueError(
@@ -154,7 +153,8 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
 
     match_spec = None
     if match_raw is not None:
-        # Use unified parser with membership-specific defaults
+        # Unlike failure rules, membership rules default to "and" logic and
+        # need at least one condition.
         match_spec = parse_match_spec(
             match_raw,
             default_logic="and",

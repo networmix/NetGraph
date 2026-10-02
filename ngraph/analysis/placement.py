@@ -45,7 +45,7 @@ _CACHEABLE_TE: frozenset[FlowPolicyPreset] = frozenset(
 FLOW_RESOLUTION = 1.0 / 4096.0
 
 # Threshold for recording a placed amount as a flow entry. Any nonzero amount
-# the core returns clears FLOW_RESOLUTION and hence this comfortably.
+# the core returns is at least FLOW_RESOLUTION, far above this.
 _MIN_FLOW = 1e-9
 
 # Cached-path FlowIndex ids start far above the ids Core's FlowPolicy assigns
@@ -175,16 +175,6 @@ def _preset_modes(
     return modes
 
 
-def _get_edge_selection(preset: FlowPolicyPreset) -> netgraph_core.EdgeSelection:
-    """Get EdgeSelection for a cacheable preset."""
-    return _preset_modes(preset)[0]
-
-
-def _get_flow_placement(preset: FlowPolicyPreset) -> netgraph_core.FlowPlacement:
-    """Get FlowPlacement for a cacheable preset."""
-    return _preset_modes(preset)[1]
-
-
 def place_demands(
     demands: Sequence["ExpandedDemand"],
     volumes: Sequence[float],
@@ -207,8 +197,8 @@ def place_demands(
     capacity and the totals of rerouting presets depend on demand order.
 
     Hop-by-hop presets (``HOP_BY_HOP_PRESETS``) place each demand in one pass
-    on the cost-only shortest-path DAG of its source. A combine-mode demand is
-    a virtual source, a pool of the selected sources: with such a preset
+    on the cost-only shortest-path DAG of its source. A combine-mode demand
+    pools the selected sources behind a virtual source: with such a preset
     (``ExpandedDemand.src_members`` set) every member that can reach a target
     originates an even share of the volume, since hop-by-hop routing has no
     controller that could choose where traffic originates, and each share is
@@ -504,7 +494,13 @@ def _place_cached(
     include_cost_distribution: bool,
     include_used_edges: bool,
 ) -> tuple[_CachedPlacement, int]:
-    """Place single demand with SPF caching."""
+    """Place one demand on cached SPF DAGs.
+
+    TE presets then reroute the remainder on fresh residual-aware DAGs.
+
+    Returns:
+        The placement outcome and the next free flow id.
+    """
     selection, placement = _preset_modes(preset)
     is_te = preset in _CACHEABLE_TE
     lossy = placement == netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY
@@ -560,9 +556,9 @@ def _place_cached(
             residual = np.ascontiguousarray(
                 flow_graph.residual_view(), dtype=np.float64
             )
-            # Note: Do NOT cache residual-based DAGs. The TE loop computes
-            # DAGs specific to this demand's placement; caching them would
-            # corrupt results for other demands from the same source.
+            # Residual-based DAGs are not cached: they reflect this demand's
+            # placement so far, and reusing them would corrupt results for
+            # other demands from the same source.
             fresh_dists, fresh_dag = ctx.algorithms.spf(
                 ctx.handle,
                 src=src_id,

@@ -14,7 +14,6 @@ def _single_mode_policy(rule: FailureRule, **kwargs) -> FailurePolicy:
 
 def test_failure_rule_invalid_probability():
     """Test FailureRule validation for invalid probability values."""
-    # Test probability > 1.0
     with pytest.raises(ValueError, match="probability=1.5 must be within \\[0,1\\]"):
         FailureRule(
             scope="node",
@@ -24,7 +23,6 @@ def test_failure_rule_invalid_probability():
             probability=1.5,
         )
 
-    # Test probability < 0.0
     with pytest.raises(ValueError, match="probability=-0.1 must be within \\[0,1\\]"):
         FailureRule(
             scope="node",
@@ -366,7 +364,7 @@ def test_multiple_rules():
 
 
 def test_condition_operators():
-    """Test various condition operators."""
+    """Test the '!=' operator and a condition on a missing attribute."""
     # Test '!=' operator
     rule_neq = FailureRule(
         scope="node",
@@ -418,7 +416,6 @@ def test_serialization():
 
     policy_dict = policy.to_dict()
     assert "seed" not in policy_dict
-    assert "expand_children" not in policy_dict
     assert "modes" in policy_dict and len(policy_dict["modes"]) == 1
     mode_dict = policy_dict["modes"][0]
     assert len(mode_dict["rules"]) == 1
@@ -487,9 +484,8 @@ def test_empty_entities():
 def test_multi_rule_independence():
     """Multi-rule policies must produce statistically independent selections.
 
-    Verifies the fix for the correlated-seed bug: each rule in a mode
-    must draw from the same RNG stream sequentially rather than each
-    creating a fresh RNG from the same seed.
+    Each rule in a mode must draw sequentially from one shared RNG stream.
+    A fresh RNG per rule built from the same seed would correlate the rules.
     """
     link_rule = FailureRule(scope="link", mode="random", probability=0.5)
     node_rule = FailureRule(scope="node", mode="random", probability=0.5)
@@ -504,7 +500,7 @@ def test_multi_rule_independence():
     N = 2000
     # Count how often the *first* link (L00) and *first* node (N00) both fail.
     # Under independence P(both) ≈ 0.5 * 0.5 = 0.25
-    # Under the old correlated bug P(both) ≈ 0.5 (draws are identical)
+    # With correlated draws (identical RNG streams) P(both) ≈ 0.5
     joint_fail = 0
     link0_fail = 0
     node0_fail = 0
@@ -526,8 +522,8 @@ def test_multi_rule_independence():
     p_expected_independent = p_link * p_node
 
     # Joint probability should be close to the product (independent).
-    # Allow generous tolerance for finite sample size, but catch the 2x
-    # correlation that the old bug produced.
+    # Allow generous tolerance for finite sample size, but catch a 2x
+    # correlation from shared RNG streams.
     assert abs(p_joint - p_expected_independent) < 0.06, (
         f"Joint failure rate {p_joint:.4f} deviates too much from independent "
         f"expectation {p_expected_independent:.4f} (p_link={p_link:.4f}, "
@@ -538,9 +534,8 @@ def test_multi_rule_independence():
 def test_multi_mode_entity_independence():
     """Entity failure probability must be independent of which mode was selected.
 
-    Verifies the fix for the mode-entity correlation bug: the RNG draw
-    that selects the mode must not be the same draw that determines
-    entity[0] failure.
+    The RNG draw that selects the mode must not also decide whether
+    entity[0] fails.
     """
     # Two modes with asymmetric weights
     rule_mode0 = FailureRule(scope="node", mode="random", probability=0.3)

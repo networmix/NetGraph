@@ -96,8 +96,8 @@ def test_build_demand_set_with_flow_policy_string():
     assert demands[0].flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
 
 
-def test_build_demand_set_with_flow_policy_int():
-    """Test building with FlowPolicyPreset as integer."""
+def test_build_demand_set_rejects_integer_flow_policy():
+    """Presets are named; integer values are not accepted."""
     raw = {
         "tm1": [
             {
@@ -109,9 +109,8 @@ def test_build_demand_set_with_flow_policy_int():
         ]
     }
 
-    tms = build_demand_set(raw)
-    demands = tms.get_set("tm1")
-    assert demands[0].flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+    with pytest.raises(ValueError, match="Invalid flow_policy"):
+        build_demand_set(raw)
 
 
 def test_build_demand_set_invalid_raw_type():
@@ -150,15 +149,6 @@ def test_coerce_flow_policy_enum():
     assert coerce_flow_policy(preset) == preset
 
 
-def test_coerce_flow_policy_int():
-    """Test coercing integer to enum."""
-    assert coerce_flow_policy(1) == FlowPolicyPreset.SHORTEST_PATHS_ECMP
-    assert coerce_flow_policy(2) == FlowPolicyPreset.SHORTEST_PATHS_WCMP
-    assert coerce_flow_policy(3) == FlowPolicyPreset.TE_WCMP_UNLIM
-    assert coerce_flow_policy(4) == FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP
-    assert coerce_flow_policy(5) == FlowPolicyPreset.TE_ECMP_16_LSP
-
-
 def test_coerce_flow_policy_string():
     """Test coercing string to enum."""
     assert (
@@ -181,35 +171,18 @@ def test_coerce_flow_policy_string():
     assert coerce_flow_policy("TE_ECMP_16_LSP") == FlowPolicyPreset.TE_ECMP_16_LSP
 
 
-def test_coerce_flow_policy_string_numeric():
-    """Test coercing numeric string to enum."""
-    assert coerce_flow_policy("1") == FlowPolicyPreset.SHORTEST_PATHS_ECMP
-    assert coerce_flow_policy("2") == FlowPolicyPreset.SHORTEST_PATHS_WCMP
-    assert coerce_flow_policy("3") == FlowPolicyPreset.TE_WCMP_UNLIM
-
-
-def test_coerce_flow_policy_empty_string():
-    """Test coercing empty string."""
-    assert coerce_flow_policy("") is None
-    assert coerce_flow_policy("   ") is None
-
-
 def test_coerce_flow_policy_invalid_string():
-    """Test error handling for invalid string."""
-    with pytest.raises(ValueError, match="Unknown flow policy"):
-        coerce_flow_policy("INVALID_POLICY")
+    """Unknown, empty, and numeric strings are rejected."""
+    for value in ("INVALID_POLICY", "", "   ", "1"):
+        with pytest.raises(ValueError, match="Invalid flow_policy"):
+            coerce_flow_policy(value)
 
 
-def test_coerce_flow_policy_invalid_numeric_string():
-    """Test error handling for invalid numeric string."""
-    with pytest.raises(ValueError, match="Unknown flow policy value"):
-        coerce_flow_policy("999")
-
-
-def test_coerce_flow_policy_invalid_int():
-    """Test error handling for invalid integer."""
-    with pytest.raises(ValueError, match="Unknown flow policy value"):
-        coerce_flow_policy(999)
+def test_coerce_flow_policy_rejects_int():
+    """Integer preset values are not accepted; presets are named."""
+    for value in (1, 999):
+        with pytest.raises(ValueError, match="Invalid flow_policy"):
+            coerce_flow_policy(value)
 
 
 def test_coerce_flow_policy_rejects_bool():
@@ -265,8 +238,16 @@ def test_build_demand_set_rejects_bool_flow_policy():
 
 
 def test_coerce_flow_policy_lossy_ecmp_preset():
-    assert coerce_flow_policy(6) == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY
     assert (
         coerce_flow_policy("shortest_paths_ecmp_lossy")
         == FlowPolicyPreset.SHORTEST_PATHS_ECMP_LOSSY
     )
+
+
+def test_build_demand_set_rejects_unknown_keys() -> None:
+    """A mistyped key (here 'demand' for 'volume') raises instead of volume 0."""
+    raw = {"tm1": [{"source": "A", "target": "B", "demand": 5}]}
+    with pytest.raises(
+        ValueError, match="Unrecognized key.*demand in set .tm1.: demand"
+    ):
+        build_demand_set(raw)

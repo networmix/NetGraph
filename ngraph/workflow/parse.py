@@ -6,13 +6,11 @@ instances using the WORKFLOW_STEP_REGISTRY and attaches unique names/seeds.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Callable, Dict, List, Optional
 
-from ngraph.logging import get_logger
-from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
+from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
 from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
-
-_logger = get_logger(__name__)
 
 
 def build_workflow_steps(
@@ -26,7 +24,13 @@ def build_workflow_steps(
         derive_seed: Callable that takes a step name and returns a seed or None.
 
     Returns:
-        A list of WorkflowStep instances with unique names and optional seeds.
+        WorkflowStep instances. An unnamed step is named "{type}_{index}"; a
+        step without a seed gets ``derive_seed(name)`` when that is not None.
+
+    Raises:
+        ValueError: If ``workflow_data`` is not a list, a step lacks ``type``
+            or names an unregistered type, two steps resolve to the same
+            name, or a step carries a key its step class does not define.
     """
     if not isinstance(workflow_data, list):
         raise ValueError("'workflow' must be a list if present.")
@@ -67,15 +71,13 @@ def build_workflow_steps(
             if derived is not None:
                 normalized_ctor_args["seed"] = derived
 
+        init_fields = {f.name for f in dataclasses.fields(step_cls) if f.init}
+        check_no_extra_keys(
+            normalized_ctor_args, init_fields, f"workflow step '{step_name}'"
+        )
         step_obj = step_cls(**normalized_ctor_args)
-        try:
-            step_obj._seed_source = (
-                "explicit-step"
-                if "seed" in ctor_args and ctor_args["seed"] is not None
-                else "scenario-derived"
-            )
-        except Exception as exc:
-            _logger.debug("Failed to set _seed_source on step %s: %s", step_name, exc)
+        if ctor_args.get("seed") is None:
+            step_obj._seed_source = "scenario-derived"
 
         steps.append(step_obj)
 

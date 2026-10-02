@@ -30,7 +30,7 @@ def select_nodes(
     selector: NodeSelector,
     default_active_only: bool,
 ) -> Dict[str, List["Node"]]:
-    """Unified entry point for node selection.
+    """Select and group the nodes a `NodeSelector` matches.
 
     Evaluation order:
     1. Select nodes matching `path` regex (or all nodes if path is None)
@@ -49,29 +49,24 @@ def select_nodes(
         Dict mapping group labels to lists of nodes. Groups that filter down
         to nothing are dropped.
     """
-    # Resolve effective active_only flag
     active_only = (
         selector.active_only
         if selector.active_only is not None
         else default_active_only
     )
 
-    # Step 1: Select by path regex (or all nodes). Regex selection delegates
-    # to Network.select_node_groups_by_path() which provides caching.
+    # Network.select_node_groups_by_path() caches regex results per pattern.
     if selector.path is not None:
         candidates = network.select_node_groups_by_path(selector.path)
     else:
         candidates = {"_all_": list(network.nodes.values())}
 
-    # Step 2: Apply match conditions
     if selector.match is not None:
         candidates = _filter_by_match(candidates, selector.match)
 
-    # Step 3: Filter active only
     if active_only:
         candidates = _filter_active(candidates)
 
-    # Step 4: Apply grouping (overrides regex capture grouping)
     if selector.group_by is not None:
         return _group_by_attribute(candidates, selector.group_by)
 
@@ -115,7 +110,6 @@ def flatten_node_attrs(node: "Node") -> Dict[str, Any]:
         # Sorted for deterministic group_by labels and ==/in comparisons.
         "risk_groups": sorted(node.risk_groups),
     }
-    # Add user attrs, but don't overwrite top-level fields
     attrs.update({k: v for k, v in node.attrs.items() if k not in attrs})
     return attrs
 
@@ -245,9 +239,8 @@ def _group_by_attribute(
 
     Supports both top-level fields (name, disabled, risk_groups) and custom
     attrs, consistent with match condition evaluation. Nodes lacking the
-    attribute are dropped.
-
-    Note: This discards any existing grouping (including regex captures).
+    attribute are dropped. Any existing grouping, including regex captures,
+    is discarded.
     """
     result: Dict[str, List["Node"]] = {}
     for nodes in groups.values():

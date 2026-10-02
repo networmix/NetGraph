@@ -18,7 +18,6 @@ def _sample_results_doc() -> dict:
         scenario_seed=123,
         step_seed=None,
         seed_source="scenario-derived",
-        active_seed=123,
     )
     r.set_scenario_snapshot({"name": "demo"})
     return r.to_dict()

@@ -13,8 +13,7 @@ import pytest
 from ngraph.analysis.functions import demand_placement_analysis
 from ngraph.analysis.placement import (
     CACHEABLE_PRESETS,
-    _get_edge_selection,
-    _get_flow_placement,
+    _preset_modes,
 )
 from ngraph.model.flow.policy_config import FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node
@@ -41,12 +40,10 @@ def _run_demand_placement_without_cache(
     from ngraph.analysis.demand import expand_demands
     from ngraph.model.demand.spec import TrafficDemand
     from ngraph.model.flow.policy_config import (
-        FlowPolicyPreset,
         create_flow_policy,
     )
     from ngraph.results.flow import FlowEntry, FlowSummary
 
-    # Reconstruct TrafficDemand objects
     traffic_demands = []
     for config in demands_config:
         demand = TrafficDemand(
@@ -59,14 +56,8 @@ def _run_demand_placement_without_cache(
         )
         traffic_demands.append(demand)
 
-    # Expand demands
-    expansion = expand_demands(
-        network,
-        traffic_demands,
-        default_policy_preset=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
-    )
+    expansion = expand_demands(network, traffic_demands)
 
-    # Build context
     ctx = AnalysisContext.from_network(network, augmentations=expansion.augmentations)
 
     handle = ctx.handle
@@ -124,7 +115,9 @@ def _run_demand_placement_without_cache(
                     )
                     edges = flow_graph.get_flow_edges(flow_idx)
                     for edge_id, _ in edges:
-                        edge_ref = edge_mapper.to_ref(edge_id, multidigraph)
+                        edge_ref = edge_mapper.decode_ext_id(
+                            int(multidigraph.ext_edge_ids_view()[edge_id])
+                        )
                         if edge_ref is not None:
                             used_edges.add(f"{edge_ref.link_id}:{edge_ref.direction}")
 
@@ -169,19 +162,19 @@ class TestHelperFunctions:
 
     def test_get_selection_for_ecmp(self) -> None:
         """Test EdgeSelection for ECMP preset."""
-        selection = _get_edge_selection(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+        selection = _preset_modes(FlowPolicyPreset.SHORTEST_PATHS_ECMP)[0]
         assert selection.multi_edge is True
         assert selection.require_capacity is False
 
     def test_get_selection_for_wcmp(self) -> None:
         """Test EdgeSelection for WCMP preset."""
-        selection = _get_edge_selection(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
+        selection = _preset_modes(FlowPolicyPreset.SHORTEST_PATHS_WCMP)[0]
         assert selection.multi_edge is True
         assert selection.require_capacity is False
 
     def test_get_selection_for_te_wcmp_unlim(self) -> None:
         """Test EdgeSelection for TE_WCMP_UNLIM preset."""
-        selection = _get_edge_selection(FlowPolicyPreset.TE_WCMP_UNLIM)
+        selection = _preset_modes(FlowPolicyPreset.TE_WCMP_UNLIM)[0]
         assert selection.multi_edge is True
         assert selection.require_capacity is True
 
@@ -189,7 +182,7 @@ class TestHelperFunctions:
         """Test FlowPlacement for ECMP preset."""
         import netgraph_core
 
-        placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+        placement = _preset_modes(FlowPolicyPreset.SHORTEST_PATHS_ECMP)[1]
         # Lossless hash-ECMP admission with a load-blind next-hop set.
         assert placement == netgraph_core.FlowPlacement.EQUAL_BALANCED
 
@@ -197,19 +190,19 @@ class TestHelperFunctions:
         """Test FlowPlacement for WCMP preset."""
         import netgraph_core
 
-        placement = _get_flow_placement(FlowPolicyPreset.SHORTEST_PATHS_WCMP)
+        placement = _preset_modes(FlowPolicyPreset.SHORTEST_PATHS_WCMP)[1]
         assert placement == netgraph_core.FlowPlacement.PROPORTIONAL
 
     def test_get_placement_for_te_wcmp_unlim(self) -> None:
         """Test FlowPlacement for TE_WCMP_UNLIM preset."""
         import netgraph_core
 
-        placement = _get_flow_placement(FlowPolicyPreset.TE_WCMP_UNLIM)
+        placement = _preset_modes(FlowPolicyPreset.TE_WCMP_UNLIM)[1]
         assert placement == netgraph_core.FlowPlacement.PROPORTIONAL
 
 
 class TestCacheablePresets:
-    """Test that cacheable preset sets are correctly defined."""
+    """Shortest-path and TE_WCMP_UNLIM presets are cacheable; LSP presets are not."""
 
     def test_cacheable_presets_contains_expected(self) -> None:
         """Test that cacheable presets contain expected policies."""
@@ -255,7 +248,7 @@ class TestSPFCachingBasic:
         return network
 
     def test_single_demand_ecmp(self, diamond_network: Network) -> None:
-        """Test that single demand with ECMP works correctly with caching."""
+        """A single 50-unit ECMP demand is fully placed through the SPF cache."""
         demands_config = [
             {
                 "source": "A",
@@ -284,7 +277,7 @@ class TestSPFCachingBasic:
     def test_multiple_demands_same_source_reuses_cache(
         self, multi_source_network: Network
     ) -> None:
-        """Test that multiple demands from same source benefit from caching."""
+        """Two demands from S1 that share one cached SPF are both fully placed."""
         # Multiple demands from S1 to different destinations
         demands_config = [
             {
@@ -401,7 +394,6 @@ class TestSPFCachingEquivalence:
             demands_config=demands_config,
         )
 
-        # Compare results
         assert len(cached_result.flows) == len(reference_result.flows)
         assert (
             cached_result.summary.total_demand == reference_result.summary.total_demand
@@ -434,7 +426,6 @@ class TestSPFCachingEquivalence:
             demands_config=demands_config,
         )
 
-        # Compare summaries
         assert (
             cached_result.summary.total_demand == reference_result.summary.total_demand
         )
@@ -442,7 +433,6 @@ class TestSPFCachingEquivalence:
             reference_result.summary.total_placed, rel=1e-9
         )
 
-        # Compare individual flows
         for cached_flow, ref_flow in zip(
             cached_result.flows, reference_result.flows, strict=True
         ):
@@ -471,7 +461,6 @@ class TestSPFCachingEquivalence:
             include_flow_details=True,
         )
 
-        # Both should have cost distribution
         for cached_flow, ref_flow in zip(
             cached_result.flows, reference_result.flows, strict=True
         ):
@@ -503,13 +492,11 @@ class TestSPFCachingEquivalence:
             include_used_edges=True,
         )
 
-        # Both should have used edges
         for cached_flow, ref_flow in zip(
             cached_result.flows, reference_result.flows, strict=True
         ):
             cached_edges = set(cached_flow.data.get("edges", []))
             ref_edges = set(ref_flow.data.get("edges", []))
-            # Edges should be the same
             assert cached_edges == ref_edges
 
 
@@ -635,7 +622,7 @@ class TestSPFCachingTEPolicy:
 
 
 class TestSPFCachingEdgeCases:
-    """Test edge cases and error handling for SPF caching."""
+    """Cached placement with unreachable targets, zero or excess demand, no details."""
 
     @pytest.fixture
     def disconnected_network(self) -> Network:
@@ -800,7 +787,7 @@ class TestSPFCachingWithExclusions:
 
         network.add_link(Link("A", "B", capacity=100.0, cost=1.0))
         network.add_link(Link("B", "C", capacity=100.0, cost=1.0))
-        network.add_link(Link("A", "C", capacity=100.0, cost=2.0))  # Longer path
+        network.add_link(Link("A", "C", capacity=100.0, cost=2.0))  # Same cost as A-B-C
 
         return network
 
@@ -834,9 +821,8 @@ class TestSPFCachingWithExclusions:
         assert len(result.flows) == 1
         flow = result.flows[0]
         assert flow.placed == 50.0
-        # Should use path A -> B -> C (cost 2) instead of A -> C (cost 2)
+        # A -> B -> C costs 2, the same as the excluded direct link
         if flow.cost_distribution:
-            # Cost should be 2 (through B) not 2 (direct, which is excluded)
             assert 2.0 in flow.cost_distribution
 
     def test_placement_with_excluded_node(self, triangle_network: Network) -> None:
@@ -868,7 +854,7 @@ class TestSPFCachingWithExclusions:
 
 
 class TestSPFCachingCostDistribution:
-    """Test cost distribution correctness with SPF caching."""
+    """Cost distribution with SPF caching on one and two tiers."""
 
     # Uses multi_tier_network fixture from conftest.py
 
@@ -1136,7 +1122,6 @@ class TestCachedVsNonCachedEquivalence:
             demands_config=demands_config,
         )
 
-        # Compare summaries
         assert cached_result.summary.total_demand == pytest.approx(
             reference_result.summary.total_demand, rel=1e-9
         ), "Total demand mismatch"
@@ -1151,7 +1136,6 @@ class TestCachedVsNonCachedEquivalence:
             reference_result.summary.overall_ratio, rel=1e-9
         ), "Overall ratio mismatch"
 
-        # Compare individual flows
         assert len(cached_result.flows) == len(reference_result.flows), (
             "Flow count mismatch"
         )
@@ -1173,7 +1157,7 @@ class TestCachedVsNonCachedEquivalence:
     def test_te_overlapping_paths(self, overlapping_paths_network: Network) -> None:
         """Test TE policy with overlapping paths to different destinations.
 
-        This test specifically validates that cached placement handles the case where:
+        Cached placement must handle the case where:
         1. First demand A->D saturates shared edge A->B, triggers TE rerouting
         2. Second demand A->E needs the same shared edge A->B for optimal path
 
@@ -1213,7 +1197,6 @@ class TestCachedVsNonCachedEquivalence:
             demands_config=demands_config,
         )
 
-        # Compare total placed - should be identical
         assert cached_result.summary.total_placed == pytest.approx(
             reference_result.summary.total_placed, rel=1e-9
         ), (
@@ -1222,7 +1205,6 @@ class TestCachedVsNonCachedEquivalence:
             f"ref={reference_result.summary.total_placed}"
         )
 
-        # Compare individual flow placements
         for i, (cached_flow, ref_flow) in enumerate(
             zip(cached_result.flows, reference_result.flows, strict=True)
         ):
@@ -1234,8 +1216,8 @@ class TestCachedVsNonCachedEquivalence:
 
 def test_mixed_preset_same_endpoints_no_flow_index_collision() -> None:
     """Regression: cached and policy-based demands sharing (src, dst, priority)
-    must not merge flows via colliding FlowIndex values. Pre-fix this scenario
-    reported 15.0 placed across a 10-unit min cut."""
+    must not merge flows via colliding FlowIndex values. Merged flows would
+    report 15.0 placed across a 10-unit min cut."""
     from ngraph.analysis.functions import demand_placement_analysis
     from ngraph.model.network import Link, Network, Node
 

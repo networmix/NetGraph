@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple
 from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
 from ngraph.dsl.selectors import normalize_selector
 from ngraph.model.demand.spec import StaticPath, TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
+from ngraph.model.flow.policy_config import DEFAULT_PRESET, FlowPolicyPreset
 from ngraph.model.network import Network, Node
 from ngraph.model.selectors import select_nodes
 
@@ -50,7 +50,7 @@ class ExpandedDemand:
 
 @dataclass
 class DemandExpansion:
-    """Demand expansion result.
+    """Output of expand_demands.
 
     Attributes:
         demands: Concrete demands ready for placement (sorted by priority).
@@ -82,8 +82,8 @@ def _expand_combine(
 ) -> tuple[list[ExpandedDemand], list[AugmentationEdge]]:
     """Expand combine mode: aggregate sources/sinks through pseudo nodes.
 
-    The pseudo source is a virtual source, a pool of the selected sources: a
-    TE preset carries the aggregate with whichever sources have capacity.
+    The pseudo source pools the selected sources: a TE preset carries the
+    aggregate over whichever sources have capacity.
     Hop-by-hop presets cannot steer origination, so placement originates an
     even share at every member of ``src_members`` that can reach a target
     instead; the pseudo sink still delivers each share to that source's
@@ -111,15 +111,12 @@ def _expand_combine(
 
     augmentations = []
 
-    # Pseudo-source -> real sources (unidirectional OUT)
     for src_name in src_names:
         augmentations.append(AugmentationEdge(pseudo_src, src_name, LARGE_CAPACITY, 0))
 
-    # Real targets -> pseudo-target (unidirectional IN)
     for dst_name in dst_names:
         augmentations.append(AugmentationEdge(dst_name, pseudo_snk, LARGE_CAPACITY, 0))
 
-    # Single aggregated demand
     expanded = ExpandedDemand(
         src_name=pseudo_src,
         dst_name=pseudo_snk,
@@ -138,11 +135,13 @@ def _expand_pairwise(
     dst_groups: Dict[str, List[Node]],
     policy_preset: FlowPolicyPreset,
 ) -> tuple[list[ExpandedDemand], list[AugmentationEdge]]:
-    """Expand pairwise mode: create demand for each (src, dst) pair."""
+    """Expand pairwise mode: one demand per (src, dst) pair.
+
+    Self-pairs are skipped and td.volume is split evenly across the rest.
+    """
     src_nodes = _flatten_groups(src_groups)
     dst_nodes = _flatten_groups(dst_groups)
 
-    # Filter self-pairs
     pairs = [
         (src, dst) for src in src_nodes for dst in dst_nodes if src.name != dst.name
     ]
@@ -150,7 +149,6 @@ def _expand_pairwise(
     if not pairs:
         return [], []
 
-    # Distribute volume evenly
     volume_per_pair = td.volume / len(pairs)
 
     demands = [
@@ -165,7 +163,7 @@ def _expand_pairwise(
         for src, dst in pairs
     ]
 
-    return demands, []  # No augmentations for pairwise
+    return demands, []
 
 
 def _expand_by_group_mode(
@@ -195,7 +193,6 @@ def _expand_by_group_mode(
     # td.mode and td.group_mode are validated by TrafficDemand.__post_init__,
     # so mode is "combine" or "pairwise" in every branch below.
     if td.group_mode == "flatten":
-        # Standard behavior: flatten all groups, then apply mode
         if td.mode == "combine":
             return _expand_combine(td, src_groups, dst_groups, policy_preset)
         return _expand_pairwise(td, src_groups, dst_groups, policy_preset)
@@ -252,7 +249,6 @@ def _expand_by_group_mode(
         if not group_pairs:
             return [], []
 
-        # Divide volume among group pairs
         volume_per_group_pair = td.volume / len(group_pairs)
 
         for pair_index, (src_label, dst_label) in enumerate(group_pairs):
@@ -286,26 +282,23 @@ def _expand_by_group_mode(
 def expand_demands(
     network: Network,
     traffic_demands: List[TrafficDemand],
-    default_policy_preset: FlowPolicyPreset = FlowPolicyPreset.SHORTEST_PATHS_ECMP,
 ) -> DemandExpansion:
     """Expand TrafficDemand specifications into concrete demands with augmentations.
 
-    Pure function that:
-    1. Normalizes and evaluates selectors to get node groups
-    2. Distributes volume based on mode (combine/pairwise) and group_mode
-    3. Generates augmentation edges for combine mode (pseudo nodes)
-    4. Returns demands (node names) + augmentations
+    Resolves each demand's selectors to node groups, splits its volume by
+    mode and group_mode, and generates pseudo-node augmentation edges for
+    combine mode. Inputs are not modified.
 
-    Node names are used (not IDs) so expansion happens BEFORE graph building.
-    IDs are resolved after graph is built with augmentations.
+    Demands carry node names, not IDs, so expansion runs before the graph is
+    built; IDs are resolved once the graph includes the augmentations.
 
-    Note: Variable expansion (expand: block) is handled during YAML parsing in
-    build_demand_set(), so TrafficDemand objects here are already expanded.
+    Variable expansion (`expand:` blocks) happens earlier, during YAML parsing
+    in build_demand_set(), so the TrafficDemand objects here are already
+    expanded.
 
     Args:
         network: Network for node selection.
         traffic_demands: High-level demand specifications.
-        default_policy_preset: Default policy if demand doesn't specify one.
 
     Returns:
         DemandExpansion with demands and augmentations.
@@ -330,11 +323,9 @@ def expand_demands(
     all_augmentations: List[AugmentationEdge] = []
 
     for td in traffic_demands:
-        # Step 1: Normalize selectors
         src_sel = normalize_selector(td.source, "demand")
         tgt_sel = normalize_selector(td.target, "demand")
 
-        # Step 2: Select nodes (active_only=True for demands by context default)
         src_groups = select_nodes(network, src_sel, default_active_only=True)
         dst_groups = select_nodes(network, tgt_sel, default_active_only=True)
 
@@ -346,9 +337,8 @@ def expand_demands(
                 )
             continue
 
-        policy_preset = td.flow_policy or default_policy_preset
+        policy_preset = td.flow_policy or DEFAULT_PRESET
 
-        # Step 3: Expand by group_mode
         demands, augmentations = _expand_by_group_mode(
             td, src_groups, dst_groups, policy_preset
         )
@@ -402,7 +392,8 @@ def expand_demands(
                 )
             seen_endpoints.add(name)
 
-    # Sort by priority (lower = higher priority)
+    # Lower value = higher priority; the stable sort keeps expansion order
+    # within a priority class.
     sorted_demands = sorted(all_demands, key=lambda d: d.priority)
 
     return DemandExpansion(demands=sorted_demands, augmentations=all_augmentations)

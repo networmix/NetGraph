@@ -85,7 +85,6 @@ def test_to_dict_excludes_seed_and_nests_match() -> None:
     data = policy.to_dict()
 
     assert "seed" not in data
-    assert "expand_children" not in data
     rule_dict = data["modes"][0]["rules"][0]
     assert "conditions" not in rule_dict
     assert "logic" not in rule_dict

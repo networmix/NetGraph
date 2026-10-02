@@ -2,17 +2,17 @@
 
 Quick links:
 
-- [Design](design.md) -- architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) -- YAML syntax for scenario definition
-- [Workflow Reference](workflow.md) -- analysis workflow configuration and execution
-- [CLI Reference](cli.md) -- command-line tools for running scenarios
-- [Auto-Generated API Reference](api-full.md) -- complete class and method documentation
+- [Design](design.md) - architecture, model, algorithms, workflow
+- [DSL Reference](dsl.md) - YAML syntax for scenario definition
+- [Workflow Reference](workflow.md) - analysis workflow configuration and execution
+- [CLI Reference](cli.md) - command-line tools for running scenarios
+- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
 
-The Python API, organized by how it is typically used.
+A guide to the Python API. Every public name is listed in the [Auto-Generated API Reference](api-full.md).
 
 ## 1. Programmatic Quickstart
 
-Minimal, copy-pastable start: build a tiny network, run max-flow, and reuse a bound context.
+Build a three-node network, run max-flow, and reuse a bound context:
 
 ```python
 from ngraph import Network, Node, Link, analyze, Mode
@@ -45,7 +45,7 @@ print("baseline", baseline, "degraded", degraded)
 
 ## 2. Fundamentals
 
-The three types most NetGraph programs are built from.
+Scenario, Network and Results, and how to turn on logging.
 
 ### Scenario
 
@@ -67,12 +67,12 @@ exported = scenario.results.to_dict()
 print(exported["workflow"].keys())
 ```
 
-**Key Methods:**
+**Methods:**
 
 - `from_yaml(yaml_str, default_components=None)` - Parse scenario from YAML string (use `Path.read_text()` for file loading)
 - `run(step_hook=None)` - Execute workflow steps in sequence. The optional `step_hook` is a callable that receives each `WorkflowStep` and returns a context manager entered around that step's execution (used by the CLI for per-step profiling)
 
-Network, workflow, and Results can also be used independently of Scenario for direct programmatic access.
+Network and Results also work on their own, without a Scenario.
 
 ### Network
 
@@ -92,12 +92,12 @@ flow_result = analyze(network).max_flow("^n1$", "^n2$")
 print(flow_result)  # {("^n1$", "^n2$"): 100.0}
 ```
 
-**Key Methods:**
+**Methods:**
 
 - `add_node(node)`, `add_link(link)` - Build topology programmatically
 - `nodes`, `links` - Access topology as dictionaries
 
-**Key Concepts:**
+**Concepts:**
 
 - **disabled flags:** Node.disabled and Link.disabled mark components as inactive in the scenario topology (use `excluded_nodes`/`excluded_links` parameters for temporary analysis-time exclusion)
 - **Risk Groups:** Nodes and links can be tagged with risk group names (e.g., "rack1", "fiber_bundle") to model shared failure domains.
@@ -105,7 +105,7 @@ print(flow_result)  # {("^n1$", "^n2$"): 100.0}
 
 ### Results
 
-Holds each workflow step's output, with metadata, under that step's name; every step writes here. Managed by Scenario - access it via `scenario.results` to read results or to write from a custom step.
+Holds each step's `metadata` and `data` under the step name. Read it as `scenario.results`; a custom step writes to the same object.
 
 ```python
 # Access results from scenario
@@ -116,7 +116,7 @@ all_data = results.to_dict()
 print(list(all_data["steps"].keys()))
 ```
 
-**Key Methods:**
+**Methods:**
 
 - `enter_step(step_name)` / `exit_step()` - Scope writes to a step (managed by WorkflowStep.execute())
 - `put(key, value)` - Store value under active step; key must be `"metadata"` or `"data"`
@@ -124,9 +124,26 @@ print(list(all_data["steps"].keys()))
 - `get_step(step_name)` - Retrieve complete step dict for cross-step reads
 - `to_dict()` - Export results with shape `{workflow, steps, scenario}` (JSON-serializable)
 
+### Logging
+
+Importing `ngraph` attaches only a `NullHandler` to the `ngraph` logger; nothing is printed unless the application opts in.
+
+```python
+import logging
+from ngraph.logging import set_global_log_level
+
+set_global_log_level(logging.DEBUG)  # installs a stderr handler on first call
+```
+
+**Functions:**
+
+- `set_global_log_level(level)` - Set the level on the `ngraph` logger and its handlers, installing the console handler if none is configured
+- `setup_root_logger(level=logging.INFO, format_string=None, handler=None)` - Install a single handler explicitly; later calls are no-ops until `reset_logging()`
+- `get_logger(name)` - Logger for a module under the `ngraph` hierarchy
+
 ## 3. NetworkX Integration
 
-Convert between NetworkX graphs and the internal graph format for algorithm execution.
+Convert between NetworkX graphs and the Core graph format.
 
 ### Converting from NetworkX
 
@@ -156,7 +173,7 @@ dists, _ = algorithms.spf(handle, src=src_idx, dst=dst_idx)
 print(f"Shortest path cost A->C: {dists[dst_idx]}")  # 15.0 (via B)
 ```
 
-**Key Functions:**
+**Functions:**
 
 - `from_networkx(G, *, capacity_attr, cost_attr, default_capacity, default_cost, bidirectional)` - Convert NetworkX graph to internal format
 - `to_networkx(graph, node_map, *, capacity_attr, cost_attr)` - Convert back to NetworkX MultiDiGraph
@@ -174,7 +191,7 @@ print(f"Shortest path cost A->C: {dists[dst_idx]}")  # 15.0 (via B)
 
 - `bidirectional` - Direction handling. `None` (default) infers from the graph type: directed inputs get one arc per edge; undirected inputs get antiparallel arc pairs (the standard undirected-to-directed reduction for max-flow/reachability). Pass an explicit `True`/`False` to override.
 - `capacity_attr` / `cost_attr` - Custom attribute names for capacity and cost
-- `default_capacity` / `default_cost` - Default values when attributes missing. Cost values must be integers — `from_networkx` raises `ValueError` on fractional costs because the core engine requires int64 costs; pre-scale fractional costs (e.g., multiply by 10 or 100) before conversion.
+- `default_capacity` / `default_cost` - Default values when attributes missing. Cost values must be integers: `from_networkx` raises `ValueError` on fractional costs because the core engine requires int64 costs. Scale fractional costs (by 10 or 100, say) before conversion.
 
 ### Writing Results Back
 
@@ -199,11 +216,7 @@ Max-flow, shortest paths, and edge sensitivity.
 
 ### Flow Analysis with `analyze()`
 
-**Purpose:** Calculate network flows between source and sink groups.
-
-**When to use:** Measuring capacity between source and sink groups, under a choice of flow placement policy and with nodes or links excluded to model failures.
-
-Max-flow runs in C++ with the GIL released. The algorithm and its complexity bounds are described in [Design](design.md).
+Maximum flow between source and sink groups, under a chosen placement policy and with nodes or links excluded to model failures. It runs in C++ with the GIL released; the algorithm and its complexity bounds are in [Design](design.md).
 
 ```python
 from ngraph import analyze, Mode, FlowPlacement
@@ -225,17 +238,17 @@ result = analyze(network).max_flow_detailed(
 print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volume
 ```
 
-**Key Functions:**
+**Functions:**
 
-- `analyze(network, *, source=None, sink=None, mode=Mode.COMBINE)` - Create analysis context
+- `analyze(network, *, source=None, sink=None, mode=None, augmentations=None)` - Create an `AnalysisContext`; `mode` (default COMBINE) applies to a context bound with `source` and `sink`, which then rejects per-call `source`, `sink` and `mode`; `mode` without `source` and `sink` raises `ValueError`
 - `ctx.max_flow(source, sink, *, mode, shortest_path, require_capacity, flow_placement, excluded_nodes, excluded_links)` - Maximum flow
 - `ctx.max_flow_detailed(..., include_min_cut=False)` - Maximum flow with cost distribution and optional min-cut; the min-cut is a true minimum cut (its capacity equals the max flow under the default `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`), not the set of saturated edges
 - `ctx.sensitivity(...)` - Identify critical edges and their impact on flow
 - `ctx.sensitivity_with_flow(...)` - Compute max flow and edge sensitivity together per group pair in a single pass (used by the sensitivity Monte Carlo hot path)
-- `ctx.shortest_path_cost(source, sink, *, mode, edge_select=ALL_MIN_COST, excluded_nodes, excluded_links)` - Shortest path cost
+- `ctx.shortest_path_cost(source, sink, *, mode, excluded_nodes, excluded_links)` - Shortest path cost
 - `ctx.shortest_paths(source, sink, *, mode, edge_select, split_parallel_edges)` - Full Path objects
 
-**Key Concepts:**
+**Concepts:**
 
 - **Mode.COMBINE:** Aggregate sources into one super-source, sinks into one super-sink; returns single total flow
 - **Mode.PAIRWISE:** Compute flow for each (source_group, sink_group) pair independently
@@ -246,7 +259,7 @@ print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volu
 - **require_capacity=True:** Path selection considers available capacity; flow moves to next-cheapest paths as cheaper ones saturate (default)
 - **require_capacity=False:** Path selection is cost-only; saturated paths are not bypassed (true IP/IGP semantics; pair with shortest_path=True for IP simulation)
 
-### Efficient Repeated Analysis (Bound Context)
+### Repeated Analysis with a Bound Context
 
 Bind source and sink groups once, then reuse the context across many calls:
 
@@ -265,11 +278,7 @@ for failed_links in failure_scenarios:
     print(f"Capacity with {failed_links}: {degraded}")
 ```
 
-**Benefits of Bound Context:**
-
-- Graph infrastructure built once at context creation
-- Each analysis call rebuilds only the node and edge masks — a full-length array fill (Theta(V) for nodes, Theta(E) for edges) plus O(|excluded| + |disabled|) updates — instead of rebuilding the Core graph
-- Thread-safe: can run concurrent analysis calls with different exclusions
+A bound context builds the Core graph once. Each call then rebuilds only the node and edge masks (a full-length array fill plus O(|excluded| + |disabled|) updates), and concurrent calls with different exclusions are safe.
 
 **Unbound vs. bound construction:** Unbound flow calls (`max_flow`, `max_flow_detailed`, `sensitivity`) construct a full temporary bound context per call, so repeated analysis should use a bound context. A plain unbound context builds its Core graph lazily on first use; bound contexts (and contexts with augmentations) build eagerly at creation.
 
@@ -303,15 +312,15 @@ k_paths = analyze(network).k_shortest_paths(
 )
 ```
 
-**Key Functions:**
+**Functions:**
 
-- `ctx.shortest_path_cost(source, sink, *, mode, edge_select=ALL_MIN_COST)` - Cost only, no path objects
+- `ctx.shortest_path_cost(source, sink, *, mode)` - Cost only, no path objects
 - `ctx.shortest_paths(source, sink, *, mode, edge_select=ALL_MIN_COST, split_parallel_edges=False)` - Full Path objects
 - `ctx.k_shortest_paths(source, sink, *, mode=PAIRWISE, max_k=3, max_path_cost, max_path_cost_factor, excluded_nodes, excluded_links)` - Multiple paths per pair
 
 ### Sensitivity Analysis
 
-Identify critical edges and quantify their impact:
+Which edges limit the flow, and by how much:
 
 ```python
 from ngraph import analyze, Mode
@@ -332,11 +341,9 @@ for pair, edge_impacts in sensitivity.items():
 
 ## 5. Monte Carlo Analysis
 
-Probabilistic failure analysis using FailureManager.
+`FailureManager` samples failures from a policy, runs an analysis function under each sample, and aggregates the iterations.
 
 ### FailureManager
-
-**Purpose:** Execute Monte Carlo failure scenarios and aggregate results across multiple iterations.
 
 ```python
 from ngraph import Network, Node, Link, FailureManager
@@ -382,7 +389,7 @@ for iter_result in results["results"]:
     print(f"Flow: {iter_result.summary.total_placed:.1f} (x{iter_result.occurrence_count})")
 ```
 
-**Key Methods:**
+**Methods:**
 
 - `run_max_flow_monte_carlo(...)` - Max-flow capacity analysis under failures
 - `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
@@ -390,7 +397,7 @@ for iter_result in results["results"]:
 
 ## 6. Workflow Steps
 
-Pre-built analysis steps for YAML-driven workflows.
+The built-in steps as written in a scenario's `workflow` section. Parameters and outputs are in the [Workflow Reference](workflow.md).
 
 ### MaxFlow Step
 
@@ -552,4 +559,4 @@ for pair, impacts in sensitivity.items():
 
 Network, Scenario and the workflow steps are Python. Shortest paths, max-flow and k-shortest paths run in C++ (NetGraph-Core) with the GIL released. Public APIs take and return Python types; the C++ layer is only reached through `netgraph_core` when you call it yourself, as in the NetworkX section above.
 
-Threads help only when an iteration spends its time inside the C++ engine (max-flow, the LSP presets). Demand placement for the hop-by-hop presets is Python-bound between short engine calls, which is why `TrafficMatrixPlacement` resolves `parallelism: auto` to 1 for those demand sets.
+Threads help only when an iteration spends its time inside the C++ engine (max-flow, the LSP presets). Demand placement for the hop-by-hop presets and `TE_WCMP_UNLIM` is Python-bound between short engine calls, which is why `TrafficMatrixPlacement` resolves `parallelism: auto` to 1 for those demand sets.

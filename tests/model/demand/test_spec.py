@@ -1,14 +1,7 @@
-import dataclasses
+import pytest
 
 from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset as FlowPolicyConfig
-
-
-def test_removed_legacy_fields_absent() -> None:
-    """Dead pre-netgraph-core fields are not part of the dataclass."""
-    field_names = {f.name for f in dataclasses.fields(TrafficDemand)}
-    assert "volume_placed" not in field_names
-    assert "flow_policy_obj" not in field_names
+from ngraph.model.flow.policy_config import FlowPolicyPreset
 
 
 def test_defaults_and_id_generation() -> None:
@@ -90,7 +83,7 @@ def test_custom_assignment_including_policy_config() -> None:
         volume=42.5,
         attrs={"description": "test"},
         mode="pairwise",
-        flow_policy=FlowPolicyConfig.SHORTEST_PATHS_ECMP,
+        flow_policy=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
     )
 
     assert demand.source == "SourceNode"
@@ -99,4 +92,11 @@ def test_custom_assignment_including_policy_config() -> None:
     assert demand.volume == 42.5
     assert demand.attrs == {"description": "test"}
     assert demand.mode == "pairwise"
-    assert demand.flow_policy == FlowPolicyConfig.SHORTEST_PATHS_ECMP
+    assert demand.flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+
+
+def test_flow_policy_must_be_preset() -> None:
+    """Preset names and integers are parsed by the builder, not the dataclass."""
+    for value in ("SHORTEST_PATHS_ECMP", 1):
+        with pytest.raises(ValueError, match="flow_policy must be a FlowPolicyPreset"):
+            TrafficDemand(source="A", target="B", flow_policy=value)

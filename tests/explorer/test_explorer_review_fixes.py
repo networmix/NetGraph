@@ -1,19 +1,17 @@
-"""Regression tests for NetworkExplorer review fixes.
+"""Regression tests for NetworkExplorer.
 
 Covers:
 - get_bom_map include_root/root_label contract.
-- get_node_utilization signature cleanup (no include_disabled, no disabled field).
-- Node-utilization validation equivalence after the O(E) adjacency pre-pass.
-- External link path attribution after hoisting path computation.
+- get_node_utilization covers enabled nodes only.
+- Node utilization and strict validation computed via the O(E) adjacency pre-pass.
+- External link details name the opposite endpoint's full path.
 """
 
 from __future__ import annotations
 
-import dataclasses
-
 import pytest
 
-from ngraph.explorer import NetworkExplorer, NodeUtilization
+from ngraph.explorer import NetworkExplorer
 from ngraph.model.components import Component, ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 
@@ -77,19 +75,8 @@ class TestGetBomMapIncludeRoot:
         assert "" not in bom_map
 
 
-class TestGetNodeUtilizationSignature:
-    """get_node_utilization takes no filter; snapshots cover enabled nodes only."""
-
-    def test_no_include_disabled_parameter(self) -> None:
-        explorer = NetworkExplorer.explore_network(
-            _network_with_hw(), components_library=_library()
-        )
-        with pytest.raises(TypeError):
-            explorer.get_node_utilization(include_disabled=False)  # type: ignore[call-arg]
-
-    def test_disabled_field_removed(self) -> None:
-        field_names = {f.name for f in dataclasses.fields(NodeUtilization)}
-        assert "disabled" not in field_names
+class TestGetNodeUtilizationEnabledOnly:
+    """Utilization snapshots cover enabled nodes only."""
 
     def test_disabled_nodes_have_no_snapshot(self) -> None:
         net = _network_with_hw()
@@ -100,7 +87,7 @@ class TestGetNodeUtilizationSignature:
 
 
 class TestUtilizationAdjacencyPrePass:
-    """Utilization results must be identical after the O(E) adjacency index."""
+    """Node utilization computed via the per-node adjacency index."""
 
     def test_disabled_links_and_endpoints_excluded(self) -> None:
         net = Network()

@@ -2,17 +2,13 @@
 
 Quick links:
 
-- [Design](design.md) — architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) — YAML syntax for scenario definition
-- [CLI Reference](cli.md) — command-line tools for running scenarios
-- [API Reference](api.md) — Python API for programmatic scenario creation
-- [Auto-Generated API Reference](api-full.md) — complete class and method documentation
+- [Design](design.md) - architecture, model, algorithms, workflow
+- [DSL Reference](dsl.md) - YAML syntax for scenario definition
+- [CLI Reference](cli.md) - command-line tools for running scenarios
+- [API Reference](api.md) - Python API for programmatic scenario creation
+- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
 
-A workflow is the ordered list of analysis steps a scenario runs.
-
-## Overview
-
-Each step computes one result (statistics, a Monte Carlo analysis, an export) and writes it under its step name in the results store.
+A workflow is the ordered list of analysis steps a scenario runs. Each step computes one result (statistics, a Monte Carlo analysis, an export) and writes it under its step name in the results store.
 
 ```yaml
 workflow:
@@ -32,13 +28,13 @@ workflow:
 
 - Steps run sequentially via `WorkflowStep.execute()`, which records timing and metadata and stores outputs under `{metadata, data}` for the step.
 - Monte Carlo steps (`MaxFlow`, `TrafficMatrixPlacement`) execute iterations using the Failure Manager. Each iteration analyzes the network with exclusion sets applied to mask failed nodes/links without mutating the base network. Workers are controlled by `parallelism: auto|int`. For `MaxFlow`, `auto` is the CPU count. For `TrafficMatrixPlacement`, `auto` is 1 unless the demand set uses an LSP preset or the interpreter is free-threaded, because iterations for the other presets are Python-bound and threads only slow them down; an explicit integer is always honoured.
-- Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, `seed_source`, and `active_seed`. `seed_source`/`active_seed` reflect the seed the step actually uses: a step constructed without its own seed reports `seed_source: none` even when the scenario has a seed (YAML-loaded scenarios derive per-step seeds at parse time, so those report `scenario-derived`).
+- Seeding: a scenario-level `seed` derives per-step seeds unless a step sets an explicit `seed`. Metadata includes `scenario_seed`, `step_seed`, and `seed_source`. `seed_source` reflects the seed the step actually uses: a step constructed without its own seed reports `seed_source: none` even when the scenario has a seed (YAML-loaded scenarios derive per-step seeds at parse time, so those report `scenario-derived`).
 
-## Core Workflow Steps
+## Built-in Steps
 
 ### BuildGraph
 
-Validates network topology and exports node-link JSON for external analysis. Optional for other workflow steps.
+Exports the network as node-link JSON for external tools. No other step depends on it.
 
 ```yaml
 - type: BuildGraph
@@ -48,11 +44,11 @@ Validates network topology and exports node-link JSON for external analysis. Opt
 
 Parameters:
 
-- `add_reverse`: If `true`, adds reverse edges for each link to enable bidirectional connectivity. Set to `false` for directed-only graphs. Default: `true`.
+- `add_reverse`: Add a reverse edge for each link. Default: `true`.
 
 ### NetworkStats
 
-Compute node, link, and degree metrics. Supports temporary exclusions without modifying the base network.
+Node, link, capacity and degree statistics, optionally with nodes or links excluded.
 
 ```yaml
 - type: NetworkStats
@@ -89,6 +85,30 @@ Monte Carlo maximum flow analysis between node groups. Baseline (no failures) is
   include_min_cut: false        # per-flow min-cut edge list
 ```
 
+Parameters:
+
+- `source`, `target`: Node selectors, a string pattern or a selector object (see Node Selection below). Required.
+- `mode`: `combine` or `pairwise`. Default: `combine`.
+- `failure_policy`: Name of a policy in the `failures` section. Default: none (no failures).
+- `iterations`: Number of failure iterations; the no-failure baseline is extra. Default: `1`.
+- `parallelism`: Worker threads, an integer or `auto` (the CPU count). Default: `auto`.
+- `shortest_path`: Restrict flow to the lowest-cost paths. Default: `false`.
+- `require_capacity`: Path selection considers residual capacity; `false` gives cost-only IP/IGP routing. Default: `true`.
+- `flow_placement`: `PROPORTIONAL` or `EQUAL_BALANCED`. Default: `PROPORTIONAL`.
+- `store_failure_patterns`: Record the failure trace on each result. Default: `false`.
+- `include_flow_details`: Emit `cost_distribution` per flow. Default: `false`.
+- `include_min_cut`: Emit the min-cut edge list per flow. Default: `false`.
+
+Outputs:
+
+- metadata: iterations, parallelism, analysis_function, policy_name,
+  execution_time, unique_patterns, occurrence_counts
+- data.baseline and data.flow_results: see Results Export Shape below
+- data.context: source, target, mode, shortest_path, require_capacity,
+  flow_placement, include_flow_details, include_min_cut
+- each flow entry's `data` holds `edges`/`edges_kind: min_cut` with
+  `include_min_cut`
+
 ### TrafficMatrixPlacement
 
 Monte Carlo placement of a named demand set with optional alpha scaling. Baseline (no failures) is always run first as a separate reference.
@@ -103,11 +123,24 @@ Monte Carlo placement of a named demand set with optional alpha scaling. Baselin
   include_flow_details: true     # cost_distribution per flow
   include_used_edges: false      # include per-demand used edge lists
   store_failure_patterns: false
-  # Alpha scaling – explicit or from another step
+  # Alpha scaling – explicit (default 1.0) or from another step, not both
   alpha: 1.0
   # alpha_from_step: msd_default
   # alpha_from_field: data.alpha_star
 ```
+
+Parameters:
+
+- `demand_set`: Name of the demand set to place. Required.
+- `failure_policy`: Name of a policy in the `failures` section. Default: none (no failures).
+- `iterations`: Number of failure iterations (>= 0). Default: `1`.
+- `parallelism`: Worker threads, an integer or `auto`. Default: `auto` (see Execution Model).
+- `store_failure_patterns`: Record the failure trace on each result. Default: `false`.
+- `include_flow_details`: Emit `cost_distribution` per flow. Default: `false`.
+- `include_used_edges`: Emit the used edge list per demand. Default: `false`.
+- `alpha`: Demand volume multiplier, must be > 0. Default: `1.0`. Cannot be combined with `alpha_from_step`.
+- `alpha_from_step`: Name of an earlier step whose result supplies alpha.
+- `alpha_from_field`: Dotted path of the alpha value in that step's results. Default: `data.alpha_star`.
 
 Outputs:
 
@@ -120,17 +153,14 @@ Outputs:
   `include_used_edges`, and `dropped_edges` (volume lost per link) for
   `SHORTEST_PATHS_ECMP_LOSSY` demands with `include_flow_details`
 
-Note: `placement_rounds` is deprecated and has no effect. It is still accepted in YAML for backward compatibility and is not exported in `data.context`; setting it to any value other than `auto` also logs a deprecation warning.
-
 ### MaximumSupportedDemand
 
-Search for the maximum uniform traffic multiplier `alpha_star` that is fully placeable.
+Search for the maximum uniform traffic multiplier `alpha_star` that is fully placeable. An alpha is feasible when every demand is placed to within the core engine's resolution of 1/4096 and no demand places nothing.
 
 ```yaml
 - type: MaximumSupportedDemand
   name: msd_default
   demand_set: default
-  acceptance_rule: hard          # Currently only "hard" is supported
   alpha_start: 1.0               # Starting alpha value for search
   growth_factor: 2.0             # Growth factor for bracketing (must be > 1.0)
   alpha_min: 0.000001            # Minimum alpha bound (default: 1e-6)
@@ -143,15 +173,13 @@ Search for the maximum uniform traffic multiplier `alpha_star` that is fully pla
 Parameters:
 
 - `demand_set`: Name of the demand set to analyze (default: "default").
-- `acceptance_rule`: Acceptance rule for feasibility (currently only "hard" is supported): every demand must be placed to within the core engine's resolution of 1/4096 and no demand may place nothing.
-- `alpha_start`: Initial alpha value to probe.
-- `growth_factor`: Multiplier for bracketing phase (must be > 1.0).
-- `alpha_min`: Minimum alpha bound for search.
-- `alpha_max`: Maximum alpha bound for search.
-- `resolution`: Convergence threshold for bisection.
-- `max_bracket_iters`: Maximum iterations for bracketing phase.
-- `max_bisect_iters`: Maximum iterations for bisection phase.
-- `placement_rounds`: Deprecated; accepted for backward compatibility but has no effect (each demand is placed in one deterministic pass, so repeated rounds change nothing).
+- `alpha_start`: Initial alpha value to probe. Default: `1.0`.
+- `growth_factor`: Multiplier for bracketing phase (must be > 1.0). Default: `2.0`.
+- `alpha_min`: Minimum alpha bound for search. Default: `1e-6`.
+- `alpha_max`: Maximum alpha bound for search. Default: `1e9`.
+- `resolution`: Convergence threshold for bisection (must be positive). Default: `0.01`.
+- `max_bracket_iters`: Maximum iterations for bracketing phase. Default: `32`.
+- `max_bisect_iters`: Maximum iterations for bisection phase. Default: `32`.
 
 Outputs:
 
@@ -171,117 +199,38 @@ Aggregate platform and optics capex/power by hierarchy level (split by `/`).
   aggregation_level: 2
 ```
 
+Parameters:
+
+- `include_disabled`: If `true`, include disabled nodes and links. Default: `false`.
+- `aggregation_level`: Deepest hierarchy level to report; levels `0..N` are produced and `0` is the root. Must be >= 0. Default: `2`.
+
 Outputs:
 
 - data.context: include_disabled, aggregation_level
-- data.levels: mapping level->list of {path, platform_capex, platform_power_watts,
+- data.levels: mapping level (`"0"`..`"N"`) -> list of {path, platform_capex, platform_power_watts,
   optics_capex, optics_power_watts, capex_total, power_total_watts}
 
 CostPower performs no hardware capacity/ports validation and completes even on networks that strict hardware validation would reject; use `ngraph inspect` for hardware validation.
 
-## Node Selection Mechanism
+## Node Selection
 
-Every workflow step selects nodes the same way: a selector is either a string pattern or a selector object.
+`MaxFlow` `source` and `target` accept a string pattern or a selector object; the syntax is the one described in the [DSL Reference](dsl.md#node-selection).
 
-### String Pattern Matching
-
-String patterns are regular expressions matched against node names, anchored at the start (Python `re.match()`).
-
-```yaml
-# Exact match (also matches names that continue past it, e.g. "spine-10")
-source: "spine-1"
-
-# Prefix match
-source: "datacenter/servers/"
-
-# Pattern match
-source: "^pod[1-3]/leaf/.*$"
-```
-
-### Selector Objects
+- A string is a regular expression matched against node names from the start (Python `re.match()`), so `"spine-1"` also matches `"spine-10"`; anchor with `^...$` for an exact match.
+- Capturing groups define the groups: each distinct captured value (several captures joined with `|`) becomes one group, and a pattern without captures forms a single group labeled by the pattern.
+- A selector object combines `path` (a regex), `group_by` (an attribute whose values become the groups) and `match` (attribute conditions).
 
 ```yaml
-# Attribute-based grouping
-source:
-  group_by: "dc"
-
-# Combined path and grouping
-source:
-  path: "^datacenter/.*"
-  group_by: "role"
-
-# With attribute filtering
-source:
+source: "(dc[1-3])/servers/.*"     # one group per captured value: dc1, dc2, dc3
+target:
   path: "^pod[1-3]/.*"
+  group_by: "role"
   match:
     conditions:
-      - attr: "tier"
-        op: "=="
-        value: "leaf"
+      - {attr: "tier", op: "==", value: "leaf"}
 ```
 
-### Capturing Groups for Node Grouping
-
-**No Capturing Groups**: All matching nodes form one group labeled by the pattern.
-
-```yaml
-source: "edge/.*"
-# Creates one group: "edge/.*" containing all matching nodes
-```
-
-**Single Capturing Group**: Each unique captured value creates a separate group.
-
-```yaml
-source: "(dc[1-3])/servers/.*"
-# Creates groups: "dc1", "dc2", "dc3"
-# Each group contains servers from that datacenter
-```
-
-**Multiple Capturing Groups**: Group labels join captured values with `|`.
-
-```yaml
-source: '(dc[1-3])/(spine|leaf)/switch-(\d+)'
-# Creates groups: "dc1|spine|1", "dc1|leaf|2", "dc2|spine|1", etc.
-```
-
-### Attribute-based Grouping
-
-```yaml
-# Group by node attribute value (e.g., node.attrs["dc"])
-source:
-  group_by: "dc"
-```
-
-### Flow Analysis Modes
-
-**`combine` Mode**: Aggregates all source matches into one virtual source, all target matches into one virtual target. Produces single flow value.
-
-**`pairwise` Mode**: Computes flow between each source group and target group pair. Produces flow matrix keyed by `(source_group, target_group)`.
-
-## MaxFlow Parameters
-
-### Required Parameters
-
-- `source`: Node selector for source nodes (string pattern or selector object)
-- `target`: Node selector for target nodes (string pattern or selector object)
-
-### Analysis Configuration
-
-```yaml
-mode: combine                    # combine | pairwise (default: combine)
-iterations: 1000                 # Failure iterations to run (default: 1)
-failure_policy: policy_name      # Name in failures section (default: null)
-parallelism: auto                # Worker threads (default: auto)
-shortest_path: false             # Restrict to shortest paths (default: false)
-require_capacity: true           # Path selection considers capacity (default: true)
-                                 # Set false for true IP/IGP semantics (cost-only routing)
-flow_placement: PROPORTIONAL     # PROPORTIONAL | EQUAL_BALANCED
-store_failure_patterns: false    # Store failure patterns in results
-include_flow_details: false      # Emit cost_distribution per flow
-include_min_cut: false           # Emit min-cut edge list per flow
-```
-
-Note: Baseline (no failures) is always run first as a separate reference; `iterations` counts failure scenarios only.
+`mode: combine` aggregates all source matches into one virtual source and all target matches into one virtual target and produces one flow value; `mode: pairwise` computes a flow for each (source group, target group) pair.
 
 ## Results Export Shape
 
@@ -296,8 +245,7 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
       "execution_order": 0,
       "scenario_seed": 42,
       "step_seed": 1903777304,
-      "seed_source": "scenario-derived",
-      "active_seed": 1903777304
+      "seed_source": "scenario-derived"
     }
   },
   "steps": {
@@ -340,7 +288,8 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
     "failure_trace": null,
     "occurrence_count": 1,
     "flows": [ ... ],
-    "summary": { "total_demand": 10.0, "total_placed": 10.0, "overall_ratio": 1.0 }
+    "summary": { "total_demand": 10.0, "total_placed": 10.0, "overall_ratio": 1.0, "dropped_flows": 0, "num_flows": 2 },
+    "data": {}
   },
   "flow_results": [
     {
@@ -349,7 +298,8 @@ Exported results have a fixed top-level structure. Keys under `workflow` and `st
       "failure_trace": { "mode_index": 0, "selections": [...], ... },
       "occurrence_count": 5,
       "flows": [ ... ],
-      "summary": { "total_demand": 10.0, "total_placed": 8.0, "overall_ratio": 0.8 }
+      "summary": { "total_demand": 10.0, "total_placed": 8.0, "overall_ratio": 0.8, "dropped_flows": 1, "num_flows": 2 },
+      "data": {}
     }
   ],
   "context": { ... }
@@ -365,4 +315,5 @@ Notes:
 - `failure_trace` contains policy selection details when `store_failure_patterns: true`.
 - `failure_state` contains `excluded_nodes` and `excluded_links` lists.
 - `cost_distribution` uses string keys for JSON stability; values are numeric.
+- `data` on each entry is reserved for per-iteration extras; the built-in analyses leave it empty.
 - Effective `parallelism` and other execution fields are recorded in step metadata.

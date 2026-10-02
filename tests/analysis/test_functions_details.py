@@ -11,7 +11,6 @@ def test_demand_placement_analysis_includes_flow_details_costs_and_edges() -> No
     for node in ["A", "B", "C", "D"]:
         network.add_node(Node(node))
 
-    # Create two paths with different costs
     # Path 1: A -> B -> D (cost 2, capacity 100)
     network.add_link(Link("A", "B", capacity=100.0, cost=1.0))
     network.add_link(Link("B", "D", capacity=100.0, cost=1.0))
@@ -24,7 +23,7 @@ def test_demand_placement_analysis_includes_flow_details_costs_and_edges() -> No
         {
             "source": "A",
             "target": "D",
-            "volume": 150.0,  # Exceeds single path capacity, will use both paths
+            "volume": 150.0,  # Exceeds the cost-2 path's capacity
             "mode": "pairwise",
             "priority": 0,
         },
@@ -39,14 +38,12 @@ def test_demand_placement_analysis_includes_flow_details_costs_and_edges() -> No
         include_used_edges=True,
     )
 
-    # Validate result structure
     assert len(result.flows) == 1
     flow = result.flows[0]
 
     # Should have cost_distribution when include_flow_details=True
     assert isinstance(flow.cost_distribution, dict)
-    # With both paths used, we should see different costs
-    # (exact distribution depends on flow policy)
+    # Exact distribution depends on the flow policy
     if flow.cost_distribution:
         assert len(flow.cost_distribution) > 0
         assert all(isinstance(k, float) for k in flow.cost_distribution.keys())

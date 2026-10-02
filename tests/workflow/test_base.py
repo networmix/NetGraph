@@ -22,7 +22,7 @@ def test_workflow_step_is_abstract() -> None:
 def test_register_workflow_step_decorator() -> None:
     """
     Verify that using the @register_workflow_step decorator registers
-    the subclass in the WORKFLOW_STEP_REGISTRY with the correct key.
+    the subclass in the WORKFLOW_STEP_REGISTRY under the decorator's key.
     """
 
     @register_workflow_step("TestStep")
@@ -30,7 +30,6 @@ def test_register_workflow_step_decorator() -> None:
         def run(self, scenario) -> None:
             pass
 
-    # Check if the class is registered correctly
     assert "TestStep" in WORKFLOW_STEP_REGISTRY
     assert WORKFLOW_STEP_REGISTRY["TestStep"] == TestStep
 
@@ -49,7 +48,6 @@ def test_workflow_step_subclass_run_method() -> None:
     step_instance = ConcreteStep(name="test_step")
     step_instance.run(mock_scenario)
 
-    # Check if run() was actually invoked
     assert getattr(step_instance, "_ran", False) is True
     assert step_instance.name == "test_step"
 

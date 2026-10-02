@@ -11,7 +11,7 @@ from ngraph.scenario import Scenario
 
 
 class TestRiskGroupGenerationBasic:
-    """Basic tests for risk group generation."""
+    """Generate risk groups from link and node attributes."""
 
     def test_generate_from_link_attribute(self) -> None:
         """Generate conduit risk groups from unique fiber.path_id values on links."""
@@ -174,7 +174,7 @@ risk_groups:
 
 
 class TestRiskGroupGenerationEdgeCases:
-    """Edge cases for risk group generation."""
+    """Missing or null attributes, explicit groups, and multiple generate blocks."""
 
     def test_generate_no_matches(self) -> None:
         """No groups generated when attribute is missing from all entities."""

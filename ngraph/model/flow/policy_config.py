@@ -10,25 +10,16 @@ and placement mode from ``preset_config`` so the two cannot drift.
 from __future__ import annotations
 
 from enum import IntEnum
-from typing import Any, Optional
+from typing import Optional
 
-from ngraph.logging import get_logger
-
-try:
-    import netgraph_core
-except ImportError as e:
-    raise ImportError(
-        "netgraph_core module not found. Ensure NetGraph-Core is installed."
-    ) from e
-
-logger = get_logger(__name__)
+import netgraph_core
 
 
 class FlowPolicyPreset(IntEnum):
-    """Enumerates common flow policy presets for traffic routing.
+    """Named flow policy presets for traffic routing.
 
-    These presets map to specific combinations of path algorithms, flow placement
-    strategies, and edge selection modes provided by NetGraph-Core.
+    Each preset maps to a combination of path algorithm, flow placement
+    strategy, and edge selection mode in NetGraph-Core.
 
     The ``SHORTEST_PATHS_*`` presets model hop-by-hop IP/IGP forwarding: routes
     follow link costs alone and each demand is placed in one pass on the
@@ -67,9 +58,9 @@ class FlowPolicyPreset(IntEnum):
 
     Each LSP is a distinct tunnel using a single path (MPLS LSP semantics). Multiple LSPs
     can share the same path. With N LSPs and M paths where N > M, LSPs are distributed
-    across paths (~N/M LSPs per path). ECMP constraint ensures all LSPs carry equal volume.
+    across paths (~N/M LSPs per path). The ECMP constraint gives all LSPs equal volume.
 
-    Configuration: multipath=False ensures tunnel-based ECMP (not hash-based ECMP).
+    Configuration: multipath=False makes this tunnel-based ECMP, not hash-based ECMP.
     """
 
     TE_ECMP_16_LSP = 5
@@ -79,14 +70,14 @@ class FlowPolicyPreset(IntEnum):
 
     Each LSP is a distinct tunnel using a single path (MPLS LSP semantics). With 16 LSPs
     and M paths: if M ≥ 16, one LSP per path; if M < 16, some paths carry multiple LSPs.
-    ECMP constraint ensures all LSPs carry equal volume.
+    The ECMP constraint gives all LSPs equal volume.
 
     Example: 15 parallel paths (capacity 1.0 each) with 16 LSPs:
       - 15 paths carry 1 LSP, 1 path carries 2 LSPs
       - ECMP constraint limits all LSPs to 0.5 units (bottleneck path: 1.0 / 2 = 0.5)
       - Total: 16 × 0.5 = 8.0 units
 
-    Configuration: multipath=False ensures tunnel-based ECMP (not hash-based ECMP).
+    Configuration: multipath=False makes this tunnel-based ECMP, not hash-based ECMP.
     """
 
     SHORTEST_PATHS_ECMP_LOSSY = 6
@@ -99,6 +90,9 @@ class FlowPolicyPreset(IntEnum):
     result records the dropped volume per link.
     """
 
+
+#: Preset for demands that leave ``flow_policy`` unset.
+DEFAULT_PRESET = FlowPolicyPreset.SHORTEST_PATHS_ECMP
 
 #: Presets that model hop-by-hop IP/IGP forwarding: cost-only routes, one
 #: placement pass per demand, no rerouting. In combine mode these presets
@@ -135,7 +129,6 @@ def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
         ValueError: If an unknown FlowPolicyPreset value is provided.
     """
     config = netgraph_core.FlowPolicyConfig()
-    config.path_alg = netgraph_core.PathAlg.SPF
 
     if preset in HOP_BY_HOP_PRESETS:
         # Hop-by-hop IP/IGP forwarding: cost-only routing, single pass, one
@@ -174,7 +167,7 @@ def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
         FlowPolicyPreset.TE_ECMP_16_LSP,
     ):
         # TE with ECMP flow placement over single-path tunnels.
-        # multipath=False ensures each LSP is a single path (MPLS tunnel semantics)
+        # multipath=False keeps each LSP on one path (MPLS tunnel semantics).
         config.flow_placement = netgraph_core.FlowPlacement.EQUAL_BALANCED
         config.selection = netgraph_core.EdgeSelection(
             multi_edge=False,
@@ -207,8 +200,8 @@ def create_flow_policy(
     Args:
         algorithms: NetGraph-Core Algorithms instance.
         graph: NetGraph-Core Graph handle.
-        preset: Preset whose path algorithm, placement, edge selection, and
-            flow-count bounds to apply (see ``preset_config``).
+        preset: Preset whose placement, edge selection, and flow-count bounds
+            to apply (see ``preset_config``).
         node_mask: Optional numpy bool array for node exclusions (True = include).
         edge_mask: Optional numpy bool array for edge exclusions (True = include).
         static_path_count: Number of routes the caller will pin with
@@ -240,27 +233,3 @@ def create_flow_policy(
     return netgraph_core.FlowPolicy(
         algorithms, graph, config, node_mask=node_mask, edge_mask=edge_mask
     )
-
-
-def serialize_policy_preset(cfg: Any) -> Optional[str]:
-    """Serialize a FlowPolicyPreset to its string name for JSON storage.
-
-    Args:
-        cfg: FlowPolicyPreset enum, an integer coercible to one, or any other
-            value.
-
-    Returns:
-        Preset name (e.g. "SHORTEST_PATHS_ECMP"); None when ``cfg`` is None.
-        Values that do not map to a preset are logged at debug level and
-        returned as ``str(cfg)``.
-    """
-    if cfg is None:
-        return None
-    if isinstance(cfg, FlowPolicyPreset):
-        return cfg.name
-    # Try to coerce integer to enum
-    try:
-        return FlowPolicyPreset(int(cfg)).name
-    except (ValueError, TypeError) as exc:
-        logger.debug("Unrecognized flow_policy_preset value: %r (%s)", cfg, exc)
-        return str(cfg)

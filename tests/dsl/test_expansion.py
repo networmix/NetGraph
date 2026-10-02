@@ -1,9 +1,5 @@
-"""Comprehensive tests for the variable expansion system.
-
-Tests for ngraph.dsl.expansion modules:
-- ExpansionSpec: schema for expansion configuration
-- substitute_vars: single template substitution
-- expand_name_patterns: bracket expansion for names
+"""Tests for ngraph.dsl.expansion: ExpansionSpec, substitute_vars, and bracket
+expansion of group names and risk group references.
 """
 
 import pytest
@@ -14,10 +10,6 @@ from ngraph.dsl.expansion import (
     expand_risk_group_refs,
     substitute_vars,
 )
-
-# ──────────────────────────────────────────────────────────────────────────────
-# ExpansionSpec Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestExpansionSpec:
@@ -39,11 +31,6 @@ class TestExpansionSpec:
         spec = ExpansionSpec(vars={"dc": [1, 2]}, mode="zip")
         assert spec.vars == {"dc": [1, 2]}
         assert spec.mode == "zip"
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# substitute_vars Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestSubstituteVars:
@@ -113,11 +100,6 @@ class TestSubstituteVars:
             substitute_vars("${missing}", {"x": 1})
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# expand_name_patterns Tests
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 class TestExpandNamePatterns:
     """Tests for bracket expansion in group names."""
 
@@ -159,7 +141,7 @@ class TestExpandNamePatterns:
         assert expand_name_patterns("prefix[1-2]") == ["prefix1", "prefix2"]
 
     def test_adjacent_brackets(self) -> None:
-        """Adjacent brackets expand correctly."""
+        """Adjacent brackets expand to their cartesian product."""
         result = expand_name_patterns("[a,b][1-2]")
         assert sorted(result) == sorted(["a1", "a2", "b1", "b2"])
 
@@ -173,7 +155,7 @@ class TestExpandNamePatterns:
 
 
 class TestExpandNamePatternsEdgeCases:
-    """Edge case tests for bracket expansion validation."""
+    """Bracket expansion error messages and boundary inputs."""
 
     def test_alphabetic_range_raises_clear_error(self) -> None:
         """Alphabetic range [a-c] raises ValueError with helpful message."""
@@ -220,13 +202,12 @@ class TestExpandNamePatternsEdgeCases:
         assert "a-c" in error_msg
 
     def test_alphabetic_list_still_works(self) -> None:
-        """Comma-separated alphabetic values still work correctly."""
-        # This should work (list syntax, not range syntax)
+        """Comma-separated alphabetic values expand; only a-c ranges are rejected."""
         result = expand_name_patterns("node[a,b,c]")
         assert result == ["nodea", "nodeb", "nodec"]
 
     def test_zero_start_range_works(self) -> None:
-        """Range starting at zero works correctly."""
+        """Range starting at zero includes 0."""
         result = expand_name_patterns("node[0-2]")
         assert result == ["node0", "node1", "node2"]
 
@@ -234,11 +215,6 @@ class TestExpandNamePatternsEdgeCases:
         """Leading zeros in list values are preserved."""
         result = expand_name_patterns("port[01,02,03]")
         assert result == ["port01", "port02", "port03"]
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# expand_risk_group_refs Tests
-# ──────────────────────────────────────────────────────────────────────────────
 
 
 class TestExpandRiskGroupRefs:

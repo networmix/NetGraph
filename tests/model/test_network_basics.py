@@ -1,13 +1,4 @@
-"""
-Tests for basic network construction, utilities, nodes, and links.
-
-This module contains tests for the fundamental building blocks of the network:
-- Utility functions (UUID generation)
-- Node creation and management
-- Link creation and management
-- Basic network construction
-- Node/link enabling/disabling
-"""
+"""Tests for basic network construction, utilities, nodes, and links."""
 
 import pytest
 
@@ -106,7 +97,7 @@ class TestNetworkConstruction:
         return network
 
     def test_network_add_node_and_link(self, empty_network):
-        """Adding nodes and links to a Network should store them correctly."""
+        """Added nodes and links are stored in Network.nodes and Network.links."""
         node_a = Node("A")
         node_b = Node("B")
 
@@ -213,7 +204,7 @@ class TestNodeLinkManagement:
             net.enable_link("xyz")
 
     def test_enable_all_disable_all(self, basic_network):
-        """Test enable_all and disable_all correctly toggle all nodes and links."""
+        """Test enable_all and disable_all toggle all nodes and links."""
         net, link = basic_network
 
         # Everything enabled by default
@@ -221,13 +212,11 @@ class TestNodeLinkManagement:
         assert net.nodes["B"].disabled is False
         assert net.links[link.id].disabled is False
 
-        # Disable all
         net.disable_all()
         assert net.nodes["A"].disabled is True
         assert net.nodes["B"].disabled is True
         assert net.links[link.id].disabled is True
 
-        # Enable all
         net.enable_all()
         assert net.nodes["A"].disabled is False
         assert net.nodes["B"].disabled is False

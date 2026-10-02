@@ -1,4 +1,4 @@
-"""Centralized logging configuration for NetGraph.
+"""Logging configuration for NetGraph.
 
 Follows the standard library pattern: importing the package attaches only a
 ``logging.NullHandler`` to the root ``ngraph`` logger and never installs
@@ -13,7 +13,7 @@ import logging
 import sys
 from typing import Optional
 
-# Flag to track if we've already set up the root logger
+# Set by setup_root_logger(), cleared by reset_logging()
 _ROOT_LOGGER_CONFIGURED = False
 
 
@@ -42,7 +42,6 @@ def setup_root_logger(
     # Replace the import-time NullHandler (and any stale handlers)
     root_logger.handlers.clear()
 
-    # Default format with timestamps, level, logger name, and message
     if format_string is None:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
@@ -78,7 +77,7 @@ def get_logger(name: str) -> logging.Logger:
     """
     logger = logging.getLogger(name)
 
-    # Don't add handlers to child loggers - they inherit from root
+    # Child loggers get no handlers; they inherit from the ngraph logger.
     logger.setLevel(logging.NOTSET)  # Inherit from parent
 
     return logger
@@ -94,26 +93,15 @@ def set_global_log_level(level: int) -> None:
     Args:
         level: Logging level (e.g., logging.DEBUG, logging.INFO).
     """
-    # Ensure a console handler exists for applications that only call this
+    # Install the console handler for applications that only call this
     setup_root_logger(level=level)
 
-    # Set the root level for all ngraph loggers
     root_logger = logging.getLogger("ngraph")
     root_logger.setLevel(level)
 
     # Also update handlers to respect the new level
     for handler in root_logger.handlers:
         handler.setLevel(level)
-
-
-def enable_debug_logging() -> None:
-    """Enable debug logging for the entire package."""
-    set_global_log_level(logging.DEBUG)
-
-
-def disable_debug_logging() -> None:
-    """Disable debug logging, set to INFO level."""
-    set_global_log_level(logging.INFO)
 
 
 def reset_logging() -> None:

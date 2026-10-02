@@ -1,5 +1,5 @@
 # Test scenario 4: Advanced DSL features demonstration
-# Tests components system, variable expansion, bracket expansion, complex overrides
+# Tests components system, variable expansion, bracket expansion, node/link rules
 # and risk groups in a realistic data center fabric scenario
 seed: 4004
 
@@ -204,8 +204,8 @@ blueprints:
         # Spine switches share room-level risk (cooling/power in spine room)
     links:
       # Variable expansion for leaf-spine connectivity using $var syntax
-      - source: "leaf-${leaf_id}"
-        target: "spine-${spine_id}"
+      - source: "leaf/leaf-${leaf_id}"
+        target: "spine/spine-${spine_id}"
         expand:
           vars:
             leaf_id: [1, 2]
@@ -272,7 +272,7 @@ network:
           conduit_id: "DC1-DC2-C1"
         distance_km: 50
 
-  # Complex node overrides with regex patterns
+  # Node rules with regex patterns
   node_rules:
     # Override DC1 spine switches - assign to DC1 spine room
     - path: "dc1_fabric/spine/spine-[1-2]"
@@ -321,7 +321,7 @@ network:
       attrs:
         maintenance_status: "scheduled"
 
-  # Complex link overrides
+  # Link rules
   link_rules:
     # Higher capacity for inter-DC links - both conduit and path level risk
     - source: "dc1_fabric/spine/.*"
@@ -403,28 +403,27 @@ failures:
             mode: "choice"
             count: 1
 
-# Multi-step workflow demonstrating various workflow steps
+# BuildGraph, then MaxFlow runs without and with failure policies
 workflow:
   - type: BuildGraph
     name: build_graph
 
-  # Capacity analysis with different traffic patterns
-  # Forward intra-DC capacity analysis
+  # Forward intra-DC capacity analysis: pod a to pod b
   - type: MaxFlow
     name: intra_dc_capacity_forward
-    source: "dc1_pod[ab]_rack.*/servers/.*"
-    target: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_poda_rack.*/servers/.*"
+    target: "dc1_podb_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
     iterations: 1
     failure_policy: null
 
-  # Reverse intra-DC capacity analysis
+  # Reverse intra-DC capacity analysis: pod b to pod a
   - type: MaxFlow
     name: intra_dc_capacity_reverse
-    source: "dc1_pod[ab]_rack.*/servers/.*"
-    target: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_podb_rack.*/servers/.*"
+    target: "dc1_poda_rack.*/servers/.*"
     mode: "combine"
     shortest_path: false
     flow_placement: "PROPORTIONAL"
@@ -456,8 +455,8 @@ workflow:
   # Failure analysis with different policies
   - type: MaxFlow
     name: rack_failure_analysis
-    source: "dc1_pod[ab]_rack.*/servers/.*"
-    target: "dc1_pod[ab]_rack.*/servers/.*"
+    source: "dc1_poda_rack.*/servers/.*"
+    target: "dc1_podb_rack.*/servers/.*"
     mode: "combine"
     failure_policy: "single_link_failure"
     iterations: 10 # 10 iterations for test efficiency

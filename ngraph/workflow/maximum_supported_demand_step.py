@@ -73,26 +73,23 @@ class _MSDCache:
 class MaximumSupportedDemand(WorkflowStep):
     """Finds the maximum uniform traffic multiplier that is fully placeable.
 
-    Binary search yields alpha_star: the largest multiplier at which every
-    demand in the set still places fully on the network.
+    Brackets alpha_star by scaling alpha_start up or down by growth_factor,
+    then bisects. alpha_star is the largest multiplier at which every demand
+    in the set still places fully on the network.
 
     Attributes:
         demand_set: Name of the demand set to analyze.
-        acceptance_rule: Currently only "hard" is implemented; anything else
-            raises ValueError at run time.
         alpha_start: Starting multiplier for binary search.
         growth_factor: Factor for bracket expansion; must be > 1.0.
-        alpha_min: Minimum allowed alpha value.
-        alpha_max: Maximum allowed alpha value.
-        resolution: Convergence threshold for binary search; must be positive.
+        alpha_min: Lowest alpha probed; the step raises if it is infeasible.
+        alpha_max: Highest alpha probed; returned when it is feasible.
+        resolution: Bisection stops once the bracket is no wider than this;
+            must be positive.
         max_bracket_iters: Maximum iterations for bracketing phase.
         max_bisect_iters: Maximum iterations for bisection phase.
-        placement_rounds: Deprecated; accepted for backward compatibility but
-            has no effect (each demand is placed in one deterministic pass).
     """
 
     demand_set: str = "default"
-    acceptance_rule: str = "hard"
     alpha_start: float = 1.0
     growth_factor: float = 2.0
     alpha_min: float = 1e-6
@@ -100,14 +97,8 @@ class MaximumSupportedDemand(WorkflowStep):
     resolution: float = 0.01
     max_bracket_iters: int = 32
     max_bisect_iters: int = 32
-    placement_rounds: int | str = "auto"
 
     def __post_init__(self) -> None:
-        if self.placement_rounds != "auto":
-            logger.warning(
-                "MaximumSupportedDemand 'placement_rounds' is deprecated and has "
-                "no effect; each demand is placed in one deterministic pass."
-            )
         try:
             self.alpha_start = float(self.alpha_start)
             self.growth_factor = float(self.growth_factor)
@@ -124,9 +115,6 @@ class MaximumSupportedDemand(WorkflowStep):
             raise ValueError("resolution must be positive")
 
     def run(self, scenario: "Any") -> None:
-        if self.acceptance_rule != "hard":
-            raise ValueError("Only 'hard' acceptance_rule is implemented")
-
         t0 = time.perf_counter()
         logger.info("Starting MaximumSupportedDemand: name=%s", self.name)
         logger.debug(
@@ -144,18 +132,16 @@ class MaximumSupportedDemand(WorkflowStep):
 
         if not base_demands:
             raise ValueError(
-                f"Demand set '{self.demand_set}' contains no demands. "
-                "Cannot compute maximum supported demand without traffic specifications."
+                f"Demand set '{self.demand_set}' contains no demands; "
+                "there is nothing to scale."
             )
 
-        # Build cache once for all probes
         cache = self._build_cache(scenario, base_tds)
         logger.debug(
             "MSD cache built: %d expanded demands",
             len(cache.base_expanded),
         )
 
-        # Binary search
         probes: list[dict[str, Any]] = []
 
         def probe(alpha: float) -> tuple[bool, dict[str, Any]]:
@@ -165,9 +151,7 @@ class MaximumSupportedDemand(WorkflowStep):
 
         alpha_star = self._binary_search(probe)
 
-        # Store results
         context = {
-            "acceptance_rule": self.acceptance_rule,
             "alpha_start": self.alpha_start,
             "growth_factor": self.growth_factor,
             "alpha_min": self.alpha_min,
@@ -290,7 +274,7 @@ class MaximumSupportedDemand(WorkflowStep):
         """
         ctx, expansion, resolved_ids = build_demand_placement_inputs(
             scenario.network,
-            [{**td.to_dict(), "flow_policy": td.flow_policy} for td in base_tds],
+            [td.to_dict() for td in base_tds],
         )
 
         # Build masks once (no exclusions during MSD)
