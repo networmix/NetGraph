@@ -15,6 +15,8 @@ from ngraph.utils.ids import new_base64_uuid
 # Derived from the Mode enum so the vocabulary is defined once.
 _VALID_MODES = tuple(m.name.lower() for m in Mode)
 _VALID_GROUP_MODES = ("flatten", "per_group", "group_pairwise")
+#: Per-edge value that ranks equal-cost alternatives (Core ``EdgePriority``).
+VALID_EDGE_PRIORITIES = ("residual", "capacity", "headroom")
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,11 @@ class TrafficDemand:
             ("flatten", "per_group", "group_pairwise").
         flow_policy: Routing preset; None uses ``DEFAULT_PRESET``
             (SHORTEST_PATHS_ECMP).
+        edge_priority: Which per-edge value ranks equal-cost alternatives when
+            this demand is routed: "residual" (the preset default), "capacity"
+            (static capacity even under capacity-aware routing) or "headroom"
+            (residual / capacity). None keeps the preset's behaviour. It never
+            changes which edges are eligible.
         static_paths: Explicit routes to pin this demand to. When set, the
             demand is placed only on these routes: one flow per route, and a
             route broken by a failure carries nothing rather than rerouting.
@@ -74,6 +81,7 @@ class TrafficDemand:
     mode: str = "combine"
     group_mode: str = "flatten"
     flow_policy: Optional[FlowPolicyPreset] = None
+    edge_priority: Optional[str] = None
     static_paths: Tuple[StaticPath, ...] = ()
     attrs: Dict[str, Any] = field(default_factory=dict)
     id: str = ""
@@ -102,6 +110,14 @@ class TrafficDemand:
             raise ValueError(
                 f"flow_policy must be a FlowPolicyPreset or None, got "
                 f"{self.flow_policy!r}"
+            )
+        if (
+            self.edge_priority is not None
+            and self.edge_priority not in VALID_EDGE_PRIORITIES
+        ):
+            raise ValueError(
+                f"Unknown demand edge_priority {self.edge_priority!r}. "
+                f"Expected one of: {', '.join(VALID_EDGE_PRIORITIES)}"
             )
         for path in self.static_paths:
             if not isinstance(path, StaticPath):
@@ -133,6 +149,7 @@ class TrafficDemand:
             "flow_policy": (
                 self.flow_policy.name if self.flow_policy is not None else None
             ),
+            "edge_priority": self.edge_priority,
             "static_paths": [
                 {"nodes": list(p.nodes)} if p.nodes else {"links": list(p.links)}
                 for p in self.static_paths

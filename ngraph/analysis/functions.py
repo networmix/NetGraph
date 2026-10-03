@@ -74,7 +74,7 @@ def _reconstruct_traffic_demands(
     Args:
         demands_config: List of demand configurations with fields:
             source, target, volume, mode, group_mode, flow_policy,
-            priority, static_paths, attrs.
+            edge_priority, priority, static_paths, attrs.
 
     Returns:
         List of TrafficDemand objects with stable IDs.
@@ -91,6 +91,7 @@ def _reconstruct_traffic_demands(
                 mode=config.get("mode", "combine"),
                 group_mode=config.get("group_mode", "flatten"),
                 flow_policy=coerce_flow_policy(config.get("flow_policy")),
+                edge_priority=config.get("edge_priority"),
                 priority=config.get("priority", 0),
                 static_paths=_static_paths_from_config(config.get("static_paths")),
                 attrs=config.get("attrs") or {},

@@ -1138,6 +1138,7 @@ demands:
 | `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
 | `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
 | `flow_policy` | string | Routing policy preset name (case-insensitive); omitted or `null` selects `SHORTEST_PATHS_ECMP`. Non-string values (integers, inline policy mappings) fail schema validation at scenario load; any other string (unknown name, numeric string, blank) raises `ValueError` |
+| `edge_priority` | string | Per-edge value that ranks equal-cost alternatives when routing this demand: `residual` (the preset default: residual capacity under capacity-aware routing, static capacity otherwise), `capacity` (static capacity even under capacity-aware routing) or `headroom` (`residual / capacity`, the fraction still free). Eligibility is unaffected; omitted or `null` keeps the preset's behaviour |
 | `static_paths` | array | Explicit routes to pin the demand to; see below |
 | `attrs` | object | Arbitrary metadata |
 | `expand` | object | Variable expansion block |

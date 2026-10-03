@@ -706,6 +706,19 @@
                 "null"
               ]
             },
+            "edge_priority": {
+              "description": "Per-edge value that ranks equal-cost alternatives when routing this demand: residual (preset default), capacity, or headroom (residual / capacity)",
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "residual",
+                "capacity",
+                "headroom",
+                null
+              ]
+            },
             "attrs": {
               "type": "object",
               "description": "Additional demand attributes"

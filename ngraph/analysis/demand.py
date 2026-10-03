@@ -8,7 +8,7 @@ resolved through the shared selector layer.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ngraph.analysis.context import LARGE_CAPACITY, AugmentationEdge
 from ngraph.dsl.selectors import normalize_selector
@@ -46,6 +46,7 @@ class ExpandedDemand:
     policy_preset: FlowPolicyPreset
     static_paths: Tuple[StaticPath, ...] = ()
     src_members: Tuple[str, ...] = ()
+    edge_priority: Optional[str] = None
 
 
 @dataclass
@@ -124,6 +125,7 @@ def _expand_combine(
         priority=td.priority,
         policy_preset=policy_preset,
         src_members=tuple(src_names),
+        edge_priority=td.edge_priority,
     )
 
     return [expanded], augmentations
@@ -159,6 +161,7 @@ def _expand_pairwise(
             priority=td.priority,
             policy_preset=policy_preset,
             static_paths=td.static_paths,
+            edge_priority=td.edge_priority,
         )
         for src, dst in pairs
     ]

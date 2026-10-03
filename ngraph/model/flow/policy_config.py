@@ -107,7 +107,35 @@ HOP_BY_HOP_PRESETS: frozenset[FlowPolicyPreset] = frozenset(
 )
 
 
-def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
+_CORE_EDGE_PRIORITY = {
+    "residual": netgraph_core.EdgePriority.RESIDUAL,
+    "capacity": netgraph_core.EdgePriority.CAPACITY,
+    "headroom": netgraph_core.EdgePriority.HEADROOM,
+}
+
+
+def core_edge_priority(edge_priority: Optional[str]) -> netgraph_core.EdgePriority:
+    """Map a demand's ``edge_priority`` name to Core's ``EdgePriority``.
+
+    None is the preset default (``RESIDUAL``).
+
+    Raises:
+        ValueError: If the name is not one of residual, capacity, headroom.
+    """
+    if edge_priority is None:
+        return netgraph_core.EdgePriority.RESIDUAL
+    try:
+        return _CORE_EDGE_PRIORITY[edge_priority]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unknown edge_priority {edge_priority!r}; expected one of "
+            f"{', '.join(_CORE_EDGE_PRIORITY)}"
+        ) from exc
+
+
+def preset_config(
+    preset: FlowPolicyPreset, edge_priority: Optional[str] = None
+) -> netgraph_core.FlowPolicyConfig:
     """Build the Core ``FlowPolicyConfig`` a preset stands for.
 
     This is the single source of the preset semantics. The SPF-cached
@@ -121,13 +149,22 @@ def preset_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
 
     Args:
         preset: Preset to describe.
+        edge_priority: Per-edge value that ranks equal-cost alternatives
+            (see ``core_edge_priority``); None keeps the preset default.
 
     Returns:
         A fresh ``FlowPolicyConfig``; callers may adjust it further.
 
     Raises:
-        ValueError: If an unknown FlowPolicyPreset value is provided.
+        ValueError: If an unknown FlowPolicyPreset value or edge_priority is
+            provided.
     """
+    config = _preset_base_config(preset)
+    config.selection.priority = core_edge_priority(edge_priority)
+    return config
+
+
+def _preset_base_config(preset: FlowPolicyPreset) -> netgraph_core.FlowPolicyConfig:
     config = netgraph_core.FlowPolicyConfig()
 
     if preset in HOP_BY_HOP_PRESETS:
@@ -194,6 +231,7 @@ def create_flow_policy(
     node_mask=None,
     edge_mask=None,
     static_path_count: Optional[int] = None,
+    edge_priority: Optional[str] = None,
 ) -> netgraph_core.FlowPolicy:
     """Create a FlowPolicy instance from a preset configuration.
 
@@ -207,6 +245,9 @@ def create_flow_policy(
         static_path_count: Number of routes the caller will pin with
             `FlowPolicy.set_static_paths`. Sets the flow count to match, since
             a pinned policy creates one flow per route and never grows.
+        edge_priority: Per-edge value that ranks equal-cost alternatives
+            (``residual``, ``capacity`` or ``headroom``); None keeps the
+            preset default.
 
     Returns:
         netgraph_core.FlowPolicy: Configured policy instance.
@@ -220,7 +261,7 @@ def create_flow_policy(
         >>> graph = algs.build_graph(strict_multidigraph)
         >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
     """
-    config = preset_config(preset)
+    config = preset_config(preset, edge_priority)
     if static_path_count is not None:
         # A pinned policy creates exactly one flow per route, so the flow
         # bounds must match; Core rejects a mismatch. Cost ceilings,

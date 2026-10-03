@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Sequence, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set, Tuple
 
 import netgraph_core
 import numpy as np
@@ -155,23 +155,26 @@ class _CachedPlacement:
 
 
 _PRESET_MODES: Dict[
-    FlowPolicyPreset, Tuple[netgraph_core.EdgeSelection, netgraph_core.FlowPlacement]
+    Tuple[FlowPolicyPreset, Optional[str]],
+    Tuple[netgraph_core.EdgeSelection, netgraph_core.FlowPlacement],
 ] = {}
 
 
 def _preset_modes(
-    preset: FlowPolicyPreset,
+    preset: FlowPolicyPreset, edge_priority: Optional[str] = None
 ) -> Tuple[netgraph_core.EdgeSelection, netgraph_core.FlowPlacement]:
     """Edge selection and placement mode of a cacheable preset.
 
     Read from ``preset_config`` so the cached engine and Core's FlowPolicy
-    agree by construction; memoized because presets are immutable.
+    agree by construction; memoized because presets are immutable. The
+    demand's ``edge_priority`` is part of the selection and of the key.
     """
-    modes = _PRESET_MODES.get(preset)
+    key = (preset, edge_priority)
+    modes = _PRESET_MODES.get(key)
     if modes is None:
-        config = preset_config(preset)
+        config = preset_config(preset, edge_priority)
         modes = (config.selection, config.flow_placement)
-        _PRESET_MODES[preset] = modes
+        _PRESET_MODES[key] = modes
     return modes
 
 
@@ -226,7 +229,7 @@ def place_demands(
         include_used_edges: Include used edges in entries.
         dag_cache: Optional persistent SPF DAG cache. Base DAGs are keyed by
             ``(src_id, uses_capacity_aware_selection)`` and combine-mode
-            fan-out DAGs by ``(dst_id, "fanout")``. All of them depend only
+            fan-out DAGs by ``(dst_id, "fanout", edge_priority)``. All of them depend only
             on the static graph and masks, so repeated calls with the same
             context and masks (e.g. MSD probes) can share one cache.
 
@@ -294,7 +297,7 @@ def place_demands(
                         )
                     member_ids.append(member_id)
                 if (
-                    _preset_modes(demand.policy_preset)[1]
+                    _preset_modes(demand.policy_preset, demand.edge_priority)[1]
                     == netgraph_core.FlowPlacement.EQUAL_BALANCED
                 ):
                     # Lossless admission applies to the demand as a whole: one
@@ -308,6 +311,7 @@ def place_demands(
                         volume,
                         demand.priority,
                         demand.policy_preset,
+                        demand.edge_priority,
                         dag_cache,
                         ctx,
                         flow_graph,
@@ -325,12 +329,14 @@ def place_demands(
                     # pool: a member with no path to any target is not part
                     # of the split.
                     outcome = _CachedPlacement()
-                    selection = _preset_modes(demand.policy_preset)[0]
+                    selection = _preset_modes(
+                        demand.policy_preset, demand.edge_priority
+                    )[0]
                     reachable = [
                         member_id
                         for member_id in member_ids
                         if _base_dag(
-                            (member_id, False),
+                            (member_id, False, demand.edge_priority),
                             member_id,
                             selection,
                             dag_cache,
@@ -348,6 +354,7 @@ def place_demands(
                             share,
                             demand.priority,
                             demand.policy_preset,
+                            demand.edge_priority,
                             dag_cache,
                             ctx,
                             flow_graph,
@@ -365,6 +372,7 @@ def place_demands(
                     volume,
                     demand.priority,
                     demand.policy_preset,
+                    demand.edge_priority,
                     dag_cache,
                     ctx,
                     flow_graph,
@@ -400,6 +408,7 @@ def place_demands(
                 volume,
                 demand.priority,
                 demand.policy_preset,
+                demand.edge_priority,
                 ctx,
                 flow_graph,
                 node_mask,
@@ -485,6 +494,7 @@ def _place_cached(
     volume: float,
     priority: int,
     preset: FlowPolicyPreset,
+    edge_priority: Optional[str],
     dag_cache: dict[tuple, tuple[np.ndarray, Any]],
     ctx: "AnalysisContext",
     flow_graph: netgraph_core.FlowGraph,
@@ -501,13 +511,13 @@ def _place_cached(
     Returns:
         The placement outcome and the next free flow id.
     """
-    selection, placement = _preset_modes(preset)
+    selection, placement = _preset_modes(preset, edge_priority)
     is_te = preset in _CACHEABLE_TE
     lossy = placement == netgraph_core.FlowPlacement.EQUAL_BALANCED_LOSSY
     # Hop-by-hop presets share one cost-only EdgeSelection; TE presets share
     # the capacity-aware one. Keying by selection family (not preset) lets
     # mixed workloads reuse the same base SPF DAG.
-    cache_key = (src_id, is_te)
+    cache_key = (src_id, is_te, edge_priority)
 
     outcome = _CachedPlacement()
     flow_indices: list[netgraph_core.FlowIndex] = []
@@ -634,6 +644,7 @@ def _place_cached_fanout(
     volume: float,
     priority: int,
     preset: FlowPolicyPreset,
+    edge_priority: Optional[str],
     dag_cache: dict[tuple, tuple[np.ndarray, Any]],
     ctx: "AnalysisContext",
     flow_graph: netgraph_core.FlowGraph,
@@ -656,8 +667,8 @@ def _place_cached_fanout(
     The DAG is cached per destination (one reverse SPF per demand per mask
     state) rather than per source.
     """
-    selection, placement = _preset_modes(preset)
-    cache_key = (dst_id, "fanout")
+    selection, placement = _preset_modes(preset, edge_priority)
+    cache_key = (dst_id, "fanout", edge_priority)
     outcome = _CachedPlacement()
     flow_idx_counter = flow_idx_start
 
@@ -716,6 +727,7 @@ def _place_with_policy(
     volume: float,
     priority: int,
     preset: FlowPolicyPreset,
+    edge_priority: Optional[str],
     ctx: "AnalysisContext",
     flow_graph: netgraph_core.FlowGraph,
     node_mask: np.ndarray,
@@ -739,6 +751,7 @@ def _place_with_policy(
         node_mask=node_mask,
         edge_mask=edge_mask,
         static_path_count=len(static_paths) or None,
+        edge_priority=edge_priority,
     )
     if static_paths:
         bundles = build_static_path_bundles(ctx, static_paths, src_name, dst_name)

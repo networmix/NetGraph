@@ -71,6 +71,7 @@ _DEMAND_KEYS = frozenset(
         "mode",
         "group_mode",
         "flow_policy",
+        "edge_priority",
         "static_paths",
         "attrs",
         "expand",
@@ -107,6 +108,9 @@ def _build_demand(d: Dict[str, Any], set_name: str) -> TrafficDemand:
 
     if "flow_policy" in d:
         td_kwargs["flow_policy"] = coerce_flow_policy(d["flow_policy"])
+
+    if "edge_priority" in d:
+        td_kwargs["edge_priority"] = d["edge_priority"]
 
     if "static_paths" in d:
         td_kwargs["static_paths"] = _build_static_paths(d["static_paths"], set_name)
