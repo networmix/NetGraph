@@ -1,6 +1,6 @@
 # Bundled Scenarios
 
-Three scenarios under `scenarios/` exercise the DSL, the workflow steps and the results export. They double as a check of a fresh installation and as starting points for your own models.
+Four scenarios under `scenarios/` exercise the DSL, workflow steps and results export. They are starting points for your own models; `readme_example.yml` is the smallest.
 
 ## How to run
 
@@ -42,7 +42,7 @@ ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
 
   - Uses `blueprints`, attribute-based link selectors, and hardware component attrs
   - Failure policy: weighted multi-mode (`failures.weighted_modes`)
-  - Demand set: inter-metro DC flows with TE/WCMP policy
+  - Demand set: inter-metro DC flows with unrestricted optimized TE
   - Workflow steps: `network_statistics`, `msd_baseline`, `tm_placement`, `cost_power`
 
 Run:
@@ -79,36 +79,27 @@ ngraph run scenarios/nsfnet.yaml --keys node_to_node_capacity_matrix_1 --stdout
 `--stdout` prints only the JSON, so it pipes into `jq`:
 
 ```bash
-# The largest traffic multiplier that still fits (square_mesh: 1.0)
+# The largest traffic multiplier actually tested feasible, with its probe history
 ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys msd_baseline \
-  | jq '.steps.msd_baseline.data.alpha_star'
+  | jq '.steps[] | select(.name == "msd_baseline") | .result | {alpha_feasible, search_status, history}'
 
 # One line per distinct failure pattern: which links failed, how many
 # iterations drew it, and the fraction of demand still placed
 ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys tm_placement \
-  | jq -c '.steps.tm_placement.data.flow_results[]
-           | {links: .failure_state.excluded_links, n: .occurrence_count, ratio: .summary.overall_ratio}'
+  | jq -c '.steps[] | select(.name == "tm_placement") | .result.cases[]
+           | {links: .case.pattern.excluded_links, n: .case.occurrences, ratio: .states.converged.totals.delivery_ratio}'
 
 # Pairwise capacity matrix: 676 source/destination pairs in the no-failure baseline
 ngraph run scenarios/nsfnet.yaml --no-results --stdout --keys node_to_node_capacity_matrix_1 \
-  | jq '.steps.node_to_node_capacity_matrix_1.data.baseline.flows | length'
+  | jq '.steps[] | select(.name == "node_to_node_capacity_matrix_1") | .result.cases[0].states.converged.rows | length'
 
 # Capex and power per metro from the components library
 ngraph run scenarios/backbone_clos.yml --no-results --stdout --keys cost_power \
-  | jq -c '.steps.cost_power.data.levels["1"][] | {path, capex_total, power_total_watts}'
-```
-
-The `square_mesh` placement output looks like this (1000 iterations, six single-link patterns):
-
-```text
-{"links":["N1|N2|0"],"n":164,"ratio":0.8333333333333334}
-{"links":["N3|N4|0"],"n":180,"ratio":0.8333333333333334}
-{"links":["N2|N4|0"],"n":165,"ratio":1.0}
-{"links":["N2|N3|0"],"n":183,"ratio":0.8333333333333334}
-{"links":["N1|N3|0"],"n":164,"ratio":1.0}
-{"links":["N1|N4|0"],"n":144,"ratio":0.8333333333333334}
+  | jq -c '.steps[] | select(.name == "cost_power") | .result.levels[] | select(.level == 1) | .rows[] | {path, capex_total, power_total_watts}'
 ```
 
 ## Notes on results
 
-Every run writes the same JSON shape: `workflow`, `steps` and `scenario` sections. `MaxFlow` and `TrafficMatrixPlacement` store the no-failure run under `data.baseline` and one entry per distinct failure pattern under `data.flow_results`. Patterns are deduplicated across iterations, so the list is usually much shorter than `iterations`; without a `failure_policy` it is empty. Each entry carries a `summary` and per-flow `flows`. A flow's `cost_distribution` is filled when `include_flow_details` is set and is `{}` otherwise; with `include_min_cut`, the min-cut edges appear under the flow's `data` as `edges` with `edges_kind: "min_cut"`. The [Workflow Reference](../reference/workflow.md) has the full schema.
+Every run exports producer metadata, the units report and an ordered `steps` array. Each step records its normalized question and actual execution order. `--keys` filters that array after execution; retained orders may have gaps.
+
+Capacity and placement results contain a baseline case followed by distinct sampled physical failure patterns. Each case records occurrences and one `states.converged` result. Without sampling there is only the baseline. Demand totals and delivery ratios remain exact integers and rational pairs. Native flow arrays, cuts and tagged cost distributions appear only when requested. MSD reports the largest tested feasible alpha and the complete compact probe history. The [Workflow Reference](../reference/workflow.md) describes the settings and the [API guide](../reference/api.md) shows typed access.

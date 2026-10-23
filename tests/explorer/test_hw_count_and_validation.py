@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from ngraph.explorer import NetworkExplorer
@@ -76,7 +78,7 @@ def test_node_capacity_validation_strict() -> None:
 
     lib = _lib_with_box_and_optic()
     # Constrain node hardware to 200 to trigger validation failure (sum links=300)
-    lib.components["box"].capacity = 200.0
+    lib.components["box"] = replace(lib.components["box"], capacity=200.0)
     with pytest.raises(ValueError) as exc:
         NetworkExplorer.explore_network(net, components_library=lib)
     assert "Node 'A' total attached capacity" in str(exc.value)

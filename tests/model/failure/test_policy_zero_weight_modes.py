@@ -1,91 +1,79 @@
-"""Tests for zero-weight failure mode semantics.
-
-Modes with zero weight must never be selected, including the degenerate case
-where no mode has positive weight (the policy then fails nothing). The parser
-rejects policies whose modes all have zero weight.
-"""
-
-from __future__ import annotations
+"""Zero modes never win; YAML requires at least one positive mode."""
 
 import pytest
 
-from ngraph.model.failure.parser import build_failure_policy
-from ngraph.model.failure.policy import FailureMode, FailurePolicy, FailureRule
+from ngraph.analysis.failures import FailureRequest, failure_cases
+from ngraph.model.failure import (
+    FailureMode,
+    FailurePolicy,
+    FailureRule,
+    build_failure_policies,
+)
+from tests.failure_fixture import draw, policy_network
 
 
-def test_all_zero_weight_modes_apply_no_failures() -> None:
-    """A policy whose only mode has weight 0 must not fail anything."""
-    rule = FailureRule(scope="node", mode="all")
-    policy = FailurePolicy(modes=[FailureMode(weight=0.0, rules=[rule])])
-
-    nodes = {"N1": {}, "N2": {}}
-    trace: dict = {}
-    failed = policy.apply_failures(nodes, {}, failure_trace=trace, seed=1)
-
-    assert failed == []
-    assert trace["mode_index"] is None
-    assert trace["mode_attrs"] == {}
-    assert trace["selections"] == []
+def test_all_zero_weight_modes_apply_no_failures():
+    policy = FailurePolicy(modes=[FailureMode(0, [FailureRule("node")])])
+    case = draw(policy_network(), policy, trace=True)
+    assert case.pattern.excluded_nodes == case.pattern.excluded_links == ()
+    assert case.trace.mode_index is None
+    assert dict(case.trace.mode_attrs) == {}
+    assert case.trace.selections == ()
 
 
-def test_all_zero_weight_modes_no_failures_across_seeds() -> None:
-    """No seed may ever select a zero-weight mode."""
-    rule = FailureRule(scope="node", mode="all")
+def test_all_zero_weight_modes_no_failures_across_seeds():
     policy = FailurePolicy(
         modes=[
-            FailureMode(weight=0.0, rules=[rule]),
-            FailureMode(weight=0.0, rules=[rule]),
+            FailureMode(0, [FailureRule("node")]),
+            FailureMode(0, [FailureRule("link")]),
         ]
     )
-    nodes = {"N1": {}, "N2": {}}
+    cases = failure_cases(policy_network(), FailureRequest(policy, 20, 0))
+    assert len(cases) == 1 and cases[0].occurrences == 20
+    assert cases[0].pattern.excluded_nodes == cases[0].pattern.excluded_links == ()
 
-    for seed in range(20):
-        assert policy.apply_failures(nodes, {}, seed=seed) == []
 
-
-def test_zero_weight_mode_never_selected_among_positive() -> None:
-    """A zero-weight mode must never win against a positive-weight mode."""
-    node_rule = FailureRule(scope="node", mode="all")
-    link_rule = FailureRule(scope="link", mode="all")
+def test_zero_weight_mode_never_selected_among_positive():
     policy = FailurePolicy(
         modes=[
-            FailureMode(weight=0.0, rules=[node_rule]),
-            FailureMode(weight=1.0, rules=[link_rule]),
+            FailureMode(0, [FailureRule("node")]),
+            FailureMode(1, [FailureRule("link")]),
         ]
     )
-    nodes = {"N1": {}}
-    links = {"L1": {}}
-
+    prepared = policy_network()
     for seed in range(50):
-        trace: dict = {}
-        failed = policy.apply_failures(nodes, links, failure_trace=trace, seed=seed)
-        assert trace["mode_index"] == 1
-        assert failed == ["L1"]
+        case = draw(prepared, policy, seed, trace=True)
+        assert case.trace.mode_index == 1
+        assert case.pattern.excluded_nodes == ()
+        assert case.pattern.excluded_links == ("N1|N2|0", "N1|N3|0")
 
 
-def test_parser_rejects_all_zero_weight_policy() -> None:
-    """An all-zero-weight policy must fail loudly at parse time."""
-    fp_data = {
-        "modes": [
-            {"weight": 0.0, "rules": [{"scope": "node", "mode": "all"}]},
-            {"weight": 0, "rules": []},
-        ]
-    }
-    with pytest.raises(ValueError, match="no mode with positive weight"):
-        build_failure_policy(
-            fp_data, policy_name="all_zero", derive_seed=lambda _name: None
+def test_parser_rejects_all_zero_weight_policy():
+    with pytest.raises(ValueError, match="at least one mode must have positive weight"):
+        build_failure_policies(
+            {"all_zero": {"modes": [{"weight": 0, "rules": []}]}}, None
         )
-
-
-def test_parser_accepts_mixed_zero_and_positive_weights() -> None:
-    """Zero-weight modes are allowed as long as one mode has positive weight."""
-    fp_data = {
-        "modes": [
-            {"weight": 0.0, "rules": [{"scope": "node", "mode": "all"}]},
-            {"weight": 2.5, "rules": [{"scope": "link", "mode": "all"}]},
+    assert (
+        build_failure_policies({"positive": {"modes": [{"weight": 1}]}}, None)[
+            "positive"
         ]
-    }
-    policy = build_failure_policy(
-        fp_data, policy_name="mixed", derive_seed=lambda _name: None
+        .modes[0]
+        .weight
+        == 1
     )
-    assert [mode.weight for mode in policy.modes] == [0.0, 2.5]
+
+
+def test_parser_accepts_mixed_zero_and_positive_weights():
+    policy = build_failure_policies(
+        {
+            "mixed": {
+                "modes": [
+                    {"weight": 0, "rules": [{"scope": "node"}]},
+                    {"weight": 2.5, "rules": [{"scope": "link"}]},
+                ]
+            }
+        },
+        None,
+    )["mixed"]
+    assert [mode.weight for mode in policy.modes] == [0, 2.5]
+    assert draw(policy_network(), policy, trace=True).trace.mode_index == 1

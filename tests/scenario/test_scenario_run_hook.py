@@ -1,48 +1,38 @@
-"""Tests for Scenario.run step_hook and pre-run validation semantics."""
+"""Typed workflow hook order, failure propagation and execution numbering."""
 
-from __future__ import annotations
-
+from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Callable, ContextManager, Iterator, List
+from dataclasses import FrozenInstanceError, dataclass, replace
 
 import pytest
 
 from ngraph.model.network import Network
-from ngraph.scenario import Scenario
+from ngraph.results import StepContext, StepOutput
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.base import WorkflowStep
 
 
 @dataclass
 class _EventStep(WorkflowStep):
-    """Workflow step that records its execution into a shared event list."""
+    emit: Callable[[str], None] = lambda event: None
 
-    events: List[str] = field(default_factory=list)
-
-    def run(self, scenario: Scenario) -> None:
-        """Record that this step executed."""
-        self.events.append(f"execute:{self.name}")
+    def run(self, context: StepContext) -> StepOutput:
+        self.emit(f"execute:{context.step_name}")
+        return StepOutput({"action": "event"}, {"ran": True})
 
 
 @dataclass
 class _FailingStep(WorkflowStep):
-    """Workflow step that raises to exercise exception propagation."""
+    emit: Callable[[str], None] = lambda event: None
 
-    events: List[str] = field(default_factory=list)
-
-    def run(self, scenario: Scenario) -> None:
-        """Record execution, then fail."""
-        self.events.append(f"execute:{self.name}")
+    def run(self, context: StepContext) -> StepOutput:
+        self.emit(f"execute:{context.step_name}")
         raise RuntimeError("boom")
 
 
-def _make_hook(
-    events: List[str],
-) -> Callable[[WorkflowStep], ContextManager[None]]:
-    """Return a step hook that records enter/exit events around each step."""
-
+def _make_hook(events):
     @contextmanager
-    def hook(step: WorkflowStep) -> Iterator[None]:
+    def hook(step):
         events.append(f"enter:{step.name}")
         yield
         events.append(f"exit:{step.name}")
@@ -50,30 +40,27 @@ def _make_hook(
     return hook
 
 
-def test_run_without_hook_executes_steps() -> None:
-    events: List[str] = []
-    scenario = Scenario(
-        network=Network(),
-        workflow=[_EventStep(name="s1", events=events)],
-    )
-
-    scenario.run()
-
+def test_run_without_hook_executes_steps():
+    events = []
+    prepared = prepare(Scenario(Network(), [_EventStep(name="s1", emit=events.append)]))
+    result = run(prepared)
     assert events == ["execute:s1"]
+    assert result.steps[0].result == {"ran": True}
+    assert result.steps[0].question == {"action": "event"}
 
 
-def test_step_hook_wraps_each_step_in_order() -> None:
-    events: List[str] = []
-    scenario = Scenario(
-        network=Network(),
-        workflow=[
-            _EventStep(name="s1", events=events),
-            _EventStep(name="s2", events=events),
-        ],
+def test_step_hook_wraps_each_step_in_order():
+    events = []
+    prepared = prepare(
+        Scenario(
+            Network(),
+            [
+                _EventStep(name="s1", emit=events.append),
+                _EventStep(name="s2", emit=events.append),
+            ],
+        )
     )
-
-    scenario.run(step_hook=_make_hook(events))
-
+    result = run(prepared, step_hook=_make_hook(events))
     assert events == [
         "enter:s1",
         "execute:s1",
@@ -82,60 +69,62 @@ def test_step_hook_wraps_each_step_in_order() -> None:
         "execute:s2",
         "exit:s2",
     ]
+    assert [step.name for step in result.steps] == ["s1", "s2"]
 
 
-def test_step_hook_exception_propagates_and_skips_post_yield() -> None:
-    """A step failure propagates through the hook and skips its exit code.
-
-    Code after the hook's ``yield`` (e.g., profile merging) must not run for
-    a failed step, and remaining steps must not execute.
-    """
-    events: List[str] = []
-    scenario = Scenario(
-        network=Network(),
-        workflow=[
-            _FailingStep(name="bad", events=events),
-            _EventStep(name="after", events=events),
-        ],
+def test_step_hook_exception_propagates_and_skips_post_yield():
+    events = []
+    prepared = prepare(
+        Scenario(
+            Network(),
+            [
+                _FailingStep(name="bad", emit=events.append),
+                _EventStep(name="after", emit=events.append),
+            ],
+        )
     )
-
     with pytest.raises(RuntimeError, match="boom"):
-        scenario.run(step_hook=_make_hook(events))
-
+        run(prepared, step_hook=_make_hook(events))
     assert events == ["enter:bad", "execute:bad"]
+    with pytest.raises(FrozenInstanceError):
+        prepared.scenario.workflow = (_EventStep(name="retry", emit=events.append),)
+    retry = prepare(Scenario(Network(), [_EventStep(name="retry", emit=events.append)]))
+    assert run(retry).steps[0].result == {"ran": True}
 
 
-def test_run_resets_execution_counter_between_runs() -> None:
-    """Repeated runs restart execution_order from zero, also with a hook."""
-    events: List[str] = []
-    scenario = Scenario(
-        network=Network(),
-        workflow=[
-            _EventStep(name="s1", events=events),
-            _EventStep(name="s2", events=events),
-        ],
+def test_repeated_runs_restart_execution_order():
+    events = []
+    prepared = prepare(
+        Scenario(
+            Network(),
+            [
+                _EventStep(name="s1", emit=events.append),
+                _EventStep(name="s2", emit=events.append),
+            ],
+        )
     )
-
-    scenario.run(step_hook=_make_hook(events))
-    scenario.run(step_hook=_make_hook(events))
-
-    workflow_metadata = scenario.results.to_dict()["workflow"]
-    assert workflow_metadata["s1"]["execution_order"] == 0
-    assert workflow_metadata["s2"]["execution_order"] == 1
+    first = run(prepared, step_hook=_make_hook(events))
+    second = run(prepared, step_hook=_make_hook(events))
+    assert [step.execution_order for step in first.steps] == [0, 1]
+    assert [step.execution_order for step in second.steps] == [0, 1]
+    assert first.steps == second.steps
 
 
-def test_run_validates_unique_step_names_before_any_execution() -> None:
-    """Duplicate effective step names fail before any step or hook runs."""
-    events: List[str] = []
-    scenario = Scenario(
-        network=Network(),
-        workflow=[
-            _EventStep(name="dup", events=events),
-            _EventStep(name="dup", events=events),
-        ],
-    )
-
+def test_run_validates_unique_step_names_before_any_execution():
+    events = []
+    first = _EventStep(name="dup", emit=events.append)
+    second = _EventStep(name="dup", emit=events.append)
+    scenario = Scenario(Network(), [first, second])
     with pytest.raises(ValueError, match="Duplicate workflow step name"):
-        scenario.run(step_hook=_make_hook(events))
-
+        prepare(scenario)
     assert events == []
+    scenario = replace(scenario, workflow=(first,))
+    prepared = prepare(scenario)
+    with pytest.raises(FrozenInstanceError):
+        prepared.scenario.workflow = (first, second)
+    assert events == []
+    assert run(prepared).steps[0].name == "dup"
+    with pytest.raises(FrozenInstanceError):
+        scenario.workflow = (first, second)
+    with pytest.raises(ValueError, match="Duplicate workflow step name"):
+        prepare(Scenario(Network(), (first, second)))

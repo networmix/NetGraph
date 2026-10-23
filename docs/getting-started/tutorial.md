@@ -1,86 +1,95 @@
 # Tutorial
 
-Running a scenario from the CLI, and a small workflow in Python. The Examples section has larger scenarios and covers flow placement and failure policies.
+A scenario describes an editable network, traffic, failure policies and an ordered workflow. Preparation chooses one bandwidth quantum and makes owned numerical inputs; execution returns typed results.
 
-## CLI: run and inspect
+## Write a scenario
 
-```bash
-# Inspect (validate and preview structure, steps, demands)
-ngraph inspect scenarios/square_mesh.yaml --detail
+Save this as `example.yaml`:
 
-# Run and store results (JSON) in the current directory or under --output
-ngraph run scenarios/square_mesh.yaml --output out
-
-# Filter exported results by workflow step names
-ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
-```
-
-See also: `scenarios/backbone_clos.yml` and `scenarios/nsfnet.yaml`.
-
-## Programmatic: a small workflow
-
-A three-node network, one demand, and the two steps most analyses start with: find the largest multiplier of the traffic matrix that still fits (`MaximumSupportedDemand`), then place the matrix under random single-link failures (`TrafficMatrixPlacement`).
-
-```python
-from ngraph.scenario import Scenario
-
-scenario_yaml = """
+```yaml
 seed: 42
-
+units: {resolution: auto, precision: 0.001}
 network:
   nodes: {A: {}, B: {}, C: {}}
   links:
     - {source: A, target: B, capacity: 10, cost: 1}
-    - {source: B, target: C, capacity: 10, cost: 1}
-    - {source: A, target: C, capacity: 5, cost: 3}
-
+    - {source: B, target: C, capacity: 10, cost: 2}
 failures:
-  single_link:
+  random_link:
     modes:
-      - weight: 1.0
-        rules: [{scope: link, mode: choice, count: 1}]
-
+      - weight: 1
+        rules:
+          - {scope: link, mode: choice, count: 1}
 demands:
-  default:
-    - {source: ^A$, target: ^C$, volume: 8, mode: pairwise, flow_policy: TE_WCMP_UNLIM}
-
+  traffic:
+    - {id: service, source: ^A$, target: ^C$, volume: 4,
+       preset: SHORTEST_PATHS_ECMP}
 workflow:
-  - {type: MaximumSupportedDemand, name: msd, demand_set: default}
-  - {type: TrafficMatrixPlacement, name: placement, demand_set: default,
-     failure_policy: single_link, iterations: 20}
-"""
-
-scenario = Scenario.from_yaml(scenario_yaml)
-scenario.run()
-steps = scenario.results.to_dict()["steps"]
-
-print("alpha_star:", steps["msd"]["data"]["alpha_star"])
-placement = steps["placement"]["data"]
-print("baseline placed:", placement["baseline"]["summary"]["total_placed"])
-for pattern in placement["flow_results"]:
-    failed = pattern["failure_state"]["excluded_links"]
-    summary = pattern["summary"]
-    print(f"  {failed} x{pattern['occurrence_count']}: "
-          f"placed {summary['total_placed']:.0f} of {summary['total_demand']:.0f}")
+  - {type: BuildGraph, name: topology}
+  - {type: NetworkStats, name: stats}
+  - type: MaxFlow
+    name: ideal_capacity
+    source: ^A$
+    target: ^C$
+    preset: TE_MAXFLOW_UNLIM
+    outputs: {min_cut: true, cost_distribution: true}
+  - type: MaximumSupportedDemand
+    name: supported_load
+    demand_set: traffic
+    alpha_tolerance: 0.01
+  - type: TrafficMatrixPlacement
+    name: under_failures
+    demand_set: traffic
+    alpha_from_step: supported_load
+    failure_policy: random_link
+    iterations: 20
+    workers: auto
+    failure_trace: true
 ```
 
-```text
-alpha_star: 1.875
-baseline placed: 8.0
-  ['B|C|0'] x8: placed 5 of 8
-  ['A|C|0'] x7: placed 8 of 8
-  ['A|B|0'] x5: placed 5 of 8
+Each physical link carries traffic in both directions. Costs must be positive integers. Volumes and capacities are physical quantities; results use integer units and retain their quantum for display.
+
+## Run and inspect
+
+```bash
+ngraph inspect example.yaml
+ngraph run example.yaml --output results/
+ngraph run example.yaml --stdout --no-results
+ngraph run example.yaml --profile --output results/
 ```
 
-`alpha_star` is 1.875 because A can reach C with 15 units in total (10 through B plus 5 direct) and the demand is 8. The 20 failure iterations collapse into three distinct patterns; `occurrence_count` says how many iterations drew each one. Losing either link of the B path leaves only the 5-unit direct link.
+`run` writes `results/example.results.json`. `--stdout` emits pure JSON; diagnostic and step-profile reports go to stderr. The output file is replaced after complete encoding succeeds.
 
-## Results structure
+## Read results
 
-Results have a fixed shape with `workflow`, `steps`, and `scenario` sections. Each step writes `metadata` and `data` under its name: `MaximumSupportedDemand` writes `data.alpha_star`, and `MaxFlow` and `TrafficMatrixPlacement` write a no-failure `data.baseline` plus `data.flow_results`, one entry per distinct failure pattern with its `occurrence_count`, per-flow `flows`, and a `summary`. See the [Workflow Reference](../reference/workflow.md) for every field.
+The document has `metadata`, `units_report` and an ordered `steps` array. Each step records its normalized `question` and typed `result`.
 
-## Next steps
+```bash
+jq '.steps[] | select(.name == "supported_load") | .result.alpha_feasible' results/example.results.json
+jq '.steps[] | select(.name == "under_failures") | .result.cases[].states.converged.totals' results/example.results.json
+```
 
-- [Bundled Scenarios](../examples/bundled-scenarios.md) - Ready-to-run example scenarios
-- [DSL Reference](../reference/dsl.md) - YAML scenario syntax
-- [Workflow Reference](../reference/workflow.md) - Analysis step configuration
-- [CLI Reference](../reference/cli.md) - Command-line interface details
+The intact chain has physical capacity 10, cut at A→B, and route cost 3. Either single-link failure disconnects A from C. The 20 draws therefore collapse into at most two failure patterns, plus the baseline. `occurrences` sum to 20; the baseline is not an extra trial.
+
+MSD reports its largest tested feasible factor and complete probe history. Its result distinguishes search bounds, iteration limits, stagnation and numeric range refusal. An upper certificate is present only for a proved monotone class. The placement step records that it used the earlier step's feasible factor.
+
+To export one step, add `--keys under_failures`. The complete workflow still executes; the selected step retains its actual execution order 4. Filtered exports can have gaps, while the full run is contiguous.
+
+## Use Python
+
+```python
+from pathlib import Path
+from ngraph import Scenario, prepare, run, write_json
+
+scenario = Scenario.from_yaml(Path("example.yaml").read_text())
+prepared = prepare(scenario)
+result = run(prepared)
+for step in result.steps:
+    print(step.name, step.step_type)
+with open("python-results.json", "w") as destination:
+    write_json(result, destination)
+```
+
+Results belong to the returned run. `Scenario` keeps declarations; later topology edits require another preparation. Library users can prepare selected demand sets and call `capacity`, `place`, `paths`, `edge_sensitivity` or `maximum_supported_demand` directly with typed queries.
+
+Continue with the [basic API example](../examples/basic.md), [Clos topology](../examples/clos-fabric.md), [DSL reference](../reference/dsl.md) and [workflow reference](../reference/workflow.md).

@@ -1,298 +1,258 @@
-"""Scenario class for defining network analysis workflows from YAML."""
+"""Editable scenarios, read-only shared preparation and typed workflow execution."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, ContextManager, List, Optional
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import AbstractContextManager, nullcontext
+from dataclasses import KW_ONLY, dataclass, field, replace
 
-from ngraph.dsl.blueprints.expand import expand_network_dsl
-from ngraph.dsl.loader import load_scenario_yaml
-from ngraph.logging import get_logger
+from ngraph.analysis.metadata import run_metadata
+from ngraph.analysis.preparation import PreparedScenario, prepare_scenario
+from ngraph.analysis.units import UnitsSettings
 from ngraph.model.components import ComponentsLibrary
-from ngraph.model.demand.builder import build_demand_set
-from ngraph.model.demand.matrix import DemandSet
-from ngraph.model.failure.generate import generate_risk_groups, parse_generate_spec
-from ngraph.model.failure.membership import resolve_membership_rules
-from ngraph.model.failure.parser import build_failure_policy_set, build_risk_groups
-from ngraph.model.failure.policy_set import FailurePolicySet
-from ngraph.model.failure.validation import (
-    validate_risk_group_hierarchy,
-    validate_risk_group_references,
-)
+from ngraph.model.demand import DemandSet, RouteSpec, SupportSpec, WeightSpec
+from ngraph.model.failure import FailurePolicy
 from ngraph.model.network import Network
-from ngraph.results import Results
-from ngraph.results.snapshot import build_scenario_snapshot
-from ngraph.utils.seed_manager import SeedManager
+from ngraph.results import (
+    CapacityAnalysis,
+    MSDAnalysis,
+    PathAnalysis,
+    PlacementAnalysis,
+    RunResult,
+    SensitivityAnalysis,
+    StepContext,
+)
+from ngraph.utils.values import frozen_dict, own_scalars
 from ngraph.workflow.base import WorkflowStep, validate_unique_step_names
-from ngraph.workflow.parse import build_workflow_steps
 
 
-@dataclass
+def _named(values, kind, label):
+    if values is None:
+        return frozen_dict()
+    if not isinstance(values, Mapping):
+        raise TypeError(f"{label}: expected mapping")
+    owned = {}
+    for name, value in values.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"{label}: expected nonempty string names")
+        if not isinstance(value, kind):
+            raise TypeError(f"{label}.{name}: expected {kind.__name__}")
+        owned[str.__str__(name)] = value
+    return frozen_dict(owned)
+
+
+@dataclass(frozen=True, eq=False)
 class Scenario:
-    """A complete scenario for building and executing network workflows.
+    """Named domain inputs, fixed at construction.
 
-    Holds:
-      - A network (nodes/links), constructed via blueprint expansion.
-      - A failure policy set (one or more named failure policies).
-      - A demand set containing one or more named demand collections.
-      - A list of workflow steps to execute.
-      - A results container for storing outputs.
-      - A components_library for hardware/optics definitions.
-      - A seed for reproducible random operations (optional).
-
-    Typical usage example:
-
-        scenario = Scenario.from_yaml(yaml_str, default_components=default_lib)
-        scenario.run()
-        # Inspect scenario.results
+    The network and the components library keep editable dicts of immutable
+    records; ``prepare`` takes a read-only view of them, so later edits do not
+    reach a prepared scenario. ``dataclasses.replace`` builds an edited copy.
     """
 
     network: Network
-    workflow: List[WorkflowStep]
-    failure_policy_set: FailurePolicySet = field(default_factory=FailurePolicySet)
-    demand_set: DemandSet = field(default_factory=DemandSet)
-    results: Results = field(default_factory=Results)
+    workflow: Sequence[WorkflowStep] = ()
+    _: KW_ONLY
+    demand_sets: Mapping[str, DemandSet] = field(default_factory=frozen_dict)
+    failure_policies: Mapping[str, FailurePolicy] = field(default_factory=frozen_dict)
     components_library: ComponentsLibrary = field(default_factory=ComponentsLibrary)
-    seed: Optional[int] = None
-    # Per-instance step execution counter, reset by run()
-    _execution_counter: int = field(default=0, init=False, repr=False)
+    seed: int | None = None
+    units: UnitsSettings = field(default_factory=UnitsSettings)
+    routes: Mapping[str, RouteSpec] = field(default_factory=frozen_dict)
+    supports: Mapping[str, SupportSpec] = field(default_factory=frozen_dict)
+    weights: Mapping[str, WeightSpec] = field(default_factory=frozen_dict)
 
-    _logger = get_logger(__name__)
-
-    def run(
-        self,
-        step_hook: Optional[Callable[[WorkflowStep], ContextManager[None]]] = None,
-    ) -> None:
-        """Execute the scenario's workflow steps in order.
-
-        A step may modify scenario data or store outputs in scenario.results.
-
-        Args:
-            step_hook: Optional callable invoked once per step with the step
-                about to run. It must return a context manager, which is
-                entered before ``step.execute`` and exited after it returns
-                (e.g., for per-step profiling). Exceptions raised by a step
-                propagate through the context manager.
-        """
-        # Reject duplicate effective step names before executing anything.
-        validate_unique_step_names(self.workflow)
-        self._execution_counter = 0
-        for step in self.workflow:
-            if step_hook is None:
-                step.execute(self)
-            else:
-                with step_hook(step):
-                    step.execute(self)
+    def __post_init__(self) -> None:
+        if not isinstance(self.network, Network):
+            raise TypeError("Scenario.network: expected Network")
+        seed = self.seed
+        if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
+            raise ValueError("Scenario.seed: expected integer or None")
+        if self.units is None:
+            object.__setattr__(self, "units", UnitsSettings())
+        if not isinstance(self.units, UnitsSettings):
+            raise TypeError("Scenario.units: expected UnitsSettings")
+        if self.components_library is None:
+            object.__setattr__(self, "components_library", ComponentsLibrary())
+        if not isinstance(self.components_library, ComponentsLibrary):
+            raise TypeError("Scenario.components_library: expected ComponentsLibrary")
+        own_scalars(self, "Scenario", ("seed",))
+        object.__setattr__(self, "workflow", tuple(self.workflow))
+        if not all(isinstance(step, WorkflowStep) for step in self.workflow):
+            raise TypeError("Scenario.workflow: expected WorkflowStep values")
+        for name, kind in (
+            ("demand_sets", DemandSet),
+            ("failure_policies", FailurePolicy),
+            ("routes", RouteSpec),
+            ("supports", SupportSpec),
+            ("weights", WeightSpec),
+        ):
+            object.__setattr__(self, name, _named(getattr(self, name), kind, name))
+        for name, value in self.demand_sets.items():
+            if name != value.name:
+                raise ValueError(
+                    f"demand_sets.{name}: name/key disagreement {value.name}"
+                )
 
     @classmethod
     def from_yaml(
-        cls,
-        yaml_str: str,
-        default_components: Optional[ComponentsLibrary] = None,
+        cls, yaml_str: str, default_components: ComponentsLibrary | None = None
     ) -> Scenario:
-        """Construct a Scenario from a YAML string, merging in a default
-        ComponentsLibrary when one is given.
+        """Parse one closed scenario declaration and retain editable domain inputs."""
+        from ngraph.dsl.blueprints.expand import expand_network_dsl
+        from ngraph.dsl.inputs import closed, demand_sets, named_declarations
+        from ngraph.dsl.loader import load_scenario_yaml
+        from ngraph.model.failure import build_failure_policies
+        from ngraph.model.risk import (
+            MembershipIndex,
+            build_risk_groups,
+            generate_risk_groups,
+            parse_generate_spec,
+            resolve_membership_rules,
+        )
+        from ngraph.utils.seed_manager import SeedManager
+        from ngraph.workflow.parse import build_workflow_steps
 
-        Top-level YAML keys can include:
-          - vars: YAML anchors for value reuse
-          - blueprints: Reusable topology templates
-          - components: Hardware component library
-          - network: Nodes, links, node_rules, link_rules
-          - risk_groups: Failure correlation groups (direct, membership rules, generate blocks)
-          - demands: Traffic demand definitions (named sets)
-          - failures: Failure simulation policies
-          - workflow: Analysis execution steps
-          - seed: Master seed for reproducible randomness
-
-        Risk group processing:
-        1. Direct risk-group definitions are registered
-        2. Membership rules auto-assign entities to groups
-        3. The risk-group hierarchy is validated (cycle detection)
-        4. Generate blocks create groups from unique attribute values
-           (membership rules cannot match generated groups, since generation
-           runs after membership resolution)
-        5. Members of groups declared disabled are disabled (recursive
-           cascade; runs after membership and generate processing so rule-
-           and generate-assigned entities are covered)
-        6. Risk-group references on nodes/links are validated (undefined
-           groups detected)
-
-        If no 'workflow' key is provided, the scenario has no steps to run.
-        If 'failures' is omitted, scenario.failure_policy_set is empty.
-        If 'components' is provided, it is merged with default_components.
-
-        Args:
-            yaml_str (str): The YAML string that defines the scenario.
-            default_components (ComponentsLibrary, optional):
-                A default library to merge with scenario-specific components.
-
-        Returns:
-            Scenario: An initialized Scenario with expanded network.
-
-        Raises:
-            ValueError: If the YAML is malformed or missing required sections,
-                has unrecognized keys in any section, defines two top-level
-                risk groups with the same name, or gives a workflow step a
-                key its step class does not define.
-            jsonschema.ValidationError: If the YAML does not match the
-                packaged schema, including unrecognized top-level keys.
-        """
         data = load_scenario_yaml(yaml_str)
-
-        # Extract seed first as it may be used by other components. The schema's
-        # draft-07 "integer" also admits floats with no fraction (5.0).
-        seed = data.get("seed")
-        if seed is not None and not isinstance(seed, int):
-            raise ValueError("'seed' must be an integer if provided.")
-
-        # 1) Expand blueprints and the network section into a Network
-        network_obj = expand_network_dsl(data)
-        Scenario._logger.debug(
-            "Expanded network: nodes=%d, links=%d",
-            len(network_obj.nodes),
-            len(network_obj.links),
-        )
-
-        # 2) Build the failure policy set
-        seed_manager = SeedManager(seed)
-        failure_policy_set = build_failure_policy_set(
-            data.get("failures", {}),
-            derive_seed=lambda n: seed_manager.derive_seed("failure_policy", n),
-        )
-
-        if failure_policy_set.policies:
-            policy_names = sorted(failure_policy_set.policies.keys())
-            Scenario._logger.debug(
-                "Built FailurePolicySet: %d policies (%s)",
-                len(policy_names),
-                ", ".join(policy_names[:5]) + ("..." if len(policy_names) > 5 else ""),
-            )
-
-        # 3) Build demand sets
-        raw = data.get("demands", {})
-        ds = build_demand_set(raw)
-        set_names = sorted(ds.sets.keys())
-        Scenario._logger.debug(
-            "Constructed DemandSet: sets=%d, total_demands=%d%s",
-            len(set_names),
-            sum(len(demands) for demands in ds.sets.values()),
-            (
-                f" ({', '.join(set_names[:5])}{'...' if len(set_names) > 5 else ''})"
-                if set_names
-                else ""
-            ),
-        )
-
-        # 4) Build workflow steps
-        workflow_data = data.get("workflow", [])
-        workflow_steps = build_workflow_steps(
-            workflow_data,
-            derive_seed=lambda name: seed_manager.derive_seed("workflow_step", name),
-        )
-        labels = [step.name for step in workflow_steps]
-        Scenario._logger.debug(
-            "Built workflow: steps=%d%s",
-            len(workflow_steps),
-            (
-                f" ({', '.join(labels[:8])}{'...' if len(labels) > 8 else ''})"
-                if labels
-                else ""
-            ),
-        )
-
-        # 5) Build/merge components library
-        scenario_comps_data = data.get("components", {})
-        scenario_comps_lib = (
-            ComponentsLibrary.from_dict(scenario_comps_data)
-            if scenario_comps_data
-            else None
-        )
-        final_components = (
-            default_components.clone() if default_components else ComponentsLibrary()
-        )
-        if scenario_comps_lib:
-            final_components.merge(scenario_comps_lib)
-
-        # 6) Parse optional risk_groups, then attach them to the network
-        rg_data = data.get("risk_groups", [])
-        generate_specs_raw: list = []
-        if rg_data:
-            risk_groups, generate_specs_raw = build_risk_groups(rg_data)
-            for rg in risk_groups:
-                if rg.name in network_obj.risk_groups:
+        master = data.get("seed")
+        if master is not None and (
+            isinstance(master, bool) or not isinstance(master, int)
+        ):
+            raise ValueError("seed: expected integer")
+        network = expand_network_dsl(data)
+        groups, generate = build_risk_groups(data.get("risk_groups", []))
+        for group in groups:
+            if group.name in network.risk_groups:
+                raise ValueError(f"Duplicate risk group name {group.name!r}")
+            network.risk_groups[group.name] = group
+        resolve_membership_rules(network)
+        if generate:
+            # Generation reads the resolved memberships; refuse a broken
+            # declaration with its own message before generating from it.
+            MembershipIndex.build(network)
+        for raw in generate:
+            for group in generate_risk_groups(network, parse_generate_spec(raw)):
+                if group.name in network.risk_groups:
                     raise ValueError(
-                        f"Duplicate risk group name '{rg.name}'; each top-level "
-                        "risk group must have a unique name."
+                        f"Generated risk group {group.name!r} conflicts with existing group"
                     )
-                network_obj.risk_groups[rg.name] = rg
-            Scenario._logger.debug(
-                "Attached risk groups: %d", len(network_obj.risk_groups)
-            )
-
-        # 7) Resolve membership rules (adds entities to risk groups based on conditions)
-        resolve_membership_rules(network_obj)
-
-        # 8) Validate risk group hierarchy (detect cycles from membership rules)
-        validate_risk_group_hierarchy(network_obj)
-
-        # 9) Process generate blocks (creates risk groups from entity attributes)
-        for gen_raw in generate_specs_raw:
-            try:
-                spec = parse_generate_spec(gen_raw)
-                generated_rgs = generate_risk_groups(network_obj, spec)
-                for rg in generated_rgs:
-                    if rg.name in network_obj.risk_groups:
-                        raise ValueError(
-                            f"Generated risk group '{rg.name}' conflicts with existing "
-                            f"risk group. The generate block with group_by='{spec.group_by}' "
-                            f"and name='{spec.name}' produced a name that "
-                            f"already exists. Either rename the existing group or adjust "
-                            f"the name to avoid collisions."
-                        )
-                    network_obj.risk_groups[rg.name] = rg
-            except ValueError as e:
-                raise ValueError(f"Invalid generate block: {e}") from e
-
-        if generate_specs_raw:
-            Scenario._logger.debug(
-                "Generated risk groups: total now %d", len(network_obj.risk_groups)
-            )
-
-        # Disable members of risk groups declared disabled. This runs after
-        # membership rules and generate blocks so entities assigned to groups
-        # by those mechanisms are covered by the cascade.
-        for rg in network_obj.risk_groups.values():
-            if rg.disabled:
-                network_obj.disable_risk_group(rg.name, recursive=True)
-
-        # 10) Check that every risk group named on a node or link is defined
-        validate_risk_group_references(network_obj)
-
-        scenario_obj = Scenario(
-            network=network_obj,
-            failure_policy_set=failure_policy_set,
-            workflow=workflow_steps,
-            demand_set=ds,
-            components_library=final_components,
-            seed=seed,
+                network.risk_groups[group.name] = group
+        index = MembershipIndex.build(network)
+        for group in network.risk_groups.values():
+            if group.disabled:
+                members = index.members(group.name, recursive=True)
+                for node_name in sorted(members.nodes):
+                    network.disable_node(node_name)
+                for link_id in sorted(members.links):
+                    network.disable_link(link_id)
+        components = (
+            default_components.clone()
+            if default_components is not None
+            else ComponentsLibrary()
+        )
+        if data.get("components"):
+            components.merge(ComponentsLibrary.from_dict(data["components"]))
+        unit_values = closed(
+            data.get("units", {}), ("resolution", "precision"), "units"
+        )
+        routes, supports, weights = named_declarations(data)
+        seeds = SeedManager(master)
+        return cls(
+            network,
+            build_workflow_steps(
+                data.get("workflow", []),
+                lambda name: seeds.derive_seed("workflow_step", name),
+            ),
+            demand_sets=demand_sets(data.get("demands", {})),
+            failure_policies=build_failure_policies(data.get("failures", {}), master),
+            components_library=components,
+            seed=master,
+            units=UnitsSettings(**unit_values),
+            routes=routes,
+            supports=supports,
+            weights=weights,
         )
 
-        # Attach minimal scenario snapshot to results for export
-        scenario_obj.results.set_scenario_snapshot(
-            build_scenario_snapshot(
-                seed=seed,
-                failure_policy_set=failure_policy_set,
-                demand_set=ds,
+
+def prepare(
+    scenario: Scenario,
+    *,
+    units: UnitsSettings | None = None,
+    demand_sets: Sequence[str] = (),
+) -> PreparedScenario:
+    """Choose one graph/unit over a read-only view of the scenario.
+
+    The input is not changed. The prepared scenario shares its immutable
+    records and keeps read-only copies of the network and component dicts,
+    so later edits of the caller's collections do not reach it.
+    """
+    if not isinstance(scenario, Scenario):
+        raise TypeError("prepare: expected Scenario")
+    if units is not None and not isinstance(units, UnitsSettings):
+        raise TypeError("prepare.units: expected UnitsSettings")
+    if isinstance(demand_sets, str):
+        raise ValueError("prepare.demand_sets: expected a sequence of names")
+    requested = tuple(dict.fromkeys(demand_sets))
+    for name in requested:
+        if not isinstance(name, str) or name not in scenario.demand_sets:
+            raise ValueError(f"prepare.demand_sets: unknown demand set {name!r}")
+    requested = tuple(str.__str__(name) for name in requested)
+    validate_unique_step_names(scenario.workflow)
+    snapshot = replace(
+        scenario,
+        network=scenario.network.snapshot(),
+        components_library=scenario.components_library.snapshot(),
+    )
+    return prepare_scenario(
+        snapshot, units if units is not None else snapshot.units, requested
+    )
+
+
+def run(
+    prepared: PreparedScenario,
+    *,
+    step_hook: Callable[[WorkflowStep], AbstractContextManager[None]] | None = None,
+) -> RunResult:
+    """Execute once in declaration order; publish a run only after every step succeeds."""
+    if not isinstance(prepared, PreparedScenario):
+        raise TypeError("run: expected PreparedScenario")
+    scenario = prepared.scenario
+    completed = {}
+    results, misses = [], []
+    for order, (step, (name, seed, seed_source)) in enumerate(
+        zip(scenario.workflow, prepared._steps, strict=True)
+    ):
+        context = StepContext(prepared, completed, name, order, seed, seed_source)
+        with nullcontext() if step_hook is None else step_hook(step):
+            result = step.execute(context)
+        value = result.result
+        if isinstance(
+            value,
+            (
+                CapacityAnalysis,
+                PlacementAnalysis,
+                SensitivityAnalysis,
+                PathAnalysis,
+                MSDAnalysis,
+            ),
+        ):
+            # An analysis belongs to a preparation of the same graph and report.
+            if (
+                value.prepared.topology.graph.uid() != prepared.topology.graph.uid()
+                or value.prepared.units_report != prepared.units_report
+            ):
+                raise ValueError(
+                    f"step {name}: analysis units/topology do not belong to this preparation"
+                )
+            misses.extend(
+                replace(miss, location=replace(miss.location, step=name))
+                for miss in value.misses
             )
-        )
-
-        Scenario._logger.debug(
-            "Scenario constructed: nodes=%d, links=%d, policies=%d, demand_sets=%d, steps=%d",
-            len(network_obj.nodes),
-            len(network_obj.links),
-            len(failure_policy_set.policies),
-            len(ds.sets),
-            len(workflow_steps),
-        )
-
-        return scenario_obj
+        completed[name] = result
+        results.append(result)
+    return RunResult(
+        run_metadata(scenario.seed),
+        prepared.units_report.with_misses(tuple(misses)),
+        tuple(results),
+        prepared,
+    )

@@ -96,20 +96,3 @@ def results_path_for_run(
     if output_dir is not None:
         return build_artifact_path(output_dir, prefix, ".results.json")
     return Path(f"{prefix}.results.json")
-
-
-def profiles_dir_for_run(scenario_path: Path, output_dir: Optional[Path]) -> Path:
-    """Return the directory for child worker profiles for ``run --profile``.
-
-    Args:
-        scenario_path: The scenario YAML path.
-        output_dir: Optional base output directory.
-
-    Returns:
-        ``output_dir/<prefix>.profiles``, or ``worker_profiles`` in the
-        current directory when ``output_dir`` is None.
-    """
-    prefix = scenario_prefix_from_path(scenario_path)
-    if output_dir is None:
-        return Path("worker_profiles")
-    return build_artifact_path(output_dir, prefix, ".profiles")

@@ -103,7 +103,7 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
         if op == ">=":
             return left >= right
 
-    # Substring test on strings, membership test on list/tuple/set. Other
+    # Substring test on strings, membership test on a JSON list. Other
     # types never "contain", so not_contains is True for them.
     if op == "contains":
         if isinstance(attr_value, str):

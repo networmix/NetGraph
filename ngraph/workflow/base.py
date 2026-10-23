@@ -1,232 +1,192 @@
-"""Base classes for workflow automation.
-
-Defines the workflow step abstraction, registration decorator, and execution
-lifecycle. Steps implement `run()` and are executed via `execute()` which
-handles timing, logging, and metadata recording. Failures are logged and
-re-raised.
-"""
+"""Typed workflow execution and explicit extension registration."""
 
 from __future__ import annotations
 
-import os
-import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import KW_ONLY, FrozenInstanceError, dataclass, field
+from importlib import import_module
+from typing import TYPE_CHECKING, Literal, TypeVar
 
+from ngraph.analysis.failures import FailureRequest
+from ngraph.export import is_question, owned_step_result
 from ngraph.logging import get_logger
+from ngraph.results import StepContext, StepOutput, StepResult
+from ngraph.utils.values import frozen_attrs, own_scalars
 
 if TYPE_CHECKING:
-    # Type-checking import only; a runtime import would be circular.
-    from ngraph.scenario import Scenario
+    from ngraph.analysis.preparation import StepNeeds
 
 logger = get_logger(__name__)
-
-# Maps YAML step `type` names to WorkflowStep subclasses
-WORKFLOW_STEP_REGISTRY: Dict[str, Type["WorkflowStep"]] = {}
-
-
-def register_workflow_step(step_type: str):
-    """Return a decorator that registers a `WorkflowStep` subclass.
-
-    Args:
-        step_type: Registry key used to instantiate steps from configuration.
-
-    Returns:
-        A class decorator that adds the class to `WORKFLOW_STEP_REGISTRY`.
-    """
-
-    def decorator(cls: Type["WorkflowStep"]) -> Type["WorkflowStep"]:
-        WORKFLOW_STEP_REGISTRY[step_type] = cls
-        return cls
-
-    return decorator
+SeedSource = Literal["explicit-step", "scenario-derived", "none"]
+WORKFLOW_STEP_REGISTRY: dict[str, type[WorkflowStep]] = {}
+StepT = TypeVar("StepT", bound="WorkflowStep")
+# Built-in step types register when their module first loads.
+BUILTIN_STEP_MODULES = {
+    "BuildGraph": "ngraph.workflow.build_graph",
+    "CostPower": "ngraph.workflow.cost_power",
+    "MaxFlow": "ngraph.workflow.max_flow_step",
+    "MaximumSupportedDemand": "ngraph.workflow.maximum_supported_demand_step",
+    "NetworkStats": "ngraph.workflow.network_stats",
+    "TrafficMatrixPlacement": "ngraph.workflow.traffic_matrix_placement_step",
+}
 
 
-def validate_unique_step_names(workflow: "list[WorkflowStep]") -> None:
-    """Validate that effective step names in a workflow list are unique.
+def step_type(name: str) -> type[WorkflowStep] | None:
+    """Return the registered step class for a YAML type name, if any."""
+    if name not in WORKFLOW_STEP_REGISTRY and name in BUILTIN_STEP_MODULES:
+        import_module(BUILTIN_STEP_MODULES[name])
+    return WORKFLOW_STEP_REGISTRY.get(name)
 
-    Effective names follow the same rule used for results storage:
-    ``step.name`` or the step class name when no name is set. Duplicate
-    effective names would silently overwrite each other's namespace in the
-    results store.
 
-    Args:
-        workflow: Workflow step list.
+def register_workflow_step(name: str) -> Callable[[type[StepT]], type[StepT]]:
+    """Register one concrete step class for a nonempty YAML type name."""
+    if not isinstance(name, str) or not name:
+        raise ValueError("workflow registration name: expected nonempty string")
 
-    Raises:
-        ValueError: If two or more steps share the same effective name.
-    """
-    counts: Dict[str, int] = {}
+    def register(step_type: type[StepT]) -> type[StepT]:
+        if not issubclass(step_type, WorkflowStep):
+            raise TypeError("workflow registration requires a WorkflowStep subclass")
+        builtin = BUILTIN_STEP_MODULES.get(name)
+        if name in WORKFLOW_STEP_REGISTRY or (
+            builtin is not None and step_type.__module__ != builtin
+        ):
+            raise ValueError(f"workflow step type already registered: {name}")
+        WORKFLOW_STEP_REGISTRY[name] = step_type
+        return step_type
+
+    return register
+
+
+def validate_unique_step_names(workflow: Sequence[WorkflowStep]) -> None:
+    seen = set()
     for step in workflow:
-        effective = step.name or type(step).__name__
-        counts[effective] = counts.get(effective, 0) + 1
-    duplicates = sorted(name for name, count in counts.items() if count > 1)
-    if duplicates:
-        dup_list = ", ".join(f"'{name}'" for name in duplicates)
+        if not isinstance(step, WorkflowStep):
+            raise TypeError("workflow: expected WorkflowStep values")
+        name = step.name or type(step).__name__
+        if name in seen:
+            raise ValueError(f"Duplicate workflow step name: {name}")
+        seen.add(name)
+
+
+def workflow_failures(context, policy_name, iterations, failure_trace):
+    """Supply the step's named policy and effective seed to the one sampler."""
+    policies = context.prepared.scenario.failure_policies
+    if policy_name is not None and policy_name not in policies:
         raise ValueError(
-            f"Duplicate workflow step name(s): {dup_list}. Results are stored "
-            "per step name, so duplicates would overwrite each other; set a "
-            "unique 'name' on each step."
+            f"step {context.step_name}: unknown failure policy {policy_name!r}"
         )
+    return FailureRequest(
+        policies.get(policy_name),
+        iterations,
+        context.seed,
+        failure_trace,
+        policy_name,
+        "scenario" if context.seed_source == "scenario-derived" else "step",
+    )
 
 
-def resolve_parallelism(parallelism: Union[int, str]) -> int:
-    """Validate and resolve a parallelism setting to a concrete worker count.
-
-    Args:
-        parallelism: Either a positive integer worker count or "auto" for
-            the CPU count.
-
-    Returns:
-        Positive integer worker count (minimum 1).
-
-    Raises:
-        ValueError: If parallelism is neither "auto" nor an integer >= 1.
-    """
-    if parallelism == "auto":
-        return max(1, os.cpu_count() or 1)
-    if isinstance(parallelism, bool) or not isinstance(parallelism, int):
-        raise ValueError(
-            f"parallelism must be an integer or 'auto', got {parallelism!r}"
-        )
-    if parallelism < 1:
-        raise ValueError("parallelism must be >= 1")
-    return parallelism
-
-
-def serialize_monte_carlo_results(raw: Dict[str, Any]) -> tuple[dict, list[dict]]:
-    """Convert FailureManager Monte Carlo output into JSON-safe dicts.
-
-    Args:
-        raw: ``run_monte_carlo_analysis`` output whose "baseline" and
-            "results" items are FlowIterationResult objects.
-
-    Returns:
-        Tuple of (baseline_dict, flow_results).
-    """
-    return raw["baseline"].to_dict(), [item.to_dict() for item in raw["results"]]
+def _question(value):
+    """Check a step's recorded question; custom JSON parameters are frozen."""
+    if not is_question(value):
+        raise TypeError(f"workflow question: unsupported type {type(value).__name__}")
+    if isinstance(value, Mapping) and not isinstance(value, WorkflowStep):
+        return frozen_attrs(value, "custom question parameters")
+    return value
 
 
 @dataclass
 class WorkflowStep(ABC):
-    """Base class for all workflow steps.
+    """Base of every workflow step.
 
-    `execute()` logs each step with its duration and records step metadata in
-    scenario.results. A step seed makes random operations reproducible.
-
-    YAML Configuration:
-        ```yaml
-        workflow:
-          - type: <StepTypeName>
-            name: "optional_step_name"  # Optional: Custom name for this step instance
-            seed: 42                    # Optional: Seed for reproducible random operations
-            # ... step-specific parameters ...
-        ```
-
-    Attributes:
-        name: Optional custom identifier for this workflow step instance,
-            used for logging and result storage. When empty, the class name
-            is used instead.
-        seed: Optional seed for reproducible random operations. If None,
-            random operations are non-deterministic.
+    Built-in steps are immutable once constructed (``dataclasses.replace``
+    makes an edited copy). A custom step's own fields stay its own; ``prepare``
+    records its name and seed, so later edits of those do not reach a
+    prepared scenario.
     """
 
     name: str = ""
-    seed: Optional[int] = None
-    # Provenance of a set seed: "explicit-step", or "scenario-derived" when
-    # the workflow parser derived it from the scenario seed.
-    _seed_source: str = field(default="explicit-step", init=False, repr=False)
+    seed: int | None = None
+    _: KW_ONLY
+    # Its YAML declaration, kept by dataclasses.replace: the refusal label and
+    # the seed the scenario derived for it (its seed is derived while equal).
+    yaml_label: str | None = field(default=None, compare=False, repr=False)
+    derived_seed: int | None = field(default=None, compare=False, repr=False)
+    _immutable = False
 
-    def execute(self, scenario: "Scenario") -> None:
-        """Run the step inside its results namespace and record metadata.
-
-        Wraps `run()`: enters the step's results scope, stores step metadata
-        (type, execution order, seeds), logs start and end, and adds
-        `duration_sec` to the step metadata on success.
-
-        Args:
-            scenario: The scenario to execute the step on.
-
-        Raises:
-            Exception: Re-raises any exception raised by `run()` after logging
-                duration and context.
-        """
-        step_type = self.__class__.__name__
-        # An unnamed step uses its class name as the results namespace.
-        step_name = self.name or step_type
-
-        # Determine seed provenance from the seed the step actually uses.
-        # run() only ever consults self.seed; a scenario-level seed without a
-        # concrete step seed means the step runs unseeded.
-        scenario_seed = scenario.seed
-        step_seed = self.seed
-        seed_source = self._seed_source if step_seed is not None else "none"
-
-        execution_order = scenario._execution_counter
-        scenario._execution_counter += 1
-
-        scenario.results.enter_step(step_name)
-        scenario.results.put_step_metadata(
-            step_name=step_name,
-            step_type=step_type,
-            execution_order=execution_order,
-            scenario_seed=scenario_seed,
-            step_seed=step_seed,
-            seed_source=seed_source,
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str):
+            raise ValueError("workflow step name: expected string")
+        for name in ("seed", "derived_seed"):
+            value = getattr(self, name)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int)
+            ):
+                raise ValueError(f"workflow step {name}: expected integer or None")
+        if self.yaml_label is not None and (
+            not isinstance(self.yaml_label, str) or not self.yaml_label
+        ):
+            raise ValueError("workflow step yaml_label: expected a nonempty string")
+        own_scalars(
+            self, "workflow step", ("name", "seed", "yaml_label", "derived_seed")
         )
+        if self._immutable:
+            object.__setattr__(self, "_constructed", True)
 
-        if self.seed is not None:
-            logger.debug(
-                "Executing step: %s (%s) with seed=%s",
-                step_name,
-                step_type,
-                str(self.seed),
-            )
-        logger.info(f"Starting workflow step: {step_name} ({step_type})")
-        start_time = time.time()
+    def __setattr__(self, name, value):
+        if "_constructed" in self.__dict__:
+            raise FrozenInstanceError(f"cannot assign to field {name!r}")
+        object.__setattr__(self, name, value)
 
-        try:
-            self.run(scenario)
-            end_time = time.time()
-            duration = end_time - start_time
-            # Merge duration_sec into the step's 'metadata' entry (created
-            # if run() stored none).
-            existing_md = scenario.results.get("metadata", {})
-            if not isinstance(existing_md, dict):
-                raise TypeError("Results metadata must be a dict")
-            updated_md = dict(existing_md)
-            updated_md["duration_sec"] = float(duration)
-            scenario.results.put("metadata", updated_md)
-            logger.info(
-                f"Completed workflow step: {step_name} ({step_type}) "
-                f"in {duration:.3f} seconds"
-            )
-            logger.debug(
-                "Step %s finished: duration=%.3fs, results_keys=%s",
-                step_name,
-                duration,
-                ", ".join(sorted(scenario.results.get_step(step_name))) or "-",
-            )
-        except Exception as e:
-            end_time = time.time()
-            duration = end_time - start_time
-            logger.error(
-                f"Failed workflow step: {step_name} ({step_type}) "
-                f"after {duration:.3f} seconds: {type(e).__name__}: {e}"
-            )
-            raise
-        finally:
-            scenario.results.exit_step()
+    def __delattr__(self, name):
+        if "_constructed" in self.__dict__:
+            raise FrozenInstanceError(f"cannot delete field {name!r}")
+        object.__delattr__(self, name)
+
+    def execute(self, context: StepContext) -> StepResult:
+        """Run once, validate/own its boundary, and publish one immutable result."""
+        logger.info(
+            "Starting workflow step: %s (%s)", context.step_name, type(self).__name__
+        )
+        output = self.run(context)
+        if not isinstance(output, StepOutput):
+            raise TypeError(f"step {context.step_name}: run must return StepOutput")
+        question = _question(output.question)
+        result = owned_step_result(output.result)
+        completed = StepResult(
+            context.step_name,
+            type(self).__name__,
+            context.execution_order,
+            context.prepared.scenario.seed,
+            context.seed,
+            context.seed_source,
+            result,
+            question,
+        )
+        logger.info(
+            "Completed workflow step: %s (%s)", context.step_name, type(self).__name__
+        )
+        return completed
+
+    @classmethod
+    def yaml_arguments(cls, arguments: dict, name: str) -> dict:
+        """Turn this step type's YAML keys into constructor arguments."""
+        return arguments
+
+    @property
+    def seed_source(self) -> SeedSource:
+        """Where this step's seed comes from."""
+        if self.seed is None:
+            return "none"
+        if self.seed == self.derived_seed:
+            return "scenario-derived"
+        return "explicit-step"
+
+    def needs(self) -> StepNeeds | None:
+        """What preparation must bind for this step; None asks for nothing."""
+        return None
 
     @abstractmethod
-    def run(self, scenario: "Scenario") -> None:
-        """Execute the workflow step logic.
-
-        Called by `execute()`, which handles logging, timing, and metadata
-        storage.
-
-        Args:
-            scenario: The scenario to execute the step on.
-        """
-        pass
+    def run(self, context: StepContext) -> StepOutput:
+        """Return this step's typed question and result without publishing state."""
+        raise NotImplementedError

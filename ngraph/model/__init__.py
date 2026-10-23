@@ -1,24 +1,6 @@
-"""Network model package.
+"""Editable named network models; analysis state belongs to prepared inputs."""
 
-Nodes, links, risk groups, and the scenario-level `Network`. Temporary
-exclusions for analysis are handled via node_mask and edge_mask parameters in
-Core algorithms, not by mutating this model.
-"""
+from ngraph.model.network import Link, Network, Node
+from ngraph.model.risk import RiskGroup
 
-from ngraph.model.demand import TrafficDemand
-from ngraph.model.flow import FlowPolicyPreset
-from ngraph.model.network import Link, Network, Node, RiskGroup
-from ngraph.model.path import Path
-
-__all__ = [
-    # Network topology
-    "Network",
-    "Node",
-    "Link",
-    "RiskGroup",
-    "Path",
-    # Traffic demands
-    "TrafficDemand",
-    # Flow configuration
-    "FlowPolicyPreset",
-]
+__all__ = ["Link", "Network", "Node", "RiskGroup"]

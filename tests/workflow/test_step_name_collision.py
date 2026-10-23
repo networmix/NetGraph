@@ -1,7 +1,6 @@
 """Regression tests for workflow step-name collision detection.
 
-Two unnamed steps of the same type in a programmatic scenario must not share
-a results namespace, which would silently drop the first step's data.
+Effective step names must be unique before preparation or execution publishes data.
 """
 
 from __future__ import annotations
@@ -11,15 +10,15 @@ from dataclasses import dataclass
 import pytest
 
 from ngraph.model.network import Network
-from ngraph.scenario import Scenario
+from ngraph.results import StepContext, StepOutput
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.base import WorkflowStep, validate_unique_step_names
 
 
 @dataclass
 class _DummyStep(WorkflowStep):
-    def run(self, scenario) -> None:
-        scenario.results.put("metadata", {})
-        scenario.results.put("data", {"ran": True})
+    def run(self, context: StepContext) -> StepOutput:
+        return StepOutput({}, {"ran": True})
 
 
 def _make_scenario(workflow: list[WorkflowStep]) -> Scenario:
@@ -29,33 +28,33 @@ def _make_scenario(workflow: list[WorkflowStep]) -> Scenario:
 def test_duplicate_unnamed_steps_raise() -> None:
     scenario = _make_scenario([_DummyStep(), _DummyStep()])
     with pytest.raises(ValueError, match="Duplicate workflow step name"):
-        scenario.run()
+        prepare(scenario)
 
 
 def test_duplicate_explicit_names_raise() -> None:
     scenario = _make_scenario([_DummyStep(name="x"), _DummyStep(name="x")])
-    with pytest.raises(ValueError, match="'x'"):
-        scenario.run()
+    with pytest.raises(ValueError, match="name: x"):
+        prepare(scenario)
 
 
 def test_unique_names_run_and_rerun() -> None:
     scenario = _make_scenario([_DummyStep(name="a"), _DummyStep(name="b")])
-    scenario.run()
+    prepared = prepare(scenario)
+    result = run(prepared)
     # Re-running the same scenario object must not trigger the collision check
-    scenario.run()
-    exported = scenario.results.to_dict()
-    assert exported["steps"]["a"]["data"]["ran"] is True
-    assert exported["steps"]["b"]["data"]["ran"] is True
+    repeated = run(prepared)
+    assert [step.name for step in result.steps] == ["a", "b"]
+    assert [step.result for step in repeated.steps] == [{"ran": True}, {"ran": True}]
 
 
 def test_direct_step_execute_reuse_not_flagged() -> None:
     # Executing the same step twice directly (test/REPL pattern) is allowed;
     # only duplicates within scenario.workflow are rejected.
-    scenario = _make_scenario([])
+    scenario = prepare(_make_scenario([]))
     step = _DummyStep(name="solo")
-    step.execute(scenario)
-    step.execute(scenario)
-    assert scenario.results.to_dict()["steps"]["solo"]["data"]["ran"] is True
+    context = StepContext(scenario, {}, "solo", 0, None, "none")
+    first, second = step.execute(context), step.execute(context)
+    assert first.result == second.result == {"ran": True}
 
 
 def test_validate_unique_step_names_accepts_unique() -> None:

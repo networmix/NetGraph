@@ -17,7 +17,10 @@ pip install ngraph
 ## Python API
 
 ```python
-from ngraph import Network, Node, Link, analyze, Mode
+from ngraph import (
+    CapacityQuery, Link, Network, Node, Scenario, Selector, UnitsSettings,
+    capacity, prepare,
+)
 
 # Three nodes in a line
 network = Network()
@@ -27,9 +30,11 @@ network.add_node(Node("C"))
 network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
 network.add_link(Link("B", "C", capacity=10.0, cost=1.0))
 
-# Compute max flow
-result = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-print(result)  # {('^A$', '^C$'): 10.0}
+# Prepare an owned graph with one physical unit per native integer unit.
+prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
+result = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^C$")))
+row = result.cases[0].states["converged"].rows[0]
+print(row.result.delivered)  # 10 integer units
 ```
 
 ## Scenario DSL
@@ -81,7 +86,7 @@ demands:
       target: ^site2/leaf/
       volume: 100.0
       mode: combine
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 
 # Analysis workflow: find max capacity, then test under failures
 workflow:
@@ -98,17 +103,21 @@ workflow:
   - type: TrafficMatrixPlacement
     name: placement_at_max
     demand_set: global_traffic
-    alpha_from_step: max_demand # Use alpha_star from MSD step
+    alpha_from_step: max_demand # Use its largest tested feasible alpha
     failure_policy: random_link
     iterations: 100
 ```
 
 ```bash
 ngraph run scenario.yml --output results/
-jq '.steps.max_demand.data.alpha_star' results/scenario.results.json
+jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible' results/scenario.results.json
 ```
 
-The scenario builds two Clos sites from one blueprint, finds the largest demand multiplier the network carries, then places that demand under 100 random single-link failures and writes the results to JSON.
+The scenario builds two Clos sites from one blueprint, searches for a feasible demand multiplier, then places the largest tested feasible multiplier under 100 random single-link failures. MSD records every probe and its status; an upper certificate is reported only for a proved monotone model.
+
+Python workflows use `result = run(prepare(scenario))`; results belong to the returned `RunResult`. Each ordered step records its question and typed result. Each failure case has a `states` mapping containing `converged`. `write_json(result, file)` performs the explicit JSON projection. JSON rows default to compact exact summaries, retaining pool metadata so pooled costs keep their domain. Request `outputs: {details: true}` for per-source, per-tunnel, plan and call details. Python native results remain complete. Cost reports (`outputs.cost_distribution`) and cuts (`outputs.min_cut`) have independent selectors; details alone enables neither.
+
+Capacities and volumes are physical input quantities. Preparation selects one power-of-two quantum `q`, or accepts a declared legal resolution, and reports its rounding and split precision. Numerical results are exact integer units; multiply by `q` only for display. The default `MaxFlow` question is unrestricted optimized capacity. Static ECMP, capacity-weighted shortest paths and tunnel models are separate declared questions.
 
 See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Examples](https://networmix.github.io/NetGraph/examples/clos-fabric/) for more.
 

@@ -45,7 +45,7 @@ help:
 	@echo "  make format        - Auto-format code with ruff"
 	@echo "  make test          - Run tests with coverage (includes slow tests)"
 	@echo "  make qt            - Run quick tests only (excludes slow tests)"
-	@echo "  make perf          - Run the performance benchmarks and write reports and plots"
+	@echo "  make perf          - Scenario comparison driver (PERF_ARGS='--help')"
 	@echo "  make validate      - Validate YAML schemas"
 	@echo ""
 	@echo "Documentation:"
@@ -140,13 +140,18 @@ qt:
 	@echo "⚡ Running quick tests only (excludes slow tests)..."
 	@$(PYTEST) --no-cov -m "not slow"
 
+PERF_ARGS ?= --help
 perf:
-	@echo "📊 Running performance analysis with tables and graphs..."
-	@$(PYTHON) -m dev.perf.main run || (echo "❌ Performance analysis failed."; exit 1)
+	@$(PYTHON) dev/scenario_perf.py $(PERF_ARGS)
+
+.PHONY: perf-tool-test
+perf-tool-test:
+	@$(PYTEST) -o addopts= tests/dev/test_scenario_perf.py
 
 validate:
 	@echo "📋 Validating YAML schemas..."
 	@$(PYTHON) -c "import json, yaml, jsonschema, pathlib; from importlib import resources as res; f=res.files('ngraph.schemas').joinpath('scenario.json').open('r', encoding='utf-8'); schema=json.load(f); f.close(); scenario_files=sorted(set(pathlib.Path('scenarios').rglob('*.yaml')) | set(pathlib.Path('scenarios').rglob('*.yml'))); integration_files=sorted(set(pathlib.Path('tests/integration').glob('*.yaml')) | set(pathlib.Path('tests/integration').glob('*.yml'))); all_files=scenario_files+integration_files; [jsonschema.validate(yaml.safe_load(open(fp)), schema) for fp in all_files]; print(f'✅ Validated {len(all_files)} YAML files against schema ({len(scenario_files)} scenarios, {len(integration_files)} integration tests)')"
+	@$(PYTHON) dev/generate_results_schema.py --check
 
 # Documentation
 docs:

@@ -1,6 +1,6 @@
 import pytest
 
-from ngraph.scenario import Scenario
+from ngraph.scenario import Scenario, prepare, run
 
 
 def test_basic_network_example():
@@ -282,11 +282,11 @@ demands:
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    default_demands = scenario.demand_set.get_set("default")
+    default_demands = scenario.demand_sets["default"].demands
     assert len(default_demands) == 1
     demand = default_demands[0]
-    assert demand.source == "source.*"
-    assert demand.target == "sink.*"
+    assert demand.source.path == "source.*"
+    assert demand.target.path == "sink.*"
     assert demand.volume == 100
     assert demand.mode == "combine"
 
@@ -322,10 +322,8 @@ failures:
 """
 
     scenario = Scenario.from_yaml(yaml_content)
-    assert len(scenario.failure_policy_set.policies) == 1
-    policies = scenario.failure_policy_set.get_all_policies()
-    assert len(policies) > 0
-    default_policy = scenario.failure_policy_set.get_policy("default")
+    assert len(scenario.failure_policies) == 1
+    default_policy = scenario.failure_policies["default"]
     assert default_policy.expand_groups
     assert len(default_policy.modes) == 1
     mode = default_policy.modes[0]
@@ -351,11 +349,10 @@ workflow:
     assert len(scenario.workflow) == 1
     assert scenario.workflow[0].__class__.__name__ == "BuildGraph"
 
-    scenario.run()
-    # The unnamed step gets a default unique name
-    step_name = scenario.workflow[0].name
-    exp = scenario.results.to_dict()
-    assert exp["steps"][step_name]["data"].get("graph") is not None
+    (step,) = run(prepare(scenario)).steps
+    assert step.name == "BuildGraph_0" and step.execution_order == 0
+    assert step.result.node_count == 2 and step.result.link_count == 0
+    assert [node["id"] for node in step.result.graph["nodes"]] == ["node1", "node2"]
 
 
 def test_node_overrides_example():

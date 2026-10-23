@@ -229,3 +229,17 @@ class TestLinkUtilities:
 
         specific = net.find_links(source_regex="router-1", target_regex="switch-2")
         assert len(specific) == 1
+
+
+def test_selection_reads_the_current_records_after_each_edit():
+    from ngraph.model.selectors import Selector, select_nodes
+
+    net = Network()
+    net.add_node(Node("a1"))
+    net.add_node(Node("a2"))
+    selector = Selector("^a", active_only=True)
+    assert [n.name for n in select_nodes(net, selector, True)["^a"]] == ["a1", "a2"]
+    net.disable_node("a1")
+    assert [n.name for n in select_nodes(net, selector, True)["^a"]] == ["a2"]
+    net.replace_node("a2", attrs={"role": "edge"})
+    assert select_nodes(net, selector, True)["^a"][0].attrs == {"role": "edge"}

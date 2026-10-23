@@ -10,7 +10,8 @@ import dataclasses
 from typing import Any, Callable, Dict, List, Optional
 
 from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
-from ngraph.workflow.base import WORKFLOW_STEP_REGISTRY, WorkflowStep
+from ngraph.workflow.base import WorkflowStep
+from ngraph.workflow.base import step_type as registered_step
 
 
 def build_workflow_steps(
@@ -46,7 +47,7 @@ def build_workflow_steps(
                 "indicating the WorkflowStep subclass to use."
             )
 
-        step_cls = WORKFLOW_STEP_REGISTRY.get(step_type)
+        step_cls = registered_step(step_type)
         if not step_cls:
             raise ValueError(f"Unrecognized step 'type': {step_type}")
 
@@ -66,19 +67,22 @@ def build_workflow_steps(
 
         normalized_ctor_args["name"] = step_name
 
-        if "seed" not in normalized_ctor_args or normalized_ctor_args["seed"] is None:
-            derived = derive_seed(step_name)
-            if derived is not None:
-                normalized_ctor_args["seed"] = derived
+        # Each step type turns its own YAML keys into constructor arguments.
+        normalized_ctor_args = step_cls.yaml_arguments(normalized_ctor_args, step_name)
 
-        init_fields = {f.name for f in dataclasses.fields(step_cls) if f.init}
+        # Declaration provenance is the parser's, never a YAML key.
+        init_fields = {f.name for f in dataclasses.fields(step_cls) if f.init} - {
+            "yaml_label",
+            "derived_seed",
+        }
         check_no_extra_keys(
             normalized_ctor_args, init_fields, f"workflow step '{step_name}'"
         )
-        step_obj = step_cls(**normalized_ctor_args)
-        if ctor_args.get("seed") is None:
-            step_obj._seed_source = "scenario-derived"
-
-        steps.append(step_obj)
+        provenance: Dict[str, Any] = {"yaml_label": f"workflow step {step_name}"}
+        if normalized_ctor_args.get("seed") is None:
+            derived = derive_seed(step_name)
+            if derived is not None:
+                normalized_ctor_args["seed"] = provenance["derived_seed"] = derived
+        steps.append(step_cls(**normalized_ctor_args, **provenance))
 
     return steps

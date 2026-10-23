@@ -20,14 +20,15 @@ from ngraph.dsl.expansion import (
     expand_name_patterns,
     expand_risk_group_refs,
 )
-from ngraph.dsl.selectors import normalize_selector
 from ngraph.model.network import Link, Network, Node
 from ngraph.model.selectors import (
     evaluate_conditions,
     flatten_link_attrs,
+    normalize_selector,
     parse_match_spec,
     select_nodes,
 )
+from ngraph.utils.values import physical
 from ngraph.utils.yaml_utils import check_no_extra_keys
 
 
@@ -401,9 +402,9 @@ def _expand_node_group(
             node = Node(
                 name=effective_path,
                 disabled=group_disabled,
-                attrs=copy.deepcopy(combined_attrs),
+                risk_groups=final_risk_groups,
+                attrs=combined_attrs,
             )
-            node.risk_groups = final_risk_groups.copy()
             ctx.network.add_node(node)
         else:
             count = group_def.get("count", 1)
@@ -418,9 +419,9 @@ def _expand_node_group(
                 node = Node(
                     name=node_name,
                     disabled=group_disabled,
-                    attrs=copy.deepcopy(combined_attrs),
+                    risk_groups=final_risk_groups,
+                    attrs=combined_attrs,
                 )
-                node.risk_groups = final_risk_groups.copy()
                 ctx.network.add_node(node)
 
 
@@ -457,7 +458,7 @@ def _normalize_link_selector(sel: Any, base: str) -> Dict[str, Any]:
     if isinstance(sel, str):
         return {"path": _join_parent(base, sel)}
     if isinstance(sel, dict):
-        # NodeSelector.__post_init__ validates that at least one of path,
+        # Selector.__post_init__ validates that at least one of path,
         # group_by, or match is present when the selector is parsed.
         path = sel.get("path")
         out = dict(sel)
@@ -661,22 +662,17 @@ def _create_link(
         count: Number of parallel links to create between source and target.
     """
     for _ in range(count):
-        capacity = link_def.get("capacity", 1.0)
-        cost = link_def.get("cost", 1.0)
-        attrs = copy.deepcopy(link_def.get("attrs", {}))
-        disabled_flag = bool(link_def.get("disabled", False))
-        link_rgs = expand_risk_group_refs(link_def.get("risk_groups", []))
-
-        link = Link(
-            source=source,
-            target=target,
-            capacity=capacity,
-            cost=cost,
-            attrs=attrs,
-            disabled=disabled_flag,
+        net.add_link(
+            Link(
+                source=source,
+                target=target,
+                capacity=link_def.get("capacity", 1.0),
+                cost=link_def.get("cost", 1.0),
+                attrs=link_def.get("attrs", {}),
+                disabled=bool(link_def.get("disabled", False)),
+                risk_groups=expand_risk_group_refs(link_def.get("risk_groups", [])),
+            )
         )
-        link.risk_groups = link_rgs
-        net.add_link(link)
 
 
 def _process_node_rules(net: Network, network_data: Dict[str, Any]) -> None:
@@ -725,7 +721,7 @@ def _apply_node_rule(net: Network, rule: Dict[str, Any]) -> None:
     if "attrs" in rule and not isinstance(rule["attrs"], dict):
         raise ValueError("attrs must be a dict in node rule.")
 
-    attrs_to_set = copy.deepcopy(rule.get("attrs", {}))
+    attrs_to_set = rule.get("attrs", {})
     _update_nodes(
         net, path, match_spec, attrs_to_set, top_level_disabled, rule_risk_groups
     )
@@ -848,16 +844,20 @@ def _update_links(
             ):
                 continue
 
+        changes: Dict[str, Any] = {}
         if new_capacity is not None:
-            link.capacity = new_capacity
+            # A rule's capacity is labelled by the link it updates.
+            changes["capacity"] = physical(new_capacity, f"link.{link_id}.capacity")
         if new_cost is not None:
-            link.cost = new_cost
+            changes["cost"] = new_cost
         if new_disabled_val is not None:
-            link.disabled = bool(new_disabled_val)
+            changes["disabled"] = bool(new_disabled_val)
         if new_risk_groups is not None:
-            link.risk_groups = expand_risk_group_refs(new_risk_groups)
+            changes["risk_groups"] = expand_risk_group_refs(new_risk_groups)
         if new_attrs:
-            link.attrs.update(new_attrs)
+            changes["attrs"] = {**link.attrs, **new_attrs}
+        if changes:
+            net.replace_link(link_id, **changes)
 
 
 def _update_nodes(
@@ -886,13 +886,15 @@ def _update_nodes(
     normalized = normalize_selector(selector_dict, context="rule")
     node_groups = select_nodes(net, normalized, default_active_only=False)
 
+    changes: Dict[str, Any] = {}
+    if disabled_val is not None:
+        changes["disabled"] = bool(disabled_val)
+    if risk_groups_val is not None:
+        changes["risk_groups"] = expand_risk_group_refs(risk_groups_val)
     for _, nodes in node_groups.items():
         for node in nodes:
-            if disabled_val is not None:
-                node.disabled = bool(disabled_val)
-            if risk_groups_val is not None:
-                node.risk_groups = expand_risk_group_refs(risk_groups_val)
-            node.attrs.update(attrs)
+            current = net.nodes[node.name]
+            net.replace_node(node.name, **changes, attrs={**current.attrs, **attrs})
 
 
 def _longest_subgroup_prefix(key: str, group_names: Iterable[str]) -> Optional[str]:

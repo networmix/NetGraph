@@ -1,55 +1,98 @@
 """Network topology modeling with Node, Link, RiskGroup, and Network classes.
 
 These classes carry no analysis machinery and can be used on their own.
+Nodes, links and risk groups are immutable records; a Network holds them in
+editable dicts and its edit methods replace records.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from base64 import urlsafe_b64encode
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from uuid import uuid4
 
-from ngraph.utils.ids import new_base64_uuid
+from ngraph.model.risk import MembershipIndex
+from ngraph.utils.values import (
+    frozen_attrs,
+    frozen_dict,
+    own_scalars,
+    owned_dict,
+    physical,
+    scalar,
+)
+
+if TYPE_CHECKING:
+    from ngraph.model.risk import RiskGroup
 
 
-@dataclass
+@dataclass(frozen=True)
+class DirectedLink:
+    """One analysis direction of a stored physical link."""
+
+    link: str
+    direction: Literal["forward", "reverse"]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.link, str) or not self.link:
+            raise ValueError("link: expected a nonempty physical link id")
+        if self.direction not in ("forward", "reverse"):
+            raise ValueError(f"link {self.link}: direction must be forward or reverse")
+        own_scalars(self, "directed link", ("link", "direction"))
+
+
+@dataclass(frozen=True)
 class Node:
     """Network node, keyed by its unique name in ``Network.nodes``.
 
     Attributes:
         name (str): Unique identifier for the node.
         disabled (bool): Whether the node is disabled in the scenario configuration.
-        risk_groups (Set[str]): Set of risk group names this node belongs to.
-        attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
+        risk_groups (AbstractSet[str]): Names of the risk groups this node belongs
+            to, stored as a frozenset.
+        attrs (Dict[str, Any]): Finite JSON metadata (e.g., coordinates, region),
+            checked and stored read-only at construction.
     """
 
     name: str
     disabled: bool = False
-    risk_groups: Set[str] = field(default_factory=set)
+    risk_groups: AbstractSet[str] = frozenset()
     attrs: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        own_scalars(self, "node", ("name",))
+        label = f"node {self.name}"
+        own_scalars(self, label, ("disabled",))
+        object.__setattr__(self, "risk_groups", _names(self.risk_groups, label))
+        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
 
-@dataclass
+
+@dataclass(frozen=True)
 class Link:
     """One directed link between two nodes.
 
     The model stores a single direction (``source`` -> ``target``). When the
-    analysis graph is built (via ``AnalysisContext`` / netgraph-core), a reverse
+    prepared native graph is built, a reverse
     edge is added automatically for each link to provide bidirectional
     connectivity.
 
     Attributes:
         source (str): Name of the source node.
         target (str): Name of the target node.
-        capacity (float): Link capacity (default 1.0).
+        capacity (float): Finite nonnegative link capacity (default 1.0),
+            promoted to binary64 at construction.
         cost (float): Link cost (default 1.0).
         disabled (bool): Whether the link is disabled.
-        risk_groups (Set[str]): Set of risk group names this link belongs to.
-        attrs (Dict[str, Any]): Additional metadata (e.g., distance).
+        risk_groups (AbstractSet[str]): Names of the risk groups this link belongs
+            to, stored as a frozenset.
+        attrs (Dict[str, Any]): Finite JSON metadata (e.g., distance), checked
+            and stored read-only at construction.
         id (str): Unique identifier. ``Network.add_link`` assigns the
             deterministic form "{source}|{target}|<seq>", where <seq> is a
-            per-(source, target) insertion sequence number; links never added
-            to a Network keep a provisional uuid-suffixed id.
+            per-(source, target) insertion sequence number, once; links never
+            added to a Network keep a provisional uuid-suffixed id.
     """
 
     source: str
@@ -57,57 +100,46 @@ class Link:
     capacity: float = 1.0
     cost: float = 1.0
     disabled: bool = False
-    risk_groups: Set[str] = field(default_factory=set)
+    risk_groups: AbstractSet[str] = frozenset()
     attrs: Dict[str, Any] = field(default_factory=dict)
     id: str = field(init=False)
 
     def __post_init__(self) -> None:
-        """Assign a provisional unique ID.
+        """Validate the fields and assign a provisional unique ID.
 
         Network.add_link replaces it with the deterministic
         "source|target|<seq>" form; the uuid suffix only guarantees
         uniqueness for links never added to a Network.
         """
-        self.id = f"{self.source}|{self.target}|{new_base64_uuid()}"
+        own_scalars(self, "link", ("source", "target"))
+        label = f"link {self.source}->{self.target}"
+        own_scalars(self, label, ("cost", "disabled"))
+        object.__setattr__(
+            self, "capacity", physical(self.capacity, f"{label}.capacity")
+        )
+        object.__setattr__(self, "risk_groups", _names(self.risk_groups, label))
+        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
+        suffix = urlsafe_b64encode(uuid4().bytes)[:-2].decode("ascii")
+        object.__setattr__(self, "id", f"{self.source}|{self.target}|{suffix}")
 
 
-@dataclass
-class RiskGroup:
-    """Shared-risk or failure domain, optionally with nested children.
-
-    Risk groups model correlated failures: when a risk group fails, all entities
-    (nodes, links) in that group fail together. Hierarchical children enable
-    cascading failures (parent failure implies all descendants fail).
-
-    Risk groups can be created three ways:
-    1. Direct definition: Explicitly named in YAML risk_groups section
-    2. Membership rules: Auto-assign entities based on attribute matching
-    3. Generate blocks: Auto-create groups from unique attribute values
-
-    Attributes:
-        name (str): Unique name of this risk group.
-        children (List[RiskGroup]): Subdomains in a nested structure.
-        disabled (bool): Whether this group was declared disabled on load.
-        attrs (Dict[str, Any]): Additional metadata for the risk group.
-        _membership_raw (Optional[Dict[str, Any]]): Raw membership rule for
-            deferred resolution. Internal use only.
-    """
-
-    name: str
-    children: List[RiskGroup] = field(default_factory=list)
-    disabled: bool = False
-    attrs: Dict[str, Any] = field(default_factory=dict)
-    _membership_raw: Optional[Dict[str, Any]] = field(default=None, repr=False)
+def _names(values: Any, label: str) -> frozenset[str]:
+    if isinstance(values, str):
+        raise ValueError(f"{label}.risk_groups: expected a collection of names")
+    return frozenset(scalar(name, f"{label}.risk_groups") for name in values)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Network:
     """Scenario-level topology: nodes, links, and risk groups.
 
     Holds persistent state only (nodes and links disabled in the scenario
-    configuration). For temporary exclusion of nodes or links during analysis
-    (e.g., failure simulation), pass node_mask and edge_mask to NetGraph-Core
-    algorithms.
+    configuration). For temporary exclusions, pass a graph-owned Eligibility
+    through the native operation's options.
+
+    The dicts stay editable; their values are immutable records, so an edit
+    replaces a record. ``prepare`` keeps a read-only view of these dicts, so
+    later edits do not reach a prepared scenario.
 
     Attributes:
         nodes (Dict[str, Node]): Mapping from node name -> Node object.
@@ -120,10 +152,22 @@ class Network:
     links: Dict[str, Link] = field(default_factory=dict)
     risk_groups: Dict[str, RiskGroup] = field(default_factory=dict)
     attrs: Dict[str, Any] = field(default_factory=dict)
-    _selection_cache: Dict[str, Dict[str, List[Node]]] = field(
-        default_factory=dict, init=False, repr=False
-    )
     _link_seq: Dict[tuple, int] = field(default_factory=dict, init=False, repr=False)
+
+    def snapshot(self) -> Network:
+        """Return a read-only view sharing this network's immutable records.
+
+        Each dict is copied by reference, under plain string keys, into a
+        read-only dict of its own; ``attrs`` is checked as JSON and frozen.
+        """
+        view = Network(
+            owned_dict(self.nodes, "network.nodes"),
+            owned_dict(self.links, "network.links"),
+            owned_dict(self.risk_groups, "network.risk_groups"),
+            frozen_attrs(self.attrs, "network.attrs"),
+        )
+        object.__setattr__(view, "_link_seq", frozen_dict(self._link_seq))
+        return view
 
     def add_node(self, node: Node) -> None:
         """Add a node to the network (keyed by node.name).
@@ -134,15 +178,16 @@ class Network:
         Raises:
             ValueError: If a node with the same name already exists.
         """
+        if not isinstance(node, Node):
+            raise TypeError("add_node: expected Node")
         if node.name in self.nodes:
             raise ValueError(f"Node '{node.name}' already exists in the network.")
         self.nodes[node.name] = node
-        self._selection_cache.clear()
 
     def add_link(self, link: Link) -> None:
         """Add a link to the network, assigning its deterministic ID.
 
-        The link's ID is (re)assigned here as "source|target|<seq>", where
+        The link's ID is assigned here, once, as "source|target|<seq>", where
         <seq> is a per-(source, target) insertion sequence number, so ids and
         their sort order are stable across identical scenario builds.
 
@@ -151,11 +196,14 @@ class Network:
 
         Raises:
             ValueError: If the link's source or target node does not exist.
-            ValueError: If this Link object was already added to this network.
+            ValueError: If this Link object was already added to a network;
+                add ``dataclasses.replace(link)`` to place a copy.
             ValueError: If the generated "source|target|<seq>" id collides with
                 an existing one, which distinct endpoint pairs can do when node
                 names contain '|' (e.g. 'a|b'->'c' vs 'a'->'b|c').
         """
+        if not isinstance(link, Link):
+            raise TypeError("add_link: expected Link")
         if link.source not in self.nodes:
             raise ValueError(f"Source node '{link.source}' not found in network.")
         if link.target not in self.nodes:
@@ -165,13 +213,13 @@ class Network:
         # construction makes parallel links sort in a rebuild-dependent order,
         # which breaks seeded reproducibility of failure sampling and makes
         # link ids unstable across identical scenario builds.
-        if self.links.get(link.id) is link:
+        if "_placed" in vars(link):
             raise ValueError(
-                f"Link '{link.id}' has already been added to this network."
+                f"Link '{link.id}' has already been added to a network; "
+                "add dataclasses.replace(link) to place a copy."
             )
         pair = (link.source, link.target)
         seq = self._link_seq.get(pair, 0)
-        self._link_seq[pair] = seq + 1
         new_id = f"{link.source}|{link.target}|{seq}"
         if new_id in self.links:
             # Distinct endpoint pairs can render to the same string when node
@@ -181,8 +229,37 @@ class Network:
                 f"Link id '{new_id}' already exists; node names containing "
                 "'|' can make distinct endpoint pairs ambiguous."
             )
-        link.id = new_id
-        self.links[link.id] = link
+        self.links[new_id] = link
+        self._link_seq[pair] = seq + 1
+        # The id is completed once, when the link joins its network.
+        object.__setattr__(link, "id", new_id)
+        object.__setattr__(link, "_placed", True)
+
+    def replace_node(self, name: str, **changes: Any) -> Node:
+        """Replace a node by a copy with the given field changes."""
+        if name not in self.nodes:
+            raise ValueError(f"Node '{name}' does not exist.")
+        node = self.nodes[name] = replace(self.nodes[name], **changes)
+        return node
+
+    def replace_link(self, link_id: str, **changes: Any) -> Link:
+        """Replace a link by a copy with the given field changes; its id stays.
+
+        The endpoints are the link's identity: to move a link, add a new one.
+        """
+        if link_id not in self.links:
+            raise ValueError(f"Link '{link_id}' does not exist.")
+        endpoints = sorted({"source", "target"} & changes.keys())
+        if endpoints:
+            raise ValueError(
+                f"Link '{link_id}': {' and '.join(endpoints)} cannot change; "
+                "add a new link instead."
+            )
+        link = replace(self.links[link_id], **changes)
+        object.__setattr__(link, "id", link_id)
+        object.__setattr__(link, "_placed", True)
+        self.links[link_id] = link
+        return link
 
     def select_node_groups_by_path(self, path: str) -> Dict[str, List[Node]]:
         r"""Select and group nodes by regex pattern on node name.
@@ -198,16 +275,8 @@ class Network:
             path: Regex pattern for node name.
 
         Returns:
-            A fresh mapping from group label to a fresh list of nodes; the Node
-            objects themselves are shared, so mutating the returned mapping or
-            lists does not affect the internal selection cache.
+            A fresh mapping from group label to a fresh list of nodes.
         """
-        # Cache hits return a shallow copy so callers cannot mutate the cache
-        # (groups map and lists are fresh; Node objects are shared).
-        cached = self._selection_cache.get(path)
-        if cached is not None:
-            return {label: list(nodes) for label, nodes in cached.items()}
-
         pattern = re.compile(path)
         groups_map: Dict[str, List[Node]] = {}
 
@@ -221,8 +290,7 @@ class Network:
                     label = path
                 groups_map.setdefault(label, []).append(node)
 
-        self._selection_cache[path] = groups_map
-        return {label: list(nodes) for label, nodes in groups_map.items()}
+        return groups_map
 
     def disable_node(self, node_name: str) -> None:
         """Mark a node as disabled.
@@ -233,9 +301,7 @@ class Network:
         Raises:
             ValueError: If the specified node does not exist.
         """
-        if node_name not in self.nodes:
-            raise ValueError(f"Node '{node_name}' does not exist.")
-        self.nodes[node_name].disabled = True
+        self.replace_node(node_name, disabled=True)
 
     def enable_node(self, node_name: str) -> None:
         """Mark a node as enabled.
@@ -246,9 +312,7 @@ class Network:
         Raises:
             ValueError: If the specified node does not exist.
         """
-        if node_name not in self.nodes:
-            raise ValueError(f"Node '{node_name}' does not exist.")
-        self.nodes[node_name].disabled = False
+        self.replace_node(node_name, disabled=False)
 
     def disable_link(self, link_id: str) -> None:
         """Mark a link as disabled.
@@ -259,9 +323,7 @@ class Network:
         Raises:
             ValueError: If the specified link does not exist.
         """
-        if link_id not in self.links:
-            raise ValueError(f"Link '{link_id}' does not exist.")
-        self.links[link_id].disabled = True
+        self.replace_link(link_id, disabled=True)
 
     def enable_link(self, link_id: str) -> None:
         """Mark a link as enabled.
@@ -272,23 +334,21 @@ class Network:
         Raises:
             ValueError: If the specified link does not exist.
         """
-        if link_id not in self.links:
-            raise ValueError(f"Link '{link_id}' does not exist.")
-        self.links[link_id].disabled = False
+        self.replace_link(link_id, disabled=False)
 
     def enable_all(self) -> None:
         """Mark all nodes and links as enabled."""
-        for node in self.nodes.values():
-            node.disabled = False
-        for link in self.links.values():
-            link.disabled = False
+        for name in self.nodes:
+            self.replace_node(name, disabled=False)
+        for link_id in self.links:
+            self.replace_link(link_id, disabled=False)
 
     def disable_all(self) -> None:
         """Mark all nodes and links as disabled."""
-        for node in self.nodes.values():
-            node.disabled = True
-        for link in self.links.values():
-            link.disabled = True
+        for name in self.nodes:
+            self.replace_node(name, disabled=True)
+        for link_id in self.links:
+            self.replace_link(link_id, disabled=True)
 
     def get_links_between(self, source: str, target: str) -> List[str]:
         """Retrieve the IDs of all direct links from source to target.
@@ -362,26 +422,14 @@ class Network:
             recursive (bool): If True, also disable members of child groups,
                 transitively.
         """
-        if name not in self.risk_groups:
+        index = MembershipIndex.build(self)
+        if name not in index.groups:
             return
-
-        to_disable: Set[str] = set()
-        queue = [self.risk_groups[name]]
-        while queue:
-            grp = queue.pop()
-            if grp.name in to_disable:
-                continue
-            to_disable.add(grp.name)
-            if recursive:
-                queue.extend(grp.children)
-
-        for node_name, node_obj in self.nodes.items():
-            if node_obj.risk_groups & to_disable:
-                self.disable_node(node_name)
-
-        for link_id, link_obj in self.links.items():
-            if link_obj.risk_groups & to_disable:
-                self.disable_link(link_id)
+        members = index.members(name, recursive)
+        for node_name in sorted(members.nodes):
+            self.disable_node(node_name)
+        for link_id in sorted(members.links):
+            self.disable_link(link_id)
 
     def enable_risk_group(self, name: str, recursive: bool = True) -> None:
         """Enable every node/link that has 'name' in its risk_groups.
@@ -395,23 +443,11 @@ class Network:
             recursive (bool): If True, also enable members of child groups,
                 transitively.
         """
-        if name not in self.risk_groups:
+        index = MembershipIndex.build(self)
+        if name not in index.groups:
             return
-
-        to_enable: Set[str] = set()
-        queue = [self.risk_groups[name]]
-        while queue:
-            grp = queue.pop()
-            if grp.name in to_enable:
-                continue
-            to_enable.add(grp.name)
-            if recursive:
-                queue.extend(grp.children)
-
-        for node_name, node_obj in self.nodes.items():
-            if node_obj.risk_groups & to_enable:
-                self.enable_node(node_name)
-
-        for link_id, link_obj in self.links.items():
-            if link_obj.risk_groups & to_enable:
-                self.enable_link(link_id)
+        members = index.members(name, recursive)
+        for node_name in sorted(members.nodes):
+            self.enable_node(node_name)
+        for link_id in sorted(members.links):
+            self.enable_link(link_id)

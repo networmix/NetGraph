@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **BREAKING**: analyses run as `Scenario` → `prepare` → `run` on native NetGraph-Core results. `prepare` chooses one bandwidth unit and builds the graph once, without changing its input; `run(prepare(scenario))` returns a `RunResult`. Library questions are `capacity`, `place`, `paths`, `edge_sensitivity` and `maximum_supported_demand` with typed queries (`CapacityQuery`, `PlacementQuery`, `PathQuery`, `SensitivityQuery`, `MSDQuery`) and `FailureRequest` for failure cases.
+- **BREAKING**: domain records (nodes, links, risk groups, components, selectors, failure and demand declarations, built-in workflow steps) are immutable; edit through `Network` methods such as `replace_node` and `replace_link`, or `dataclasses.replace`. Constructors check values once: `attrs` and condition operands must be finite JSON and are stored read-only, physical amounts (including NumPy numbers) become floats, and other non-built-in scalars are refused.
+- **BREAKING**: results carry exact integer units and their quantum `q`, chosen from the top-level `units: {resolution, precision}` (`UnitsSettings`) and described by a `units_report`; each failure case holds its rows in `states.converged`, and each row keeps the native result.
+- **BREAKING**: each analysis records its typed query as `query`, and each step result records it as its `question`.
+- **BREAKING**: custom workflow steps implement `run(StepContext) -> StepOutput`, read earlier results (read-only) through `context.prior_results`, state what preparation must bind with `needs()`, and register custom result types with `register_result_exporter`.
+- **BREAKING**: YAML demands and MaxFlow steps name a `preset` or a `model` instead of `flow_policy` and the MaxFlow flags `shortest_path`, `require_capacity` and `flow_placement`, and a MaxFlow step with neither still asks maximum flow (`TE_MAXFLOW_UNLIM`); explicit paths are named `routes`, `supports` and `weights` instead of demand `static_paths`. Step keys: `parallelism` is `workers`, `store_failure_patterns` is `failure_trace`, `include_flow_details` is `outputs.cost_distribution`, `include_min_cut` is `outputs.min_cut`, `include_used_edges` is replaced by `outputs.edge_flows`, MSD `resolution` is `alpha_tolerance`, and `alpha_from_field` is gone. Old spellings, non-diagonal overlapping endpoint sets and nonpositive costs are refused.
+- **BREAKING**: presets are native models. `TE_WCMP_UNLIM` is renamed `TE_MAXFLOW_UNLIM` (minimum-cost maximum flow, no residual tier loop); `SHORTEST_PATHS_WCMP` splits by link capacity on shortest paths; `SHORTEST_PATHS_MAXFLOW` is new; `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` over combined sources start at one private ingress head, reported as the row's `pool`. Equal splits place exact integer shares, so answers can differ from 0.24.0 by whole units.
+- **BREAKING**: MSD returns the largest tested feasible alpha (`alpha_feasible`), its probe history and a `search_status` instead of raising "No feasible alpha found" (`none_feasible`); a probe whose traffic rounds to zero units is `below_resolution`, never feasible.
+- **BREAKING**: JSON is written by `write_json` (and the CLI) as compact exact rows; `outputs.details` adds native per-source, per-tunnel, plan and call fields, and cost reports, cuts and edge arrays are separate opt-in outputs. `ngraph/schemas/results.json` is generated from the result declarations.
+- Failure random rules draw one Bernoulli trial per matched entity on every supported Python, so random-rule draws on Python 3.12 and later differ from 0.24.0; choice-rule seeds are unchanged. Results record the runtime, seed and draw order.
+- Nested risk-group declarations that reuse a name must be identical; conflicting ones are refused with both paths.
+- `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
+
+### Removed
+
+- **BREAKING**: `analyze`, `AnalysisContext` and `FailureManager`; use `prepare` with the library questions above and `FailureRequest`.
+- **BREAKING**: `Scenario.run` and `Scenario.results`; use `run(prepare(scenario))`.
+- **BREAKING**: `TrafficDemand` and `build_demand_set`; use `DemandSpec` and `DemandSet`.
+- **BREAKING**: `MaxFlowResult`, `FlowEntry`, `FlowIterationResult`, `FlowSummary`, `CapacityEnvelope` and the result store `Results`; analyses return typed records holding native results.
+- **BREAKING**: `FlowPlacement`, `EdgeSelect`, `Mode`, `EdgeRef` and `Path`; use presets or native models, `DirectedLink` and `PathQuery`.
+- **BREAKING**: `from_networkx`, `to_networkx`, `NodeMap` and `EdgeMap`; `BuildGraph` exports node-link JSON.
+- `FailurePolicySet`, `build_failure_policy` and `build_failure_policy_set`; use the `Scenario.failure_policies` mapping of `FailurePolicy` values.
+- `validate_risk_group_hierarchy` and `validate_risk_group_references`; `prepare` validates risk groups.
+
+### Fixed
+
+- Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24.0 picked the last mode, or fell back to name order); other draws are unchanged.
+
 ## [0.24.0] - 2026-10-02
 
 ### Fixed

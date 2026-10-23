@@ -2,12 +2,12 @@
 
 import pytest
 
-from ngraph.model.failure.validation import validate_risk_group_references
-from ngraph.model.network import Link, Network, Node, RiskGroup
+from ngraph.model.network import Link, Network, Node
+from ngraph.model.risk import MembershipIndex, RiskGroup
 
 
 class TestValidateRiskGroupReferences:
-    """Tests for validate_risk_group_references() function."""
+    """Tests for shared membership reference validation."""
 
     def test_valid_references(self):
         """No error when all references are valid."""
@@ -21,7 +21,7 @@ class TestValidateRiskGroupReferences:
         net.risk_groups["RG2"] = RiskGroup("RG2")
 
         # Should not raise
-        validate_risk_group_references(net)
+        MembershipIndex.build(net)
 
     def test_undefined_node_reference(self):
         """Error when node references undefined risk group."""
@@ -29,7 +29,7 @@ class TestValidateRiskGroupReferences:
         net.add_node(Node("A", risk_groups={"Undefined_RG"}))
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         assert "undefined risk group reference" in str(exc_info.value).lower()
         assert "Node 'A'" in str(exc_info.value)
@@ -44,7 +44,7 @@ class TestValidateRiskGroupReferences:
         net.add_link(link)
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         assert "undefined risk group reference" in str(exc_info.value).lower()
         assert "Link 'A->B'" in str(exc_info.value)
@@ -59,7 +59,7 @@ class TestValidateRiskGroupReferences:
         net.add_link(link)
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         error_msg = str(exc_info.value)
         assert "3 undefined risk group reference" in error_msg.lower()
@@ -75,7 +75,7 @@ class TestValidateRiskGroupReferences:
         net.risk_groups["Valid_RG"] = RiskGroup("Valid_RG")
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         error_msg = str(exc_info.value)
         assert "Invalid_RG" in error_msg
@@ -84,7 +84,7 @@ class TestValidateRiskGroupReferences:
     def test_empty_network(self):
         """No error for empty network."""
         net = Network()
-        validate_risk_group_references(net)  # Should not raise
+        MembershipIndex.build(net)  # Should not raise
 
     def test_no_risk_group_references(self):
         """No error when entities don't reference any risk groups."""
@@ -94,7 +94,7 @@ class TestValidateRiskGroupReferences:
         link = Link("A", "B")
         net.add_link(link)
 
-        validate_risk_group_references(net)  # Should not raise
+        MembershipIndex.build(net)  # Should not raise
 
     def test_error_message_has_helpful_hint(self):
         """Error message includes hint about how to fix."""
@@ -102,7 +102,7 @@ class TestValidateRiskGroupReferences:
         net.add_node(Node("A", risk_groups={"Typo_RG"}))
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         error_msg = str(exc_info.value)
         assert "risk_groups" in error_msg.lower()
@@ -116,7 +116,7 @@ class TestValidateRiskGroupReferences:
             net.add_node(Node(f"Node_{i}", risk_groups={f"Bad_{i}"}))
 
         with pytest.raises(ValueError) as exc_info:
-            validate_risk_group_references(net)
+            MembershipIndex.build(net)
 
         error_msg = str(exc_info.value)
         assert "15 undefined" in error_msg.lower()

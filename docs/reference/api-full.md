@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 54
+Modules auto-discovered: 50
 
 ---
 
@@ -82,7 +82,6 @@ included) and 'active' (enabled only).
 
 - `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None, strict_validation: 'bool' = True) -> 'NetworkExplorer'` - Build the hierarchy tree and compute 'all' and 'active' statistics.
 - `get_bom(self, include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return aggregated hardware BOM for the whole network.
-- `get_bom_by_path(self, path: 'str', include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return the hardware BOM for a specific hierarchy path.
 - `get_bom_map(self, include_disabled: 'bool' = True, include_root: 'bool' = True, root_label: 'str' = '') -> 'Dict[str, Dict[str, float]]'` - Return a mapping from hierarchy path to BOM for each subtree.
 - `get_link_issues(self) -> 'List[LinkCapacityIssue]'` - Return link capacity violations recorded in non-strict mode.
 - `get_node_utilization(self) -> 'List[NodeUtilization]'` - Return hardware utilization per node based on active topology.
@@ -181,6 +180,45 @@ Attributes:
 
 ---
 
+## ngraph.export
+
+One exact-type result exporter registry and JSON output boundary.
+
+A plain record is written as its declared class constants and fields, in
+declaration order, by one walk over an explicit set of record types.
+Native results, rows, failure cases, paths, sensitivity, the analysis
+envelopes and the recorded questions have explicit encoders.
+
+### is_question(value: 'object') -> 'bool'
+
+Whether a step may record this value as its question.
+
+### owned_step_result(value: 'object') -> 'object'
+
+Publish a step result without running its encoder.
+
+NetGraph's records are immutable and finite JSON is frozen. A registered
+result type is published as it is, with any native values it holds; its
+own type decides whether a later step can change it.
+
+### project(value: 'object') -> 'JSONValue'
+
+Write a plain record, its exact field values and finite JSON data.
+
+### question(value, prepared: 'PreparedScenario')
+
+Write a recorded question.
+
+### register_result_exporter(result_type: 'type[ExportT]', encoder: 'Callable[[ExportT, ExportContext], JSONValue]') -> 'None'
+
+Register one explicit encoder for exactly this result type.
+
+### write_json(result: 'RunResult | AnalysisResult', file: 'IO[str]') -> 'None'
+
+Project once and encode before writing, so encoder errors write nothing.
+
+---
+
 ## ngraph.logging
 
 Logging configuration for NetGraph.
@@ -208,10 +246,6 @@ Args:
 Returns:
     Logger instance inheriting from the root ngraph logger.
 
-### reset_logging() -> None
-
-Reset logging configuration (mainly for testing).
-
 ### set_global_log_level(level: int) -> None
 
 Set the log level for all NetGraph loggers.
@@ -227,7 +261,7 @@ Args:
 
 Set up the root NetGraph logger with a single handler.
 
-Subsequent calls are no-ops until ``reset_logging()`` is called.
+Subsequent calls leave the existing handlers in place.
 
 Args:
     level: Logging level (default: INFO).
@@ -236,45 +270,779 @@ Args:
 
 ---
 
+## ngraph.results
+
+Owned analysis envelopes, exact reports and normalized questions.
+
+Computational results remain native values with their native lifetime and fields.
+
+### AnalysisMetadata
+
+Immutable AnalysisMetadata record.
+
+**Attributes:**
+
+- `workers` (int)
+- `sampling` (SamplingMetadata | None)
+
+### BuildGraphResult
+
+Immutable BuildGraphResult record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['build_graph']]) = build_graph
+- `add_reverse` (bool)
+- `node_count` (int)
+- `link_count` (int)
+- `graph` (Mapping[str, JSONValue])
+
+### CapacityAnalysis
+
+Immutable CapacityAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['capacity']]) = capacity
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `outputs` (OutputSelection)
+- `question` (Literal['lossless_bound', 'fixed_offer_delivery', 'first_hop_experiment'])
+- `offer_source` (Literal['unlimited', 'explicit', 'design', 'first_hop'])
+- `cases` (tuple[CaseResult[CapacityRow | SelfPair], ...])
+- `query` (CapacityQuery)
+
+### CapacityRow
+
+Immutable CapacityRow record.
+
+**Attributes:**
+
+- `id` (str)
+- `endpoints` (Endpoints)
+- `result` (ngc.PlacementResult)
+- `pool` (PoolMetadata | None)
+- `cost_distribution` (CostReport | None)
+- `unavailable_outputs` (Mapping[Literal['cost_distribution'], CostUnavailableReason])
+
+### CaseResult
+
+Immutable CaseResult record.
+
+**Attributes:**
+
+- `case` (FailureCase)
+- `states` (Mapping[Literal['converged'], CaseState[RowT]])
+
+### CaseState
+
+Immutable CaseState record.
+
+**Attributes:**
+
+- `rows` (tuple[RowT, ...])
+- `totals` (PlacementTotals | None)
+
+### CostPowerResult
+
+Immutable CostPowerResult record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['cost_power']]) = cost_power
+- `include_disabled` (bool)
+- `aggregation_level` (int)
+- `levels` (Mapping[int, tuple[HardwareRow, ...]])
+
+### DeliveredByPathCost
+
+Immutable DeliveredByPathCost record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['delivered_by_path_cost']]) = delivered_by_path_cost
+- `cost_domain` (Literal['physical_network', 'analysis_graph'])
+- `bins` (tuple[PathCostBin, ...])
+
+### DiscardedShare
+
+Immutable DiscardedShare record.
+
+**Attributes:**
+
+- `label` (str)
+- `units` (int)
+- `reason` (Literal['self_pair', 'filtered', 'empty_selection'])
+
+### Endpoints
+
+Immutable Endpoints record.
+
+**Attributes:**
+
+- `sources` (tuple[str, ...])
+- `destinations` (tuple[str, ...])
+
+### ExactAlpha
+
+Immutable ExactAlpha record.
+
+**Attributes:**
+
+- `value` (Annotated[float, {'exclusiveMinimum': 0}])
+- `numerator` (int)
+- `denominator` (Annotated[int, {'minimum': 1}])
+
+### ExpansionAccounting
+
+Immutable ExpansionAccounting record.
+
+**Attributes:**
+
+- `base_id` (str)
+- `declared_units` (int)
+- `resolved_units` (int)
+- `discarded_units` (int)
+- `discards` (tuple[DiscardedShare, ...])
+
+### ExpansionLeaf
+
+Immutable ExpansionLeaf record.
+
+**Attributes:**
+
+- `id` (str)
+- `order` (int)
+- `endpoints` (Endpoints | None)
+- `discard_reason` (Literal['self_pair', 'filtered', 'empty_selection'] | None)
+
+### ExpansionParent
+
+One declared demand: its declaration and its expansion tree.
+
+``config`` is the native configuration of its first resolved leaf (None
+when every leaf of a named pinned declaration was discarded).
+
+**Attributes:**
+
+- `source` (Selector)
+- `target` (Selector)
+- `priority` (int)
+- `policy` (DemandPolicy)
+- `config` (ngc.FlowPolicyConfig | None)
+- `base_id` (str)
+- `declaration_ordinal` (int)
+- `expand_leaf_index` (int | None)
+- `physical_volume` (float)
+- `mode` (Literal['combine', 'pairwise'])
+- `group_mode` (Literal['flatten', 'per_group', 'group_pairwise'])
+- `root` (ExpansionSplit | ExpansionLeaf)
+
+### ExpansionSplit
+
+Immutable ExpansionSplit record.
+
+**Attributes:**
+
+- `label` (str)
+- `children` (tuple[ExpansionSplit | ExpansionLeaf, ...])
+
+### ExportContext
+
+Immutable ExportContext record.
+
+**Attributes:**
+
+- `prepared` (PreparedScenario)
+- `units_report` (UnitsReport)
+
+### FailureCase
+
+Immutable FailureCase record.
+
+**Attributes:**
+
+- `id` (str)
+- `kind` (Literal['baseline', 'failure'])
+- `pattern` (FailurePattern)
+- `occurrences` (int)
+- `eligibility` (ngc.Eligibility)
+- `trace` (FailureTrace | None)
+
+### FailurePattern
+
+Canonical failure mask used as a scheduling and sampling key.
+
+**Attributes:**
+
+- `excluded_nodes` (tuple[str, ...])
+- `excluded_links` (tuple[str, ...])
+
+### FailureSelection
+
+Immutable FailureSelection record.
+
+**Attributes:**
+
+- `rule_index` (int)
+- `scope` (Literal['node', 'link', 'risk_group'])
+- `selected` (tuple[str, ...])
+
+### FailureTrace
+
+Immutable FailureTrace record.
+
+**Attributes:**
+
+- `draw_index` (int)
+- `mode_index` (int | None)
+- `mode_attrs` (Mapping[str, JSONValue])
+- `selections` (tuple[FailureSelection, ...])
+- `expanded_nodes` (tuple[str, ...])
+- `expanded_links` (tuple[str, ...])
+
+### HardwareRow
+
+Immutable HardwareRow record.
+
+**Attributes:**
+
+- `path` (str)
+- `platform_capex` (float)
+- `platform_power_watts` (float)
+- `optics_capex` (float)
+- `optics_power_watts` (float)
+- `capex_total` (float)
+- `power_total_watts` (float)
+
+### InputConstraint
+
+Immutable InputConstraint record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['input']]) = input
+- `label` (str)
+- `q_upper_bound` (Fraction)
+- `met` (bool)
+
+### InputQuantization
+
+Immutable InputQuantization record.
+
+**Attributes:**
+
+- `label` (str)
+- `kind` (Literal['capacity', 'demand', 'offer', 'design', 'min_unreserved'])
+- `binary64_value` (float)
+- `binary64_hex` (str)
+- `units` (int)
+- `error` (Fraction)
+- `relative_error` (Fraction | None)
+
+### MSDAnalysis
+
+Immutable MSDAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['msd']]) = msd
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `outputs` (OutputSelection)
+- `alpha_feasible` (ExactAlpha | None)
+- `best_probe_index` (int | None)
+- `monotone_proven` (bool)
+- `proof` (MSDProof)
+- `upper_certificate` (UpperCertificate | None)
+- `search_status` (MSDStatus)
+- `stop_reason` (MSDStopReason)
+- `history` (tuple[MSDProbe, ...])
+- `query` (MSDQuery)
+- `best_rows` (tuple[PlacementRow, ...] | None)
+- `best_accounting` (tuple[ExpansionAccounting, ...] | None)
+- `probe_rows` (Mapping[int, tuple[PlacementRow, ...]] | None)
+
+### MSDProbe
+
+Immutable MSDProbe record.
+
+**Attributes:**
+
+- `index` (int)
+- `alpha` (ExactAlpha)
+- `outcome` (Literal['feasible', 'infeasible', 'below_resolution', 'range'])
+- `totals` (PlacementTotals | None)
+- `range_refusal` (RangeRefusal | None)
+
+### MarginalCostBin
+
+Immutable MarginalCostBin record.
+
+**Attributes:**
+
+- `marginal_cost` (int)
+- `units` (int)
+
+### MarginalCurve
+
+Immutable MarginalCurve record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['marginal_curve']]) = marginal_curve
+- `cost_domain` (Literal['physical_network', 'analysis_graph'])
+- `bins` (tuple[MarginalCostBin, ...])
+
+### NetworkStatsResult
+
+Immutable NetworkStatsResult record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['network_stats']]) = network_stats
+- `node_count` (int)
+- `link_count` (int)
+- `total_capacity` (float)
+- `mean_capacity` (float)
+- `median_capacity` (float)
+- `min_capacity` (float)
+- `max_capacity` (float)
+- `mean_cost` (float)
+- `median_cost` (float)
+- `min_cost` (float)
+- `max_cost` (float)
+- `mean_degree` (float)
+- `median_degree` (float)
+- `min_degree` (float)
+- `max_degree` (float)
+
+### OutputSelection
+
+Immutable OutputSelection record.
+
+**Attributes:**
+
+- `native` (ngc.OutputOptions)
+- `cost_distribution` (bool)
+- `details` (bool) = False
+
+### PathAnalysis
+
+Immutable PathAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['paths']]) = paths
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `algorithm` (Literal['spf', 'ksp'])
+- `mode` (Literal['combine', 'pairwise'])
+- `costs_only` (bool)
+- `rows` (tuple[PathRow, ...])
+- `query` (PathQuery)
+
+### PathCostBin
+
+Immutable PathCostBin record.
+
+**Attributes:**
+
+- `cost` (int)
+- `physical_path_cost` (int)
+- `delivered_units` (int)
+
+### PathRow
+
+Immutable PathRow record.
+
+**Attributes:**
+
+- `id` (str)
+- `endpoints` (Endpoints)
+- `kind` (Literal['paths', 'self'])
+- `cost` (int | None)
+- `paths` (tuple[ngc.Path, ...] | None)
+
+### PlacementAnalysis
+
+Immutable PlacementAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['placement']]) = placement
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `outputs` (OutputSelection)
+- `alpha` (ExactAlpha)
+- `cases` (tuple[CaseResult[PlacementRow], ...])
+- `accounting` (tuple[ExpansionAccounting, ...])
+- `query` (PlacementQuery)
+
+### PlacementRow
+
+Immutable PlacementRow record.
+
+**Attributes:**
+
+- `id` (str)
+- `base_id` (str)
+- `endpoints` (Endpoints)
+- `reference_request_units` (int)
+- `result` (ngc.PlacementResult)
+- `pool` (PoolMetadata | None)
+- `cost_distribution` (CostReport | None)
+- `unavailable_outputs` (Mapping[Literal['cost_distribution'], CostUnavailableReason])
+
+### PlacementTotals
+
+Immutable PlacementTotals record.
+
+**Attributes:**
+
+- `reference_request_units` (int)
+- `delivered_units` (int)
+- `unadmitted_units` (int)
+- `source_drop_units` (int)
+- `edge_drop_units` (int)
+- `reference_shortfall_units` (int)
+- `delivery_ratio` (Fraction)
+- `feasible` (bool)
+
+### PoolHead
+
+Immutable PoolHead record.
+
+**Attributes:**
+
+- `pool_id` (str)
+- `physical_sources` (tuple[str, ...])
+
+### PoolMetadata
+
+Immutable PoolMetadata record.
+
+**Attributes:**
+
+- `head` (PoolHead)
+- `offer_limit_units` (ClassVar[Literal[0]]) = 0
+- `synthetic_ingress_cost` (ClassVar[Literal[1]]) = 1
+
+### PrecisionMiss
+
+Immutable PrecisionMiss record.
+
+**Attributes:**
+
+- `location` (ReportLocation)
+- `constraints` (tuple[InputConstraint | SplitConstraint | UnverifiedConstraint, ...])
+- `inexact_inputs` (int)
+- `zeroed_inputs` (int)
+- `examples` (tuple[InputQuantization, ...])
+
+### PreparationScope
+
+Immutable PreparationScope record.
+
+**Attributes:**
+
+- `workflow_steps` (tuple[str, ...])
+- `workflow_demand_sets` (tuple[str, ...])
+- `library_demand_sets` (tuple[str, ...])
+
+### RangeConstraint
+
+Immutable RangeConstraint record.
+
+**Attributes:**
+
+- `kind` (Literal['capacity_sum', 'cost_sum', 'amount'])
+- `label` (str)
+- `tested_q` (float)
+- `units_value` (int)
+- `exclusive_limit` (int)
+- `met` (bool)
+
+### RangeRefusal
+
+Immutable RangeRefusal record.
+
+**Attributes:**
+
+- `label` (str)
+- `reason` (Literal['scaled_nonfinite', 'native_units_range'])
+- `message` (str)
+- `binary64_hex` (str | None)
+
+### ReportLocation
+
+Immutable ReportLocation record.
+
+**Attributes:**
+
+- `step` (str | None)
+- `case_id` (str | None)
+- `probe_index` (int | None)
+
+### ResolvedDemand
+
+Immutable ResolvedDemand record.
+
+**Attributes:**
+
+- `id` (str)
+- `base_id` (str)
+- `endpoints` (Endpoints)
+- `priority` (int)
+- `order` (int)
+- `nominal_units` (int)
+- `config` (ngc.FlowPolicyConfig)
+- `pool` (PoolMetadata | None)
+- `yaml_label` (str | None)
+
+### ResolvedDemandSet
+
+Immutable ResolvedDemandSet record.
+
+**Attributes:**
+
+- `name` (str)
+- `demands` (tuple[ResolvedDemand, ...])
+- `accounting` (tuple[ExpansionAccounting, ...])
+- `expansion_template` (tuple[ExpansionParent, ...])
+
+### RunMetadata
+
+Immutable RunMetadata record.
+
+**Attributes:**
+
+- `schema_version` (ClassVar[Literal['1.0']]) = 1.0
+- `netgraph_version` (str)
+- `core_version` (str)
+- `core_extension_sha256` (str)
+- `python_version` (str)
+- `seed` (int | None)
+
+### RunResult
+
+One run; ``units_report`` adds every step's precision misses, by step.
+
+**Attributes:**
+
+- `metadata` (RunMetadata)
+- `units_report` (UnitsReport)
+- `steps` (tuple[StepResult, ...])
+- `prepared` (PreparedScenario)
+
+### SamplingMetadata
+
+Immutable SamplingMetadata record.
+
+**Attributes:**
+
+- `random_rule_algorithm` (ClassVar[Literal['per_entity_bernoulli']]) = per_entity_bernoulli
+- `rng` (ClassVar[Literal['random.Random']]) = random.Random
+- `python_version` (ClassVar[str]) = 3.14.5
+- `seed` (int | None)
+- `seed_source` (Literal['query', 'step', 'scenario', 'policy', 'unseeded'])
+- `draw_seed_rule` (ClassVar[Literal['base_plus_draw_index']]) = base_plus_draw_index
+- `entity_order` (ClassVar[Literal['sorted_identifier']]) = sorted_identifier
+- `rule_order` (ClassVar[Literal['declaration']]) = declaration
+- `iterations` (int)
+
+### SelfPair
+
+Immutable SelfPair record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['self']]) = self
+- `id` (str)
+- `node` (str)
+- `capacity_units` (ClassVar[Literal[0]]) = 0
+
+### SensitivityAnalysis
+
+Immutable SensitivityAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['sensitivity']]) = sensitivity
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `outputs` (OutputSelection)
+- `endpoints` (Endpoints)
+- `question` (Literal['lossless_bound', 'fixed_offer_delivery'])
+- `offer_source` (Literal['unlimited', 'explicit', 'design'])
+- `result` (ngc.SensitivityResult)
+- `query` (SensitivityQuery)
+
+### SplitConstraint
+
+Immutable SplitConstraint record.
+
+**Attributes:**
+
+- `kind` (Literal['expansion', 'source', 'router', 'tunnel'])
+- `label` (str)
+- `incoming_physical` (Fraction)
+- `basis` (Literal['declared', 'observed'])
+- `members` (Annotated[int, {'minimum': 2}])
+- `q_upper_bound` (Fraction)
+- `met` (bool)
+
+### StepContext
+
+Immutable StepContext record.
+
+**Attributes:**
+
+- `prepared` (PreparedScenario)
+- `prior_results` (Mapping[str, StepResult])
+- `step_name` (str)
+- `execution_order` (int)
+- `seed` (int | None)
+- `seed_source` (Literal['explicit-step', 'scenario-derived', 'none'])
+
+### StepOutput
+
+Immutable StepOutput record.
+
+**Attributes:**
+
+- `question` (StepQuestion)
+- `result` (object)
+
+### StepResult
+
+Immutable StepResult record.
+
+**Attributes:**
+
+- `name` (str)
+- `step_type` (str)
+- `execution_order` (int)
+- `scenario_seed` (int | None)
+- `step_seed` (int | None)
+- `seed_source` (Literal['explicit-step', 'scenario-derived', 'none'])
+- `result` (object)
+- `question` (StepQuestion)
+
+### SyntheticIngress
+
+Immutable SyntheticIngress record.
+
+**Attributes:**
+
+- `pool_id` (str)
+- `source` (str)
+
+### UnitsReport
+
+Immutable UnitsReport record.
+
+**Attributes:**
+
+- `q` (float)
+- `exponent` (int)
+- `mode` (Literal['auto', 'manual'])
+- `precision` (float)
+- `target_met` (bool)
+- `input_convention` (ClassVar[Literal['promoted_binary64_half_up']]) = promoted_binary64_half_up
+- `display_convention` (ClassVar[Literal['units_authoritative_binary64_display']]) = units_authoritative_binary64_display
+- `scope` (PreparationScope)
+- `binding_constraints` (tuple[UnitConstraint, ...])
+- `input_count` (int)
+- `inexact_inputs` (int)
+- `zeroed_inputs` (int)
+- `inexact_examples` (tuple[InputQuantization, ...])
+- `zeroed_examples` (tuple[InputQuantization, ...])
+- `max_absolute_input_error` (Fraction)
+- `max_relative_input_error` (Fraction)
+- `augmented_capacity_sum_units` (int)
+- `augmented_cost_sum` (int)
+- `nominal_split_count` (int)
+- `nominal_splits` (tuple[SplitConstraint, ...])
+- `misses` (tuple[PrecisionMiss, ...])
+
+**Methods:**
+
+- `with_misses(self, misses: 'tuple[PrecisionMiss, ...]') -> 'UnitsReport'` - This report with further precision misses appended.
+
+### UnverifiedConstraint
+
+Immutable UnverifiedConstraint record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['unverified']]) = unverified
+- `label` (str)
+- `reason` (ClassVar[Literal['opaque_program']]) = opaque_program
+
+### UpperCertificate
+
+Immutable UpperCertificate record.
+
+**Attributes:**
+
+- `proof` (Literal['fixed_program', 'single_controller'])
+- `lower` (ExactAlpha)
+- `upper` (ExactAlpha)
+- `lower_probe_index` (int)
+- `upper_probe_index` (int)
+
+### exact_alpha(value: 'float') -> 'ExactAlpha'
+
+The exact binary64 ratio of a positive physical multiplier.
+
+---
+
 ## ngraph.scenario
 
-Scenario class for defining network analysis workflows from YAML.
+Editable scenarios, read-only shared preparation and typed workflow execution.
 
 ### Scenario
 
-A complete scenario for building and executing network workflows.
+Named domain inputs, fixed at construction.
 
-Holds:
-
-- A network (nodes/links), constructed via blueprint expansion.
-- A failure policy set (one or more named failure policies).
-- A demand set containing one or more named demand collections.
-- A list of workflow steps to execute.
-- A results container for storing outputs.
-- A components_library for hardware/optics definitions.
-- A seed for reproducible random operations (optional).
-
-Typical usage example:
-
-    scenario = Scenario.from_yaml(yaml_str, default_components=default_lib)
-    scenario.run()
-    # Inspect scenario.results
+The network and the components library keep editable dicts of immutable
+records; ``prepare`` takes a read-only view of them, so later edits do not
+reach a prepared scenario. ``dataclasses.replace`` builds an edited copy.
 
 **Attributes:**
 
 - `network` (Network)
-- `workflow` (List[WorkflowStep])
-- `failure_policy_set` (FailurePolicySet) = FailurePolicySet(policies={})
-- `demand_set` (DemandSet) = DemandSet(sets={})
-- `results` (Results) = Results(_store={}, _metadata={}, _active_step=None, _scenario={})
+- `workflow` (Sequence[WorkflowStep]) = ()
+- `demand_sets` (Mapping[str, DemandSet]) = {}
+- `failure_policies` (Mapping[str, FailurePolicy]) = {}
 - `components_library` (ComponentsLibrary) = ComponentsLibrary(components={})
-- `seed` (Optional[int])
-- `_execution_counter` (int) = 0
+- `seed` (int | None)
+- `units` (UnitsSettings) = UnitsSettings(resolution='auto', precision=0.001)
+- `routes` (Mapping[str, RouteSpec]) = {}
+- `supports` (Mapping[str, SupportSpec]) = {}
+- `weights` (Mapping[str, WeightSpec]) = {}
 
 **Methods:**
 
-- `from_yaml(yaml_str: 'str', default_components: 'Optional[ComponentsLibrary]' = None) -> 'Scenario'` - Construct a Scenario from a YAML string, merging in a default
-- `run(self, step_hook: 'Optional[Callable[[WorkflowStep], ContextManager[None]]]' = None) -> 'None'` - Execute the scenario's workflow steps in order.
+- `from_yaml(yaml_str: 'str', default_components: 'ComponentsLibrary | None' = None) -> 'Scenario'` - Parse one closed scenario declaration and retain editable domain inputs.
+
+### prepare(scenario: 'Scenario', *, units: 'UnitsSettings | None' = None, demand_sets: 'Sequence[str]' = ()) -> 'PreparedScenario'
+
+Choose one graph/unit over a read-only view of the scenario.
+
+The input is not changed. The prepared scenario shares its immutable
+records and keeps read-only copies of the network and component dicts,
+so later edits of the caller's collections do not reach it.
+
+### run(prepared: 'PreparedScenario', *, step_hook: 'Callable[[WorkflowStep], AbstractContextManager[None]] | None' = None) -> 'RunResult'
+
+Execute once in declaration order; publish a run only after every step succeeds.
 
 ---
 
@@ -298,9 +1066,10 @@ Attributes:
     capacity (float): A generic capacity measure (e.g., platform capacity).
     ports (int): Number of ports if relevant for this component.
     count (int): How many identical copies of this component are present.
-    attrs (Dict[str, Any]): Arbitrary key-value attributes for extra metadata.
+    attrs (Dict[str, Any]): Finite JSON metadata, checked and stored
+        read-only at construction.
     children (Dict[str, Component]): Nested child components (e.g., line cards
-        inside a chassis), keyed by child name.
+        inside a chassis), keyed by child name; read-only.
 
 **Attributes:**
 
@@ -328,7 +1097,8 @@ Attributes:
 
 Named Component templates for capex, power, and capacity lookups.
 
-Each entry is a top-level template and may have nested children.
+Each entry is a top-level template and may have nested children. The
+``components`` dict stays editable; ``prepare`` keeps a read-only view.
 
 Example (YAML-like):
     components:
@@ -356,11 +1126,12 @@ Example (YAML-like):
 
 **Methods:**
 
-- `clone(self) -> 'ComponentsLibrary'` - Creates a deep copy of this ComponentsLibrary.
+- `clone(self) -> 'ComponentsLibrary'` - Creates an independent copy of this ComponentsLibrary.
 - `from_dict(data: 'Dict[str, Any]') -> 'ComponentsLibrary'` - Constructs a ComponentsLibrary from raw component definitions.
 - `from_yaml(yaml_str: 'str') -> 'ComponentsLibrary'` - Constructs a ComponentsLibrary from a YAML string.
 - `get(self, name: 'str') -> 'Optional[Component]'` - Retrieves a Component by its name from the library.
 - `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'` - Merges another ComponentsLibrary into this one.
+- `snapshot(self) -> 'ComponentsLibrary'` - Return a read-only view sharing this library's immutable components.
 
 ### resolve_link_end_components(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'tuple[tuple[Optional[Component], float, bool], tuple[Optional[Component], float, bool]]'
 
@@ -416,145 +1187,265 @@ Returns:
 
 ---
 
-## ngraph.model.demand.builder
+## ngraph.model.demand
 
-Builders for demand sets.
-
-Construct `DemandSet` from raw dictionaries (e.g. parsed YAML).
-
-### build_demand_set(raw: 'Dict[str, List[dict]]') -> 'DemandSet'
-
-Build a `DemandSet` from a mapping of name -> list of dicts.
-
-Args:
-    raw: Mapping where each key is a demand set name and each value is a list of
-        dictionaries with `TrafficDemand` constructor fields.
-
-Returns:
-    `DemandSet` with one entry per input set. An entry with an `expand`
-    block contributes one demand per expansion.
-
-Raises:
-    ValueError: If ``raw`` is not a mapping of name -> list[dict], a demand
-        is missing ``source``/``target`` or carries an unrecognized key,
-        ``flow_policy`` is not a preset name, or ``static_paths`` is
-        malformed.
-
-### coerce_flow_policy(value: 'Any') -> 'Optional[FlowPolicyPreset]'
-
-Return the FlowPolicyPreset a demand's `flow_policy` value names.
-
-Accepts None, a FlowPolicyPreset, or a preset name (case-insensitive).
-
-Raises:
-    ValueError: For any other value, including integers and unknown names.
-
----
-
-## ngraph.model.demand.matrix
-
-Demand set containers.
-
-`DemandSet` holds named `TrafficDemand` lists as input to demand expansion and
-placement. These are input containers, not analysis results.
+Immutable demand declarations and native preset values.
 
 ### DemandSet
 
-Named collection of TrafficDemand lists.
-
-Attributes:
-    sets: Dictionary mapping set names to TrafficDemand lists.
+DemandSet(name: 'str', demands: 'tuple[DemandSpec, ...]')
 
 **Attributes:**
 
-- `sets` (dict[str, list[TrafficDemand]]) = {}
+- `name` (str)
+- `demands` (tuple[DemandSpec, ...])
 
-**Methods:**
+### DemandSpec
 
-- `add(self, name: 'str', demands: 'list[TrafficDemand]') -> 'None'` - Add a demand list, replacing any set already stored under `name`.
-- `get_all_demands(self) -> 'list[TrafficDemand]'` - Get all traffic demands from all sets combined.
-- `get_set(self, name: 'str') -> 'list[TrafficDemand]'` - Get a specific demand set by name.
+DemandSpec(source: 'Selector', target: 'Selector', volume: 'PhysicalAmount', policy: 'DemandPolicy' = <FlowPolicyPreset.SHORTEST_PATHS_ECMP: 'SHORTEST_PATHS_ECMP'>, id: 'str | None' = None, priority: 'int' = 0, mode: "Literal['combine', 'pairwise']" = 'combine', group_mode: "Literal['flatten', 'per_group', 'group_pairwise']" = 'flatten', attrs: 'Mapping[str, JSONValue]' = <factory>, *, yaml_label: 'str | None' = None, declaration_ordinal: 'int | None' = None, expand_leaf_index: 'int | None' = None)
+
+**Attributes:**
+
+- `source` (Selector)
+- `target` (Selector)
+- `volume` (PhysicalAmount)
+- `policy` (DemandPolicy) = SHORTEST_PATHS_ECMP
+- `id` (str | None)
+- `priority` (int) = 0
+- `mode` (Literal['combine', 'pairwise']) = combine
+- `group_mode` (Literal['flatten', 'per_group', 'group_pairwise']) = flatten
+- `attrs` (Mapping[str, JSONValue]) = {}
+- `yaml_label` (str | None)
+- `declaration_ordinal` (int | None)
+- `expand_leaf_index` (int | None)
+
+### EdgeWeight
+
+EdgeWeight(edge: 'DirectedLink', value: 'int')
+
+**Attributes:**
+
+- `edge` (DirectedLink)
+- `value` (int)
+
+### FlowPolicyPreset
+
+Named questions with one immutable native configuration each.
+
+### PinnedRoutes
+
+PinnedRoutes(routes: 'tuple[str, ...]', admission: 'ngc.Admission' = <Admission.LOSSLESS: 0>, allocation: 'ngc.RouteAllocation | None' = None, weight_basis: 'ngc.WeightBasis | None' = None, edge_weights: 'str | None' = None)
+
+**Attributes:**
+
+- `routes` (tuple[str, ...])
+- `admission` (ngc.Admission) = Admission.LOSSLESS
+- `allocation` (ngc.RouteAllocation | None)
+- `weight_basis` (ngc.WeightBasis | None)
+- `edge_weights` (str | None)
+
+### RouteSpec
+
+RouteSpec(head: 'str', nodes: 'tuple[str, ...] | None' = None, edges: 'tuple[DirectedLink, ...] | None' = None, support: 'str | None' = None, weight: 'int' = 1)
+
+**Attributes:**
+
+- `head` (str)
+- `nodes` (tuple[str, ...] | None)
+- `edges` (tuple[DirectedLink, ...] | None)
+- `support` (str | None)
+- `weight` (int) = 1
+
+### SupportSpec
+
+SupportSpec(edges: 'tuple[DirectedLink, ...]')
+
+**Attributes:**
+
+- `edges` (tuple[DirectedLink, ...])
+
+### WeightSpec
+
+WeightSpec(entries: 'tuple[EdgeWeight, ...]')
+
+**Attributes:**
+
+- `entries` (tuple[EdgeWeight, ...])
 
 ---
 
-## ngraph.model.demand.spec
+## ngraph.model.failure
 
-Traffic demand specification.
+Failure declarations and one YAML construction path.
 
-Defines `TrafficDemand`, a user-facing specification used by demand expansion
-and placement. Routing behavior is selected via an optional `FlowPolicyPreset`,
-or pinned to explicit routes with `StaticPath`.
+### FailureMode
 
-### StaticPath
-
-One explicit route a demand can be pinned to (an MPLS-style LSP).
-
-Give exactly one of `nodes` or `links`:
-
-- `nodes`: the node names the route visits, source first and target last.
-
-  Each consecutive pair must be adjacent. When several parallel links
-  connect a pair, the cheapest is used (ties broken by link id); name the
-  link explicitly to choose a different one.
-
-- `links`: the link ids the route traverses, in order. Unambiguous when
-
-  parallel links exist. A link may be traversed in either direction.
-
-Attributes:
-    nodes: Node names along the route, or empty when `links` is given.
-    links: Link ids along the route, or empty when `nodes` is given.
+FailureMode(weight: 'float', rules: 'Sequence[FailureRule]' = (), attrs: 'dict[str, Any]' = <factory>)
 
 **Attributes:**
 
-- `nodes` (Tuple) = ()
-- `links` (Tuple) = ()
+- `weight` (float)
+- `rules` (Sequence[FailureRule]) = ()
+- `attrs` (dict[str, Any]) = {}
 
-### TrafficDemand
+### FailurePolicy
 
-Traffic demand between selector-matched source and target nodes.
-
-Attributes:
-    source: Source node selector (string path or selector dict).
-    target: Target node selector (string path or selector dict).
-    volume: Total demand volume.
-    priority: Priority class (lower = higher priority).
-    mode: Node pairing mode ("combine" or "pairwise").
-    group_mode: How grouped nodes produce demands
-        ("flatten", "per_group", "group_pairwise").
-    flow_policy: Routing preset; None uses ``DEFAULT_PRESET``
-        (SHORTEST_PATHS_ECMP).
-    static_paths: Explicit routes to pin this demand to. When set, the
-        demand is placed only on these routes: one flow per route, and a
-        route broken by a failure carries nothing rather than rerouting.
-        Requires selectors matching exactly one source and one target.
-    attrs: Arbitrary user metadata.
-    id: Unique identifier. Auto-generated if empty.
+FailurePolicy(attrs: 'dict[str, Any]' = <factory>, expand_groups: 'bool' = False, seed: 'int | None' = None, modes: 'Sequence[FailureMode]' = ())
 
 **Attributes:**
 
-- `source` (Union)
-- `target` (Union)
-- `volume` (float) = 0.0
-- `priority` (int) = 0
-- `mode` (str) = combine
-- `group_mode` (str) = flatten
-- `flow_policy` (Union)
-- `static_paths` (Tuple) = ()
-- `attrs` (Dict) = {}
+- `attrs` (dict[str, Any]) = {}
+- `expand_groups` (bool) = False
+- `seed` (int | None)
+- `modes` (Sequence[FailureMode]) = ()
+
+### FailureRule
+
+FailureRule(scope: 'EntityScope', conditions: 'Sequence[Condition]' = (), logic: "Literal['and', 'or']" = 'or', mode: "Literal['random', 'choice', 'all']" = 'all', probability: 'float' = 1.0, count: 'int' = 1, weight_by: 'str | None' = None, path: 'str | None' = None)
+
+**Attributes:**
+
+- `scope` (EntityScope)
+- `conditions` (Sequence[Condition]) = ()
+- `logic` (Literal['and', 'or']) = or
+- `mode` (Literal['random', 'choice', 'all']) = all
+- `probability` (float) = 1.0
+- `count` (int) = 1
+- `weight_by` (str | None)
+- `path` (str | None)
+
+### build_failure_policies(raw: 'dict[str, Any]', master_seed: 'int | None') -> 'dict[str, FailurePolicy]'
+
+Construct named policies; seeded YAML keeps the established composed hash.
+
+Policy name ``n`` uses SHA256("<master>:failure_policy:failure_policy:<n>"),
+first four bytes big-endian masked to31 bits. Step seeds use their own
+workflow_step component and never pass through this policy derivation.
+
+---
+
+## ngraph.model.network
+
+Network topology modeling with Node, Link, RiskGroup, and Network classes.
+
+These classes carry no analysis machinery and can be used on their own.
+Nodes, links and risk groups are immutable records; a Network holds them in
+editable dicts and its edit methods replace records.
+
+### DirectedLink
+
+One analysis direction of a stored physical link.
+
+**Attributes:**
+
+- `link` (str)
+- `direction` (Literal['forward', 'reverse'])
+
+### Link
+
+One directed link between two nodes.
+
+The model stores a single direction (``source`` -> ``target``). When the
+prepared native graph is built, a reverse
+edge is added automatically for each link to provide bidirectional
+connectivity.
+
+Attributes:
+    source (str): Name of the source node.
+    target (str): Name of the target node.
+    capacity (float): Finite nonnegative link capacity (default 1.0),
+        promoted to binary64 at construction.
+    cost (float): Link cost (default 1.0).
+    disabled (bool): Whether the link is disabled.
+    risk_groups (AbstractSet[str]): Names of the risk groups this link belongs
+        to, stored as a frozenset.
+    attrs (Dict[str, Any]): Finite JSON metadata (e.g., distance), checked
+        and stored read-only at construction.
+    id (str): Unique identifier. ``Network.add_link`` assigns the
+        deterministic form "{source}|{target}|<seq>", where <seq> is a
+        per-(source, target) insertion sequence number, once; links never
+        added to a Network keep a provisional uuid-suffixed id.
+
+**Attributes:**
+
+- `source` (str)
+- `target` (str)
+- `capacity` (float) = 1.0
+- `cost` (float) = 1.0
+- `disabled` (bool) = False
+- `risk_groups` (AbstractSet[str]) = frozenset()
+- `attrs` (Dict[str, Any]) = {}
 - `id` (str)
 
+### Network
+
+Scenario-level topology: nodes, links, and risk groups.
+
+Holds persistent state only (nodes and links disabled in the scenario
+configuration). For temporary exclusions, pass a graph-owned Eligibility
+through the native operation's options.
+
+The dicts stay editable; their values are immutable records, so an edit
+replaces a record. ``prepare`` keeps a read-only view of these dicts, so
+later edits do not reach a prepared scenario.
+
+Attributes:
+    nodes (Dict[str, Node]): Mapping from node name -> Node object.
+    links (Dict[str, Link]): Mapping from link ID -> Link object.
+    risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
+    attrs (Dict[str, Any]): Optional metadata about the network.
+
+**Attributes:**
+
+- `nodes` (Dict[str, Node]) = {}
+- `links` (Dict[str, Link]) = {}
+- `risk_groups` (Dict[str, RiskGroup]) = {}
+- `attrs` (Dict[str, Any]) = {}
+- `_link_seq` (Dict[tuple, int]) = {}
+
 **Methods:**
 
-- `to_dict(self) -> Dict[str, Any]` - Return the canonical serialized form.
+- `add_link(self, link: 'Link') -> 'None'` - Add a link to the network, assigning its deterministic ID.
+- `add_node(self, node: 'Node') -> 'None'` - Add a node to the network (keyed by node.name).
+- `disable_all(self) -> 'None'` - Mark all nodes and links as disabled.
+- `disable_link(self, link_id: 'str') -> 'None'` - Mark a link as disabled.
+- `disable_node(self, node_name: 'str') -> 'None'` - Mark a node as disabled.
+- `disable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Disable every node/link that has 'name' in its risk_groups.
+- `enable_all(self) -> 'None'` - Mark all nodes and links as enabled.
+- `enable_link(self, link_id: 'str') -> 'None'` - Mark a link as enabled.
+- `enable_node(self, node_name: 'str') -> 'None'` - Mark a node as enabled.
+- `enable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Enable every node/link that has 'name' in its risk_groups.
+- `find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -> 'List[Link]'` - Search for links by regex on source and/or target node names.
+- `get_links_between(self, source: 'str', target: 'str') -> 'List[str]'` - Retrieve the IDs of all direct links from source to target.
+- `replace_link(self, link_id: 'str', **changes: 'Any') -> 'Link'` - Replace a link by a copy with the given field changes; its id stays.
+- `replace_node(self, name: 'str', **changes: 'Any') -> 'Node'` - Replace a node by a copy with the given field changes.
+- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'` - Select and group nodes by regex pattern on node name.
+- `snapshot(self) -> 'Network'` - Return a read-only view sharing this network's immutable records.
+
+### Node
+
+Network node, keyed by its unique name in ``Network.nodes``.
+
+Attributes:
+    name (str): Unique identifier for the node.
+    disabled (bool): Whether the node is disabled in the scenario configuration.
+    risk_groups (AbstractSet[str]): Names of the risk groups this node belongs
+        to, stored as a frozenset.
+    attrs (Dict[str, Any]): Finite JSON metadata (e.g., coordinates, region),
+        checked and stored read-only at construction.
+
+**Attributes:**
+
+- `name` (str)
+- `disabled` (bool) = False
+- `risk_groups` (AbstractSet[str]) = frozenset()
+- `attrs` (Dict[str, Any]) = {}
 
 ---
 
-## ngraph.model.failure.generate
+## ngraph.model.risk
 
-Dynamic risk group generation from entity attributes.
-
-Creates one risk group per unique value of a chosen node or link attribute.
+Risk-group declarations and the shared, typed membership resolver.
 
 ### GenerateSpec
 
@@ -576,48 +1467,35 @@ Attributes:
 - `path` (Optional[str])
 - `attrs` (Dict[str, Any]) = {}
 
-### generate_risk_groups(network: "'Network'", spec: 'GenerateSpec') -> 'List[RiskGroup]'
+### Members
 
-Generate risk groups from unique attribute values.
+Members(nodes: 'frozenset[str]', links: 'frozenset[str]')
 
-For each unique value of the specified attribute, creates a new risk
-group and adds its name to the `risk_groups` set of every matching
-entity, in place. The caller registers the returned groups.
+**Attributes:**
 
-Args:
-    network: Network with nodes and links populated.
-    spec: Generation specification.
+- `nodes` (frozenset[str])
+- `links` (frozenset[str])
 
-Returns:
-    List of newly created RiskGroup objects.
+### MembershipIndex
 
-Raises:
-    ValueError: If `group_by` resolves to an unhashable value, or if the
-        name template renders the same group name for two distinct values.
+One immutable resolution of the current editable network.
 
-### parse_generate_spec(raw: 'Dict[str, Any]') -> 'GenerateSpec'
+Node and link identifiers occupy separate namespaces. Mutation callers
+build a fresh index; prepared analyses retain their owned snapshot.
 
-Parse raw generate dict into a GenerateSpec.
+**Attributes:**
 
-Args:
-    raw: Raw generate dict from YAML.
+- `groups` (Mapping[str, RiskGroup])
+- `direct` (Mapping[str, Members])
+- `transitive` (Mapping[str, Members])
+- `node_groups` (Mapping[str, frozenset[str]])
+- `link_groups` (Mapping[str, frozenset[str]])
 
-Returns:
-    Parsed GenerateSpec.
+**Methods:**
 
-Raises:
-    ValueError: If the block carries an unrecognized key, 'scope' is
-        missing or is neither 'node' nor 'link', 'group_by' or 'name' is
-        missing, or 'name' omits the '${value}' placeholder.
-
----
-
-## ngraph.model.failure.membership
-
-Risk group membership rule resolution.
-
-Resolves policy-based membership rules that auto-assign entities (nodes,
-links, risk groups) to risk groups based on attribute conditions.
+- `build(network: 'Network') -> 'MembershipIndex'`
+- `expand(self, nodes: 'set[str]', links: 'set[str]', groups: 'set[str]', *, shared: 'bool') -> 'Members'` - Expand explicit group causes, then optional shared direct membership.
+- `members(self, group: 'str', recursive: 'bool' = True) -> 'Members'`
 
 ### MembershipSpec
 
@@ -636,63 +1514,20 @@ Attributes:
 - `path` (Optional[str])
 - `match` (Optional[MatchSpec])
 
-### resolve_membership_rules(network: "'Network'") -> 'None'
+### RiskGroup
 
-Apply membership rules to populate entity risk_groups sets.
+A named failure domain with optional nested, unregistered descendants.
 
-For each risk group with a `_membership_raw` specification:
+``attrs`` holds finite JSON metadata, checked and stored read-only at
+construction.
 
-- If scope is "node" or "link": adds the risk group name to each
+**Attributes:**
 
-  matched entity's risk_groups set.
-
-- If scope is "risk_group": adds matched risk groups as children
-
-  of this risk group (hierarchical membership).
-
-Modifies entities in place. Call after all risk groups are registered
-but before validation.
-
-Args:
-    network: Network with risk_groups, nodes, and links populated.
-
----
-
-## ngraph.model.failure.parser
-
-Parsers for FailurePolicySet and related failure modeling structures.
-
-### build_failure_policy(fp_data: 'Dict[str, Any]', *, policy_name: 'str', derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicy'
-
-Build a FailurePolicy from a raw configuration dictionary.
-
-Args:
-    fp_data: Policy definition dict with keys: modes (required), attrs,
-        expand_groups. Each mode contains weight and rules.
-    policy_name: Name identifier for this policy (used for seed derivation).
-    derive_seed: Callable to derive deterministic seeds from component names.
-
-Returns:
-    FailurePolicy: Configured policy with parsed modes and rules.
-
-Raises:
-    ValueError: If modes is empty or malformed, if rules are invalid, if
-        no mode has positive weight, or if the policy, a mode or a rule
-        carries an unrecognized key.
-
-### build_failure_policy_set(raw: 'Dict[str, Any]', *, derive_seed: 'Callable[[str], Optional[int]]') -> 'FailurePolicySet'
-
-Build a FailurePolicySet from raw config data.
-
-Args:
-    raw: Mapping of policy name -> policy definition dict.
-    derive_seed: Callable to derive deterministic seeds from component names.
-
-Returns:
-    Configured FailurePolicySet.
-
-Raises:
-    ValueError: If raw is not a dict or contains invalid policy definitions.
+- `name` (str)
+- `children` (Sequence[RiskGroup]) = ()
+- `disabled` (bool) = False
+- `attrs` (dict[str, Any]) = {}
+- `_membership_raw` (dict[str, Any] | None)
 
 ### build_risk_groups(rg_data: 'List[Any]') -> 'tuple[List[RiskGroup], List[Dict[str, Any]]]'
 
@@ -724,416 +1559,60 @@ Raises:
         carries an unrecognized key, or is a child entry with
         'membership', 'disabled' or 'generate'.
 
----
+### generate_risk_groups(network: "'Network'", spec: 'GenerateSpec') -> 'List[RiskGroup]'
 
-## ngraph.model.failure.policy
+Generate risk groups from unique attribute values.
 
-Failure policy primitives.
-
-Defines `FailureRule` and `FailurePolicy` for expressing how nodes, links,
-and risk groups fail in analyses. Conditions match on top-level attributes
-with simple operators; rules select matches using "all", probabilistic
-"random" (with `probability`), or fixed-size "choice" (with `count`).
-Policies can optionally expand failures by shared risk groups. Failed risk
-groups always cascade to their children downstream (the hierarchy is
-inherent), so no policy flag controls that behavior.
-
-### FailureMode
-
-Weighted set of rules applied together.
-
-Exactly one mode is selected per failure iteration according to the
-mode weights. Within a mode, all contained rules are applied and their
-selections are unioned into the failure set.
-
-Attributes:
-    weight: Non-negative weight used for mode selection. All weights are
-        normalized internally. Modes with zero weight are never selected.
-    rules: A list of `FailureRule` applied together when this mode is chosen.
-    attrs: Optional metadata.
-
-**Attributes:**
-
-- `weight` (float)
-- `rules` (List[FailureRule]) = []
-- `attrs` (Dict[str, Any]) = {}
-
-### FailurePolicy
-
-Weighted failure modes plus optional metadata in `attrs`.
-
-The main entry point is `apply_failures_typed`, which:
-  1) Builds a single RNG for the entire call (from `seed` or `self.seed`).
-  2) Selects a mode based on weights (one RNG draw).
-  3) Gathers the relevant entities for each rule in that mode.
-  4) Matches them against the rule conditions using 'and' or 'or' logic.
-  5) Applies the selection strategy (all, random, or choice), drawing
-     from the same RNG, which keeps rules statistically independent.
-  6) Collects the union of all failed entities across all rules.
-  7) Optionally expands failures by shared-risk groups.
-
-Attributes:
-    attrs: Arbitrary metadata about this policy.
-    expand_groups: If True, expand failures among entities sharing
-        risk groups with failed entities.
-    seed: Default seed for reproducible random operations. Overridden
-        by the ``seed`` parameter on ``apply_failures_typed`` when
-        provided.
-    modes: List of weighted failure modes.
-
-**Attributes:**
-
-- `attrs` (Dict[str, Any]) = {}
-- `expand_groups` (bool) = False
-- `seed` (Optional[int])
-- `modes` (List[FailureMode]) = []
-
-**Methods:**
-
-- `apply_failures(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None, failure_trace: 'Optional[Dict[str, Any]]' = None, prepared_matches: 'Optional[Dict[int, tuple[str, ...]]]' = None, prepared_weights: 'Optional[Dict[int, Tuple[Dict[str, float], Tuple[str, ...]]]]' = None, prepared_rg_index: 'Optional[Dict[str, Set[str]]]' = None, prepared_rg_members: 'Optional[Dict[str, Tuple[frozenset, frozenset]]]' = None) -> 'List[str]'` - Identify which entities fail for this iteration.
-- `apply_failures_typed(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None, *, seed: 'Optional[int]' = None, failure_trace: 'Optional[Dict[str, Any]]' = None, prepared_matches: 'Optional[Dict[int, tuple[str, ...]]]' = None, prepared_weights: 'Optional[Dict[int, Tuple[Dict[str, float], Tuple[str, ...]]]]' = None, prepared_rg_index: 'Optional[Dict[str, Set[str]]]' = None, prepared_rg_members: 'Optional[Dict[str, Tuple[frozenset, frozenset]]]' = None) -> 'Tuple[Set[str], Set[str], Set[str]]'` - Identify which entities fail for this iteration, typed by scope.
-- `build_risk_group_index(network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]') -> 'Dict[str, Set[str]]'` - Build a risk-group -> entity-ID index for risk-group expansion.
-- `prepare_matches(self, network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'Dict[int, tuple[str, ...]]'` - Prepare stable ordered candidate pools for all rules in this policy.
-- `prepare_weights(self, prepared_matches: 'Dict[int, tuple[str, ...]]', network_nodes: 'Dict[str, Any]', network_links: 'Dict[str, Any]', network_risk_groups: 'Dict[str, Any] | None' = None) -> 'Dict[int, Tuple[Dict[str, float], Tuple[str, ...]]]'` - Precompute per-rule weight splits for weighted-choice rules.
-- `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
-### FailureRule
-
-Defines how to match and then select entities for failure.
-
-Attributes:
-    scope: The type of entities this rule applies to: "node", "link",
-        or "risk_group".
-    conditions: A list of conditions to filter matching entities.
-    logic: "and" (all must be true) or "or" (any must be true, default).
-    mode: The selection strategy among the matched set:
-
-- "random": each matched entity fails independently with
-
-          `probability`.
-
-- "choice": pick exactly `count` items (random sample).
-- "all": select every matched entity.
-
-    probability: Probability in [0,1], used if mode="random".
-    count: Number of entities to pick if mode="choice".
-    weight_by: Optional attribute for weighted sampling in choice mode.
-    path: Optional regex pattern applied after condition matching. For
-        node and risk_group scope it is matched against the entity ID;
-        for link scope it is matched against the "source|target" key,
-        not the link ID.
-
-**Attributes:**
-
-- `scope` (EntityScope)
-- `conditions` (List[Condition]) = []
-- `logic` (Literal['and', 'or']) = or
-- `mode` (Literal['random', 'choice', 'all']) = all
-- `probability` (float) = 1.0
-- `count` (int) = 1
-- `weight_by` (Optional[str])
-- `path` (Optional[str])
-
----
-
-## ngraph.model.failure.policy_set
-
-Failure policy containers.
-
-`FailurePolicySet` is a named collection of `FailurePolicy` objects used as
-input to failure analysis workflows. These are input containers, not analysis
-results.
-
-### FailurePolicySet
-
-Named collection of FailurePolicy objects.
-
-Attributes:
-    policies: Dictionary mapping failure policy names to FailurePolicy objects.
-
-**Attributes:**
-
-- `policies` (dict[str, FailurePolicy]) = {}
-
-**Methods:**
-
-- `add(self, name: 'str', policy: 'FailurePolicy') -> 'None'` - Add a policy, replacing any policy already stored under `name`.
-- `get_all_policies(self) -> 'list[FailurePolicy]'` - Get all failure policies from the collection.
-- `get_policy(self, name: 'str') -> 'FailurePolicy'` - Get a specific failure policy by name.
-- `to_dict(self) -> 'dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
----
-
-## ngraph.model.failure.validation
-
-Risk group reference validation.
-
-Validates that all risk group references in nodes and links resolve to
-defined risk groups, catching typos and missing definitions early, and
-detects cycles in risk group hierarchies.
-
-### validate_risk_group_hierarchy(network: "'Network'") -> 'None'
-
-Detect circular references in risk group parent-child relationships.
-
-Cycles arise when membership rules with scope='risk_group' create mutual
-parent-child relationships. Detection is a DFS over the children hierarchy.
+For each unique value of the specified attribute, creates a new risk
+group and adds its name to the `risk_groups` of every matching entity,
+replacing those records in the network. The caller registers the
+returned groups.
 
 Args:
-    network: Network with risk_groups populated (after membership resolution).
-
-Raises:
-    ValueError: If a cycle is detected, with details about the cycle path.
-
-### validate_risk_group_references(network: "'Network'") -> 'None'
-
-Check that every risk group named by a node or link is defined.
-
-Names are checked against network.risk_groups; typos and missing
-definitions would otherwise cause silent failures in simulations.
-
-Args:
-    network: Network with nodes, links, and risk_groups populated.
-
-Raises:
-    ValueError: If any node or link references an undefined risk group.
-        The error message lists up to 10 violations with entity names
-        and the undefined group names.
-
----
-
-## ngraph.model.flow.policy_config
-
-Flow policy preset configurations for NetGraph.
-
-Named routing presets, the single mapping from a preset to a NetGraph-Core
-``FlowPolicyConfig``, and the factory that materializes a preset as a Core
-``FlowPolicy``. Both placement engines (the SPF-cached fast path in
-``ngraph.analysis.placement`` and Core's FlowPolicy) read their edge selection
-and placement mode from ``preset_config`` so the two cannot drift.
-
-### FlowPolicyPreset
-
-Named flow policy presets for traffic routing.
-
-Each preset maps to a combination of path algorithm, flow placement
-strategy, and edge selection mode in NetGraph-Core.
-
-The ``SHORTEST_PATHS_*`` presets model hop-by-hop IP/IGP forwarding: routes
-follow link costs alone and each demand is placed in one pass on the
-cost-only shortest-path DAG. The ``TE_*`` presets model a controller that
-selects paths with knowledge of residual capacity.
-
-### create_flow_policy(algorithms: 'netgraph_core.Algorithms', graph: 'netgraph_core.Graph', preset: 'FlowPolicyPreset', node_mask=None, edge_mask=None, static_path_count: 'Optional[int]' = None) -> 'netgraph_core.FlowPolicy'
-
-Create a FlowPolicy instance from a preset configuration.
-
-Args:
-    algorithms: NetGraph-Core Algorithms instance.
-    graph: NetGraph-Core Graph handle.
-    preset: Preset whose placement, edge selection, and flow-count bounds
-        to apply (see ``preset_config``).
-    node_mask: Optional numpy bool array for node exclusions (True = include).
-    edge_mask: Optional numpy bool array for edge exclusions (True = include).
-    static_path_count: Number of routes the caller will pin with
-        `FlowPolicy.set_static_paths`. Sets the flow count to match, since
-        a pinned policy creates one flow per route and never grows.
+    network: Network with nodes and links populated.
+    spec: Generation specification.
 
 Returns:
-    netgraph_core.FlowPolicy: Configured policy instance.
+    List of newly created RiskGroup objects.
 
 Raises:
-    ValueError: If an unknown FlowPolicyPreset value is provided.
+    ValueError: If `group_by` resolves to an unhashable value, or if the
+        name template renders the same group name for two distinct values.
 
-Example:
-    >>> backend = netgraph_core.Backend.cpu()
-    >>> algs = netgraph_core.Algorithms(backend)
-    >>> graph = algs.build_graph(strict_multidigraph)
-    >>> policy = create_flow_policy(algs, graph, FlowPolicyPreset.SHORTEST_PATHS_ECMP)
+### parse_generate_spec(raw: 'Dict[str, Any]') -> 'GenerateSpec'
 
-### preset_config(preset: 'FlowPolicyPreset') -> 'netgraph_core.FlowPolicyConfig'
-
-Build the Core ``FlowPolicyConfig`` a preset stands for.
-
-This is the single source of the preset semantics. The SPF-cached
-placement engine reads ``selection`` and ``flow_placement`` from it, and
-``create_flow_policy`` materializes it as a Core ``FlowPolicy``.
-
-Hop-by-hop presets set ``require_capacity=False`` (routes follow costs
-only) and ``shortest_path=True`` (one placement on the cost-only DAG), so
-a FlowPolicy built from them places exactly what the cached engine
-places.
+Parse raw generate dict into a GenerateSpec.
 
 Args:
-    preset: Preset to describe.
+    raw: Raw generate dict from YAML.
 
 Returns:
-    A fresh ``FlowPolicyConfig``; callers may adjust it further.
+    Parsed GenerateSpec.
 
 Raises:
-    ValueError: If an unknown FlowPolicyPreset value is provided.
+    ValueError: If the block carries an unrecognized key, 'scope' is
+        missing or is neither 'node' nor 'link', 'group_by' or 'name' is
+        missing, or 'name' omits the '${value}' placeholder.
 
----
+### resolve_membership_rules(network: "'Network'") -> 'None'
 
-## ngraph.model.network
+Apply membership rules to populate entity risk_groups sets.
 
-Network topology modeling with Node, Link, RiskGroup, and Network classes.
+For each risk group with a `_membership_raw` specification:
 
-These classes carry no analysis machinery and can be used on their own.
+- If scope is "node" or "link": adds the risk group name to each
 
-### Link
+  matched entity's risk_groups set.
 
-One directed link between two nodes.
+- If scope is "risk_group": adds matched risk groups as children
 
-The model stores a single direction (``source`` -> ``target``). When the
-analysis graph is built (via ``AnalysisContext`` / netgraph-core), a reverse
-edge is added automatically for each link to provide bidirectional
-connectivity.
+  of this risk group (hierarchical membership).
 
-Attributes:
-    source (str): Name of the source node.
-    target (str): Name of the target node.
-    capacity (float): Link capacity (default 1.0).
-    cost (float): Link cost (default 1.0).
-    disabled (bool): Whether the link is disabled.
-    risk_groups (Set[str]): Set of risk group names this link belongs to.
-    attrs (Dict[str, Any]): Additional metadata (e.g., distance).
-    id (str): Unique identifier. ``Network.add_link`` assigns the
-        deterministic form "{source}|{target}|<seq>", where <seq> is a
-        per-(source, target) insertion sequence number; links never added
-        to a Network keep a provisional uuid-suffixed id.
+Replaces the affected records in the network. Call after all risk groups
+are registered but before validation.
 
-**Attributes:**
-
-- `source` (str)
-- `target` (str)
-- `capacity` (float) = 1.0
-- `cost` (float) = 1.0
-- `disabled` (bool) = False
-- `risk_groups` (Set[str]) = set()
-- `attrs` (Dict[str, Any]) = {}
-- `id` (str)
-
-### Network
-
-Scenario-level topology: nodes, links, and risk groups.
-
-Holds persistent state only (nodes and links disabled in the scenario
-configuration). For temporary exclusion of nodes or links during analysis
-(e.g., failure simulation), pass node_mask and edge_mask to NetGraph-Core
-algorithms.
-
-Attributes:
-    nodes (Dict[str, Node]): Mapping from node name -> Node object.
-    links (Dict[str, Link]): Mapping from link ID -> Link object.
-    risk_groups (Dict[str, RiskGroup]): Top-level risk groups by name.
-    attrs (Dict[str, Any]): Optional metadata about the network.
-
-**Attributes:**
-
-- `nodes` (Dict[str, Node]) = {}
-- `links` (Dict[str, Link]) = {}
-- `risk_groups` (Dict[str, RiskGroup]) = {}
-- `attrs` (Dict[str, Any]) = {}
-- `_selection_cache` (Dict[str, Dict[str, List[Node]]]) = {}
-- `_link_seq` (Dict[tuple, int]) = {}
-
-**Methods:**
-
-- `add_link(self, link: 'Link') -> 'None'` - Add a link to the network, assigning its deterministic ID.
-- `add_node(self, node: 'Node') -> 'None'` - Add a node to the network (keyed by node.name).
-- `disable_all(self) -> 'None'` - Mark all nodes and links as disabled.
-- `disable_link(self, link_id: 'str') -> 'None'` - Mark a link as disabled.
-- `disable_node(self, node_name: 'str') -> 'None'` - Mark a node as disabled.
-- `disable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Disable every node/link that has 'name' in its risk_groups.
-- `enable_all(self) -> 'None'` - Mark all nodes and links as enabled.
-- `enable_link(self, link_id: 'str') -> 'None'` - Mark a link as enabled.
-- `enable_node(self, node_name: 'str') -> 'None'` - Mark a node as enabled.
-- `enable_risk_group(self, name: 'str', recursive: 'bool' = True) -> 'None'` - Enable every node/link that has 'name' in its risk_groups.
-- `find_links(self, source_regex: 'Optional[str]' = None, target_regex: 'Optional[str]' = None, any_direction: 'bool' = False) -> 'List[Link]'` - Search for links by regex on source and/or target node names.
-- `get_links_between(self, source: 'str', target: 'str') -> 'List[str]'` - Retrieve the IDs of all direct links from source to target.
-- `select_node_groups_by_path(self, path: 'str') -> 'Dict[str, List[Node]]'` - Select and group nodes by regex pattern on node name.
-
-### Node
-
-Network node, keyed by its unique name in ``Network.nodes``.
-
-Attributes:
-    name (str): Unique identifier for the node.
-    disabled (bool): Whether the node is disabled in the scenario configuration.
-    risk_groups (Set[str]): Set of risk group names this node belongs to.
-    attrs (Dict[str, Any]): Additional metadata (e.g., coordinates, region).
-
-**Attributes:**
-
-- `name` (str)
-- `disabled` (bool) = False
-- `risk_groups` (Set[str]) = set()
-- `attrs` (Dict[str, Any]) = {}
-
-### RiskGroup
-
-Shared-risk or failure domain, optionally with nested children.
-
-Risk groups model correlated failures: when a risk group fails, all entities
-(nodes, links) in that group fail together. Hierarchical children enable
-cascading failures (parent failure implies all descendants fail).
-
-Risk groups can be created three ways:
-
-1. Direct definition: Explicitly named in YAML risk_groups section
-2. Membership rules: Auto-assign entities based on attribute matching
-3. Generate blocks: Auto-create groups from unique attribute values
-
-Attributes:
-    name (str): Unique name of this risk group.
-    children (List[RiskGroup]): Subdomains in a nested structure.
-    disabled (bool): Whether this group was declared disabled on load.
-    attrs (Dict[str, Any]): Additional metadata for the risk group.
-    _membership_raw (Optional[Dict[str, Any]]): Raw membership rule for
-        deferred resolution. Internal use only.
-
-**Attributes:**
-
-- `name` (str)
-- `children` (List[RiskGroup]) = []
-- `disabled` (bool) = False
-- `attrs` (Dict[str, Any]) = {}
-- `_membership_raw` (Optional[Dict[str, Any]])
-
----
-
-## ngraph.model.path
-
-Representation of a single routing path.
-
-``Path`` stores a sequence of (node, parallel edges) elements plus a numeric
-cost. Paths sort by cost, compare by structure and cost, and support sub-path
-extraction, which leaves the cost for the caller to recompute.
-
-### Path
-
-Routing path as a sequence of nodes and the parallel edges leaving each.
-
-Attributes:
-    path: Sequence of (node_name, (edge_refs...)) tuples representing the path.
-          The final element typically has an empty tuple of edge refs.
-    cost: Total numeric cost (e.g., distance or metric) of the path.
-    edges: Set of all EdgeRefs encountered in the path.
-    nodes: Set of all node names encountered in the path.
-    edge_tuples: Set of all tuples of parallel EdgeRefs from each path element.
-
-**Attributes:**
-
-- `path` (Tuple[Tuple[str, Tuple[EdgeRef, ...]], ...])
-- `cost` (Cost)
-- `edges` (Set[EdgeRef]) = set()
-- `nodes` (Set[str]) = set()
-- `edge_tuples` (Set[Tuple[EdgeRef, ...]]) = set()
-
-**Methods:**
-
-- `get_sub_path(self, dst_node: 'str') -> 'Path'` - Create a sub-path ending at the specified destination node.
+Args:
+    network: Network with risk_groups, nodes, and links populated.
 
 ---
 
@@ -1210,6 +1689,25 @@ Builds model schema types (`Condition`, `MatchSpec`) from raw dict input.
 Lives in the model layer so failure-policy and membership parsing can use
 it without a runtime dependency on the DSL package.
 
+### normalize_selector(raw: 'Union[str, Dict[str, Any], Selector]', context: 'str') -> 'Selector'
+
+Normalize a raw selector (string or dict) to a Selector.
+
+All downstream code works with Selector objects only.
+
+Args:
+    raw: Either a regex string, selector dict, or existing Selector.
+    context: Usage context ("link", "rule", "demand", "workflow").
+        Determines the default for active_only.
+
+Returns:
+    Selector with active_only set, from the selector or the context
+    default.
+
+Raises:
+    ValueError: If the selector is neither a string nor a dict, a selector
+        dict carries an unrecognized key, or the context is unknown.
+
 ### parse_match_spec(raw: 'Dict[str, Any]', *, default_logic: "Literal['and', 'or']" = 'or', require_conditions: 'bool' = False, context: 'str' = 'match') -> 'MatchSpec'
 
 Parse a match specification from raw dict.
@@ -1250,7 +1748,8 @@ resolves to attrs["hardware"]["vendor"]).
 Attributes:
     attr: Attribute name to match (supports dot-notation for nested attrs).
     op: Comparison operator.
-    value: Right-hand operand (unused for exists/not_exists).
+    value: Right-hand operand (unused for exists/not_exists): finite JSON
+        data, stored read-only with accepted scalar subclasses normalized.
 
 **Attributes:**
 
@@ -1263,15 +1762,15 @@ Attributes:
 Attribute conditions combined with "and" or "or" logic.
 
 Attributes:
-    conditions: List of conditions to evaluate.
+    conditions: Conditions to evaluate, in order.
     logic: How to combine conditions ("and" = all, "or" = any).
 
 **Attributes:**
 
-- `conditions` (List[Condition]) = []
+- `conditions` (Sequence[Condition]) = ()
 - `logic` (Literal['and', 'or']) = or
 
-### NodeSelector
+### Selector
 
 Node selection by name regex, attribute conditions, and grouping.
 
@@ -1354,7 +1853,7 @@ Return the "source|target" key used when path-matching links.
 Links have no name of their own, so path regexes match against this
 canonical endpoint-pair form of the flattened link attributes.
 
-### match_entity_ids(entity_attrs: 'Dict[str, Dict[str, Any]]', conditions: 'List[Condition]', logic: 'str' = 'or') -> 'Set[str]'
+### match_entity_ids(entity_attrs: 'Dict[str, Dict[str, Any]]', conditions: 'Sequence[Condition]', logic: 'str' = 'or') -> 'Set[str]'
 
 Match entity IDs by attribute conditions.
 
@@ -1369,9 +1868,9 @@ Args:
 Returns:
     Set of matching entity IDs. Returns all IDs if conditions is empty.
 
-### select_nodes(network: "'Network'", selector: 'NodeSelector', default_active_only: 'bool') -> "Dict[str, List['Node']]"
+### select_nodes(network: "'Network'", selector: 'Selector', default_active_only: 'bool') -> "Dict[str, List['Node']]"
 
-Select and group the nodes a `NodeSelector` matches.
+Select and group the nodes a `Selector` matches.
 
 Evaluation order:
 
@@ -1395,429 +1894,200 @@ Returns:
 
 ## ngraph.workflow.base
 
-Base classes for workflow automation.
-
-Defines the workflow step abstraction, registration decorator, and execution
-lifecycle. Steps implement `run()` and are executed via `execute()` which
-handles timing, logging, and metadata recording. Failures are logged and
-re-raised.
+Typed workflow execution and explicit extension registration.
 
 ### WorkflowStep
 
-Base class for all workflow steps.
+Base of every workflow step.
 
-`execute()` logs each step with its duration and records step metadata in
-scenario.results. A step seed makes random operations reproducible.
-
-YAML Configuration:
-    ```yaml
-    workflow:
-      - type: <StepTypeName>
-        name: "optional_step_name"  # Optional: Custom name for this step instance
-        seed: 42                    # Optional: Seed for reproducible random operations
-        # ... step-specific parameters ...
-    ```
-
-Attributes:
-    name: Optional custom identifier for this workflow step instance,
-        used for logging and result storage. When empty, the class name
-        is used instead.
-    seed: Optional seed for reproducible random operations. If None,
-        random operations are non-deterministic.
+Built-in steps are immutable once constructed (``dataclasses.replace``
+makes an edited copy). A custom step's own fields stay its own; ``prepare``
+records its name and seed, so later edits of those do not reach a
+prepared scenario.
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
+- `run(self, context: 'StepContext') -> 'StepOutput'` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
-### register_workflow_step(step_type: 'str')
+### register_workflow_step(name: 'str') -> 'Callable[[type[StepT]], type[StepT]]'
 
-Return a decorator that registers a `WorkflowStep` subclass.
+Register one concrete step class for a nonempty YAML type name.
 
-Args:
-    step_type: Registry key used to instantiate steps from configuration.
+### step_type(name: 'str') -> 'type[WorkflowStep] | None'
 
-Returns:
-    A class decorator that adds the class to `WORKFLOW_STEP_REGISTRY`.
+Return the registered step class for a YAML type name, if any.
 
-### resolve_parallelism(parallelism: 'Union[int, str]') -> 'int'
+### validate_unique_step_names(workflow: 'Sequence[WorkflowStep]') -> 'None'
 
-Validate and resolve a parallelism setting to a concrete worker count.
+No documentation available.
 
-Args:
-    parallelism: Either a positive integer worker count or "auto" for
-        the CPU count.
+### workflow_failures(context, policy_name, iterations, failure_trace)
 
-Returns:
-    Positive integer worker count (minimum 1).
-
-Raises:
-    ValueError: If parallelism is neither "auto" nor an integer >= 1.
-
-### serialize_monte_carlo_results(raw: 'Dict[str, Any]') -> 'tuple[dict, list[dict]]'
-
-Convert FailureManager Monte Carlo output into JSON-safe dicts.
-
-Args:
-    raw: ``run_monte_carlo_analysis`` output whose "baseline" and
-        "results" items are FlowIterationResult objects.
-
-Returns:
-    Tuple of (baseline_dict, flow_results).
-
-### validate_unique_step_names(workflow: "'list[WorkflowStep]'") -> 'None'
-
-Validate that effective step names in a workflow list are unique.
-
-Effective names follow the same rule used for results storage:
-``step.name`` or the step class name when no name is set. Duplicate
-effective names would silently overwrite each other's namespace in the
-results store.
-
-Args:
-    workflow: Workflow step list.
-
-Raises:
-    ValueError: If two or more steps share the same effective name.
+Supply the step's named policy and effective seed to the one sampler.
 
 ---
 
 ## ngraph.workflow.build_graph
 
-BuildGraph workflow step.
-
-Exports the network topology as a NetworkX node-link representation for
-inspection. Analysis functions build their own graphs and do not read this
-one.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: BuildGraph
-        name: "build_network_graph"  # Optional: Custom name for this step
-        add_reverse: true  # Optional: Add reverse edges (default: true)
-    ```
-
-With `add_reverse: true` (the default), each Link(A→B) gets both a forward
-(A→B) and a reverse (B→A) edge for bidirectional connectivity. Set it to
-`false` for directed-only graphs.
-
-Results stored in `scenario.results` under the step name as two keys:
-
-- metadata: node_count and link_count (graph edges, including reverse edges)
-- data: { graph: node-link JSON dict, context: { add_reverse: bool } }
+Export the named domain network in NetworkX node-link form.
 
 ### BuildGraph
 
-Stores the network as JSON-serializable NetworkX node-link data.
-
-Attributes:
-    add_reverse: If True, adds a reverse edge (id "<link_id>_reverse") for
-        every link. Defaults to True.
+BuildGraph(name: 'str' = '', seed: 'int | None' = None, add_reverse: bool = True, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `question_kind` (ClassVar) = build_graph
 - `add_reverse` (bool) = True
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: 'Scenario') -> 'None'` - Store the network's node-link representation.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
 ## ngraph.workflow.cost_power
 
-CostPower workflow step: collect capex and power by hierarchy level.
-
-Aggregates capex and power from the network hardware inventory, with no
-normalization or reporting. Contributions are split into two categories:
-
-- platform_*: node hardware (e.g., chassis, linecards) resolved from node attrs
-- optics_*: per-end link hardware (e.g., optics) resolved from link attrs
-
-Aggregation is computed at hierarchy levels 0..N where level 0 is the global
-root (path ""), and higher levels correspond to prefixes of node names split by
-"/". For example, for node "dc1/plane1/leaf/leaf-1":
-
-- level 1 path is "dc1"
-- level 2 path is "dc1/plane1"
-- etc.
-
-Disabled handling:
-
-- When include_disabled is False, only enabled nodes and links are considered,
-
-  and a link's optics count only when both endpoint nodes are enabled.
-
-- Optics are counted only when the endpoint node has platform hardware.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: CostPower
-        name: "cost_power"           # Optional custom name
-        include_disabled: false       # Default: only enabled nodes/links
-        aggregation_level: 2          # Produce levels: 0, 1, 2
-    ```
-
-Results stored in `scenario.results` under this step namespace:
-    data:
-      context:
-        include_disabled: bool
-        aggregation_level: int
-      levels:
-        "0":
-
-- path: ""
-
-            platform_capex: float
-            platform_power_watts: float
-            optics_capex: float
-            optics_power_watts: float
-            capex_total: float
-            power_total_watts: float
-        "1": [ ... ]
-        "2": [ ... ]
+Platform/optic cost and power at each named hierarchy level.
 
 ### CostPower
 
-Collect platform and optics capex/power by aggregation level.
-
-Attributes:
-    include_disabled: If True, include disabled nodes and links.
-    aggregation_level: Inclusive depth for aggregation; 0 = root only.
-        Must be >= 0.
+CostPower(name: 'str' = '', seed: 'int | None' = None, include_disabled: 'bool' = False, aggregation_level: 'int' = 2, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `question_kind` (ClassVar[str]) = cost_power
 - `include_disabled` (bool) = False
 - `aggregation_level` (int) = 2
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: 'Any') -> 'None'` - Aggregate capex and power by hierarchy levels 0..N.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
+- `run(self, context: 'StepContext') -> 'StepOutput'` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
 ## ngraph.workflow.max_flow_step
 
-MaxFlow workflow step.
-
-Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
-Writes one `FlowIterationResult` dict per unique failure pattern under
-`data.flow_results` and the no-failure result under `data.baseline`.
-
-Baseline (no failures) always runs first as a separate reference; `iterations`
-counts failure scenarios only.
-
-YAML Configuration Example:
-
-    workflow:
-
-- type: MaxFlow
-
-        name: "maxflow_dc_to_edge"
-        source: "^datacenter/.*"
-        target: "^edge/.*"
-        mode: "combine"
-        failure_policy: "random_failures"
-        iterations: 100
-        parallelism: auto
-        shortest_path: false
-        require_capacity: true           # false for true IP/IGP semantics
-        flow_placement: "PROPORTIONAL"
-        seed: 42
-        store_failure_patterns: false
-        include_flow_details: false      # cost_distribution
-        include_min_cut: false           # min-cut edges list
+Native capacity questions over one shared sequence of failure cases.
 
 ### MaxFlow
 
-Maximum flow Monte Carlo workflow step.
-
-Baseline (no failures) always runs first and is returned in a separate field.
-The flow_results list holds unique failure patterns (deduplicated); each result
-carries an occurrence_count of how many iterations matched that pattern.
-
-Attributes:
-    source: Source node selector (string path or selector dict).
-    target: Target node selector (string path or selector dict).
-    mode: Flow analysis mode ("combine" or "pairwise").
-    failure_policy: Name of failure policy in scenario.failure_policy_set.
-        If None, no failure policy is applied.
-    iterations: Number of failure iterations to run; must be >= 0.
-    parallelism: Worker thread count, or "auto" for the CPU count.
-    shortest_path: Restrict flow to lowest-cost paths (IP/IGP mode).
-    require_capacity: If True (default), path selection considers capacity.
-        If False, path selection is cost-only (true IP/IGP semantics).
-    flow_placement: Flow placement strategy.
-    seed: Optional seed for reproducible results.
-    store_failure_patterns: Record the failure trace on each result.
-        Iterations are deduplicated, so a trace describes the first
-        iteration of its pattern, not every matching iteration.
-    include_flow_details: Whether to collect cost distribution per flow.
-    include_min_cut: Whether to include min-cut edges per flow.
+Evaluate independent endpoint capacities with explicit native routing.
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
-- `source` (Union[str, Dict[str, Any]])
-- `target` (Union[str, Dict[str, Any]])
-- `mode` (str) = combine
-- `failure_policy` (str | None)
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `source` (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)
+- `target` (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)
+- `mode` (Literal) = combine
+- `preset` (Union)
+- `model` (object)
+- `offer` (Union)
+- `design_demand` (Union)
+- `failure_policy` (Union)
 - `iterations` (int) = 1
-- `parallelism` (int | str) = auto
-- `shortest_path` (bool) = False
-- `require_capacity` (bool) = True
-- `flow_placement` (FlowPlacement | str) = 1
-- `store_failure_patterns` (bool) = False
-- `include_flow_details` (bool) = False
-- `include_min_cut` (bool) = False
+- `workers` (Union) = auto
+- `failure_trace` (bool) = False
+- `outputs` (OutputOptions)
+- `export_cost_distribution` (bool) = False
+- `export_details` (bool) = False
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
+- `query(self, prepared: ngraph.analysis.preparation.PreparedScenario, failures=None) -> ngraph.analysis.capacity.CapacityQuery`
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: dict, name: str) -> dict` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
 ## ngraph.workflow.maximum_supported_demand_step
 
-MaximumSupportedDemand workflow step.
-
-Searches for the maximum uniform traffic multiplier `alpha_star` that is fully
-placeable for a given demand set. Stores results under `data` as:
-
-- `alpha_star`: float
-- `context`: parameters used for the search
-- `base_demands`: serialized base demand specs
-- `probes`: bracket/bisect evaluations with feasibility
-
-Performance: AnalysisContext is built once at search start and reused across
-all binary search probes. Only demand volumes change per probe.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: MaximumSupportedDemand
-        name: "msd_search"
-        demand_set: "default"
-        resolution: 0.01        # Convergence threshold
-        max_bisect_iters: 50    # Maximum bisection iterations
-        alpha_start: 1.0        # Starting multiplier
-        growth_factor: 2.0      # Bracket expansion factor
-    ```
+Report the largest tested feasible physical multiplier and its probe history.
 
 ### MaximumSupportedDemand
 
-Finds the maximum uniform traffic multiplier that is fully placeable.
-
-Brackets alpha_star by scaling alpha_start up or down by growth_factor,
-then bisects. alpha_star is the largest multiplier at which every demand
-in the set still places fully on the network.
-
-Attributes:
-    demand_set: Name of the demand set to analyze.
-    alpha_start: Starting multiplier for binary search.
-    growth_factor: Factor for bracket expansion; must be > 1.0.
-    alpha_min: Lowest alpha probed; the step raises if it is infeasible.
-    alpha_max: Highest alpha probed; returned when it is feasible.
-    resolution: Bisection stops once the bracket is no wider than this;
-        must be positive.
-    max_bracket_iters: Maximum iterations for bracketing phase.
-    max_bisect_iters: Maximum iterations for bisection phase.
+MaximumSupportedDemand(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', alpha_start: float = 1.0, growth_factor: float = 2.0, alpha_min: float = 1e-06, alpha_max: float = 1000000000.0, alpha_tolerance: float = 0.01, max_bracket_iters: int = 32, max_bisect_iters: int = 32, export_details: bool = False, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
-- `demand_set` (str) = default
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `demand_set` (str)
 - `alpha_start` (float) = 1.0
 - `growth_factor` (float) = 2.0
 - `alpha_min` (float) = 1e-06
 - `alpha_max` (float) = 1000000000.0
-- `resolution` (float) = 0.01
+- `alpha_tolerance` (float) = 0.01
 - `max_bracket_iters` (int) = 32
 - `max_bisect_iters` (int) = 32
+- `export_details` (bool) = False
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: "'Any'") -> 'None'` - Execute the workflow step logic.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
+- `query(self, demands)`
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: dict, name: str) -> dict` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
 ## ngraph.workflow.network_stats
 
-Workflow step for basic node and link statistics.
-
-Computes node and link counts plus mean, median, min, and max of link
-capacity, link cost, and node degree. Excluded entities are filtered out
-without modifying the base network; disabled nodes and links are excluded too
-unless `include_disabled` is set. A link counts only when both endpoints
-remain.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: NetworkStats
-        name: "network_statistics"           # Optional: Custom name for this step
-        include_disabled: false              # Include disabled nodes/links in stats
-        excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
-        excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
-    ```
-
-Results stored in `scenario.results` under `data`:
-
-- Node statistics: node_count
-- Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
-
-      min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
-
-- Degree statistics: mean_degree, median_degree, min_degree, max_degree
+Statistics of the named physical network, with temporary exclusions.
 
 ### NetworkStats
 
-Compute basic node and link statistics for the network.
-
-Exclusions apply to this computation only; the network is not modified.
-
-Attributes:
-    include_disabled: If True, include disabled nodes and links in statistics.
-        If False, only consider enabled entities.
-    excluded_nodes: Optional list of node names to exclude (temporary exclusion).
-    excluded_links: Optional list of link IDs to exclude (temporary exclusion).
+NetworkStats(name: 'str' = '', seed: 'int | None' = None, include_disabled: bool = False, excluded_nodes: tuple[str, ...] = (), excluded_links: tuple[str, ...] = (), *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `question_kind` (ClassVar) = network_stats
 - `include_disabled` (bool) = False
-- `excluded_nodes` (Iterable[str]) = ()
-- `excluded_links` (Iterable[str]) = ()
+- `excluded_nodes` (tuple) = ()
+- `excluded_links` (tuple) = ()
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: 'Scenario') -> 'None'` - Compute and store network statistics.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
@@ -1849,103 +2119,35 @@ Raises:
 
 ## ngraph.workflow.traffic_matrix_placement_step
 
-TrafficMatrixPlacement workflow step.
-
-Runs Monte Carlo demand placement using a named demand set. Writes one
-`FlowIterationResult` dict per unique failure pattern under
-`data.flow_results` and the no-failure result under `data.baseline`.
-
-Baseline (no failures) always runs first as a separate reference; `iterations`
-counts failure scenarios only.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: TrafficMatrixPlacement
-        name: "tm_analysis"
-        demand_set: "default"
-        failure_policy: "single_link"    # Optional: failure policy name
-        iterations: 100                  # Number of failure scenarios
-        parallelism: 4                   # Worker threads (or "auto")
-        alpha: 1.0                       # Demand volume multiplier
-        include_flow_details: true       # Include cost distribution per flow
-    ```
+Ordered native traffic placement with typed earlier-MSD scale selection.
 
 ### TrafficMatrixPlacement
 
-Monte Carlo demand placement using a named demand set.
-
-Baseline (no failures) always runs first and is returned in a separate field.
-The flow_results list holds unique failure patterns (deduplicated); each result
-carries an occurrence_count of how many iterations matched that pattern.
-
-Attributes:
-    demand_set: Name of the demand set to analyze. Required; an empty
-        value raises ValueError.
-    failure_policy: Failure policy name in scenario.failure_policy_set.
-        If None, no failure policy is applied.
-    iterations: Number of failure iterations to run; must be >= 0.
-    parallelism: Worker thread count, or "auto". Auto uses the CPU count
-        when iterations can run concurrently (an LSP preset in the demand
-        set, or a free-threaded interpreter) and 1 otherwise, because
-        cacheable presets are Python-bound under the GIL and threads only
-        slow them down. See ``resolve_placement_parallelism``.
-    seed: Optional seed for reproducibility.
-    store_failure_patterns: Record the failure trace on each result.
-        Iterations are deduplicated, so a trace describes the first
-        iteration of its pattern, not every matching iteration.
-    include_flow_details: When True, include cost_distribution per flow.
-    include_used_edges: When True, include set of used edges per demand in entry data.
-    alpha: Numeric scale for demands in the set; must be > 0.0. Defaults
-        to 1.0; cannot be combined with alpha_from_step.
-    alpha_from_step: Optional producer step name to read alpha from; it
-        must run before this step.
-    alpha_from_field: Dotted field path in producer step (default: "data.alpha_star").
+TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', failure_policy: str | None = None, iterations: int = 1, workers: int | Literal['auto'] = 'auto', failure_trace: bool = False, outputs: _netgraph_core.OutputOptions = <factory>, export_cost_distribution: bool = False, export_details: bool = False, alpha: float | None = None, alpha_from_step: str | None = None, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
 - `name` (str)
-- `seed` (Optional[int])
-- `_seed_source` (str) = explicit-step
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
 - `demand_set` (str)
-- `failure_policy` (str | None)
+- `failure_policy` (Union)
 - `iterations` (int) = 1
-- `parallelism` (int | str) = auto
-- `store_failure_patterns` (bool) = False
-- `include_flow_details` (bool) = False
-- `include_used_edges` (bool) = False
-- `alpha` (float | None)
-- `alpha_from_step` (str | None)
-- `alpha_from_field` (str) = data.alpha_star
+- `workers` (Union) = auto
+- `failure_trace` (bool) = False
+- `outputs` (OutputOptions)
+- `export_cost_distribution` (bool) = False
+- `export_details` (bool) = False
+- `alpha` (Union)
+- `alpha_from_step` (Union)
 
 **Methods:**
 
-- `execute(self, scenario: "'Scenario'") -> 'None'` - Run the step inside its results namespace and record metadata.
-- `run(self, scenario: "'Scenario'") -> 'None'` - Execute the workflow step logic.
-
-### resolve_placement_parallelism(parallelism: 'int | str', demands: 'Iterable[TrafficDemand]') -> 'int'
-
-Resolve the worker count for demand placement iterations.
-
-An explicit integer is used as given. ``"auto"`` becomes the CPU count
-only when iterations can run concurrently: on a free-threaded interpreter,
-or when the demand set uses a preset outside ``CACHEABLE_PRESETS`` (the
-LSP presets), whose placement runs inside the core engine with the GIL
-released. Iterations for cacheable presets are dominated by Python-side
-work between very short engine calls, so on a GIL interpreter threads
-only add contention and ``"auto"`` resolves to 1.
-
-Args:
-    parallelism: Positive worker count or ``"auto"``.
-    demands: Demands of the set to place; unset presets count as the
-        default ``SHORTEST_PATHS_ECMP``.
-
-Returns:
-    Positive worker count.
-
-Raises:
-    ValueError: If ``parallelism`` is neither a positive integer nor
-        ``"auto"``.
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: dict, name: str) -> dict` - Turn this step type's YAML keys into constructor arguments.
 
 ---
 
@@ -2193,6 +2395,64 @@ Raises:
 
 ---
 
+## ngraph.dsl.inputs
+
+Closed YAML declarations for native routing and named physical references.
+
+### boolean(value, label)
+
+No documentation available.
+
+### ceiling(value, label)
+
+No documentation available.
+
+### closed(value, keys, label)
+
+No documentation available.
+
+### demand_sets(raw)
+
+No documentation available.
+
+### directed(value, label)
+
+No documentation available.
+
+### enum(kind, value, label)
+
+No documentation available.
+
+### flow_outputs(arguments, name)
+
+A flow step's YAML ``outputs`` as native options, cost and detail flags.
+
+### mapping(value, label)
+
+No documentation available.
+
+### named_declarations(data)
+
+Own the three separate namespaces without resolving physical identities yet.
+
+### names(value, label, *, nonempty=False)
+
+No documentation available.
+
+### outputs(raw, label)
+
+No documentation available.
+
+### policy(value, label)
+
+Parse one discriminated model, retaining physical T1 minimum until q is fixed.
+
+### tunnel_count(value, label)
+
+No documentation available.
+
+---
+
 ## ngraph.dsl.loader
 
 YAML loader + schema validation for Scenario DSL.
@@ -2216,280 +2476,6 @@ Raises:
 
 ---
 
-## ngraph.dsl.selectors.normalize
-
-Selector parsing and normalization.
-
-Converts raw selector values (strings or dicts) into NodeSelector objects.
-
-### normalize_selector(raw: 'Union[str, Dict[str, Any], NodeSelector]', context: 'str') -> 'NodeSelector'
-
-Normalize a raw selector (string or dict) to a NodeSelector.
-
-All downstream code works with NodeSelector objects only.
-
-Args:
-    raw: Either a regex string, selector dict, or existing NodeSelector.
-    context: Usage context ("link", "rule", "demand", "workflow").
-        Determines the default for active_only.
-
-Returns:
-    NodeSelector with active_only set, from the selector or the context
-    default.
-
-Raises:
-    ValueError: If the selector is neither a string nor a dict, a selector
-        dict carries an unrecognized key, or the context is unknown.
-
----
-
-## ngraph.results.artifacts
-
-Serializable result artifacts for analysis workflows.
-
-`CapacityEnvelope` captures a frequency-based capacity distribution in
-JSON-serializable form.
-
-### CapacityEnvelope
-
-Capacity distribution stored as a value -> occurrence-count map.
-
-Monte Carlo runs repeat the same capacity values many times, so counting
-them keeps memory proportional to the number of distinct values. Individual
-sample order is not preserved.
-
-Attributes:
-    source_pattern: Regex pattern used to select source nodes.
-    sink_pattern: Regex pattern used to select sink nodes.
-    mode: Flow analysis mode ("combine" or "pairwise").
-    frequencies: Dictionary mapping capacity values to their occurrence counts.
-    min_capacity: Minimum observed capacity.
-    max_capacity: Maximum observed capacity.
-    mean_capacity: Mean capacity across all samples.
-    stdev_capacity: Population standard deviation of capacity values.
-    total_samples: Total number of samples represented.
-
-**Attributes:**
-
-- `source_pattern` (str)
-- `sink_pattern` (str)
-- `mode` (str)
-- `frequencies` (Dict[float, int])
-- `min_capacity` (float)
-- `max_capacity` (float)
-- `mean_capacity` (float)
-- `stdev_capacity` (float)
-- `total_samples` (int)
-
-**Methods:**
-
-- `expand_to_values(self) -> 'List[float]'` - Expand frequency map back to individual values.
-- `from_dict(data: 'Dict[str, Any]') -> "'CapacityEnvelope'"` - Construct a CapacityEnvelope from a dictionary.
-- `from_values(source_pattern: 'str', sink_pattern: 'str', mode: 'str', values: 'List[float]') -> "'CapacityEnvelope'"` - Create envelope from capacity values.
-- `get_percentile(self, percentile: 'float') -> 'float'` - Calculate percentile from frequency distribution.
-- `to_dict(self) -> 'Dict[str, Any]'` - Convert to dictionary for JSON serialization.
-
----
-
-## ngraph.results.flow
-
-Flow result containers for failure-analysis iterations.
-
-Serializable dataclasses for per-iteration outcomes of capacity and
-demand-placement analyses. Values are unit-agnostic.
-
-Objects expose `to_dict()` that returns JSON-safe primitives. Float-keyed
-distributions are normalized to fixed-point string keys via
-`_fmt_float_key()`, and `data` payloads are checked by `_ensure_json_safe()`.
-Steps write these dicts under `data.flow_results`.
-
-### FlowEntry
-
-One source→destination flow outcome within an iteration.
-
-Fields are unit-agnostic. Callers can interpret numbers as needed for
-presentation (e.g., Gbit/s).
-
-Args:
-    source: Source identifier.
-    destination: Destination identifier.
-    priority: Priority/class for traffic placement scenarios. Zero when not applicable.
-    demand: Requested volume for this flow.
-    placed: Delivered volume for this flow.
-    dropped: Unmet volume (``demand - placed``).
-    cost_distribution: Optional distribution of placed volume by path cost.
-    data: Optional per-flow details (e.g., min-cut edges, used edges).
-
-**Attributes:**
-
-- `source` (str)
-- `destination` (str)
-- `priority` (int)
-- `demand` (float)
-- `placed` (float)
-- `dropped` (float)
-- `cost_distribution` (Dict[float, float]) = {}
-- `data` (Dict[str, Any]) = {}
-
-**Methods:**
-
-- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
-
-### FlowIterationResult
-
-Container for per-iteration analysis results.
-
-Args:
-    failure_id: Stable identifier for the failure scenario (hash of excluded
-        components, or "" for no exclusions).
-    failure_state: Optional excluded components for the iteration.
-    failure_trace: Optional trace info (mode_index, selections, expansion) when
-        store_failure_patterns=True. None for baseline or when tracing disabled.
-    occurrence_count: Number of Monte Carlo iterations that produced this exact
-        failure pattern. Used with deduplication to avoid re-running identical
-        analyses. Defaults to 1.
-    flows: List of flow entries for this iteration.
-    summary: Aggregated summary across ``flows``.
-    data: Optional per-iteration extras.
-
-**Attributes:**
-
-- `failure_id` (str)
-- `failure_state` (Optional[Dict[str, List[str]]])
-- `failure_trace` (Optional[Dict[str, Any]])
-- `occurrence_count` (int) = 1
-- `flows` (List[FlowEntry]) = []
-- `summary` (FlowSummary) = FlowSummary(total_demand=0.0, total_placed=0.0, overall_ratio=1.0, dropped_flows=0, num_flows=0)
-- `data` (Dict[str, Any]) = {}
-
-**Methods:**
-
-- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
-
-### FlowSummary
-
-Aggregated metrics across all flows in one iteration.
-
-Args:
-    total_demand: Sum of all demands in this iteration.
-    total_placed: Sum of all delivered volumes in this iteration.
-    overall_ratio: ``total_placed / total_demand`` when demand > 0, else 1.0.
-    dropped_flows: Number of flow entries with non-zero drop.
-    num_flows: Total number of flows considered.
-
-**Attributes:**
-
-- `total_demand` (float)
-- `total_placed` (float)
-- `overall_ratio` (float)
-- `dropped_flows` (int)
-- `num_flows` (int)
-
-**Methods:**
-
-- `to_dict(self) -> 'Dict[str, Any]'` - Return a JSON-serializable dictionary representation.
-
----
-
-## ngraph.results.snapshot
-
-Scenario snapshot helpers.
-
-Build a concise dictionary snapshot of failure policies and demand sets for
-export into results without keeping heavy domain objects.
-
-### build_scenario_snapshot(*, seed: 'int | None', failure_policy_set, demand_set) -> 'Dict[str, Any]'
-
-Build a concise dictionary snapshot of the scenario state.
-
-Args:
-    seed: Scenario-level seed for reproducibility, or None if unseeded.
-    failure_policy_set: FailurePolicySet containing named failure policies.
-    demand_set: DemandSet containing named demand collections.
-
-Returns:
-    Dict containing: seed, failures (policy snapshots), demands (demand snapshots).
-
----
-
-## ngraph.results.store
-
-Generic results store for workflow steps and their metadata.
-
-`Results` organizes outputs by workflow step name and records
-`WorkflowStepMetadata` for execution context. Storage is step-scoped, and a
-step may write only two keys under its namespace:
-
-- ``metadata``: step-level metadata (dict)
-- ``data``: step-specific payload (dict)
-
-Export with :meth:`Results.to_dict`, which returns a structure with shape
-``{workflow, steps, scenario}``. During export, objects with a ``to_dict()``
-method are converted, dictionary keys are coerced to strings, and tuples are
-emitted as lists. Other values pass through unchanged, so steps must store
-JSON-compatible values.
-
-### Results
-
-Step-scoped results container with deterministic export shape.
-
-Structure:
-
-- workflow: step metadata registry
-- steps: per-step results with enforced keys {"metadata", "data"}
-- scenario: optional scenario snapshot set once at load time
-
-**Attributes:**
-
-- `_store` (Dict) = {}
-- `_metadata` (Dict) = {}
-- `_active_step` (Union)
-- `_scenario` (Dict) = {}
-
-**Methods:**
-
-- `enter_step(self, step_name: str) -> None` - Enter step scope. Subsequent put/get are scoped to this step.
-- `exit_step(self) -> None` - Exit step scope; put/get raise until the next enter_step.
-- `get(self, key: str, default: Any = None) -> Any` - Get a value from the active step scope.
-- `get_all_step_metadata(self) -> Dict[str, ngraph.results.store.WorkflowStepMetadata]` - Get metadata for all workflow steps.
-- `get_step(self, step_name: str) -> Dict[str, Any]` - Return the raw dict for a given step name (for cross-step reads).
-- `get_step_metadata(self, step_name: str) -> ngraph.results.store.WorkflowStepMetadata | None` - Get metadata for a workflow step.
-- `get_steps_by_execution_order(self) -> list[str]` - Get step names ordered by their execution order.
-- `put(self, key: str, value: Any) -> None` - Store a value in the active step under an allowed key.
-- `put_step_metadata(self, step_name: str, step_type: str, execution_order: int, *, scenario_seed: int | None = None, step_seed: int | None = None, seed_source: str = 'none') -> None` - Store metadata for a workflow step.
-- `set_scenario_snapshot(self, snapshot: Dict[str, Any]) -> None` - Attach a normalized scenario snapshot for export.
-- `to_dict(self) -> Dict[str, Any]` - Return exported results with shape: {workflow, steps, scenario}.
-
-### WorkflowStepMetadata
-
-Metadata for a workflow step execution.
-
-Attributes:
-    step_type: The workflow step class name (e.g., 'NetworkStats').
-    step_name: The instance name of the step.
-    execution_order: Order in which this step was executed (0-based).
-    scenario_seed: Scenario-level seed provided in the YAML (if any).
-    step_seed: Seed assigned to this step (explicit or scenario-derived).
-    seed_source: Source for the step seed. One of:
-
-- "scenario-derived": seed was derived from scenario.seed
-- "explicit-step": seed was explicitly provided for the step
-- "none": no seed provided/active for this step
-
-        Monte Carlo steps derive per-iteration seeds from step_seed
-        (step_seed + iteration_index).
-
-**Attributes:**
-
-- `step_type` (str)
-- `step_name` (str)
-- `execution_order` (int)
-- `scenario_seed` (Union)
-- `step_seed` (Union)
-- `seed_source` (str) = none
-
----
-
 ## ngraph.profiling.profiler
 
 Profiling for NetGraph workflow execution.
@@ -2509,10 +2495,7 @@ than 10% of total wall time as bottlenecks.
 
 - `analyze_performance(self) -> 'None'` - Flag steps above 10% of total wall time and fill ``analysis_summary``.
 - `end_scenario(self) -> 'None'` - Record total wall time and sum CPU time and calls across steps.
-- `get_top_functions(self, step_name: 'str', limit: 'int' = 10) -> 'List[Tuple[str, float, int]]'` - Return the step's functions with the highest internal time.
-- `merge_child_profiles(self, profile_dir: 'Path', step_name: 'str') -> 'None'` - Merge child worker profiles into the parent step profile.
 - `profile_step(self, step_name: 'str', step_type: 'str') -> 'Generator[None, None, None]'` - Profile the enclosed block as one workflow step.
-- `save_detailed_profile(self, output_path: 'Path', step_name: 'str') -> 'None'` - Save one step's cProfile data to a file.
 - `start_scenario(self) -> 'None'` - Record the scenario start time.
 
 ### PerformanceReporter
@@ -2558,8 +2541,7 @@ Attributes:
     function_calls: Number of function calls during execution.
     memory_peak: Peak traced memory in bytes; None unless memory
         tracking ran for this step.
-    cprofile_stats: cProfile statistics, including merged worker profiles.
-    worker_profiles_merged: Number of worker profiles merged into this step.
+    cprofile_stats: cProfile statistics for this step.
 
 **Attributes:**
 
@@ -2570,84 +2552,6 @@ Attributes:
 - `function_calls` (int)
 - `memory_peak` (Optional[float])
 - `cprofile_stats` (Optional[pstats.Stats])
-- `worker_profiles_merged` (int) = 0
-
----
-
-## ngraph.types.base
-
-Cost alias and enums shared by network analysis algorithms.
-
-### EdgeSelect
-
-Edge selection criteria for shortest-path algorithms.
-
-Determines which edges are considered when finding paths between nodes.
-These map to NetGraph-Core's EdgeSelection configuration.
-
-### FlowPlacement
-
-Strategies to distribute flow across parallel equal-cost paths.
-
-### Mode
-
-Analysis mode for source/sink group handling.
-
-Determines how multiple source and sink nodes are combined for analysis.
-
----
-
-## ngraph.types.dto
-
-Immutable edge references and result containers for algorithm outputs.
-
-### EdgeRef
-
-Reference to a directed edge via scenario link_id and direction.
-
-Identifying an edge by the link's unique ID rather than by a node-name
-tuple keeps the reference valid across Core edge reorderings.
-
-Attributes:
-    link_id: Scenario link identifier (matches Network.links keys)
-    direction: 'fwd' for source→target as defined in Link; 'rev' for reverse
-
-**Attributes:**
-
-- `link_id` (str)
-- `direction` (EdgeDir)
-
-### MaxFlowResult
-
-Result of max-flow computation between a source/sink pair.
-
-Attributes:
-    total_flow: Maximum flow value achieved.
-    cost_distribution: Mapping of cost to flow volume placed at that cost.
-        Completion-phase entries are marginal costs, so a key need not match
-        any single path's cost.
-    min_cut: Edges forming a minimum cut (None if not computed).
-
-**Attributes:**
-
-- `total_flow` (float)
-- `cost_distribution` (Dict[Cost, float])
-- `min_cut` (Tuple[EdgeRef, ...] | None)
-
----
-
-## ngraph.utils.ids
-
-### new_base64_uuid() -> 'str'
-
-Return a 22-character URL-safe Base64-encoded UUID without padding.
-
-The 16 raw bytes of a random version 4 UUID are encoded with URL-safe
-Base64; the two trailing padding characters are dropped, leaving 22 ASCII
-characters.
-
-Returns:
-    22-character ASCII string.
 
 ---
 
@@ -2674,18 +2578,6 @@ Returns:
 ### ensure_parent_dir(path: 'Path') -> 'None'
 
 Create the parent directory of ``path`` if it is missing.
-
-### profiles_dir_for_run(scenario_path: 'Path', output_dir: 'Optional[Path]') -> 'Path'
-
-Return the directory for child worker profiles for ``run --profile``.
-
-Args:
-    scenario_path: The scenario YAML path.
-    output_dir: Optional base output directory.
-
-Returns:
-    ``output_dir/<prefix>.profiles``, or ``worker_profiles`` in the
-    current directory when ``output_dir`` is None.
 
 ### resolve_override_path(override: 'Optional[Path]', output_dir: 'Optional[Path]') -> 'Optional[Path]'
 
@@ -2759,6 +2651,62 @@ Usage:
 
 ---
 
+## ngraph.utils.values
+
+Validation of domain input values and their immutable JSON form.
+
+### frozen_attrs(value: 'object', label: 'str' = 'attrs') -> 'dict[str, JSONValue]'
+
+Validate an attribute mapping once and return its read-only JSON form.
+
+### frozen_dict(items: 'Mapping[Any, Any]' = {}) -> 'dict'
+
+Return a read-only dict holding the given references.
+
+### frozen_json(value: 'object', label: 'str' = 'attrs', *, strict_objects: 'bool' = False) -> 'JSONValue'
+
+Validate finite JSON data and return it in read-only form.
+
+Accepted scalar subclasses become their plain built-in values and mapping
+keys become plain strings. Mappings (only dicts with ``strict_objects``)
+become read-only dicts and lists become read-only lists. A read-only
+container is checked like any other, since record collections share its
+type, and is shared when its contents are already in that form.
+
+### integer(value: 'object', label: 'str', *, minimum: 'int' = 0, maximum: 'int | None' = None) -> 'int'
+
+Validate exact integer domain inputs without accepting booleans.
+
+### json_copy(value: 'object', label: 'str' = 'attrs', *, strict_objects: 'bool' = False) -> 'JSONValue'
+
+Validate finite JSON data and return an editable plain copy.
+
+### own_scalars(record: 'object', label: 'str', names: 'tuple[str, ...]') -> 'None'
+
+Normalize the named scalar fields of a record during its construction.
+
+### owned_dict(items: 'Mapping[Any, Any]', label: 'str') -> 'dict'
+
+Return a read-only dict of the given references under plain built-in keys.
+
+### physical(value: 'object', label: 'str', *, positive: 'bool' = False) -> 'float'
+
+Promote a finite nonnegative physical input to binary64.
+
+### scalar(value: 'Any', label: 'str') -> 'Any'
+
+Store a scalar field as its exact built-in value; refuse other scalar types.
+
+None, bool, int, float, str and Enum members are kept; a subclass of str,
+int or float becomes its stored built-in value; anything else (a NumPy
+scalar, for example) is refused with the field's label.
+
+### shared_copy(self, memo=None)
+
+Copies of an immutable record share it, with the native values it holds.
+
+---
+
 ## ngraph.utils.yaml_utils
 
 Helpers for YAML parsing quirks and configuration key checks.
@@ -2797,777 +2745,594 @@ Examples:
 
 ---
 
-## ngraph.analysis.context
+## ngraph.analysis.capacity
 
-AnalysisContext: prepared graph state for repeated network analysis.
+Named capacity questions evaluated directly by the native evaluators.
 
-AnalysisContext holds the Core graph infrastructure and exposes max-flow,
-shortest-path, and sensitivity analysis over it.
+### CapacityQuery
 
-Usage:
-    # One-off analysis
-    from ngraph import analyze
-    flow = analyze(network).max_flow("^A$", "^B$")
-
-    # Repeated analysis over one prepared graph (bound context)
-    ctx = analyze(network, source="^A$", sink="^B$")
-    baseline = ctx.max_flow()
-    degraded = ctx.max_flow(excluded_links=failed_links)
-
-### AnalysisContext
-
-Prepared graph state for repeated network analysis.
-
-Wraps the Core graph infrastructure. Two usage patterns:
-
-**Unbound** (source/sink given per call):
-
-    ctx = AnalysisContext.from_network(network)
-    cost = ctx.shortest_path_cost("A", "B")
-    flow = ctx.max_flow("A", "B")
-
-Every flow call on an unbound context builds a full temporary bound
-context, which rebuilds the graph from scratch; bind the context instead
-for repeated flow analysis.
-
-**Bound** (source/sink fixed at construction, reused across calls):
-
-    ctx = AnalysisContext.from_network(
-        network,
-        source="^dc/",
-        sink="^edge/"
-    )
-    baseline = ctx.max_flow()  # Uses pre-built pseudo-nodes
-    degraded = ctx.max_flow(excluded_links=failed)
-
-Selectors, here and in every method taking one, are either a regex path
-string or a dict with ``path``/``group_by``/``match``.
-
-Thread Safety:
-    Immutable after creation. Safe for concurrent analysis calls
-    with different exclusion sets.
-
-Attributes:
-    network: Reference to source Network (read-only).
-    is_bound: True if source/sink groups are pre-configured.
+CapacityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicyConfig' = <factory>, mode: "Literal['combine', 'pairwise']" = 'combine', offer: 'float | None' = None, design_demand: 'float | None' = None, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, declaration: 'object' = None)
 
 **Attributes:**
 
-- `_network` ('Network')
-- `_core` (Optional[_GraphBuildResult])
-- `_source` (Optional[Union[str, Dict[str, Any]]])
-- `_sink` (Optional[Union[str, Dict[str, Any]]])
-- `_mode` (Optional[Mode])
-- `_pseudo_context` (Optional[_PseudoNodeContext])
-- `_augmentations` (Tuple[AugmentationEdge, ...]) = ()
-- `_core_lock` (threading.Lock)
-- `_static_path_cache` (Dict[tuple, List[netgraph_core.PredDAG]]) = {}
+- `source` (Selector)
+- `target` (Selector)
+- `config` (ngc.FlowPolicyConfig) = FlowPolicyConfig(routing=CentralizedTE(source_allocation=SourceAllocation.OPTIMIZED), admission=Admission.LOSSLESS)
+- `mode` (Literal['combine', 'pairwise']) = combine
+- `offer` (float | None)
+- `design_demand` (float | None)
+- `failures` (FailureRequest | None)
+- `workers` (Workers) = auto
+- `outputs` (ngc.OutputOptions)
+- `export_cost_distribution` (bool) = False
+- `export_details` (bool) = False
+- `declaration` (object)
 
-**Methods:**
+### capacity(prepared: 'PreparedScenario', query: 'CapacityQuery') -> 'CapacityAnalysis'
 
-- `build_edge_mask(self, excluded_links: 'Optional[Set[str]]' = None) -> 'np.ndarray'` - Build an edge inclusion mask for Core algorithms.
-- `build_node_mask(self, excluded_nodes: 'Optional[Set[str]]' = None) -> 'np.ndarray'` - Build a node inclusion mask for Core algorithms.
-- `from_network(network: "'Network'", *, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, mode: 'Optional[Mode]' = None, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> "'AnalysisContext'"` - Build a context for a network, bound when source and sink are given.
-- `k_shortest_paths(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, max_k: 'int' = 3, max_path_cost: 'float' = inf, max_path_cost_factor: 'Optional[float]' = None, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute up to K shortest paths per group pair.
-- `max_flow(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute maximum flow between node groups.
-- `max_flow_detailed(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None, include_min_cut: 'bool' = False) -> 'Dict[Tuple[str, str], MaxFlowResult]'` - Compute max flow with detailed results including cost distribution.
-- `sensitivity(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], Dict[str, float]]'` - Analyze sensitivity of max flow to edge failures.
-- `sensitivity_with_flow(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], Tuple[float, Dict[str, float]]]'` - Compute max flow and edge sensitivity together per group pair.
-- `shortest_path_cost(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], float]'` - Compute shortest path costs between node groups.
-- `shortest_paths(self, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, *, mode: 'Optional[Mode]' = None, edge_select: 'EdgeSelect' = <EdgeSelect.ALL_MIN_COST: 1>, split_parallel_edges: 'bool' = False, excluded_nodes: 'Optional[Set[str]]' = None, excluded_links: 'Optional[Set[str]]' = None) -> 'Dict[Tuple[str, str], List[Path]]'` - Compute concrete shortest paths between node groups.
+No documentation available.
 
-### AugmentationEdge
+### evaluate(topology, query: 'CapacityQuery', native_pairs, options, workers: 'int')
 
-Edge specification for graph augmentation.
+Evaluate each pair once with the native evaluator the question names.
 
-Augmentation edges are added to the graph as-is (unidirectional).
-Endpoints that are not network nodes become pseudo nodes.
+### evaluation_options(topology, config, offer, design, mask, outputs)
 
-Attributes:
-    source: Source node name (real or pseudo)
-    target: Target node name (real or pseudo)
-    capacity: Edge capacity
-    cost: Edge cost (must be an integer value; Core uses int64 costs)
+No documentation available.
 
-### analyze(network: "'Network'", *, source: 'Optional[Union[str, Dict[str, Any]]]' = None, sink: 'Optional[Union[str, Dict[str, Any]]]' = None, mode: 'Optional[Mode]' = None, augmentations: 'Optional[List[AugmentationEdge]]' = None) -> 'AnalysisContext'
+### maximum_config() -> 'ngc.FlowPolicyConfig'
 
-Create an analysis context for the network.
+No documentation available.
 
-Primary entry point for network analysis in NetGraph.
+### question_kind(config, offer, design)
 
-Args:
-    network: Network topology to analyze.
-    source: Optional source node selector (string path or selector dict).
-            If provided with sink, creates a bound context whose pseudo
-            nodes are pre-built once and reused by every flow call.
-    sink: Optional sink node selector (string path or selector dict).
-    mode: Group mode of a bound context: COMBINE (default) or PAIRWISE.
-        Unbound calls choose the mode per method call.
-    augmentations: Extra edges added to the graph as-is (see
-        AugmentationEdge).
+Name the actual native evaluator question and its offer source.
 
-Returns:
-    AnalysisContext ready for analysis calls.
+### question_pairs(prepared: 'PreparedScenario', query: 'CapacityQuery', label: 'str')
 
-Raises:
-    ValueError: If only one of source/sink is provided, if mode is given
-        without them, or if a bound selector matches no nodes.
-    ValueError: If any link capacity is at or above LARGE_CAPACITY (1e15,
-        the internal pseudo-edge capacity), since such a link would be
-        silently clamped by the pseudo attachment edges in combine-mode
-        flows.
-    ValueError: If any link or augmentation cost is negative or
-        non-integer, or if the total of all edge costs reaches 2**62.
-        Core's int64 cost arithmetic would overflow and silently corrupt
-        SPF and flow results.
+The question's endpoint pairs; the evaluated ones, indexed; their native
+ids; and the pool of each pooled one, by index.
 
-Note:
-    The capacity and cost checks run during the graph build, which happens
-    here for bound contexts and for contexts with custom augmentations,
-    and on first use otherwise.
+A singleton self pair is not evaluated. A pooled pair starts at its pool head.
 
-Examples:
-    One-off analysis (unbound context):
+### validate_capacity_inputs(source, target, config, offer, design, outputs) -> 'None'
 
-        flow = analyze(network).max_flow("^A$", "^B$")
-        paths = analyze(network).shortest_paths("^A$", "^B$")
-
-    Repeated analysis over one prepared graph (bound context):
-
-        ctx = analyze(network, source="^dc/", sink="^edge/")
-        baseline = ctx.max_flow()
-        degraded = ctx.max_flow(excluded_links=failed_links)
-
-    Multiple exclusion scenarios:
-
-        ctx = analyze(network, source="^A$", sink="^B$")
-        for scenario in failure_scenarios:
-            result = ctx.max_flow(excluded_links=scenario)
+No documentation available.
 
 ---
 
-## ngraph.analysis.demand
+## ngraph.analysis.costs
 
-Demand expansion: converts TrafficDemand specs into concrete placement demands.
+Opt-in exact path-cost bins or native marginal-cost pieces.
 
-Combine mode aggregates each side behind augmentation-based pseudo nodes;
-pairwise mode emits one demand per (source, target) pair. Endpoints are
-resolved through the shared selector layer.
+### cost_distribution(topology: ngraph.analysis.topology.PreparedTopology, config: _netgraph_core.FlowPolicyConfig, result: _netgraph_core.PlacementResult, destinations, mask: _netgraph_core.Eligibility, *, pool=None, records=None, shortest_costs=None) -> tuple[ngraph.results.DeliveredByPathCost | ngraph.results.MarginalCurve | None, collections.abc.Mapping[typing.Literal['cost_distribution'], typing.Literal['mixed_cost_dag', 'unsupported_model']]]
 
-### DemandExpansion
+Project only determined costs; callers invoke this only when requested.
 
-Output of expand_demands.
+---
 
-Attributes:
-    demands: Concrete demands ready for placement (sorted by priority).
-    augmentations: Augmentation edges for pseudo nodes (empty for pairwise).
+## ngraph.analysis.demands
+
+Canonical physical selections and total-preserving demand expansion.
+
+### bind_plans(topology: 'PreparedTopology', named: 'NamedRoutes', name: 'str', plans: 'Sequence[_Expansion]') -> 'ResolvedDemandSet'
+
+No documentation available.
+
+### declared_split(named: 'NamedRoutes', config: 'ngc.FlowPolicyConfig | None', policy: 'object' = None) -> 'tuple[ngc.RouteAllocation | None, ngc.WeightBasis | None]'
+
+The route allocation and weight basis a declared model splits by.
+
+Shortest paths report their native allocation and, when weighted, its
+basis. A named pinned declaration reports them only when one of its
+routes is a support DAG (any other allocation counts as equal). Other
+models split by neither.
+
+### expand_units(root: 'ExpansionSplit | ExpansionLeaf', total: 'int') -> 'tuple[tuple[ExpansionLeaf, int], ...]'
+
+No documentation available.
+
+### expansion_plans(network: 'Network', specs: 'DemandSet') -> 'tuple[_Expansion, ...]'
+
+Resolve physical endpoints once; zero and discarded leaves remain in the tree.
+
+### leaves(root: 'ExpansionSplit | ExpansionLeaf') -> 'tuple[ExpansionLeaf, ...]'
+
+No documentation available.
+
+### materialize_config(topology: 'PreparedTopology', named: 'NamedRoutes', endpoints: 'Endpoints', policy) -> 'ngc.FlowPolicyConfig'
+
+No documentation available.
+
+### pool_requirements(plans: 'Sequence[_Expansion]') -> 'dict[str, tuple[str, ...]]'
+
+No documentation available.
+
+### pooled(mode: 'str', declaration: 'object') -> 'bool'
+
+Whether a question's combined sources are a pool.
+
+### refuse_overlap(sources: 'Sequence[str]', destinations: 'Sequence[str]', label: 'str') -> 'None'
+
+No documentation available.
+
+### residual_weights(named: 'NamedRoutes', parents) -> 'bool'
+
+Whether any declared demand weights its split by the residual snapshot.
+
+### resolve_demands(prepared: 'PreparedScenario', specs: 'DemandSet') -> 'ResolvedDemandSet'
+
+No documentation available.
+
+### scaled_expansion(demands: 'ResolvedDemandSet', alpha: 'float', q: 'float') -> 'tuple[Mapping[str, int], tuple[ExpansionAccounting, ...]]'
+
+Rescale physical parents; retain exact discard accounting and zero leaves.
+
+### selected_groups(network: 'Network', selector: 'Selector', label: 'str') -> 'dict[str, tuple[str, ...]]'
+
+No documentation available.
+
+### selected_pairs(network: 'Network', source: 'Selector', target: 'Selector', mode: 'str', label: 'str') -> 'tuple[Endpoints, ...]'
+
+One shared selection/overlap rule for capacity, paths and sensitivity.
+
+---
+
+## ngraph.analysis.failures
+
+Canonical failure draws, graph-owned cases and independent-case scheduling.
+
+### FailureRequest
+
+One failure sampling question.
+
+``policy_name`` names a scenario's policy in the recorded question (an
+unnamed policy is recorded inline); ``seed_source`` records where a given
+``seed`` came from.
 
 **Attributes:**
 
-- `demands` (List[ExpandedDemand])
-- `augmentations` (List[AugmentationEdge])
+- `policy` (FailurePolicy | None)
+- `iterations` (int) = 1
+- `seed` (int | None)
+- `failure_trace` (bool) = False
+- `policy_name` (str | None)
+- `seed_source` (Literal['query', 'step', 'scenario']) = query
 
-### ExpandedDemand
+### failure_cases(prepared: 'PreparedScenario', request: 'FailureRequest | None') -> 'tuple[FailureCase, ...]'
 
-Concrete demand ready for placement.
+The baseline, then each distinct drawn pattern with its draw count.
 
-Uses node names (not IDs) so expansion happens before graph building.
-Node IDs are resolved after the graph is built with pseudo nodes.
+### resolve_workers(workers: 'Workers') -> 'int'
 
-Attributes:
-    src_name: Source node name (real or pseudo).
-    dst_name: Destination node name (real or pseudo).
-    volume: Traffic volume to place.
-    priority: Priority class (lower is higher priority).
-    policy_preset: FlowPolicy configuration preset.
-    static_paths: Routes this demand is pinned to, empty when it is
-        routed by the policy.
-    src_members: Real source node names behind a combine-mode pseudo
-        source, in selection order; empty for pairwise demands. Hop-by-hop
-        presets originate an even share of the volume at each member that
-        can reach a target instead of routing from the pseudo source.
+No documentation available.
+
+### sampling_metadata(request: 'FailureRequest | None') -> 'SamplingMetadata | None'
+
+No documentation available.
+
+### schedule_cases(cases: 'tuple[_Job, ...]', solve: 'Callable[[_Job], _Result]', workers: 'int') -> 'tuple[_Result, ...]'
+
+Publish in case order; all worker cleanup completes before an error leaves.
+
+---
+
+## ngraph.analysis.metadata
+
+Producer identity captured once from the actual imported extension.
+
+### analysis_metadata(workers: int, failures: ngraph.analysis.failures.FailureRequest | None = None) -> ngraph.results.AnalysisMetadata
+
+No documentation available.
+
+### run_metadata(seed: int | None = None) -> ngraph.results.RunMetadata
+
+No documentation available.
+
+---
+
+## ngraph.analysis.msd
+
+Bounded physical-alpha search on one persistent native policy roster.
+
+### MSDQuery
+
+MSDQuery(demands: 'ResolvedDemandSet', alpha_start: 'float' = 1.0, growth_factor: 'float' = 2.0, alpha_min: 'float' = 1e-06, alpha_max: 'float' = 1000000000.0, alpha_tolerance: 'float' = 0.01, max_bracket_iters: 'int' = 32, max_bisect_iters: 'int' = 32, export_probe_rows: 'bool' = False, export_details: 'bool' = False)
 
 **Attributes:**
 
-- `src_name` (str)
-- `dst_name` (str)
-- `volume` (float)
-- `priority` (int)
-- `policy_preset` (FlowPolicyPreset)
-- `static_paths` (Tuple[StaticPath, ...]) = ()
-- `src_members` (Tuple[str, ...]) = ()
+- `demands` (ResolvedDemandSet)
+- `alpha_start` (float) = 1.0
+- `growth_factor` (float) = 2.0
+- `alpha_min` (float) = 1e-06
+- `alpha_max` (float) = 1000000000.0
+- `alpha_tolerance` (float) = 0.01
+- `max_bracket_iters` (int) = 32
+- `max_bisect_iters` (int) = 32
+- `export_probe_rows` (bool) = False
+- `export_details` (bool) = False
 
-### expand_demands(network: 'Network', traffic_demands: 'List[TrafficDemand]') -> 'DemandExpansion'
+### maximum_supported_demand(prepared: 'PreparedScenario', query: 'MSDQuery') -> 'MSDAnalysis'
 
-Expand TrafficDemand specifications into concrete demands with augmentations.
-
-Resolves each demand's selectors to node groups, splits its volume by
-mode and group_mode, and generates pseudo-node augmentation edges for
-combine mode. Inputs are not modified.
-
-Demands carry node names, not IDs, so expansion runs before the graph is
-built; IDs are resolved once the graph includes the augmentations.
-
-Variable expansion (`expand:` blocks) happens earlier, during YAML parsing
-in build_demand_set(), so the TrafficDemand objects here are already
-expanded.
-
-Args:
-    network: Network for node selection.
-    traffic_demands: High-level demand specifications.
-
-Returns:
-    DemandExpansion with demands and augmentations.
-
-Raises:
-    ValueError: If no demands could be expanded, if two demands share an
-        id (pseudo node names embed the id, so duplicates would merge
-        distinct demands' attachment edges into one endpoint), or if a
-        demand with `static_paths` does not resolve to exactly one
-        source/target pair.
+No documentation available.
 
 ---
 
-## ngraph.analysis.failure_manager
+## ngraph.analysis.paths
 
-FailureManager for Monte Carlo failure analysis.
+Named SPF/KSP selection and the declared cross-pair merge.
 
-Runs an analysis function over many failure scenarios, handling failure policy
-application, graph caching, and parallel execution. Used by workflow steps and
-directly from user code.
+### PathQuery
 
-Performance characteristics:
-Time complexity: O(S + I * A / P), where S is one-time graph setup cost,
-I is iteration count, A is per-iteration analysis cost, and P is parallelism.
-Graph caching amortizes graph construction across all iterations: each
-iteration applies its exclusions as boolean masks (a vectorized O(V+E) fill
-plus O(|excluded|) updates) instead of rebuilding the graph.
+PathQuery(source: 'Selector', target: 'Selector', mode: "Literal['combine', 'pairwise']" = 'combine', options: 'ngc.SpfOptions | ngc.KspOptions' = <factory>, costs_only: 'bool' = False, max_paths: 'int | None' = None, split_parallel_edges: 'bool | None' = None)
 
-Space complexity: O(V + E + I * R), where V and E are node and link counts,
-and R is result size per iteration. The pre-built graph is shared across
-all iterations.
+**Attributes:**
 
-Parallelism: The C++ Core backend releases the GIL during computation, so
-Python threads run Core work in parallel. With graph caching, most
-per-iteration work runs in GIL-free C++ code; speedup depends on workload
-and parallelism level.
+- `source` (Selector)
+- `target` (Selector)
+- `mode` (Literal['combine', 'pairwise']) = combine
+- `options` (ngc.SpfOptions | ngc.KspOptions)
+- `costs_only` (bool) = False
+- `max_paths` (int | None)
+- `split_parallel_edges` (bool | None)
 
-### AnalysisFunction
+### paths(prepared: 'PreparedScenario', query: 'PathQuery') -> 'PathAnalysis'
 
-Protocol for analysis functions used with FailureManager.
-
-Analysis functions take a Network, exclusion sets, and analysis-specific
-parameters, returning results of any type.
-
-### FailureManager
-
-Run an analysis function across Monte Carlo failure scenarios.
-
-Applies a failure policy, deduplicates identical failure patterns, and
-runs iterations in parallel. Used by workflow steps and directly from user code.
-
-Executes any analysis function that takes a Network plus exclusion sets and
-returns results, so the same engine covers capacity, traffic, connectivity,
-and custom analyses.
-
-Attributes:
-    network: The underlying network (not modified during analysis).
-    failure_policy_set: Set of named failure policies.
-    policy_name: Name of specific failure policy to use.
-
-**Methods:**
-
-- `compute_exclusions(self, policy: "'FailurePolicy | None'" = None, seed_offset: 'int | None' = None, failure_trace: 'Optional[Dict[str, Any]]' = None) -> 'tuple[set[str], set[str]]'` - Compute set of nodes and links to exclude for a failure iteration.
-- `get_failure_policy(self) -> "'FailurePolicy | None'"` - Return the failure policy named by policy_name, if any.
-- `run_demand_placement_monte_carlo(self, demands_config: 'list[dict[str, Any]] | DemandSet', iterations: 'int' = 100, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_used_edges: 'bool' = False) -> 'Any'` - Analyze traffic demand placement success under failures.
-- `run_max_flow_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False) -> 'Any'` - Compute max-flow capacity envelopes between node groups under failures.
-- `run_monte_carlo_analysis(self, analysis_func: 'AnalysisFunction', iterations: 'int' = 1, parallelism: 'int' = 1, seed: 'int | None' = None, store_failure_patterns: 'bool' = False, **analysis_kwargs) -> 'dict[str, Any]'` - Run Monte Carlo failure analysis with any analysis function.
-- `run_sensitivity_monte_carlo(self, source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', iterations: 'int' = 100, parallelism: 'int' = 1, shortest_path: 'bool' = False, flow_placement: 'FlowPlacement | str' = <FlowPlacement.PROPORTIONAL: 1>, seed: 'int | None' = None, store_failure_patterns: 'bool' = False) -> 'dict[str, Any]'` - Analyze component criticality for flow capacity under failures.
-
----
-
-## ngraph.analysis.functions
-
-Flow analysis functions for FailureManager.
-
-Each function takes a Network, exclusion sets, and analysis-specific
-parameters, and returns a FlowIterationResult.
-
-Graph caching builds the graph once and applies each exclusion set as a
-boolean mask (a vectorized array fill plus O(|excluded|) updates) instead of
-rebuilding.
-
-SPF caching computes the base shortest-path DAG once per unique source node
-rather than once per demand, so SPF runs scale with unique sources.
-
-### build_demand_placement_inputs(network: "'Network'", demands_config: 'list[dict[str, Any]]') -> 'tuple[AnalysisContext, DemandExpansion, list[tuple[int, int]]]'
-
-Build context, expansion, and resolved node IDs for demand placement.
-
-Reconstructs and expands demands once so repeated calls to
-demand_placement_analysis (e.g., Monte Carlo iterations) can skip the
-per-iteration expansion and node-ID resolution work. Building the
-expansion and context together guarantees that pseudo node names
-(derived from demand ids) match the context's graph.
-
-Args:
-    network: Network to analyze.
-    demands_config: List of demand configurations (same format as
-        demand_placement_analysis).
-
-Returns:
-    Tuple of (context, expansion, resolved_ids) where resolved_ids holds
-    (src_id, dst_id) pairs aligned with expansion.demands.
-
-### build_maxflow_context(network: "'Network'", source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine') -> 'AnalysisContext'
-
-Build an AnalysisContext for repeated max-flow analysis.
-
-Pre-computes the graph with pseudo source/target nodes for all source/target
-pairs, so each iteration only builds exclusion masks.
-
-Args:
-    network: Network to analyze.
-    source: Source node selector (string path or selector dict).
-    target: Target node selector (string path or selector dict).
-    mode: Flow analysis mode ("combine" or "pairwise").
-
-Returns:
-    AnalysisContext ready for use with max_flow_analysis or sensitivity_analysis.
-
-### demand_placement_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', demands_config: 'list[dict[str, Any]]', include_flow_details: 'bool' = False, include_used_edges: 'bool' = False, context: 'Optional[AnalysisContext]' = None, expansion: 'Optional[DemandExpansion]' = None, resolved_ids: 'Optional[Sequence[tuple[int, int]]]' = None) -> 'FlowIterationResult'
-
-Analyze traffic demand placement success rates using Core directly.
-
-Steps:
-
-1. Build Core infrastructure (graph, algorithms, flow_graph), or reuse the
-
-   pre-built ``context``
-
-2. Expand demands into concrete (src, dst, volume) tuples (or use a
-
-   pre-computed expansion)
-
-3. Place each demand using SPF caching for cacheable policies, in priority
-
-   order and input order within a priority; nothing is revisited.
-   SHORTEST_PATHS_* presets place in one pass on the cost-only shortest
-   paths of the base topology: ``_ECMP`` admits what the equal-cost next
-   hops carry without loss, ``_ECMP_LOSSY`` delivers what survives
-   per-link drops, ``_WCMP`` splits by residual capacity. A combine-mode
-   demand is a virtual source: with one of these presets every source
-   that can reach a target originates an even share, and under
-   ``_ECMP`` the pool is admitted at one global scale. TE_* presets
-   reroute remaining volume onto residual-capacity paths.
-
-4. Fall back to FlowPolicy for presets outside CACHEABLE_PRESETS
-5. Aggregate results into FlowIterationResult. With
-
-   ``include_flow_details`` a lossy demand's entry carries
-   ``data["dropped_edges"]``, the dropped volume per ``link_id:direction``.
-
-SPF Caching:
-    For cacheable presets (the hop-by-hop ``SHORTEST_PATHS_*`` presets and
-    ``TE_WCMP_UNLIM``), base SPF DAGs are cached by source node, which
-    cuts SPF runs from O(demands) to O(unique_sources).
-
-Args:
-    network: Network to analyze.
-    excluded_nodes: Set of node names to exclude temporarily.
-    excluded_links: Set of link IDs to exclude temporarily.
-    demands_config: List of demand configurations (serializable dicts).
-    include_flow_details: When True, include cost_distribution per flow.
-    include_used_edges: When True, include set of used edges per demand in entry data.
-    context: Pre-built AnalysisContext, reused across calls. Must be built
-        from this same demands_config: pseudo node names embed demand
-        ids, so a context built from a different config raises ValueError
-        during endpoint resolution. See build_demand_placement_inputs.
-    expansion: Pre-computed DemandExpansion matching demands_config. When
-        provided, per-call demand reconstruction and expansion are skipped.
-        Must be built together with ``context`` (pseudo node names embed
-        demand ids); see build_demand_placement_inputs.
-    resolved_ids: Pre-resolved (src_id, dst_id) pairs aligned with
-        expansion.demands. Only valid together with ``context``.
-
-Returns:
-    FlowIterationResult with one entry per expanded demand.
-
-### max_flow_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, require_capacity: 'bool' = True, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, include_flow_details: 'bool' = False, include_min_cut: 'bool' = False, context: 'Optional[AnalysisContext]' = None) -> 'FlowIterationResult'
-
-Analyze maximum flow capacity between node groups.
-
-Args:
-    network: Network to analyze.
-    excluded_nodes: Set of node names to exclude temporarily.
-    excluded_links: Set of link IDs to exclude temporarily.
-    source: Source node selector (string path or selector dict).
-    target: Target node selector (string path or selector dict).
-    mode: Flow analysis mode ("combine" or "pairwise").
-    shortest_path: If True, use single-tier shortest-path flow (IP/IGP
-        mode) instead of full iterative max-flow.
-    require_capacity: If True (default), path selection considers available
-        capacity. If False, path selection is cost-only (IP/IGP semantics).
-    flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
-    include_flow_details: Whether to fill each entry's cost_distribution.
-    include_min_cut: Whether to include min-cut edge list in entry data.
-    context: Pre-built AnalysisContext reused across calls, bound to
-        these same source/target/mode arguments (see
-        ``build_maxflow_context``).
-
-Returns:
-    FlowIterationResult with one entry per source/sink pair; demand and
-    placed both equal the max flow.
-
-Raises:
-    ValueError: If ``context`` is unbound or bound to different
-        source/target/mode arguments.
-
-### sensitivity_analysis(network: "'Network'", excluded_nodes: 'Set[str]', excluded_links: 'Set[str]', source: 'str | dict[str, Any]', target: 'str | dict[str, Any]', mode: 'str' = 'combine', shortest_path: 'bool' = False, flow_placement: 'FlowPlacement' = <FlowPlacement.PROPORTIONAL: 1>, context: 'Optional[AnalysisContext]' = None) -> 'FlowIterationResult'
-
-Analyze component sensitivity to failures.
-
-Identifies critical edges (saturated edges) and computes the flow reduction
-caused by removing each one. Returns a FlowIterationResult where each
-FlowEntry represents a source/target pair with:
-
-- demand/placed = max flow value (the capacity being analyzed)
-- dropped = 0.0 (the max flow is reported as fully placed)
-- data["sensitivity"] = {link_id:direction: flow_reduction} for critical edges
-
-Args:
-    network: Network to analyze.
-    excluded_nodes: Set of node names to exclude temporarily.
-    excluded_links: Set of link IDs to exclude temporarily.
-    source: Source node selector (string path or selector dict).
-    target: Target node selector (string path or selector dict).
-    mode: Flow analysis mode ("combine" or "pairwise").
-    shortest_path: If True, use single-tier shortest-path flow (IP/IGP mode).
-        Reports only edges used under ECMP routing. If False (default), use
-        full iterative max-flow (SDN/TE mode) and report all saturated edges.
-    flow_placement: PROPORTIONAL (WCMP) or EQUAL_BALANCED (ECMP).
-    context: Pre-built AnalysisContext reused across calls, bound to
-        these same source/target/mode arguments (see
-        ``build_maxflow_context``).
-
-Returns:
-    FlowIterationResult with sensitivity data in each FlowEntry.data.
-
-Raises:
-    ValueError: If ``context`` is unbound or bound to different
-        source/target/mode arguments.
+No documentation available.
 
 ---
 
 ## ngraph.analysis.placement
 
-Core demand placement with SPF caching.
+Ordered native policy actions and explicit ledger ownership.
 
-### PlacementEntry
+### PlacementQuery
 
-Single demand placement result.
-
-Attributes:
-    src_name: Source node name (real or pseudo).
-    dst_name: Destination node name (real or pseudo).
-    priority: Priority class.
-    volume: Requested volume.
-    placed: Placed volume. For ``SHORTEST_PATHS_ECMP_LOSSY`` this is the
-        volume delivered to the destination.
-    cost_distribution: Placed volume by path cost, when requested.
-    used_edges: ``link_id:direction`` of every edge carrying this demand,
-        when requested.
-    dropped_edges: Dropped volume by ``link_id:direction``, when requested;
-        only lossy presets drop.
+PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, alpha_from_step: 'str | None' = None)
 
 **Attributes:**
 
-- `src_name` (str)
-- `dst_name` (str)
-- `priority` (int)
-- `volume` (float)
-- `placed` (float)
-- `cost_distribution` (dict[float, float]) = {}
-- `used_edges` (set[str]) = set()
-- `dropped_edges` (dict[str, float]) = {}
+- `demands` (ResolvedDemandSet)
+- `alpha` (float) = 1.0
+- `failures` (FailureRequest | None)
+- `workers` (Workers) = auto
+- `outputs` (ngc.OutputOptions)
+- `export_cost_distribution` (bool) = False
+- `export_details` (bool) = False
+- `alpha_from_step` (str | None)
 
-### PlacementResult
+### place(prepared: 'PreparedScenario', query: 'PlacementQuery') -> 'PlacementAnalysis'
 
-Result of one `place_demands` call.
+No documentation available.
 
-Attributes:
-    summary: Aggregated demand and placed totals.
-    entries: Per-demand results, or None unless the call passed
-        ``collect_entries=True``.
+### policy_roster(topology: 'PreparedTopology', demands: 'Sequence[ResolvedDemand]', mask: 'ngc.Eligibility') -> 'tuple[ngc.FlowLedger, tuple[ngc.FlowPolicy, ...]]'
 
-**Attributes:**
+Create one private ledger and stable policy identities for a case or series.
 
-- `summary` (PlacementSummary)
-- `entries` (list[PlacementEntry] | None)
+### remove_policies(policies: 'Sequence[ngc.FlowPolicy]') -> 'None'
 
-### PlacementSummary
+Release every owner explicitly; destruction is not a cleanup operation.
 
-Aggregated placement totals.
+### replace_matrix(ledger: 'ngc.FlowLedger', policies: 'Sequence[ngc.FlowPolicy]', requests: 'Sequence[int]', outputs: 'ngc.OutputOptions | None' = None) -> 'tuple[ngc.PlacementResult, ...]'
 
-Attributes:
-    total_demand: Sum of demand volumes.
-    total_placed: Sum of placed volumes.
-    max_shortfall: Largest ``volume - placed`` over all demands.
-    unserved_demands: Demands with positive volume that placed nothing.
-
-**Attributes:**
-
-- `total_demand` (float)
-- `total_placed` (float)
-- `max_shortfall` (float) = 0.0
-- `unserved_demands` (int) = 0
-
-### place_demands(demands: "Sequence['ExpandedDemand']", volumes: 'Sequence[float]', flow_graph: 'netgraph_core.FlowGraph', ctx: "'AnalysisContext'", node_mask: 'np.ndarray', edge_mask: 'np.ndarray', *, resolved_ids: 'Sequence[tuple[int, int]] | None' = None, collect_entries: 'bool' = False, include_cost_distribution: 'bool' = False, include_used_edges: 'bool' = False, dag_cache: 'dict[tuple, tuple[np.ndarray, Any]] | None' = None) -> 'PlacementResult'
-
-Place demands on a flow graph with SPF caching.
-
-Demands are placed one at a time in the given order (callers sort by
-priority), each seeing the residual left by the ones before it. Nothing
-is revisited, so within a priority class earlier demands win contended
-capacity and the totals of rerouting presets depend on demand order.
-
-Hop-by-hop presets (``HOP_BY_HOP_PRESETS``) place each demand in one pass
-on the cost-only shortest-path DAG of its source. A combine-mode demand
-pools the selected sources behind a virtual source: with such a preset
-(``ExpandedDemand.src_members`` set) every member that can reach a target
-originates an even share of the volume, since hop-by-hop routing has no
-controller that could choose where traffic originates, and each share is
-routed to that member's nearest targets. Under lossless ECMP the pool is
-admitted as one demand at a single scale. TE presets keep the aggregated
-pseudo source and let capacity decide which members originate. A fixed
-per-source matrix is a different question, answered by pairwise or
-per-group expansion.
-
-Args:
-    demands: Expanded demands (policy_preset, priority, names).
-    volumes: Volume per demand, positionally aligned with `demands`;
-        passed separately so callers can scale without rebuilding demands.
-    flow_graph: Target FlowGraph; placed flow accumulates here.
-    ctx: AnalysisContext holding the built graph and Core algorithms.
-    node_mask: Node inclusion mask (True = include), as built by
-        ctx.build_node_mask.
-    edge_mask: Edge inclusion mask (True = include), as built by
-        ctx.build_edge_mask.
-    resolved_ids: Pre-resolved (src_id, dst_id) pairs. Computed from the
-        demand names if None.
-    collect_entries: If True, populate result.entries.
-    include_cost_distribution: Include cost distribution and, for lossy
-        presets, dropped volume per link in entries.
-    include_used_edges: Include used edges in entries.
-    dag_cache: Optional persistent SPF DAG cache. Base DAGs are keyed by
-        ``(src_id, uses_capacity_aware_selection)`` and combine-mode
-        fan-out DAGs by ``(dst_id, "fanout")``. All of them depend only
-        on the static graph and masks, so repeated calls with the same
-        context and masks (e.g. MSD probes) can share one cache.
-
-Returns:
-    PlacementResult with summary and optional entries.
-
-Raises:
-    ValueError: If a demand endpoint is not present in ``ctx``'s graph
-        (checked only when ``resolved_ids`` is not supplied). Pseudo node
-        names embed demand ids, so this usually means the context was
-        built from a different demands_config.
-    ValueError: If two policy-based demands (presets outside
-        CACHEABLE_PRESETS) share the same (src, dst, priority): their
-        FlowIndex values would collide and silently merge in FlowGraph.
-    ValueError: If ``demands``, ``volumes``, and ``resolved_ids`` are not
-        all the same length.
+Remove the whole previous matrix, then submit full Replace requests once.
 
 ---
 
-## ngraph.analysis.static_paths
+## ngraph.analysis.precision
 
-Resolution of explicit routes into Core path bundles.
+Local split-precision constraints of native observations, under one set of rules.
 
-Turns the `StaticPath` entries on a demand into the `PredDAG` bundles that
-`FlowPolicy.set_static_paths` pins traffic to. A bundle is a single simple
-path: one edge per hop, so a route that names adjacent nodes with parallel
-links between them picks one of those links (see `StaticPath`).
+A placed demand and an evaluated capacity question split traffic by the same
+rules: sources share a demand equally, tunnels share a head, and DAG routers
+share their incoming amount by allocation and weights. The rules read their
+facts from one of two observers: a placement's native records, or the
+searches a capacity evaluator would make on an empty ledger.
 
-### build_static_path_bundles(ctx: "'AnalysisContext'", paths: 'Sequence[StaticPath]', src_name: 'str', dst_name: 'str') -> 'List[netgraph_core.PredDAG]'
+### dag_bounds(topology, dags, injections, destinations, allocation, weights, label, precision, *, allowed_edges=None)
 
-Build the Core path bundles a demand is pinned to.
+Rational split propagation over native-selected DAGs, without capacity/admission.
 
-Args:
-    ctx: Context holding the built graph; routes resolve against it.
-    paths: Routes to pin, in the order flows should be created.
-    src_name: Node every route must start at.
-    dst_name: Node every route must end at.
+### expansion_bounds(plans, q, precision, alpha=1.0)
 
-Returns:
-    One `PredDAG` per route, in the given order. Results are cached per
-    context, so repeated calls during a Monte Carlo run resolve once.
+Describe continuous declared splits on the fixed ordered tree.
 
-Raises:
-    ValueError: If an endpoint is absent from the context graph, if a
-        route names an unknown node or a disabled/unknown link, has a hop
-        whose nodes are joined only by disabled links, has a hop with
-        no link, traverses a link that does not leave the node it has
-        reached, does not run from `src_name` to `dst_name`, or revisits
-        a node (a pinned route must be a simple path).
+### observed_inputs(prepared: 'PreparedScenario', inputs)
+
+Reuse exact prepared atoms; scaled or query-local atoms remain local.
+
+### placement_inputs(prepared: 'PreparedScenario', demands, alpha)
+
+The input observations shared by cases of one fixed-alpha question.
+
+### placement_miss(prepared: 'PreparedScenario', demands, owners, results, records, mask, alpha, location, observations) -> 'PrecisionMiss | None'
+
+The missed local targets of one placement on the fixed prepared q.
+
+### placement_splits(topology: 'PreparedTopology', named: 'NamedRoutes', demands, owners, results, record_sets, mask, alpha, precision)
+
+Describe actual native records; never rerun a placement to obtain a report.
+
+### query_has_splits(query) -> 'bool'
+
+Whether this native allocation has local split constraints at all.
+
+### query_inputs(prepared: 'PreparedScenario', query, label)
+
+The input observations of one capacity question, shared by its cases.
+
+### query_miss(prepared: 'PreparedScenario', query, observations, location, inputs) -> 'PrecisionMiss | None'
+
+The missed local targets of one capacity question's evaluations.
+
+``observations`` holds (pair, delivered units, eligibility, label, pool)
+rows.
+
+### query_splits(topology, named, query, pair, delivered, mask, label, precision, pool=None)
+
+Describe this native evaluation's splits, without another traffic solve.
+
+### question_inputs(offer, design_demand, declaration)
+
+A capacity question's physical atoms, by field, known before evaluation.
+
+### split_constraint(kind: "Literal['expansion', 'source', 'router', 'tunnel']", label: 'str', incoming: 'Fraction', members: 'int', q: 'float', precision: 'float') -> 'SplitConstraint'
+
+Record a local split bound without solving admission or forwarding.
 
 ---
 
-## ngraph.lib.nx
+## ngraph.analysis.preparation
 
-NetworkX graph conversion utilities.
+Assemble one prepared graph, unit and demand binding for a scenario's questions.
 
-Convert between NetworkX graphs and the internal graph representation that
-ngraph's algorithms run on.
+Preparation decides what is asked (which steps, demand sets and capacity
+questions are active) and observes each candidate resolution once; the units
+module calculates conversions, reports and the choice of resolution.
 
-Example:
-    >>> import networkx as nx
-    >>> from ngraph.lib.nx import from_networkx, to_networkx
-    >>>
-    >>> # Create a NetworkX graph
-    >>> G = nx.DiGraph()
-    >>> G.add_edge("A", "B", capacity=100.0, cost=10)
-    >>> G.add_edge("B", "C", capacity=50.0, cost=5)
-    >>>
-    >>> # Convert to ngraph format for analysis
-    >>> graph, node_map, edge_map = from_networkx(G)
-    >>>
-    >>> # Use with ngraph algorithms...
-    >>>
-    >>> # Convert back to NetworkX
-    >>> G_out = to_networkx(graph, node_map)
+### PreparedScenario
 
-### EdgeMap
+One graph, unit and demand binding over a read-only view of a scenario.
 
-Bidirectional mapping between internal edge IDs and original edge references.
-
-When converting a NetworkX graph, each edge is assigned an internal integer ID
-(ext_edge_id). Keep the map to interpret algorithm results and write them
-back to the original graph.
-
-Attributes:
-    to_ref: Maps internal edge ID to original (source, target, key) tuple
-    from_ref: Maps original (source, target, key) to list of internal edge IDs
-        (list because bidirectional=True creates two IDs per edge)
-
-Example:
-    >>> graph, node_map, edge_map = from_networkx(G)
-    >>> # edge_flow_view() is indexed by internal Core edge index, so
-    >>> # translate through ext_edge_ids_view() before using to_ref.
-    >>> ext_edge_ids = graph.ext_edge_ids_view()
-    >>> for edge_idx, flow in enumerate(flow_state.edge_flow_view()):
-    ...     if flow > 0:
-    ...         u, v, key = edge_map.to_ref[int(ext_edge_ids[edge_idx])]
-    ...         G.edges[u, v, key]["flow"] = flow  # G.edges[u, v] for a DiGraph
+``units_report`` is the nominal preparation's report; each analysis
+returns its own precision misses beside it.
 
 **Attributes:**
 
-- `to_ref` (Dict[int, NxEdgeTuple]) = {}
-- `from_ref` (Dict[NxEdgeTuple, List[int]]) = {}
+- `scenario` (Scenario)
+- `topology` (PreparedTopology)
+- `demand_sets` (Mapping[str, ResolvedDemandSet])
+- `units_report` (UnitsReport)
+- `_named` (NamedRoutes)
+- `_membership` (MembershipIndex)
+- `_inputs` (Mapping[str, tuple[_InputKind, float]])
+- `_input_observations` (Mapping[str, tuple[InputQuantization, InputConstraint | None]])
+- `_steps` (tuple[tuple[str, int | None, SeedSource], ...])
 
-### NodeMap
+### StepNeeds
 
-Bidirectional mapping between node names and integer indices.
+What preparation must know of one workflow step's question.
 
-When converting a NetworkX graph to the internal representation, node names
-(which can be any hashable type) are mapped to contiguous integer indices
-starting from 0. Keep the map to interpret results and convert back.
-
-Attributes:
-    to_index: Maps original node names to integer indices
-    to_name: Maps integer indices back to original node names
-
-Example:
-    >>> node_map = NodeMap.from_names(["A", "B", "C"])
-    >>> node_map.to_index["A"]
-    0
-    >>> node_map.to_name[1]
-    'B'
+``numerical`` steps are evaluated at the prepared resolution. A step may
+name a demand set to bind, a failure policy, and an earlier step whose
+feasible alpha it uses (one that ``provides_alpha``). ``capacity`` builds
+the step's capacity question, which preparation evaluates once per
+candidate resolution; ``inputs`` are that question's physical amounts, by
+field name. ``pool_endpoints`` are the source and target of a question
+whose combined sources are a pool: preparation gives them a private head.
 
 **Attributes:**
 
-- `to_index` (Dict[Hashable, int]) = {}
-- `to_name` (Dict[int, Hashable]) = {}
+- `numerical` (bool) = False
+- `demand_set` (str | None)
+- `failure_policy` (str | None)
+- `alpha_from_step` (str | None)
+- `provides_alpha` (bool) = False
+- `capacity` (Callable[[PreparedScenario], CapacityQuery] | None)
+- `inputs` (Mapping[str, tuple[_InputKind, float]]) = {}
+- `pool_endpoints` (tuple[Selector, Selector] | None)
+
+### prepare_scenario(scenario: 'Scenario', settings: 'UnitsSettings', requested: 'tuple[str, ...]') -> 'PreparedScenario'
+
+Prepare a read-only scenario view; the steps' needs decide what is bound.
+
+---
+
+## ngraph.analysis.programs
+
+Resolve declared physical routes, supports and weights into native programs.
+
+### compile_named(topology, *, routes=None, supports=None, weights=None)
+
+Validate all named references and own one native value per graph/name.
+
+### edge_id(topology: 'PreparedTopology', ref: 'DirectedLink', label: 'str') -> 'int'
+
+No documentation available.
+
+### explicit_weights(topology: 'PreparedTopology', spec: 'WeightSpec', label: 'str') -> 'tuple[int, ...]'
+
+Unlisted edges have weight zero; duplicates are errors, never summed.
+
+### hop_index(topology: 'PreparedTopology') -> 'dict[tuple[int, int], int]'
+
+The cheapest enabled physical edge of each node pair, by (cost, link, direction).
+
+### pinned_config(topology: 'PreparedTopology', endpoints: 'Endpoints', declaration: 'PinnedRoutes', named: 'NamedRoutes') -> 'ngc.FlowPolicyConfig'
+
+No documentation available.
+
+### route_definition(topology: 'PreparedTopology', spec: 'RouteSpec', supports: 'Mapping[str, ngc.PredecessorDAG]', hops_by_pair: 'Mapping[tuple[int, int], int]', label: 'str') -> 'ngc.RouteDefinition'
+
+No documentation available.
+
+### support_dag(topology: 'PreparedTopology', spec: 'SupportSpec', label: 'str') -> 'ngc.PredecessorDAG'
+
+Build the declared DAG once, validating duplicate and cyclic supports natively.
+
+### validate_pinned(declaration, routes, weights)
+
+No documentation available.
+
+---
+
+## ngraph.analysis.sensitivity
+
+Directed-edge sensitivity of one native model at a fixed question.
+
+### SensitivityQuery
+
+SensitivityQuery(source: 'Selector', target: 'Selector', config: 'ngc.FlowPolicyConfig', offer: 'float | None' = None, design_demand: 'float | None' = None, eligibility: 'ngc.Eligibility | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_details: 'bool' = False)
+
+**Attributes:**
+
+- `source` (Selector)
+- `target` (Selector)
+- `config` (ngc.FlowPolicyConfig)
+- `offer` (float | None)
+- `design_demand` (float | None)
+- `eligibility` (ngc.Eligibility | None)
+- `workers` (Workers) = auto
+- `outputs` (ngc.OutputOptions)
+- `export_details` (bool) = False
+
+### edge_sensitivity(prepared: 'PreparedScenario', query: 'SensitivityQuery') -> 'SensitivityAnalysis'
+
+No documentation available.
+
+---
+
+## ngraph.analysis.topology
+
+Compile named physical links and finite TE ingresses into one native graph.
+
+### NamedRoutes
+
+Declared routes, supports and weights, and their native forms on one graph.
+
+**Attributes:**
+
+- `route_specs` (Mapping[str, RouteSpec]) = {}
+- `support_specs` (Mapping[str, SupportSpec]) = {}
+- `weight_specs` (Mapping[str, WeightSpec]) = {}
+- `routes` (Mapping[str, ngc.RouteDefinition]) = {}
+- `supports` (Mapping[str, ngc.PredecessorDAG]) = {}
+- `weights` (Mapping[str, tuple[int, ...]]) = {}
 
 **Methods:**
 
-- `from_names(names: 'List[Hashable]') -> "'NodeMap'"` - Create a NodeMap from a list of node names.
+- `vector(self, name: 'str') -> 'tuple[int, ...]'` - The named explicit edge weights.
 
-### from_networkx(G: 'NxGraph', *, capacity_attr: 'str' = 'capacity', cost_attr: 'str' = 'cost', default_capacity: 'float' = 1.0, default_cost: 'int' = 1, bidirectional: 'Optional[bool]' = None) -> 'Tuple[netgraph_core.StrictMultiDiGraph, NodeMap, EdgeMap]'
+### PreparedTopology
 
-Convert a NetworkX graph to ngraph's internal graph format.
+One graph with network labels; native edge arrays remain authoritative.
 
-Converts any NetworkX graph (DiGraph, MultiDiGraph, Graph, MultiGraph) to
-netgraph_core.StrictMultiDiGraph. Node names are mapped to integer indices;
-the returned NodeMap and EdgeMap preserve mappings for result interpretation.
+``pool_heads`` maps each finite TE ingress pool to its synthetic head node.
 
-Args:
-    G: NetworkX graph (DiGraph, MultiDiGraph, Graph, or MultiGraph)
-    capacity_attr: Edge attribute name for capacity (default: "capacity")
-    cost_attr: Edge attribute name for cost (default: "cost"). Cost values
-        must be integers (netgraph_core requires int64 costs); fractional
-        values raise ValueError.
-    default_capacity: Capacity value when attribute is missing (default: 1.0)
-    default_cost: Cost value when attribute is missing (default: 1).
-        Must be an integer value.
-    bidirectional: If True, add a reverse edge for each edge. If None
-        (default), inferred from the graph type: directed inputs get one
-        arc per edge, undirected inputs get antiparallel arc pairs (the
-        standard undirected-to-directed reduction for max-flow and
-        reachability). Pass an explicit True or False to override.
+**Attributes:**
 
-Returns:
-    Tuple of (graph, node_map, edge_map) where:
+- `graph` (ngc.Graph)
+- `node_names` (tuple[str, ...])
+- `node_id_by_name` (Mapping[str, int])
+- `edge_refs` (tuple[DirectedLink | SyntheticIngress, ...])
+- `edges_by_link` (Mapping[str, tuple[int, int]])
+- `disabled` (ngc.Eligibility)
+- `q` (float)
+- `pool_heads` (Mapping[str, int])
+- `_edge_id_by_ref` (Mapping[DirectedLink | SyntheticIngress, int])
 
-- graph: netgraph_core.StrictMultiDiGraph ready for algorithms
-- node_map: NodeMap for converting node indices back to names
-- edge_map: EdgeMap for converting edge IDs back to (u, v, key) refs
+### compile_topology(network: 'Network', q: 'float', *, pools: 'Mapping[str, tuple[str, ...]] | None' = None) -> 'PreparedTopology'
 
-Raises:
-    TypeError: If G is not a NetworkX graph
-    ValueError: If graph has no nodes, or an edge cost is not an integer
-        value
+Compile a candidate graph, refusing directed capacity/cost sums out of range.
 
-Example:
-    >>> import networkx as nx
-    >>> G = nx.DiGraph()
-    >>> G.add_edge("src", "dst", capacity=100.0, cost=10)
-    >>> graph, node_map, edge_map = from_networkx(G)
-    >>> graph.num_nodes()
-    2
-    >>> node_map.to_index  # node indices assigned in sorted-name order
-    {'dst': 0, 'src': 1}
-    >>> edge_map.to_ref[0]  # edge refs preserve original (u, v, key)
-    ('src', 'dst', 0)
+### cost_units(value, label)
 
-### to_networkx(graph: 'netgraph_core.StrictMultiDiGraph', node_map: 'Optional[NodeMap]' = None, *, capacity_attr: 'str' = 'capacity', cost_attr: 'str' = 'cost') -> 'nx.MultiDiGraph'
+Positive integral costs keep their value; no offset or rounding.
 
-Convert ngraph's internal graph format back to NetworkX MultiDiGraph.
+### eligibility(topology: 'PreparedTopology', excluded_nodes=(), excluded_links=(), excluded_edges=()) -> 'ngc.Eligibility'
 
-Each Core edge becomes one NetworkX edge carrying only capacity and cost,
-so reverse arcs added by ``from_networkx(bidirectional=True)`` come back as
-separate edges.
+Intersect physical failures with declared disabled nodes and links.
 
-Args:
-    graph: netgraph_core.StrictMultiDiGraph to convert
-    node_map: Optional NodeMap to restore original node names.
-        If None, nodes are labeled 0, 1, 2, ...
-    capacity_attr: Edge attribute name for capacity (default: "capacity")
-    cost_attr: Edge attribute name for cost (default: "cost")
+---
 
-Returns:
-    nx.MultiDiGraph with edges and attributes from the internal graph
+## ngraph.analysis.totals
 
-Raises:
-    KeyError: If ``node_map`` lacks an entry for a node index of ``graph``
+Exact converged-state totals with the declared reference denominator.
 
-Example:
-    >>> graph, node_map, edge_map = from_networkx(G)
-    >>> # ... run algorithms ...
-    >>> G_out = to_networkx(graph, node_map)
-    >>> list(G_out.nodes())
-    ['A', 'B', 'C']
+### placement_totals(entries) -> ngraph.results.PlacementTotals
+
+Totals of (demand id, reference request units, native result) entries.
+
+---
+
+## ngraph.analysis.units
+
+Exact physical conversion, unit reports and the choice of one resolution.
+
+### UnitRangeError
+
+A validated physical amount exceeded the fixed native units domain.
+
+### UnitsSettings
+
+One physical unit and the local relative precision target.
+
+**Attributes:**
+
+- `resolution` (float | Literal['auto']) = auto
+- `precision` (float) = 0.001
+
+### choose_resolution(settings: 'UnitsSettings', inputs: 'Mapping[str, tuple[_InputKind, float]]', coefficients: 'Mapping[str, int]', split_bounds: 'Iterable[Fraction]', candidate: 'Callable[[float], tuple[Candidate, bool]]') -> 'tuple[Candidate, RangeConstraint | None]'
+
+Choose q by the fixed recipe and return the chosen candidate.
+
+``coefficients`` counts each link capacity's directed copies in the
+augmented graph; ``split_bounds`` are the declared expansion bounds, which
+like the input bounds do not depend on q. ``candidate(q)`` prepares one
+resolution and says whether it meets the target. Automatic choice takes the
+coarsest range-valid q within the declared bounds that meets the target,
+else the finest range-valid one. The second value is the range failure of
+the next finer q, which the caller reports as binding.
+
+### input_constraint(label: 'str', value: 'float', q: 'float', precision: 'float') -> 'InputConstraint | None'
+
+Positive inputs retain their precision constraint even if rounded to zero.
+
+### input_observations(inputs, q, precision)
+
+Own one complete set of exact input samples and constraints per unit.
+
+### input_samples(inputs: 'Mapping[str, tuple[_InputKind, float]]', q: 'float') -> 'tuple[InputQuantization, ...]'
+
+Describe all input errors exactly, before truncating report examples.
+
+### make_report(q, settings, scope, inputs, capacity_sum, cost_sum, splits=(), extra=(), misses=(), *, observations=None)
+
+Build a report from complete observations; examples are only a sample.
+
+### precision_miss(location, samples, constraints) -> 'PrecisionMiss | None'
+
+One observation's missed local targets, or None when all are met.
+
+### quantize(value: 'float', q: 'float', label: 'str') -> 'int'
+
+Quantize the promoted binary64 amount using Core's half-up rule.
+
+### scaled_units(volume: 'float', alpha: 'float', q: 'float', label: 'str') -> 'int'
+
+Scale the original physical total once, then quantize once.
+
+### split_units(total: 'int', members: 'int') -> 'tuple[int, ...]'
+
+Allocate a declared total in canonical quotient/remainder order.
+
+### validate_resolution(q: 'float') -> 'float'
+
+No documentation available.
+
+### with_splits(report, splits, extra)
+
+Complete the existing input report without observing its inputs again.
 
 ---
 

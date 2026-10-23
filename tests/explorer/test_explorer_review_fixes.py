@@ -80,7 +80,7 @@ class TestGetNodeUtilizationEnabledOnly:
 
     def test_disabled_nodes_have_no_snapshot(self) -> None:
         net = _network_with_hw()
-        net.nodes["dc2/b"].disabled = True
+        net.disable_node("dc2/b")
         explorer = NetworkExplorer.explore_network(net, components_library=_library())
         utils = explorer.get_node_utilization()
         assert [u.node_name for u in utils] == ["dc1/a"]

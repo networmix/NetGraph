@@ -1,170 +1,90 @@
-"""Workflow step for basic node and link statistics.
-
-Computes node and link counts plus mean, median, min, and max of link
-capacity, link cost, and node degree. Excluded entities are filtered out
-without modifying the base network; disabled nodes and links are excluded too
-unless `include_disabled` is set. A link counts only when both endpoints
-remain.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: NetworkStats
-        name: "network_statistics"           # Optional: Custom name for this step
-        include_disabled: false              # Include disabled nodes/links in stats
-        excluded_nodes: ["node1", "node2"]   # Optional: Temporary node exclusions
-        excluded_links: ["link1", "link3"]   # Optional: Temporary link exclusions
-    ```
-
-Results stored in `scenario.results` under `data`:
-    - Node statistics: node_count
-    - Link statistics: link_count, total_capacity, mean_capacity, median_capacity,
-      min_capacity, max_capacity, mean_cost, median_cost, min_cost, max_cost
-    - Degree statistics: mean_degree, median_degree, min_degree, max_degree
-"""
-
-from __future__ import annotations
+"""Statistics of the named physical network, with temporary exclusions."""
 
 from dataclasses import dataclass
 from statistics import mean, median
-from typing import TYPE_CHECKING, Dict, Iterable
+from typing import ClassVar
 
-from ngraph.logging import get_logger
+from ngraph.results import (
+    NetworkStatsResult,
+    StepContext,
+    StepOutput,
+)
+from ngraph.utils.values import own_scalars, shared_copy
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
-if TYPE_CHECKING:
-    from ngraph.scenario import Scenario
 
-logger = get_logger(__name__)
+def _names(values, label):
+    if isinstance(values, str):
+        raise ValueError(f"{label}: expected a sequence of names")
+    values = tuple(values)
+    if not all(isinstance(name, str) and name for name in values):
+        raise ValueError(f"{label}: expected nonempty string names")
+    return tuple(sorted({str.__str__(name) for name in values}))
 
 
+@register_workflow_step("NetworkStats")
 @dataclass
 class NetworkStats(WorkflowStep):
-    """Compute basic node and link statistics for the network.
-
-    Exclusions apply to this computation only; the network is not modified.
-
-    Attributes:
-        include_disabled: If True, include disabled nodes and links in statistics.
-            If False, only consider enabled entities.
-        excluded_nodes: Optional list of node names to exclude (temporary exclusion).
-        excluded_links: Optional list of link IDs to exclude (temporary exclusion).
-    """
-
+    _immutable = True
+    __copy__ = __deepcopy__ = shared_copy
+    # The recorded question is the step itself: this kind and its own fields.
+    question_kind: ClassVar[str] = "network_stats"
     include_disabled: bool = False
-    excluded_nodes: Iterable[str] = ()
-    excluded_links: Iterable[str] = ()
+    excluded_nodes: tuple[str, ...] = ()
+    excluded_links: tuple[str, ...] = ()
 
-    def run(self, scenario: Scenario) -> None:
-        """Compute and store network statistics.
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.include_disabled, bool):
+            raise ValueError("NetworkStats.include_disabled: expected bool")
+        for name in ("excluded_nodes", "excluded_links"):
+            object.__setattr__(
+                self, name, _names(getattr(self, name), f"NetworkStats.{name}")
+            )
+        own_scalars(self, f"workflow step {self.name}", ("include_disabled",))
 
-        Args:
-            scenario: The scenario containing the network to analyze.
-        """
-        logger.info("Starting NetworkStats: name=%s", self.name)
-
-        # Sets, so the per-node/per-link membership tests below stay O(1)
-        excluded_nodes_set = set(self.excluded_nodes) if self.excluded_nodes else set()
-        excluded_links_set = set(self.excluded_links) if self.excluded_links else set()
-
-        if self.include_disabled:
-            nodes = {
-                name: node
-                for name, node in scenario.network.nodes.items()
-                if name not in excluded_nodes_set
-            }
-        else:
-            nodes = {
-                name: node
-                for name, node in scenario.network.nodes.items()
-                if not node.disabled and name not in excluded_nodes_set
-            }
-
-        # A link counts only if both endpoints survived node filtering.
-        if self.include_disabled:
-            links = {
-                link_id: link
-                for link_id, link in scenario.network.links.items()
-                if link_id not in excluded_links_set
-                and link.source in nodes
-                and link.target in nodes
-            }
-        else:
-            links = {
-                link_id: link
-                for link_id, link in scenario.network.links.items()
-                if not link.disabled
-                and link_id not in excluded_links_set
-                and link.source in nodes
-                and link.target in nodes
-            }
-
-        node_count = len(nodes)
-        link_count = len(links)
-
-        total_capacity_val = mean_capacity_val = median_capacity_val = 0.0
-        min_capacity_val = max_capacity_val = 0.0
-        mean_cost_val = median_cost_val = min_cost_val = max_cost_val = 0.0
-        if links:
-            capacities = [link.capacity for link in links.values()]
-            costs = [link.cost for link in links.values()]
-
-            total_capacity_val = sum(capacities)
-            mean_capacity_val = mean(capacities)
-            median_capacity_val = median(capacities)
-            min_capacity_val = min(capacities)
-            max_capacity_val = max(capacities)
-
-            mean_cost_val = mean(costs)
-            median_cost_val = median(costs)
-            min_cost_val = min(costs)
-            max_cost_val = max(costs)
-
-        mean_degree_val = median_degree_val = min_degree_val = max_degree_val = 0.0
-        if nodes:
-            degrees: Dict[str, int] = {name: 0 for name in nodes}
-
-            for link in links.values():
-                if link.source in degrees:
-                    degrees[link.source] += 1
-                if link.target in degrees:
-                    degrees[link.target] += 1
-
-            degree_values = list(degrees.values())
-            mean_degree_val = mean(degree_values)
-            median_degree_val = median(degree_values)
-            min_degree_val = min(degree_values)
-            max_degree_val = max(degree_values)
-
-        scenario.results.put("metadata", {})
-        scenario.results.put(
-            "data",
-            {
-                "node_count": int(node_count),
-                "link_count": int(link_count),
-                "total_capacity": float(total_capacity_val),
-                "mean_capacity": float(mean_capacity_val),
-                "median_capacity": float(median_capacity_val),
-                "min_capacity": float(min_capacity_val),
-                "max_capacity": float(max_capacity_val),
-                "mean_cost": float(mean_cost_val),
-                "median_cost": float(median_cost_val),
-                "min_cost": float(min_cost_val),
-                "max_cost": float(max_cost_val),
-                "mean_degree": float(mean_degree_val),
-                "median_degree": float(median_degree_val),
-                "min_degree": float(min_degree_val),
-                "max_degree": float(max_degree_val),
-            },
+    def run(self, context: StepContext) -> StepOutput:
+        network = context.prepared.scenario.network
+        excluded_nodes, excluded_links = (
+            set(self.excluded_nodes),
+            set(self.excluded_links),
         )
-
-        logger.info(
-            "NetworkStats completed: name=%s nodes=%d links=%d total_capacity=%.1f",
-            self.name,
-            node_count,
-            link_count,
-            float(total_capacity_val),
+        nodes = {
+            name
+            for name, node in network.nodes.items()
+            if name not in excluded_nodes
+            and (self.include_disabled or not node.disabled)
+        }
+        links = [
+            link
+            for name, link in network.links.items()
+            if name not in excluded_links
+            and link.source in nodes
+            and link.target in nodes
+            and (self.include_disabled or not link.disabled)
+        ]
+        capacities = [float(link.capacity) for link in links]
+        costs = [float(link.cost) for link in links]
+        degrees = {name: 0 for name in nodes}
+        for link in links:
+            degrees[link.source] += 1
+            degrees[link.target] += 1
+        degree_values = list(degrees.values())
+        result = NetworkStatsResult(
+            len(nodes),
+            len(links),
+            sum(capacities),
+            float(mean(capacities)) if capacities else 0.0,
+            float(median(capacities)) if capacities else 0.0,
+            min(capacities, default=0.0),
+            max(capacities, default=0.0),
+            float(mean(costs)) if costs else 0.0,
+            float(median(costs)) if costs else 0.0,
+            min(costs, default=0.0),
+            max(costs, default=0.0),
+            float(mean(degree_values)) if degree_values else 0.0,
+            float(median(degree_values)) if degree_values else 0.0,
+            float(min(degree_values, default=0)),
+            float(max(degree_values, default=0)),
         )
-
-
-register_workflow_step("NetworkStats")(NetworkStats)
+        return StepOutput(self, result)

@@ -120,62 +120,6 @@ class TestPerformanceProfiler:
         assert summary["slowest_step"] == "slow_step"
         assert summary["bottleneck_count"] == 1
 
-    @patch("pstats.Stats")
-    def test_get_top_functions(self, mock_stats_class):
-        """Test getting top functions for a step."""
-        # Setup mock stats
-        mock_stats = MagicMock()
-        # pstats.Stats.stats values are tuples: (cc, nc, tt, ct, callers)
-        mock_stats.stats = {
-            ("file.py", 1, "func1"): (
-                20,
-                20,
-                0.2,
-                0.2,
-                {},
-            ),  # (cc, nc, tt, ct, callers)
-            ("file.py", 2, "func2"): (10, 10, 0.1, 0.1, {}),
-            ("file.py", 3, "func3"): (5, 5, 0.05, 0.05, {}),
-        }
-
-        profiler = PerformanceProfiler()
-        step_profile = StepProfile(
-            "test_step", "TestStep", 1.0, 0.35, 35, cprofile_stats=mock_stats
-        )
-        profiler.results.step_profiles.append(step_profile)
-
-        top_functions = profiler.get_top_functions("test_step", limit=2)
-
-        assert len(top_functions) == 2
-        assert top_functions[0][0] == "file.py:1(func1)"
-        assert top_functions[0][1] == 0.2  # total time (tt)
-        assert top_functions[0][2] == 20  # call count (cc)
-
-    def test_get_top_functions_no_step(self):
-        """Test getting top functions for non-existent step."""
-        profiler = PerformanceProfiler()
-
-        top_functions = profiler.get_top_functions("nonexistent_step")
-        assert top_functions == []
-
-    def test_save_detailed_profile(self):
-        """Test saving detailed profile data."""
-        from pathlib import Path
-
-        mock_stats = MagicMock()
-        mock_stats.dump_stats = MagicMock()
-
-        profiler = PerformanceProfiler()
-        step_profile = StepProfile(
-            "test_step", "TestStep", 1.0, 0.8, 100, cprofile_stats=mock_stats
-        )
-        profiler.results.step_profiles.append(step_profile)
-
-        output_path = Path("test_profile.prof")
-        profiler.save_detailed_profile(output_path, "test_step")
-
-        mock_stats.dump_stats.assert_called_once_with(str(output_path))
-
 
 class TestPerformanceReporter:
     """Test the PerformanceReporter class."""
@@ -370,3 +314,20 @@ class TestProfilerIntegration:
         profile = profiler.results.step_profiles[0]
         assert profile.step_name == "error_step"
         assert profile.wall_time > 0
+
+
+def test_step_report_has_only_live_step_profile_fields():
+    profile = StepProfile("one", "BuildGraph", 1.0, 0.5, 7)
+    assert set(vars(profile)) == {
+        "step_name",
+        "step_type",
+        "wall_time",
+        "cpu_time",
+        "function_calls",
+        "memory_peak",
+        "cprofile_stats",
+    }
+    results = ProfileResults(step_profiles=[profile], total_wall_time=1.0)
+    report = PerformanceReporter(results).generate_report()
+    assert "one" in report and "BuildGraph" in report
+    assert "Workers" not in report

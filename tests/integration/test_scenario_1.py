@@ -13,6 +13,9 @@ links, no blueprints. Validation helpers come from integration.helpers.
 
 import pytest
 
+from ngraph.results import BuildGraphResult
+from ngraph.scenario import prepare, run
+
 from .expectations import SCENARIO_1_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
 
@@ -29,22 +32,20 @@ class TestScenario1:
     @pytest.fixture
     def scenario_1_executed(self, scenario_1):
         """Execute scenario 1 workflow and return with results."""
-        scenario_1.run()
-        return scenario_1
+        return run(prepare(scenario_1))
 
     @pytest.fixture
-    def helper(self, scenario_1_executed):
+    def helper(self, scenario_1, scenario_1_executed):
         """Create test helper for scenario 1."""
         # create_scenario_helper handles graph conversion using nx.node_link_graph
-        helper = create_scenario_helper(scenario_1_executed)
+        helper = create_scenario_helper(scenario_1, scenario_1_executed)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_1_executed):
         """Test that scenario 1 can be parsed and executed without errors."""
-        # Basic sanity check - scenario should have run successfully
-        assert scenario_1_executed.results is not None
-        exported = scenario_1_executed.results.to_dict()
-        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
+        (step,) = scenario_1_executed.steps
+        assert step.name == "build_graph" and isinstance(step.result, BuildGraphResult)
+        assert step.result.node_count == 6 and step.result.link_count == 20
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations."""
@@ -129,10 +130,11 @@ class TestScenario1:
         """Test that the default demand set holds the four 50-unit demands."""
         helper.validate_traffic_demands(expected_count=4)
 
-        default_demands = helper.scenario.demand_set.get_set("default")
+        default_demands = helper.scenario.demand_sets["default"].demands
 
         demands_dict = {
-            (demand.source, demand.target): demand.volume for demand in default_demands
+            (demand.source.path, demand.target.path): demand.volume
+            for demand in default_demands
         }
 
         expected_demands = {
@@ -156,8 +158,7 @@ class TestScenario1:
         """Test the single link-choice rule and description of the failure policy."""
         helper.validate_failure_policy(expected_rules=1, expected_scopes=["link"])
 
-        policies = helper.scenario.failure_policy_set.get_all_policies()
-        policy = policies[0]
+        (policy,) = helper.scenario.failure_policies.values()
         rule = policy.modes[0].rules[0]
 
         assert rule.logic == "or", f"Expected rule logic 'or', found '{rule.logic}'"

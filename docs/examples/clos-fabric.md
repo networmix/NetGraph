@@ -1,265 +1,100 @@
 # Clos Fabric Analysis
 
-Maximum flow between two 3-tier Clos fabrics, comparing ECMP and WCMP placement with and without failures. The [Tutorial](../getting-started/tutorial.md) covers running the bundled scenarios from the CLI.
+Two sites each have four leaves and two spines. Each leaf has a capacity-100 link to each local spine. The two capacity-50 inter-site links limit total site-to-site delivery to 100; losing either inter-site link leaves 50.
 
-## Scenario
+## Declare the topology and traffic
 
-Two 3-tier Clos networks joined spine to spine. The scenario nests blueprints inside blueprints and wires the tiers with `mesh` and `one_to_one` link patterns.
+Save this as `clos.yaml`:
 
-## Programmatic scenario
-
-```python
-from ngraph.scenario import Scenario
-from ngraph import analyze, Mode, FlowPlacement
-
-scenario_yaml = """
+```yaml
+seed: 42
 blueprints:
-  brick_2tier:
+  fabric:
     nodes:
-      t1:
-        count: 8
-        template: "t1-{n}"
-      t2:
-        count: 8
-        template: "t2-{n}"
-
+      leaf: {count: 4, template: "leaf{n}"}
+      spine: {count: 2, template: "spine{n}"}
     links:
-      - source: /t1
-        target: /t2
-        pattern: mesh
-        capacity: 2
-        cost: 1
-
-  3tier_clos:
-    nodes:
-      b1:
-        blueprint: brick_2tier
-      b2:
-        blueprint: brick_2tier
-      spine:
-        count: 64
-        template: "t3-{n}"
-
-    links:
-      - source: b1/t2
-        target: spine
-        pattern: one_to_one
-        capacity: 2
-        cost: 1
-      - source: b2/t2
-        target: spine
-        pattern: one_to_one
-        capacity: 2
-        cost: 1
-
+      - {source: /leaf, target: /spine, pattern: mesh,
+         capacity: 100, cost: 1}
 network:
-  name: "3tier_clos_network"
-  version: 1.0
-
   nodes:
-    my_clos1:
-      blueprint: 3tier_clos
-
-    my_clos2:
-      blueprint: 3tier_clos
-
+    site1: {blueprint: fabric}
+    site2: {blueprint: fabric}
   links:
-    - source: my_clos1/spine
-      target: my_clos2/spine
+    - source: site1/spine
+      target: site2/spine
       pattern: one_to_one
-      count: 4
-      capacity: 1
-      cost: 1
-"""
-
-# Build the network
-scenario = Scenario.from_yaml(scenario_yaml)
-network = scenario.network
-
-# Maximum flow with ECMP
-max_flow_ecmp = analyze(network).max_flow(
-    r"my_clos1.*(b[0-9]*)/t1",
-    r"my_clos2.*(b[0-9]*)/t1",
-    mode=Mode.COMBINE,
-    shortest_path=True,
-    flow_placement=FlowPlacement.EQUAL_BALANCED,
-)
-
-print(f"Maximum flow with ECMP: {max_flow_ecmp}")
-# Result: {('b1|b2', 'b1|b2'): 256.0}
+      capacity: 50
+      cost: 10
+      attrs: {role: inter_site}
+failures:
+  inter_site_link:
+    modes:
+      - weight: 1
+        rules:
+          - scope: link
+            mode: choice
+            count: 1
+            match:
+              conditions:
+                - {attr: role, op: "==", value: inter_site}
+demands:
+  traffic:
+    - {id: service, source: ^site1/leaf/, target: ^site2/leaf/,
+       volume: 100, preset: SHORTEST_PATHS_ECMP}
+workflow:
+  - {type: BuildGraph, name: topology}
+  - type: MaxFlow
+    name: equal_shortest_capacity
+    source: ^site1/leaf/
+    target: ^site2/leaf/
+    preset: SHORTEST_PATHS_ECMP
+    failure_policy: inter_site_link
+    iterations: 20
+    workers: auto
+    outputs: {cost_distribution: true}
+  - {type: TrafficMatrixPlacement, name: traffic, demand_set: traffic}
 ```
 
-## Reading the result
+Blueprint expansion creates 12 nodes and 18 physical links, hence 36 directed export edges. Selectors name the leaf sets; a source's shortest route crosses one local spine, an inter-site link and a remote spine-to-leaf link, cost 1 + 10 + 1 = 12.
 
-The result `{('b1|b2', 'b1|b2'): 256.0}` means:
-
-- **Source**: All t1 nodes in both b1 and b2 segments of my_clos1
-- **Target**: All t1 nodes in both b1 and b2 segments of my_clos2
-- **Capacity**: Maximum flow of 256.0 units
-
-## ECMP versus WCMP with uneven links
-
-Two placement policies split flow across equal-cost paths: `FlowPlacement.EQUAL_BALANCED` gives every path the same share (ECMP) and `FlowPlacement.PROPORTIONAL` weights the shares by capacity (WCMP). With `shortest_path=True` both stay on the equal-cost paths; with `shortest_path=False` placement spills onto costlier paths as capacity runs out, which is traffic engineering.
-
-The example above pairs `EQUAL_BALANCED` with `shortest_path=True`, which is ECMP. Compare it with `PROPORTIONAL` under two conditions:
-
-- Symmetric parallel inter-spine links: ECMP and WCMP both give 256.0.
-- Uneven capacities within each equal-cost bundle: WCMP carries more, because ECMP is capped by the equal split.
-
-The code below makes the 4 parallel spine-to-spine links of each pair uneven while keeping their costs equal, so only the splitting policy differs.
+## Execute and inspect typed results
 
 ```python
-from ngraph import analyze, Mode, FlowPlacement
-from ngraph.scenario import Scenario
+from pathlib import Path
+import netgraph_core as ngc
+from ngraph import Scenario, prepare, run
 
-scenario_yaml = """
-blueprints:
-  brick_2tier:
-    nodes:
-      t1: {count: 8, template: "t1-{n}"}
-      t2: {count: 8, template: "t2-{n}"}
-    links:
-      - {source: /t1, target: /t2, pattern: mesh, capacity: 2, cost: 1}
-  3tier_clos:
-    nodes:
-      b1: {blueprint: brick_2tier}
-      b2: {blueprint: brick_2tier}
-      spine: {count: 64, template: "t3-{n}"}
-    links:
-      - {source: b1/t2, target: spine, pattern: one_to_one, capacity: 2, cost: 1}
-      - {source: b2/t2, target: spine, pattern: one_to_one, capacity: 2, cost: 1}
-network:
-  name: 3tier_clos_network
-  nodes:
-    my_clos1: {blueprint: 3tier_clos}
-    my_clos2: {blueprint: 3tier_clos}
-  links:
-    - {source: my_clos1/spine, target: my_clos2/spine, pattern: one_to_one, count: 4, capacity: 1, cost: 1}
-"""
-
-scenario = Scenario.from_yaml(scenario_yaml)
-network = scenario.network
-
-# Baseline (symmetric)
-baseline_ecmp = analyze(network).max_flow(
-    r"my_clos1.*(b[0-9]*)/t1",
-    r"my_clos2.*(b[0-9]*)/t1",
-    mode=Mode.COMBINE, shortest_path=True,
-    flow_placement=FlowPlacement.EQUAL_BALANCED,
-)
-baseline_wcmp = analyze(network).max_flow(
-    r"my_clos1.*(b[0-9]*)/t1",
-    r"my_clos2.*(b[0-9]*)/t1",
-    mode=Mode.COMBINE, shortest_path=True,
-    flow_placement=FlowPlacement.PROPORTIONAL,
-)
-
-# Make parallel inter-spine links uneven (keeps equal cost)
-from collections import defaultdict
-groups = defaultdict(list)
-for lk in network.links.values():
-    s, t = lk.source, lk.target
-    if (s.startswith("my_clos1/spine") and t.startswith("my_clos2/spine")) or \
-       (s.startswith("my_clos2/spine") and t.startswith("my_clos1/spine")):
-        groups[(s, t)].append(lk)
-for i, key in enumerate(sorted(groups.keys())):
-    links = sorted(groups[key], key=lambda x: x.id)
-    caps = [4.0, 0.25, 0.25, 0.25] if i % 2 == 0 else [2.0, 1.0, 0.5, 0.25]
-    for lk, cap in zip(links, caps):
-        lk.capacity = cap
-
-ecmp = analyze(network).max_flow(
-    r"my_clos1.*(b[0-9]*)/t1",
-    r"my_clos2.*(b[0-9]*)/t1",
-    mode=Mode.COMBINE, shortest_path=True,
-    flow_placement=FlowPlacement.EQUAL_BALANCED,
-)
-wcmp = analyze(network).max_flow(
-    r"my_clos1.*(b[0-9]*)/t1",
-    r"my_clos2.*(b[0-9]*)/t1",
-    mode=Mode.COMBINE, shortest_path=True,
-    flow_placement=FlowPlacement.PROPORTIONAL,
-)
-print("Baseline ECMP:", baseline_ecmp)
-print("Baseline WCMP:", baseline_wcmp)
-print("Uneven ECMP:", ecmp)
-print("Uneven WCMP:", wcmp)
+scenario = Scenario.from_yaml(Path("clos.yaml").read_text())
+result = run(prepare(scenario))
+built, analysis, placed = [step.result for step in result.steps]
+assert built.node_count == 12 and built.link_count == 36
+q = result.topology.q
+baseline, *failed = analysis.cases
+row = baseline.states["converged"].rows[0]
+assert row.result.delivered == ngc.to_units(100, q)
+assert [(piece.cost, piece.delivered_units)
+        for piece in row.cost_distribution.bins] == [(12, ngc.to_units(100, q))]
+assert len(failed) == 2
+assert sum(case.case.occurrences for case in failed) == 20
+for case in failed:
+    assert len(case.case.pattern.excluded_links) == 1
+    assert case.states["converged"].rows[0].result.delivered == ngc.to_units(50, q)
+assert placed.cases[0].states["converged"].totals.delivered_units == ngc.to_units(100, q)
 ```
 
-Example output:
+The preparation report records the chosen q and exact input/split constraints. All cases use that q. Native integers are authoritative; multiply by q only when presenting physical bandwidth.
 
-```text
-Baseline ECMP: {('b1|b2', 'b1|b2'): 256.0}
-Baseline WCMP: {('b1|b2', 'b1|b2'): 256.0}
-Uneven ECMP: {('b1|b2', 'b1|b2'): 64.0}
-Uneven WCMP: {('b1|b2', 'b1|b2'): 248.0}
+## Use the CLI
+
+```bash
+ngraph inspect clos.yaml --detail
+ngraph run clos.yaml --output results/
+ngraph run clos.yaml --keys equal_shortest_capacity --stdout --no-results
 ```
 
-Uneven links drop ECMP to 64 while WCMP keeps 248. ECMP gives every member of a bundle the same share, so the smallest link caps the bundle.
+The filtered export retains that step's actual execution order 1. `--keys` selects output after the whole workflow executes. The JSON has one case per physical failure pattern, its multiplicity and a converged-state mapping.
 
-## Failure Analysis
+Change `preset` to `SHORTEST_PATHS_WCMP` for capacity-weighted shortest routing, `SHORTEST_PATHS_MAXFLOW` for an optimized shortest-support question, or `TE_MAXFLOW_UNLIM` for unrestricted optimized capacity. These are distinct models; the symmetric baseline here is bounded by the same inter-site cut.
 
-The same ECMP-versus-WCMP question under failures, this time with `FailureManager` running a Monte Carlo over random spine failures in `my_clos1`. Each iteration fails two spines; identical failure patterns are run once and weighted by how often they were drawn.
-
-```python
-from collections import Counter
-from ngraph import FailureManager, FlowPlacement
-from ngraph.model.failure.policy import FailurePolicy, FailureMode, FailureRule
-from ngraph.model.failure.policy_set import FailurePolicySet
-
-# Restore symmetric inter-spine links for this section
-for lk in network.links.values():
-    if lk.source.startswith("my_clos1/spine") or lk.source.startswith("my_clos2/spine"):
-        lk.capacity = 1.0
-
-two_spines = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[
-    FailureRule(scope="node", mode="choice", count=2, path="^my_clos1/spine/"),
-])])
-fm = FailureManager(
-    network=network,
-    failure_policy_set=FailurePolicySet(policies={"two_spines": two_spines}),
-    policy_name="two_spines",
-)
-
-for placement in (FlowPlacement.EQUAL_BALANCED, FlowPlacement.PROPORTIONAL):
-    mc = fm.run_max_flow_monte_carlo(
-        source=r"my_clos1.*(b[0-9]*)/t1",
-        target=r"my_clos2.*(b[0-9]*)/t1",
-        mode="combine",
-        iterations=100,
-        parallelism=1,
-        seed=1,
-        shortest_path=True,
-        flow_placement=placement,
-    )
-    capacity = Counter()
-    for item in mc["results"]:
-        capacity[item.summary.total_placed] += item.occurrence_count
-    print(placement.name, "baseline", mc["baseline"].summary.total_placed,
-          "under failure", dict(sorted(capacity.items())))
-```
-
-```text
-EQUAL_BALANCED baseline 256.0 under failure {192.0: 13, 224.0: 87}
-PROPORTIONAL baseline 256.0 under failure {248.0: 100}
-```
-
-Losing two spines removes 8 of 256 inter-spine links. WCMP loses exactly that capacity in every iteration. ECMP loses 32, or 64 when both failed spines serve the same t2 switch, because the surviving equal-cost next hops still receive equal shares and the smallest one caps the whole split.
-
-## Network structure
-
-`NetworkExplorer` prints the node hierarchy with node, link and capacity statistics per subtree:
-
-```python
-from ngraph.explorer import NetworkExplorer
-
-explorer = NetworkExplorer.explore_network(network)
-explorer.print_tree(skip_leaves=True, detailed=False)  # skip_leaves hides individual nodes
-```
-
-## Next Steps
-
-- **[Bundled Scenarios](bundled-scenarios.md)** - Ready-to-run examples
-- **[Workflow Reference](../reference/workflow.md)** - Analysis workflows and Monte Carlo simulation
-- **[DSL Reference](../reference/dsl.md)** - YAML syntax reference
-- **[API Reference](../reference/api.md)** - Python API
+See [DSL](../reference/dsl.md) for grouped selection, explicit routes and hardware declarations, and [workflow](../reference/workflow.md) for MSD dependencies and optional outputs.

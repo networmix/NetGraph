@@ -1,87 +1,96 @@
-"""MaximumSupportedDemand feasibility at the engine's numeric resolution."""
+"""Small finite tunnel demands and unreachable demand outcomes at fixed q."""
 
-from __future__ import annotations
+from fractions import Fraction
 
-import pytest
-
-from ngraph.model.demand.matrix import DemandSet
-from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
+from ngraph.analysis.units import UnitsSettings
+from ngraph.model.demand import DemandSet, DemandSpec, FlowPolicyPreset
 from ngraph.model.network import Link, Network, Node
-from ngraph.results import Results
+from ngraph.model.selectors import Selector
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 
 
-class _Scenario:
-    def __init__(self, network: Network, demand_set: DemandSet) -> None:
-        self.network = network
-        self.demand_set = demand_set
-        self.results = Results()
+def _fabric(leaves, spines):
+    network = Network()
+    for index in range(leaves):
+        network.add_node(Node(f"leaf{index:02d}"))
+    for index in range(spines):
+        network.add_node(Node(f"spine{index:02d}"))
+    for leaf in range(leaves):
+        for spine in range(spines):
+            network.add_link(Link(f"leaf{leaf:02d}", f"spine{spine:02d}", 100, 1))
+    return network
 
 
-def _fabric(leaves: int, spines: int) -> Network:
-    net = Network()
-    for i in range(leaves):
-        net.add_node(Node(f"leaf{i:02d}"))
-    for j in range(spines):
-        net.add_node(Node(f"spine{j:02d}"))
-    for i in range(leaves):
-        for j in range(spines):
-            net.add_link(Link(f"leaf{i:02d}", f"spine{j:02d}", capacity=100.0, cost=1))
-    return net
-
-
-def _run_msd(net: Network, demands: list[TrafficDemand], **params) -> dict:
-    ds = DemandSet()
-    ds.add("default", demands)
-    scenario = _Scenario(net, ds)
-    step = MaximumSupportedDemand(demand_set="default", **params)
-    step.name = "msd"
-    scenario.results.enter_step("msd")
-    try:
-        step.run(scenario)  # type: ignore[arg-type]
-    finally:
-        scenario.results.exit_step()
-    return scenario.results.get_step("msd")["data"]
-
-
-def test_many_lsps_over_small_pairwise_volumes_find_alpha_star():
-    """256 LSPs per pair on 0.03-unit demands quantize at 1/4096; that is not infeasibility."""
-    net = _fabric(8, 4)
-    demands = [
-        TrafficDemand(
-            source=f"^leaf{i:02d}$",
-            target="^leaf",
-            volume=1.0,
-            mode="pairwise",
-            flow_policy=FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP,
-            id=f"d{i}",
-        )
-        for i in range(8)
-    ]
-    data = _run_msd(
-        net,
-        demands,
-        alpha_start=1.0,
-        resolution=0.5,
-        max_bracket_iters=6,
+def test_many_lsps_over_small_pairwise_volumes_find_tested_feasible_alpha():
+    network = _fabric(4, 2)
+    demands = DemandSet(
+        "load",
+        tuple(
+            DemandSpec(
+                Selector(f"^leaf{index:02d}$"),
+                Selector("^leaf", group_by="name"),
+                1,
+                FlowPolicyPreset.TE_ECMP_UP_TO_256_LSP,
+                id=f"d{index}",
+                mode="pairwise",
+            )
+            for index in range(4)
+        ),
+    )
+    step = MaximumSupportedDemand(
+        name="msd",
+        demand_set="load",
+        alpha_tolerance=0.5,
+        max_bracket_iters=12,
         max_bisect_iters=4,
     )
-    # Each leaf sends 1.0 over 4 uplinks of 100: alpha_star sits between 64 and 512.
-    assert 64.0 <= data["alpha_star"] <= 512.0
-    assert data["probes"][0]["feasible"] is True
+    prepared = prepare(Scenario(network, (step,), demand_sets={"load": demands}))
+    result = run(prepared).steps[0].result
+    assert prepared.topology.q <= 1 / 4096
+    assert 64 <= result.alpha_feasible.value <= 512
+    assert result.history[0].outcome == "feasible"
+    assert result.proof == "unproved" and result.upper_certificate is None
+    assert result.best_rows is not None and len(result.best_rows) == 12
+    assert all(row.result.requested == row.result.delivered for row in result.best_rows)
 
 
-def test_unreachable_target_reports_ratio_in_error():
-    net = Network()
-    for n in ("A", "B", "C"):
-        net.add_node(Node(n))
-    net.add_link(Link("A", "B", capacity=10, cost=1))
-    demands = [
-        TrafficDemand(source="^A$", target="^B$", volume=1.0, mode="pairwise", id="ok"),
-        TrafficDemand(
-            source="^A$", target="^C$", volume=1.0, mode="pairwise", id="isolated"
+def test_unreachable_target_reports_exact_ratio_and_no_feasible_status():
+    network = Network(nodes={name: Node(name) for name in ("A", "B", "C")})
+    network.add_link(Link("A", "B", 10, 3))
+    demands = DemandSet(
+        "load",
+        (
+            DemandSpec(Selector("^A$"), Selector("^B$"), 1, id="ok"),
+            DemandSpec(Selector("^A$"), Selector("^C$"), 1, id="isolated"),
         ),
-    ]
-    with pytest.raises(ValueError, match=r"best placement ratio over probes 0\.5000"):
-        _run_msd(net, demands, alpha_start=1.0, max_bracket_iters=3, max_bisect_iters=2)
+    )
+    step = MaximumSupportedDemand(
+        name="msd",
+        demand_set="load",
+        alpha_min=1,
+        max_bracket_iters=3,
+        max_bisect_iters=2,
+    )
+    result = (
+        run(
+            prepare(
+                Scenario(
+                    network,
+                    (step,),
+                    demand_sets={"load": demands},
+                    units=UnitsSettings(1 / 4096),
+                )
+            )
+        )
+        .steps[0]
+        .result
+    )
+    assert (
+        result.search_status == "none_feasible" and result.stop_reason == "alpha_bound"
+    )
+    assert result.alpha_feasible is result.best_probe_index is None
+    assert len(result.history) == 1
+    assert result.history[0].totals.delivery_ratio == Fraction(1, 2)
+    assert result.history[0].totals.reference_request_units == 8192
+    assert result.history[0].totals.delivered_units == 4096

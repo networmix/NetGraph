@@ -1,103 +1,50 @@
-"""CostPower workflow step: collect capex and power by hierarchy level.
-
-Aggregates capex and power from the network hardware inventory, with no
-normalization or reporting. Contributions are split into two categories:
-
-- platform_*: node hardware (e.g., chassis, linecards) resolved from node attrs
-- optics_*: per-end link hardware (e.g., optics) resolved from link attrs
-
-Aggregation is computed at hierarchy levels 0..N where level 0 is the global
-root (path ""), and higher levels correspond to prefixes of node names split by
-"/". For example, for node "dc1/plane1/leaf/leaf-1":
-    - level 1 path is "dc1"
-    - level 2 path is "dc1/plane1"
-    - etc.
-
-Disabled handling:
-- When include_disabled is False, only enabled nodes and links are considered,
-  and a link's optics count only when both endpoint nodes are enabled.
-- Optics are counted only when the endpoint node has platform hardware.
-
-YAML Configuration Example:
-    ```yaml
-    workflow:
-      - type: CostPower
-        name: "cost_power"           # Optional custom name
-        include_disabled: false       # Default: only enabled nodes/links
-        aggregation_level: 2          # Produce levels: 0, 1, 2
-    ```
-
-Results stored in `scenario.results` under this step namespace:
-    data:
-      context:
-        include_disabled: bool
-        aggregation_level: int
-      levels:
-        "0":
-          - path: ""
-            platform_capex: float
-            platform_power_watts: float
-            optics_capex: float
-            optics_power_watts: float
-            capex_total: float
-            power_total_watts: float
-        "1": [ ... ]
-        "2": [ ... ]
-"""
+"""Platform/optic cost and power at each named hierarchy level."""
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from types import MappingProxyType
+from typing import Any, ClassVar, Dict, List
 
-from ngraph.logging import get_logger
 from ngraph.model.components import (
     ComponentsLibrary,
     resolve_link_end_components,
     resolve_node_hardware,
     totals_with_multiplier,
 )
+from ngraph.results import (
+    CostPowerResult,
+    HardwareRow,
+    StepContext,
+    StepOutput,
+)
+from ngraph.utils.values import integer, own_scalars, shared_copy
 from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
-logger = get_logger(__name__)
 
-
+@register_workflow_step("CostPower")
 @dataclass
 class CostPower(WorkflowStep):
-    """Collect platform and optics capex/power by aggregation level.
-
-    Attributes:
-        include_disabled: If True, include disabled nodes and links.
-        aggregation_level: Inclusive depth for aggregation; 0 = root only.
-            Must be >= 0.
-    """
-
+    _immutable = True
+    __copy__ = __deepcopy__ = shared_copy
+    # The recorded question is the step itself: this kind and its own fields.
+    question_kind: ClassVar[str] = "cost_power"
     include_disabled: bool = False
     aggregation_level: int = 2
 
     def __post_init__(self) -> None:
-        try:
-            self.aggregation_level = int(self.aggregation_level)
-        except Exception as exc:
-            raise ValueError(f"aggregation_level must be int: {exc}") from exc
-        if self.aggregation_level < 0:
-            raise ValueError("aggregation_level must be >= 0")
-
-    def run(self, scenario: Any) -> None:
-        """Aggregate capex and power by hierarchy levels 0..N.
-
-        Args:
-            scenario: Scenario with network, components_library, and results store.
-        """
-        t0 = time.perf_counter()
-        logger.info("Starting CostPower: name=%s", self.name)
-        logger.debug(
-            "CostPower params: include_disabled=%s aggregation_level=%d",
-            self.include_disabled,
-            self.aggregation_level,
+        super().__post_init__()
+        if not isinstance(self.include_disabled, bool):
+            raise ValueError("CostPower.include_disabled: expected bool")
+        integer(self.aggregation_level, "CostPower.aggregation_level", minimum=0)
+        own_scalars(
+            self,
+            f"workflow step {self.name}",
+            ("include_disabled", "aggregation_level"),
         )
 
+    def run(self, context: StepContext) -> StepOutput:
+        scenario = context.prepared.scenario
         network = scenario.network
         library: ComponentsLibrary = scenario.components_library
 
@@ -172,45 +119,25 @@ class CostPower(WorkflowStep):
                 capex, power, _ = totals_with_multiplier(dst_comp, dst_cnt)
                 add_values(lk.target, 0.0, 0.0, float(capex), float(power))
 
-        levels_payload: Dict[int, List[Dict[str, Any]]] = {}
-        for lvl, mapping in levels.items():
-            out_list: List[Dict[str, Any]] = []
-            for path, vals in sorted(mapping.items(), key=lambda kv: kv[0]):
-                platform_capex, platform_power, optics_capex, optics_power = vals
-                out_list.append(
-                    {
-                        "path": path,
-                        "platform_capex": float(platform_capex),
-                        "platform_power_watts": float(platform_power),
-                        "optics_capex": float(optics_capex),
-                        "optics_power_watts": float(optics_power),
-                        "capex_total": float(platform_capex + optics_capex),
-                        "power_total_watts": float(platform_power + optics_power),
-                    }
-                )
-            levels_payload[lvl] = out_list
-
-        scenario.results.put("metadata", {})
-        scenario.results.put(
-            "data",
-            {
-                "context": {
-                    "include_disabled": bool(self.include_disabled),
-                    "aggregation_level": int(self.aggregation_level),
-                },
-                "levels": levels_payload,
-            },
+        result = CostPowerResult(
+            self.include_disabled,
+            self.aggregation_level,
+            MappingProxyType(
+                {
+                    level: tuple(
+                        HardwareRow(
+                            path,
+                            float(values[0]),
+                            float(values[1]),
+                            float(values[2]),
+                            float(values[3]),
+                            float(values[0] + values[2]),
+                            float(values[1] + values[3]),
+                        )
+                        for path, values in mapping.items()
+                    )
+                    for level, mapping in levels.items()
+                }
+            ),
         )
-
-        root_items = levels_payload.get(0, [])
-        root = root_items[0] if root_items else {}
-        logger.info(
-            "CostPower completed: name=%s capex_total=%.2f power_total=%.2f duration=%.3fs",
-            self.name,
-            float(root.get("capex_total", 0.0)),
-            float(root.get("power_total_watts", 0.0)),
-            time.perf_counter() - t0,
-        )
-
-
-register_workflow_step("CostPower")(CostPower)
+        return StepOutput(self, result)

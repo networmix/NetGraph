@@ -580,13 +580,11 @@ workflow:
     mode: pairwise
     failure_policy: single_link_failure
     iterations: 1000
-    parallelism: 8
-    shortest_path: false
-    flow_placement: PROPORTIONAL
+    workers: 8
+    preset: TE_MAXFLOW_UNLIM
     seed: 42
-    store_failure_patterns: true
-    include_flow_details: true
-    include_min_cut: true
+    failure_trace: true
+    outputs: {cost_distribution: true, min_cut: true}
   - type: MaxFlow
     name: node_to_node_capacity_matrix_2
     source: ^(.+)$
@@ -594,10 +592,8 @@ workflow:
     mode: pairwise
     failure_policy: availability_1992
     iterations: 1000
-    parallelism: 8
-    shortest_path: false
-    flow_placement: PROPORTIONAL
+    workers: 8
+    preset: TE_MAXFLOW_UNLIM
     seed: 42
-    store_failure_patterns: true
-    include_flow_details: true
-    include_min_cut: true
+    failure_trace: true
+    outputs: {cost_distribution: true, min_cut: true}

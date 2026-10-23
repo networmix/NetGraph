@@ -13,7 +13,7 @@ import logging
 import sys
 from typing import Optional
 
-# Set by setup_root_logger(), cleared by reset_logging()
+# Set once by setup_root_logger().
 _ROOT_LOGGER_CONFIGURED = False
 
 
@@ -24,7 +24,7 @@ def setup_root_logger(
 ) -> None:
     """Set up the root NetGraph logger with a single handler.
 
-    Subsequent calls are no-ops until ``reset_logging()`` is called.
+    Subsequent calls leave the existing handlers in place.
 
     Args:
         level: Logging level (default: INFO).
@@ -102,18 +102,6 @@ def set_global_log_level(level: int) -> None:
     # Also update handlers to respect the new level
     for handler in root_logger.handlers:
         handler.setLevel(level)
-
-
-def reset_logging() -> None:
-    """Reset logging configuration (mainly for testing)."""
-    global _ROOT_LOGGER_CONFIGURED
-    _ROOT_LOGGER_CONFIGURED = False
-
-    # Restore the unconfigured import-time state: only a NullHandler attached
-    root_logger = logging.getLogger("ngraph")
-    root_logger.handlers.clear()
-    root_logger.setLevel(logging.NOTSET)
-    root_logger.addHandler(logging.NullHandler())
 
 
 # Library pattern: attach only a NullHandler at import time so unconfigured

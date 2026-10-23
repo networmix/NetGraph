@@ -1,275 +1,130 @@
 # Basic Example
 
-A four-node topology defined inline, used to walk through the analysis API. The [Tutorial](../getting-started/tutorial.md) covers the CLI and the bundled scenarios.
-
-## Creating a Simple Network
-
-**Network Topology:**
+The network below has two parallel links on each hop of the cheap route, and one longer route:
 
 ```text
-             [1,1] & [1,2]     [1,1] & [1,2]
-      A -------------------- B ---------------- C
-      |                                         |
-      |    [2,3]                                | [2,3]
-      +-------------------- D -----------------+
-
-[1,1] and [1,2] are parallel edges between A and B.
-They have the same metric of 1 but different capacities (1 and 2).
+    capacity 1+2, cost 1    capacity 1+2, cost 1
+  A --------------------- B --------------------- C
+   \                                             /
+    +---------------- D ------------------------+
+      capacity 3, cost 2      capacity 3, cost 2
 ```
 
-Build it with the scenario system:
+## Build and prepare
 
 ```python
-from ngraph.scenario import Scenario
-from ngraph import analyze, Mode, FlowPlacement
-
-# Define network topology with parallel paths
-scenario_yaml = """
-seed: 1234  # Optional; makes randomized steps reproducible
-
-network:
-  name: "fundamentals_example"
-
-  # Create individual nodes
-  nodes:
-    A: {}
-    B: {}
-    C: {}
-    D: {}
-
-  # Create links with different capacities and costs
-  links:
-    # Parallel edges between A->B
-    - source: A
-      target: B
-      capacity: 1
-      cost: 1
-    - source: A
-      target: B
-      capacity: 2
-      cost: 1
-
-    # Parallel edges between B->C
-    - source: B
-      target: C
-      capacity: 1
-      cost: 1
-    - source: B
-      target: C
-      capacity: 2
-      cost: 1
-
-    # Alternative path A->D->C
-    - source: A
-      target: D
-      capacity: 3
-      cost: 2
-    - source: D
-      target: C
-      capacity: 3
-      cost: 2
-"""
-
-# Create the network
-scenario = Scenario.from_yaml(scenario_yaml)
-network = scenario.network
-```
-
-This spells out every node and link individually. The optional `seed` makes randomized workflow steps reproducible. Larger topologies instead use node groups (`count` plus `template`) with link rules connecting them, or `blueprints` for reusable components - see the [DSL Reference](../reference/dsl.md) and the [Clos Fabric Analysis](clos-fabric.md) example.
-
-### Flow Analysis Variants
-
-Run MaxFlow using the `analyze()` API:
-
-```python
-# 1. "True" maximum flow (uses all available paths)
-max_flow_all = analyze(network).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-print(f"Maximum flow (all paths): {max_flow_all}")
-# Result: {('^A$', '^C$'): 6.0} (uses both A->B->C path capacity of 3 and A->D->C path capacity of 3)
-
-# 2. Flow along shortest paths only
-max_flow_shortest = analyze(network).max_flow(
-    "^A$",
-    "^C$",
-    mode=Mode.COMBINE,
-    shortest_path=True
-)
-print(f"Flow on shortest paths: {max_flow_shortest}")
-# Result: {('^A$', '^C$'): 3.0} (only uses A->B->C path, ignoring higher-cost A->D->C path)
-
-# 3. Equal-balanced flow placement on shortest paths
-max_flow_shortest_balanced = analyze(network).max_flow(
-    "^A$",
-    "^C$",
-    mode=Mode.COMBINE,
-    shortest_path=True,
-    flow_placement=FlowPlacement.EQUAL_BALANCED
-)
-print(f"Equal-balanced flow: {max_flow_shortest_balanced}")
-# Result: {('^A$', '^C$'): 2.0} (splits flow equally across parallel edges in A->B and B->C)
-```
-
-## Results Interpretation
-
-- **"True" MaxFlow**: Uses all available paths regardless of their cost
-- **Shortest Path**: Only uses paths with the minimum cost
-- **EQUAL_BALANCED Flow Placement**: Distributes flows equally across all parallel paths. The total flow can be limited by the smallest capacity path.
-
-Paired with `shortest_path=True`, `EQUAL_BALANCED` models ECMP: an equal split across the equal-cost paths.
-
-## Cost Distribution
-
-Cost distribution shows how flow splits across path costs for latency/span analysis:
-
-```python
-# Get flow analysis with cost distribution
-result = analyze(network).max_flow_detailed(
-    "^A$",
-    "^C$",
-    mode=Mode.COMBINE
+import netgraph_core as ngc
+from ngraph import (
+    CapacityQuery, Link, Network, Node, Scenario, Selector, UnitsSettings,
+    capacity, prepare,
 )
 
-# Extract flow value and summary
-(src_label, target_label), summary = next(iter(result.items()))
-
-print(f"Total flow: {summary.total_flow}")
-print(f"Cost distribution: {summary.cost_distribution}")
-
-# Example output:
-# Total flow: 6.0
-# Cost distribution: {2.0: 3.0, 4.0: 3.0}
-#
-# This means:
-# - 3.0 units of flow use paths with total cost 2.0 (A->B->C path)
-# - 3.0 units of flow use paths with total cost 4.0 (A->D->C path)
+network = Network()
+for name in ("A", "B", "C", "D"):
+    network.add_node(Node(name))
+for source, target, amount, cost in (
+    ("A", "B", 1, 1), ("A", "B", 2, 1),
+    ("B", "C", 1, 1), ("B", "C", 2, 1),
+    ("A", "D", 3, 2), ("D", "C", 3, 2),
+):
+    network.add_link(Link(source, target, amount, cost))
+prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
+source, target = Selector("^A$"), Selector("^C$")
 ```
 
-### Latency Span Analysis
+The explicit quantum is 1, so the returned native units equal physical bandwidth units in this example. The prepared scenario keeps a read-only view of the network; later edits of the network require a new preparation.
 
-If link costs approximate latency, derive span summary from cost distribution:
+## Ask distinct capacity questions
 
 ```python
-# Example cost distribution analysis
-cost_dist = summary.cost_distribution  # {2.0: 3.0, 4.0: 3.0}
-total_flow = summary.total_flow        # 6.0
-
-# Calculate weighted average latency
-avg_latency = sum(cost * flow for cost, flow in cost_dist.items()) / total_flow
-print(f"Average latency: {avg_latency}")  # 3.0
-
-# Find min/max latency tiers
-min_latency = min(cost_dist.keys())
-max_latency = max(cost_dist.keys())
-print(f"Latency range: {min_latency} - {max_latency}")  # 2.0 - 4.0
+ideal = capacity(prepared, CapacityQuery(source, target))
+shortest = capacity(prepared, CapacityQuery(source, target, config=
+    ngc.FlowPolicyConfig(routing=ngc.ShortestPaths(
+        allocation=ngc.RouteAllocation.OPTIMIZED,
+    )),
+))
+equal = capacity(prepared, CapacityQuery(source, target, config=
+    ngc.FlowPolicyConfig(routing=ngc.ShortestPaths()),
+))
+assert ideal.cases[0].states["converged"].rows[0].result.delivered == 6
+assert shortest.cases[0].states["converged"].rows[0].result.delivered == 3
+assert equal.cases[0].states["converged"].rows[0].result.delivered == 2
 ```
 
-## Repeated Analysis with a Bound Context
+The ideal controller uses both routes: 3 cheap units and 3 expensive units. The shortest-support controller uses only the cheap route, whose parallel capacities sum to 3. Equal splitting admits 2, because each capacity-1 parallel member receives half the traffic. A capacity-weighted shortest-path model can use the full 3 while retaining that shortest support.
 
-To analyze the same source and sink under many exclusion sets, bind them once:
+## Request cost information
 
 ```python
-# Create bound context - graph built once
-ctx = analyze(network, source="^A$", sink="^C$", mode=Mode.COMBINE)
-
-# Baseline capacity
-baseline = ctx.max_flow()
-print(f"Baseline: {baseline}")
-
-# Exclude one node at a time
-for node in ["B", "D"]:
-    degraded = ctx.max_flow(excluded_nodes={node})
-    print(f"Without {node}: {degraded}")
-
-# Output:
-# Baseline: {('^A$', '^C$'): 6.0}
-# Without B: {('^A$', '^C$'): 3.0}
-# Without D: {('^A$', '^C$'): 3.0}
+reported = capacity(prepared, CapacityQuery(
+    source, target, export_cost_distribution=True,
+    outputs=ngc.OutputOptions(min_cut=True),
+))
+row = reported.cases[0].states["converged"].rows[0]
+assert row.cost_distribution.kind == "marginal_curve"
+assert [(piece.marginal_cost, piece.units)
+        for piece in row.cost_distribution.bins] == [(2, 3), (4, 3)]
+assert row.result.delivered == 6
+assert len(row.result.min_cut) == 3
 ```
 
-## Sensitivity Analysis
+The minimum-cost objective is 3×2 + 3×4 = 18. The cut contains the two A→B members and A→D, capacity 1 + 2 + 3 = 6. These native marginal pieces describe the optimized question. Determined shortest-path or tunnel delivery reports instead use tagged path-cost bins. Cost work and optional native arrays/cuts are requested explicitly.
 
-Which edges limit the flow, and by how much:
+## Sample failures on the same prepared graph
 
 ```python
-# Get sensitivity analysis
-sensitivity = analyze(network).sensitivity(
-    "^A$",
-    "^C$",
-    mode=Mode.COMBINE,
-    shortest_path=False  # Full max-flow mode
-)
+from ngraph import FailureMode, FailurePolicy, FailureRequest, FailureRule
 
-for pair, edge_impacts in sensitivity.items():
-    print(f"Critical edges for {pair}:")
-    for edge_key, flow_reduction in sorted(edge_impacts.items(), key=lambda x: -x[1]):
-        print(f"  {edge_key}: -{flow_reduction:.1f}")
+policy = FailurePolicy(modes=[FailureMode(1, [
+    FailureRule("node", mode="all", path="^B$"),
+])])
+result = capacity(prepared, CapacityQuery(
+    source, target, failures=FailureRequest(policy, iterations=3, seed=42),
+))
+baseline, failed = result.cases
+assert baseline.states["converged"].rows[0].result.delivered == 6
+assert failed.states["converged"].rows[0].result.delivered == 3
+assert failed.case.pattern.excluded_nodes == ("B",)
+assert failed.case.occurrences == 3
 ```
 
-## Shortest Paths
+All three draws give one physical pattern, evaluated once. The baseline has zero sampled occurrences. The graph and quantum stay fixed; the failed case uses its own eligibility.
 
-Path objects rather than costs:
+## Read native paths
 
 ```python
-from ngraph import EdgeSelect
+from ngraph import PathQuery, paths
 
-# Get all equal-cost shortest paths
-paths = analyze(network).shortest_paths(
-    "^A$",
-    "^C$",
-    mode=Mode.COMBINE,
-    edge_select=EdgeSelect.ALL_MIN_COST
-)
-
-for pair, path_list in paths.items():
-    print(f"Paths from {pair[0]} to {pair[1]}:")
-    for path in path_list:
-        nodes = [elem[0] for elem in path.path]
-        print(f"  {' -> '.join(nodes)} (cost: {path.cost})")
-
-# Get k-shortest paths
-k_paths = analyze(network).k_shortest_paths(
-    "^A$",
-    "^C$",
-    max_k=3,
-    mode=Mode.PAIRWISE
-)
-
-for pair, path_list in k_paths.items():
-    print(f"Top {len(path_list)} paths from {pair[0]} to {pair[1]}:")
-    for i, path in enumerate(path_list, 1):
-        print(f"  {i}. Cost: {path.cost}")
+found = paths(prepared, PathQuery(source, target))
+assert found.rows[0].cost == 2
+assert found.rows[0].paths[0].cost() == 2
+alternatives = paths(prepared, PathQuery(
+    source, target, options=ngc.KspOptions(3, parallel_edges=False),
+))
+assert [path.cost() for path in alternatives.rows[0].paths] == [2, 4]
 ```
 
-## Demand Placement
+Paths retain native hop/edge identities. `prepared.topology.edge_refs` maps those edge IDs to physical links and directions. Native options control parallel-edge choices, cost ceilings, residuals and masks.
 
-Max-flow asks how much the network could carry. Demand placement asks how much of a given volume it does carry under a routing model. The same 6 units from A to C give a different answer under each preset:
+## Place declared traffic and export
 
 ```python
-from ngraph.analysis.functions import demand_placement_analysis
+from ngraph import DemandSet, DemandSpec, PlacementQuery, place, write_json
+from io import StringIO
 
-for preset in ("SHORTEST_PATHS_ECMP", "SHORTEST_PATHS_ECMP_LOSSY",
-               "SHORTEST_PATHS_WCMP", "TE_WCMP_UNLIM"):
-    result = demand_placement_analysis(
-        network,
-        excluded_nodes=set(),
-        excluded_links=set(),
-        demands_config=[{"source": "^A$", "target": "^C$", "volume": 6,
-                         "mode": "pairwise", "flow_policy": preset}],
-        include_flow_details=True,
-    )
-    entry = result.flows[0]
-    print(f"{preset}: placed={entry.placed:g} dropped={entry.dropped:g} "
-          f"by_cost={entry.cost_distribution} {entry.data}")
-
-# SHORTEST_PATHS_ECMP: placed=2 dropped=4 by_cost={2.0: 2.0} {}
-# SHORTEST_PATHS_ECMP_LOSSY: placed=2.5 dropped=3.5 by_cost={2.0: 2.5} {'dropped_edges': {'A|B|0:fwd': 2.0, 'A|B|1:fwd': 1.0, 'B|C|0:fwd': 0.5}}
-# SHORTEST_PATHS_WCMP: placed=3 dropped=3 by_cost={2.0: 3.0} {}
-# TE_WCMP_UNLIM: placed=6 dropped=0 by_cost={2.0: 3.0, 4.0: 3.0} {}
+traffic = DemandSet("traffic", (
+    DemandSpec(source, target, volume=6, id="service"),
+))
+loaded = prepare(Scenario(network, demand_sets={"traffic": traffic},
+                          units=UnitsSettings(resolution=1)),
+                 demand_sets=("traffic",))
+placed = place(loaded, PlacementQuery(loaded.demand_sets["traffic"]))
+state = placed.cases[0].states["converged"]
+assert state.totals.reference_request_units == 6
+assert state.totals.delivered_units == 2
+assert state.totals.reference_shortfall_units == 4
+output = StringIO()
+write_json(placed, output)
 ```
 
-- `SHORTEST_PATHS_ECMP` hashes 3 units onto each parallel link of the cost-2 path. The capacity-1 link admits only 1 without loss, so the whole demand is admitted at that scale: 2 units.
-- `SHORTEST_PATHS_ECMP_LOSSY` sends the same 3 and 3, and each link carries what fits. 2.5 units arrive; `dropped_edges` says where the other 3.5 were lost.
-- `SHORTEST_PATHS_WCMP` splits by capacity, so the cost-2 path carries its full 3 units. The demand does not leave the shortest path, so 3 units are unmet.
-- `TE_WCMP_UNLIM` reroutes the remainder onto the cost-4 path and places everything.
-
-In a scenario file the same choice is the demand's `flow_policy`; see the [Tutorial](../getting-started/tutorial.md) for placement inside a workflow.
+The default demand model is lossless shortest-path ECMP. The remaining 4 units are unadmitted. Exact integer accounting distinguishes unadmitted traffic, source losses and edge losses. See the [tutorial](../getting-started/tutorial.md) for workflow execution and the [API](../reference/api.md) for the other native models.

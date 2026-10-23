@@ -1,84 +1,298 @@
-"""NetGraph: Network modeling and analysis library.
+"""Named network models and exact-unit analyses on NetGraph-Core.
 
-Network topology modeling, traffic analysis, and capacity planning on a hybrid
-Python+C++ architecture.
-
-Primary API:
-    analyze() - Create an analysis context for network queries
-    AnalysisContext - Prepared graph state reused across queries
-    Network, Node, Link - Network topology model
-    from_networkx() - Convert NetworkX graph to internal format
-    to_networkx() - Convert internal format back to NetworkX
-
-Example:
-    from ngraph import Network, Node, Link, analyze
-
-    # Build network
-    net = Network()
-    net.add_node(Node(name="A"))
-    net.add_node(Node(name="B"))
-    net.add_link(Link(source="A", target="B", capacity=100.0))
-
-    # One-off analysis
-    flow = analyze(net).max_flow("^A$", "^B$")
-
-    # Bound context: graph built once, reused across queries
-    ctx = analyze(net, source="^A$", sink="^B$")
-    baseline = ctx.max_flow()
-    degraded = ctx.max_flow(excluded_links=failed_links)
+Every public name loads its module on first use, so a run imports only the
+modules it needs.
 """
 
-from __future__ import annotations
+from importlib import import_module
+from typing import TYPE_CHECKING
 
-from importlib.metadata import version
+from ngraph import logging as _logging  # noqa: F401  (attaches the NullHandler)
 
-__version__ = version("ngraph")
-from ngraph.analysis import AnalysisContext, analyze
-from ngraph.analysis.failure_manager import FailureManager
-from ngraph.explorer import NetworkExplorer
-from ngraph.lib.nx import EdgeMap, NodeMap, from_networkx, to_networkx
-from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
-from ngraph.model.network import Link, Network, Node, RiskGroup
-from ngraph.model.path import Path
-from ngraph.results.artifacts import CapacityEnvelope
-from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
-from ngraph.scenario import Scenario
-from ngraph.types.base import EdgeSelect, FlowPlacement, Mode
-from ngraph.types.dto import EdgeRef, MaxFlowResult
+if TYPE_CHECKING:
+    __version__: str
+    from ngraph.analysis.capacity import CapacityQuery, capacity
+    from ngraph.analysis.demands import resolve_demands
+    from ngraph.analysis.failures import FailureRequest, Workers, failure_cases
+    from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
+    from ngraph.analysis.paths import PathQuery, paths
+    from ngraph.analysis.placement import PlacementQuery, place
+    from ngraph.analysis.sensitivity import SensitivityQuery, edge_sensitivity
+    from ngraph.analysis.topology import PreparedTopology
+    from ngraph.analysis.units import UnitsSettings
+    from ngraph.explorer import NetworkExplorer
+    from ngraph.export import register_result_exporter, write_json
+    from ngraph.model.components import Component, ComponentsLibrary
+    from ngraph.model.demand import (
+        DemandSet,
+        DemandSpec,
+        EdgeWeight,
+        FlowPolicyPreset,
+        PhysicalAmount,
+        PinnedRoutes,
+        RouteSpec,
+        SupportSpec,
+        WeightSpec,
+    )
+    from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
+    from ngraph.model.network import DirectedLink, Link, Network, Node
+    from ngraph.model.risk import RiskGroup
+    from ngraph.model.selectors import Condition, MatchSpec, Selector
+    from ngraph.results import (
+        AnalysisMetadata,
+        AnalysisResult,
+        BuildGraphResult,
+        CapacityAnalysis,
+        CapacityRow,
+        CaseResult,
+        CaseState,
+        CostPowerResult,
+        CostReport,
+        CostUnavailableReason,
+        DeliveredByPathCost,
+        DiscardedShare,
+        DomainResult,
+        Endpoints,
+        ExactAlpha,
+        ExpansionAccounting,
+        ExpansionLeaf,
+        ExpansionParent,
+        ExpansionSplit,
+        ExportContext,
+        FailureCase,
+        FailurePattern,
+        FailureSelection,
+        FailureTrace,
+        HardwareRow,
+        InputConstraint,
+        InputQuantization,
+        JSONValue,
+        MarginalCostBin,
+        MarginalCurve,
+        MSDAnalysis,
+        MSDProbe,
+        MSDProof,
+        MSDStatus,
+        MSDStopReason,
+        NetworkStatsResult,
+        OutputSelection,
+        PathAnalysis,
+        PathCostBin,
+        PathRow,
+        PlacementAnalysis,
+        PlacementRow,
+        PlacementTotals,
+        PoolHead,
+        PoolMetadata,
+        PrecisionMiss,
+        PreparationScope,
+        RangeConstraint,
+        RangeRefusal,
+        ReportLocation,
+        ResolvedDemand,
+        ResolvedDemandSet,
+        RunMetadata,
+        RunResult,
+        SamplingMetadata,
+        SelfPair,
+        SensitivityAnalysis,
+        SplitConstraint,
+        StepContext,
+        StepOutput,
+        StepQuestion,
+        StepResult,
+        SyntheticIngress,
+        UnitConstraint,
+        UnitsReport,
+        UnverifiedConstraint,
+        UpperCertificate,
+    )
+    from ngraph.scenario import PreparedScenario, Scenario, prepare, run
+    from ngraph.workflow.base import WorkflowStep, register_workflow_step
+
+_MODULES = {
+    "ngraph.analysis.capacity": "CapacityQuery capacity",
+    "ngraph.analysis.demands": "resolve_demands",
+    "ngraph.analysis.failures": "FailureRequest Workers failure_cases",
+    "ngraph.analysis.msd": "MSDQuery maximum_supported_demand",
+    "ngraph.analysis.placement": "PlacementQuery place",
+    "ngraph.analysis.topology": "PreparedTopology",
+    "ngraph.analysis.units": "UnitsSettings",
+    "ngraph.explorer": "NetworkExplorer",
+    "ngraph.export": "register_result_exporter write_json",
+    "ngraph.model.components": "Component ComponentsLibrary",
+    "ngraph.model.demand": (
+        "DemandSet DemandSpec EdgeWeight FlowPolicyPreset PhysicalAmount "
+        "PinnedRoutes RouteSpec SupportSpec WeightSpec"
+    ),
+    "ngraph.model.failure": "FailureMode FailurePolicy FailureRule",
+    "ngraph.model.network": "DirectedLink Link Network Node",
+    "ngraph.model.risk": "RiskGroup",
+    "ngraph.model.selectors": "Condition MatchSpec Selector",
+    "ngraph.results": (
+        "AnalysisMetadata AnalysisResult "
+        "BuildGraphResult CapacityAnalysis "
+        "CapacityRow CaseResult CaseState "
+        "CostPowerResult CostReport CostUnavailableReason "
+        "DeliveredByPathCost DiscardedShare "
+        "DomainResult Endpoints ExactAlpha ExpansionAccounting "
+        "ExpansionLeaf ExpansionParent ExpansionSplit ExportContext FailureCase "
+        "FailurePattern FailureSelection FailureTrace "
+        "HardwareRow InputConstraint InputQuantization JSONValue "
+        "MarginalCostBin MarginalCurve MSDAnalysis MSDProbe MSDProof "
+        "MSDStatus MSDStopReason "
+        "NetworkStatsResult OutputSelection PathAnalysis "
+        "PathCostBin PathRow PlacementAnalysis "
+        "PlacementRow PlacementTotals PoolHead PoolMetadata PrecisionMiss "
+        "PreparationScope RangeConstraint RangeRefusal ReportLocation "
+        "ResolvedDemand ResolvedDemandSet RunMetadata RunResult "
+        "SamplingMetadata SelfPair SensitivityAnalysis "
+        "SplitConstraint StepContext StepOutput StepQuestion "
+        "StepResult SyntheticIngress UnitConstraint UnitsReport "
+        "UnverifiedConstraint UpperCertificate"
+    ),
+    "ngraph.scenario": "PreparedScenario Scenario prepare run",
+    "ngraph.workflow.base": "WorkflowStep register_workflow_step",
+    "ngraph.analysis.paths": "PathQuery paths",
+    "ngraph.analysis.sensitivity": "SensitivityQuery edge_sensitivity",
+}
+_EXPORTS = {
+    name: module for module, names in _MODULES.items() for name in names.split()
+}
+
+
+def __getattr__(name):
+    if name == "__version__":
+        from importlib.metadata import version
+
+        value = version("ngraph")
+    else:
+        module = _EXPORTS.get(name)
+        if module is None:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        value = getattr(import_module(module), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_EXPORTS) | {"__version__"})
+
 
 __all__ = [
-    # Version
-    "__version__",
-    # Model
-    "Network",
-    "Node",
-    "Link",
-    "RiskGroup",
-    "Path",
-    "TrafficDemand",
+    "AnalysisMetadata",
+    "AnalysisResult",
+    "BuildGraphResult",
+    "CapacityAnalysis",
+    "CapacityQuery",
+    "CapacityRow",
+    "CaseResult",
+    "CaseState",
+    "Component",
+    "ComponentsLibrary",
+    "Condition",
+    "CostPowerResult",
+    "CostReport",
+    "CostUnavailableReason",
+    "DeliveredByPathCost",
+    "DemandSet",
+    "DemandSpec",
+    "DirectedLink",
+    "DiscardedShare",
+    "DomainResult",
+    "EdgeWeight",
+    "Endpoints",
+    "ExactAlpha",
+    "ExpansionAccounting",
+    "ExpansionLeaf",
+    "ExpansionParent",
+    "ExpansionSplit",
+    "ExportContext",
+    "FailureCase",
+    "FailureMode",
+    "FailurePattern",
+    "FailurePolicy",
+    "FailureRequest",
+    "FailureRule",
+    "FailureSelection",
+    "FailureTrace",
     "FlowPolicyPreset",
-    "Scenario",
-    # Analysis (primary API)
-    "analyze",
-    "AnalysisContext",
-    # Types
-    "FlowPlacement",
-    "EdgeSelect",
-    "Mode",
-    "EdgeRef",
-    "MaxFlowResult",
-    # Results
-    "FlowEntry",
-    "FlowIterationResult",
-    "FlowSummary",
-    "CapacityEnvelope",
-    # Execution
-    "FailureManager",
+    "HardwareRow",
+    "InputConstraint",
+    "InputQuantization",
+    "JSONValue",
+    "Link",
+    "MSDAnalysis",
+    "MSDProbe",
+    "MSDProof",
+    "MSDQuery",
+    "MSDStatus",
+    "MSDStopReason",
+    "MarginalCostBin",
+    "MarginalCurve",
+    "MatchSpec",
+    "Network",
     "NetworkExplorer",
-    # Library integrations (NetworkX)
-    "EdgeMap",
-    "NodeMap",
-    "from_networkx",
-    "to_networkx",
+    "NetworkStatsResult",
+    "Node",
+    "OutputSelection",
+    "PathAnalysis",
+    "PathCostBin",
+    "PathQuery",
+    "PathRow",
+    "PhysicalAmount",
+    "PinnedRoutes",
+    "PlacementAnalysis",
+    "PlacementQuery",
+    "PlacementRow",
+    "PlacementTotals",
+    "PoolHead",
+    "PoolMetadata",
+    "PrecisionMiss",
+    "PreparationScope",
+    "PreparedScenario",
+    "PreparedTopology",
+    "RangeConstraint",
+    "RangeRefusal",
+    "ReportLocation",
+    "ResolvedDemand",
+    "ResolvedDemandSet",
+    "RiskGroup",
+    "RouteSpec",
+    "RunMetadata",
+    "RunResult",
+    "SamplingMetadata",
+    "Scenario",
+    "Selector",
+    "SelfPair",
+    "SensitivityAnalysis",
+    "SensitivityQuery",
+    "SplitConstraint",
+    "StepContext",
+    "StepOutput",
+    "StepQuestion",
+    "StepResult",
+    "SupportSpec",
+    "SyntheticIngress",
+    "UnitConstraint",
+    "UnitsReport",
+    "UnitsSettings",
+    "UnverifiedConstraint",
+    "UpperCertificate",
+    "WeightSpec",
+    "Workers",
+    "WorkflowStep",
+    "__version__",
+    "capacity",
+    "edge_sensitivity",
+    "failure_cases",
+    "maximum_supported_demand",
+    "paths",
+    "place",
+    "prepare",
+    "register_result_exporter",
+    "register_workflow_step",
+    "resolve_demands",
+    "run",
+    "write_json",
 ]

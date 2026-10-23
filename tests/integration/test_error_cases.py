@@ -1,340 +1,169 @@
-"""
-Error case tests for scenario processing and validation.
+"""YAML refusals and degenerate physical topologies through preparation/run."""
 
-Covers malformed YAML, invalid configurations, and degenerate topologies
-(empty, single node, self-loops, parallel and zero-capacity links).
-"""
-
+import jsonschema
 import pytest
 from yaml.parser import ParserError
 
-from ngraph.scenario import Scenario
+from ngraph.results import BuildGraphResult
+from ngraph.scenario import Scenario, prepare, run
 
 from .helpers import ScenarioDataBuilder
 
 
+def _graph(scenario):
+    (step,) = run(prepare(scenario)).steps
+    assert isinstance(step.result, BuildGraphResult)
+    assert step.result.node_count == len(step.result.graph["nodes"])
+    assert step.result.link_count == len(step.result.graph["edges"])
+    return step.result.graph
+
+
+def _builder(nodes=()):
+    return (
+        ScenarioDataBuilder()
+        .with_simple_nodes(list(nodes))
+        .with_workflow_step("BuildGraph", "build_graph")
+    )
+
+
 @pytest.mark.slow
 class TestMalformedYAML:
-    """Tests for malformed YAML and parsing errors."""
-
     def test_invalid_yaml_syntax(self):
-        """Test that invalid YAML syntax raises ParserError."""
-        # Use raw YAML for syntax error testing (can't build with builder)
-        invalid_yaml = """
-        network:
-          nodes:
-            NodeA: {
-        """  # Missing closing brace
-
         with pytest.raises(ParserError):
-            Scenario.from_yaml(invalid_yaml)
+            Scenario.from_yaml("network:\n  nodes:\n    NodeA: {\n")
+        assert (
+            _graph(_builder(("NodeA",)).build_scenario())["nodes"][0]["id"] == "NodeA"
+        )
 
     def test_missing_required_fields(self):
-        """Test that an empty builder scenario loads with a network object."""
-        # Empty scenario using builder
-        builder = ScenarioDataBuilder()
-        scenario = builder.build_scenario()
-
-        assert scenario.network is not None
+        scenario = ScenarioDataBuilder().build_scenario()
+        assert not scenario.network.nodes and not scenario.workflow
+        assert run(prepare(scenario)).steps == ()
 
     def test_invalid_node_definitions(self):
-        """Test invalid node definitions."""
-        # Use raw YAML for testing invalid fields that builder can't create
-        invalid_node_yaml = """
-        network:
-          nodes:
-            NodeA:
-              invalid_field: "should_not_exist"
-              disabled: "not_a_boolean"  # Should be boolean
-        """
-
-        # Schema validation rejects unknown node keys
-        import jsonschema.exceptions
-
         with pytest.raises(
-            jsonschema.exceptions.ValidationError,
-            match="Additional properties are not allowed",
+            jsonschema.ValidationError, match="Additional properties are not allowed"
         ):
-            _scenario = Scenario.from_yaml(invalid_node_yaml)
+            Scenario.from_yaml(
+                "network:\n  nodes:\n    NodeA:\n      invalid_field: should_not_exist\n      disabled: not_a_boolean\n"
+            )
+        assert (
+            _graph(_builder(("NodeA",)).build_scenario())["nodes"][0]["disabled"]
+            is False
+        )
 
     def test_nonexistent_link_endpoints(self):
-        """Test links referencing nonexistent nodes are silently skipped."""
-        # Use raw YAML since builder would validate node existence
-        invalid_endpoints_yaml = """
-        network:
-          nodes:
-            NodeA: {}
-          links:
-            - source: NodeA
-              target: NonexistentNode  # Node doesn't exist
-              capacity: 10
-              cost: 1
-        workflow:
-          - type: BuildGraph
-            name: build_graph
-        """
-
-        # Links to unknown nodes are silently skipped by mesh pattern
-        scenario = Scenario.from_yaml(invalid_endpoints_yaml)
-        scenario.run()
-        assert "NodeA" in scenario.network.nodes
-        assert len(scenario.network.links) == 0  # Link is silently skipped
+        scenario = Scenario.from_yaml("""
+network:
+  nodes: {NodeA: {}}
+  links:
+    - {source: NodeA, target: NonexistentNode, capacity: 10, cost: 1}
+workflow:
+  - {type: BuildGraph, name: build_graph}
+""")
+        graph = _graph(scenario)
+        assert [node["id"] for node in graph["nodes"]] == ["NodeA"]
+        assert not graph["edges"] and not scenario.network.links
 
 
 @pytest.mark.slow
 class TestBlueprintErrors:
-    """Tests for blueprint-related errors."""
-
     def test_nonexistent_blueprint_reference(self):
-        """Test referencing a blueprint that doesn't exist."""
-        # Use raw YAML for invalid blueprint reference
-        invalid_blueprint_ref = """
-        network:
-          name: "test_network"
-          nodes:
-            test_group:
-              blueprint: nonexistent_blueprint  # Doesn't exist
-        """
-
         with pytest.raises((ValueError, KeyError)):
-            scenario = Scenario.from_yaml(invalid_blueprint_ref)
-            scenario.run()
+            Scenario.from_yaml("network:\n  nodes:\n    group: {blueprint: absent}\n")
+        scenario = Scenario.from_yaml(
+            "blueprints:\n  simple:\n    nodes: {member: {}}\nnetwork:\n  nodes:\n    group: {blueprint: simple}\n"
+        )
+        assert scenario.network.nodes
 
     def test_circular_blueprint_references(self):
-        """Test circular references between blueprints."""
-        builder = ScenarioDataBuilder()
-        builder.with_blueprint(
-            "blueprint_a", {"nodes": {"group_a": {"blueprint": "blueprint_b"}}}
-        )
-        builder.with_blueprint(
-            "blueprint_b",
-            {
-                "nodes": {"group_b": {"blueprint": "blueprint_a"}}  # Circular!
-            },
-        )
-
-        # Add network using one of the circular blueprints
-        builder.data["network"] = {
-            "name": "test_network",
-            "nodes": {"test_group": {"blueprint": "blueprint_a"}},
-        }
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
+        builder = _builder()
+        builder.with_blueprint("a", {"nodes": {"next": {"blueprint": "b"}}})
+        builder.with_blueprint("b", {"nodes": {"next": {"blueprint": "a"}}})
+        builder.data["network"] = {"nodes": {"group": {"blueprint": "a"}}}
         with pytest.raises((ValueError, RecursionError)):
-            scenario = builder.build_scenario()
-            scenario.run()
+            builder.build_scenario()
+        builder.data["blueprints"]["b"] = {"nodes": {"last": {}}}
+        assert _graph(builder.build_scenario())["nodes"]
 
     def test_malformed_link_patterns(self):
-        """Test malformed link patterns."""
-        import jsonschema.exceptions
-
-        # Use raw YAML for invalid pattern value that builder might validate
-        malformed_adjacency = """
-        blueprints:
-          bad_blueprint:
-            nodes:
-              group1:
-                count: 2
-                template: "node-{n}"
-              group2:
-                count: 2
-                template: "node-{n}"
-            links:
-              - source: group1
-                target: group2
-                pattern: "invalid_pattern"  # Should be 'mesh' or 'one_to_one'
-                capacity: 10
-
-        network:
-          nodes:
-            test_group:
-              blueprint: bad_blueprint
-        workflow:
-          - type: BuildGraph
-            name: build_graph
-        """
-
-        # Schema validation catches this before code execution
-        with pytest.raises(jsonschema.exceptions.ValidationError):
-            scenario = Scenario.from_yaml(malformed_adjacency)
-            scenario.run()
+        builder = _builder(("A", "B"))
+        builder.data["network"]["links"] = [
+            {"source": "A", "target": "B", "pattern": "invalid_pattern", "capacity": 10}
+        ]
+        with pytest.raises(jsonschema.ValidationError):
+            builder.build_scenario()
+        builder.data["network"]["links"][0]["pattern"] = "mesh"
+        assert len(_graph(builder.build_scenario())["edges"]) == 2
 
 
 @pytest.mark.slow
 class TestWorkflowErrors:
-    """Tests for workflow step errors."""
-
     def test_nonexistent_workflow_step_type(self):
-        """Test referencing nonexistent workflow step types."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA"])
+        builder = _builder(("A",))
         builder.with_workflow_step("NonexistentStepType", "invalid_step")
-
-        with pytest.raises((ValueError, KeyError)):
-            scenario = builder.build_scenario()
-            scenario.run()
+        with pytest.raises((ValueError, KeyError, jsonschema.ValidationError)):
+            builder.build_scenario()
+        builder.data["workflow"].pop()
+        assert len(_graph(builder.build_scenario())["nodes"]) == 1
 
 
 @pytest.mark.slow
 class TestEdgeCases:
-    """Degenerate topologies and extreme parameter values."""
-
     def test_empty_network(self):
-        """Test scenario with no nodes or links."""
-        builder = ScenarioDataBuilder()
-        builder.data["network"] = {"name": "empty_network", "nodes": {}, "links": []}
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        # Should succeed but produce empty graph
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert len(graph_data.get("nodes", [])) == 0
-        assert len(graph_data.get("edges", [])) == 0
+        graph = _graph(_builder().build_scenario())
+        assert graph["nodes"] == graph["edges"] == []
 
     def test_single_node_network(self):
-        """Test scenario with only one node."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["LonelyNode"])
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert len(graph_data.get("nodes", [])) == 1
-        assert len(graph_data.get("edges", [])) == 0
+        graph = _graph(_builder(("LonelyNode",)).build_scenario())
+        assert [node["id"] for node in graph["nodes"]] == ["LonelyNode"]
+        assert graph["edges"] == []
 
     def test_isolated_nodes(self):
-        """Test network with isolated nodes (no connections)."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB", "NodeC"])
-        # No links - all nodes isolated
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert len(graph_data.get("nodes", [])) == 3
-        assert len(graph_data.get("edges", [])) == 0
+        graph = _graph(_builder(("NodeA", "NodeB", "NodeC")).build_scenario())
+        assert [node["id"] for node in graph["nodes"]] == ["NodeA", "NodeB", "NodeC"]
+        assert graph["edges"] == []
 
     def test_self_loop_links(self):
-        """Test links from a node to itself."""
-        # Use raw YAML since builder would prevent self-loops
-        self_loop_yaml = """
-        network:
-          nodes:
-            NodeA: {}
-          links:
-            - source: NodeA
-              target: NodeA  # Self-loop
-              capacity: 10
-              cost: 1
-        workflow:
-          - type: BuildGraph
-            name: build_graph
-        """
-
-        # NetGraph silently skips self-loops (mesh pattern behavior)
-        scenario = Scenario.from_yaml(self_loop_yaml)
-        scenario.run()
-        assert "NodeA" in scenario.network.nodes
-        assert len(scenario.network.links) == 0  # Self-loop is silently skipped
+        builder = _builder(("NodeA",))
+        builder.with_simple_links([("NodeA", "NodeA", 10)])
+        scenario = builder.build_scenario()
+        assert _graph(scenario)["edges"] == [] and not scenario.network.links
 
     def test_duplicate_links(self):
-        """Test multiple links between the same pair of nodes."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB"])
-        # Add duplicate links with different parameters
-        builder.with_simple_links([("NodeA", "NodeB", 10.0)])
-        builder.data["network"]["links"].append(
-            {
-                "source": "NodeA",
-                "target": "NodeB",
-                "capacity": 20.0,
-                "cost": 2,
-            }
-        )
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert len(graph_data.get("nodes", [])) == 2
-        # Should have multiple edges between the same nodes
-        edges = graph_data.get("edges", [])
-        nodeA_to_nodeB_edges = [
-            e
-            for e in edges
-            if e.get("source") == "NodeA" and e.get("target") == "NodeB"
-        ]
-        assert len(nodeA_to_nodeB_edges) >= 2
+        builder = _builder(("NodeA", "NodeB"))
+        builder.with_simple_links([("NodeA", "NodeB", 10), ("NodeA", "NodeB", 20)])
+        builder.data["network"]["links"][1]["cost"] = 2
+        graph = _graph(builder.build_scenario())
+        assert len(graph["nodes"]) == 2 and len(graph["edges"]) == 4
+        assert [
+            (edge["capacity"], edge["cost"])
+            for edge in graph["edges"]
+            if edge["source"] == "NodeA"
+        ] == [(10, 1), (20, 2)]
 
     def test_zero_capacity_links(self):
-        """Test links with zero capacity."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB"])
-        builder.data["network"]["links"] = [
-            {
-                "source": "NodeA",
-                "target": "NodeB",
-                "capacity": 0,
-                "cost": 1,  # Zero capacity
-            }
-        ]
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert len(graph_data.get("nodes", [])) == 2
+        builder = _builder(("NodeA", "NodeB")).with_simple_links(
+            [("NodeA", "NodeB", 0)]
+        )
+        graph = _graph(builder.build_scenario())
+        assert len(graph["nodes"]) == 2 and len(graph["edges"]) == 2
+        assert all(
+            edge["capacity"] == 0 and edge["cost"] == 1 for edge in graph["edges"]
+        )
 
     def test_very_large_network_parameters(self):
-        """Test handling of very large numeric parameters."""
-        builder = ScenarioDataBuilder()
-        builder.with_simple_nodes(["NodeA", "NodeB"])
-        builder.data["network"]["links"] = [
-            {
-                "source": "NodeA",
-                "target": "NodeB",
-                "capacity": 999999999999,  # Very large capacity
-                "cost": 999999999999,  # Very large cost
-            }
-        ]
-        builder.with_workflow_step("BuildGraph", "build_graph")
-
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        # Should handle large numbers without overflow issues
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        assert graph_data is not None, "BuildGraph should produce a graph"
-        assert len(graph_data.get("nodes", [])) == 2
+        builder = _builder(("NodeA", "NodeB")).with_simple_links(
+            [("NodeA", "NodeB", 999999999999)]
+        )
+        builder.data["network"]["links"][0]["cost"] = 999999999999
+        graph = _graph(builder.build_scenario())
+        assert len(graph["nodes"]) == 2 and len(graph["edges"]) == 2
+        assert all(
+            edge["capacity"] == edge["cost"] == 999999999999 for edge in graph["edges"]
+        )
 
     def test_special_characters_in_node_names(self):
-        """Test node names with valid special characters (dashes and underscores)."""
-        builder = ScenarioDataBuilder()
-        # Schema allows: alphanumeric, dashes, underscores (not dots)
-        special_names = ["node-with-dashes", "node_with_underscores", "Node-123_test"]
-
-        builder.with_simple_nodes(special_names)
-        builder.with_workflow_step("BuildGraph", "build_graph")
-        scenario = builder.build_scenario()
-        scenario.run()
-
-        exported = scenario.results.to_dict()
-        graph_data = exported["steps"]["build_graph"]["data"]["graph"]
-        nodes = graph_data.get("nodes", [])
-        node_ids = [n.get("id") for n in nodes]
-        for name in special_names:
-            assert name in node_ids, f"Node {name} should be in graph"
+        names = ["node-with-dashes", "node_with_underscores", "Node-123_test"]
+        graph = _graph(_builder(names).build_scenario())
+        assert {node["id"] for node in graph["nodes"]} == set(names)

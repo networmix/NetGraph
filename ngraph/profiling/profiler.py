@@ -14,7 +14,6 @@ import time
 import tracemalloc
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 from ngraph.logging import get_logger
@@ -48,8 +47,7 @@ class StepProfile:
         function_calls: Number of function calls during execution.
         memory_peak: Peak traced memory in bytes; None unless memory
             tracking ran for this step.
-        cprofile_stats: cProfile statistics, including merged worker profiles.
-        worker_profiles_merged: Number of worker profiles merged into this step.
+        cprofile_stats: cProfile statistics for this step.
     """
 
     step_name: str
@@ -59,7 +57,6 @@ class StepProfile:
     function_calls: int
     memory_peak: Optional[float] = None
     cprofile_stats: Optional[pstats.Stats] = None
-    worker_profiles_merged: int = 0
 
 
 @dataclass
@@ -206,64 +203,6 @@ class PerformanceProfiler:
                 f"({wall_time:.3f}s wall, {cpu_time:.3f}s CPU, {function_calls:,} calls)"
             )
 
-    def merge_child_profiles(self, profile_dir: Path, step_name: str) -> None:
-        """Merge child worker profiles into the parent step profile.
-
-        Adds every ``*_thread_*.pstats`` file in ``profile_dir`` to the step's
-        stats, recounts calls, and deletes the merged files. Merge errors are
-        logged as warnings, not raised.
-
-        Args:
-            profile_dir: Directory containing worker profile files.
-            step_name: Name of the workflow step these workers belong to.
-        """
-        step_profile = None
-        for profile in self.results.step_profiles:
-            if profile.step_name == step_name:
-                step_profile = profile
-                break
-
-        if not step_profile or not step_profile.cprofile_stats:
-            logger.warning(f"No parent profile found for step: {step_name}")
-            return
-
-        # Find all worker profile files for this step. Workers in
-        # analysis/failure_manager.py write {analysis_name}_thread_{tid}_{uuid}.pstats.
-        worker_files = list(profile_dir.glob("*_thread_*.pstats"))
-        if not worker_files:
-            logger.debug(f"No worker profiles found in {profile_dir}")
-            return
-
-        logger.debug(f"Found {len(worker_files)} worker profiles to merge")
-
-        try:
-            merged_count = 0
-            for worker_file in worker_files:
-                step_profile.cprofile_stats.add(str(worker_file))
-                logger.debug(f"Merged worker profile: {worker_file.name}")
-                merged_count += 1
-
-            stats_data = getattr(step_profile.cprofile_stats, "stats", {})
-            step_profile.function_calls = sum(
-                stat_tuple[0] for stat_tuple in stats_data.values()
-            )
-            step_profile.worker_profiles_merged = merged_count
-
-            logger.info(
-                f"Merged {len(worker_files)} worker profiles into step '{step_name}'"
-            )
-
-            for worker_file in worker_files:
-                try:
-                    worker_file.unlink()
-                except Exception as exc:
-                    logger.debug(
-                        "Failed to remove worker profile %s: %s", worker_file, exc
-                    )
-
-        except Exception as e:
-            logger.warning(f"Failed to merge worker profiles: {type(e).__name__}: {e}")
-
     def analyze_performance(self) -> None:
         """Flag steps above 10% of total wall time and fill ``analysis_summary``.
 
@@ -325,47 +264,6 @@ class PerformanceProfiler:
         logger.debug(
             f"Performance analysis completed: {len(bottlenecks)} bottlenecks identified"
         )
-
-    def get_top_functions(
-        self, step_name: str, limit: int = 10
-    ) -> List[Tuple[str, float, int]]:
-        """Return the step's functions with the highest internal time.
-
-        Args:
-            step_name: Name of the workflow step to analyze.
-            limit: Maximum number of functions to return.
-
-        Returns:
-            List of (function_name, cpu_time, call_count) tuples; empty when
-            the step has no profile.
-        """
-        step_profile = next(
-            (p for p in self.results.step_profiles if p.step_name == step_name), None
-        )
-        if not step_profile or not step_profile.cprofile_stats:
-            return []
-
-        return _top_functions(step_profile.cprofile_stats, limit)
-
-    def save_detailed_profile(self, output_path: Path, step_name: str) -> None:
-        """Save one step's cProfile data to a file.
-
-        Args:
-            output_path: Destination for the ``pstats`` dump.
-            step_name: Step whose profile to save. Logs a warning if the step
-                has no profile.
-        """
-        step_profile = next(
-            (p for p in self.results.step_profiles if p.step_name == step_name),
-            None,
-        )
-        if step_profile and step_profile.cprofile_stats:
-            step_profile.cprofile_stats.dump_stats(str(output_path))
-            logger.info(
-                f"Detailed profile for step '{step_name}' saved to: {output_path}"
-            )
-        else:
-            logger.warning(f"No detailed profile data available for step: {step_name}")
 
 
 class PerformanceReporter:
@@ -448,7 +346,6 @@ class PerformanceReporter:
             "Calls",
             "% Total",
             "Memory",
-            "Workers",
         ]
 
         col_widths = [len(h) for h in headers]
@@ -473,9 +370,6 @@ class PerformanceReporter:
                 f"{step.function_calls:,}",
                 f"{percentage:.1f}%",
                 mem_str,
-                f"{step.worker_profiles_merged}"
-                if step.worker_profiles_merged > 0
-                else "-",
             ]
             table_data.append(row)
 

@@ -10,8 +10,9 @@ import json
 from importlib import resources
 from typing import Any, Dict
 
-import jsonschema
 import yaml
+from jsonschema.exceptions import best_match
+from jsonschema.validators import validator_for
 
 
 def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
@@ -75,6 +76,13 @@ def load_scenario_yaml(yaml_str: str) -> Dict[str, Any]:
         .joinpath("scenario.json")
         .read_text(encoding="utf-8")
     )
-    jsonschema.validate(data, json.loads(schema_text))
+    schema = json.loads(schema_text)
+    # The packaged schema is checked by the schema gate. Per-load validation
+    # keeps jsonschema.validate's instance-error selection without repeatedly
+    # validating that fixed schema against its metaschema.
+    validator = validator_for(schema)(schema)
+    error = best_match(validator.iter_errors(data))
+    if error is not None:
+        raise error
 
     return data

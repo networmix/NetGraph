@@ -5,21 +5,19 @@ selection over `Network` objects. It lives in the model layer so that failure
 policies and analysis code can evaluate selectors without depending on the DSL
 package.
 
-YAML-facing selector parsing (`normalize_selector`) lives in
-`ngraph.dsl.selectors`, which builds the schema types defined here
-(dsl -> model direction only). `parse_match_spec` lives here because it
-builds model types from plain dicts and is used by model-layer parsers.
+YAML-facing selector normalization and match parsing live here, alongside the
+schema types they construct. DSL callers construct these typed values once.
 
 Usage:
-    from ngraph.model.selectors import NodeSelector, select_nodes
+    from ngraph.model.selectors import Selector, select_nodes
 
-    selector = NodeSelector(path="^dc1/.*")
+    selector = Selector(path="^dc1/.*")
     groups = select_nodes(network, selector, default_active_only=True)
 """
 
 from .conditions import evaluate_condition, evaluate_conditions, resolve_attr_path
-from .parse import parse_match_spec
-from .schema import VALID_OPERATORS, Condition, EntityScope, MatchSpec, NodeSelector
+from .parse import normalize_selector, parse_match_spec
+from .schema import VALID_OPERATORS, Condition, EntityScope, MatchSpec, Selector
 from .select import (
     flatten_link_attrs,
     flatten_node_attrs,
@@ -34,9 +32,10 @@ __all__ = [
     "Condition",
     "EntityScope",
     "MatchSpec",
-    "NodeSelector",
+    "Selector",
     "VALID_OPERATORS",
     # Parsing
+    "normalize_selector",
     "parse_match_spec",
     # Evaluation
     "select_nodes",

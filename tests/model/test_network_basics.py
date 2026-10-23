@@ -2,24 +2,7 @@
 
 import pytest
 
-from ngraph.model.network import Link, Network, Node, new_base64_uuid
-
-
-class TestUtilities:
-    """Tests for utility functions."""
-
-    def test_new_base64_uuid_length_and_uniqueness(self):
-        """Generate two Base64-encoded UUIDs and confirm they are 22 chars and unique."""
-        uuid1 = new_base64_uuid()
-        uuid2 = new_base64_uuid()
-
-        assert isinstance(uuid1, str)
-        assert isinstance(uuid2, str)
-        assert "=" not in uuid1
-        assert "=" not in uuid2
-        assert len(uuid1) == 22
-        assert len(uuid2) == 22
-        assert uuid1 != uuid2
+from ngraph.model.network import Link, Network, Node
 
 
 class TestNodeCreation:

@@ -1,0 +1,643 @@
+"""Typed API client covering compact and requested native result projection."""
+
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from fractions import Fraction
+from io import StringIO
+from typing import Literal
+
+import netgraph_core as ngc
+
+from ngraph import (
+    BuildGraphResult,
+    CapacityAnalysis,
+    CapacityQuery,
+    CapacityRow,
+    CaseResult,
+    CaseState,
+    CostPowerResult,
+    CostReport,
+    DeliveredByPathCost,
+    DemandSet,
+    DemandSpec,
+    DirectedLink,
+    DomainResult,
+    EdgeWeight,
+    ExportContext,
+    FailureCase,
+    FailurePolicy,
+    FailureRequest,
+    InputConstraint,
+    JSONValue,
+    MarginalCurve,
+    MSDAnalysis,
+    MSDProof,
+    MSDQuery,
+    MSDStatus,
+    MSDStopReason,
+    NetworkStatsResult,
+    OutputSelection,
+    PathAnalysis,
+    PathQuery,
+    PinnedRoutes,
+    PlacementAnalysis,
+    PlacementQuery,
+    PlacementRow,
+    RangeConstraint,
+    ResolvedDemandSet,
+    RouteSpec,
+    RunResult,
+    Scenario,
+    Selector,
+    SelfPair,
+    SensitivityAnalysis,
+    SensitivityQuery,
+    SplitConstraint,
+    StepContext,
+    StepOutput,
+    SupportSpec,
+    UnitsReport,
+    UnitsSettings,
+    UnverifiedConstraint,
+    WeightSpec,
+    WorkflowStep,
+    capacity,
+    edge_sensitivity,
+    failure_cases,
+    maximum_supported_demand,
+    paths,
+    place,
+    prepare,
+    register_result_exporter,
+    register_workflow_step,
+    resolve_demands,
+    run,
+    write_json,
+)
+from ngraph.model.components import ComponentsLibrary
+from ngraph.model.network import Link, Network, Node
+
+
+def minimal(network: Network, workflow: Sequence[WorkflowStep]) -> RunResult:
+    return run(prepare(Scenario(network=network, workflow=workflow)))
+
+
+def populated(
+    network: Network,
+    workflow: Sequence[WorkflowStep],
+    demand_sets: Mapping[str, DemandSet],
+    failure_policies: Mapping[str, FailurePolicy],
+    components_library: ComponentsLibrary,
+    routes: Mapping[str, RouteSpec],
+    supports: Mapping[str, SupportSpec],
+    weights: Mapping[str, WeightSpec],
+) -> RunResult:
+    return run(
+        prepare(
+            Scenario(
+                network,
+                workflow,
+                demand_sets=demand_sets,
+                failure_policies=failure_policies,
+                components_library=components_library,
+                seed=42,
+                units=UnitsSettings(),
+                routes=routes,
+                supports=supports,
+                weights=weights,
+            ),
+            demand_sets=tuple(demand_sets),
+        )
+    )
+
+
+def read_units(report: UnitsReport) -> float:
+    q: float = report.q
+    exponent: int = report.exponent
+    target: bool = report.target_met
+    precision: float = report.precision
+    assert q == 2.0**exponent and precision > 0
+    assert isinstance(target, bool)
+    sets: tuple[str, ...] = report.scope.library_demand_sets
+    for name in sets:
+        assert isinstance(name, str)
+    maximum: Fraction = report.max_absolute_input_error
+    relative: Fraction = report.max_relative_input_error
+    assert maximum >= 0 and relative >= 0
+    for constraint in report.binding_constraints:
+        label: str = constraint.label
+        assert label
+        if isinstance(constraint, (InputConstraint, SplitConstraint)):
+            bound: Fraction = constraint.q_upper_bound
+            assert bound >= 0
+            if isinstance(constraint, SplitConstraint):
+                assert constraint.basis in ("declared", "observed")
+                incoming: Fraction = constraint.incoming_physical
+                assert incoming >= 0
+        elif isinstance(constraint, RangeConstraint):
+            integer: int = constraint.units_value
+            assert integer >= 0
+        else:
+            opaque: UnverifiedConstraint = constraint
+            assert opaque.reason == "opaque_program"
+    for miss in report.misses:
+        case: str | None = miss.location.case_id
+        index: int | None = miss.location.probe_index
+        assert case is None or isinstance(case, str)
+        assert index is None or index >= 0
+        for sample in miss.examples:
+            error: Fraction = sample.error
+            assert sample.binary64_hex and isinstance(error, Fraction)
+    return q
+
+
+def read_cost(row: CostReport) -> int:
+    # The two exported forms have different numerical meanings.
+    if isinstance(row, DeliveredByPathCost):
+        return sum(bin.delivered_units for bin in row.bins)
+    curve: MarginalCurve = row
+    return sum(bin.units for bin in curve.bins)
+
+
+_COMPACT_NATIVE_KEYS = frozenset(
+    (
+        "request_kind",
+        "requested_units",
+        "offered_units",
+        "delivered_units",
+        "unadmitted_units",
+        "source_drop_units",
+        "edge_drop_units",
+        "termination",
+        "total_cost",
+    )
+)
+_DETAIL_NATIVE_KEYS = frozenset(
+    (
+        "call_delivered_units",
+        "call_undelivered_units",
+        "delivery_delta_units",
+        "call_edge_drops",
+        "call_source_drop_units",
+        "admitted_units",
+        "edge_drops",
+        "by_source",
+        "by_tunnel",
+        "plan",
+    )
+)
+
+
+def read_native_details(value: ngc.PlacementResult) -> None:
+    # Direct native access is available even when its wire projection is compact.
+    sources: tuple[ngc.SourceFlow, ...] = value.by_source
+    tunnels: tuple[ngc.TunnelFlow, ...] = value.by_tunnel
+    plan: ngc.TunnelPlan | None = value.plan
+    assert all(isinstance(row.delivered, int) for row in sources)
+    assert all(isinstance(row.delivered, int) for row in tunnels)
+    assert plan is None or isinstance(plan.tunnels_per_head, int)
+
+
+def _object(value: JSONValue) -> dict[str, JSONValue]:
+    assert isinstance(value, dict)
+    return value
+
+
+def _array(value: JSONValue) -> list[JSONValue]:
+    assert isinstance(value, list)
+    return value
+
+
+def check_wire_rows(
+    value: CapacityAnalysis | PlacementAnalysis | SensitivityAnalysis | MSDAnalysis,
+    *,
+    details: bool,
+) -> None:
+    selection: OutputSelection = value.outputs
+    selected_details: bool = selection.details
+    assert selected_details is details
+    output = StringIO()
+    write_json(value, output)
+    parsed: JSONValue = json.loads(output.getvalue())
+    analysis = _object(_object(parsed)["analysis"])
+    selected = _object(analysis["outputs"])
+    assert selected["details"] is details
+    rows: list[dict[str, JSONValue]] = []
+    if analysis["kind"] == "sensitivity":
+        native_rows = [_object(analysis["baseline"])]
+    else:
+        if analysis["kind"] == "msd":
+            if analysis["best_rows"] is not None:
+                rows.extend(_object(row) for row in _array(analysis["best_rows"]))
+            if "probe_rows" in analysis:
+                for probe in _array(analysis["probe_rows"]):
+                    rows.extend(_object(row) for row in _array(_object(probe)["rows"]))
+        else:
+            for case in _array(analysis["cases"]):
+                state = _object(_object(_object(case)["states"])["converged"])
+                rows.extend(_object(row) for row in _array(state["rows"]))
+        for row in rows:
+            if row["kind"] == "self":
+                assert set(row) == {"kind", "id", "node", "capacity_units"}
+            else:
+                assert "pool" in row
+        native_rows = [_object(row["result"]) for row in rows if row["kind"] != "self"]
+    flags = (
+        ("edge_flows", selection.native.edge_flows),
+        ("residual", selection.native.residual),
+        ("edge_reservations", selection.native.edge_reservations),
+        ("saturated_boundary_edges", selection.native.saturated_boundary_edges),
+        ("min_cut", selection.native.min_cut),
+    )
+    for native in native_rows:
+        assert _COMPACT_NATIVE_KEYS <= native.keys()
+        for name in ("delivered_units", "source_drop_units", "edge_drop_units"):
+            amount = native[name]
+            assert (
+                isinstance(amount, int) and not isinstance(amount, bool) and amount >= 0
+            )
+        assert native["request_kind"] in ("finite", "unlimited")
+        for name in (
+            "requested_units",
+            "offered_units",
+            "unadmitted_units",
+            "total_cost",
+        ):
+            amount = native[name]
+            assert amount is None or (
+                isinstance(amount, int) and not isinstance(amount, bool)
+            )
+        assert (_DETAIL_NATIVE_KEYS & native.keys()) == (
+            _DETAIL_NATIVE_KEYS if details else set()
+        )
+        for name, enabled in flags:
+            assert (name in native) is enabled
+        if details:
+            _array(native["by_source"])
+            _array(native["by_tunnel"])
+            plan = native["plan"]
+            assert plan is None or isinstance(plan, dict)
+            delta = native["delivery_delta_units"]
+            assert isinstance(delta, int) and not isinstance(delta, bool)
+        if not selection.cost_distribution:
+            assert all(
+                "cost_distribution" not in row and "unavailable_outputs" not in row
+                for row in rows
+            )
+
+
+def read_capacity(value: CapacityAnalysis) -> int:
+    details: bool = value.outputs.details
+    assert isinstance(details, bool)
+    total = 0
+    for case in value.cases:
+        typed_case: CaseResult[CapacityRow | SelfPair] = case
+        state = typed_case.states["converged"]
+        assert state.totals is None
+        for row in state.rows:
+            if isinstance(row, SelfPair):
+                assert row.capacity_units == 0
+            else:
+                units: int = row.result.delivered
+                total += units
+                if row.cost_distribution is not None:
+                    assert read_cost(row.cost_distribution) == units
+    config: ngc.FlowPolicyConfig = value.query.config
+    mode: str = value.query.mode
+    assert config.routing is not None and mode
+    return total
+
+
+def read_sensitivity(value: SensitivityAnalysis) -> int:
+    details: bool = value.outputs.details
+    assert isinstance(details, bool)
+    baseline: ngc.PlacementResult = value.result.baseline
+    deltas: list[int] = [entry.delivery_reduction for entry in value.result.entries]
+    assert all(
+        isinstance(delta, int) and not isinstance(delta, bool) for delta in deltas
+    )
+    source_path: str | None = value.query.source.path
+    assert source_path is None or isinstance(source_path, str)
+    return baseline.delivered
+
+
+def read_paths(value: PathAnalysis) -> list[int | None]:
+    costs: list[int | None] = []
+    for row in value.rows:
+        costs.append(row.cost)
+        if row.paths is not None:
+            for path in row.paths:
+                native_cost: int = path.cost()
+                assert native_cost >= 0
+    options = value.query.options
+    if isinstance(options, ngc.KspOptions):
+        assert value.algorithm == "ksp"
+    else:
+        assert value.algorithm == "spf" and options.min_residual >= 1
+    return costs
+
+
+def read_placement(value: PlacementAnalysis) -> None:
+    details: bool = value.outputs.details
+    assert isinstance(details, bool)
+    set_name: str = value.query.demands.name
+    assert set_name
+    for case in value.cases:
+        state: CaseState[PlacementRow] = case.states["converged"]
+        assert state.totals is not None
+        reference: int = state.totals.reference_request_units
+        assert reference >= 0
+        for row in state.rows:
+            if row.pool is not None:
+                zero_budget: Literal[0] = row.pool.offer_limit_units
+                assert zero_budget == 0
+            if row.cost_distribution is not None:
+                read_cost(row.cost_distribution)
+
+
+def read_msd(value: MSDAnalysis) -> MSDStatus:
+    details: bool = value.outputs.details
+    assert isinstance(details, bool)
+    status: MSDStatus = value.search_status
+    known_status: Literal[
+        "feasible", "none_feasible", "range", "stagnation", "limit", "trivial"
+    ] = status
+    legal_statuses: tuple[MSDStatus, ...] = (
+        "feasible",
+        "none_feasible",
+        "range",
+        "stagnation",
+        "limit",
+        "trivial",
+    )
+    assert known_status in legal_statuses
+    reason: MSDStopReason = value.stop_reason
+    proof: MSDProof = value.proof
+    assert reason and proof
+    for probe in value.history:
+        outcome: str = probe.outcome
+        assert outcome in ("feasible", "infeasible", "range")
+        if probe.totals is not None:
+            delivered: int = probe.totals.delivered_units
+            ratio: Fraction = probe.totals.delivery_ratio
+            assert delivered >= 0 and ratio >= 0
+        if probe.range_refusal is not None:
+            why: str = probe.range_refusal.reason
+            assert why in ("scaled_nonfinite", "native_units_range")
+    if value.alpha_feasible is not None:
+        alpha: float = value.alpha_feasible.value
+        assert alpha > 0 and value.best_rows is not None
+    if value.upper_certificate is not None:
+        upper: float = value.upper_certificate.upper.value
+        lower: float = value.upper_certificate.lower.value
+        index: int = value.upper_certificate.upper_probe_index
+        assert lower < upper and value.history[index].outcome == "infeasible"
+    if value.best_rows is not None:
+        for best_row in value.best_rows:
+            best_delivered: int = best_row.result.delivered
+            assert best_delivered >= 0
+    if value.probe_rows is not None:
+        for index, rows in value.probe_rows.items():
+            assert value.history[index].outcome != "range"
+            assert all(
+                row.result.requested == row.reference_request_units for row in rows
+            )
+    bounds: float = value.query.alpha_max
+    assert bounds > 0
+    return status
+
+
+def read_domain(value: DomainResult) -> float:
+    if isinstance(value, NetworkStatsResult):
+        capacity_total: float = value.total_capacity
+        return capacity_total
+    if isinstance(value, CostPowerResult):
+        power: float = sum(
+            row.power_total_watts for rows in value.levels.values() for row in rows
+        )
+        return power
+    graph: BuildGraphResult = value
+    count: int = graph.node_count
+    assert graph.graph and count >= 0
+    return float(count)
+
+
+def read_run(value: RunResult) -> None:
+    assert read_units(value.units_report) == value.topology.q
+    version: str = value.metadata.core_version
+    digest: str = value.metadata.core_extension_sha256
+    assert version and len(digest) == 64
+    for step in value.steps:
+        name: str = step.name
+        order: int = step.execution_order
+        assert name and order >= 0
+        assert step.question is not None
+        if isinstance(step.result, PlacementAnalysis):
+            for case in step.result.cases:
+                state: CaseState[PlacementRow] = case.states["converged"]
+                assert state.totals is not None
+                assert tuple(case.states) == ("converged",)
+        elif isinstance(step.result, MSDAnalysis):
+            read_msd(step.result)
+        elif isinstance(
+            step.result, (BuildGraphResult, NetworkStatsResult, CostPowerResult)
+        ):
+            read_domain(step.result)
+
+
+@dataclass(frozen=True)
+class CustomNodeCount:
+    nodes: int
+
+
+def export_node_count(value: CustomNodeCount, context: ExportContext) -> JSONValue:
+    assert context.units_report.q == context.topology.q
+    payload: JSONValue = {"nodes": value.nodes}
+    return payload
+
+
+register_result_exporter(CustomNodeCount, export_node_count)
+
+
+@register_workflow_step("CountNodes")
+class CountNodes(WorkflowStep):
+    def run(self, context: StepContext) -> StepOutput:
+        for previous in context.prior_results.values():
+            # alpha_from_step must narrow the actual typed earlier result.
+            if isinstance(previous.result, MSDAnalysis):
+                assert previous.result.alpha_feasible is not None
+                step_name: str = previous.name
+                assert step_name
+        return StepOutput(
+            {"metric": "nodes"},
+            CustomNodeCount(len(context.prepared.topology.node_names)),
+        )
+
+
+def read_template(value: ResolvedDemandSet) -> None:
+    for parent in value.expansion_template:
+        physical: float = parent.physical_volume
+        ordinal: int = parent.declaration_ordinal
+        source: str | None = parent.source.path
+        priority: int = parent.priority
+        assert source is None or isinstance(source, str)
+        assert isinstance(priority, int) and parent.policy is not None
+        assert physical >= 0 and ordinal >= 0
+
+
+def workflow_details_example() -> RunResult:
+    result = run(
+        prepare(
+            Scenario.from_yaml("""
+units: {resolution: 1}
+network:
+  nodes: {A: {}, T: {}}
+  links: [{source: A, target: T, capacity: 10, cost: 1}]
+demands:
+  demo: [{source: '^A$', target: '^T$', volume: 2, preset: TE_MAXFLOW_UNLIM}]
+workflow:
+  - {type: MaxFlow, name: compact_capacity, source: '^A$', target: '^T$', workers: 1}
+  - type: MaxFlow
+    name: detail_capacity
+    source: '^A$'
+    target: '^T$'
+    workers: 1
+    outputs: {details: true}
+  - {type: TrafficMatrixPlacement, name: compact_placement, demand_set: demo, workers: 1}
+  - type: TrafficMatrixPlacement
+    name: detail_placement
+    demand_set: demo
+    workers: 1
+    outputs: {details: true}
+  - {type: MaximumSupportedDemand, name: compact_msd, demand_set: demo}
+  - type: MaximumSupportedDemand
+    name: detail_msd
+    demand_set: demo
+    outputs: {details: true}
+""")
+        )
+    )
+    for step in result.steps:
+        analysis = step.result
+        assert isinstance(analysis, (CapacityAnalysis, PlacementAnalysis, MSDAnalysis))
+        check_wire_rows(analysis, details=step.name.startswith("detail_"))
+    return result
+
+
+def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
+    workflow_details_example()
+    network = Network()
+    for name in ("A", "B", "T"):
+        network.add_node(Node(name))
+    network.add_link(Link("A", "B", capacity=10, cost=1))
+    network.add_link(Link("A", "B", capacity=10, cost=2))
+    network.add_link(Link("B", "T", capacity=20, cost=1))
+    ab, bt = DirectedLink("A|B|0", "forward"), DirectedLink("B|T|0", "forward")
+    demands = DemandSet(
+        "example",
+        (
+            DemandSpec(
+                Selector("^A$"),
+                Selector("^T$"),
+                8,
+                policy=PinnedRoutes(("cheap",)),
+                id="pinned",
+            ),
+            DemandSpec(
+                Selector("^A$"),
+                Selector("^T$"),
+                2,
+                policy=PinnedRoutes(
+                    ("dag_entry",),
+                    allocation=ngc.RouteAllocation.WEIGHTED,
+                    weight_basis=ngc.WeightBasis.EXPLICIT,
+                    edge_weights="cheap_weights",
+                ),
+                id="dag",
+            ),
+        ),
+    )
+    policy = FailurePolicy()
+    scenario = Scenario(
+        network,
+        (CountNodes(name="count"),),
+        demand_sets={"example": demands},
+        failure_policies={"empty": policy},
+        components_library=ComponentsLibrary(),
+        routes={
+            "cheap": RouteSpec(head="A", nodes=("A", "B", "T")),
+            "dag_entry": RouteSpec(head="A", support="cheap_dag"),
+        },
+        supports={"cheap_dag": SupportSpec((ab, bt))},
+        weights={"cheap_weights": WeightSpec((EdgeWeight(ab, 1), EdgeWeight(bt, 1)))},
+        units=UnitsSettings(resolution=1),
+        seed=42,
+    )
+    prepared = prepare(scenario, demand_sets=("example",))
+    resolved: ResolvedDemandSet = resolve_demands(prepared, demands)
+    read_template(resolved)
+    request = FailureRequest(policy, iterations=2, seed=42, failure_trace=True)
+    cases: tuple[FailureCase, ...] = failure_cases(prepared, request)
+    assert sum(case.occurrences for case in cases) == 2
+    result: RunResult = run(prepared)
+    read_run(result)
+    placement = place(
+        prepared,
+        PlacementQuery(
+            resolved,
+            workers=1,
+            outputs=ngc.OutputOptions(edge_flows=True),
+            export_cost_distribution=True,
+        ),
+    )
+    state = placement.cases[0].states["converged"]
+    assert tuple(row.result.delivered for row in state.rows) == (8, 2)
+    read_placement(placement)
+    check_wire_rows(placement, details=False)  # cost/edge outputs do not imply details
+    for row in state.rows:
+        read_native_details(row.result)
+    detailed_placement = place(
+        prepared, PlacementQuery(resolved, workers=1, export_details=True)
+    )
+    check_wire_rows(
+        detailed_placement, details=True
+    )  # details do not imply costs/arrays
+    supported = maximum_supported_demand(prepared, MSDQuery(resolved))
+    read_msd(supported)
+    check_wire_rows(supported, details=False)
+    detailed_msd = maximum_supported_demand(
+        prepared, MSDQuery(resolved, export_details=True, export_probe_rows=True)
+    )
+    check_wire_rows(detailed_msd, details=True)
+    assert detailed_msd.probe_rows is not None
+    cap = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^T$"), workers=1))
+    assert read_capacity(cap) == 20
+    check_wire_rows(cap, details=False)
+    detailed_cap = capacity(
+        prepared,
+        CapacityQuery(Selector("^A$"), Selector("^T$"), workers=1, export_details=True),
+    )
+    check_wire_rows(detailed_cap, details=True)
+    config = ngc.FlowPolicyConfig(
+        routing=ngc.CentralizedTE(source_allocation=ngc.SourceAllocation.OPTIMIZED)
+    )
+    sensitivity = edge_sensitivity(
+        prepared,
+        SensitivityQuery(Selector("^A$"), Selector("^T$"), config, workers=1),
+    )
+    assert read_sensitivity(sensitivity) == 20
+    check_wire_rows(sensitivity, details=False)
+    read_native_details(sensitivity.result.baseline)
+    detailed_sensitivity = edge_sensitivity(
+        prepared,
+        SensitivityQuery(
+            Selector("^A$"), Selector("^T$"), config, workers=1, export_details=True
+        ),
+    )
+    check_wire_rows(detailed_sensitivity, details=True)
+    routes = paths(prepared, PathQuery(Selector("^A$"), Selector("^T$")))
+    assert read_paths(routes) == [2]
+    output = StringIO()
+    write_json(placement, output)
+    return result, placement, supported, output.getvalue()

@@ -1,15 +1,15 @@
-"""Tests for the selector system in ngraph.dsl.selectors and ngraph.model.selectors."""
+"""Tests for the shared model selector parser and evaluator."""
 
 import pytest
 
-from ngraph.dsl.selectors import normalize_selector
 from ngraph.model.network import Network, Node
 from ngraph.model.selectors import (
     Condition,
     MatchSpec,
-    NodeSelector,
+    Selector,
     evaluate_condition,
     evaluate_conditions,
+    normalize_selector,
     select_nodes,
 )
 
@@ -49,51 +49,51 @@ def attributed_network() -> Network:
     return network
 
 
-class TestNodeSelectorSchema:
-    """Tests for NodeSelector dataclass validation."""
+class TestSelectorSchema:
+    """Tests for Selector dataclass validation."""
 
     def test_path_only_valid(self) -> None:
-        """NodeSelector with only path is valid."""
-        sel = NodeSelector(path="^dc1/.*")
+        """Selector with only path is valid."""
+        sel = Selector(path="^dc1/.*")
         assert sel.path == "^dc1/.*"
         assert sel.group_by is None
         assert sel.match is None
 
     def test_group_by_only_valid(self) -> None:
-        """NodeSelector with only group_by is valid."""
-        sel = NodeSelector(group_by="role")
+        """Selector with only group_by is valid."""
+        sel = Selector(group_by="role")
         assert sel.group_by == "role"
         assert sel.path is None
 
     def test_match_only_valid(self) -> None:
-        """NodeSelector with only match is valid."""
+        """Selector with only match is valid."""
         cond = Condition(attr="role", op="==", value="leaf")
         match = MatchSpec(conditions=[cond])
-        sel = NodeSelector(match=match)
+        sel = Selector(match=match)
         assert sel.match is not None
         assert sel.path is None
         assert sel.group_by is None
 
     def test_all_fields_valid(self) -> None:
-        """NodeSelector with all fields is valid."""
+        """Selector with all fields is valid."""
         cond = Condition(attr="role", op="==", value="leaf")
         match = MatchSpec(conditions=[cond])
-        sel = NodeSelector(path="^dc1/.*", group_by="role", match=match)
+        sel = Selector(path="^dc1/.*", group_by="role", match=match)
         assert sel.path == "^dc1/.*"
         assert sel.group_by == "role"
         assert sel.match is not None
 
     def test_no_fields_raises(self) -> None:
-        """NodeSelector with no fields raises ValueError."""
+        """Selector with no fields raises ValueError."""
         with pytest.raises(ValueError, match="at least one of"):
-            NodeSelector()
+            Selector()
 
 
 class TestNormalizeSelector:
     """Tests for normalize_selector function."""
 
     def test_string_input_creates_path_selector(self) -> None:
-        """String input creates NodeSelector with path."""
+        """String input creates Selector with path."""
         sel = normalize_selector("^dc1/.*", "demand")
         assert sel.path == "^dc1/.*"
         assert sel.group_by is None
@@ -139,16 +139,16 @@ class TestNormalizeSelector:
         assert sel.group_by == "role"
         assert sel.match is not None
 
-    def test_existing_node_selector_with_active_only_set(self) -> None:
-        """NodeSelector with active_only already set is returned as-is."""
-        original = NodeSelector(path="^A$", active_only=False)
+    def test_existing_selector_with_active_only_set(self) -> None:
+        """Selector with active_only already set is returned as-is."""
+        original = Selector(path="^A$", active_only=False)
         result = normalize_selector(original, "demand")
         assert result is original
         assert result.active_only is False  # Preserved, not overwritten
 
-    def test_existing_node_selector_active_only_none_gets_default(self) -> None:
-        """NodeSelector with active_only=None gets context default (new object)."""
-        original = NodeSelector(path="^A$")  # active_only defaults to None
+    def test_existing_selector_active_only_none_gets_default(self) -> None:
+        """Selector with active_only=None gets context default (new object)."""
+        original = Selector(path="^A$")  # active_only defaults to None
         assert original.active_only is None
 
         result = normalize_selector(original, "demand")
@@ -203,7 +203,7 @@ class TestSelectNodesByPath:
 
     def test_simple_regex_match(self, simple_network: Network) -> None:
         """Simple regex matches nodes."""
-        sel = NodeSelector(path="^[AB]$")
+        sel = Selector(path="^[AB]$")
         groups = select_nodes(simple_network, sel, default_active_only=False)
 
         # Pattern without capture groups uses pattern as label
@@ -213,7 +213,7 @@ class TestSelectNodesByPath:
 
     def test_capture_groups_create_labels(self, attributed_network: Network) -> None:
         """Capture groups in regex create group labels."""
-        sel = NodeSelector(path="^(dc[12])_.*")
+        sel = Selector(path="^(dc[12])_.*")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         # Captured groups become labels
@@ -224,7 +224,7 @@ class TestSelectNodesByPath:
 
     def test_no_match_returns_empty(self, simple_network: Network) -> None:
         """No matching nodes returns empty dict."""
-        sel = NodeSelector(path="^nonexistent$")
+        sel = Selector(path="^nonexistent$")
         groups = select_nodes(simple_network, sel, default_active_only=False)
         assert groups == {}
 
@@ -234,7 +234,7 @@ class TestSelectNodesByMatch:
 
     def test_match_filters_nodes(self, attributed_network: Network) -> None:
         """Match conditions filter nodes."""
-        sel = NodeSelector(
+        sel = Selector(
             path=".*",
             match=MatchSpec(conditions=[Condition(attr="role", op="==", value="leaf")]),
         )
@@ -247,7 +247,7 @@ class TestSelectNodesByMatch:
 
     def test_match_with_and_logic(self, attributed_network: Network) -> None:
         """Match with AND logic requires all conditions."""
-        sel = NodeSelector(
+        sel = Selector(
             path=".*",
             match=MatchSpec(
                 conditions=[
@@ -265,7 +265,7 @@ class TestSelectNodesByMatch:
 
     def test_match_with_or_logic(self, attributed_network: Network) -> None:
         """Match with OR logic requires any condition."""
-        sel = NodeSelector(
+        sel = Selector(
             path=".*",
             match=MatchSpec(
                 conditions=[
@@ -286,7 +286,7 @@ class TestSelectNodesActiveOnly:
 
     def test_active_only_excludes_disabled(self, attributed_network: Network) -> None:
         """active_only=True excludes disabled nodes."""
-        sel = NodeSelector(path="^dc2_.*", active_only=True)
+        sel = Selector(path="^dc2_.*", active_only=True)
         groups = select_nodes(attributed_network, sel, default_active_only=True)
 
         all_nodes = [n for nodes in groups.values() for n in nodes]
@@ -298,7 +298,7 @@ class TestSelectNodesActiveOnly:
         self, attributed_network: Network
     ) -> None:
         """active_only=False includes disabled nodes."""
-        sel = NodeSelector(path="^dc2_.*", active_only=False)
+        sel = Selector(path="^dc2_.*", active_only=False)
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         all_nodes = [n for nodes in groups.values() for n in nodes]
@@ -310,7 +310,7 @@ class TestSelectNodesByGroupBy:
 
     def test_group_by_attribute(self, attributed_network: Network) -> None:
         """group_by creates groups by attribute value."""
-        sel = NodeSelector(path=".*", group_by="role")
+        sel = Selector(path=".*", group_by="role")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         assert "leaf" in groups
@@ -322,7 +322,7 @@ class TestSelectNodesByGroupBy:
         self, attributed_network: Network
     ) -> None:
         """group_by overrides regex capture group labels."""
-        sel = NodeSelector(path="^(dc[12])_.*", group_by="role")
+        sel = Selector(path="^(dc[12])_.*", group_by="role")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         # group_by should override capture group labels
@@ -338,7 +338,7 @@ class TestSelectNodesByGroupBy:
         # Add a node without the grouping attribute
         attributed_network.add_node(Node("orphan", attrs={"other": "value"}))
 
-        sel = NodeSelector(path=".*", group_by="role")
+        sel = Selector(path=".*", group_by="role")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         all_nodes = [n for nodes in groups.values() for n in nodes]
@@ -347,9 +347,9 @@ class TestSelectNodesByGroupBy:
 
     def test_group_by_disabled_field(self, attributed_network: Network) -> None:
         """group_by can use top-level fields like disabled."""
-        attributed_network.nodes["dc1_leaf_1"].disabled = True
+        attributed_network.disable_node("dc1_leaf_1")
 
-        sel = NodeSelector(path=".*", group_by="disabled")
+        sel = Selector(path=".*", group_by="disabled")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         assert "True" in groups
@@ -362,7 +362,7 @@ class TestSelectNodesByGroupBy:
 
     def test_group_by_name_field(self, attributed_network: Network) -> None:
         """group_by can use top-level name field."""
-        sel = NodeSelector(path="dc1_leaf.*", group_by="name")
+        sel = Selector(path="dc1_leaf.*", group_by="name")
         groups = select_nodes(attributed_network, sel, default_active_only=False)
 
         # Each node should be in its own group (keyed by name)
@@ -379,7 +379,7 @@ class TestSelectNodesMatchOnly:
         self, attributed_network: Network
     ) -> None:
         """Match-only selector starts with all nodes, then filters."""
-        sel = NodeSelector(
+        sel = Selector(
             match=MatchSpec(conditions=[Condition(attr="tier", op="==", value=2)])
         )
         groups = select_nodes(attributed_network, sel, default_active_only=False)

@@ -19,18 +19,18 @@ digraph SystemPipeline {
 
     subgraph cluster_model {
       label=""; style=invis;
-      scenario [label="Scenario\n·Network\n·FailurePolicySet\n·DemandSet\n·Workflow", shape=box];
+      scenario [label="Scenario\n·Network\n·Named failure policies\n·Demand sets\n·Workflow", shape=box];
     }
 
     subgraph cluster_exec {
       label=""; style=invis;
-      engine [label="Scenario.run()"];
+      engine [label="prepare() / run()"];
       steps [label="WorkflowSteps"];
-      exec [label="Execution\n·FailureManager\n·Demand Expansion\n·Flow Solvers"];
+      exec [label="Execution\n·Failure cases\n·Demand expansion\n·Native analyses"];
       engine -> steps -> exec;
     }
 
-    adapter [label="Core Adapter\n(build_graph, mappers)"];
+    adapter [label="PreparedTopology\n·Units\n·Physical/native labels"];
 
     scenario -> engine;
     exec -> adapter;
@@ -43,7 +43,7 @@ digraph SystemPipeline {
     subgraph cluster_graph {
       label=""; style=invis;
       core_backend [label="Backend"];
-      core_graph [label="StrictMultiDiGraph"];
+      core_graph [label="Graph"];
       { rank=same; core_backend; core_graph; }
     }
 
@@ -66,11 +66,11 @@ digraph SystemPipeline {
   // Results Layer
   subgraph cluster_results {
     label="Results"; labeljust="l"; style="rounded,dashed";
-    results [label="Results Store"];
+    results [label="RunResult\n·Typed questions/results\n·One JSON export"];
   }
 
   // Main flow
   expand -> scenario [lhead=cluster_python, ltail=cluster_input];
-  adapter -> core_backend [lhead=cluster_core, ltail=cluster_python, xlabel="GIL released"];
+  adapter -> core_backend [lhead=cluster_core, ltail=cluster_python];
   core_maxf -> results [ltail=cluster_core, lhead=cluster_results];
 }

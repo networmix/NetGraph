@@ -1,590 +1,214 @@
+"""Failure declarations execute through typed graph-owned cases."""
+
+import random
+
 import pytest
 
-from ngraph.model.failure.policy import (
-    FailureMode,
-    FailurePolicy,
-    FailureRule,
-)
-from ngraph.model.selectors import Condition
+from ngraph.analysis.failures import FailureRequest, failure_cases
+from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
+from ngraph.model.network import Network
+from ngraph.model.selectors import Condition, evaluate_conditions
+from ngraph.scenario import Scenario, prepare
+from tests.failure_fixture import draw, policy_network
 
 
-def _single_mode_policy(rule: FailureRule, **kwargs) -> FailurePolicy:
-    return FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])], **kwargs)
+def _policy(rule):
+    return FailurePolicy(modes=[FailureMode(1, [rule])])
 
 
-def test_failure_rule_invalid_probability():
-    """Test FailureRule validation for invalid probability values."""
-    with pytest.raises(ValueError, match="probability=1.5 must be within \\[0,1\\]"):
-        FailureRule(
-            scope="node",
-            conditions=[Condition(attr="type", op="==", value="router")],
-            logic="and",
-            mode="random",
-            probability=1.5,
-        )
-
-    with pytest.raises(ValueError, match="probability=-0.1 must be within \\[0,1\\]"):
-        FailureRule(
-            scope="node",
-            conditions=[Condition(attr="type", op="==", value="router")],
-            logic="and",
-            mode="random",
-            probability=-0.1,
-        )
+@pytest.mark.parametrize("probability", [-0.1, 1.5])
+def test_failure_rule_invalid_probability(probability):
+    with pytest.raises(ValueError, match="failure rule probability"):
+        FailureRule("node", probability=probability)
+    assert FailureRule("node", probability=0.5).probability == 0.5
 
 
 def test_failure_policy_evaluate_conditions_or_logic():
-    """Test condition evaluation with 'or' logic via shared evaluate_conditions."""
-    from ngraph.model.selectors import evaluate_conditions
-
     conditions = [
-        Condition(attr="vendor", op="==", value="cisco"),
-        Condition(attr="location", op="==", value="dallas"),
+        Condition("vendor", "==", "cisco"),
+        Condition("location", "==", "dallas"),
     ]
-
-    # Should pass if either condition is true
-    attrs1 = {"vendor": "cisco", "location": "houston"}  # First condition true
-    assert evaluate_conditions(attrs1, conditions, "or") is True
-
-    attrs2 = {"vendor": "juniper", "location": "dallas"}  # Second condition true
-    assert evaluate_conditions(attrs2, conditions, "or") is True
-
-    attrs3 = {"vendor": "cisco", "location": "dallas"}  # Both conditions true
-    assert evaluate_conditions(attrs3, conditions, "or") is True
-
-    attrs4 = {"vendor": "juniper", "location": "houston"}  # Neither condition true
-    assert evaluate_conditions(attrs4, conditions, "or") is False
+    assert evaluate_conditions(
+        {"vendor": "cisco", "location": "houston"}, conditions, "or"
+    )
+    assert evaluate_conditions(
+        {"vendor": "juniper", "location": "dallas"}, conditions, "or"
+    )
+    assert evaluate_conditions(
+        {"vendor": "cisco", "location": "dallas"}, conditions, "or"
+    )
+    assert not evaluate_conditions(
+        {"vendor": "juniper", "location": "houston"}, conditions, "or"
+    )
 
 
 def test_failure_policy_evaluate_conditions_invalid_logic():
-    """Test condition evaluation with invalid logic via shared evaluate_conditions."""
-    from ngraph.model.selectors import evaluate_conditions
-
-    conditions = [Condition(attr="vendor", op="==", value="cisco")]
-    attrs = {"vendor": "cisco"}
-
+    conditions = [Condition("vendor", "==", "cisco")]
     with pytest.raises(ValueError, match="Unsupported logic: invalid"):
-        evaluate_conditions(attrs, conditions, "invalid")
+        evaluate_conditions({"vendor": "cisco"}, conditions, "invalid")
+    assert evaluate_conditions({"vendor": "cisco"}, conditions, "and")
 
 
 def test_node_scope_all():
-    """Rule with scope='node' and mode='all' => fails all matched nodes."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="all",
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco", "location": "dallas"},
-        "N2": {"equipment_vendor": "juniper", "location": "houston"},
-        "N3": {"equipment_vendor": "cisco", "location": "austin"},
-    }
-    links = {
-        "L1": {"link_type": "fiber"},
-        "L2": {"link_type": "radio_relay"},
-    }
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "N3"}
+    policy = _policy(FailureRule("node", [Condition("vendor", "==", "cisco")]))
+    pattern = draw(policy_network(), policy).pattern
+    assert pattern.excluded_nodes == ("N1", "N3")
+    assert pattern.excluded_links == ()
 
 
 def test_node_scope_random():
-    """Rule with scope='node' and mode='random' => seeded random node failure."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="random",
-        probability=0.5,
+    prepared = policy_network()
+    policy = _policy(
+        FailureRule(
+            "node", [Condition("vendor", "==", "cisco")], mode="random", probability=0.5
+        )
     )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-        "N3": {"equipment_vendor": "cisco"},
-    }
-    links = {}
-
-    # Same seed must produce identical results (determinism)
-    failed1 = policy.apply_failures(nodes, links, seed=42)
-    failed2 = policy.apply_failures(nodes, links, seed=42)
-    assert failed1 == failed2
-
-    # Only cisco nodes can appear in results (juniper N2 never matched)
-    assert all(f in {"N1", "N3"} for f in failed1)
-
-    # Different seeds should eventually produce different results
-    results_by_seed = {
-        tuple(policy.apply_failures(nodes, links, seed=s)) for s in range(50)
-    }
-    assert len(results_by_seed) > 1  # Not all identical
+    observations = set()
+    for seed in range(50):
+        rng = random.Random(seed)
+        rng.random()  # mode selection precedes the independent entity draws
+        expected = tuple(name for name in ("N1", "N3") if rng.random() < 0.5)
+        case = draw(prepared, policy, seed)
+        assert case.pattern.excluded_nodes == expected
+        assert draw(prepared, policy, seed).pattern == case.pattern
+        assert case.pattern.excluded_links == ()
+        observations.add(expected)
+    assert len(observations) == 4
 
 
 def test_node_scope_choice():
-    """Rule with scope='node' and mode='choice' => limited node failures."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="choice",
-        count=1,
+    prepared = policy_network()
+    policy = _policy(
+        FailureRule(
+            "node", [Condition("vendor", "==", "cisco")], mode="choice", count=1
+        )
     )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-        "N3": {"equipment_vendor": "cisco"},
-    }
-    links = {}
-
-    # Seeded selection is deterministic and picks exactly 1
-    failed = policy.apply_failures(nodes, links, seed=42)
-    assert len(failed) == 1
-    assert failed[0] in {"N1", "N3"}  # Must be a cisco node
-
-    # Same seed → same result
-    assert policy.apply_failures(nodes, links, seed=42) == failed
-
-
-def test_apply_failures_prepared_matches_preserves_results() -> None:
-    """Prepared candidate pools must not change seeded selection behavior."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="choice",
-        count=1,
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-        "N3": {"equipment_vendor": "cisco"},
-    }
-    links = {}
-    prepared_matches = policy.prepare_matches(nodes, links, {})
-
-    assert policy.apply_failures(nodes, links, seed=42) == policy.apply_failures(
-        nodes,
-        links,
-        seed=42,
-        prepared_matches=prepared_matches,
-    )
-
-
-def test_prepare_matches_is_stable_by_rule_identity() -> None:
-    """Prepared matches should expose one stable ordered pool per distinct rule."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="all",
-    )
-    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule, rule])], seed=7)
-    nodes = {
-        "N2": {"equipment_vendor": "cisco"},
-        "N1": {"equipment_vendor": "cisco"},
-        "N3": {"equipment_vendor": "juniper"},
-    }
-
-    prepared = policy.prepare_matches(nodes, {}, {})
-
-    assert prepared == {id(rule): ("N1", "N2")}
+    rng = random.Random(42)
+    rng.random()
+    expected = tuple(rng.sample(("N1", "N3"), 1))
+    assert draw(prepared, policy).pattern.excluded_nodes == expected
+    assert draw(prepared, policy).pattern.excluded_links == ()
 
 
 def test_link_scope_all():
-    """Rule with scope='link' and mode='all' => fails all matched links."""
-    rule = FailureRule(
-        scope="link",
-        conditions=[Condition(attr="link_type", op="==", value="fiber")],
-        logic="and",
-        mode="all",
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {"N1": {}, "N2": {}}
-    links = {
-        "L1": {"link_type": "fiber"},
-        "L2": {"link_type": "radio_relay"},
-        "L3": {"link_type": "fiber"},
-    }
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"L1", "L3"}
+    policy = _policy(FailureRule("link", [Condition("kind", "==", "fiber")]))
+    pattern = draw(policy_network(), policy).pattern
+    assert pattern.excluded_nodes == ()
+    assert pattern.excluded_links == ("N1|N2|0",)
 
 
 def test_link_scope_random():
-    """Rule with scope='link' and mode='random' => seeded random link failure."""
-    rule = FailureRule(
-        scope="link",
-        conditions=[Condition(attr="link_type", op="==", value="fiber")],
-        logic="and",
-        mode="random",
-        probability=0.4,
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {}
-    links = {
-        "L1": {"link_type": "fiber"},
-        "L2": {"link_type": "radio_relay"},
-        "L3": {"link_type": "fiber"},
-    }
-
-    # Same seed must produce identical results (determinism)
-    failed1 = policy.apply_failures(nodes, links, seed=42)
-    failed2 = policy.apply_failures(nodes, links, seed=42)
-    assert failed1 == failed2
-
-    # Only fiber links can appear (radio_relay L2 never matched)
-    assert all(f in {"L1", "L3"} for f in failed1)
-
-    # Different seeds should eventually produce different results
-    results_by_seed = {
-        tuple(policy.apply_failures(nodes, links, seed=s)) for s in range(50)
-    }
-    assert len(results_by_seed) > 1
+    prepared = policy_network()
+    policy = _policy(FailureRule("link", mode="random", probability=0.5))
+    for seed in range(50):
+        rng = random.Random(seed)
+        rng.random()
+        expected = tuple(name for name in ("N1|N2|0", "N1|N3|0") if rng.random() < 0.5)
+        pattern = draw(prepared, policy, seed).pattern
+        assert pattern.excluded_links == expected
+        assert pattern.excluded_nodes == ()
 
 
 def test_link_scope_choice():
-    """Rule with scope='link' and mode='choice' => limited link failures."""
-    rule = FailureRule(
-        scope="link",
-        conditions=[Condition(attr="link_type", op="==", value="fiber")],
-        logic="and",
-        mode="choice",
-        count=1,
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {}
-    links = {
-        "L1": {"link_type": "fiber"},
-        "L2": {"link_type": "radio_relay"},
-        "L3": {"link_type": "fiber"},
-    }
-
-    # Seeded selection is deterministic and picks exactly 1
-    failed = policy.apply_failures(nodes, links, seed=42)
-    assert len(failed) == 1
-    assert failed[0] in {"L1", "L3"}  # Must be a fiber link
-
-    # Same seed → same result
-    assert policy.apply_failures(nodes, links, seed=42) == failed
+    policy = _policy(FailureRule("link", mode="choice", count=1))
+    rng = random.Random(42)
+    rng.random()
+    expected = tuple(rng.sample(("N1|N2|0", "N1|N3|0"), 1))
+    pattern = draw(policy_network(), policy).pattern
+    assert pattern.excluded_links == expected
+    assert pattern.excluded_nodes == ()
 
 
 def test_complex_conditions_and_logic():
-    """Multiple conditions with 'and' logic."""
     rule = FailureRule(
-        scope="node",
-        conditions=[
-            Condition(attr="equipment_vendor", op="==", value="cisco"),
-            Condition(attr="location", op="==", value="dallas"),
-        ],
+        "node",
+        [Condition("vendor", "==", "cisco"), Condition("location", "==", "dallas")],
         logic="and",
-        mode="all",
     )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco", "location": "dallas"},
-        "N2": {"equipment_vendor": "cisco", "location": "houston"},
-        "N3": {"equipment_vendor": "juniper", "location": "dallas"},
-        "N4": {"equipment_vendor": "juniper", "location": "houston"},
-    }
-    links = {}
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1"}
+    assert draw(policy_network(), _policy(rule)).pattern.excluded_nodes == ("N1",)
 
 
 def test_complex_conditions_or_logic():
-    """Multiple conditions with 'or' logic."""
     rule = FailureRule(
-        scope="node",
-        conditions=[
-            Condition(attr="equipment_vendor", op="==", value="cisco"),
-            Condition(attr="location", op="==", value="critical_site"),
-        ],
+        "node",
+        [Condition("vendor", "==", "juniper"), Condition("location", "==", "dallas")],
         logic="or",
-        mode="all",
     )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco", "location": "dallas"},
-        "N2": {
-            "equipment_vendor": "juniper",
-            "location": "critical_site",
-        },
-        "N3": {"equipment_vendor": "juniper", "location": "houston"},
-        "N4": {"equipment_vendor": "cisco", "location": "critical_site"},
-    }
-    links = {}
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "N2", "N4"}
+    assert draw(policy_network(), _policy(rule)).pattern.excluded_nodes == ("N1", "N2")
 
 
 def test_multiple_rules():
-    """Policy with multiple rules affecting different entities."""
-    node_rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="all",
-    )
-    link_rule = FailureRule(
-        scope="link",
-        conditions=[Condition(attr="link_type", op="==", value="fiber")],
-        logic="and",
-        mode="all",
-    )
-    policy = FailurePolicy(
-        modes=[FailureMode(weight=1.0, rules=[node_rule, link_rule])]
-    )
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-    }
-    links = {
-        "L1": {"link_type": "fiber"},
-        "L2": {"link_type": "radio_relay"},
-    }
-
-    failed = policy.apply_failures(nodes, links)
-    assert set(failed) == {"N1", "L1"}
+    rules = [
+        FailureRule("node", [Condition("vendor", "==", "juniper")]),
+        FailureRule("link", [Condition("kind", "==", "fiber")]),
+    ]
+    pattern = draw(
+        policy_network(), FailurePolicy(modes=[FailureMode(1, rules)])
+    ).pattern
+    assert pattern.excluded_nodes == ("N2",)
+    assert pattern.excluded_links == ("N1|N2|0",)
 
 
 def test_condition_operators():
-    """Test the '!=' operator and a condition on a missing attribute."""
-    # Test '!=' operator
-    rule_neq = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="!=", value="cisco")],
-        logic="and",
-        mode="all",
-    )
-    policy_neq = _single_mode_policy(rule_neq)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-        "N3": {"equipment_vendor": "arista"},
-    }
-
-    failed = policy_neq.apply_failures(nodes, {})
-    assert set(failed) == {"N2", "N3"}
-
-    # Test missing attribute
-    rule_missing = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="missing_attr", op="==", value="some_value")],
-        logic="and",
-        mode="all",
-    )
-    policy_missing = _single_mode_policy(rule_missing)
-
-    nodes = {
-        "N1": {"vendor": "cisco"},
-        "N2": {"vendor": "juniper"},
-    }
-
-    failed = policy_missing.apply_failures(nodes, {})
-    assert failed == []
-
-
-def test_serialization():
-    """Test policy serialization."""
-    condition = Condition(attr="equipment_vendor", op="==", value="cisco")
-    rule = FailureRule(
-        scope="node",
-        conditions=[condition],
-        logic="and",
-        mode="random",
-        probability=0.2,
-        count=3,
-    )
-    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-    policy_dict = policy.to_dict()
-    assert "seed" not in policy_dict
-    assert "modes" in policy_dict and len(policy_dict["modes"]) == 1
-    mode_dict = policy_dict["modes"][0]
-    assert len(mode_dict["rules"]) == 1
-
-    rule_dict = mode_dict["rules"][0]
-    assert rule_dict["scope"] == "node"
-    assert rule_dict["mode"] == "random"
-    assert rule_dict["probability"] == 0.2
-    assert rule_dict["count"] == 3
-
-    # Conditions and logic are nested under "match", matching the YAML format
-    match_dict = rule_dict["match"]
-    assert match_dict["logic"] == "and"
-    assert len(match_dict["conditions"]) == 1
-
-    condition_dict = match_dict["conditions"][0]
-    assert condition_dict["attr"] == "equipment_vendor"
-    assert condition_dict["op"] == "=="
-    assert condition_dict["value"] == "cisco"
+    prepared = policy_network()
+    different = _policy(FailureRule("node", [Condition("vendor", "!=", "cisco")]))
+    missing = _policy(FailureRule("node", [Condition("absent", "exists")]))
+    assert draw(prepared, different).pattern.excluded_nodes == ("N2",)
+    assert draw(prepared, missing).pattern.excluded_nodes == ()
 
 
 def test_missing_attributes():
-    """Test behavior when entities don't have required attributes."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="nonexistent_attr", op="==", value="some_value")],
-        logic="and",
-        mode="all",
-    )
-    policy = _single_mode_policy(rule)
-
-    nodes = {
-        "N1": {"equipment_vendor": "cisco"},
-        "N2": {"equipment_vendor": "juniper"},
-    }
-
-    failed = policy.apply_failures(nodes, {})
-    assert failed == []
+    policy = _policy(FailureRule("node", [Condition("missing", "==", "value")]))
+    assert draw(policy_network(), policy).pattern.excluded_nodes == ()
 
 
 def test_empty_policy():
-    """Test policy with no rules."""
-    policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[])])
-
-    nodes = {"N1": {"equipment_vendor": "cisco"}}
-    links = {"L1": {"link_type": "fiber"}}
-
-    failed = policy.apply_failures(nodes, links)
-    assert failed == []
+    case = draw(policy_network(), FailurePolicy())
+    assert case.kind == "baseline"
+    assert case.pattern.excluded_nodes == case.pattern.excluded_links == ()
 
 
 def test_empty_entities():
-    """Test policy applied to empty node/link sets."""
-    rule = FailureRule(
-        scope="node",
-        conditions=[Condition(attr="equipment_vendor", op="==", value="cisco")],
-        logic="and",
-        mode="all",
-    )
-    policy = _single_mode_policy(rule)
-
-    failed = policy.apply_failures({}, {})
-    assert failed == []
+    case = draw(prepare(Scenario(Network())), _policy(FailureRule("node")))
+    assert case.pattern.excluded_nodes == case.pattern.excluded_links == ()
 
 
 def test_multi_rule_independence():
-    """Multi-rule policies must produce statistically independent selections.
-
-    Each rule in a mode must draw sequentially from one shared RNG stream.
-    A fresh RNG per rule built from the same seed would correlate the rules.
-    """
-    link_rule = FailureRule(scope="link", mode="random", probability=0.5)
-    node_rule = FailureRule(scope="node", mode="random", probability=0.5)
-    policy = FailurePolicy(
-        modes=[FailureMode(weight=1.0, rules=[link_rule, node_rule])]
+    prepared = policy_network()
+    rules = [
+        FailureRule("link", mode="random", probability=0.5),
+        FailureRule("node", mode="random", probability=0.5),
+    ]
+    cases = failure_cases(
+        prepared, FailureRequest(FailurePolicy(modes=[FailureMode(1, rules)]), 2000, 0)
     )
-
-    # 20 links and 20 nodes so we get enough samples per entity
-    links = {f"L{i:02d}": {} for i in range(20)}
-    nodes = {f"N{i:02d}": {} for i in range(20)}
-
-    N = 2000
-    # Count how often the *first* link (L00) and *first* node (N00) both fail.
-    # Under independence P(both) ≈ 0.5 * 0.5 = 0.25
-    # With correlated draws (identical RNG streams) P(both) ≈ 0.5
-    joint_fail = 0
-    link0_fail = 0
-    node0_fail = 0
-
-    for trial in range(N):
-        failed = set(policy.apply_failures(nodes, links, seed=trial))
-        l0 = "L00" in failed
-        n0 = "N00" in failed
-        if l0:
-            link0_fail += 1
-        if n0:
-            node0_fail += 1
-        if l0 and n0:
-            joint_fail += 1
-
-    p_link = link0_fail / N
-    p_node = node0_fail / N
-    p_joint = joint_fail / N
-    p_expected_independent = p_link * p_node
-
-    # Joint probability should be close to the product (independent).
-    # Allow generous tolerance for finite sample size, but catch a 2x
-    # correlation from shared RNG streams.
-    assert abs(p_joint - p_expected_independent) < 0.06, (
-        f"Joint failure rate {p_joint:.4f} deviates too much from independent "
-        f"expectation {p_expected_independent:.4f} (p_link={p_link:.4f}, "
-        f"p_node={p_node:.4f}). Rules may be correlated."
+    joint = sum(
+        case.occurrences
+        for case in cases
+        if "N1|N2|0" in case.pattern.excluded_links
+        and "N1" in case.pattern.excluded_nodes
     )
+    links = sum(
+        case.occurrences for case in cases if "N1|N2|0" in case.pattern.excluded_links
+    )
+    nodes = sum(
+        case.occurrences for case in cases if "N1" in case.pattern.excluded_nodes
+    )
+    assert abs(joint / 2000 - (links / 2000) * (nodes / 2000)) < 0.06
+    assert 0.45 < links / 2000 < 0.55 and 0.45 < nodes / 2000 < 0.55
 
 
 def test_multi_mode_entity_independence():
-    """Entity failure probability must be independent of which mode was selected.
-
-    The RNG draw that selects the mode must not also decide whether
-    entity[0] fails.
-    """
-    # Two modes with asymmetric weights
-    rule_mode0 = FailureRule(scope="node", mode="random", probability=0.3)
-    rule_mode1 = FailureRule(scope="node", mode="random", probability=0.3)
-    policy = FailurePolicy(
-        modes=[
-            FailureMode(weight=0.8, rules=[rule_mode0]),
-            FailureMode(weight=0.2, rules=[rule_mode1]),
-        ]
-    )
-
-    nodes = {f"N{i:02d}": {} for i in range(10)}
-    links = {}
-
-    N = 5000
-    mode0_count = 0
-    mode0_n00_fail = 0
-    mode1_count = 0
-    mode1_n00_fail = 0
-
-    for trial in range(N):
-        trace: dict = {}
-        failed = set(
-            policy.apply_failures(nodes, links, seed=trial, failure_trace=trace)
-        )
-        mode_idx = trace["mode_index"]
-        n00_failed = "N00" in failed
-
-        if mode_idx == 0:
-            mode0_count += 1
-            if n00_failed:
-                mode0_n00_fail += 1
-        else:
-            mode1_count += 1
-            if n00_failed:
-                mode1_n00_fail += 1
-
-    # Both conditional rates should be close to 0.3 (the probability),
-    # regardless of which mode was selected.
-    rate_mode0 = mode0_n00_fail / mode0_count if mode0_count > 0 else 0
-    rate_mode1 = mode1_n00_fail / mode1_count if mode1_count > 0 else 0
-
-    assert abs(rate_mode0 - 0.3) < 0.05, (
-        f"P(N00 fails | mode=0) = {rate_mode0:.4f}, expected ~0.3"
-    )
-    assert abs(rate_mode1 - 0.3) < 0.05, (
-        f"P(N00 fails | mode=1) = {rate_mode1:.4f}, expected ~0.3"
-    )
-    # Mode selection frequency should match weights
-    assert abs(mode0_count / N - 0.8) < 0.05, (
-        f"P(mode=0) = {mode0_count / N:.4f}, expected ~0.8"
-    )
+    prepared = policy_network()
+    rule = FailureRule("node", mode="random", probability=0.3)
+    policy = FailurePolicy(modes=[FailureMode(0.8, [rule]), FailureMode(0.2, [rule])])
+    mode_counts, first_failed = [0, 0], [0, 0]
+    # One draw per request preserves each draw's trace instead of deduplicating it.
+    for seed in range(2000):
+        case = draw(prepared, policy, seed, trace=True)
+        mode = case.trace.mode_index
+        mode_counts[mode] += 1
+        first_failed[mode] += "N1" in case.pattern.excluded_nodes
+    assert abs(mode_counts[0] / 2000 - 0.8) < 0.05
+    for count, failed in zip(mode_counts, first_failed, strict=True):
+        assert abs(failed / count - 0.3) < 0.05

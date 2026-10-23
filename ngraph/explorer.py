@@ -847,26 +847,6 @@ class NetworkExplorer:
         )
         return dict(stats.bom)
 
-    def get_bom_by_path(
-        self, path: str, include_disabled: bool = True
-    ) -> Dict[str, float]:
-        """Return the hardware BOM for a specific hierarchy path.
-
-        Args:
-            path: Hierarchy path (e.g., "dc1/plane1"). Empty string returns the root BOM.
-            include_disabled: If True, include disabled nodes/links.
-
-        Returns:
-            Mapping component_name -> count for the subtree.
-        """
-        if path == "":
-            return self.get_bom(include_disabled=include_disabled)
-        node = self._path_map.get(path)
-        if node is None:
-            return {}
-        stats = node.stats if include_disabled else node.active_stats
-        return dict(stats.bom)
-
     def get_bom_map(
         self,
         include_disabled: bool = True,

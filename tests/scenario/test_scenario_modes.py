@@ -36,6 +36,6 @@ workflow:
 """
 
     scenario = Scenario.from_yaml(scenario_yaml)
-    policy = scenario.failure_policy_set.get_policy("weighted_modes")
+    policy = scenario.failure_policies["weighted_modes"]
     assert policy.modes and len(policy.modes) == 2
     assert policy.modes[0].rules[0].weight_by == "cost"

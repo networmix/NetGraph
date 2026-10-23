@@ -10,6 +10,18 @@ Quick links:
 
 A scenario is a YAML file describing the network topology (nodes, links, risk groups), the analysis configuration (traffic demands, failure policies, workflow) and reusable parts (blueprints, hardware components). Every structure can be written out directly or generated from templates and parameters.
 
+## Units and input validation
+
+```yaml
+units:
+  resolution: auto
+  precision: 0.001
+```
+
+Capacities, demand volumes, finite offers/designs and minimum unreserved bandwidth are physical quantities. A legal explicit resolution is one power of two from 2^-32 through 2^32. Preparation promotes each input to binary64, selects one quantum q and converts quantities with exact half-up rounding. Costs are positive integers; counts and weights are integers. Each finite native bandwidth input and each directed graph capacity/cost aggregate must stay below 2^62, including reverse and synthetic edges. Exact result totals can exceed 64 bits.
+
+The units report is always returned. It records input and local-split constraints, rounding counts, missed targets and unverified supplied programs. Failures and MSD probes keep q and report observation-specific misses. Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`.
+
 ## Template Syntaxes
 
 Three template syntaxes, each valid only in its own context:
@@ -62,7 +74,7 @@ Traffic demands select nodes the same way as links, with these differences:
 
 1. `active_only` defaults to `true`: only active nodes participate
 2. Two selections, source nodes first and then target nodes, each with `path`, `match` and `group_by`
-3. `mode` expands the selection: `pairwise` creates one demand per (source, target) pair with the volume split evenly; `combine` creates pseudo source and target nodes and a single aggregated demand
+3. `mode` expands the selection: `pairwise` creates one demand per (source, target) pair with the volume split evenly; `combine` declares one native source-set/destination-set demand
 4. `group_mode` (`flatten`, `per_group`, `group_pairwise`) decides how grouped selections produce demands
 
 ### Risk Group Creation Flow
@@ -207,7 +219,7 @@ seed: 42                 # Master seed for reproducibility (integer)
 
 All sections are optional. A scenario that omits `network` entirely, or sets it to an empty mapping (`network: {}`), builds with an empty topology. A bare `network:` with no value is a YAML null and fails schema validation. Any unrecognized top-level key is rejected during JSON Schema validation with `jsonschema.ValidationError` (the schema sets `additionalProperties: false`).
 
-**Seed:** `seed` derives per-component seeds (via SHA-256) for failure sampling and workflow steps, so runs are reproducible. Each failure iteration gets its own random number generator from its derived seed. Without a seed, results vary between runs.
+**Seed:** YAML policy `name` derives its seed from SHA-256 of the UTF-8 string `<master>:failure_policy:failure_policy:<name>`. Read the first four bytes as a big-endian integer and mask with `0x7fffffff`. The repeated component preserves existing seeded draws: master `42` and policy `random_link` yield `2099469712`. An absent workflow step seed uses the same hash/truncation on `<master>:workflow_step:<effective-step-name>`. An explicit step seed wins. Failure draw `i` creates `random.Random(base_seed + i)`; an absent base creates an unseeded generator for that draw. Random rules draw one Bernoulli trial per matched entity in sorted identifier order on every supported Python runtime. Without a seed, results vary between runs.
 
 ## `network` - Topology
 
@@ -783,6 +795,8 @@ network:
 
 Risk groups model correlated failures as hierarchies: physical infrastructure, geographic regions, vendor dependencies, or custom domains.
 
+Identical repeated inline group declarations resolve once. Conflicting inline attributes, disabled flags, membership declarations or child declarations refuse with both parent paths. A registered top-level declaration takes precedence over inline references of the same name.
+
 ### Hierarchy
 
 Risk groups form parent-child trees that model **cascading failures**:
@@ -1065,7 +1079,7 @@ demands:
       volume: 1000
       mode: "combine"
       priority: 1
-      flow_policy: "SHORTEST_PATHS_ECMP"
+      preset: "SHORTEST_PATHS_ECMP"
 
     # Dict selectors with attribute-based grouping
     - source:
@@ -1137,70 +1151,76 @@ demands:
 | `priority` | integer | Priority class; lower = higher priority (default: 0) |
 | `mode` | string | Node pairing mode: `combine` or `pairwise` (default: `combine`) |
 | `group_mode` | string | How grouped nodes produce demands (default: `flatten`) |
-| `flow_policy` | string | Routing policy preset name (case-insensitive); omitted or `null` selects `SHORTEST_PATHS_ECMP`. Non-string values (integers, inline policy mappings) fail schema validation at scenario load; any other string (unknown name, numeric string, blank) raises `ValueError` |
-| `edge_priority` | string | Per-edge value that ranks equal-cost alternatives when routing this demand: `residual` (the preset default: residual capacity under capacity-aware routing, static capacity otherwise), `capacity` (static capacity even under capacity-aware routing) or `headroom` (`residual / capacity`, the fraction still free). Eligibility is unaffected; omitted or `null` keeps the preset's behaviour |
-| `static_paths` | array | Explicit routes to pin the demand to; see below |
+| `id` | string | Optional nonempty run-unique identity |
+| `preset` | string | Declared preset name; omission selects `SHORTEST_PATHS_ECMP`. Exclusive with `model` |
+| `model` | object | Explicit routing/admission declaration; see below |
 | `attrs` | object | Arbitrary metadata |
 | `expand` | object | Variable expansion block |
 
-Each demand receives an auto-generated unique `id`; an explicit `id` key is not accepted in scenario YAML. Duplicate ids can arise only when demands are constructed programmatically, and demand expansion rejects them with `ValueError`.
+An absent `id` becomes `<set>|<source declaration ordinal>`. Ordinals count source declarations before expansion. An `expand` leaf appends its stable index; resolved analysis leaves append their own stable expansion ordinal. IDs are unique across all active sets in a run; explicit/generated collisions refuse with both locations. Caller declarations are never rewritten in place.
 
-### Static Paths
+### Named routes and explicit models
 
-`static_paths` pins a demand to routes you choose, instead of letting the flow
-policy pick them. This models MPLS-style LSPs: one flow per route, and a route
-broken by a failure carries nothing rather than rerouting.
+Named routes are declared once and compiled on the prepared graph. A Pinned model references their names in declaration order, retaining duplicates and route weights.
 
 ```yaml
+routes:
+  via_b:
+    head: A
+    nodes: [A, B, C]
+    weight: 3
+  via_d:
+    head: A
+    edges:
+      - {link: "A|D|0", direction: forward}
+      - {link: "D|C|0", direction: forward}
+    weight: 2
 demands:
-  default:
-    - source: "^A$"
-      target: "^C$"
+  traffic:
+    - source: ^A$
+      target: ^C$
       volume: 10
-      mode: pairwise
-      flow_policy: SHORTEST_PATHS_WCMP
-      static_paths:
-        - ["A", "B", "C"]              # node names, source first
-        - links: ["A|D|0", "D|C|0"]    # or link ids, in traversal order
+      model:
+        admission: lossless
+        routing: {type: pinned, routes: [via_b, via_d]}
 ```
 
-Each route is either a list of node names or a mapping with `nodes` or
-`links`. Name nodes for readability; name links when parallel links connect
-the same pair and you need a specific one.
+Each route specifies its source `head` and exactly one of `nodes`, directed `edges`, or a named DAG `support`. Node paths and edge paths must be nonempty simple contiguous routes with the declared head and selected destination. A node hop chooses the nominal enabled parallel link with minimum `(cost, DirectedLink)`; an explicitly disabled link or a hop with no enabled link refuses. Compiled routes remain fixed under sampled failures.
 
-A route is a strict explicit route: every hop is one link. Where parallel
-links connect a pair, a node hop takes the cheapest enabled one (ties broken
-by link id), so the route carries that single link's capacity and fails when
-that link fails, not when the whole bundle does. To model an LSP per parallel
-link, list one route per link using the `links` form. Disabled links are never
-chosen for a node hop, and naming one in the `links` form is an error.
+Pure path routes use their declared nonnegative integer weights, default 1; weight 0 still receives full structural validation. Eligibility removes every route that touches a failed node or link; the head splits its offer over the surviving routes by their weights. A head with no surviving route loses its traffic. The compiled paths themselves stay fixed. Two demands with the same endpoints/model/priority remain distinct when their IDs are distinct. Combine and pairwise are both supported when the route endpoints match the resolved question.
 
-Semantics:
+`supports` and `weights` are separate named namespaces:
 
-- One flow per route, created in the order listed. How volume divides depends
-  on the preset: proportional presets such as `SHORTEST_PATHS_WCMP` fill the
-  routes in the order you list them, so a volume smaller than the first
-  route's bottleneck never reaches the second; `SHORTEST_PATHS_ECMP` gives
-  every surviving route the same share, so total placement is limited by the
-  smallest surviving route; `SHORTEST_PATHS_ECMP_LOSSY` offers every surviving
-  route the same share and each carries what fits, so `placed` is the
-  delivered total (per-link drops are not reported for pinned routes). Route
-  order is therefore significant under proportional presets.
-- A route whose nodes or links are excluded carries nothing. Traffic does not
-  move to another route, which is what makes this different from ordinary
-  routing.
-- The policy neither adds routes nor reoptimizes, so preset cost ceilings and
-  LSP counts do not apply.
+```yaml
+supports:
+  through_b:
+    edges:
+      - {link: "A|B|0", direction: forward}
+      - {link: "B|C|0", direction: forward}
+weights:
+  explicit_split:
+    entries:
+      - edge: {link: "A|B|0", direction: forward}
+        value: 3
+```
 
-Two demands pinned between the same source, target, and priority are rejected,
-because their flows would collide. Put every route on one demand, or separate
-the demands by priority.
+A support must be an acyclic directed graph without duplicate edges. Unlisted explicit edge weights are 0. A support route uses `support: through_b`; a Pinned DAG model can declare `allocation: equal` or `weighted`, with `weight_basis: capacity` or `explicit` as applicable and `edge_weights` naming the explicit vector. Named Pinned DAGs refuse `residual_snapshot`. Path-only routes do not accept DAG split controls.
 
-Because routes run between two concrete nodes, a demand using `static_paths`
-must set `mode: pairwise` and use selectors matching exactly one source and
-one target; anything else raises `ValueError` during expansion. Every route
-must start at the source and end at the target, visit adjacent nodes, and not
-revisit a node.
+Other routing models use `type: shortest_paths`, `distributed_te` or `centralized_te`. For example:
+
+```yaml
+model:
+  admission: lossless
+  routing:
+    type: shortest_paths
+    allocation: weighted
+    weight_basis: capacity
+    tie_break: fewer_hops
+    multipath: true
+    parallel_edges: true
+```
+
+`distributed_te` requires `tunnel_count: {per_head: N}` and accepts `min_unreserved_bandwidth` in physical units plus `cost_ceiling: {type: absolute, value: C}` or `{type: stretch, value: "3/2"}`. Stretch values are exact integers or fraction strings. `centralized_te` requires `source_allocation: optimized` or `equal`, accepts an optional `tunnel_count` with `up_to`, and `prefer_headroom`. Native model applicability and integer/range restrictions are enforced at preparation.
 
 ### Selector Fields
 
@@ -1213,21 +1233,17 @@ The `source` and `target` fields accept either:
 
 Controls how source and target node sets are paired:
 
-- `combine`: Aggregate all sources into one virtual source and all targets into one virtual target. Produces a single flow entry. The virtual source is a pool of the selected sources:
-    - With a `TE_*` preset, capacity decides which sources originate the traffic. This answers "what is the largest volume this group can deliver to that group".
-    - With a `SHORTEST_PATHS_*` preset, every source that can reach a target originates an even share and routes it to its nearest targets, because hop-by-hop routing cannot choose where traffic originates. A source with no path (its links or node failed) drops out of the split.
-    - Under `SHORTEST_PATHS_ECMP` the pool is admitted as one demand with its split fixed, so a source that can carry only part of its share throttles the others too. Two equal-cost sources of capacity 100 and 10 admit 20 of a 110 demand without loss; `SHORTEST_PATHS_ECMP_LOSSY` delivers 65 and drops 45 at the small source.
-    - For a fixed per-source matrix, where an isolated source's share is unserved rather than moved to the others, expand per source (`group_by: name` with `group_mode: per_group`) or use `pairwise`.
-- `pairwise`: Create individual flows between all source-target node pairs. Volume is distributed across pairs.
+- `combine`: One source-set/destination-set demand. Equal/weighted shortest-path routing injects equal integer shares at reachable source heads and pools traffic at shared routers. Optimized routing can choose source injections. At q = 1, source capacities 100/10 permit the integer equal-source prefix 21 (11/10), rather than the fluid 20; the same question at a finer q can give a different final fractional prefix.
+- `pairwise`: Create one demand for each selected source/target node pair, distributing the parent units across the fixed expansion leaves.
 
-**Overlapping selections in `combine` mode:** Nodes selected by both `source` and `target` are excluded from the target side, so overlapping selections cannot route volume through a zero-cost pseudo-node bypass; placement is bounded by real network capacity. With `group_mode: flatten`, a demand whose source and target selections fully overlap leaves no targets after exclusion and expands to nothing; if no demand in the whole expansion produces anything, analysis fails with `No demands could be expanded`.
+Non-diagonal overlapping resolved endpoint groups refuse in demands, capacity and paths; no target is silently trimmed. A singleton self pair remains a legal diagonal. Intentionally filtered, self and empty-selection expansion shares are reported as discarded units.
 
 ### Group Modes (`group_mode`)
 
 When using `group_by` selectors, controls how grouped nodes produce demands:
 
 - `flatten` (default): Flatten all groups into a single source/target set, then apply `mode`
-- `per_group`: Create separate demands for each group independently. With `mode: combine`, one demand per source group with all targets combined; each source group's combined target set excludes that group's own nodes, and a source group whose target set becomes empty after this exclusion is skipped (its even share of the volume is dropped). With `mode: pairwise`, node pairs within each group label present on both source and target sides (labels must match). Volume is split evenly across source groups (combine) or shared labels (pairwise); the total expanded volume equals the configured volume unless a group is skipped due to full overlap.
+- `per_group`: Create one branch per source group with combined targets, or pairwise node branches within labels shared by both selectors. Non-diagonal overlap refuses; genuinely empty branches retain their accounted discarded share.
 - `group_pairwise`: Create demands between each ordered (source_group, target_group) label pair; pairs with identical labels are skipped
 
 **Example with `group_mode`:**
@@ -1254,20 +1270,21 @@ demands:
 | `pairwise` | `per_group` | Pairwise within each group |
 | `pairwise` | `group_pairwise` | Pairwise for each group pair combination |
 
-In `per_group`, `group_pairwise`, and `pairwise` expansions the configured volume is split evenly at each expansion level (across groups or group pairs, then across node pairs within each), so total volume is conserved, except that a skipped expansion's share is dropped: in `combine` mode any group (or group pair) whose target set is empty after excluding shared source/target nodes is skipped, and in `pairwise` mode a group (or group pair) with no non-self node pairs is skipped. If no demands remain after exclusion, expansion fails with `No demands could be expanded`.
+Each physical parent total is quantized once, then split across the stored expansion tree using integer quotient/remainder order. Declared units equal resolved plus discarded units, including zero leaves. Discarded shares are never redistributed. At q = 1, a parent of 10 split into two groups and the second into three produces 5 and (2, 2, 1), retaining the total 10.
 
 ### Flow Policies
 
-Demands that omit `flow_policy` use `SHORTEST_PATHS_ECMP`.
+Demands that omit both `preset` and `model` use `SHORTEST_PATHS_ECMP`. A `MaxFlow` step that omits both asks unrestricted optimized lossless maximum flow (`TE_MAXFLOW_UNLIM`), in YAML and Python.
 
 - `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths, admitted without loss. `placed` is what the network carries with no drops; a next hop filled by an earlier demand blocks later demands hashed onto it
-- `SHORTEST_PATHS_ECMP_LOSSY`: the same routing, forwarded best-effort. Every link carries what fits and drops the rest; `placed` is what arrives and `dropped` what was lost. With `include_flow_details` each entry reports `dropped_edges`, the lost volume per link
-- `SHORTEST_PATHS_WCMP`: IP/IGP routing with weighted ECMP; proportional split by residual capacity (equal to link capacity on an unloaded network)
-- `TE_WCMP_UNLIM`: MPLS-TE / SDN with capacity-aware WCMP; unlimited tunnels
+- `SHORTEST_PATHS_ECMP_LOSSY`: the same routing with best-effort forwarding; native results retain delivered traffic, source losses and losses at each edge
+- `SHORTEST_PATHS_WCMP`: capacity-weighted static shortest-path routing with lossless equal source allocation
+- `SHORTEST_PATHS_MAXFLOW`: optimized capacity on the union of the selected shortest-path supports
+- `TE_MAXFLOW_UNLIM`: unrestricted optimized lossless traffic engineering
 - `TE_ECMP_16_LSP`: MPLS-TE with exactly 16 ECMP LSPs per demand
 - `TE_ECMP_UP_TO_256_LSP`: MPLS-TE with up to 256 ECMP LSPs per demand
 
-See [Flow Policy Presets](design.md#flow-policy-presets) for what each preset sets internally.
+See [traffic models](design.md#traffic-models) for their distinct questions. Tunnel counts are per head; a configured count is a layout, not a delivery guarantee.
 
 ## `failures` - Failure Policies
 
@@ -1414,7 +1431,7 @@ workflow:
 - `NetworkStats`: Node, link, capacity and degree statistics
 - `MaxFlow`: Monte Carlo capacity analysis between node groups
 - `TrafficMatrixPlacement`: Monte Carlo demand placement for a named demand set
-- `MaximumSupportedDemand`: Search for `alpha_star` (scaling factor) for a named demand set
+- `MaximumSupportedDemand`: Search for the largest tested feasible alpha for a named demand set
 - `CostPower`: Aggregate capex and power by network hierarchy level
 
 See [Workflow Reference](workflow.md) for detailed configuration.
@@ -1556,3 +1573,20 @@ network:
         path: "^dc2/leaf/.*"
       pattern: mesh
 ```
+
+Capacity split precision uses the finite native delivery at each candidate unit
+size for an uncapped lossless question or a Core-derived first-hop experiment.
+The units report labels these split constraints `basis: observed` and records
+the exact physical incoming amount. Finite declared offers and designs use
+`basis: declared`. Input rounding is checked independently, and later failures
+or probes keep the prepared unit size while reporting missed local targets.
+
+The CLI `--keys` option selects exported steps after the full workflow executes.
+It preserves declaration order and each step's actual `execution_order` value:
+exporting only the second step keeps order `1`. A filtered export may have gaps;
+the complete run has contiguous execution order.
+
+
+### Analysis output details
+
+Numerical workflow rows export compact exact summaries by default. `MaxFlow` and `TrafficMatrixPlacement` support `outputs.details: true` to add native call, per-source, per-tunnel and plan fields; their cost, cut and array flags stay independent. `MaximumSupportedDemand` accepts only `details` in its outputs object. Omitted outputs, `{}`, or `details: false` select compact output. Details accepts only a boolean. Pool metadata remains available in either mode, preserving the synthetic-ingress cost domain. Python callers retain full native results regardless of export selection.

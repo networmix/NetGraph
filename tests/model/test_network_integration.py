@@ -1,8 +1,21 @@
 """Integration tests combining network features with flow analysis."""
 
+import copy
+
 import pytest
 
-from ngraph import Link, Mode, Network, Node, RiskGroup, analyze
+from ngraph import (
+    CapacityQuery,
+    Link,
+    Network,
+    Node,
+    RiskGroup,
+    Scenario,
+    Selector,
+    UnitsSettings,
+    capacity,
+    prepare,
+)
 
 
 class TestNetworkIntegration:
@@ -35,15 +48,27 @@ class TestNetworkIntegration:
         net.risk_groups["critical"] = RiskGroup("critical")
 
         # Risk group enabled: the unit-capacity chain carries 1.0
-        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
-        assert flow[("^A$", "^D$")] == 1.0
+        source, target = Selector("^A$"), Selector("^D$")
+        flow = capacity(
+            prepare(Scenario(net, units=UnitsSettings(1))),
+            CapacityQuery(source, target, workers=1),
+        )
+        assert flow.cases[0].states["converged"].rows[0].result.delivered == 1
 
         # No flow possible when all nodes are disabled - raises error
+        net = copy.deepcopy(net)
         net.disable_risk_group("critical")
-        with pytest.raises(ValueError, match="No source nodes found"):
-            analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
+        with pytest.raises(ValueError, match="capacity.source: empty selection"):
+            capacity(
+                prepare(Scenario(net, units=UnitsSettings(1))),
+                CapacityQuery(source, target, workers=1),
+            )
 
         # Flow should resume when risk group is re-enabled
+        net = copy.deepcopy(net)
         net.enable_risk_group("critical")
-        flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
-        assert flow[("^A$", "^D$")] == 1.0
+        flow = capacity(
+            prepare(Scenario(net, units=UnitsSettings(1))),
+            CapacityQuery(source, target, workers=1),
+        )
+        assert flow.cases[0].states["converged"].rows[0].result.delivered == 1

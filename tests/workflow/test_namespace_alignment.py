@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from ngraph.results import Results
-from ngraph.scenario import Scenario
+import json
+from dataclasses import replace
+from io import StringIO
+
+from ngraph.export import write_json
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.cost_power import CostPower
 
 
@@ -23,25 +27,25 @@ workflow:
     step_name = scenario.workflow[0].name
     assert isinstance(step_name, str) and step_name != ""
 
-    scenario.run()
-
-    # Stored results must appear under steps in the exported dict
-    exported = scenario.results.to_dict()
-    assert "steps" in exported and step_name in exported["steps"]
-    assert "data" in exported["steps"][step_name]
-    assert exported["steps"][step_name]["data"].get("graph") is not None
-
-    md = scenario.results.get_step_metadata(step_name)
-    assert md is not None
-    assert md.step_name == step_name
-    assert md.step_type == "BuildGraph"
-
-    # Execution order listing includes the empty-name step
-    assert scenario.results.get_steps_by_execution_order() == [step_name]
+    result = run(prepare(scenario))
+    step = result.steps[0]
+    assert step.name == step_name
+    assert step.step_type == "BuildGraph"
+    assert step.execution_order == 0
+    assert step.question is scenario.workflow[0]
+    assert step.result.node_count == 2
+    output = StringIO()
+    write_json(result, output)
+    exported = json.loads(output.getvalue())["steps"]
+    assert [row["name"] for row in exported] == [step_name]
+    assert exported[0]["result"]["graph"]["nodes"] == [
+        {"id": "A", "disabled": False},
+        {"id": "B", "disabled": False},
+    ]
 
 
 def test_cost_power_collects_levels_schema_smoke() -> None:
-    # Minimal scenario with components and one link; results is a real store
+    # Minimal scenario with components and one link.
     from ngraph.model.components import Component, ComponentsLibrary
     from ngraph.model.network import Link, Network, Node
 
@@ -49,11 +53,17 @@ def test_cost_power_collects_levels_schema_smoke() -> None:
     net.add_node(Node("A", attrs={"hardware": {"component": "NodeHW", "count": 1}}))
     net.add_node(Node("B", attrs={"hardware": {"component": "NodeHW", "count": 1}}))
     link = Link("A", "B", capacity=10.0)
-    link.attrs["hardware"] = {
-        "source": {"component": "LinkHW", "count": 1},
-        "target": {"component": "LinkHW", "count": 1},
-    }
-    net.add_link(link)
+    net.add_link(
+        replace(
+            link,
+            attrs={
+                "hardware": {
+                    "source": {"component": "LinkHW", "count": 1},
+                    "target": {"component": "LinkHW", "count": 1},
+                }
+            },
+        )
+    )
 
     comps = ComponentsLibrary(
         components={
@@ -76,16 +86,19 @@ def test_cost_power_collects_levels_schema_smoke() -> None:
         }
     )
 
-    scen = Scenario(network=net, workflow=[], components_library=comps)
-    scen.results = Results()
-
     step = CostPower(name="cpe", include_disabled=True, aggregation_level=1)
-
-    step.execute(scen)
-
-    exported = scen.results.to_dict()
-    data = exported["steps"]["cpe"]["data"]
-    assert "context" in data and "levels" in data
-    assert data["context"]["aggregation_level"] == 1
-    # Root level present
-    assert isinstance(data["levels"].get(0, []), list)
+    scen = Scenario(network=net, workflow=(step,), components_library=comps)
+    result = run(prepare(scen))
+    data = result.steps[0].result
+    assert result.steps[0].question is step
+    assert data.include_disabled is True and data.aggregation_level == 1
+    assert tuple(data.levels) == (0, 1)
+    root = data.levels[0]
+    assert len(root) == 1
+    assert root[0].capex_total == 202
+    assert root[0].power_total_watts == 21
+    output = StringIO()
+    write_json(result, output)
+    wire = json.loads(output.getvalue())["steps"][0]["result"]
+    assert [row["level"] for row in wire["levels"]] == [0, 1]
+    assert wire["levels"][0]["rows"][0]["capex_total"] == 202

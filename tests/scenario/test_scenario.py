@@ -1,20 +1,17 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import pytest
 
-from ngraph.model.failure.policy import FailurePolicy
+from ngraph.model.failure import FailurePolicy
 from ngraph.model.network import Network
-from ngraph.results import Results
-from ngraph.scenario import Scenario
+from ngraph.results import StepContext, StepOutput
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.base import (
     WORKFLOW_STEP_REGISTRY,
     WorkflowStep,
     register_workflow_step,
 )
-
-if TYPE_CHECKING:
-    from ngraph.scenario import Scenario
 
 
 @dataclass
@@ -25,13 +22,8 @@ class DoSmth(WorkflowStep):
 
     some_param: int = 0
 
-    def run(self, scenario: Scenario) -> None:
-        """
-        Perform a dummy operation for testing.
-        Store something in scenario.results under this step.
-        """
-        scenario.results.put("metadata", {})
-        scenario.results.put("data", {"ran": True})
+    def run(self, context: StepContext) -> StepOutput:
+        return StepOutput({"some_param": self.some_param}, {"ran": True})
 
 
 @dataclass
@@ -42,9 +34,9 @@ class DoSmthElse(WorkflowStep):
 
     factor: float = 1.0
 
-    def run(self, scenario: Scenario) -> None:
-        scenario.results.put("metadata", {})
-        scenario.results.put("data", {"ran": True})
+    def run(self, context: StepContext) -> StepOutput:
+        assert context.prior_results["Step1"].result == {"ran": True}
+        return StepOutput({"factor": self.factor}, {"ran": True})
 
 
 # Register the classes after definition to avoid decorator ordering issues
@@ -244,9 +236,9 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     Checks that:
       - Network has the expected nodes/links
       - FailurePolicy is set with multiple rules
-      - TrafficDemands are parsed
+      - Typed demand declarations are parsed
       - Workflow steps are instantiated
-      - Results object is present
+      - Inputs are typed and execution has no mutable result store
     """
     scenario = Scenario.from_yaml(valid_scenario_yaml)
 
@@ -282,7 +274,7 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert link_bc.cost == 4
 
     # Check failure policy - access by known name "default"
-    simple_policy = scenario.failure_policy_set.get_policy("default")
+    simple_policy = scenario.failure_policies["default"]
     assert isinstance(simple_policy, FailurePolicy)
     assert not simple_policy.expand_groups
 
@@ -298,17 +290,17 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert r2.scope == "link" and r2.mode == "all"
 
     # Check demand set
-    assert len(scenario.demand_set.sets) == 1
-    assert "default" in scenario.demand_set.sets
-    default_demands = scenario.demand_set.sets["default"]
+    assert len(scenario.demand_sets) == 1
+    assert "default" in scenario.demand_sets
+    default_demands = scenario.demand_sets["default"].demands
     assert len(default_demands) == 2
     d1 = default_demands[0]
     d2 = default_demands[1]
-    assert d1.source == "NodeA"
-    assert d1.target == "NodeB"
+    assert d1.source.path == "NodeA"
+    assert d1.target.path == "NodeB"
     assert d1.volume == 15
-    assert d2.source == "NodeA"
-    assert d2.target == "NodeC"
+    assert d2.source.path == "NodeA"
+    assert d2.target.path == "NodeC"
     assert d2.volume == 5
 
     # Check workflow
@@ -322,20 +314,17 @@ def test_scenario_from_yaml_valid(valid_scenario_yaml: str) -> None:
     assert step2.name == "Step2"
     assert cast(DoSmthElse, step2).factor == 2.0
 
-    assert isinstance(scenario.results, Results)
+    assert "results" not in vars(scenario)
 
 
 def test_scenario_run(valid_scenario_yaml: str) -> None:
     """
-    Tests scenario.run() => each workflow step is executed in order,
-    storing data in scenario.results.
+    Each typed workflow step executes in order and reads prior completed values.
     """
     scenario = Scenario.from_yaml(valid_scenario_yaml)
-    scenario.run()
-
-    exp = scenario.results.to_dict()
-    assert exp["steps"]["Step1"]["data"].get("ran") is True
-    assert exp["steps"]["Step2"]["data"].get("ran") is True
+    result = run(prepare(scenario))
+    assert [step.name for step in result.steps] == ["Step1", "Step2"]
+    assert [step.result for step in result.steps] == [{"ran": True}, {"ran": True}]
 
 
 def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> None:
@@ -381,10 +370,9 @@ def test_scenario_minimal(minimal_scenario_yaml: str) -> None:
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
 
-    # Without a failures block, failure_policy_set has no policies
-    assert len(scenario.failure_policy_set.get_all_policies()) == 0
+    assert len(scenario.failure_policies) == 0
 
-    assert len(scenario.demand_set.sets) == 0
+    assert len(scenario.demand_sets) == 0
     assert len(scenario.workflow) == 1
     step = scenario.workflow[0]
     assert step.name == "JustStep"
@@ -400,9 +388,9 @@ def test_scenario_empty_yaml(empty_yaml: str) -> None:
     assert scenario.network is not None
     assert len(scenario.network.nodes) == 0
     assert len(scenario.network.links) == 0
-    assert len(scenario.failure_policy_set.get_all_policies()) == 0
-    assert len(scenario.demand_set.sets) == 0
-    assert scenario.workflow == []
+    assert len(scenario.failure_policies) == 0
+    assert len(scenario.demand_sets) == 0
+    assert scenario.workflow == ()
 
 
 def test_scenario_risk_groups() -> None:
@@ -512,13 +500,13 @@ demands:
 
 
 def test_scenario_snapshot_serialization_format():
-    """Scenario snapshot must serialize policies in YAML format and presets by name.
-
-    Regression tests: the snapshot delegates failure-policy serialization to
-    FailurePolicy.to_dict (conditions nested under "match")
-    and stores flow_policy as the preset name string instead of a raw IntEnum.
-    """
+    """The durable typed question retains parsed conditions and explicit model names."""
     import json
+    from io import StringIO
+
+    from ngraph.analysis.failures import FailureRequest
+    from ngraph.analysis.placement import PlacementQuery, place
+    from ngraph.export import write_json
 
     yaml_content = """
 network:
@@ -548,25 +536,32 @@ demands:
     - source: A
       target: B
       volume: 5
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 """
     scenario = Scenario.from_yaml(yaml_content)
-    exported = scenario.results.to_dict()
-    snapshot = exported["scenario"]
-
-    # Failure policies use the parser-compatible to_dict shape
-    policy_dict = snapshot["failures"]["default"]
-    assert "seed" not in policy_dict
+    prepared = prepare(scenario, demand_sets=("default",))
+    result = place(
+        prepared,
+        PlacementQuery(
+            prepared.demand_sets["default"],
+            failures=FailureRequest(scenario.failure_policies["default"], iterations=1),
+            workers=1,
+        ),
+    )
+    output = StringIO()
+    write_json(result, output)
+    exported = json.loads(output.getvalue())
+    question = exported["analysis"]["query"]
+    policy_dict = question["failures"]["inline_policy"]
+    assert policy_dict["seed"] is None
     rule_dict = policy_dict["modes"][0]["rules"][0]
     assert rule_dict["match"]["logic"] == "and"
     assert rule_dict["match"]["conditions"][0]["attr"] == "capacity"
 
-    # flow_policy is the preset name string, consistent with step exports
-    demand_entry = snapshot["demands"]["default"][0]
-    assert demand_entry["flow_policy"] == "SHORTEST_PATHS_ECMP"
-
-    # The whole export must be JSON-serializable
-    json.dumps(exported)
+    demand_entry = question["demands"][0]
+    assert demand_entry["model"]["routing"] == "shortest_paths"
+    assert demand_entry["model"]["allocation"] == "equal"
+    assert demand_entry["model"]["admission"] == "lossless"
 
 
 def test_scenario_seed_rejects_float() -> None:
@@ -577,7 +572,7 @@ network:
     A: {}
 seed: 5.0
 """
-    with pytest.raises(ValueError, match="'seed' must be an integer"):
+    with pytest.raises(ValueError, match="seed: expected integer"):
         Scenario.from_yaml(yaml_str)
 
 
@@ -595,3 +590,33 @@ risk_groups:
 """
     with pytest.raises(ValueError, match="Duplicate risk group name 'RG1'"):
         Scenario.from_yaml(yaml_str)
+
+
+@pytest.mark.parametrize("generate,builds", [(False, 1), (True, 2)])
+def test_yaml_loading_builds_the_membership_index_once_per_stage(
+    monkeypatch, generate, builds
+):
+    from ngraph.model.risk import MembershipIndex
+
+    text = """
+network:
+  nodes:
+    A: {attrs: {site: x}, risk_groups: [g]}
+    B: {}
+risk_groups:
+  - {name: g, disabled: true}
+"""
+    if generate:
+        text += '  - generate: {scope: node, group_by: site, name: "site_${value}"}\n'
+    calls = []
+    original = MembershipIndex.build.__func__
+
+    def counted(cls, network):
+        calls.append(network)
+        return original(cls, network)
+
+    monkeypatch.setattr(MembershipIndex, "build", classmethod(counted))
+    scenario = Scenario.from_yaml(text)
+    assert len(calls) == builds
+    assert scenario.network.nodes["A"].disabled
+    assert not scenario.network.nodes["B"].disabled

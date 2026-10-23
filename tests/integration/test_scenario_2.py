@@ -13,6 +13,9 @@ Validation helpers come from integration.helpers.
 
 import pytest
 
+from ngraph.results import BuildGraphResult
+from ngraph.scenario import prepare, run
+
 from .expectations import SCENARIO_2_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
 
@@ -29,21 +32,21 @@ class TestScenario2:
     @pytest.fixture
     def scenario_2_executed(self, scenario_2):
         """Execute scenario 2 workflow and return with results."""
-        scenario_2.run()
-        return scenario_2
+        return run(prepare(scenario_2))
 
     @pytest.fixture
-    def helper(self, scenario_2_executed):
+    def helper(self, scenario_2, scenario_2_executed):
         """Create test helper for scenario 2."""
         # create_scenario_helper handles graph conversion using nx.node_link_graph
-        helper = create_scenario_helper(scenario_2_executed)
+        helper = create_scenario_helper(scenario_2, scenario_2_executed)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_2_executed):
         """Test that scenario 2 can be parsed and executed without errors."""
-        assert scenario_2_executed.results is not None
-        exported = scenario_2_executed.results.to_dict()
-        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
+        (step,) = scenario_2_executed.steps
+        assert step.name == "build_graph" and isinstance(step.result, BuildGraphResult)
+        assert step.result.node_count == SCENARIO_2_EXPECTATIONS.count
+        assert step.result.link_count == SCENARIO_2_EXPECTATIONS.edge_count
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations after blueprint expansion."""
@@ -198,9 +201,10 @@ class TestScenario2:
         helper.validate_traffic_demands(expected_count=4)
 
         # Same traffic demands as scenario 1
-        default_demands = helper.scenario.demand_set.get_set("default")
+        default_demands = helper.scenario.demand_sets["default"].demands
         demands_dict = {
-            (demand.source, demand.target): demand.volume for demand in default_demands
+            (demand.source.path, demand.target.path): demand.volume
+            for demand in default_demands
         }
 
         expected_demands = {

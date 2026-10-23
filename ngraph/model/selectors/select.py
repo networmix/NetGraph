@@ -7,13 +7,15 @@ condition evaluation runs against.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Dict, List, Set
 
 from .conditions import evaluate_conditions
-from .schema import Condition, MatchSpec, NodeSelector
+from .schema import Condition, MatchSpec, Selector
 
 if TYPE_CHECKING:
-    from ngraph.model.network import Link, Network, Node, RiskGroup
+    from ngraph.model.network import Link, Network, Node
+    from ngraph.model.risk import RiskGroup
 
 __all__ = [
     "select_nodes",
@@ -27,10 +29,10 @@ __all__ = [
 
 def select_nodes(
     network: "Network",
-    selector: NodeSelector,
+    selector: Selector,
     default_active_only: bool,
 ) -> Dict[str, List["Node"]]:
-    """Select and group the nodes a `NodeSelector` matches.
+    """Select and group the nodes a `Selector` matches.
 
     Evaluation order:
     1. Select nodes matching `path` regex (or all nodes if path is None)
@@ -55,7 +57,6 @@ def select_nodes(
         else default_active_only
     )
 
-    # Network.select_node_groups_by_path() caches regex results per pattern.
     if selector.path is not None:
         candidates = network.select_node_groups_by_path(selector.path)
     else:
@@ -173,7 +174,7 @@ def flatten_risk_group_attrs(rg: "RiskGroup") -> Dict[str, Any]:
 
 def match_entity_ids(
     entity_attrs: Dict[str, Dict[str, Any]],
-    conditions: List[Condition],
+    conditions: Sequence[Condition],
     logic: str = "or",
 ) -> Set[str]:
     """Match entity IDs by attribute conditions.

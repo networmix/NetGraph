@@ -7,23 +7,17 @@ win over user attrs, matching the precedence documented for
 flatten_node_attrs and flatten_link_attrs.
 """
 
-from unittest.mock import MagicMock
-
 import pytest
 
 from ngraph.model.network import Link, Network, Node
-from ngraph.results.store import Results
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.build_graph import BuildGraph
 
 
 @pytest.fixture
 def scenario_with_reserved_attrs():
     """Scenario whose node/link attrs collide with reserved graph keys."""
-    scenario = MagicMock()
-    scenario.seed = None
-    scenario._execution_counter = 0
-    scenario.network = Network()
-    scenario.results = Results()
+    scenario = Scenario(Network())
 
     scenario.network.add_node(Node("A", attrs={"disabled": "user-value", "site": "X"}))
     scenario.network.add_node(Node("B"))
@@ -45,26 +39,27 @@ def scenario_with_reserved_attrs():
     return scenario
 
 
-def _step_data(scenario, step_name: str) -> dict:
-    return scenario.results.to_dict()["steps"][step_name]["data"]
+def _step_data(scenario, step_name: str):
+    assert scenario.steps[0].name == step_name
+    return scenario.steps[0].result
 
 
 def test_build_graph_runs_with_reserved_attr_keys(scenario_with_reserved_attrs):
     """Step completes instead of raising TypeError on reserved attr keys."""
     step = BuildGraph(name="build_graph")
 
-    step.execute(scenario_with_reserved_attrs)
+    result = run(prepare(Scenario(scenario_with_reserved_attrs.network, (step,))))
 
-    data = _step_data(scenario_with_reserved_attrs, "build_graph")
-    assert data["graph"] is not None
+    data = _step_data(result, "build_graph")
+    assert data.graph is not None
 
 
 def test_reserved_node_keys_win_over_user_attrs(scenario_with_reserved_attrs):
     """Node 'disabled' reflects model state, not the user attr value."""
     step = BuildGraph(name="build_graph")
-    step.execute(scenario_with_reserved_attrs)
+    result = run(prepare(Scenario(scenario_with_reserved_attrs.network, (step,))))
 
-    graph_dict = _step_data(scenario_with_reserved_attrs, "build_graph")["graph"]
+    graph_dict = _step_data(result, "build_graph").graph
     nodes = {n["id"]: n for n in graph_dict["nodes"]}
 
     assert nodes["A"]["disabled"] is False
@@ -78,9 +73,9 @@ def test_reserved_link_keys_win_over_user_attrs(scenario_with_reserved_attrs):
     link_id = next(iter(network.links))
 
     step = BuildGraph(name="build_graph")
-    step.execute(scenario_with_reserved_attrs)
+    result = run(prepare(Scenario(scenario_with_reserved_attrs.network, (step,))))
 
-    graph_dict = _step_data(scenario_with_reserved_attrs, "build_graph")["graph"]
+    graph_dict = _step_data(result, "build_graph").graph
     edges = {e["id"]: e for e in graph_dict["edges"]}
 
     forward = edges[link_id]
@@ -103,19 +98,15 @@ def test_reserved_link_keys_win_over_user_attrs(scenario_with_reserved_attrs):
 
 def test_build_graph_without_reserved_keys_unchanged():
     """Attrs without reserved keys pass through unchanged."""
-    scenario = MagicMock()
-    scenario.seed = None
-    scenario._execution_counter = 0
-    scenario.network = Network()
-    scenario.results = Results()
+    scenario = Scenario(Network())
     scenario.network.add_node(Node("A", attrs={"role": "leaf"}))
     scenario.network.add_node(Node("B", disabled=True))
     scenario.network.add_link(Link("A", "B", capacity=5.0, cost=1.0))
 
     step = BuildGraph(name="build_graph")
-    step.execute(scenario)
+    result = run(prepare(Scenario(scenario.network, (step,))))
 
-    graph_dict = _step_data(scenario, "build_graph")["graph"]
+    graph_dict = _step_data(result, "build_graph").graph
     nodes = {n["id"]: n for n in graph_dict["nodes"]}
     assert nodes["A"]["role"] == "leaf"
     assert nodes["A"]["disabled"] is False

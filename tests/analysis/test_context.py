@@ -1,30 +1,24 @@
-"""Tests for AnalysisContext internal infrastructure.
+"""Physical preparation owns one native graph and its nominal eligibility."""
 
-Checks that disabled nodes and links are tracked and that the context
-exposes the Core graph components.
-"""
-
-from ngraph import Link, Network, Node
-from ngraph.analysis import AnalysisContext
+from ngraph import Link, Network, Node, Scenario, UnitsSettings, prepare
 
 
 def test_context_creation():
-    """Test that AnalysisContext can be created from a network."""
+    """Preparation compiles every bidirectional physical link."""
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     net.add_link(Link("A", "B", capacity=10.0))
 
-    ctx = AnalysisContext.from_network(net)
+    topology = prepare(Scenario(net, units=UnitsSettings(1))).topology
 
     # Basic sanity checks
-    assert ctx is not None
-    assert ctx.multidigraph.num_nodes() >= 2
-    assert ctx.multidigraph.num_edges() >= 2  # Forward + reverse
+    assert topology.graph.num_nodes() == 2
+    assert topology.graph.num_edges() == 2
 
 
 def test_disabled_node_tracked():
-    """Test that disabled nodes are tracked in context."""
+    """Declared disabled nodes remain in labels and are masked."""
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B", disabled=True))
@@ -32,18 +26,18 @@ def test_disabled_node_tracked():
     net.add_link(Link("A", "B", capacity=10.0))
     net.add_link(Link("B", "C", capacity=10.0))
 
-    ctx = AnalysisContext.from_network(net)
-
-    assert len(ctx.disabled_node_ids) == 1
+    topology = prepare(Scenario(net, units=UnitsSettings(1))).topology
+    assert topology.node_names == ("A", "B", "C")
+    assert topology.disabled.node_allowed().tolist() == [True, False, True]
 
 
 def test_disabled_link_tracked():
-    """Test that disabled links are tracked in context."""
+    """A disabled physical link masks both analysis directions."""
     net = Network()
     net.add_node(Node("A"))
     net.add_node(Node("B"))
     net.add_link(Link("A", "B", capacity=10.0, disabled=True))
 
-    ctx = AnalysisContext.from_network(net)
-
-    assert len(ctx.disabled_link_ids) == 1
+    topology = prepare(Scenario(net, units=UnitsSettings(1))).topology
+    assert topology.disabled.edge_allowed().tolist() == [False, False]
+    assert topology.disabled.node_allowed().tolist() == [True, True]

@@ -1,16 +1,12 @@
-"""End-to-end test for risk group scoped failures.
-
-Covers the full pipeline FailureManager.compute_exclusions →
-FailurePolicy.apply_failures → match_entity_ids: risk group attributes
-are matched and member links are excluded.
-"""
+"""YAML risk-group rules reach native placement with typed converged results."""
 
 from __future__ import annotations
 
-from ngraph.scenario import Scenario
+from ngraph.scenario import Scenario, prepare, run
 
 SCENARIO_YAML = """\
 seed: 42
+units: {resolution: 1}
 network:
   nodes:
     A: {}
@@ -46,7 +42,7 @@ demands:
       target: ^B$
       volume: 10
       mode: combine
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 
 workflow:
   - type: TrafficMatrixPlacement
@@ -54,7 +50,7 @@ workflow:
     demand_set: tm
     failure_policy: fail_fiber
     iterations: 5
-    parallelism: 1
+    workers: 1
     seed: 42
 """
 
@@ -69,27 +65,17 @@ def test_risk_group_failure_excludes_member_links() -> None:
     With the only link removed, no traffic can be placed.
     """
     scenario = Scenario.from_yaml(SCENARIO_YAML)
-    scenario.run()
-    results = scenario.results.to_dict()
-
-    tm = results["steps"]["tm_test"]["data"]
-    baseline = tm["baseline"]
-    flow_results = tm["flow_results"]
-
-    # Baseline: link is up, all traffic placed
-    assert baseline["summary"]["total_placed"] == 10.0
-
-    # Every failure iteration: link is down, nothing placed
-    assert len(flow_results) == 1, "Single risk group → one unique pattern"
-
-    fr = flow_results[0]
-    assert fr["occurrence_count"] == 5
-    assert len(fr["failure_state"]["excluded_links"]) > 0
-    assert fr["summary"]["total_placed"] == 0.0
+    value = run(prepare(scenario)).steps[0].result
+    baseline, failed = value.cases
+    assert baseline.states["converged"].totals.delivered_units == 10
+    assert failed.case.occurrences == 5
+    assert failed.case.pattern.excluded_links == ("A|B|0",)
+    assert failed.states["converged"].totals.delivered_units == 0
 
 
 DUAL_PATH_YAML = """\
 seed: 42
+units: {resolution: 1}
 network:
   nodes:
     S: {}
@@ -132,7 +118,7 @@ demands:
       target: ^D$
       volume: 50
       mode: combine
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 
 workflow:
   - type: TrafficMatrixPlacement
@@ -140,7 +126,8 @@ workflow:
     demand_set: tm
     failure_policy: fail_lh
     iterations: 20
-    parallelism: 1
+    workers: 1
+    outputs: {cost_distribution: true}
     seed: 42
 """
 
@@ -162,23 +149,17 @@ def test_dual_path_risk_group_failure_produces_asymmetric_results() -> None:
     - fail path_b: all traffic at cost 1
     """
     scenario = Scenario.from_yaml(DUAL_PATH_YAML)
-    scenario.run()
-    results = scenario.results.to_dict()
-
-    tm = results["steps"]["tm_lh"]["data"]
-    flow_results = tm["flow_results"]
-
-    # Two risk groups → at most 2 unique patterns
-    assert 1 <= len(flow_results) <= 2
-
-    # Every pattern must have non-empty exclusions
-    for fr in flow_results:
-        assert len(fr["failure_state"]["excluded_links"]) > 0, (
-            "Risk group failure must exclude member links"
-        )
-        # Both paths can individually carry the 50 Gbps demand
-        assert fr["summary"]["total_placed"] == 50.0
-
-    # Total occurrence_count must equal iterations
-    total_occ = sum(fr["occurrence_count"] for fr in flow_results)
-    assert total_occ == 20
+    value = run(prepare(scenario)).steps[0].result
+    baseline, *failed = value.cases
+    assert baseline.states["converged"].totals.delivered_units == 50
+    assert len(failed) == 2
+    for case in failed:
+        assert len(case.case.pattern.excluded_links) == 1
+        state = case.states["converged"]
+        assert state.totals.delivered_units == 50
+        expected_cost = 2 if case.case.pattern.excluded_links == ("S|D|0",) else 1
+        assert [
+            (bin.cost, bin.delivered_units)
+            for bin in state.rows[0].cost_distribution.bins
+        ] == [(expected_cost, 50)]
+    assert sum(case.case.occurrences for case in failed) == 20

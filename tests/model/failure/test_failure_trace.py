@@ -1,312 +1,219 @@
-"""Tests for failure_trace capture in FailurePolicy and FailureManager."""
+"""Typed trace ownership, deduplication and native analysis integration."""
+
+from dataclasses import replace
 
 import pytest
 
-from ngraph.analysis.failure_manager import FailureManager
-from ngraph.model.failure.policy import (
-    FailureMode,
-    FailurePolicy,
-    FailureRule,
-)
-from ngraph.model.failure.policy_set import FailurePolicySet
+from ngraph.analysis.capacity import CapacityQuery, capacity
+from ngraph.analysis.failures import FailureRequest, failure_cases
+from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
 from ngraph.model.network import Link, Network, Node
-from ngraph.model.selectors import Condition
+from ngraph.model.risk import RiskGroup
+from ngraph.model.selectors import Condition, Selector
+from ngraph.scenario import Scenario, prepare
+from tests.failure_fixture import draw, policy_network
 
 
 class TestFailureTracePolicyLevel:
-    """Test failure_trace capture in FailurePolicy.apply_failures."""
-
-    def test_trace_captures_mode_index(self) -> None:
-        """mode_index and mode_attrs come from the selected positive-weight mode."""
-        rule = FailureRule(scope="node", mode="all")
+    def test_trace_captures_mode_index(self):
         policy = FailurePolicy(
             modes=[
-                FailureMode(weight=0.0, rules=[]),  # weight=0 never selected
-                FailureMode(weight=1.0, rules=[rule], attrs={"name": "mode1"}),
+                FailureMode(0, []),
+                FailureMode(1, [FailureRule("node")], {"name": "mode1"}),
             ]
         )
+        trace = draw(policy_network(), policy, trace=True).trace
+        assert trace.mode_index == 1
+        assert dict(trace.mode_attrs) == {"name": "mode1"}
 
-        nodes = {"N1": {}, "N2": {}}
-        trace: dict = {}
-        policy.apply_failures(nodes, {}, failure_trace=trace, seed=42)
+    def test_trace_captures_mode_attrs(self):
+        attrs = {"severity": "high", "nested": {"region": "west"}}
+        policy = FailurePolicy(modes=[FailureMode(1, [FailureRule("node")], attrs)])
+        trace = draw(policy_network(), policy, trace=True).trace
+        attrs["nested"]["region"] = "changed"
+        with pytest.raises(TypeError, match="read-only"):
+            policy.modes[0].attrs["nested"]["region"] = "changed-again"
+        assert dict(trace.mode_attrs) == {
+            "severity": "high",
+            "nested": {"region": "west"},
+        }
 
-        assert trace["mode_index"] == 1
-        assert trace["mode_attrs"] == {"name": "mode1"}
-
-    def test_trace_captures_mode_attrs(self) -> None:
-        """Test that mode_attrs is a copy of the selected mode's attrs."""
-        attrs = {"severity": "high", "region": "west"}
-        rule = FailureRule(scope="node", mode="all")
+    def test_trace_captures_selection_fields(self):
         policy = FailurePolicy(
-            modes=[FailureMode(weight=1.0, rules=[rule], attrs=attrs)]
-        )
-
-        trace: dict = {}
-        policy.apply_failures({"N1": {}}, {}, failure_trace=trace)
-
-        assert trace["mode_attrs"] == attrs
-        assert trace["mode_attrs"] is not attrs
-
-    def test_trace_captures_selection_fields(self) -> None:
-        """Test that selections contain correct fields."""
-        rule = FailureRule(
-            scope="node",
-            conditions=[Condition(attr="type", op="==", value="router")],
-            mode="choice",
-            count=1,
-        )
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-        nodes = {
-            "N1": {"type": "router"},
-            "N2": {"type": "router"},
-            "N3": {"type": "server"},
-        }
-        trace: dict = {}
-        policy.apply_failures(nodes, {}, failure_trace=trace, seed=42)
-
-        assert len(trace["selections"]) == 1
-        sel = trace["selections"][0]
-        assert sel["rule_index"] == 0
-        assert sel["scope"] == "node"
-        assert sel["mode"] == "choice"
-        assert sel["matched_count"] == 2  # N1 and N2 matched
-        assert len(sel["selected_ids"]) == 1  # count=1
-
-    def test_trace_empty_selections_when_no_match(self) -> None:
-        """Test that rules matching nothing are not recorded."""
-        rule = FailureRule(
-            scope="node",
-            conditions=[Condition(attr="type", op="==", value="nonexistent")],
-            mode="all",
-        )
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-        nodes = {"N1": {"type": "router"}}
-        trace: dict = {}
-        policy.apply_failures(nodes, {}, failure_trace=trace)
-
-        assert trace["selections"] == []
-
-    def test_trace_captures_expansion_nodes_links(self) -> None:
-        """Test expansion tracking for risk group expansion."""
-        nodes = {
-            "N1": {"risk_groups": ["rg1"]},
-            "N2": {"risk_groups": ["rg1"]},
-            "N3": {"risk_groups": []},
-        }
-        links = {"L1": {"risk_groups": ["rg1"]}}
-
-        # N1 and N2 share rg1, L1 also in rg1
-        # After expansion: N2 and L1 should appear in expansion
-        trace: dict = {}
-        # Pass only N1 that matches (we need to match only one node initially)
-        policy_choice = FailurePolicy(
             modes=[
                 FailureMode(
-                    weight=1.0,
-                    rules=[FailureRule(scope="node", mode="choice", count=1)],
+                    1,
+                    [
+                        FailureRule(
+                            "node",
+                            [Condition("vendor", "==", "cisco")],
+                            mode="choice",
+                            count=1,
+                        )
+                    ],
                 )
-            ],
-            expand_groups=True,
+            ]
         )
-        policy_choice.apply_failures(nodes, links, failure_trace=trace, seed=42)
+        case = draw(policy_network(), policy, trace=True)
+        (selection,) = case.trace.selections
+        assert selection.rule_index == 0 and selection.scope == "node"
+        assert len(selection.selected) == 1
+        assert selection.selected == case.pattern.excluded_nodes
+        assert set(selection.selected) <= {"N1", "N3"}
 
-        # The expansion should show nodes/links added after initial selection
-        assert "expansion" in trace
-        assert "nodes" in trace["expansion"]
-        assert "links" in trace["expansion"]
-
-    def test_trace_no_modes_returns_null_mode_index(self) -> None:
-        """Test that mode_index is None when no modes configured."""
-        policy = FailurePolicy(modes=[])
-
-        trace: dict = {}
-        policy.apply_failures({}, {}, failure_trace=trace)
-
-        assert trace["mode_index"] is None
-        assert trace["mode_attrs"] == {}
-        assert trace["selections"] == []
-
-    def test_trace_none_does_not_populate(self) -> None:
-        """Test that passing failure_trace=None doesn't cause errors."""
-        rule = FailureRule(scope="node", mode="all")
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-        # Should not raise
-        result = policy.apply_failures({"N1": {}}, {}, failure_trace=None)
-        assert result == ["N1"]
-
-    def test_trace_deterministic_with_seed(self) -> None:
-        """Test that trace is deterministic with fixed seed."""
-        rule = FailureRule(scope="node", mode="choice", count=1)
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-        nodes = {"N1": {}, "N2": {}, "N3": {}}
-
-        trace1: dict = {}
-        trace2: dict = {}
-        policy.apply_failures(nodes, {}, failure_trace=trace1, seed=42)
-        policy.apply_failures(nodes, {}, failure_trace=trace2, seed=42)
-
-        assert trace1 == trace2
-
-
-@pytest.fixture
-def simple_network() -> Network:
-    """Chain N1-N2-N3: two routers and one server."""
-    network = Network()
-    network.add_node(Node("N1", attrs={"type": "router"}))
-    network.add_node(Node("N2", attrs={"type": "router"}))
-    network.add_node(Node("N3", attrs={"type": "server"}))
-    network.add_link(Link("N1", "N2", capacity=100.0))
-    network.add_link(Link("N2", "N3", capacity=100.0))
-    return network
-
-
-class TestFailureTraceManagerIntegration:
-    """Test failure_trace integration in FailureManager."""
-
-    def test_results_include_trace_fields(self, simple_network: Network) -> None:
-        """Test that results include trace fields when store_failure_patterns=True."""
-        rule = FailureRule(scope="node", mode="choice", count=1)
+    def test_trace_empty_selection_when_no_match(self):
         policy = FailurePolicy(
-            modes=[FailureMode(weight=1.0, rules=[rule], attrs={"test": "attr"})]
+            modes=[
+                FailureMode(
+                    1, [FailureRule("node", [Condition("vendor", "==", "absent")])]
+                )
+            ]
         )
-        policy_set = FailurePolicySet()
-        policy_set.policies["test"] = policy
+        case = draw(policy_network(), policy, trace=True)
+        # Every declared rule keeps its ordinal, including an empty selection.
+        (selection,) = case.trace.selections
+        assert selection.rule_index == 0 and selection.scope == "node"
+        assert selection.selected == ()
+        assert case.pattern.excluded_nodes == ()
 
-        fm = FailureManager(simple_network, policy_set, policy_name="test")
-
-        def mock_analysis(network, excluded_nodes, excluded_links, **kwargs):
-            return {"mock": True}
-
-        result = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=3,
-            store_failure_patterns=True,
-            seed=42,
+    def test_trace_captures_expansion_nodes_links(self):
+        network = Network(risk_groups={"shared": RiskGroup("shared")})
+        network.add_node(Node("a", risk_groups={"shared"}))
+        network.add_node(Node("b", risk_groups={"shared"}))
+        network.add_link(Link("a", "b", 10, 3, risk_groups={"shared"}))
+        policy = FailurePolicy(
+            expand_groups=True,
+            modes=[FailureMode(1, [FailureRule("node", path="^a$")])],
         )
+        case = draw(prepare(Scenario(network)), policy, trace=True)
+        assert case.trace.selections[0].selected == ("a",)
+        assert case.trace.expanded_nodes == ("b",)
+        assert case.trace.expanded_links == ("a|b|0",)
+        assert case.pattern.excluded_nodes == ("a", "b")
 
-        # Results contain unique patterns covering all iterations
-        results = result["results"]
-        assert len(results) >= 1
-        assert result["metadata"]["iterations"] == 3
+    def test_trace_no_modes_returns_null_mode_index(self):
+        trace = draw(policy_network(), FailurePolicy(), trace=True).trace
+        assert trace.mode_index is None and dict(trace.mode_attrs) == {}
+        assert trace.selections == ()
+        assert trace.expanded_nodes == trace.expanded_links == ()
 
-    def test_baseline_has_no_trace_fields(self, simple_network: Network) -> None:
-        """Test that baseline result doesn't have trace fields."""
-        rule = FailureRule(scope="node", mode="choice", count=1)
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-        policy_set = FailurePolicySet()
-        policy_set.policies["test"] = policy
+    def test_trace_disabled_does_not_populate(self):
+        policy = FailurePolicy(modes=[FailureMode(1, [FailureRule("node")])])
+        assert draw(policy_network(), policy).trace is None
+        assert draw(policy_network(), policy, trace=True).trace is not None
 
-        fm = FailureManager(simple_network, policy_set, policy_name="test")
-
-        def mock_analysis(network, excluded_nodes, excluded_links, **kwargs):
-            return {"mock": True}
-
-        result = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=3,
-            store_failure_patterns=True,
-            seed=42,
+    def test_trace_deterministic_with_seed(self):
+        prepared = policy_network()
+        policy = FailurePolicy(
+            modes=[FailureMode(1, [FailureRule("node", mode="choice", count=1)])]
         )
-
-        # Baseline is a separate result
-        baseline = result["baseline"]
-        assert baseline is not None
-
-        # Results contain unique patterns covering all iterations
-        results = result["results"]
-        assert len(results) >= 1
-        assert result["metadata"]["iterations"] == 3
-
-    def test_deduplication_produces_unique_patterns(
-        self, simple_network: Network
-    ) -> None:
-        """Test that deduplicated iterations produce single unique result."""
-        # Use a deterministic policy that always produces same result
-        rule = FailureRule(
-            scope="node",
-            conditions=[Condition(attr="type", op="==", value="router")],
-            mode="all",  # Always selects same nodes
-        )
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-        policy_set = FailurePolicySet()
-        policy_set.policies["test"] = policy
-
-        fm = FailureManager(simple_network, policy_set, policy_name="test")
-
-        def mock_analysis(network, excluded_nodes, excluded_links, **kwargs):
-            return {"mock": True}
-
-        result = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=5,
-            store_failure_patterns=True,
-            seed=42,
-        )
-
-        # All 5 iterations should produce same pattern -> 1 unique result
-        results = result["results"]
-        assert len(results) == 1  # All deduplicated to 1 unique pattern
-
-        # Metadata should report 1 unique pattern from 5 iterations
-        assert result["metadata"]["unique_patterns"] == 1
-        assert result["metadata"]["iterations"] == 5
-
-    def test_trace_deterministic_across_runs(self, simple_network: Network) -> None:
-        """Test that trace is deterministic with fixed seed across runs."""
-        rule = FailureRule(scope="node", mode="choice", count=1)
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-        policy_set = FailurePolicySet()
-        policy_set.policies["test"] = policy
-
-        fm = FailureManager(simple_network, policy_set, policy_name="test")
-
-        def mock_analysis(network, excluded_nodes, excluded_links, **kwargs):
-            return {"mock": True}
-
-        result1 = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=5,
-            store_failure_patterns=True,
-            seed=42,
-        )
-        result2 = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=5,
-            store_failure_patterns=True,
-            seed=42,
-        )
-
-        assert len(result1["results"]) == len(result2["results"])
-
         assert (
-            result1["metadata"]["unique_patterns"]
-            == result2["metadata"]["unique_patterns"]
+            draw(prepared, policy, trace=True).trace
+            == draw(prepared, policy, trace=True).trace
         )
 
-    def test_no_trace_when_store_failure_patterns_false(
-        self, simple_network: Network
-    ) -> None:
-        """Test that trace is not captured when store_failure_patterns=False."""
-        rule = FailureRule(scope="node", mode="choice", count=1)
-        policy = FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-        policy_set = FailurePolicySet()
-        policy_set.policies["test"] = policy
 
-        fm = FailureManager(simple_network, policy_set, policy_name="test")
-
-        def mock_analysis(network, excluded_nodes, excluded_links, **kwargs):
-            return {"mock": True}
-
-        result = fm.run_monte_carlo_analysis(
-            analysis_func=mock_analysis,
-            iterations=3,
-            store_failure_patterns=False,
-            seed=42,
+def _analysis(*, trace=True, iterations=5, policy=None):
+    prepared = policy_network()
+    if policy is None:
+        policy = FailurePolicy(
+            modes=[
+                FailureMode(
+                    1, [FailureRule("link", mode="choice", count=1)], {"test": "attr"}
+                )
+            ]
         )
+    query = CapacityQuery(
+        Selector("^N1$"),
+        Selector("^N2$"),
+        failures=FailureRequest(policy, iterations, 42, trace),
+        workers=2,
+    )
+    return prepared, query, capacity(prepared, query)
 
-        # Results should still be present (just without trace)
-        assert len(result["results"]) > 0
+
+class TestFailureTraceAnalysisIntegration:
+    def test_results_include_trace_fields(self):
+        _, _, result = _analysis()
+        assert sum(case.case.occurrences for case in result.cases) == 5
+        for case in result.cases[1:]:
+            assert case.case.trace.mode_index == 0
+            assert dict(case.case.trace.mode_attrs) == {"test": "attr"}
+            assert case.case.trace.selections[0].scope == "link"
+            expected = 0 if "N1|N2|0" in case.case.pattern.excluded_links else 10
+            assert case.states["converged"].rows[0].result.delivered == expected
+
+    def test_baseline_has_no_trace_fields(self):
+        _, _, result = _analysis()
+        assert result.cases[0].case.id == "baseline"
+        assert result.cases[0].case.trace is None
+        assert result.cases[0].states["converged"].rows[0].result.delivered == 10
+
+    def test_deduplication_produces_unique_patterns(self):
+        policy = FailurePolicy(
+            modes=[
+                FailureMode(
+                    1, [FailureRule("node", [Condition("vendor", "==", "cisco")])]
+                )
+            ]
+        )
+        prepared, query, result = _analysis(policy=policy)
+        assert len(result.cases) == 2
+        assert result.cases[1].case.occurrences == 5
+        assert result.cases[1].case.trace.draw_index == 0
+        assert result.cases[1].case.pattern.excluded_nodes == ("N1", "N3")
+        assert result.cases[1].states["converged"].rows[0].result.delivered == 0
+        cases = failure_cases(prepared, query.failures)
+        assert len(cases) == 2 and cases[1].occurrences == 5
+
+    def test_trace_deterministic_across_runs(self):
+        prepared, query, first = _analysis()
+        second = capacity(prepared, replace(query, workers=1))
+        assert [
+            (case.case.pattern, case.case.occurrences, case.case.trace)
+            for case in first.cases
+        ] == [
+            (case.case.pattern, case.case.occurrences, case.case.trace)
+            for case in second.cases
+        ]
+
+    def test_no_trace_when_disabled(self):
+        prepared, query, result = _analysis(trace=False)
+        assert all(case.case.trace is None for case in result.cases)
+        control = capacity(
+            prepared,
+            replace(query, failures=replace(query.failures, failure_trace=True)),
+        )
+        assert control.cases[1].case.trace is not None
+        assert [
+            (case.case.pattern, case.case.occurrences) for case in control.cases
+        ] == [(case.case.pattern, case.case.occurrences) for case in result.cases]
+
+
+def test_untraced_draws_build_no_trace_and_keep_the_same_patterns(monkeypatch):
+    import ngraph.analysis.failures as failures
+
+    policy = FailurePolicy(
+        seed=5,
+        modes=[FailureMode(1, [FailureRule("node", mode="random", probability=0.5)])],
+    )
+    prepared = policy_network()
+    traced = failure_cases(prepared, FailureRequest(policy, 40, None, True))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("trace built without a request")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(failures, "FailureTrace", forbidden)
+        patch.setattr(failures, "FailureSelection", forbidden)
+        plain = failure_cases(prepared, FailureRequest(policy, 40, None, False))
+    assert [(c.pattern, c.occurrences) for c in plain] == [
+        (c.pattern, c.occurrences) for c in traced
+    ]
+    assert all(c.trace is None for c in plain)
+    assert all(c.trace is not None for c in traced[1:])
+
+
+def test_a_failure_request_shares_its_immutable_policy():
+    policy = FailurePolicy(modes=[FailureMode(1, [FailureRule("node")])])
+    assert FailureRequest(policy, 2).policy is policy

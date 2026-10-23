@@ -120,22 +120,22 @@ def test_yaml_boolean_keys_converted_to_strings():
     """)
 
     scenario = Scenario.from_yaml(yml)
-    matrices = scenario.demand_set.sets
+    matrices = scenario.demand_sets
 
     # All YAML boolean values collapse to just True/False, then converted to strings
     assert set(matrices.keys()) == {"peak", "True", "False"}
 
     # Regular string key
-    assert matrices["peak"][0].volume == 100
+    assert matrices["peak"].demands[0].volume == 100
 
     # All true-like YAML values become "True" matrix
     # NOTE: When multiple YAML keys collapse to the same boolean value,
     # only the last one wins (standard YAML/dict behavior)
-    true_demands = {d.volume for d in matrices["True"]}
+    true_demands = {d.volume for d in matrices["True"].demands}
     assert true_demands == {150}  # from 'on:', the last true-like key
 
     # All false-like YAML values become "False" matrix
-    false_demands = {d.volume for d in matrices["False"]}
+    false_demands = {d.volume for d in matrices["False"].demands}
     assert false_demands == {125}  # from 'off:', the last false-like key
 
 
@@ -160,10 +160,10 @@ def test_quoted_boolean_keys_remain_strings():
     """)
 
     scenario = Scenario.from_yaml(yml)
-    matrices = scenario.demand_set.sets
+    matrices = scenario.demand_sets
 
     # Quoted keys should remain as strings, not be converted to booleans
     assert set(matrices.keys()) == {"true", "false", "off"}
-    assert matrices["true"][0].volume == 100
-    assert matrices["false"][0].volume == 200
-    assert matrices["off"][0].volume == 300
+    assert matrices["true"].demands[0].volume == 100
+    assert matrices["false"].demands[0].volume == 200
+    assert matrices["off"].demands[0].volume == 300

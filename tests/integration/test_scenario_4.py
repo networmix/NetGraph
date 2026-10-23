@@ -19,6 +19,10 @@ import re
 import pytest
 
 from ngraph.explorer import NetworkExplorer
+from ngraph.results import BuildGraphResult
+from ngraph.scenario import prepare, run
+from tests.ecmp_oracle import equal_shortest_capacity, ideal_capacity
+from tests.question import asked
 
 from .expectations import (
     SCENARIO_4_COMPONENT_EXPECTATIONS,
@@ -42,21 +46,21 @@ class TestScenario4:
     @pytest.fixture(scope="module")
     def scenario_4_executed(self, scenario_4):
         """Execute scenario 4 workflow and return with results."""
-        scenario_4.run()
-        return scenario_4
+        return run(prepare(scenario_4))
 
     @pytest.fixture(scope="module")
-    def helper(self, scenario_4_executed):
+    def helper(self, scenario_4, scenario_4_executed):
         """Create test helper for scenario 4."""
         # create_scenario_helper handles graph conversion using nx.node_link_graph
-        helper = create_scenario_helper(scenario_4_executed)
+        helper = create_scenario_helper(scenario_4, scenario_4_executed)
         return helper
 
     def test_scenario_parsing_and_execution(self, scenario_4_executed):
         """Test that scenario 4 can be parsed and executed without errors."""
-        assert scenario_4_executed.results is not None
-        exported = scenario_4_executed.results.to_dict()
-        assert exported["steps"]["build_graph"]["data"].get("graph") is not None
+        built = scenario_4_executed.steps[0].result
+        assert isinstance(built, BuildGraphResult)
+        assert built.node_count == SCENARIO_4_EXPECTATIONS.count
+        assert built.link_count == SCENARIO_4_EXPECTATIONS.edge_count
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations for large-scale topology."""
@@ -280,17 +284,17 @@ class TestScenario4:
         traffic_expectations = SCENARIO_4_TRAFFIC_EXPECTATIONS
 
         # Test default matrix
-        default_matrix = helper.scenario.demand_set.sets.get("default")
+        default_matrix = helper.scenario.demand_sets.get("default")
         assert default_matrix is not None, "Default traffic matrix should exist"
-        assert len(default_matrix) == traffic_expectations["default_matrix"]
+        assert len(default_matrix.demands) == traffic_expectations["default_matrix"]
 
         # Test HPC workload matrix
-        hpc_matrix = helper.scenario.demand_set.sets.get("hpc_workload")
+        hpc_matrix = helper.scenario.demand_sets.get("hpc_workload")
         assert hpc_matrix is not None, "HPC workload matrix should exist"
-        assert len(hpc_matrix) == traffic_expectations["hpc_workload_matrix"]
+        assert len(hpc_matrix.demands) == traffic_expectations["hpc_workload_matrix"]
 
         # Validate traffic demand attributes
-        for demand in default_matrix:
+        for demand in default_matrix.demands:
             assert hasattr(demand, "attrs")
             if demand.attrs.get("traffic_type") == "east_west":
                 assert demand.mode == "pairwise"
@@ -301,54 +305,64 @@ class TestScenario4:
         """Test the policy count and the single-rule link and node failure policies."""
         failure_expectations = SCENARIO_4_FAILURE_POLICY_EXPECTATIONS
 
-        all_policies = helper.scenario.failure_policy_set.policies
+        all_policies = helper.scenario.failure_policies
         assert len(all_policies) == failure_expectations["total_policies"]
 
         # Test specific policies exist
-        single_link_policy = helper.scenario.failure_policy_set.policies.get(
-            "single_link_failure"
-        )
+        single_link_policy = helper.scenario.failure_policies.get("single_link_failure")
         assert single_link_policy is not None, "single_link_failure policy should exist"
         assert sum(len(m.rules) for m in single_link_policy.modes) == 1
 
-        single_node_policy = helper.scenario.failure_policy_set.policies.get(
-            "single_node_failure"
-        )
+        single_node_policy = helper.scenario.failure_policies.get("single_node_failure")
         assert single_node_policy is not None, "single_node_failure policy should exist"
         assert sum(len(m.rules) for m in single_node_policy.modes) == 1
 
     def test_advanced_workflow_steps(self, helper):
-        """Test the capacities the MaxFlow steps report.
+        """Each actual mask is checked against its declared native question.
 
-        Every rack has 8 servers on 25-unit links, which bind before any uplink:
-        pod-to-pod inside dc1 is 16 servers x 25 = 400 in either direction, and
-        dc1 to dc2 is limited by dc2's 3 enabled racks (dc2_podb_rack2 is
-        disabled) to 24 x 25 = 600. A single failure removes at most one
-        server's 25 units.
+        Ideal rows use an independent maximum-flow/minimum-cut calculation.
+        Static ECMP rows use independent shortest distances and pooled integer
+        equal-share propagation, including the source RR prefix.
         """
-        steps = helper.scenario.results.to_dict()["steps"]
-
-        def baseline_total(step: str) -> float:
-            return steps[step]["data"]["baseline"]["summary"]["total_placed"]
-
-        def failure_totals(step: str) -> list[float]:
-            return [
-                r["summary"]["total_placed"]
-                for r in steps[step]["data"]["flow_results"]
-            ]
-
-        assert baseline_total("intra_dc_capacity_forward") == pytest.approx(400.0)
-        assert baseline_total("intra_dc_capacity_reverse") == pytest.approx(400.0)
-        assert baseline_total("inter_dc_capacity_forward") == pytest.approx(600.0)
-        assert baseline_total("inter_dc_capacity_reverse") == pytest.approx(600.0)
-
-        assert baseline_total("rack_failure_analysis") == pytest.approx(400.0)
-        rack = failure_totals("rack_failure_analysis")
-        assert rack and all(375.0 - 1e-9 <= t <= 400.0 + 1e-9 for t in rack)
-
-        assert baseline_total("spine_failure_analysis") == pytest.approx(600.0)
-        spine = failure_totals("spine_failure_analysis")
-        assert spine and all(575.0 - 1e-9 <= t <= 600.0 + 1e-9 for t in spine)
+        values = {step.name: step.result for step in helper.result.steps[1:]}
+        assert set(values) == {
+            "intra_dc_capacity_forward",
+            "intra_dc_capacity_reverse",
+            "inter_dc_ecmp_capacity_forward",
+            "inter_dc_ecmp_capacity_reverse",
+            "rack_failure_analysis",
+            "inter_dc_ecmp_node_failures",
+        }
+        q = helper.result.topology.q
+        for name, analysis in values.items():
+            static = "ecmp" in name
+            assert asked(analysis)["model"]["routing"] == (
+                "shortest_paths" if static else "centralized_te"
+            )
+            if static:
+                assert asked(analysis)["model"]["allocation"] == "equal"
+            oracle = equal_shortest_capacity if static else ideal_capacity
+            for case in analysis.cases:
+                assert set(case.states) == {"converged"}
+                (row,) = case.states["converged"].rows
+                expected = oracle(
+                    helper.network,
+                    row.endpoints.sources,
+                    row.endpoints.destinations,
+                    q,
+                    case.case.pattern.excluded_nodes,
+                    case.case.pattern.excluded_links,
+                )
+                assert row.result.delivered == expected, (name, case.case.pattern)
+                assert row.result.source_drops == 0 and row.result.edge_drops == []
+                assert (
+                    sum(source.delivered for source in row.result.by_source) == expected
+                )
+            if name in ("rack_failure_analysis", "inter_dc_ecmp_node_failures"):
+                assert sum(case.case.occurrences for case in analysis.cases) == (
+                    10 if name == "rack_failure_analysis" else 20
+                )
+                assert len(analysis.cases) > 1
 
     def test_network_explorer_integration(self, helper):
         """Test NetworkExplorer totals: at least 80 nodes, positive capex and power."""

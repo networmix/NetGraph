@@ -299,10 +299,10 @@ risk_groups:
 
 
 class TestInlineFlowPolicyObjects:
-    """Validate inline flow_policy objects - custom policy configs."""
+    """Preset values and the closed demand model input."""
 
-    def test_flow_policy_preset_string(self):
-        """Preset string flow_policy parses to a FlowPolicyPreset enum."""
+    def test_named_preset_string(self):
+        """A preset string parses to its declared preset enum."""
         yaml_str = """
 network:
   nodes:
@@ -316,17 +316,17 @@ demands:
     - source: A
       target: B
       volume: 100
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 """
         scenario = Scenario.from_yaml(yaml_str)
-        demands = scenario.demand_set.sets.get("test", [])
+        demands = scenario.demand_sets["test"].demands
         assert len(demands) == 1
-        from ngraph.model.flow.policy_config import FlowPolicyPreset
+        from ngraph.model.demand import FlowPolicyPreset
 
-        assert demands[0].flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+        assert demands[0].policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
 
-    def test_flow_policy_inline_object_rejected(self):
-        """Inline object flow_policy is rejected; only preset names/ints work."""
+    def test_retired_inline_model_refused_with_preset_control(self):
+        """The removed inline spelling refuses; a declared model succeeds."""
         yaml_str = """
 network:
   nodes:
@@ -346,3 +346,8 @@ demands:
 """
         with pytest.raises((jsonschema.ValidationError, ValueError)):
             Scenario.from_yaml(yaml_str)
+        valid = yaml_str.replace(
+            "      flow_policy:\n        path_alg: SPF\n        flow_placement: PROPORTIONAL",
+            "      model:\n        routing: {type: shortest_paths, allocation: equal}",
+        )
+        assert len(Scenario.from_yaml(valid).demand_sets["test"].demands) == 1

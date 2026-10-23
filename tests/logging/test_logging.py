@@ -3,22 +3,11 @@
 import logging
 from io import StringIO
 
-import pytest
-
 from ngraph.logging import (
     get_logger,
-    reset_logging,
     set_global_log_level,
     setup_root_logger,
 )
-
-
-@pytest.fixture(autouse=True)
-def _reset_logging_each_test():
-    """Reset logging state before and after each test to avoid cross-test bleed."""
-    reset_logging()
-    yield
-    reset_logging()
 
 
 def test_effective_levels_enable_disable():

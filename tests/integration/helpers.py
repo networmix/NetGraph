@@ -11,12 +11,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from ngraph.results import BuildGraphResult, RunResult
 from ngraph.scenario import Scenario
 
 # Validation constants
 DEFAULT_LINK_COST = 1  # Default cost value for validation
 MIN_CAPACITY_VALUE = 0.0  # Minimum valid capacity (inclusive)
-MIN_COST_VALUE = 0.0  # Minimum valid cost (inclusive)
+MIN_COST_VALUE = 1  # Costs are positive integral input values.
 
 # Network validation thresholds
 MAX_EXPECTED_COMPONENTS_WARNING = 1  # Warn if more than this many components
@@ -56,13 +57,13 @@ class ScenarioTestHelper:
     Validation methods for a scenario and its built graph.
 
     Usage:
-        helper = ScenarioTestHelper(scenario)
+        helper = ScenarioTestHelper(scenario, result)
         helper.set_graph(built_graph)
         helper.validate_network_structure(expectations)
         helper.validate_topology_semantics()
     """
 
-    def __init__(self, scenario: Scenario) -> None:
+    def __init__(self, scenario: Scenario, result: RunResult) -> None:
         """
         Initialize helper with a scenario instance.
 
@@ -70,6 +71,7 @@ class ScenarioTestHelper:
             scenario: NetGraph scenario instance to validate
         """
         self.scenario = scenario
+        self.result = result
         self.network = scenario.network
         self.graph: Optional[Any] = None
 
@@ -179,7 +181,8 @@ class ScenarioTestHelper:
         Raises:
             AssertionError: If traffic demand count doesn't match expectations
         """
-        default_demands = self.scenario.demand_set.get_all_demands()
+        declaration = self.scenario.demand_sets.get("default")
+        default_demands = declaration.demands if declaration is not None else ()
         actual_count = len(default_demands)
 
         assert actual_count == expected_count, (
@@ -204,8 +207,7 @@ class ScenarioTestHelper:
             AssertionError: If failure policy doesn't match expectations
         """
         # Get the first policy if any exist for validation
-        policies = self.scenario.failure_policy_set.get_all_policies()
-        policy = policies[0] if policies else None
+        policy = next(iter(self.scenario.failure_policies.values()), None)
 
         if policy is None:
             # No policy exists - only valid if expecting zero rules
@@ -215,17 +217,13 @@ class ScenarioTestHelper:
             return
 
         # Count rules across all modes
-        actual_rules = sum(len(mode.rules) for mode in getattr(policy, "modes", []))
+        actual_rules = sum(len(mode.rules) for mode in policy.modes)
         assert actual_rules == expected_rules, (
             f"Failure policy rule count mismatch: expected {expected_rules}, found {actual_rules}"
         )
 
         if expected_scopes:
-            actual_scopes = [
-                rule.scope
-                for mode in getattr(policy, "modes", [])
-                for rule in mode.rules
-            ]
+            actual_scopes = [rule.scope for mode in policy.modes for rule in mode.rules]
             assert set(actual_scopes) == set(expected_scopes), (
                 f"Failure policy scopes mismatch: expected {expected_scopes}, found {actual_scopes}"
             )
@@ -453,29 +451,6 @@ class ScenarioDataBuilder:
         self.data["blueprints"][name] = blueprint_data
         return self
 
-    def with_traffic_demand(
-        self, source: str, target: str, volume: float, demand_set: str = "default"
-    ) -> "ScenarioDataBuilder":
-        """
-        Add a traffic demand to the named demand set.
-
-        Args:
-            source: Source node/pattern for traffic demand
-            target: Target node/pattern for traffic demand
-            volume: Traffic demand volume
-            demand_set: Name of the demand set (default: "default")
-
-        Returns:
-            Self for method chaining
-        """
-        if demand_set not in self.data["demands"]:
-            self.data["demands"][demand_set] = []
-
-        self.data["demands"][demand_set].append(
-            {"source": source, "target": target, "volume": volume}
-        )
-        return self
-
     def with_failure_policy(
         self, name: str, policy_data: Dict[str, Any]
     ) -> "ScenarioDataBuilder":
@@ -563,7 +538,7 @@ def load_scenario_from_file(filename: str) -> Scenario:
     return Scenario.from_yaml(yaml_text)
 
 
-def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
+def create_scenario_helper(scenario: Scenario, result: RunResult) -> ScenarioTestHelper:
     """
     Create a test helper for the given scenario.
 
@@ -575,16 +550,11 @@ def create_scenario_helper(scenario: Scenario) -> ScenarioTestHelper:
     """
     import networkx as nx
 
-    helper = ScenarioTestHelper(scenario)
-    exported = scenario.results.to_dict()
-
-    graph_dict = (
-        exported.get("steps", {}).get("build_graph", {}).get("data", {}).get("graph")
-    )
-    if isinstance(graph_dict, dict):
-        # Convert node-link dict format to NetworkX graph using built-in function
-        graph = nx.node_link_graph(graph_dict, edges="edges")
-    else:
-        graph = graph_dict
-    helper.set_graph(graph)
+    helper = ScenarioTestHelper(scenario, result)
+    (built,) = [
+        step.result
+        for step in result.steps
+        if isinstance(step.result, BuildGraphResult)
+    ]
+    helper.set_graph(nx.node_link_graph(dict(built.graph), edges="edges"))
     return helper

@@ -1,433 +1,136 @@
-from __future__ import annotations
+"""Placement workflows retain native rows and their normalized question."""
 
-from unittest.mock import MagicMock, patch
+import json
+from io import StringIO
 
+import netgraph_core as ngc
 import pytest
 
-from ngraph.model.demand.spec import TrafficDemand
-from ngraph.results.flow import FlowEntry, FlowIterationResult, FlowSummary
-from ngraph.results.store import Results
-from ngraph.workflow.traffic_matrix_placement_step import (
-    TrafficMatrixPlacement,
-)
+from ngraph.export import write_json
+from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
+from ngraph.scenario import prepare, run
+from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
+from ngraph.workflow.traffic_matrix_placement_step import TrafficMatrixPlacement
+from tests.question import asked
+from tests.workflow.test_alpha_resolution_errors import _scenario
 
 
-def _iteration(
-    placed: float = 10.0, demand: float = 10.0, data: dict | None = None
-) -> FlowIterationResult:
-    """One A->B placement iteration as FailureManager returns it."""
-    entry = FlowEntry(
-        source="A",
-        destination="B",
-        priority=0,
-        demand=demand,
-        placed=placed,
-        dropped=demand - placed,
-        data=data or {},
-    )
-    return FlowIterationResult(
-        flows=[entry],
-        summary=FlowSummary(
-            total_demand=demand,
-            total_placed=placed,
-            overall_ratio=placed / demand,
-            dropped_flows=int(placed < demand),
-            num_flows=1,
-        ),
-    )
+def _placement(**controls):
+    step = TrafficMatrixPlacement(name="tm", demand_set="load", workers=1, **controls)
+    prepared = prepare(_scenario((step,)))
+    return prepared, run(prepared).steps[0]
 
 
-def _raw(results: list[FlowIterationResult]) -> dict:
-    """FailureManager Monte Carlo output around the given failure iterations."""
-    return {
-        "baseline": _iteration(),
-        "results": results,
-        "metadata": {"iterations": len(results), "unique_patterns": len(results)},
+def test_traffic_matrix_placement_stores_core_outputs():
+    _, step = _placement(iterations=2)
+    assert step.result.kind == "placement" and step.question is step.result.query
+    (case,) = step.result.cases
+    assert set(case.states) == {"converged"}
+    assert case.case.occurrences == 2
+    state = case.states["converged"]
+    assert state.totals.reference_request_units == state.totals.delivered_units == 4
+    (row,) = state.rows
+    assert row.result.requested == row.result.delivered == 4
+    assert row.result.unadmitted == row.result.source_drops == 0
+    assert row.result.edge_drops == []
+    assert row.result.edge_flows is None and row.result.total_cost is None
+
+
+def test_traffic_matrix_placement_flow_details_edges():
+    prepared, step = _placement(outputs=ngc.OutputOptions(edge_flows=True))
+    (row,) = step.result.cases[0].states["converged"].rows
+    actual = {
+        (ref.link, ref.direction): int(value)
+        for ref, value in zip(
+            prepared.topology.edge_refs, row.result.edge_flows, strict=True
+        )
     }
+    assert actual == {("A|B|0", "forward"): 4, ("A|B|0", "reverse"): 0}
+    assert row.result.total_cost is None
 
 
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_stores_core_outputs(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="A",
-        target="B",
-        volume=10.0,
-        mode="pairwise",
+def test_traffic_matrix_placement_alpha_scales_demands():
+    _, step = _placement(alpha=2)
+    state = step.result.cases[0].states["converged"]
+    assert state.totals.reference_request_units == 8
+    assert state.totals.delivered_units == 4
+    assert state.totals.unadmitted_units == 4
+    assert state.rows[0].result.requested == 8
+
+
+def test_traffic_matrix_placement_question_includes_alpha():
+    prepared, step = _placement(alpha=2)
+    assert step.question.alpha == 2 and step.question.alpha_from_step is None
+    output = StringIO()
+    write_json(run(prepared), output)
+    question = json.loads(output.getvalue())["steps"][0]["question"]
+    assert question["alpha"] == {"value": 2, "numerator": 2, "denominator": 1}
+    assert question["alpha_source"] == {"kind": "query", "step": None}
+
+
+def test_traffic_matrix_placement_alpha_from_step_uses_msd():
+    producer = MaximumSupportedDemand(name="msd", demand_set="load", alpha_tolerance=1)
+    consumer = TrafficMatrixPlacement(
+        name="tm", demand_set="load", alpha_from_step="msd", workers=1
     )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
+    producer_result, result = run(prepare(_scenario((producer, consumer)))).steps
+    assert result.question.alpha == producer_result.result.alpha_feasible.value
+    assert result.question.alpha_from_step == "msd"
+    assert asked(result)["alpha_source"] == {"kind": "msd_step", "step": "msd"}
+    assert asked(result)["alpha"] == {"value": 1.0, "numerator": 1, "denominator": 1}
+    assert result.result.cases[0].states["converged"].totals.feasible
 
-    # Mock FailureManager return value: baseline separate, failure iterations in results
-    mock_raw = _raw([_iteration(placed=8.0), _iteration()])
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
 
+def test_traffic_matrix_placement_alpha_from_step_missing_msd_raises():
     step = TrafficMatrixPlacement(
-        name="tm_step",
-        demand_set="default",
-        iterations=2,
+        name="tm", demand_set="load", alpha_from_step="absent"
     )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    exported = mock_scenario.results.to_dict()
-    data = exported["steps"]["tm_step"]["data"]
-    assert isinstance(data, dict)
-    assert "flow_results" in data and isinstance(data["flow_results"], list)
-    for it in data["flow_results"]:
-        assert "summary" in it
+    with pytest.raises(ValueError, match="alpha_from_step 'absent'.*earlier MSD"):
+        prepare(_scenario((step,)))
+    assert _placement()[1].question.alpha == 1
 
 
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_flow_details_edges(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="A",
-        target="B",
-        volume=10.0,
-        mode="pairwise",
+def _failure_run(trace):
+    policy = FailurePolicy(
+        modes=[FailureMode(1, [FailureRule("node", path="^B$")], {"label": "down"})]
     )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
-
-    # Mock FailureManager return value with edges used (baseline separate)
-    mock_raw = _raw(
-        [
-            _iteration(placed=8.0, data={"edges": ["(u,v,k1)", "(x,y,k2)"]}),
-            _iteration(data={"edges": ["(u,v,k1)"]}),
-        ]
-    )
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
     step = TrafficMatrixPlacement(
-        name="tm_step",
-        demand_set="default",
-        iterations=2,
-        include_flow_details=True,
-        include_used_edges=True,
+        name="tm",
+        demand_set="load",
+        failure_policy="down",
+        iterations=3,
+        seed=42,
+        failure_trace=trace,
+        workers=2,
     )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    exported = mock_scenario.results.to_dict()
-    data = exported["steps"]["tm_step"]["data"]
-    flow_results = data["flow_results"]
-    entries = flow_results[0].get("flows", []) if flow_results else []
-    assert any("edges" in e.get("data", {}) for e in entries)
+    scenario = _scenario((step,), failure_policies={"down": policy})
+    return run(prepare(scenario))
 
 
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_alpha_scales_demands(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="S",
-        target="T",
-        volume=10.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
-
-    # Mock FailureManager return value (minimal valid structure)
-    mock_raw = _raw([_iteration()])
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
-    step = TrafficMatrixPlacement(
-        name="tm_step_alpha",
-        demand_set="default",
-        iterations=1,
-        alpha=2.5,
-    )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    # Verify demands_config passed into FailureManager had scaled demand
-    assert mock_failure_manager.run_demand_placement_monte_carlo.called
-    _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
-    dcfg = kwargs.get("demands_config")
-    assert isinstance(dcfg, list) and len(dcfg) == 1
-    assert dcfg[0]["source"] == "S"
-    assert dcfg[0]["target"] == "T"
-    assert abs(float(dcfg[0]["volume"]) - 25.0) < 1e-12
+def test_traffic_matrix_placement_failure_trace_on_results():
+    result = _failure_run(True)
+    value = result.steps[0].result
+    baseline, failed = value.cases
+    assert baseline.case.trace is None and baseline.case.occurrences == 0
+    assert baseline.states["converged"].totals.delivered_units == 4
+    assert failed.case.occurrences == 3
+    assert failed.case.trace.mode_index == 0
+    assert failed.case.trace.selections[0].selected == ("B",)
+    assert dict(failed.case.trace.mode_attrs) == {"label": "down"}
+    assert failed.states["converged"].totals.delivered_units == 0
+    assert result.steps[0].question.failures.policy_name == "down"
+    output = StringIO()
+    write_json(result, output)
+    wire = json.loads(output.getvalue())["steps"][0]["result"]["cases"][1]
+    assert wire["case"]["trace"]["mode_index"] == 0
+    assert wire["case"]["trace"]["selections"][0]["selected"] == ["B"]
 
 
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_metadata_includes_alpha(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="A",
-        target="B",
-        volume=1.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
-
-    mock_raw = _raw([_iteration()])
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
-    step = TrafficMatrixPlacement(
-        name="tm_step_meta",
-        demand_set="default",
-        iterations=1,
-        alpha=3.0,
-    )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    exported = mock_scenario.results.to_dict()
-    ctx = exported["steps"]["tm_step_meta"]["data"]["context"]
-    assert ctx.get("alpha") == 3.0
-
-
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_alpha_auto_uses_msd(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    td = TrafficDemand(
-        source="S",
-        target="T",
-        volume=4.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [td]
-
-    # Data from a prior MSD step in the results store
-    mock_scenario.results = Results()
-    mock_scenario.results.enter_step("msd1")
-    mock_scenario.results.put("metadata", {})
-    mock_scenario.results.put(
-        "data",
-        {
-            "alpha_star": 2.0,
-            "context": {"demand_set": "default"},
-            "base_demands": [
-                {
-                    "source": "S",
-                    "target": "T",
-                    "volume": 4.0,
-                    "mode": "pairwise",
-                    "priority": 0,
-                    "flow_policy": None,
-                }
-            ],
-        },
-    )
-    mock_scenario.results.exit_step()
-
-    # Minimal MC results
-    mock_raw = _raw([_iteration()])
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
-    step = TrafficMatrixPlacement(
-        name="tm_auto",
-        demand_set="default",
-        iterations=1,
-        alpha_from_step="msd1",
-        alpha_from_field="data.alpha_star",
-    )
-    step.execute(mock_scenario)
-
-    # Effective demand should be scaled by alpha_star=2.0
-    _, kwargs = mock_failure_manager.run_demand_placement_monte_carlo.call_args
-    dcfg = kwargs.get("demands_config")
-    assert isinstance(dcfg, list) and len(dcfg) == 1
-    assert abs(float(dcfg[0]["volume"]) - 8.0) < 1e-12
-
-
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_alpha_auto_missing_msd_raises(
-    mock_failure_manager_class,
-) -> None:
-    mock_scenario = MagicMock()
-    td = TrafficDemand(
-        source="S",
-        target="T",
-        volume=4.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [td]
-
-    # No MSD metadata
-    mock_scenario.results.get_all_step_metadata.return_value = {}
-
-    step = TrafficMatrixPlacement(
-        name="tm_auto",
-        demand_set="default",
-        iterations=1,
-        alpha_from_step="msd1",
-        alpha_from_field="data.alpha_star",
-    )
-    mock_scenario.results = Results()
-    with pytest.raises(ValueError):
-        step.execute(mock_scenario)
-
-
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_failure_trace_on_results(
-    mock_failure_manager_class,
-) -> None:
-    """Test that failure_trace is present on flow_results when store_failure_patterns=True."""
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="A",
-        target="B",
-        volume=10.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
-
-    mock_result = MagicMock()
-    mock_result.failure_id = "abc123"
-    mock_result.failure_state = {"excluded_nodes": [], "excluded_links": ["L1"]}
-    mock_result.failure_trace = {
-        "mode_index": 0,
-        "mode_attrs": {"category": "link_failure"},
-        "selections": [
-            {
-                "rule_index": 0,
-                "scope": "link",
-                "mode": "choice",
-                "matched_count": 5,
-                "selected_ids": ["L1"],
-            }
-        ],
-        "expansion": {"nodes": [], "links": []},
-    }
-    mock_result.occurrence_count = 2
-    mock_result.summary = MagicMock()
-    mock_result.summary.total_placed = 8.0
-    mock_result.to_dict.return_value = {
-        "failure_id": "abc123",
-        "failure_state": {"excluded_nodes": [], "excluded_links": ["L1"]},
-        "failure_trace": mock_result.failure_trace,
-        "occurrence_count": 2,
-        "flows": [],
-        "summary": {
-            "total_demand": 10.0,
-            "total_placed": 8.0,
-            "overall_ratio": 0.8,
-            "dropped_flows": 0,
-            "num_flows": 1,
-        },
-    }
-
-    mock_baseline = MagicMock()
-    mock_baseline.to_dict.return_value = {
-        "failure_id": "",
-        "failure_state": {"excluded_nodes": [], "excluded_links": []},
-        "failure_trace": None,
-        "occurrence_count": 1,
-        "flows": [],
-        "summary": {
-            "total_demand": 10.0,
-            "total_placed": 10.0,
-            "overall_ratio": 1.0,
-            "dropped_flows": 0,
-            "num_flows": 1,
-        },
-    }
-
-    mock_raw = {
-        "baseline": mock_baseline,
-        "results": [mock_result],
-        "metadata": {"iterations": 2, "parallelism": 1, "unique_patterns": 1},
-    }
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
-    step = TrafficMatrixPlacement(
-        name="tm_patterns",
-        demand_set="default",
-        iterations=2,
-        store_failure_patterns=True,
-    )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    exported = mock_scenario.results.to_dict()
-    data = exported["steps"]["tm_patterns"]["data"]
-
-    assert len(data["flow_results"]) == 1
-    result = data["flow_results"][0]
-    assert result["failure_id"] == "abc123"
-    assert result["failure_trace"]["mode_index"] == 0
-    assert result["occurrence_count"] == 2
-
-    # Baseline is stored separately from flow_results
-    assert "baseline" in data
-    assert data["baseline"]["failure_id"] == ""
-
-
-@patch("ngraph.workflow.traffic_matrix_placement_step.FailureManager")
-def test_traffic_matrix_placement_no_trace_when_disabled(
-    mock_failure_manager_class,
-) -> None:
-    """Test that failure_trace is None when store_failure_patterns=False."""
-    mock_scenario = MagicMock()
-    mock_td = TrafficDemand(
-        source="A",
-        target="B",
-        volume=10.0,
-        mode="pairwise",
-    )
-    mock_scenario.demand_set.get_set.return_value = [mock_td]
-
-    mock_result = MagicMock()
-    mock_result.failure_trace = None  # No trace when disabled
-    mock_result.occurrence_count = 1
-    mock_result.summary = MagicMock()
-    mock_result.summary.total_placed = 10.0
-    mock_result.to_dict.return_value = {
-        "failure_id": "",
-        "failure_state": None,
-        "failure_trace": None,
-        "occurrence_count": 1,
-        "flows": [],
-        "summary": {
-            "total_demand": 10.0,
-            "total_placed": 10.0,
-            "overall_ratio": 1.0,
-            "dropped_flows": 0,
-            "num_flows": 1,
-        },
-    }
-
-    mock_raw = {
-        "baseline": _iteration(),
-        "results": [mock_result],
-        "metadata": {"iterations": 1, "parallelism": 1, "unique_patterns": 1},
-    }
-    mock_failure_manager = MagicMock()
-    mock_failure_manager_class.return_value = mock_failure_manager
-    mock_failure_manager.run_demand_placement_monte_carlo.return_value = mock_raw
-
-    step = TrafficMatrixPlacement(
-        name="tm_no_patterns",
-        demand_set="default",
-        iterations=1,
-        store_failure_patterns=False,
-    )
-    mock_scenario.results = Results()
-    step.execute(mock_scenario)
-
-    exported = mock_scenario.results.to_dict()
-    data = exported["steps"]["tm_no_patterns"]["data"]
-    assert len(data["flow_results"]) == 1
-    assert data["flow_results"][0]["failure_trace"] is None
+def test_traffic_matrix_placement_no_trace_when_disabled():
+    result = _failure_run(False)
+    assert all(case.case.trace is None for case in result.steps[0].result.cases)
+    output = StringIO()
+    write_json(result, output)
+    wire = json.loads(output.getvalue())["steps"][0]["result"]["cases"]
+    assert all("trace" not in case["case"] for case in wire)
+    assert [case["case"]["occurrences"] for case in wire] == [0, 3]

@@ -31,11 +31,12 @@ Edge counts in the expectations are twice the link counts, because the exported 
 ```python
 from .expectations import SCENARIO_1_EXPECTATIONS
 from .helpers import create_scenario_helper, load_scenario_from_file
+from ngraph import prepare, run
 
 scenario = load_scenario_from_file("scenario_1.yaml")
-scenario.run()
+result = run(prepare(scenario))
 
-helper = create_scenario_helper(scenario)  # attaches the graph exported by BuildGraph
+helper = create_scenario_helper(scenario, result)  # attaches BuildGraph's exported graph
 helper.validate_network_structure(SCENARIO_1_EXPECTATIONS)
 helper.validate_topology_semantics()
 ```

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import os
+import stat
 import sys
 from contextlib import contextmanager
 from enum import Enum
@@ -14,13 +14,10 @@ from statistics import median
 from time import perf_counter
 from typing import Any, Dict, Iterator, List, Optional
 
-from ngraph.explorer import NetworkExplorer
 from ngraph.logging import get_logger, set_global_log_level, setup_root_logger
-from ngraph.profiling.profiler import PerformanceProfiler, PerformanceReporter
 from ngraph.scenario import Scenario
 from ngraph.utils.output_paths import (
     ensure_parent_dir,
-    profiles_dir_for_run,
     results_path_for_run,
 )
 from ngraph.workflow.base import WorkflowStep
@@ -95,6 +92,16 @@ def _format_cost(value: float) -> str:
     return s
 
 
+def _result_mode(destination: Path) -> int:
+    """A results file keeps its mode, or gets the mode open() would give it."""
+    try:
+        return stat.S_IMODE(destination.stat().st_mode)
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        return 0o666 & ~umask
+
+
 def _format_duration(seconds: float) -> str:
     """Format seconds as a short ASCII duration for logs.
 
@@ -123,6 +130,10 @@ def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
     for key, value in step.__dict__.items():
         if key.startswith("_"):
             continue
+        from ngraph.model.selectors import Selector
+
+        if isinstance(value, Selector):
+            value = value.path
         if not isinstance(value, str):
             continue
         if not value.strip():
@@ -231,6 +242,8 @@ def _print_network_structure(
         pkg_logger.setLevel(logging.WARNING)
         explorer = None
         try:
+            from ngraph.explorer import NetworkExplorer
+
             # Use non-strict validation so hierarchy is printable even with issues
             explorer = NetworkExplorer.explore_network(
                 network, components_library, strict_validation=False
@@ -488,20 +501,20 @@ def _print_components_library(components_library: Any, detail: bool) -> None:
                 print(f"     ... and {remaining} more")
 
 
-def _print_failure_policies(failure_policy_set: Any, detail: bool) -> None:
-    """Print failure policy set overview and optional per-mode details.
+def _print_failure_policies(failure_policies: Any, detail: bool) -> None:
+    """Print named failure policies and optional per-mode details.
 
     Args:
-        failure_policy_set: Collection of failure policies under ``policies``.
+        failure_policies: Collection of failure policies under ``policies``.
         detail: When True, also show the first three modes of each policy
             and the first three rules of each mode.
     """
     print("\n5. FAILURE POLICIES")
     print("-" * 30)
-    policy_count = len(failure_policy_set.policies)
+    policy_count = len(failure_policies)
     print(f"   Total: {policy_count}")
-    if failure_policy_set.policies:
-        policy_items = list(failure_policy_set.policies.items())[:5]
+    if failure_policies:
+        policy_items = list(failure_policies.items())[:5]
         for policy_name, policy in policy_items:
             mode_count = len(policy.modes)
             print(
@@ -544,16 +557,17 @@ def _print_demand_sets(
     """
     print("\n6. DEMAND SETS")
     print("-" * 30)
-    set_count = len(ds.sets)
+    set_count = len(ds)
     print(f"   Total: {set_count}")
-    if not ds.sets:
+    if not ds:
         return
 
     # Totals across all sets print before the per-set breakdown.
     try:
         grand_total_demand = 0.0
         grand_demand_count = 0
-        for demands in ds.sets.values():
+        for demand_set in ds.values():
+            demands = demand_set.demands
             grand_demand_count += len(demands)
             for d in demands:
                 grand_total_demand += float(d.volume)
@@ -573,8 +587,9 @@ def _print_demand_sets(
     except Exception as exc:  # pragma: no cover (defensive)
         print(f"   Capacity vs Demand: unable to compute ({type(exc).__name__}: {exc})")
 
-    set_items = list(ds.sets.items())[:5]
-    for set_name, demands in set_items:
+    set_items = list(ds.items())[:5]
+    for set_name, demand_set in set_items:
+        demands = demand_set.demands
         demand_count = len(demands)
         total_volume = sum(d.volume for d in demands)
         print(
@@ -586,8 +601,8 @@ def _print_demand_sets(
         pair_counts: Dict[tuple[str, str], Dict[str, float | int]] = {}
         for d in demands:
             # Handle both string and dict selectors
-            src_key = d.source if isinstance(d.source, str) else str(d.source)
-            tgt_key = d.target if isinstance(d.target, str) else str(d.target)
+            src_key = d.source.path or str(d.source)
+            tgt_key = d.target.path or str(d.target)
             src_counts[src_key] = src_counts.get(src_key, 0) + 1
             tgt_counts[tgt_key] = tgt_counts.get(tgt_key, 0) + 1
             key = (src_key, tgt_key)
@@ -654,8 +669,8 @@ def _print_demand_sets(
                     print("       Top demands (by offered volume):")
                     top_rows: list[list[str]] = []
                     for d in sorted_demands:
-                        src = d.source if isinstance(d.source, str) else str(d.source)
-                        tgt = d.target if isinstance(d.target, str) else str(d.target)
+                        src = d.source.path or str(d.source)
+                        tgt = d.target.path or str(d.target)
                         top_rows.append(
                             [
                                 src,
@@ -853,8 +868,8 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
             len(scenario.network.nodes),
             len(scenario.network.links),
             len(scenario.workflow),
-            len(scenario.failure_policy_set.policies),
-            len(scenario.demand_set.sets),
+            len(scenario.failure_policies),
+            len(scenario.demand_sets),
         )
         logger.info("✓ Scenario validated")
 
@@ -874,11 +889,12 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
                 sum(float(lk.capacity) for lk in enabled_links)
             )
 
-            ds = scenario.demand_set
-            set_count = len(ds.sets)
+            ds = scenario.demand_sets
+            set_count = len(ds)
             total_demands = 0
             total_demand_volume = 0.0
-            for demands in ds.sets.values():
+            for demand_set in ds.values():
+                demands = demand_set.demands
                 total_demands += len(demands)
                 for d in demands:
                     total_demand_volume += float(d.volume)
@@ -941,9 +957,9 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         )
         _print_risk_groups(network, detail)
         _print_components_library(scenario.components_library, detail)
-        _print_failure_policies(scenario.failure_policy_set, detail)
+        _print_failure_policies(scenario.failure_policies, detail)
         _print_demand_sets(
-            network, scenario.demand_set, detail, total_enabled_link_capacity
+            network, scenario.demand_sets, detail, total_enabled_link_capacity
         )
         _print_workflow_steps(scenario, detail, network)
 
@@ -982,154 +998,96 @@ def _run_scenario(
     profile_memory: bool = False,
     output_dir: Optional[Path] = None,
 ) -> None:
-    """Run a scenario file and export results as JSON by default.
+    """Execute a prepared scenario and project its result exactly once.
 
-    Exits with status 1 on any failure.
-
-    Args:
-        path: Scenario YAML file.
-        results_override: Optional explicit path for JSON results. When ``None``,
-            the path is derived from the scenario name under ``output_dir``.
-        no_results: Skip writing the results file.
-        stdout: Print the results JSON to stdout.
-        keys: Optional list of workflow step names to include. When ``None`` all steps are
-            exported.
-        profile: Profile each step with cProfile and print a report to stderr.
-        profile_memory: Also record peak memory per step with tracemalloc.
-            Only takes effect with ``profile``.
-        output_dir: Base directory for derived output paths (results, profiles).
+    Selected keys filter only the export, in declaration order. Their original
+    execution_order values are retained, so a filtered export can have gaps.
+    File output replaces the destination atomically after complete encoding.
     """
-    logger.info(f"Loading scenario from: {path}")
-    _start_time = perf_counter()
+    import tempfile
+    from dataclasses import replace
 
+    from ngraph.export import _encode_json
+    from ngraph.scenario import prepare, run
+
+    logger.info("Loading scenario from: %s", path)
+    started = perf_counter()
     try:
-        yaml_text = path.read_text()
-        scenario = Scenario.from_yaml(yaml_text)
+        scenario = Scenario.from_yaml(path.read_text())
         if keys:
-            step_names = [step.name for step in scenario.workflow]
-            unknown = sorted(set(keys) - set(step_names))
+            names = {step.name or type(step).__name__ for step in scenario.workflow}
+            unknown = sorted(set(keys) - names)
             if unknown:
                 raise ValueError(
-                    f"Unknown step name(s) in --keys: {', '.join(unknown)}; "
-                    f"workflow steps: {', '.join(step_names)}"
+                    f"Unknown step name(s) in --keys: {', '.join(unknown)}"
                 )
-
+        prepared = prepare(scenario)
         if profile:
-            logger.info("Performance profiling enabled")
+            from ngraph.profiling.profiler import (
+                PerformanceProfiler,
+                PerformanceReporter,
+            )
+
             profiler = PerformanceProfiler(track_memory=profile_memory)
             profiler.start_scenario()
 
-            logger.info("Starting scenario execution with profiling")
-
-            # FailureManager worker threads write per-worker .pstats files here.
-            child_profile_dir = profiles_dir_for_run(path, output_dir)
-            child_profile_dir.mkdir(parents=True, exist_ok=True)
-            prev_profile_dir = os.environ.get("NGRAPH_PROFILE_DIR")
-            os.environ["NGRAPH_PROFILE_DIR"] = str(child_profile_dir.resolve())
-            logger.info(f"Worker profiles will be saved to: {child_profile_dir}")
-
             @contextmanager
-            def _profile_step_hook(step: WorkflowStep) -> Iterator[None]:
-                """Wrap step execution with profiling and worker-profile merge.
-
-                Worker profiles are merged only after the profiled block exits
-                normally; exceptions raised by the step propagate unchanged and
-                skip the merge.
-                """
-                step_name = step.name or step.__class__.__name__
-                with profiler.profile_step(step_name, step.__class__.__name__):
+            def profile_step(step: WorkflowStep) -> Iterator[None]:
+                with profiler.profile_step(
+                    step.name or type(step).__name__, type(step).__name__
+                ):
                     yield
-                if child_profile_dir.exists():
-                    profiler.merge_child_profiles(child_profile_dir, step_name)
 
-            try:
-                scenario.run(step_hook=_profile_step_hook)
-            finally:
-                # Restore the environment so later in-process runs do not
-                # inherit profiling into a stale directory.
-                if prev_profile_dir is None:
-                    os.environ.pop("NGRAPH_PROFILE_DIR", None)
-                else:
-                    os.environ["NGRAPH_PROFILE_DIR"] = prev_profile_dir
-
-            logger.info("Scenario execution completed")
-
+            result = run(prepared, step_hook=profile_step)
             profiler.end_scenario()
             profiler.analyze_performance()
-
-            # merge_child_profiles deletes the files it merges; remove leftovers.
-            if child_profile_dir.exists():
-                remaining_files = list(child_profile_dir.glob("*.pstats"))
-                if remaining_files:
-                    logger.debug(
-                        f"Cleaning up {len(remaining_files)} remaining profile files"
-                    )
-                    for f in remaining_files:
-                        try:
-                            f.unlink()
-                        except Exception as exc:
-                            logger.debug("Failed to remove profile file %s: %s", f, exc)
-                # Keep the profiles directory when an explicit output dir is used
-                # to make artifact paths consistent and discoverable.
-                if output_dir is None:
-                    try:
-                        child_profile_dir.rmdir()  # Remove dir if empty
-                    except Exception as exc:
-                        logger.debug("Failed to remove profiles dir: %s", exc)
-
-            # Report goes to stderr so machine-readable stdout (--stdout)
-            # stays pure JSON.
-            reporter = PerformanceReporter(profiler.results)
-            performance_report = reporter.generate_report()
-            print("\n" + performance_report, file=sys.stderr)
-
+            print(
+                "\n" + PerformanceReporter(profiler.results).generate_report(),
+                file=sys.stderr,
+            )
         else:
-            logger.info("Starting scenario execution")
-            scenario.run()
-            print("✅ Scenario execution completed", file=sys.stderr)
-
+            result = run(prepared)
+        print("✅ Scenario execution completed", file=sys.stderr)
         if not no_results or stdout:
-            logger.info("Serializing results to JSON")
-            results_dict: Dict[str, Any] = scenario.results.to_dict()
-
             if keys:
-                # Filter only the steps subsection; keep workflow/scenario intact
-                steps_map = results_dict.get("steps", {})
-                filtered_steps: Dict[str, Any] = {
-                    step: steps_map[step] for step in keys
-                }
-                results_dict["steps"] = filtered_steps
-
-            json_str = json.dumps(results_dict, indent=2)
-
-            if not no_results:
-                effective_output = results_path_for_run(
-                    scenario_path=path,
-                    output_dir=output_dir,
-                    results_override=results_override,
+                selected = set(keys)
+                result = replace(
+                    result,
+                    steps=tuple(step for step in result.steps if step.name in selected),
                 )
-
-                ensure_parent_dir(effective_output)
-                effective_output.write_text(json_str)
-                print(f"✅ Results written to: {effective_output}", file=sys.stderr)
-
+            text = _encode_json(result)
+            if not no_results:
+                destination = results_path_for_run(path, output_dir, results_override)
+                ensure_parent_dir(destination)
+                descriptor, temporary = tempfile.mkstemp(
+                    prefix=f".{destination.name}.",
+                    suffix=".tmp",
+                    dir=destination.parent,
+                )
+                try:
+                    with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                        output.write(text)
+                        output.write("\n")
+                    os.chmod(temporary, _result_mode(destination))
+                    os.replace(temporary, destination)
+                finally:
+                    Path(temporary).unlink(missing_ok=True)
+                print(f"✅ Results written to: {destination}", file=sys.stderr)
             if stdout:
-                print(json_str)
-
-        _elapsed = perf_counter() - _start_time
-        logger.info(f"Scenario run completed in {_format_duration(_elapsed)}")
-
+                print(text)
+        logger.info(
+            "Scenario run completed in %s", _format_duration(perf_counter() - started)
+        )
     except FileNotFoundError:
-        logger.error(f"Scenario file not found: {path}")
         print(f"❌ ERROR: Scenario file not found: {path}", file=sys.stderr)
-        sys.exit(1)
-    except Exception as e:
-        logger.error(f"Failed to run scenario: {type(e).__name__}: {e}")
+        raise SystemExit(1) from None
+    except Exception as exc:
+        logger.error("Failed to run scenario: %s: %s", type(exc).__name__, exc)
         print(
-            f"❌ ERROR: Failed to run scenario: {type(e).__name__}: {e}",
+            f"❌ ERROR: Failed to run scenario: {type(exc).__name__}: {exc}",
             file=sys.stderr,
         )
-        sys.exit(1)
+        raise SystemExit(1) from None
 
 
 def main(argv: Optional[List[str]] = None) -> None:
@@ -1215,10 +1173,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         "-o",
         type=Path,
         default=None,
-        help=(
-            "Directory for the results file and, with --profile, the"
-            " worker profile directory"
-        ),
+        help="Directory for the results file",
     )
 
     effective_args = sys.argv[1:] if argv is None else argv

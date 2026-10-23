@@ -1,0 +1,3690 @@
+{
+  "root": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://netgraph.dev/schemas/results.json",
+    "title": "NetGraph typed run and analysis results",
+    "anyOf": [
+      {
+        "$ref": "#/$defs/RunJSON"
+      },
+      {
+        "$ref": "#/$defs/StandaloneAnalysisJSON"
+      }
+    ]
+  },
+  "$defs": {
+    "JSONValue": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "integer"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/JSONValue"
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        }
+      ]
+    },
+    "FractionJSON": {
+      "type": "object",
+      "properties": {
+        "numerator": {
+          "type": "integer"
+        },
+        "denominator": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "additionalProperties": false
+    },
+    "SourceJSON": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/PoolHeadJSON"
+        }
+      ]
+    },
+    "EdgeAmountJSON": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/DirectedLinkJSON"
+        },
+        "units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "SyntheticAmountJSON": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/SyntheticIngressJSON"
+        },
+        "units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "SourceFlowJSON": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SourceJSON"
+        },
+        "offered_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admitted_units": {
+          "type": "integer"
+        },
+        "delivered_units": {
+          "type": "integer"
+        },
+        "source_drop_units": {
+          "type": "integer"
+        },
+        "total_edge_drop_units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "offered_units",
+        "admitted_units",
+        "delivered_units",
+        "source_drop_units",
+        "total_edge_drop_units"
+      ],
+      "additionalProperties": false
+    },
+    "TunnelFlowJSON": {
+      "type": "object",
+      "properties": {
+        "entry_id": {
+          "type": "integer"
+        },
+        "head": {
+          "$ref": "#/$defs/SourceJSON"
+        },
+        "status": {
+          "enum": [
+            "up",
+            "insufficient_bandwidth",
+            "cost_ceiling_exceeded",
+            "failed",
+            "blackholed"
+          ]
+        },
+        "assigned_units": {
+          "type": "integer"
+        },
+        "delivered_units": {
+          "type": "integer"
+        },
+        "total_edge_drop_units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "entry_id",
+        "head",
+        "status",
+        "assigned_units",
+        "delivered_units",
+        "total_edge_drop_units"
+      ],
+      "additionalProperties": false
+    },
+    "HeadDesignJSON": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "$ref": "#/$defs/SourceJSON"
+        },
+        "units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "head",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "TunnelPlanJSON": {
+      "type": "object",
+      "properties": {
+        "tunnels_per_head": {
+          "type": "integer"
+        },
+        "design_kind": {
+          "enum": [
+            "finite",
+            "unlimited"
+          ]
+        },
+        "design_demand_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_by_head": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HeadDesignJSON"
+          }
+        },
+        "total_reserved_bandwidth_units": {
+          "type": "integer"
+        },
+        "heads_with_capacity": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "insufficient_resolution": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_fractional_bandwidth_per_tunnel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FractionJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_bandwidth_per_tunnel_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "planned_bandwidth_per_tunnel_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_planned_bandwidth_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total_tunnel_cost": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "headroom_penalty": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_lossless_offer_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "tunnels_per_head",
+        "design_kind",
+        "design_demand_units",
+        "design_by_head",
+        "total_reserved_bandwidth_units",
+        "heads_with_capacity",
+        "insufficient_resolution",
+        "max_fractional_bandwidth_per_tunnel",
+        "max_bandwidth_per_tunnel_units",
+        "planned_bandwidth_per_tunnel_units",
+        "total_planned_bandwidth_units",
+        "total_tunnel_cost",
+        "headroom_penalty",
+        "max_lossless_offer_units"
+      ],
+      "additionalProperties": false
+    },
+    "SyntheticProjectionJSON": {
+      "type": "object",
+      "properties": {
+        "call_edge_drops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticAmountJSON"
+          }
+        },
+        "edge_drops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticAmountJSON"
+          }
+        },
+        "edge_flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticAmountJSON"
+          }
+        },
+        "residual": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticAmountJSON"
+          }
+        },
+        "edge_reservations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticAmountJSON"
+          }
+        },
+        "saturated_boundary_edges": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SyntheticIngressJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_cut": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SyntheticIngressJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "NativePlacementJSON": {
+      "type": "object",
+      "properties": {
+        "request_kind": {
+          "enum": [
+            "finite",
+            "unlimited"
+          ]
+        },
+        "requested_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "offered_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivered_units": {
+          "type": "integer"
+        },
+        "unadmitted_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_drop_units": {
+          "type": "integer"
+        },
+        "edge_drop_units": {
+          "type": "integer"
+        },
+        "termination": {
+          "enum": [
+            "complete",
+            "no_route",
+            "exhausted",
+            "no_active_weight"
+          ]
+        },
+        "total_cost": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "call_delivered_units": {
+          "type": "integer"
+        },
+        "call_undelivered_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "delivery_delta_units": {
+          "type": "integer"
+        },
+        "call_edge_drops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EdgeAmountJSON"
+          }
+        },
+        "call_source_drop_units": {
+          "type": "integer"
+        },
+        "admitted_units": {
+          "type": "integer"
+        },
+        "edge_drops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EdgeAmountJSON"
+          }
+        },
+        "by_source": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SourceFlowJSON"
+          }
+        },
+        "by_tunnel": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TunnelFlowJSON"
+          }
+        },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TunnelPlanJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edge_flows": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EdgeAmountJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "residual": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EdgeAmountJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edge_reservations": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EdgeAmountJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "saturated_boundary_edges": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DirectedLinkJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_cut": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DirectedLinkJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "synthetic_ingress": {
+          "$ref": "#/$defs/SyntheticProjectionJSON"
+        }
+      },
+      "required": [
+        "request_kind",
+        "requested_units",
+        "offered_units",
+        "delivered_units",
+        "unadmitted_units",
+        "source_drop_units",
+        "edge_drop_units",
+        "termination",
+        "total_cost"
+      ],
+      "additionalProperties": false
+    },
+    "NativeOutputsJSON": {
+      "type": "object",
+      "properties": {
+        "edge_flows": {
+          "type": "boolean"
+        },
+        "residual": {
+          "type": "boolean"
+        },
+        "edge_reservations": {
+          "type": "boolean"
+        },
+        "saturated_boundary_edges": {
+          "type": "boolean"
+        },
+        "min_cut": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "edge_flows",
+        "residual",
+        "edge_reservations",
+        "saturated_boundary_edges",
+        "min_cut"
+      ],
+      "additionalProperties": false
+    },
+    "UnavailableOutputsJSON": {
+      "type": "object",
+      "properties": {
+        "cost_distribution": {
+          "$ref": "#/$defs/CostUnavailableReasonJSON"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "PlacementRowJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "placement"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "base_id": {
+          "type": "string"
+        },
+        "endpoints": {
+          "$ref": "#/$defs/EndpointsJSON"
+        },
+        "reference_request_units": {
+          "type": "integer"
+        },
+        "reference_shortfall_units": {
+          "type": "integer"
+        },
+        "result": {
+          "$ref": "#/$defs/NativePlacementJSON"
+        },
+        "pool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PoolMetadataJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_distribution": {
+          "$ref": "#/$defs/CostReportJSON"
+        },
+        "unavailable_outputs": {
+          "$ref": "#/$defs/UnavailableOutputsJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "base_id",
+        "endpoints",
+        "reference_request_units",
+        "reference_shortfall_units",
+        "result",
+        "pool"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityRowJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "capacity"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "endpoints": {
+          "$ref": "#/$defs/EndpointsJSON"
+        },
+        "result": {
+          "$ref": "#/$defs/NativePlacementJSON"
+        },
+        "pool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PoolMetadataJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_distribution": {
+          "$ref": "#/$defs/CostReportJSON"
+        },
+        "unavailable_outputs": {
+          "$ref": "#/$defs/UnavailableOutputsJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "endpoints",
+        "result",
+        "pool"
+      ],
+      "additionalProperties": false
+    },
+    "FailureCaseJSON": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "baseline",
+            "failure"
+          ]
+        },
+        "pattern": {
+          "$ref": "#/$defs/FailurePatternJSON"
+        },
+        "occurrences": {
+          "type": "integer"
+        },
+        "trace": {
+          "$ref": "#/$defs/FailureTraceJSON"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "pattern",
+        "occurrences"
+      ],
+      "additionalProperties": false
+    },
+    "PlacementStateJSON": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlacementRowJSON"
+          }
+        },
+        "totals": {
+          "$ref": "#/$defs/PlacementTotalsJSON"
+        }
+      },
+      "required": [
+        "rows",
+        "totals"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityStateJSON": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CapacityRowJSON"
+              },
+              {
+                "$ref": "#/$defs/SelfPairJSON"
+              }
+            ]
+          }
+        },
+        "totals": {
+          "type": "null"
+        }
+      },
+      "required": [
+        "rows",
+        "totals"
+      ],
+      "additionalProperties": false
+    },
+    "PlacementStatesJSON": {
+      "type": "object",
+      "properties": {
+        "converged": {
+          "$ref": "#/$defs/PlacementStateJSON"
+        }
+      },
+      "required": [
+        "converged"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityStatesJSON": {
+      "type": "object",
+      "properties": {
+        "converged": {
+          "$ref": "#/$defs/CapacityStateJSON"
+        }
+      },
+      "required": [
+        "converged"
+      ],
+      "additionalProperties": false
+    },
+    "PlacementCaseJSON": {
+      "type": "object",
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/FailureCaseJSON"
+        },
+        "states": {
+          "$ref": "#/$defs/PlacementStatesJSON"
+        }
+      },
+      "required": [
+        "case",
+        "states"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityCaseJSON": {
+      "type": "object",
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/FailureCaseJSON"
+        },
+        "states": {
+          "$ref": "#/$defs/CapacityStatesJSON"
+        }
+      },
+      "required": [
+        "case",
+        "states"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "capacity"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputSelectionJSON"
+        },
+        "question": {
+          "enum": [
+            "lossless_bound",
+            "fixed_offer_delivery",
+            "first_hop_experiment"
+          ]
+        },
+        "offer_source": {
+          "enum": [
+            "unlimited",
+            "explicit",
+            "design",
+            "first_hop"
+          ]
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CapacityCaseJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/CapacityQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "outputs",
+        "question",
+        "offer_source",
+        "cases"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "items": {
+                  "properties": {
+                    "states": {
+                      "properties": {
+                        "converged": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "not": {
+                                        "anyOf": [
+                                          {
+                                            "required": [
+                                              "call_delivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_undelivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "delivery_delta_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_source_drop_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "admitted_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_source"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_tunnel"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "plan"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "items": {
+                  "properties": {
+                    "states": {
+                      "properties": {
+                        "converged": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "required": [
+                                        "call_delivered_units",
+                                        "call_undelivered_units",
+                                        "delivery_delta_units",
+                                        "call_edge_drops",
+                                        "call_source_drop_units",
+                                        "admitted_units",
+                                        "edge_drops",
+                                        "by_source",
+                                        "by_tunnel",
+                                        "plan"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PlacementAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "placement"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputSelectionJSON"
+        },
+        "alpha": {
+          "$ref": "#/$defs/ExactAlphaJSON"
+        },
+        "accounting": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ExpansionAccountingJSON"
+          }
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlacementCaseJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/PlacementQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "outputs",
+        "alpha",
+        "accounting",
+        "cases"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "items": {
+                  "properties": {
+                    "states": {
+                      "properties": {
+                        "converged": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "not": {
+                                        "anyOf": [
+                                          {
+                                            "required": [
+                                              "call_delivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_undelivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "delivery_delta_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_source_drop_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "admitted_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_source"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_tunnel"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "plan"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "cases": {
+                "items": {
+                  "properties": {
+                    "states": {
+                      "properties": {
+                        "converged": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "required": [
+                                        "call_delivered_units",
+                                        "call_undelivered_units",
+                                        "delivery_delta_units",
+                                        "call_edge_drops",
+                                        "call_source_drop_units",
+                                        "admitted_units",
+                                        "edge_drops",
+                                        "by_source",
+                                        "by_tunnel",
+                                        "plan"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SensitivityEntryJSON": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/DirectedLinkJSON"
+        },
+        "delivery_reduction_units": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "delivery_reduction_units"
+      ],
+      "additionalProperties": false
+    },
+    "SensitivityAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "sensitivity"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputSelectionJSON"
+        },
+        "endpoints": {
+          "$ref": "#/$defs/EndpointsJSON"
+        },
+        "question": {
+          "enum": [
+            "lossless_bound",
+            "fixed_offer_delivery"
+          ]
+        },
+        "offer_source": {
+          "enum": [
+            "unlimited",
+            "explicit",
+            "design"
+          ]
+        },
+        "baseline": {
+          "$ref": "#/$defs/NativePlacementJSON"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SensitivityEntryJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/SensitivityQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "outputs",
+        "endpoints",
+        "question",
+        "offer_source",
+        "baseline",
+        "entries"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "baseline": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "call_delivered_units"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "call_undelivered_units"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "delivery_delta_units"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "call_edge_drops"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "call_source_drop_units"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "admitted_units"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "edge_drops"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "by_source"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "by_tunnel"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "plan"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "baseline": {
+                "required": [
+                  "call_delivered_units",
+                  "call_undelivered_units",
+                  "delivery_delta_units",
+                  "call_edge_drops",
+                  "call_source_drop_units",
+                  "admitted_units",
+                  "edge_drops",
+                  "by_source",
+                  "by_tunnel",
+                  "plan"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NamedPathJSON": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "destination": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "integer"
+        },
+        "hops": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/DirectedLinkJSON"
+            }
+          }
+        }
+      },
+      "required": [
+        "source",
+        "destination",
+        "cost",
+        "hops"
+      ],
+      "additionalProperties": false
+    },
+    "PathRowJSON": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "endpoints": {
+          "$ref": "#/$defs/EndpointsJSON"
+        },
+        "kind": {
+          "enum": [
+            "paths",
+            "self"
+          ]
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NamedPathJSON"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "endpoints",
+        "kind",
+        "cost"
+      ],
+      "additionalProperties": false
+    },
+    "PathAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "paths"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "algorithm": {
+          "enum": [
+            "spf",
+            "ksp"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "combine",
+            "pairwise"
+          ]
+        },
+        "costs_only": {
+          "type": "boolean"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PathRowJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/PathQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "algorithm",
+        "mode",
+        "costs_only",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "MSDAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "msd"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputSelectionJSON"
+        },
+        "alpha_feasible": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExactAlphaJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "best_probe_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "monotone_proven": {
+          "type": "boolean"
+        },
+        "proof": {
+          "$ref": "#/$defs/MSDProofJSON"
+        },
+        "upper_certificate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UpperCertificateJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "search_status": {
+          "$ref": "#/$defs/MSDStatusJSON"
+        },
+        "stop_reason": {
+          "$ref": "#/$defs/MSDStopReasonJSON"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MSDProbeJSON"
+          }
+        },
+        "best_rows": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PlacementRowJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "best_accounting": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ExpansionAccountingJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probe_rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProbeRowsJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/MSDQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "outputs",
+        "alpha_feasible",
+        "best_probe_index",
+        "monotone_proven",
+        "proof",
+        "upper_certificate",
+        "search_status",
+        "stop_reason",
+        "history",
+        "best_rows",
+        "best_accounting"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "best_rows": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "capacity",
+                              "placement"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "result": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "call_delivered_units"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "call_undelivered_units"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "delivery_delta_units"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "call_edge_drops"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "call_source_drop_units"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "admitted_units"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "edge_drops"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "by_source"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "by_tunnel"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "plan"
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "probe_rows": {
+                "items": {
+                  "properties": {
+                    "rows": {
+                      "items": {
+                        "if": {
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "capacity",
+                                "placement"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "result": {
+                              "not": {
+                                "anyOf": [
+                                  {
+                                    "required": [
+                                      "call_delivered_units"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "call_undelivered_units"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "delivery_delta_units"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "call_edge_drops"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "call_source_drop_units"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "admitted_units"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "edge_drops"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "by_source"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "by_tunnel"
+                                    ]
+                                  },
+                                  {
+                                    "required": [
+                                      "plan"
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "best_rows": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "if": {
+                        "properties": {
+                          "kind": {
+                            "enum": [
+                              "capacity",
+                              "placement"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "result": {
+                            "required": [
+                              "call_delivered_units",
+                              "call_undelivered_units",
+                              "delivery_delta_units",
+                              "call_edge_drops",
+                              "call_source_drop_units",
+                              "admitted_units",
+                              "edge_drops",
+                              "by_source",
+                              "by_tunnel",
+                              "plan"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "probe_rows": {
+                "items": {
+                  "properties": {
+                    "rows": {
+                      "items": {
+                        "if": {
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "capacity",
+                                "placement"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ]
+                        },
+                        "then": {
+                          "properties": {
+                            "result": {
+                              "required": [
+                                "call_delivered_units",
+                                "call_undelivered_units",
+                                "delivery_delta_units",
+                                "call_edge_drops",
+                                "call_source_drop_units",
+                                "admitted_units",
+                                "edge_drops",
+                                "by_source",
+                                "by_tunnel",
+                                "plan"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AnalysisJSON": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/CapacityAnalysisJSON"
+                    },
+                    {
+                      "$ref": "#/$defs/PlacementAnalysisJSON"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/SensitivityAnalysisJSON"
+                }
+              ]
+            },
+            {
+              "$ref": "#/$defs/PathAnalysisJSON"
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/MSDAnalysisJSON"
+        }
+      ]
+    },
+    "HardwareLevelJSON": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "integer"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HardwareRowJSON"
+          }
+        }
+      },
+      "required": [
+        "level",
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "CostPowerResultJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "cost_power"
+          ]
+        },
+        "include_disabled": {
+          "type": "boolean"
+        },
+        "aggregation_level": {
+          "type": "integer"
+        },
+        "levels": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HardwareLevelJSON"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "include_disabled",
+        "aggregation_level",
+        "levels"
+      ],
+      "additionalProperties": false
+    },
+    "DomainResultJSON": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BuildGraphResultJSON"
+            },
+            {
+              "$ref": "#/$defs/NetworkStatsResultJSON"
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/CostPowerResultJSON"
+        }
+      ]
+    },
+    "StepResultJSON": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "step_type": {
+          "type": "string"
+        },
+        "execution_order": {
+          "type": "integer"
+        },
+        "scenario_seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "step_seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seed_source": {
+          "enum": [
+            "explicit-step",
+            "scenario-derived",
+            "none"
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AnalysisJSON"
+                },
+                {
+                  "$ref": "#/$defs/DomainResultJSON"
+                }
+              ]
+            },
+            {
+              "$ref": "#/$defs/JSONValue"
+            }
+          ]
+        },
+        "question": {
+          "$ref": "#/$defs/StepQuestionJSON"
+        }
+      },
+      "required": [
+        "name",
+        "step_type",
+        "execution_order",
+        "scenario_seed",
+        "step_seed",
+        "seed_source",
+        "result",
+        "question"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "capacity"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/CapacityAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "placement"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/PlacementAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "sensitivity"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/SensitivityAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "paths"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/PathAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "msd"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/MSDAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "build_graph"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/BuildGraphResultJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "network_stats"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/NetworkStatsResultJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
+                    "const": "cost_power"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/CostPowerResultJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RunJSON": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/RunMetadataJSON"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StepResultJSON"
+          }
+        },
+        "units_report": {
+          "$ref": "#/$defs/UnitsReportJSON"
+        }
+      },
+      "required": [
+        "metadata",
+        "steps",
+        "units_report"
+      ],
+      "additionalProperties": false
+    },
+    "StandaloneAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "metadata": {
+          "$ref": "#/$defs/RunMetadataJSON"
+        },
+        "analysis": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/AnalysisJSON"
+            },
+            {
+              "required": [
+                "query"
+              ]
+            }
+          ]
+        },
+        "units_report": {
+          "$ref": "#/$defs/UnitsReportJSON"
+        }
+      },
+      "required": [
+        "metadata",
+        "analysis",
+        "units_report"
+      ],
+      "additionalProperties": false
+    },
+    "SelectorJSON": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "group_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "match": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/JSONValue"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "active_only": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "group_by",
+        "match",
+        "active_only"
+      ],
+      "additionalProperties": false
+    },
+    "TunnelCountJSON": {
+      "type": "object",
+      "properties": {
+        "per_head": {
+          "type": "integer"
+        },
+        "up_to": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "per_head",
+        "up_to"
+      ],
+      "additionalProperties": false
+    },
+    "CostCeilingJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "absolute",
+            "stretch"
+          ]
+        },
+        "absolute": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stretch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FractionJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "absolute",
+        "stretch"
+      ],
+      "additionalProperties": false
+    },
+    "EdgeWeightJSON": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DirectedLinkJSON"
+            },
+            {
+              "$ref": "#/$defs/SyntheticIngressJSON"
+            }
+          ]
+        },
+        "value": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "ModelJSON": {
+      "type": "object",
+      "properties": {
+        "routing": {
+          "enum": [
+            "shortest_paths",
+            "distributed_te",
+            "centralized_te",
+            "pinned"
+          ]
+        },
+        "admission": {
+          "enum": [
+            "lossless",
+            "lossy"
+          ]
+        },
+        "allocation": {
+          "anyOf": [
+            {
+              "enum": [
+                "equal",
+                "weighted",
+                "optimized"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_allocation": {
+          "anyOf": [
+            {
+              "enum": [
+                "equal",
+                "optimized"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weight_basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "capacity",
+                "explicit",
+                "residual_snapshot"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edge_weights": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EdgeWeightJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tie_break": {
+          "anyOf": [
+            {
+              "enum": [
+                "fewer_hops",
+                "higher_capacity",
+                "higher_available_capacity",
+                "higher_headroom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "multipath": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parallel_edges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tunnel_count": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TunnelCountJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prefer_headroom": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_ceiling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CostCeilingJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_unreserved_bandwidth_units": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "route_names": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supplied_support": {
+          "type": "boolean"
+        },
+        "supplied_program": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "routing",
+        "admission",
+        "allocation",
+        "source_allocation",
+        "weight_basis",
+        "edge_weights",
+        "tie_break",
+        "multipath",
+        "parallel_edges",
+        "tunnel_count",
+        "prefer_headroom",
+        "cost_ceiling",
+        "min_unreserved_bandwidth_units",
+        "route_names",
+        "supplied_support",
+        "supplied_program"
+      ],
+      "additionalProperties": false
+    },
+    "FailureRequestJSON": {
+      "type": "object",
+      "properties": {
+        "policy_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inline_policy": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/$defs/JSONValue"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "iterations": {
+          "type": "integer"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure_trace": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "policy_name",
+        "inline_policy",
+        "iterations",
+        "seed",
+        "failure_trace"
+      ],
+      "additionalProperties": false
+    },
+    "AlphaSourceJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "query",
+            "msd_step"
+          ]
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "step"
+      ],
+      "additionalProperties": false
+    },
+    "DemandQuestionJSON": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "target": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelJSON"
+        },
+        "physical_volume": {
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "combine",
+            "pairwise"
+          ]
+        },
+        "group_mode": {
+          "enum": [
+            "flatten",
+            "per_group",
+            "group_pairwise"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "priority",
+        "id",
+        "model",
+        "physical_volume",
+        "mode",
+        "group_mode"
+      ],
+      "additionalProperties": false
+    },
+    "CapacityQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "capacity"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "target": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "mode": {
+          "enum": [
+            "combine",
+            "pairwise"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/ModelJSON"
+        },
+        "offer": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_demand": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureRequestJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target",
+        "mode",
+        "model",
+        "offer",
+        "design_demand",
+        "failures"
+      ],
+      "additionalProperties": false
+    },
+    "PlacementQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "placement"
+          ]
+        },
+        "demand_set": {
+          "type": "string"
+        },
+        "demands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemandQuestionJSON"
+          }
+        },
+        "alpha": {
+          "$ref": "#/$defs/ExactAlphaJSON"
+        },
+        "alpha_source": {
+          "$ref": "#/$defs/AlphaSourceJSON"
+        },
+        "failures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FailureRequestJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "demand_set",
+        "demands",
+        "alpha",
+        "alpha_source",
+        "failures"
+      ],
+      "additionalProperties": false
+    },
+    "SensitivityQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "sensitivity"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "target": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelJSON"
+        },
+        "offer": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_demand": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "excluded_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_edges": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DirectedLinkJSON"
+              },
+              {
+                "$ref": "#/$defs/SyntheticIngressJSON"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target",
+        "model",
+        "offer",
+        "design_demand",
+        "excluded_nodes",
+        "excluded_edges"
+      ],
+      "additionalProperties": false
+    },
+    "PathQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "paths"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "target": {
+          "$ref": "#/$defs/SelectorJSON"
+        },
+        "mode": {
+          "enum": [
+            "combine",
+            "pairwise"
+          ]
+        },
+        "algorithm": {
+          "enum": [
+            "spf",
+            "ksp"
+          ]
+        },
+        "costs_only": {
+          "type": "boolean"
+        },
+        "max_paths": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "split_parallel_edges": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "k": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cost_ceiling": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CostCeilingJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tie_break": {
+          "enum": [
+            "fewer_hops",
+            "higher_capacity",
+            "higher_available_capacity",
+            "higher_headroom"
+          ]
+        },
+        "multipath": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parallel_edges": {
+          "type": "boolean"
+        },
+        "excluded_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_edges": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DirectedLinkJSON"
+              },
+              {
+                "$ref": "#/$defs/SyntheticIngressJSON"
+              }
+            ]
+          }
+        },
+        "residual_units": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_residual": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "source",
+        "target",
+        "mode",
+        "algorithm",
+        "costs_only",
+        "max_paths",
+        "split_parallel_edges",
+        "k",
+        "cost_ceiling",
+        "tie_break",
+        "multipath",
+        "parallel_edges",
+        "excluded_nodes",
+        "excluded_edges",
+        "residual_units",
+        "min_residual"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "algorithm": {
+                "const": "spf"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "min_residual": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "algorithm": {
+                "const": "ksp"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "min_residual": {
+                "type": "null"
+              },
+              "residual_units": {
+                "type": "null"
+              },
+              "max_paths": {
+                "type": "null"
+              },
+              "split_parallel_edges": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "MSDQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "msd"
+          ]
+        },
+        "demand_set": {
+          "type": "string"
+        },
+        "demands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemandQuestionJSON"
+          }
+        },
+        "alpha_start": {
+          "type": "number"
+        },
+        "growth_factor": {
+          "type": "number"
+        },
+        "alpha_min": {
+          "type": "number"
+        },
+        "alpha_max": {
+          "type": "number"
+        },
+        "alpha_tolerance": {
+          "type": "number"
+        },
+        "max_bracket_iters": {
+          "type": "integer"
+        },
+        "max_bisect_iters": {
+          "type": "integer"
+        },
+        "export_probe_rows": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "demand_set",
+        "demands",
+        "alpha_start",
+        "growth_factor",
+        "alpha_min",
+        "alpha_max",
+        "alpha_tolerance",
+        "max_bracket_iters",
+        "max_bisect_iters",
+        "export_probe_rows"
+      ],
+      "additionalProperties": false
+    },
+    "BuildGraphParametersJSON": {
+      "type": "object",
+      "properties": {
+        "add_reverse": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "add_reverse"
+      ],
+      "additionalProperties": false
+    },
+    "NetworkStatsParametersJSON": {
+      "type": "object",
+      "properties": {
+        "include_disabled": {
+          "type": "boolean"
+        },
+        "excluded_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_links": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "include_disabled",
+        "excluded_nodes",
+        "excluded_links"
+      ],
+      "additionalProperties": false
+    },
+    "CostPowerParametersJSON": {
+      "type": "object",
+      "properties": {
+        "include_disabled": {
+          "type": "boolean"
+        },
+        "aggregation_level": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "include_disabled",
+        "aggregation_level"
+      ],
+      "additionalProperties": false
+    },
+    "BuildGraphQuestionJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "build_graph"
+          ]
+        },
+        "parameters": {
+          "$ref": "#/$defs/BuildGraphParametersJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "NetworkStatsQuestionJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "network_stats"
+          ]
+        },
+        "parameters": {
+          "$ref": "#/$defs/NetworkStatsParametersJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "CostPowerQuestionJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "cost_power"
+          ]
+        },
+        "parameters": {
+          "$ref": "#/$defs/CostPowerParametersJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "DomainQuestionJSON": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BuildGraphQuestionJSON"
+            },
+            {
+              "$ref": "#/$defs/NetworkStatsQuestionJSON"
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/CostPowerQuestionJSON"
+        }
+      ]
+    },
+    "CustomQuestionJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "custom"
+          ]
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "parameters"
+      ],
+      "additionalProperties": false
+    },
+    "StepQuestionJSON": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "$ref": "#/$defs/CapacityQueryJSON"
+                            },
+                            {
+                              "$ref": "#/$defs/PlacementQueryJSON"
+                            }
+                          ]
+                        },
+                        {
+                          "$ref": "#/$defs/SensitivityQueryJSON"
+                        }
+                      ]
+                    },
+                    {
+                      "$ref": "#/$defs/PathQueryJSON"
+                    }
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/MSDQueryJSON"
+                }
+              ]
+            },
+            {
+              "$ref": "#/$defs/DomainQuestionJSON"
+            }
+          ]
+        },
+        {
+          "$ref": "#/$defs/CustomQuestionJSON"
+        }
+      ]
+    },
+    "ProbeRowsJSON": {
+      "type": "object",
+      "properties": {
+        "index": {
+          "type": "integer"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlacementRowJSON"
+          }
+        }
+      },
+      "required": [
+        "index",
+        "rows"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

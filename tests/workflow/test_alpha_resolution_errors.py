@@ -1,69 +1,80 @@
-"""Regression tests for TrafficMatrixPlacement._resolve_alpha error reporting.
+"""Placement accepts only a tested feasible alpha from an earlier MSD step."""
 
-A missing/misordered producer step must be reported as such, instead of a
-misleading alpha_from_field error (Results.get_step returns {} for unknown
-steps, so an isinstance guard alone cannot detect it).
-"""
-
-from __future__ import annotations
-
-from unittest.mock import MagicMock
+from dataclasses import replace
 
 import pytest
 
-from ngraph.results.store import Results
+from ngraph.analysis.units import UnitsSettings
+from ngraph.model.demand import DemandSet, DemandSpec
+from ngraph.model.network import Link, Network, Node
+from ngraph.model.selectors import Selector
+from ngraph.results import MSDAnalysis, StepContext
+from ngraph.scenario import Scenario, prepare, run
+from ngraph.workflow.build_graph import BuildGraph
+from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
 from ngraph.workflow.traffic_matrix_placement_step import TrafficMatrixPlacement
 
 
-def _mock_scenario() -> MagicMock:
-    mock_scenario = MagicMock()
-    td = MagicMock()
-    td.source = "A"
-    td.target = "B"
-    td.volume = 10.0
-    td.mode = "pairwise"
-    td.priority = 0
-    td.flow_policy = None
-    mock_scenario.demand_set.get_set.return_value = [td]
-    mock_scenario.results = Results()
-    return mock_scenario
-
-
-def test_missing_producer_step_reports_step_error() -> None:
-    scenario = _mock_scenario()
-    step = TrafficMatrixPlacement(
-        name="tm",
-        demand_set="default",
-        iterations=1,
-        alpha_from_step="no_such_step",
+def _scenario(workflow, *, failure_policies=None):
+    network = Network()
+    network.add_node(Node("A"))
+    network.add_node(Node("B"))
+    network.add_link(Link("A", "B", capacity=4, cost=3))
+    demands = DemandSet("load", (DemandSpec(Selector("^A$"), Selector("^B$"), 4),))
+    return Scenario(
+        network,
+        workflow,
+        demand_sets={"load": demands},
+        failure_policies=failure_policies,
+        units=UnitsSettings(1),
     )
-    with pytest.raises(
-        ValueError, match="alpha_from_step 'no_such_step' has no results"
-    ):
-        step.execute(scenario)
 
 
-def test_missing_field_in_existing_step_reports_field_error() -> None:
-    scenario = _mock_scenario()
-    scenario.results.enter_step("msd")
-    scenario.results.put("metadata", {})
-    scenario.results.put("data", {"other": 1.0})
-    scenario.results.exit_step()
+def _producer():
+    return MaximumSupportedDemand(name="msd", demand_set="load", alpha_tolerance=1)
 
-    step = TrafficMatrixPlacement(
-        name="tm",
-        demand_set="default",
-        iterations=1,
-        alpha_from_step="msd",
-        alpha_from_field="data.alpha_star",
+
+def _consumer():
+    return TrafficMatrixPlacement(
+        name="tm", demand_set="load", alpha_from_step="msd", workers=1
     )
-    with pytest.raises(ValueError, match="alpha_from_field 'data.alpha_star' missing"):
-        step.execute(scenario)
 
 
-def test_alpha_and_alpha_from_step_are_exclusive() -> None:
-    """An explicit alpha next to alpha_from_step would be ignored, so it raises."""
-    with pytest.raises(ValueError, match="either alpha or alpha_from_step"):
+@pytest.mark.parametrize(
+    "workflow",
+    [
+        (_consumer(),),
+        (_consumer(), _producer()),
+        (BuildGraph(name="msd"), _consumer()),
+    ],
+)
+def test_missing_producer_step_reports_step_error(workflow):
+    with pytest.raises(ValueError, match="alpha_from_step 'msd'.*earlier MSD"):
+        prepare(_scenario(workflow))
+    result = run(prepare(_scenario((_producer(), _consumer()))))
+    producer, consumer = result.steps
+    assert isinstance(producer.result, MSDAnalysis)
+    assert producer.result.alpha_feasible.value == 1
+    assert consumer.question.alpha == producer.result.alpha_feasible.value
+    assert consumer.question.alpha_from_step == "msd"
+    assert consumer.result.cases[0].states["converged"].totals.delivered_units == 4
+
+
+def test_producer_without_tested_feasible_alpha_refuses():
+    prepared = prepare(_scenario((_producer(), _consumer())))
+    producer = run(prepare(_scenario((_producer(),)))).steps[0]
+    context = StepContext(prepared, {"msd": producer}, "tm", 1, None, "none")
+    assert _consumer().execute(context).question.alpha == 1
+    absent = replace(producer, result=replace(producer.result, alpha_feasible=None))
+    with pytest.raises(ValueError, match="no tested feasible alpha"):
+        _consumer().execute(replace(context, prior_results={"msd": absent}))
+    with pytest.raises(ValueError, match="expected an earlier MSD result"):
+        _consumer().execute(replace(context, prior_results={}))
+
+
+def test_alpha_and_alpha_from_step_are_exclusive():
+    with pytest.raises(ValueError, match="alpha and alpha_from_step are exclusive"):
         TrafficMatrixPlacement(
-            name="tm", demand_set="default", alpha=2.0, alpha_from_step="msd"
+            name="tm", demand_set="load", alpha=2, alpha_from_step="msd"
         )
+    assert TrafficMatrixPlacement(demand_set="load", alpha=2).alpha == 2

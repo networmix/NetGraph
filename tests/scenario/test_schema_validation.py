@@ -378,7 +378,7 @@ demands:
       target: "storage.*"
       volume: 5000.0
       mode: "pairwise"
-      flow_policy: "SHORTEST_PATHS_ECMP"
+      preset: "SHORTEST_PATHS_ECMP"
 
 network:
   name: Traffic Test Network

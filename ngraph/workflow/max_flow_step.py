@@ -1,176 +1,158 @@
-"""MaxFlow workflow step.
+"""Native capacity questions over one shared sequence of failure cases."""
 
-Monte Carlo analysis of maximum flow capacity between node groups using FailureManager.
-Writes one `FlowIterationResult` dict per unique failure pattern under
-`data.flow_results` and the no-failure result under `data.baseline`.
+from dataclasses import dataclass, field
+from typing import Literal
 
-Baseline (no failures) always runs first as a separate reference; `iterations`
-counts failure scenarios only.
+import netgraph_core as ngc
 
-YAML Configuration Example:
-
-    workflow:
-      - type: MaxFlow
-        name: "maxflow_dc_to_edge"
-        source: "^datacenter/.*"
-        target: "^edge/.*"
-        mode: "combine"
-        failure_policy: "random_failures"
-        iterations: 100
-        parallelism: auto
-        shortest_path: false
-        require_capacity: true           # false for true IP/IGP semantics
-        flow_placement: "PROPORTIONAL"
-        seed: 42
-        store_failure_patterns: false
-        include_flow_details: false      # cost_distribution
-        include_min_cut: false           # min-cut edges list
-"""
-
-from __future__ import annotations
-
-import time
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Union
-
-from ngraph.analysis.failure_manager import FailureManager
-from ngraph.logging import get_logger
-from ngraph.types.base import FlowPlacement, Mode
+from ngraph.analysis.capacity import CapacityQuery, capacity
+from ngraph.analysis.demands import materialize_config, pooled, selected_pairs
+from ngraph.analysis.failures import FailureRequest, Workers, resolve_workers
+from ngraph.analysis.precision import question_inputs
+from ngraph.analysis.preparation import PreparedScenario, StepNeeds
+from ngraph.model.demand import FlowPolicyPreset, PinnedRoutes
+from ngraph.model.selectors import Selector
+from ngraph.results import StepContext, StepOutput
+from ngraph.utils.values import own_scalars, physical, shared_copy
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
-    resolve_parallelism,
-    serialize_monte_carlo_results,
+    workflow_failures,
 )
-
-if TYPE_CHECKING:
-    from ngraph.scenario import Scenario
-
-logger = get_logger(__name__)
 
 
 @dataclass
 class MaxFlow(WorkflowStep):
-    """Maximum flow Monte Carlo workflow step.
+    """Evaluate independent endpoint capacities with explicit native routing."""
 
-    Baseline (no failures) always runs first and is returned in a separate field.
-    The flow_results list holds unique failure patterns (deduplicated); each result
-    carries an occurrence_count of how many iterations matched that pattern.
-
-    Attributes:
-        source: Source node selector (string path or selector dict).
-        target: Target node selector (string path or selector dict).
-        mode: Flow analysis mode ("combine" or "pairwise").
-        failure_policy: Name of failure policy in scenario.failure_policy_set.
-            If None, no failure policy is applied.
-        iterations: Number of failure iterations to run; must be >= 0.
-        parallelism: Worker thread count, or "auto" for the CPU count.
-        shortest_path: Restrict flow to lowest-cost paths (IP/IGP mode).
-        require_capacity: If True (default), path selection considers capacity.
-            If False, path selection is cost-only (true IP/IGP semantics).
-        flow_placement: Flow placement strategy.
-        seed: Optional seed for reproducible results.
-        store_failure_patterns: Record the failure trace on each result.
-            Iterations are deduplicated, so a trace describes the first
-            iteration of its pattern, not every matching iteration.
-        include_flow_details: Whether to collect cost distribution per flow.
-        include_min_cut: Whether to include min-cut edges per flow.
-    """
-
-    source: Union[str, Dict[str, Any]] = ""
-    target: Union[str, Dict[str, Any]] = ""
-    mode: str = "combine"
+    _immutable = True
+    __copy__ = __deepcopy__ = shared_copy
+    source: Selector = field(default_factory=lambda: Selector(".*"))
+    target: Selector = field(default_factory=lambda: Selector(".*"))
+    mode: Literal["combine", "pairwise"] = "combine"
+    preset: FlowPolicyPreset | None = None
+    model: object = None
+    offer: float | None = None
+    design_demand: float | None = None
     failure_policy: str | None = None
     iterations: int = 1
-    parallelism: int | str = "auto"
-    shortest_path: bool = False
-    require_capacity: bool = True
-    flow_placement: FlowPlacement | str = FlowPlacement.PROPORTIONAL
-    store_failure_patterns: bool = False
-    include_flow_details: bool = False
-    include_min_cut: bool = False
+    workers: Workers = "auto"
+    failure_trace: bool = False
+    outputs: ngc.OutputOptions = field(default_factory=ngc.OutputOptions)
+    export_cost_distribution: bool = False
+    export_details: bool = False
 
-    def __post_init__(self) -> None:
-        if self.iterations < 0:
-            raise ValueError("iterations must be >= 0")
-        resolve_parallelism(self.parallelism)  # validate at construction
-        Mode.from_string(self.mode)  # validate; raises ValueError on bad values
-        if isinstance(self.flow_placement, str):
-            self.flow_placement = FlowPlacement.from_string(self.flow_placement)
+    def __post_init__(self):
+        super().__post_init__()
+        if not isinstance(self.export_details, bool):
+            raise TypeError("export_details: expected bool")
+        if not isinstance(self.source, Selector) or not isinstance(
+            self.target, Selector
+        ):
+            raise TypeError("MaxFlow endpoints: expected Selectors")
+        if self.mode not in ("combine", "pairwise"):
+            raise ValueError("MaxFlow.mode: expected combine or pairwise")
+        if self.preset is not None and self.model is not None:
+            raise ValueError("MaxFlow: preset and model are exclusive")
+        if self.preset is not None and not isinstance(self.preset, FlowPolicyPreset):
+            raise TypeError("MaxFlow.preset: expected FlowPolicyPreset")
+        for name in ("offer", "design_demand"):
+            if getattr(self, name) is not None:
+                object.__setattr__(
+                    self, name, physical(getattr(self, name), f"MaxFlow.{name}")
+                )
+        FailureRequest(None, self.iterations, self.seed, self.failure_trace)
+        resolve_workers(self.workers)
+        if not isinstance(self.outputs, ngc.OutputOptions):
+            raise TypeError("MaxFlow.outputs: expected native OutputOptions")
+        if not isinstance(self.export_cost_distribution, bool):
+            raise TypeError("MaxFlow.export_cost_distribution: expected bool")
+        own_scalars(
+            self,
+            f"workflow step {self.name}",
+            (
+                "mode",
+                "failure_policy",
+                "iterations",
+                "workers",
+                "failure_trace",
+                "export_cost_distribution",
+                "export_details",
+            ),
+        )
 
-    def run(self, scenario: "Scenario") -> None:
-        t0 = time.perf_counter()
-        logger.info("Starting MaxFlow: name=%s", self.name)
-        logger.debug(
-            "MaxFlow params: source=%s target=%s mode=%s failure_iters=%d parallelism=%s "
-            "failure_policy=%s include_flow_details=%s include_min_cut=%s",
+    @classmethod
+    def yaml_arguments(cls, arguments: dict, name: str) -> dict:
+        from ngraph.dsl.inputs import flow_outputs, policy
+        from ngraph.model.selectors import normalize_selector
+
+        for endpoint in ("source", "target"):
+            if endpoint not in arguments:
+                raise ValueError(f"workflow step {name}: {endpoint} is required")
+            arguments[endpoint] = normalize_selector(arguments[endpoint], "workflow")
+        if "preset" in arguments or "model" in arguments:
+            declaration = policy(arguments, f"workflow step {name}")
+            arguments.pop("preset", None)
+            arguments.pop("model", None)
+            key = "preset" if isinstance(declaration, FlowPolicyPreset) else "model"
+            arguments[key] = declaration
+        return flow_outputs(arguments, name)
+
+    @property
+    def declaration(self):
+        return (
+            self.model
+            if self.model is not None
+            else self.preset or FlowPolicyPreset.TE_MAXFLOW_UNLIM
+        )
+
+    def needs(self) -> StepNeeds:
+        return StepNeeds(
+            numerical=True,
+            failure_policy=self.failure_policy,
+            capacity=self.query,
+            inputs=question_inputs(self.offer, self.design_demand, self.declaration),
+            pool_endpoints=(self.source, self.target)
+            if pooled(self.mode, self.declaration)
+            else None,
+        )
+
+    def query(self, prepared: PreparedScenario, failures=None) -> CapacityQuery:
+        pairs = selected_pairs(
+            prepared.scenario.network,
             self.source,
             self.target,
             self.mode,
-            self.iterations,
-            self.parallelism,
-            self.failure_policy,
-            self.include_flow_details,
-            self.include_min_cut,
+            f"step {self.name}",
+        )
+        if isinstance(self.declaration, PinnedRoutes) and len(pairs) != 1:
+            raise ValueError(
+                f"step {self.name}: pinned model requires one endpoint pair"
+            )
+        config = materialize_config(
+            prepared.topology, prepared._named, pairs[0], self.declaration
+        )
+        return CapacityQuery(
+            self.source,
+            self.target,
+            config,
+            self.mode,
+            self.offer,
+            self.design_demand,
+            failures,
+            self.workers,
+            self.outputs,
+            self.export_cost_distribution,
+            self.export_details,
+            self.declaration,
         )
 
-        # __post_init__ converts string flow_placement values to the enum
-        assert isinstance(self.flow_placement, FlowPlacement)
-
-        fm = FailureManager(
-            network=scenario.network,
-            failure_policy_set=scenario.failure_policy_set,
-            policy_name=self.failure_policy,
+    def run(self, context: StepContext) -> StepOutput:
+        failures = workflow_failures(
+            context, self.failure_policy, self.iterations, self.failure_trace
         )
-        effective_parallelism = resolve_parallelism(self.parallelism)
-        raw = fm.run_max_flow_monte_carlo(
-            source=self.source,
-            target=self.target,
-            mode=self.mode,
-            iterations=self.iterations,
-            parallelism=effective_parallelism,
-            shortest_path=self.shortest_path,
-            require_capacity=self.require_capacity,
-            flow_placement=self.flow_placement,
-            seed=self.seed,
-            store_failure_patterns=self.store_failure_patterns,
-            include_flow_details=self.include_flow_details,
-            include_min_cut=self.include_min_cut,
-        )
-
-        scenario.results.put("metadata", raw.get("metadata", {}))
-
-        baseline_dict, flow_results = serialize_monte_carlo_results(raw)
-
-        context = {
-            "source": self.source,
-            "target": self.target,
-            "mode": self.mode,
-            "shortest_path": bool(self.shortest_path),
-            "require_capacity": bool(self.require_capacity),
-            "flow_placement": self.flow_placement.name,
-            "include_flow_details": bool(self.include_flow_details),
-            "include_min_cut": bool(self.include_min_cut),
-        }
-        scenario.results.put(
-            "data",
-            {
-                "baseline": baseline_dict,
-                "flow_results": flow_results,
-                "context": context,
-            },
-        )
-
-        metadata = raw.get("metadata", {})
-        logger.info(
-            "MaxFlow completed: name=%s failure_iters=%d unique_patterns=%d "
-            "workers=%d duration=%.3fs",
-            self.name,
-            metadata.get("iterations", self.iterations),
-            metadata.get("unique_patterns", 0),
-            metadata.get("parallelism", effective_parallelism),
-            time.perf_counter() - t0,
-        )
+        value = capacity(context.prepared, self.query(context.prepared, failures))
+        return StepOutput(value.query, value)
 
 
 register_workflow_step("MaxFlow")(MaxFlow)

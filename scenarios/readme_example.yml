@@ -42,7 +42,7 @@ demands:
       target: ^site2/leaf/
       volume: 100.0
       mode: combine
-      flow_policy: SHORTEST_PATHS_ECMP
+      preset: SHORTEST_PATHS_ECMP
 
 # Analysis workflow: find max capacity, then test under failures
 workflow:
@@ -59,6 +59,6 @@ workflow:
   - type: TrafficMatrixPlacement
     name: placement_at_max
     demand_set: global_traffic
-    alpha_from_step: max_demand # Use alpha_star from MSD step
+    alpha_from_step: max_demand # Use its largest tested feasible alpha
     failure_policy: random_link
     iterations: 100

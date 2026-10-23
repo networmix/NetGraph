@@ -1,671 +1,398 @@
-"""Tests for shortest path analysis via AnalysisContext.
-
-Tests cover:
-- shortest_path_cost: cost only, COMBINE and PAIRWISE modes
-- shortest_paths: full Path objects with node sequence and edge references
-- k_shortest_paths: multiple paths per pair with cost limits
-"""
-
-from __future__ import annotations
+"""Public path selection, native path values and declared cross-pair ordering."""
 
 import os
 import subprocess
 import sys
 import textwrap
-from typing import Any
+from fractions import Fraction
 
+import netgraph_core as ngc
 import pytest
 
-from ngraph import Link, Mode, Network, Node, analyze
+from ngraph.analysis.paths import PathQuery, paths
+from ngraph.analysis.units import UnitsSettings
+from ngraph.model.network import Network, Node
+from ngraph.model.selectors import Condition, MatchSpec, Selector
+from ngraph.scenario import Scenario, prepare
+from tests.placement_fixture import network_of
 
 
-def _simple_path_network() -> Network:
-    """Build a small network for path testing.
-
-    Topology:
-        A -> B (cost 1, cap 10) -> C (cost 1, cap 10)
-        A -> C (cost 3, cap 10)
-
-    Shortest path A->C: via B (cost 2)
-    Second path A->C: direct (cost 3)
-    """
-    net = Network()
-    for name in ["A", "B", "C"]:
-        net.add_node(Node(name))
-
-    net.add_link(Link("A", "B", capacity=10.0, cost=1.0))
-    net.add_link(Link("B", "C", capacity=10.0, cost=1.0))
-    net.add_link(Link("A", "C", capacity=10.0, cost=3.0))
-
-    return net
+def _prepare(network):
+    return prepare(Scenario(network, units=UnitsSettings(1)))
 
 
-def _group_network() -> Network:
-    """Build a network with attribute-based groups.
-
-    Topology:
-        A (group=src) -> X (cost 1) -> B (group=dst)
-        A (group=src) -> Y (cost 2) -> B (group=dst)
-
-    Groups: A has group=src, B has group=dst
-    """
-    net = Network()
-    net.add_node(Node("A", attrs={"group": "src"}))
-    net.add_node(Node("X"))
-    net.add_node(Node("Y"))
-    net.add_node(Node("B", attrs={"group": "dst"}))
-
-    net.add_link(Link("A", "X", capacity=10.0, cost=1.0))
-    net.add_link(Link("X", "B", capacity=10.0, cost=1.0))
-    net.add_link(Link("A", "Y", capacity=10.0, cost=2.0))
-    net.add_link(Link("Y", "B", capacity=10.0, cost=2.0))
-
-    return net
+def _simple_path_network():
+    return network_of([("A", "B", 10, 1), ("B", "C", 10, 1), ("A", "C", 10, 3)])
 
 
-def _multi_source_sink_network() -> Network:
-    """Build a network with multiple sources and sinks.
+def _group_network():
+    network = network_of(
+        [("A", "X", 10, 1), ("X", "B", 10, 1), ("A", "Y", 10, 2), ("Y", "B", 10, 2)]
+    )
+    network.replace_node("A", attrs={"group": "src"})
+    network.replace_node("B", attrs={"group": "dst"})
+    return network
 
-    Topology:
-        A (group=src) -> X -> C (group=dst)
-        B (group=src) -> X -> D (group=dst)
 
-    Sources: A, B (group=src)
-    Sinks: C, D (group=dst)
-    """
-    net = Network()
-    net.add_node(Node("A", attrs={"group": "src"}))
-    net.add_node(Node("B", attrs={"group": "src"}))
-    net.add_node(Node("X"))
-    net.add_node(Node("C", attrs={"group": "dst"}))
-    net.add_node(Node("D", attrs={"group": "dst"}))
+def _multi_source_sink_network():
+    network = network_of(
+        [("A", "X", 10, 1), ("B", "X", 10, 2), ("X", "C", 10, 1), ("X", "D", 10, 2)]
+    )
+    for name in ("A", "B", "C", "D"):
+        network.replace_node(
+            name, attrs={"group": "src" if name in ("A", "B") else "dst"}
+        )
+    return network
 
-    net.add_link(Link("A", "X", capacity=10.0, cost=1.0))
-    net.add_link(Link("B", "X", capacity=10.0, cost=2.0))
-    net.add_link(Link("X", "C", capacity=10.0, cost=1.0))
-    net.add_link(Link("X", "D", capacity=10.0, cost=2.0))
 
-    return net
+def _group_selector(group):
+    return Selector(
+        group_by="group", match=MatchSpec([Condition("group", "==", group)])
+    )
+
+
+def _row(
+    prepared,
+    *,
+    source=None,
+    target=None,
+    k=None,
+    costs_only=False,
+    mode="combine",
+    ceiling=None,
+    nodes=(),
+    links=(),
+):
+    topology = prepared.topology
+    mask = topology.graph.eligibility(
+        excluded_nodes=[topology.node_id_by_name[name] for name in nodes],
+        excluded_edges=[
+            edge for name in links for edge in topology.edges_by_link[name]
+        ],
+    )
+    options = (
+        ngc.SpfOptions(ngc.Direction.FORWARD, eligibility=mask)
+        if k is None
+        else ngc.KspOptions(k, cost_ceiling=ceiling, eligibility=mask)
+    )
+    return paths(
+        prepared,
+        PathQuery(
+            source or Selector("^A$"),
+            target or Selector("^C$"),
+            mode=mode,
+            options=options,
+            costs_only=costs_only,
+        ),
+    ).rows[0]
+
+
+def _node_sequence(prepared, path):
+    names = [prepared.topology.node_names[path.source()]]
+    for hop in path.hops():
+        ref = prepared.topology.edge_refs[hop[0]]
+        source, target, _ = ref.link.split("|")
+        names.append(target if ref.direction == "forward" else source)
+    return tuple(names)
 
 
 class TestShortestPathCosts:
-    """Tests for shortest_path_cost method."""
-
-    def test_pairwise_mode(self) -> None:
-        """Test pairwise mode returns costs for each group pair."""
-        net = _multi_source_sink_network()
-
-        results = analyze(net).shortest_path_cost(
-            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
+    def test_pairwise_mode(self):
+        prepared = _prepare(_multi_source_sink_network())
+        row = _row(
+            prepared,
+            source=_group_selector("src"),
+            target=_group_selector("dst"),
+            mode="pairwise",
+            costs_only=True,
         )
-
-        # With group_by, nodes are grouped by their group attribute value
-        # Sources: src (A, B), Sinks: dst (C, D)
-        # The only non-self pair is src -> dst
-        assert ("src", "dst") in results
-        # Best path from src to dst: A->X->C with cost 2
-        assert pytest.approx(results[("src", "dst")], abs=1e-9) == 2.0
-
-    def test_combine_mode(self) -> None:
-        """Test combine mode returns best cost across all pairs."""
-        net = _simple_path_network()
-
-        results = analyze(net).shortest_path_cost("^A$", "^C$", mode=Mode.COMBINE)
-
-        # Best path from A to C: A->B->C with cost 2
-        assert len(results) == 1
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 2.0
-
-    def test_no_path_returns_inf(self) -> None:
-        """Test that unreachable pairs return infinity."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        # No link between A and B
-
-        results = analyze(net).shortest_path_cost("^A$", "^B$", mode=Mode.COMBINE)
-
-        assert results[("^A$", "^B$")] == float("inf")
-
-    def test_excluded_nodes(self) -> None:
-        """Test that excluded nodes are not used in paths."""
-        net = _simple_path_network()
-
-        # Exclude B - only direct A->C path available
-        results = analyze(net).shortest_path_cost(
-            "^A$", "^C$", mode=Mode.COMBINE, excluded_nodes={"B"}
+        assert row.endpoints.sources == ("A", "B") and row.endpoints.destinations == (
+            "C",
+            "D",
         )
+        assert row.cost == 2 and row.paths is None
 
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 3.0
+    def test_combine_mode(self):
+        row = _row(_prepare(_simple_path_network()), costs_only=True)
+        assert row.cost == 2 and row.paths is None
+
+    def test_no_path_returns_none(self):
+        row = _row(
+            _prepare(Network(nodes={name: Node(name) for name in "AC"})),
+            costs_only=True,
+        )
+        assert row.cost is None and row.paths is None
+
+    def test_excluded_nodes(self):
+        prepared = _prepare(_simple_path_network())
+        assert _row(prepared, costs_only=True, nodes=("B",)).cost == 3
+        assert _row(prepared, costs_only=True).cost == 2
 
 
 class TestShortestPaths:
-    """Tests for shortest_paths method."""
+    def test_returns_native_path_objects(self):
+        prepared = _prepare(_simple_path_network())
+        row = _row(prepared)
+        assert len(row.paths) == 1 and isinstance(row.paths[0], ngc.Path)
+        assert row.paths[0].cost() == row.cost == 2
+        assert row.paths[0].graph_uid() == prepared.topology.graph.uid()
+        assert _node_sequence(prepared, row.paths[0]) == ("A", "B", "C")
 
-    def test_returns_path_objects(self) -> None:
-        """Test that shortest_paths returns Path objects."""
-        net = _simple_path_network()
-
-        results = analyze(net).shortest_paths("^A$", "^C$", mode=Mode.COMBINE)
-
-        paths = results[("^A$", "^C$")]
-        assert len(paths) >= 1
-
-        path = paths[0]
-        assert path.cost == 2.0  # A->B->C
-        assert len(path.path) == 3  # A, B, C (path attribute is the sequence)
-
-    def test_combine_mode_paths(self) -> None:
-        """Test combine mode returns paths for best cost."""
-        net = _group_network()
-
-        results = analyze(net).shortest_paths(
-            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.COMBINE
+    def test_combine_mode_paths(self):
+        prepared = _prepare(_group_network())
+        row = _row(
+            prepared, source=_group_selector("src"), target=_group_selector("dst")
         )
+        assert row.cost == 2 and [
+            _node_sequence(prepared, path) for path in row.paths
+        ] == [("A", "X", "B")]
 
-        # Should have one result with combined labels
-        assert len(results) == 1
-        key = list(results.keys())[0]
-        paths = results[key]
-        # Best path is A->X->B with cost 2
-        if paths:  # May be empty if src/dst overlap in combined mode
-            assert all(p.cost == 2.0 for p in paths)
-
-    def test_pairwise_mode_paths(self) -> None:
-        """Test pairwise mode returns paths per pair."""
-        net = _multi_source_sink_network()
-
-        results = analyze(net).shortest_paths(
-            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
+    def test_pairwise_mode_paths(self):
+        prepared = _prepare(_multi_source_sink_network())
+        value = paths(
+            prepared,
+            PathQuery(
+                Selector("^[AB]$", group_by="name"),
+                Selector("^[CD]$", group_by="name"),
+                mode="pairwise",
+            ),
         )
+        assert [
+            (row.endpoints.sources[0], row.endpoints.destinations[0], row.cost)
+            for row in value.rows
+        ] == [("A", "C", 2), ("A", "D", 3), ("B", "C", 3), ("B", "D", 4)]
+        assert [_node_sequence(prepared, row.paths[0]) for row in value.rows] == [
+            ("A", "X", "C"),
+            ("A", "X", "D"),
+            ("B", "X", "C"),
+            ("B", "X", "D"),
+        ]
 
-        # Should have a result for src->dst pair
-        assert ("src", "dst") in results
+    def test_path_contains_named_edge_references(self):
+        prepared = _prepare(_simple_path_network())
+        (path,) = _row(prepared).paths
+        refs = [prepared.topology.edge_refs[hop[0]] for hop in path.hops()]
+        assert [(ref.link, ref.direction) for ref in refs] == [
+            ("A|B|0", "forward"),
+            ("B|C|0", "forward"),
+        ]
+        assert _node_sequence(prepared, path) == ("A", "B", "C")
 
-    def test_path_contains_node_names(self) -> None:
-        """Test that path contains correct node names."""
-        net = _simple_path_network()
 
-        results = analyze(net).shortest_paths("^A$", "^C$", mode=Mode.COMBINE)
+def _multi_member_group_network():
+    return network_of(
+        [
+            ("x1", "y1", 10, 10),
+            ("x2", "y2", 10, 11),
+            ("x1", "m", 10, 5),
+            ("m", "y1", 10, 10),
+        ]
+    )
 
-        paths = results[("^A$", "^C$")]
-        path = paths[0]
 
-        # Extract node names from path (path is list of (node_name, edge_refs) tuples)
-        node_names = [elem[0] for elem in path.path]
-        assert "A" in node_names
-        assert "C" in node_names
+def _tie_network():
+    return network_of(
+        [
+            (source, middle, 10, 1)
+            for source in ("S1", "S2")
+            for middle in ("M1", "M2", "M3")
+        ]
+        + [
+            (middle, target, 10, 1)
+            for middle in ("M1", "M2", "M3")
+            for target in ("T1", "T2")
+        ]
+    )
 
 
 class TestKShortestPaths:
-    """Tests for k_shortest_paths method."""
+    def test_returns_multiple_paths(self):
+        prepared = _prepare(_simple_path_network())
+        row = _row(prepared, k=3, mode="pairwise")
+        assert [path.cost() for path in row.paths] == [2, 3]
+        assert [_node_sequence(prepared, path) for path in row.paths] == [
+            ("A", "B", "C"),
+            ("A", "C"),
+        ]
 
-    def test_returns_multiple_paths(self) -> None:
-        """Test that k_shortest_paths can return multiple paths."""
-        net = _simple_path_network()
+    def test_k_limits_paths(self):
+        row = _row(_prepare(_simple_path_network()), k=1)
+        assert len(row.paths) == 1 and row.paths[0].cost() == 2
 
-        # Use capturing group to get individual node labels
-        results = analyze(net).k_shortest_paths(
-            "^(A)$", "^(C)$", max_k=3, mode=Mode.PAIRWISE
+    def test_combine_mode(self):
+        prepared = _prepare(_group_network())
+        row = _row(
+            prepared, source=_group_selector("src"), target=_group_selector("dst"), k=3
         )
+        assert [path.cost() for path in row.paths] == [2, 4]
 
-        paths = results[("A", "C")]
-        # Should have 2 paths: A->B->C (cost 2) and A->C (cost 3)
-        assert len(paths) == 2
-        assert paths[0].cost <= paths[1].cost  # Sorted by cost
+    def test_excluded_nodes(self):
+        prepared = _prepare(_simple_path_network())
+        row = _row(prepared, k=2, nodes=("B",))
+        assert [path.cost() for path in row.paths] == [3]
+        assert [path.cost() for path in _row(prepared, k=2).paths] == [2, 3]
 
-    def test_max_k_limits_paths(self) -> None:
-        """Test that max_k limits number of returned paths."""
-        net = _simple_path_network()
+    def test_exact_inclusive_cost_stretch(self):
+        prepared = _prepare(_simple_path_network())
+        assert [
+            path.cost()
+            for path in _row(
+                prepared, k=5, ceiling=ngc.CostStretch(Fraction(3, 2))
+            ).paths
+        ] == [2, 3]
+        assert [
+            path.cost()
+            for path in _row(
+                prepared, k=5, ceiling=ngc.CostStretch(Fraction(149, 100))
+            ).paths
+        ] == [2]
 
-        results = analyze(net).k_shortest_paths(
-            "^(A)$", "^(C)$", max_k=1, mode=Mode.PAIRWISE
+    @pytest.mark.parametrize(
+        "k,ceiling,expected",
+        [
+            (2, None, [10, 11]),
+            (5, None, [10, 11, 15]),
+            (5, ngc.CostStretch(Fraction(6, 5)), [10, 11]),
+        ],
+    )
+    def test_multi_node_groups_merge_all_pairs(self, k, ceiling, expected):
+        prepared = _prepare(_multi_member_group_network())
+        row = _row(
+            prepared, source=Selector("^x"), target=Selector("^y"), k=k, ceiling=ceiling
         )
+        assert [path.cost() for path in row.paths] == expected
 
-        paths = results[("A", "C")]
-        assert len(paths) == 1
-
-    def test_combine_mode(self) -> None:
-        """Test combine mode returns paths for best group pair."""
-        net = _group_network()
-
-        results = analyze(net).k_shortest_paths(
-            {"group_by": "group"}, {"group_by": "group"}, max_k=3, mode=Mode.COMBINE
+    def test_many_pairs_keep_global_top_k(self):
+        network = network_of(
+            [(f"A{i}", "X", 10, i + 1) for i in range(10)]
+            + [("X", f"B{i}", 10, (i + 1) * 100) for i in range(10)]
         )
+        prepared = _prepare(network)
+        row = _row(prepared, source=Selector("^A"), target=Selector("^B"), k=3)
+        assert [path.cost() for path in row.paths] == [101, 102, 103]
+        assert [_node_sequence(prepared, path) for path in row.paths] == [
+            ("A0", "X", "B0"),
+            ("A1", "X", "B0"),
+            ("A2", "X", "B0"),
+        ]
 
-        # Should have one combined result
-        assert len(results) == 1
-
-    def test_excluded_nodes(self) -> None:
-        """Test that excluded nodes affect k-shortest paths."""
-        net = _simple_path_network()
-
-        # Exclude B - only direct A->C path (cost 3) should be available
-        results = analyze(net).k_shortest_paths(
-            "^(A)$", "^(C)$", max_k=2, mode=Mode.PAIRWISE, excluded_nodes={"B"}
-        )
-
-        paths = results[("A", "C")]
-        assert len(paths) == 1
-        assert paths[0].cost == 3.0
-
-    def test_max_path_cost_factor(self) -> None:
-        """Test max_path_cost_factor limits paths by relative cost."""
-        net = _simple_path_network()
-
-        # With factor 1.5, only paths up to 1.5 * best_cost = 1.5 * 2 = 3.0
-        results = analyze(net).k_shortest_paths(
-            "^(A)$", "^(C)$", max_k=5, mode=Mode.PAIRWISE, max_path_cost_factor=1.5
-        )
-
-        paths = results[("A", "C")]
-        # Both paths (cost 2 and 3) should be included since 3 <= 3.0
-        assert len(paths) == 2
-
-    @staticmethod
-    def _multi_member_group_network() -> Network:
-        """Build a network where groups contain multiple nodes.
-
-        Topology:
-            x1 -> y1 (cost 10)
-            x2 -> y2 (cost 11)
-            x1 -> m -> y1 (cost 5 + 10 = 15)
-
-        Group-to-group paths sorted by cost: 10 (x1->y1), 11 (x2->y2),
-        15 (x1->m->y1).
-        """
-        net = Network()
-        for name in ["x1", "x2", "y1", "y2", "m"]:
-            net.add_node(Node(name))
-
-        net.add_link(Link("x1", "y1", capacity=10.0, cost=10.0))
-        net.add_link(Link("x2", "y2", capacity=10.0, cost=11.0))
-        net.add_link(Link("x1", "m", capacity=10.0, cost=5.0))
-        net.add_link(Link("m", "y1", capacity=10.0, cost=10.0))
-        return net
-
-    def test_multi_node_groups_merge_paths_across_pairs(self) -> None:
-        """KSP between multi-node groups merges paths from all node pairs.
-
-        Running KSP only between the single best (src, snk) node pair would
-        silently omit cheaper paths from other pairs (here the cost-11
-        x2->y2 path versus the cost-15 x1->m->y1 path).
-        """
-        net = self._multi_member_group_network()
-
-        results = analyze(net).k_shortest_paths("^x", "^y", max_k=2, mode=Mode.COMBINE)
-
-        assert len(results) == 1
-        paths = list(results.values())[0]
-        assert [p.cost for p in paths] == [10.0, 11.0]
-
-    def test_multi_node_groups_all_paths_in_cost_order(self) -> None:
-        """KSP with a larger max_k returns merged paths in cost order."""
-        net = self._multi_member_group_network()
-
-        results = analyze(net).k_shortest_paths("^x", "^y", max_k=5, mode=Mode.COMBINE)
-
-        paths = list(results.values())[0]
-        assert [p.cost for p in paths] == [10.0, 11.0, 15.0]
-
-    def test_multi_node_groups_cost_factor_relative_to_group_best(self) -> None:
-        """max_path_cost_factor applies to the best cost across all pairs."""
-        net = self._multi_member_group_network()
-
-        # Cap = 10 * 1.2 = 12: includes costs 10 and 11, excludes 15
-        results = analyze(net).k_shortest_paths(
-            "^x", "^y", max_k=5, mode=Mode.COMBINE, max_path_cost_factor=1.2
-        )
-
-        paths = list(results.values())[0]
-        assert [p.cost for p in paths] == [10.0, 11.0]
-
-    @staticmethod
-    def _many_pair_group_network() -> Network:
-        """Build 10 sources and 10 sinks through one hub, all pair costs distinct.
-
-        Pair (Ai, Bj) costs (i + 1) + (j + 1) * 100, so the cheapest
-        pairs are (A0, B0) = 101, (A1, B0) = 102, (A2, B0) = 103, ...
-        """
-        net = Network()
-        net.add_node(Node("X"))
-        for i in range(10):
-            net.add_node(Node(f"A{i}"))
-            net.add_node(Node(f"B{i}"))
-            net.add_link(Link(f"A{i}", "X", capacity=10.0, cost=float(i + 1)))
-            net.add_link(Link("X", f"B{i}", capacity=10.0, cost=float((i + 1) * 100)))
-        return net
-
-    def test_multi_node_groups_prune_pairs_beyond_kth_best_cost(self) -> None:
-        """Per-pair KSP stops once later pairs cannot reach the top-k.
-
-        A full KSP per reachable node pair (100 runs here) is wasted work:
-        only the cheapest few pairs can contribute paths that survive the
-        max_k truncation.
-        """
-        net = self._many_pair_group_network()
-        ctx = analyze(net)
-        core = ctx._ensure_core()
-        inner = core._algorithms
-        calls = {"ksp": 0}
-
-        class CountingAlgorithms:
-            def __getattr__(self, name: str) -> Any:
-                return getattr(inner, name)
-
-            def ksp(self, *args: Any, **kwargs: Any) -> Any:
-                calls["ksp"] += 1
-                return inner.ksp(*args, **kwargs)
-
-        core._algorithms = CountingAlgorithms()  # type: ignore[assignment]
-
-        results = ctx.k_shortest_paths("^A", "^B", max_k=3, mode=Mode.COMBINE)
-
-        paths = list(results.values())[0]
-        assert [p.cost for p in paths] == [101.0, 102.0, 103.0]
-        # 3 KSP runs collect the top-3; the 4th-cheapest pair (cost 104)
-        # exceeds the k-th best cost (103) and terminates the pair loop.
-        assert calls["ksp"] <= 4
-
-    def test_equal_cost_truncation_is_deterministic(self) -> None:
-        """Equal-cost ties beyond max_k truncate by structural path order.
-
-        With more equal-cost paths than max_k, truncation must not keep a
-        set-iteration-order (hash-dependent) subset.
-        """
-        net = Network()
-        for name in ["S1", "S2", "M1", "M2", "M3", "T1", "T2"]:
-            net.add_node(Node(name))
-        for src in ["S1", "S2"]:
-            for mid in ["M1", "M2", "M3"]:
-                net.add_link(Link(src, mid, capacity=10.0, cost=1.0))
-        for mid in ["M1", "M2", "M3"]:
-            for dst in ["T1", "T2"]:
-                net.add_link(Link(mid, dst, capacity=10.0, cost=1.0))
-
-        # 12 equal-cost (cost 2) paths exist; max_k=3 forces truncation.
-        # The smallest 3 by (cost, node sequence) must always win.
-        for _ in range(2):  # Identical across repeated context builds
-            results = analyze(net).k_shortest_paths(
-                "^S", "^T", max_k=3, mode=Mode.COMBINE
-            )
-            paths = list(results.values())[0]
-            assert [p.nodes_seq for p in paths] == [
+    def test_equal_cost_truncation_uses_pair_ordinal_then_native_rank(self):
+        for _ in range(2):
+            prepared = _prepare(_tie_network())
+            row = _row(prepared, source=Selector("^S"), target=Selector("^T"), k=3)
+            assert [_node_sequence(prepared, path) for path in row.paths] == [
                 ("S1", "M1", "T1"),
-                ("S1", "M1", "T2"),
                 ("S1", "M2", "T1"),
+                ("S1", "M3", "T1"),
             ]
 
-    def test_equal_cost_truncation_stable_across_hash_seeds(self) -> None:
-        """Truncated path selection is identical across PYTHONHASHSEED values.
-
-        The selected subset of equal-cost paths must not vary across
-        processes with different string-hash seeds.
-        """
-        script = textwrap.dedent(
-            """
-            from ngraph import Link, Mode, Network, Node, analyze
-
-            net = Network()
-            for name in ["S1", "S2", "M1", "M2", "M3", "T1", "T2"]:
-                net.add_node(Node(name))
-            for src in ["S1", "S2"]:
-                for mid in ["M1", "M2", "M3"]:
-                    net.add_link(Link(src, mid, capacity=10.0, cost=1.0))
-            for mid in ["M1", "M2", "M3"]:
-                for dst in ["T1", "T2"]:
-                    net.add_link(Link(mid, dst, capacity=10.0, cost=1.0))
-
-            results = analyze(net).k_shortest_paths(
-                "^S", "^T", max_k=3, mode=Mode.COMBINE
-            )
-            paths = list(results.values())[0]
-            print(sorted(p.nodes_seq for p in paths))
-            """
-        )
-
-        outputs = set()
+    def test_equal_cost_truncation_stable_across_hash_seeds(self):
+        script = textwrap.dedent("""
+            from ngraph.analysis.paths import PathQuery, paths
+            from ngraph.model.selectors import Selector
+            from tests.analysis.test_paths import _prepare, _tie_network, _node_sequence
+            import netgraph_core as ngc
+            prepared = _prepare(_tie_network())
+            result = paths(prepared, PathQuery(Selector('^S'), Selector('^T'), options=ngc.KspOptions(3)))
+            print([_node_sequence(prepared, path) for path in result.rows[0].paths])
+        """)
+        outputs = []
         for seed in ("1", "42"):
-            env = dict(os.environ, PYTHONHASHSEED=seed)
-            proc = subprocess.run(
+            result = subprocess.run(
                 [sys.executable, "-c", script],
+                env=dict(os.environ, PYTHONHASHSEED=seed),
                 capture_output=True,
                 text=True,
-                env=env,
+                timeout=30,
                 check=True,
             )
-            outputs.add(proc.stdout.strip())
-
-        assert len(outputs) == 1
-
-
-class TestDictSelectorsWithShortestPaths:
-    """Tests for dict-based selectors with shortest path methods.
-
-    Verifies that shortest_path_cost, shortest_paths, and k_shortest_paths
-    handle dict selectors (group_by, match) in both unbound and
-    bound context modes.
-    """
-
-    def test_shortest_path_cost_with_dict_selector(self) -> None:
-        """shortest_path_cost works with dict selectors."""
-        net = _multi_source_sink_network()
-
-        results = analyze(net).shortest_path_cost(
-            {"group_by": "group"}, {"group_by": "group"}, mode=Mode.PAIRWISE
+            outputs.append(result.stdout.strip())
+        assert (
+            outputs
+            == ["[('S1', 'M1', 'T1'), ('S1', 'M2', 'T1'), ('S1', 'M3', 'T1')]"] * 2
         )
 
-        assert ("src", "dst") in results
-        assert pytest.approx(results[("src", "dst")], abs=1e-9) == 2.0
 
-    def test_shortest_paths_with_match_selector(self) -> None:
-        """shortest_paths works with match conditions in selectors."""
-        net = _multi_source_sink_network()
-
-        results = analyze(net).shortest_paths(
-            {
-                "path": ".*",
-                "match": {
-                    "conditions": [{"attr": "group", "op": "==", "value": "src"}]
-                },
-            },
-            {
-                "path": ".*",
-                "match": {
-                    "conditions": [{"attr": "group", "op": "==", "value": "dst"}]
-                },
-            },
-            mode=Mode.COMBINE,
+class TestTypedSelectors:
+    def test_cost_with_grouping(self):
+        prepared = _prepare(_multi_source_sink_network())
+        assert (
+            _row(
+                prepared,
+                source=_group_selector("src"),
+                target=_group_selector("dst"),
+                costs_only=True,
+                mode="pairwise",
+            ).cost
+            == 2
         )
 
-        # Should find paths from src group to dst group
-        assert len(results) == 1
-
-    def test_k_shortest_paths_with_dict_selector(self) -> None:
-        """k_shortest_paths works with dict selectors."""
-        net = _group_network()
-
-        results = analyze(net).k_shortest_paths(
-            {"group_by": "group"}, {"group_by": "group"}, max_k=3, mode=Mode.COMBINE
+    def test_paths_with_match_conditions(self):
+        prepared = _prepare(_multi_source_sink_network())
+        row = _row(
+            prepared, source=_group_selector("src"), target=_group_selector("dst")
         )
+        assert [_node_sequence(prepared, path) for path in row.paths] == [
+            ("A", "X", "C")
+        ]
 
-        assert len(results) == 1
+    def test_ksp_with_grouping(self):
+        prepared = _prepare(_group_network())
+        assert [
+            path.cost()
+            for path in _row(
+                prepared,
+                source=_group_selector("src"),
+                target=_group_selector("dst"),
+                k=3,
+            ).paths
+        ] == [2, 4]
 
-    def test_empty_result_when_no_path(self) -> None:
-        """Test that no paths are returned when unreachable."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        # No link
-
-        results = analyze(net).k_shortest_paths(
-            "^(A)$", "^(B)$", max_k=3, mode=Mode.PAIRWISE
-        )
-
-        paths = results[("A", "B")]
-        assert len(paths) == 0
+    def test_no_route_is_empty(self):
+        prepared = _prepare(Network(nodes={name: Node(name) for name in "AC"}))
+        row = _row(prepared, k=3, mode="pairwise")
+        assert row.cost is None and row.paths == ()
 
 
 class TestPathExclusions:
-    """Tests for exclusions in path methods."""
+    def test_excluded_links_in_shortest_path(self):
+        prepared = _prepare(_simple_path_network())
+        assert _row(prepared, links=("A|B|0",)).cost == 3
+        assert _row(prepared).cost == 2
 
-    def test_excluded_links_in_shortest_path(self) -> None:
-        """Test excluded links in shortest_path_cost."""
-        net = _simple_path_network()
-
-        # Get the A->B link ID
-        a_b_link_id = None
-        for link_id, link in net.links.items():
-            if link.source == "A" and link.target == "B":
-                a_b_link_id = link_id
-                break
-
-        assert a_b_link_id is not None
-
-        results = analyze(net).shortest_path_cost(
-            "^A$", "^C$", mode=Mode.COMBINE, excluded_links={a_b_link_id}
-        )
-
-        # Only direct A->C path available (cost 3)
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 3.0
-
-    def test_disabled_node_in_network(self) -> None:
-        """Test that disabled nodes in network are excluded from paths."""
-        net = Network()
-        for name in ["A", "B", "C"]:
-            disabled = name == "B"
-            net.add_node(Node(name, disabled=disabled))
-
-        net.add_link(Link("A", "B", capacity=10.0, cost=1.0))
-        net.add_link(Link("B", "C", capacity=10.0, cost=1.0))
-        net.add_link(Link("A", "C", capacity=10.0, cost=3.0))
-
-        results = analyze(net).shortest_path_cost("^A$", "^C$", mode=Mode.COMBINE)
-
-        # B is disabled, so only direct A->C path (cost 3)
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 3.0
+    def test_disabled_node_in_network(self):
+        network = _simple_path_network()
+        network.disable_node("B")
+        assert _row(_prepare(network)).cost == 3
+        network.enable_node("B")
+        assert _row(_prepare(network)).cost == 2
 
 
-class TestBoundModePathMethods:
-    """Tests for bound mode support in path methods."""
+class TestPreparedPathReuse:
+    def test_repeated_costs(self):
+        prepared = _prepare(_simple_path_network())
+        assert [_row(prepared, costs_only=True).cost for _ in range(2)] == [2, 2]
 
-    def test_shortest_path_cost_bound_mode(self) -> None:
-        """Test shortest_path_cost works with bound context."""
-        net = _simple_path_network()
+    def test_repeated_costs_with_exclusions(self):
+        prepared = _prepare(_simple_path_network())
+        assert [
+            _row(prepared, costs_only=True, nodes=nodes).cost
+            for nodes in ((), ("B",), ())
+        ] == [2, 3, 2]
 
-        ctx = analyze(net, source="^A$", sink="^C$")
+    def test_repeated_shortest_paths(self):
+        prepared = _prepare(_simple_path_network())
+        for _ in range(2):
+            assert [
+                _node_sequence(prepared, path) for path in _row(prepared).paths
+            ] == [("A", "B", "C")]
 
-        # Call without source/sink - should use bound values
-        results = ctx.shortest_path_cost()
+    def test_repeated_ksp(self):
+        prepared = _prepare(_simple_path_network())
+        for _ in range(2):
+            assert [path.cost() for path in _row(prepared, k=3).paths] == [2, 3]
 
-        # Shortest path A->B->C has cost 2
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 2.0
-
-    def test_shortest_path_cost_bound_mode_with_exclusions(self) -> None:
-        """Test bound mode works with exclusions."""
-        net = _simple_path_network()
-        ctx = analyze(net, source="^A$", sink="^C$")
-
-        # Exclude B, forcing direct A->C path
-        results = ctx.shortest_path_cost(excluded_nodes={"B"})
-
-        # Only direct path A->C (cost 3) available
-        assert pytest.approx(results[("^A$", "^C$")], abs=1e-9) == 3.0
-
-    def test_shortest_paths_bound_mode(self) -> None:
-        """Test shortest_paths works with bound context."""
-        net = _simple_path_network()
-        ctx = analyze(net, source="^A$", sink="^C$")
-
-        results = ctx.shortest_paths()
-
-        paths = results[("^A$", "^C$")]
-        assert len(paths) >= 1
-        # Best path should have cost 2
-        assert paths[0].cost == 2.0
-
-    def test_k_shortest_paths_bound_mode(self) -> None:
-        """Test k_shortest_paths works with bound context."""
-        net = _simple_path_network()
-        ctx = analyze(net, source="^A$", sink="^C$")
-
-        results = ctx.k_shortest_paths(max_k=3)
-
-        paths = results[("^A$", "^C$")]
-        # Should have at least 2 paths (via B cost 2, direct cost 3)
-        assert len(paths) >= 2
-        # First should be best (cost 2)
-        assert paths[0].cost == 2.0
-        # Second should be cost 3
-        assert paths[1].cost == 3.0
-
-    def test_bound_mode_rejects_source_sink_args(self) -> None:
-        """Test that bound context rejects source/sink arguments."""
-        net = _simple_path_network()
-        ctx = analyze(net, source="^A$", sink="^C$")
-
-        with pytest.raises(ValueError, match="source/sink/mode already configured"):
-            ctx.shortest_path_cost(source="^X$", sink="^Y$")
-
-        with pytest.raises(ValueError, match="source/sink/mode already configured"):
-            ctx.shortest_paths(source="^X$", sink="^Y$")
-
-        with pytest.raises(ValueError, match="source/sink/mode already configured"):
-            ctx.k_shortest_paths(source="^X$", sink="^Y$")
-
-    def test_bound_context_rejects_mode(self) -> None:
-        """A bound context fixes its mode; passing one per call raises."""
-        net = _simple_path_network()
-        ctx = analyze(net, source="^A$", sink="^C$")
-
-        with pytest.raises(ValueError, match="source/sink/mode already configured"):
-            ctx.shortest_paths(mode=Mode.PAIRWISE)
-        with pytest.raises(ValueError, match="source/sink/mode already configured"):
-            ctx.max_flow(mode=Mode.COMBINE)
-
-    def test_mode_without_binding_raises(self) -> None:
-        """analyze(mode=...) without source/sink would be ignored, so it raises."""
-        with pytest.raises(ValueError, match="mode applies to a bound context"):
-            analyze(_simple_path_network(), mode=Mode.PAIRWISE)
-
-    def test_unbound_mode_requires_source_sink(self) -> None:
-        """Test that unbound context requires source/sink arguments."""
-        net = _simple_path_network()
-        ctx = analyze(net)  # Unbound
-
-        with pytest.raises(ValueError, match="source and sink are required"):
-            ctx.shortest_path_cost()
-
-        with pytest.raises(ValueError, match="source and sink are required"):
-            ctx.shortest_paths()
-
-        with pytest.raises(ValueError, match="source and sink are required"):
-            ctx.k_shortest_paths()
-
-    def test_bound_properties(self) -> None:
-        """Test bound context properties."""
-        net = _simple_path_network()
-
-        # Unbound context
-        ctx_unbound = analyze(net)
-        assert ctx_unbound.is_bound is False
-        assert ctx_unbound.bound_source is None
-        assert ctx_unbound.bound_sink is None
-        assert ctx_unbound.bound_mode is None
-
-        # Bound context
-        ctx_bound = analyze(net, source="^A$", sink="^C$", mode=Mode.COMBINE)
-        assert ctx_bound.is_bound is True
-        assert ctx_bound.bound_source == "^A$"
-        assert ctx_bound.bound_sink == "^C$"
-        assert ctx_bound.bound_mode == Mode.COMBINE
-
-    def test_node_edge_count_properties(self) -> None:
-        """Test node_count and edge_count properties."""
-        net = _simple_path_network()
-        ctx = analyze(net)
-
-        # 3 nodes: A, B, C
-        assert ctx.node_count == 3
-        # 3 links x 2 directions = 6 edges
-        assert ctx.edge_count == 6
+    def test_native_graph_counts(self):
+        prepared = _prepare(_simple_path_network())
+        assert prepared.topology.graph.num_nodes() == 3
+        assert prepared.topology.graph.num_edges() == 6

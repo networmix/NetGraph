@@ -4,7 +4,8 @@ Covers recursive and non-recursive disabling, nested hierarchies, and nodes
 or links that belong to several groups.
 """
 
-from ngraph.model.network import Link, Network, Node, RiskGroup
+from ngraph.model.network import Link, Network, Node
+from ngraph.model.risk import RiskGroup
 
 
 class TestRiskGroups:

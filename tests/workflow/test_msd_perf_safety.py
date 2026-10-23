@@ -1,54 +1,16 @@
-from __future__ import annotations
+"""Repeated MSD invocations preserve their probe history and native snapshots."""
 
-from typing import Any
-
-from ngraph.workflow.maximum_supported_demand_step import MaximumSupportedDemand
-
-
-class _ScenarioStub:
-    def __init__(self, network: Any, demand_set: Any, results: Any) -> None:
-        self.network = network
-        self.demand_set = demand_set
-        self.results = results
-        self._execution_counter = 0
-        self.seed = None
+from ngraph.scenario import run
+from tests.workflow.test_maximum_supported_demand import msd_scenario
 
 
-def test_msd_deterministic_evaluation(monkeypatch):
-    from ngraph.model.demand.matrix import DemandSet
-    from ngraph.model.demand.spec import TrafficDemand
-    from ngraph.model.network import Link, Network, Node
-
-    net = Network()
-    for n in ("A", "B", "C"):
-        net.add_node(Node(n))
-    net.add_link(Link("A", "B", capacity=5, cost=1))
-    net.add_link(Link("B", "C", capacity=5, cost=1))
-
-    demand_set = DemandSet()
-    demand_set.add(
-        "default",
-        [TrafficDemand(source="A", target="C", volume=2.0, mode="pairwise")],
+def test_msd_deterministic_evaluation():
+    prepared = msd_scenario(
+        5, 2, max_bracket_iters=3, max_bisect_iters=2, alpha_tolerance=0.1
     )
-
-    from ngraph.results.store import Results
-
-    scenario = _ScenarioStub(net, demand_set, Results())
-
-    msd = MaximumSupportedDemand(
-        demand_set="default",
-        alpha_start=1.0,
-        growth_factor=2.0,
-        resolution=0.1,
-        max_bracket_iters=2,
-        max_bisect_iters=2,
-    )
-
-    msd.name = "msd"
-    msd.execute(scenario)
-
-    # Expect alpha_star >= 1 because volume=2 fits capacity 5
-    exported = scenario.results.to_dict()
-    alpha_star = exported["steps"]["msd"]["data"].get("alpha_star")
-    assert alpha_star is not None
-    assert float(alpha_star) >= 1.0
+    first, second = (run(prepared).steps[0].result for _ in range(2))
+    assert first.history == second.history
+    assert first.alpha_feasible.value >= 1
+    assert first.best_probe_index == second.best_probe_index
+    assert first.best_rows[0].result.delivered == second.best_rows[0].result.delivered
+    assert first.probe_rows is None and second.probe_rows is None

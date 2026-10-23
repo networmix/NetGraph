@@ -9,11 +9,11 @@ Quick links:
 - [API Reference](api.md) - Python API for programmatic scenario creation
 - [Auto-Generated API Reference](api-full.md) - complete class and method documentation
 
-A JSON Schema describes the scenario YAML. It drives load-time validation, IDE completion, and tests.
+Packaged JSON Schemas describe scenario inputs and exported results. They drive validation, IDE completion, and tests.
 
 ## Schema Location
 
-The schema ships in the package as `ngraph/schemas/scenario.json` and covers every top-level section.
+`ngraph/schemas/scenario.json` covers scenario inputs; `ngraph/schemas/results.json` covers the single JSON export path. Both ship in the installed package.
 
 ## Validation Scope
 
@@ -48,7 +48,7 @@ make validate
 make check
 ```
 
-The pre-commit hook runs `make validate` when scenario or integration YAML files, or the schema, change; CI runs it on every push and pull request, and the integration tests load every bundled scenario.
+`ngraph/schemas/results.json` is generated: `python dev/generate_results_schema.py` writes it from the result record declarations (plain records and their `Annotated` refinements) and the explicit fragments in `dev/explicit_results_schema.json`; `make validate` fails when the committed file differs. The pre-commit hook runs `make validate` when scenario or integration YAML files, or the schema, change; CI runs it on every push and pull request, and the integration tests load every bundled scenario.
 
 ### Python API
 
@@ -82,7 +82,18 @@ jsonschema.validate(data, schema)
 - `components` - Hardware component library
 - `vars` - YAML anchors and variables for reuse
 - `seed` - Master random seed for reproducibility
+- `routes` - Named explicit routes
+- `supports` - Named forwarding supports
+- `weights` - Named edge weights
+- `units` - Automatic or manual quantum and precision target
+
+Unknown input keys are refused with their location. Forwarding groups, routing domains, controller scopes, stale/repair states, simultaneous forwarding and tunnel-count queries are not accepted inputs. Native tunnel-count settings inside a supported flow model remain valid.
 
 ## Schema Maintenance
 
 Update the schema whenever a top-level section, a field's type, or a workflow step type changes, then run `make validate` (checks every bundled scenario and integration YAML against the schema) and `make test`. The code is authoritative: `ngraph/dsl/loader.py` validates, and `ngraph/dsl/blueprints/expand.py` and the model classes enforce what the schema cannot express.
+
+
+## Result detail selection
+
+The result schema checks the enclosing analysis `outputs.details` against its rows: false forbids native detail fields, true requires the complete selected field group. Scalar drop totals remain exact in compact rows. Nullable row `pool` metadata is required in both modes; per-source/tunnel/plan detail lists keep their native applicability when selected. Native array/cut flags and cost-report selection remain independent. MSD history remains compact regardless of detail selection.

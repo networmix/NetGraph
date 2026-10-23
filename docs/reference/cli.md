@@ -99,9 +99,9 @@ ngraph [--verbose|--quiet] run <scenario_file> [options]
 - `--no-results`: Disable results file generation
 - `--stdout`: Print results to stdout in addition to saving file. Log output, status banners, the `--profile` performance report, and run error messages all go to stderr, so stdout contains only the JSON results (safe to pipe to `jq`)
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output; an unknown name is an error
-- `--profile`: Profile the run and print a per-step CPU report to stderr
+- `--profile`: Print per-step elapsed times and the Python call profile to stderr
 - `--profile-memory`: Also track peak memory per step (requires `--profile`)
-- `--output`, `-o`: Output directory for generated artifacts: the results file and, with `--profile`, the `<scenario_name>.profiles` directory of worker profiles
+- `--output`, `-o`: Output directory for the results file
 
 ## Examples
 
@@ -123,7 +123,7 @@ ngraph run scenarios/nsfnet.yaml --no-results
 
 ### Filtering Results by Step Names
 
-`--keys` restricts the `steps` section to the named workflow steps; the `workflow` metadata section lists every step that ran. Unknown step names abort the run before any step executes:
+`--keys` selects entries from the ordered `steps` array after the complete workflow executes. It preserves declaration order and actual `execution_order` values, so a filtered export may have gaps. Unknown step names abort before any step executes:
 
 ```bash
 # Only include results from the MSD step
@@ -153,27 +153,22 @@ ngraph run scenarios/backbone_clos.yml --profile --results analysis.json
 ngraph run scenarios/backbone_clos.yml --profile --profile-memory --keys tm_placement
 ```
 
-The report lists total execution time, time per step, the steps that take more than 10% of the total, and the top CPU-consuming functions within those steps.
+The report lists total elapsed time, time per step, steps taking more than 10% of the total and the Python call profile within those steps. It does not attribute work inside native routines to individual C++ functions. The report is printed to stderr.
 
 ### Output Format
 
-The CLI outputs results as JSON with a fixed top-level shape:
+The top-level fields are `metadata`, `units_report` and ordered `steps`. Each step contains its name, type, order, seed provenance, normalized question and typed result. For example, inspect questions and their quantum with:
 
-```json
-{
-  "workflow": { "<step>": { "step_type": "...", "execution_order": 0, "step_name": "..." } },
-  "steps": {
-    "network_statistics": { "metadata": {}, "data": { "node_count": 42, "link_count": 84 } },
-    "msd_baseline": { "metadata": {}, "data": { "alpha_star": 1.23, "context": { "demand_set": "baseline_traffic_matrix" } } },
-    "tm_placement": { "metadata": { "iterations": 1000 }, "data": { "baseline": { "flows": [], "summary": {} }, "flow_results": [ { "flows": [], "summary": {} } ], "context": { "demand_set": "baseline_traffic_matrix" } } }
-  },
-  "scenario": { "seed": 42, "failures": { }, "demands": { } }
-}
+```bash
+jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}' results.json
 ```
 
-- **BuildGraph**: stores `data.graph` in node-link JSON format
-- **MaxFlow** and **TrafficMatrixPlacement**: store the no-failure reference under `data.baseline` and unique failure patterns (deduplicated, each with `occurrence_count`, flows + summary) under `data.flow_results`
-- **NetworkStats**: stores capacity and degree statistics under `data`
+- **BuildGraph** returns node-link data under `result.graph`.
+- **MaxFlow** and **TrafficMatrixPlacement** return `result.cases`, baseline first. Each case contains physical pattern metadata, sampled `occurrences` and `states.converged` rows; placement also has exact totals and expansion accounting.
+- **MaximumSupportedDemand** returns `alpha_feasible`, probe history, search status and any proved upper certificate.
+- **NetworkStats** returns its physical counts/statistics directly under `result`.
+
+Numerical values are integer units and the report records their quantum. Optional costs, cuts and edge arrays appear only when requested and applicable. See [workflow results](workflow.md) and the packaged `results.json` schema. Encoding completes before a results file is atomically replaced.
 
 ## Output Behavior
 

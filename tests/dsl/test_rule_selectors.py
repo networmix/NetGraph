@@ -347,3 +347,34 @@ class TestRulesIntegration:
         for link in net.links.values():
             if link.capacity >= 100:
                 assert link.attrs.get("high_capacity") is True
+
+
+def test_link_rule_attrs_merge_into_existing_attrs_and_keep_link_ids() -> None:
+    """A link rule merges its attrs over each matched link's own attrs."""
+    net = Network()
+    net.add_node(Node("a"))
+    net.add_node(Node("b"))
+    net.add_link(Link("a", "b", attrs={"kind": "fiber", "km": 3}))
+    _process_link_rules(
+        net,
+        {"link_rules": [{"source": "a", "target": "b", "attrs": {"km": 5, "tag": 1}}]},
+    )
+    link = net.links["a|b|0"]
+    assert link.id == "a|b|0"
+    assert link.attrs == {"kind": "fiber", "km": 5, "tag": 1}
+
+
+def test_link_rule_capacity_refusal_names_the_link_it_updates() -> None:
+    net = Network()
+    net.add_node(Node("a"))
+    net.add_node(Node("b"))
+    net.add_link(Link("a", "b"))
+    rules = {"link_rules": [{"source": "a", "target": "b", "capacity": -1}]}
+    with pytest.raises(ValueError) as error:
+        _process_link_rules(net, rules)
+    assert (
+        str(error.value) == "link.a|b|0.capacity: expected a finite nonnegative amount"
+    )
+    rules["link_rules"][0]["capacity"] = 4
+    _process_link_rules(net, rules)
+    assert net.links["a|b|0"].capacity == 4.0

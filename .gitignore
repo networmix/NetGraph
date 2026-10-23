@@ -128,6 +128,7 @@ exports/
 # Temporary analysis & CLI output
 *_results.json
 results*.json
+!ngraph/schemas/results.json
 scratch/
 temp/
 temporary/
@@ -139,8 +140,6 @@ analysis*.html
 *_analysis.html
 
 # Performance analysis results
-dev/perf_results/
-dev/perf_plots/
 .benchmarks/
 
 # Personal Superset lifecycle overrides

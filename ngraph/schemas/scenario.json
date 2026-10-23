@@ -298,6 +298,452 @@
         }
       },
       "additionalProperties": false
+    },
+    "directedLink": {
+      "type": "object",
+      "properties": {
+        "link": {
+          "type": "string",
+          "minLength": 1
+        },
+        "direction": {
+          "enum": [
+            "forward",
+            "reverse"
+          ]
+        }
+      },
+      "required": [
+        "link",
+        "direction"
+      ],
+      "additionalProperties": false
+    },
+    "tunnelCount": {
+      "type": "object",
+      "properties": {
+        "per_head": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "up_to": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "per_head"
+      ],
+      "additionalProperties": false
+    },
+    "costCeiling": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "absolute"
+              ]
+            },
+            "value": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "stretch"
+              ]
+            },
+            "value": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "preset": {
+      "enum": [
+        "SHORTEST_PATHS_ECMP",
+        "SHORTEST_PATHS_ECMP_LOSSY",
+        "SHORTEST_PATHS_WCMP",
+        "SHORTEST_PATHS_MAXFLOW",
+        "TE_MAXFLOW_UNLIM",
+        "TE_ECMP_16_LSP",
+        "TE_ECMP_UP_TO_256_LSP"
+      ]
+    },
+    "routingModel": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "shortest_paths"
+              ]
+            },
+            "allocation": {
+              "enum": [
+                "equal",
+                "weighted",
+                "optimized"
+              ]
+            },
+            "source_allocation": {
+              "enum": [
+                "equal",
+                "optimized"
+              ]
+            },
+            "weight_basis": {
+              "enum": [
+                "capacity",
+                "explicit",
+                "residual_snapshot"
+              ]
+            },
+            "edge_weights": {
+              "type": "string",
+              "minLength": 1
+            },
+            "tie_break": {
+              "enum": [
+                "fewer_hops",
+                "higher_capacity",
+                "higher_available_capacity",
+                "higher_headroom"
+              ]
+            },
+            "multipath": {
+              "type": "boolean"
+            },
+            "parallel_edges": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "distributed_te"
+              ]
+            },
+            "tunnel_count": {
+              "$ref": "#/$defs/tunnelCount"
+            },
+            "cost_ceiling": {
+              "$ref": "#/$defs/costCeiling"
+            },
+            "min_unreserved_bandwidth": {
+              "type": "number",
+              "minimum": 0
+            },
+            "tie_break": {
+              "enum": [
+                "fewer_hops",
+                "higher_capacity",
+                "higher_available_capacity",
+                "higher_headroom"
+              ]
+            },
+            "parallel_edges": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "tunnel_count"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "centralized_te"
+              ]
+            },
+            "source_allocation": {
+              "enum": [
+                "equal",
+                "optimized"
+              ]
+            },
+            "tunnel_count": {
+              "$ref": "#/$defs/tunnelCount"
+            },
+            "prefer_headroom": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "source_allocation"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "pinned"
+              ]
+            },
+            "routes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            },
+            "allocation": {
+              "enum": [
+                "equal",
+                "weighted"
+              ]
+            },
+            "weight_basis": {
+              "enum": [
+                "capacity",
+                "explicit"
+              ]
+            },
+            "edge_weights": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "type",
+            "routes"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "model": {
+      "type": "object",
+      "properties": {
+        "routing": {
+          "$ref": "#/$defs/routingModel"
+        },
+        "admission": {
+          "enum": [
+            "lossless",
+            "lossy"
+          ]
+        }
+      },
+      "required": [
+        "routing"
+      ],
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "properties": {
+        "edge_flows": {
+          "type": "boolean"
+        },
+        "residual": {
+          "type": "boolean"
+        },
+        "edge_reservations": {
+          "type": "boolean"
+        },
+        "saturated_boundary_edges": {
+          "type": "boolean"
+        },
+        "min_cut": {
+          "type": "boolean"
+        },
+        "cost_distribution": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "supportSpec": {
+      "type": "object",
+      "properties": {
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/directedLink"
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "edges"
+      ],
+      "additionalProperties": false
+    },
+    "weightSpec": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "edge": {
+                "$ref": "#/$defs/directedLink"
+              },
+              "value": {
+                "type": "integer",
+                "minimum": 0,
+                "exclusiveMaximum": 4611686018427387904
+              }
+            },
+            "required": [
+              "edge",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "routeSpec": {
+      "type": "object",
+      "properties": {
+        "head": {
+          "type": "string",
+          "minLength": 1
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMaximum": 4611686018427387904
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 2
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/directedLink"
+          },
+          "minItems": 1
+        },
+        "support": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "head"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "nodes"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "edges"
+                ]
+              },
+              {
+                "required": [
+                  "support"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "edges"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "nodes"
+                ]
+              },
+              {
+                "required": [
+                  "support"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "support"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "nodes"
+                ]
+              },
+              {
+                "required": [
+                  "edges"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     }
   },
   "properties": {
@@ -699,85 +1145,32 @@
             "expand": {
               "$ref": "#/$defs/expandBlock"
             },
-            "flow_policy": {
-              "description": "Routing preset name (FlowPolicyPreset member, case-insensitive)",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "edge_priority": {
-              "description": "Per-edge value that ranks equal-cost alternatives when routing this demand: residual (preset default), capacity, or headroom (residual / capacity)",
-              "type": [
-                "string",
-                "null"
-              ],
-              "enum": [
-                "residual",
-                "capacity",
-                "headroom",
-                null
-              ]
-            },
             "attrs": {
               "type": "object",
               "description": "Additional demand attributes"
             },
-            "static_paths": {
-              "type": "array",
-              "description": "Explicit routes to pin this demand to (one flow per route, no reroute on failure). Requires selectors matching exactly one source and one target.",
-              "minItems": 1,
-              "items": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "description": "Node names along the route, source first and target last",
-                    "minItems": 2,
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "nodes": {
-                        "type": "array",
-                        "minItems": 2,
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "required": [
-                      "nodes"
-                    ],
-                    "additionalProperties": false
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "links": {
-                        "type": "array",
-                        "minItems": 1,
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "required": [
-                      "links"
-                    ],
-                    "additionalProperties": false
-                  }
-                ]
-              }
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "preset": {
+              "$ref": "#/$defs/preset"
+            },
+            "model": {
+              "$ref": "#/$defs/model"
             }
           },
           "required": [
             "source",
             "target"
           ],
-          "additionalProperties": false
+          "additionalProperties": false,
+          "not": {
+            "required": [
+              "preset",
+              "model"
+            ]
+          }
         }
       }
     },
@@ -796,37 +1189,467 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "Type of workflow step (BuildGraph, NetworkStats, MaxFlow, TrafficMatrixPlacement, MaximumSupportedDemand, CostPower)"
+            "minLength": 1
           },
           "name": {
-            "type": "string",
-            "description": "Step name"
+            "type": "string"
           },
-          "source": {
-            "$ref": "#/$defs/selectorOrString",
-            "description": "Source node selector"
-          },
-          "target": {
-            "$ref": "#/$defs/selectorOrString",
-            "description": "Target node selector"
-          },
-          "demand_set": {
-            "type": "string",
-            "description": "Name of demand set to use"
-          },
-          "failure_policy": {
+          "seed": {
             "type": [
-              "string",
+              "integer",
               "null"
-            ],
-            "description": "Name of failure policy to use (optional)"
+            ]
           }
         },
         "required": [
           "type"
         ],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "BuildGraph"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "add_reverse": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "CostPower"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "include_disabled": {
+                  "type": "boolean"
+                },
+                "aggregation_level": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "NetworkStats"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "include_disabled": {
+                  "type": "boolean"
+                },
+                "excluded_nodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                },
+                "excluded_links": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": false
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "MaxFlow"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "failure_policy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "iterations": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "workers": {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "auto"
+                      ]
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  ]
+                },
+                "failure_trace": {
+                  "type": "boolean"
+                },
+                "outputs": {
+                  "$ref": "#/$defs/outputs"
+                },
+                "source": {
+                  "$ref": "#/$defs/selectorOrString"
+                },
+                "target": {
+                  "$ref": "#/$defs/selectorOrString"
+                },
+                "mode": {
+                  "enum": [
+                    "combine",
+                    "pairwise"
+                  ]
+                },
+                "preset": {
+                  "$ref": "#/$defs/preset"
+                },
+                "model": {
+                  "$ref": "#/$defs/model"
+                },
+                "offer": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "design_demand": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "type",
+                "source",
+                "target"
+              ],
+              "additionalProperties": false,
+              "not": {
+                "required": [
+                  "preset",
+                  "model"
+                ]
+              },
+              "description": "Without preset or model, MaxFlow asks unrestricted optimized lossless maximum flow (TE_MAXFLOW_UNLIM). Demand declarations separately default to SHORTEST_PATHS_ECMP."
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "TrafficMatrixPlacement"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "failure_policy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "iterations": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "workers": {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "auto"
+                      ]
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  ]
+                },
+                "failure_trace": {
+                  "type": "boolean"
+                },
+                "outputs": {
+                  "$ref": "#/$defs/outputs"
+                },
+                "demand_set": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "alpha": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "alpha_from_step": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "type",
+                "demand_set"
+              ],
+              "additionalProperties": false,
+              "not": {
+                "required": [
+                  "alpha",
+                  "alpha_from_step"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "MaximumSupportedDemand"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "demand_set": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "alpha_start": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "growth_factor": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "alpha_min": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "alpha_max": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "alpha_tolerance": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "max_bracket_iters": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "max_bisect_iters": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "outputs": {
+                  "type": "object",
+                  "properties": {
+                    "details": {
+                      "type": "boolean",
+                      "default": false
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "type",
+                "demand_set"
+              ],
+              "additionalProperties": false
+            }
+          }
+        ]
       }
+    },
+    "routes": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/routeSpec"
+      }
+    },
+    "supports": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/supportSpec"
+      }
+    },
+    "weights": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/weightSpec"
+      }
+    },
+    "units": {
+      "type": "object",
+      "properties": {
+        "resolution": {
+          "oneOf": [
+            {
+              "enum": [
+                "auto"
+              ]
+            },
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          ]
+        },
+        "precision": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [],
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

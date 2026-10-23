@@ -1,4 +1,4 @@
-"""Tests for risk group parsing in ngraph.model.failure.parser.
+"""Tests for risk group parsing in ngraph.model.risk.
 
 Focuses on rejection of keys that are silently inert on nested children:
 only top-level groups are registered in network.risk_groups, so 'membership',
@@ -8,7 +8,7 @@ only top-level groups are registered in network.risk_groups, so 'membership',
 import jsonschema
 import pytest
 
-from ngraph.model.failure.parser import build_risk_groups
+from ngraph.model.risk import build_risk_groups
 from ngraph.scenario import Scenario
 
 

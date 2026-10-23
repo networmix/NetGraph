@@ -25,8 +25,32 @@ if [[ "$(uname -s)" == Darwin ]]; then
 fi
 python -m pip install --upgrade pip
 python -m pip install cmake ninja
-python -m pip wheel --no-deps --wheel-dir "$run_dir/wheels" \
-    --config-settings="build-dir=$run_dir/core-build" "$core_path"
+mkdir -p "$run_dir/wheels"
+if [[ -n "${NETGRAPH_CORE_WHEEL:-}" ]]; then
+    [[ "$NETGRAPH_CORE_WHEEL" == /* && -f "$NETGRAPH_CORE_WHEEL" && -n "${NETGRAPH_CORE_WHEEL_SHA256:-}" ]] || {
+        echo 'A prebuilt Core wheel requires an absolute path and NETGRAPH_CORE_WHEEL_SHA256.' >&2
+        exit 2
+    }
+    python - "$NETGRAPH_CORE_WHEEL" "$NETGRAPH_CORE_WHEEL_SHA256" "$run_dir/wheels" <<'PY'
+import hashlib
+from pathlib import Path
+import shutil
+import sys
+source = Path(sys.argv[1])
+assert hashlib.sha256(source.read_bytes()).hexdigest() == sys.argv[2], 'Selected wheel hash differs'
+shutil.copy2(source, Path(sys.argv[3]) / source.name)
+PY
+else
+    python -m pip wheel --no-deps --wheel-dir "$run_dir/wheels" \
+        --config-settings="build-dir=$run_dir/core-build" \
+        --config-settings=cmake.define.NETGRAPH_CORE_PRIVATE_HOOKS=OFF "$core_path"
+fi
+if [[ -n "${NETGRAPH_CORE_COMMIT:-}" ]]; then
+    [[ "$(git -C "$core_path" rev-parse HEAD)" == "$NETGRAPH_CORE_COMMIT" ]] || {
+        echo 'Selected Core commit differs.' >&2
+        exit 1
+    }
+fi
 wheels=("$run_dir"/wheels/netgraph_core-*.whl)
 [[ ${#wheels[@]} -eq 1 && -f "${wheels[0]}" ]] || { echo 'Expected one Core wheel.' >&2; exit 1; }
 python -m pip install -e '.[dev]' "${wheels[0]}"
@@ -40,16 +64,24 @@ python -m pip check
 import hashlib
 import importlib.metadata
 import pathlib
+import os
 import sys
 import _netgraph_core
 import netgraph_core
 wheel = pathlib.Path(sys.argv[1])
 print('Python:', sys.version)
 print('Core version:', importlib.metadata.version('netgraph-core'))
-print('Core wrapper:', netgraph_core.__file__)
-print('Core extension:', _netgraph_core.__file__)
+for module, variable in ((netgraph_core, 'NETGRAPH_CORE_WRAPPER_SHA256'), (_netgraph_core, 'NETGRAPH_CORE_EXTENSION_SHA256')):
+    path = pathlib.Path(module.__file__).resolve()
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    print(module.__name__, 'origin:', path, 'SHA256:', actual)
+    assert path.is_relative_to(pathlib.Path(sys.prefix).resolve())
+    if os.environ.get(variable):
+        assert actual == os.environ[variable], 'Selected installed Core hash differs'
 print('Wheel SHA256:', hashlib.sha256(wheel.read_bytes()).hexdigest())
-assert pathlib.Path(_netgraph_core.__file__).is_relative_to(sys.prefix)
+for name in ('_fail_python_allocation', '_fail_native_allocation', '_with_forwarding_limits', '_at_native_exit', '_concurrency_model'):
+    assert not hasattr(_netgraph_core, name), 'Private hooks must be off'
 PY
 } | tee "$run_dir/provenance.txt"
 python -m pytest --junitxml="$run_dir/pytest.xml" 2>&1 | tee "$run_dir/pytest.log"
+echo 'SUMMARY: selected-Core integration passed; wheel and installed origins recorded'

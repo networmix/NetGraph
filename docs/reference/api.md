@@ -1,562 +1,127 @@
 # API Reference
 
-Quick links:
+NetGraph accepts typed model and query values. YAML dictionaries end at parsing. The [generated reference](api-full.md) lists the public declarations; [DSL](dsl.md), [workflow](workflow.md) and [CLI](cli.md) describe the file and command boundaries.
 
-- [Design](design.md) - architecture, model, algorithms, workflow
-- [DSL Reference](dsl.md) - YAML syntax for scenario definition
-- [Workflow Reference](workflow.md) - analysis workflow configuration and execution
-- [CLI Reference](cli.md) - command-line tools for running scenarios
-- [Auto-Generated API Reference](api-full.md) - complete class and method documentation
-
-A guide to the Python API. Every public name is listed in the [Auto-Generated API Reference](api-full.md).
-
-## 1. Programmatic Quickstart
-
-Build a three-node network, run max-flow, and reuse a bound context:
+## Prepare and query
 
 ```python
-from ngraph import Network, Node, Link, analyze, Mode
+from ngraph import (
+    CapacityQuery, Link, Network, Node, Scenario, Selector, UnitsSettings,
+    capacity, prepare,
+)
 
-# Build a small directed network
-net = Network()
-net.add_node(Node(name="A"))
-net.add_node(Node(name="B"))
-net.add_node(Node(name="C"))
-net.add_link(Link(source="A", target="B", capacity=10.0, cost=1.0))
-net.add_link(Link(source="B", target="C", capacity=5.0, cost=1.0))
-
-# One-off max-flow (unbound context)
-flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-print(flow)  # {('^A$', '^C$'): 5.0}
-
-# Detailed flow with cost distribution
-detailed = analyze(net).max_flow_detailed("^A$", "^C$", mode=Mode.COMBINE)
-(_, _), summary = next(iter(detailed.items()))
-print(summary.total_flow, summary.cost_distribution)
-
-# Bound context for repeated runs with exclusions
-ctx = analyze(net, source="^A$", sink="^C$", mode=Mode.COMBINE)
-baseline = ctx.max_flow()
-# Exclude first link by getting its ID from the network
-first_link_id = next(iter(net.links.keys()))
-degraded = ctx.max_flow(excluded_links={first_link_id})
-print("baseline", baseline, "degraded", degraded)
-```
-
-## 2. Fundamentals
-
-Scenario, Network and Results, and how to turn on logging.
-
-### Scenario
-
-The entry point for analysis workflows: it owns the network, runs the workflow steps in order, and stores their results. Load one from YAML for declarative scenarios, or construct one programmatically.
-
-```python
-from pathlib import Path
-from ngraph import Scenario
-
-# Load complete scenario from YAML text
-yaml_text = Path("scenarios/square_mesh.yaml").read_text()
-scenario = Scenario.from_yaml(yaml_text)
-
-# Execute the scenario
-scenario.run()
-
-# Export results
-exported = scenario.results.to_dict()
-print(exported["workflow"].keys())
-```
-
-**Methods:**
-
-- `from_yaml(yaml_str, default_components=None)` - Parse scenario from YAML string (use `Path.read_text()` for file loading)
-- `run(step_hook=None)` - Execute workflow steps in sequence. The optional `step_hook` is a callable that receives each `WorkflowStep` and returns a context manager entered around that step's execution (used by the CLI for per-step profiling)
-
-Network and Results also work on their own, without a Scenario.
-
-### Network
-
-The topology itself: nodes, links, and risk groups. Construct one directly for programmatic use, or read the YAML-built topology from `scenario.network`.
-
-```python
-from ngraph import Network, Node, Link, analyze
-
-# Create a tiny network
 network = Network()
-network.add_node(Node(name="n1", risk_groups={"rack1"}))
-network.add_node(Node(name="n2", risk_groups={"rack2"}))
-network.add_link(Link(source="n1", target="n2", capacity=100.0, risk_groups={"fiber_bundle_A"}))
-
-# Calculate maximum flow using analyze()
-flow_result = analyze(network).max_flow("^n1$", "^n2$")
-print(flow_result)  # {("^n1$", "^n2$"): 100.0}
-```
-
-**Methods:**
-
-- `add_node(node)`, `add_link(link)` - Build topology programmatically
-- `nodes`, `links` - Access topology as dictionaries
-
-**Concepts:**
-
-- **disabled flags:** Node.disabled and Link.disabled mark components as inactive in the scenario topology (use `excluded_nodes`/`excluded_links` parameters for temporary analysis-time exclusion)
-- **Risk Groups:** Nodes and links can be tagged with risk group names (e.g., "rack1", "fiber_bundle") to model shared failure domains.
-- **Node selection:** Use regex patterns anchored at start (e.g., `"^datacenter.*"`) or selector objects with `path`, `group_by`, and `match` fields to select and group nodes (see DSL Reference)
-
-### Results
-
-Holds each step's `metadata` and `data` under the step name. Read it as `scenario.results`; a custom step writes to the same object.
-
-```python
-# Access results from scenario
-results = scenario.results
-
-# Export all results for serialization
-all_data = results.to_dict()
-print(list(all_data["steps"].keys()))
-```
-
-**Methods:**
-
-- `enter_step(step_name)` / `exit_step()` - Scope writes to a step (managed by WorkflowStep.execute())
-- `put(key, value)` - Store value under active step; key must be `"metadata"` or `"data"`
-- `get(key, default=None)` - Retrieve value from active step scope
-- `get_step(step_name)` - Retrieve complete step dict for cross-step reads
-- `to_dict()` - Export results with shape `{workflow, steps, scenario}` (JSON-serializable)
-
-### Logging
-
-Importing `ngraph` attaches only a `NullHandler` to the `ngraph` logger; nothing is printed unless the application opts in.
-
-```python
-import logging
-from ngraph.logging import set_global_log_level
-
-set_global_log_level(logging.DEBUG)  # installs a stderr handler on first call
-```
-
-**Functions:**
-
-- `set_global_log_level(level)` - Set the level on the `ngraph` logger and its handlers, installing the console handler if none is configured
-- `setup_root_logger(level=logging.INFO, format_string=None, handler=None)` - Install a single handler explicitly; later calls are no-ops until `reset_logging()`
-- `get_logger(name)` - Logger for a module under the `ngraph` hierarchy
-
-## 3. NetworkX Integration
-
-Convert between NetworkX graphs and the Core graph format.
-
-### Converting from NetworkX
-
-```python
-import networkx as nx
-from ngraph import from_networkx, to_networkx
-import netgraph_core
-
-# Create or load a NetworkX graph
-G = nx.DiGraph()
-G.add_edge("A", "B", capacity=100.0, cost=10)
-G.add_edge("B", "C", capacity=50.0, cost=5)
-G.add_edge("A", "C", capacity=30.0, cost=25)
-
-# Convert to internal format
-graph, node_map, edge_map = from_networkx(G)
-
-# Use with Core algorithms
-backend = netgraph_core.Backend.cpu()
-algorithms = netgraph_core.Algorithms(backend)
-handle = algorithms.build_graph(graph)
-
-# Run shortest path
-src_idx = node_map.to_index["A"]
-dst_idx = node_map.to_index["C"]
-dists, _ = algorithms.spf(handle, src=src_idx, dst=dst_idx)
-print(f"Shortest path cost A->C: {dists[dst_idx]}")  # 15.0 (via B)
-```
-
-**Functions:**
-
-- `from_networkx(G, *, capacity_attr, cost_attr, default_capacity, default_cost, bidirectional)` - Convert NetworkX graph to internal format
-- `to_networkx(graph, node_map, *, capacity_attr, cost_attr)` - Convert back to NetworkX MultiDiGraph
-
-**Mapping Classes:**
-
-- `NodeMap` - Bidirectional mapping between node names and integer indices
-  - `to_index[name]` - Get integer index for node name
-  - `to_name[idx]` - Get node name for integer index
-- `EdgeMap` - Bidirectional mapping between edge IDs and original edge references
-  - `to_ref[edge_id]` - Get (source, target, key) tuple for edge ID
-  - `from_ref[(u, v, key)]` - Get list of edge IDs for original edge
-
-**Options:**
-
-- `bidirectional` - Direction handling. `None` (default) infers from the graph type: directed inputs get one arc per edge; undirected inputs get antiparallel arc pairs (the standard undirected-to-directed reduction for max-flow/reachability). Pass an explicit `True`/`False` to override.
-- `capacity_attr` / `cost_attr` - Custom attribute names for capacity and cost
-- `default_capacity` / `default_cost` - Default values when attributes missing. Cost values must be integers: `from_networkx` raises `ValueError` on fractional costs because the core engine requires int64 costs. Scale fractional costs (by 10 or 100, say) before conversion.
-
-### Writing Results Back
-
-```python
-# After algorithm execution, map results back to original graph
-flow_state = netgraph_core.FlowState(graph)
-# ... place flow ...
-
-# edge_flow_view() is indexed by internal Core edge index; translate through
-# ext_edge_ids_view() to the external edge IDs that edge_map is keyed by.
-ext_edge_ids = graph.ext_edge_ids_view()
-for edge_idx, flow in enumerate(flow_state.edge_flow_view()):
-    if flow > 0:
-        u, v, key = edge_map.to_ref[int(ext_edge_ids[edge_idx])]
-        # G is a DiGraph here; for a MultiDiGraph source graph use G.edges[u, v, key]
-        G.edges[u, v]["flow"] = float(flow)
-```
-
-## 4. Basic Analysis
-
-Max-flow, shortest paths, and edge sensitivity.
-
-### Flow Analysis with `analyze()`
-
-Maximum flow between source and sink groups, under a chosen placement policy and with nodes or links excluded to model failures. It runs in C++ with the GIL released; the algorithm and its complexity bounds are in [Design](design.md).
-
-```python
-from ngraph import analyze, Mode, FlowPlacement
-
-# Maximum flow between group patterns (combine all sources/sinks)
-flow_result = analyze(network).max_flow(
-    "^metro1/.*",
-    "^metro5/.*",
-    mode=Mode.COMBINE
-)
-
-# Detailed flow analysis with cost distribution
-result = analyze(network).max_flow_detailed(
-    "^metro1/.*",
-    "^metro5/.*",
-    mode=Mode.COMBINE
-)
-(src_label, sink_label), summary = next(iter(result.items()))
-print(summary.cost_distribution)  # Dict[float, float] mapping cost to flow volume
-```
-
-**Functions:**
-
-- `analyze(network, *, source=None, sink=None, mode=None, augmentations=None)` - Create an `AnalysisContext`; `mode` (default COMBINE) applies to a context bound with `source` and `sink`, which then rejects per-call `source`, `sink` and `mode`; `mode` without `source` and `sink` raises `ValueError`
-- `ctx.max_flow(source, sink, *, mode, shortest_path, require_capacity, flow_placement, excluded_nodes, excluded_links)` - Maximum flow
-- `ctx.max_flow_detailed(..., include_min_cut=False)` - Maximum flow with cost distribution and optional min-cut; the min-cut is a true minimum cut (its capacity equals the max flow under the default `PROPORTIONAL` placement with `require_capacity=True` and `shortest_path=False`), not the set of saturated edges
-- `ctx.sensitivity(...)` - Identify critical edges and their impact on flow
-- `ctx.sensitivity_with_flow(...)` - Compute max flow and edge sensitivity together per group pair in a single pass (used by the sensitivity Monte Carlo hot path)
-- `ctx.shortest_path_cost(source, sink, *, mode, excluded_nodes, excluded_links)` - Shortest path cost
-- `ctx.shortest_paths(source, sink, *, mode, edge_select, split_parallel_edges)` - Full Path objects
-
-**Concepts:**
-
-- **Mode.COMBINE:** Aggregate sources into one super-source, sinks into one super-sink; returns single total flow
-- **Mode.PAIRWISE:** Compute flow for each (source_group, sink_group) pair independently
-- **FlowPlacement.PROPORTIONAL (WCMP):** Split flow across parallel edges in proportion to residual capacity
-- **FlowPlacement.EQUAL_BALANCED (ECMP):** Equal split across parallel paths
-- **shortest_path=True:** Restricts flow to lowest-cost paths only (IP/IGP routing semantics)
-- **shortest_path=False:** Uses all paths progressively (TE/SDN semantics)
-- **require_capacity=True:** Path selection considers available capacity; flow moves to next-cheapest paths as cheaper ones saturate (default)
-- **require_capacity=False:** Path selection is cost-only; saturated paths are not bypassed (true IP/IGP semantics; pair with shortest_path=True for IP simulation)
-
-### Repeated Analysis with a Bound Context
-
-Bind source and sink groups once, then reuse the context across many calls:
-
-```python
-from ngraph import analyze, Mode
-
-# Create bound context - graph built once with pseudo-nodes
-ctx = analyze(network, source="^dc/", sink="^edge/", mode=Mode.COMBINE)
-
-# Baseline capacity
-baseline = ctx.max_flow()
-
-# Test with different failures - only mask building per call
-for failed_links in failure_scenarios:
-    degraded = ctx.max_flow(excluded_links=failed_links)
-    print(f"Capacity with {failed_links}: {degraded}")
-```
-
-A bound context builds the Core graph once. Each call then rebuilds only the node and edge masks (a full-length array fill plus O(|excluded| + |disabled|) updates), and concurrent calls with different exclusions are safe.
-
-**Unbound vs. bound construction:** Unbound flow calls (`max_flow`, `max_flow_detailed`, `sensitivity`) construct a full temporary bound context per call, so repeated analysis should use a bound context. A plain unbound context builds its Core graph lazily on first use; bound contexts (and contexts with augmentations) build eagerly at creation.
-
-### Shortest Paths
-
-```python
-from ngraph import analyze, Mode, EdgeSelect
-
-# Get shortest path cost between groups
-costs = analyze(network).shortest_path_cost(
-    "^dc1/.*",
-    "^dc2/.*",
-    mode=Mode.PAIRWISE
-)
-
-# Get full path objects
-paths = analyze(network).shortest_paths(
-    "^A$",
-    "^B$",
-    mode=Mode.COMBINE,
-    edge_select=EdgeSelect.ALL_MIN_COST
-)
-
-# K-shortest paths with constraints
-k_paths = analyze(network).k_shortest_paths(
-    "^A$",
-    "^B$",
-    max_k=5,
-    mode=Mode.PAIRWISE,
-    max_path_cost_factor=1.5  # Limit to 1.5x best path cost
-)
-```
-
-**Functions:**
-
-- `ctx.shortest_path_cost(source, sink, *, mode)` - Cost only, no path objects
-- `ctx.shortest_paths(source, sink, *, mode, edge_select=ALL_MIN_COST, split_parallel_edges=False)` - Full Path objects
-- `ctx.k_shortest_paths(source, sink, *, mode=PAIRWISE, max_k=3, max_path_cost, max_path_cost_factor, excluded_nodes, excluded_links)` - Multiple paths per pair
-
-### Sensitivity Analysis
-
-Which edges limit the flow, and by how much:
-
-```python
-from ngraph import analyze, Mode
-
-# Get sensitivity map: which edges are critical and by how much
-sensitivity = analyze(network).sensitivity(
-    "^metro1/.*",
-    "^metro5/.*",
-    mode=Mode.COMBINE,
-    shortest_path=False  # Full max-flow mode
-)
-
-for pair, edge_impacts in sensitivity.items():
-    print(f"Critical edges for {pair}:")
-    for edge_key, flow_reduction in edge_impacts.items():
-        print(f"  {edge_key}: -{flow_reduction:.2f}")
-```
-
-## 5. Monte Carlo Analysis
-
-`FailureManager` samples failures from a policy, runs an analysis function under each sample, and aggregates the iterations.
-
-### FailureManager
-
-```python
-from ngraph import Network, Node, Link, FailureManager
-from ngraph.model.failure.policy import FailurePolicy, FailureMode, FailureRule
-from ngraph.model.failure.policy_set import FailurePolicySet
-
-# Build a network with two disjoint A->C paths, so a single link failure
-# degrades capacity rather than disconnecting the pair entirely.
-network = Network()
-for name in ["A", "B", "C", "D"]:
-    network.add_node(Node(name=name))
-network.add_link(Link("A", "B", capacity=100.0))
-network.add_link(Link("B", "C", capacity=100.0))
-network.add_link(Link("A", "D", capacity=60.0))
-network.add_link(Link("D", "C", capacity=60.0))
-
-# Define failure policy: randomly choose 1 link to fail
-rule = FailureRule(scope="link", mode="choice", count=1)  # scope can be "node", "link", or "risk_group"
-mode = FailureMode(weight=1.0, rules=[rule])
-policy = FailurePolicy(modes=[mode])
-policy_set = FailurePolicySet(policies={"single_link": policy})
-
-# Create failure manager
-fm = FailureManager(
-    network=network,
-    failure_policy_set=policy_set,
-    policy_name="single_link"
-)
-
-# Run max-flow Monte Carlo analysis
-results = fm.run_max_flow_monte_carlo(
-    source="^A$",
-    target="^C$",
-    mode="combine",
-    iterations=100,
-    parallelism=1,
-    seed=42  # For reproducibility
-)
-
-# Access results: one entry per unique failure pattern (iterations are
-# deduplicated; occurrence_count gives how many iterations matched)
-for iter_result in results["results"]:
-    print(f"Flow: {iter_result.summary.total_placed:.1f} (x{iter_result.occurrence_count})")
-```
-
-**Methods:**
-
-- `run_max_flow_monte_carlo(...)` - Max-flow capacity analysis under failures
-- `run_demand_placement_monte_carlo(...)` - Traffic demand placement under failures
-- `run_monte_carlo_analysis(analysis_func, ...)` - Generic Monte Carlo with custom function
-
-## 6. Workflow Steps
-
-The built-in steps as written in a scenario's `workflow` section. Parameters and outputs are in the [Workflow Reference](workflow.md).
-
-### MaxFlow Step
-
-```yaml
-workflow:
-  - type: MaxFlow
-    name: "dc_to_edge_capacity"
-    source: "^datacenter/.*"
-    target: "^edge/.*"
-    mode: "combine"
-    failure_policy: "random_link_failures"
-    iterations: 100
-    parallelism: auto
-    shortest_path: false
-    require_capacity: true       # false for true IP/IGP semantics
-    flow_placement: "PROPORTIONAL"
-```
-
-### TrafficMatrixPlacement Step
-
-```yaml
-workflow:
-  - type: TrafficMatrixPlacement
-    name: "tm_placement_analysis"
-    demand_set: "peak_traffic"
-    failure_policy: "dual_link_failures"
-    iterations: 100
-    parallelism: auto
-```
-
-### MaximumSupportedDemand Step
-
-```yaml
-workflow:
-  - type: MaximumSupportedDemand
-    name: "find_alpha_star"
-    demand_set: "peak_traffic"
-    alpha_start: 1.0
-    growth_factor: 2.0
-    resolution: 0.01
-```
-
-### NetworkStats Step
-
-```yaml
-workflow:
-  - type: NetworkStats
-    name: "baseline_stats"
-    include_disabled: false
-    excluded_nodes: ["n1"]
-```
-
-### CostPower Step
-
-```yaml
-workflow:
-  - type: CostPower
-    name: "cost_power_analysis"
-    include_disabled: false
-    aggregation_level: 2
-```
-
-## 7. Types Reference
-
-### Enums
-
-```python
-from ngraph import Mode, FlowPlacement, EdgeSelect
-
-# Mode - Source/sink group handling
-Mode.COMBINE    # Aggregate all sources/sinks
-Mode.PAIRWISE   # Each (src_group, sink_group) pair independently
-
-# FlowPlacement - Flow distribution strategy
-FlowPlacement.PROPORTIONAL   # WCMP: proportional to capacity
-FlowPlacement.EQUAL_BALANCED # ECMP: equal split
-
-# EdgeSelect - SPF edge selection
-EdgeSelect.ALL_MIN_COST     # All equal-cost edges (ECMP)
-EdgeSelect.SINGLE_MIN_COST  # Single lowest-cost edge
-```
-
-### Result Types
-
-```python
-from ngraph import MaxFlowResult, FlowEntry, FlowSummary, FlowIterationResult
-
-# MaxFlowResult - Detailed max-flow result
-result.total_flow        # Total flow placed
-result.cost_distribution # Dict[cost, flow_volume]
-result.min_cut           # Optional tuple of EdgeRef (edges forming a minimum cut)
-
-# FlowEntry - Single flow entry
-entry.source        # Source label
-entry.destination   # Destination label
-entry.demand        # Requested demand
-entry.placed        # Actually placed
-entry.dropped       # Unmet demand
-entry.cost_distribution  # Dict[cost, placed volume] with include_flow_details
-entry.data          # Optional details: edges/edges_kind with include_used_edges,
-                    # dropped_edges (volume lost per link) for lossy presets
-
-# FlowSummary - Aggregated statistics
-summary.total_demand    # Sum of all demands
-summary.total_placed    # Sum of placed flows
-summary.overall_ratio   # placed / demand
-
-# FlowIterationResult - Full iteration result
-iter_result.flows    # List[FlowEntry]
-iter_result.summary  # FlowSummary
-```
-
-## 8. Complete Example
-
-```python
-from ngraph import Network, Node, Link, analyze, Mode
-
-# Build network
-network = Network()
-for name in ["dc1", "dc2", "spine1", "spine2", "leaf1", "leaf2"]:
+for name in ("A", "B", "C"):
     network.add_node(Node(name))
-
-# Add links with varying capacities
-network.add_link(Link("dc1", "spine1", capacity=100.0, cost=1.0))
-network.add_link(Link("dc1", "spine2", capacity=100.0, cost=1.0))
-network.add_link(Link("dc2", "spine1", capacity=100.0, cost=1.0))
-network.add_link(Link("dc2", "spine2", capacity=100.0, cost=1.0))
-network.add_link(Link("spine1", "leaf1", capacity=50.0, cost=1.0))
-network.add_link(Link("spine1", "leaf2", capacity=50.0, cost=1.0))
-network.add_link(Link("spine2", "leaf1", capacity=50.0, cost=1.0))
-network.add_link(Link("spine2", "leaf2", capacity=50.0, cost=1.0))
-
-# One-off max flow analysis
-flow = analyze(network).max_flow("^dc", "^leaf", mode=Mode.COMBINE)
-print(f"DC to Leaf capacity: {list(flow.values())[0]:.1f}")
-
-# Efficient repeated analysis with bound context
-ctx = analyze(network, source="^dc", sink="^leaf", mode=Mode.COMBINE)
-
-# Baseline
-baseline = ctx.max_flow()
-
-# Test spine failures
-spine_links = [lid for lid, l in network.links.items() if "spine" in l.source]
-for link_id in spine_links:
-    degraded = ctx.max_flow(excluded_links={link_id})
-    reduction = list(baseline.values())[0] - list(degraded.values())[0]
-    print(f"If {link_id} fails: {reduction:.1f} capacity loss")
-
-# Sensitivity analysis
-sensitivity = ctx.sensitivity()
-for pair, impacts in sensitivity.items():
-    print(f"\nCritical edges for {pair}:")
-    for edge, impact in sorted(impacts.items(), key=lambda x: -x[1])[:3]:
-        print(f"  {edge}: {impact:.1f}")
+network.add_link(Link("A", "B", capacity=10, cost=1))
+network.add_link(Link("B", "C", capacity=5, cost=2))
+prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
+result = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^C$")))
+row = result.cases[0].states["converged"].rows[0]
+assert row.result.delivered == 5
+assert prepared.topology.q == 1
 ```
 
-## 9. Performance Notes
+`Network` keeps editable dicts of immutable records. `prepare` resolves the selected demand sets, builds one native graph and returns `PreparedScenario`; it does not change its input. Library callers name needed demand sets with `prepare(scenario, demand_sets=("traffic",))`; workflow-referenced sets are included automatically.
 
-Network, Scenario and the workflow steps are Python. Shortest paths, max-flow and k-shortest paths run in C++ (NetGraph-Core) with the GIL released. Public APIs take and return Python types; the C++ layer is only reached through `netgraph_core` when you call it yourself, as in the NetworkX section above.
+`PreparedScenario` holds the read-only scenario view, its `topology`, the bound `demand_sets` and the preparation's `units_report`. `PreparedTopology` holds the graph and its labels: `graph`, physical node names, read-only node-name and physical-link mappings, `edge_refs` in native edge order, nominal disabled eligibility, `q` and `pool_heads` (each finite TE ingress pool's synthetic head node). Every analysis takes the prepared scenario, holds it as `prepared` and returns its own precision `misses`; its `units_report` is the preparation's report with those misses appended. A physical link has two native directions; `DirectedLink(link, direction)` identifies one. Returned native results retain their graph and remain readable after working policies are removed.
 
-Threads help only when an iteration spends its time inside the C++ engine (max-flow, the LSP presets). Demand placement for the hop-by-hop presets and `TE_WCMP_UNLIM` is Python-bound between short engine calls, which is why `TrafficMatrixPlacement` resolves `parallelism: auto` to 1 for those demand sets.
+## Native models and capacity
+
+`CapacityQuery` defaults to uncapped, lossless optimized traffic engineering. `mode="combine"` asks one source-set/destination-set question; `"pairwise"` asks each canonical selector-group pair independently. `Selector(group_by="name", path="^source")` makes one group per matching node. Non-diagonal endpoint overlap refuses; a singleton self pair has its own zero-valued `SelfPair` row.
+
+Supply a native configuration to ask another routing question:
+
+```python
+import netgraph_core as ngc
+
+equal = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths())
+weighted = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths(
+    allocation=ngc.RouteAllocation.WEIGHTED,
+    weight_basis=ngc.WeightBasis.CAPACITY,
+))
+query = CapacityQuery(Selector("^A$"), Selector("^C$"), config=equal)
+equal_result = capacity(prepared, query)
+```
+
+Shortest-path routing keeps its cost-selected support even when an edge has no capacity. Equal splitting retains that member; capacity weighting gives it zero weight. Both use native equal source allocation. An optimized controller may choose different flows and routes. The normalized question records the effective model, finite offer/design inputs and failure request.
+
+Physical offers are optional. The analysis labels the actual question `lossless_bound`, `fixed_offer_delivery` or `first_hop_experiment`, with its offer source. Native integer-valued configuration fields already contain units; YAML bandwidth minima are physical and are converted at preparation.
+
+## Demands, placement and MSD
+
+```python
+from ngraph import DemandSet, DemandSpec, PlacementQuery, place
+
+traffic = DemandSet("traffic", (
+    DemandSpec(Selector("^A$"), Selector("^C$"), volume=4, id="service"),
+))
+loaded = prepare(Scenario(network, demand_sets={"traffic": traffic},
+                          units=UnitsSettings(resolution=1)),
+                 demand_sets=("traffic",))
+placement = place(loaded, PlacementQuery(loaded.demand_sets["traffic"]))
+assert placement.cases[0].states["converged"].totals.delivered_units == 4
+```
+
+`DemandSpec` accepts a declared preset, native configuration or named `PinnedRoutes`. Priorities sort ascending; declaration and canonical expansion order break ties. IDs are unique throughout a run. Missing IDs use the set name and source declaration ordinal, with stable indices for explicit expansion and resolved leaves. Grouped splitting preserves each quantized parent total, including reported discarded shares.
+
+`maximum_supported_demand(prepared, MSDQuery(resolved_set))` keeps one native ledger and the same owners throughout the probe series. Each probe scales the original physical parent totals, quantizes once and removes every previous owner before submitting the complete matrix. Feasibility uses exact integer accounting.
+
+Read `alpha_feasible` as the largest tested feasible factor, or `None` when none was found. `history` contains every actual probe. `search_status` is one of `feasible`, `none_feasible`, `range`, `stagnation`, `limit`, `trivial`; `stop_reason` explains the termination. An upper certificate exists only for a proved downward-closed class. Multiple controllers and tunnel redesigns are conservatively unproved. Python callers may request `export_probe_rows=True`; YAML has no such input.
+
+## Failure cases
+
+```python
+from ngraph import FailureMode, FailurePolicy, FailureRequest, FailureRule
+
+policy = FailurePolicy(modes=[FailureMode(1, [
+    FailureRule("link", mode="choice", count=1),
+])])
+degraded = capacity(prepared, CapacityQuery(
+    Selector("^A$"), Selector("^C$"),
+    failures=FailureRequest(policy, iterations=20, seed=42, failure_trace=True),
+    workers=2,
+))
+assert sum(case.case.occurrences for case in degraded.cases) == 20
+```
+
+The baseline comes first; unique expanded physical patterns follow in first-observed order. Sampled empty patterns count toward the baseline's `occurrences`, without an extra baseline trial. A failed physical link excludes both directions. Risk-group membership uses one shared resolver, including unregistered descendants. Optional traces describe the first sampled cause of each pattern.
+
+`failure_cases(prepared, request)` exposes the same typed cases to custom analyses. Drawing occurs before worker execution. For capacity and placement, `workers="auto"` resolves to the CPU count (one fixed rule per analysis kind). Seven paired 1-versus-N measurements on the shipped callers selected N: NSF capacity and backbone placement save more time than the small cases spend on thread start-up. Sensitivity also resolves auto to the CPU count; the shipped scenarios have no sensitivity caller to screen. MSD remains serial. Explicit worker values must be positive integers. Query seeds override policy seeds. Each draw uses a fresh `random.Random(base_seed + draw_index)`.
+
+## Paths and sensitivity
+
+`paths(prepared, PathQuery(source, target))` returns named rows retaining native `Path` values. Default SPF uses forward search; selectors supply endpoints. SPF combine keeps only concrete pairs at the global minimum cost. `costs_only=True` omits path expansion; no route has `cost=None`, distinct from a singleton self row with cost zero.
+
+Use `options=ngc.KspOptions(k, cost_ceiling=...)` for KSP. Candidates merge by `(cost, concrete pair ordinal, native rank)` and then truncate to `k`. Native `AbsoluteCost` is inclusive; `CostStretch` accepts exact fractions. Masks and residual vectors belong to the prepared graph. The question records the effective SPF `min_residual`; KSP records `None`.
+
+`edge_sensitivity(prepared, SensitivityQuery(source, target, config, ...))` asks directed edge-deletion questions and retains the native baseline and signed integer reductions, including raw zero entries. JSON omits exact-zero entries. It accepts uncapped lossless capacity or fixed finite lossy traffic; it does not perform a second baseline solve.
+
+## Results and export
+
+`run(prepare(scenario))` returns `RunResult` with an ordered tuple of steps, one units report (the preparation's report with each step's misses, labelled by step) and producer metadata. Every analysis records its own typed query (`CapacityQuery`, `PlacementQuery`, `SensitivityQuery`, `PathQuery`, `MSDQuery`) as `query`, and a step records it as its `question`; a built-in domain step records itself. The JSON export writes each question in normalized form (selectors, the effective native model, failures, alpha and its source). A case has `states={"converged": ...}`. Rows retain native values and add endpoint identity, declared request accounting and optional reports.
+
+`write_json(result, file)` is the export path. It writes each plain record as its declared constants and fields, in declaration order, and encodes before writing; `ngraph/schemas/results.json` is generated from the same declarations. CLI file output uses an atomic replacement. Edge arrays, cuts and cost reports are opt-in; unsupported cost histograms carry an explicit reason. Unrestricted optimized capacity returns a tagged marginal curve; determined path costs return delivered-unit bins. Integer units remain exact in JSON.
+
+Custom steps implement `run(StepContext) -> StepOutput`, read earlier successful steps through `context.prior_results`, and return their question (a finite JSON mapping of their parameters) plus a result. A step that needs a demand set bound, or asks a numerical question, says so with `needs()`, which returns a `StepNeeds` record (`ngraph.analysis.preparation`); the default `None` asks preparation for nothing. A custom result registers exactly one `register_result_exporter(Type, encoder)`; plain JSON domain data is also accepted. Unknown result types refuse. The encoder runs once per requested export. Published results are immutable for later steps: plain JSON results and questions are stored read-only, and NetGraph's own records are immutable. A registered result is published as it is, with any native Core values it holds, so make its type immutable. A custom step type parses its own YAML keys by overriding the `yaml_arguments(arguments, name)` class method.
+
+## Domain tools and logging
+
+`BuildGraph` exports the physical network in NetworkX node-link form. `NetworkStats`, `CostPower` and `NetworkExplorer` retain their domain analysis roles. Risk-group editing methods on `Network` resolve current membership for each mutation.
+
+Importing the package installs a `NullHandler`. Applications can call `ngraph.logging.set_global_log_level(level)` or configure their own handler. Import the CLI explicitly when it is needed.
+
+
+## Compact rows and requested details
+
+`CapacityQuery`, `PlacementQuery`, `SensitivityQuery` and `MSDQuery` accept `export_details=False`. It controls JSON projection; `row.result` and the sensitivity baseline remain complete native objects for Python access. The analysis `outputs.details` records the effective value. MSD applies it to best rows and any explicitly retained probe rows without changing history retention.
+
+Compact native-result JSON contains `request_kind`, `requested_units`, `offered_units`, `delivered_units`, `unadmitted_units`, `source_drop_units`, `edge_drop_units`, `termination` and `total_cost`. Values retain native null/infinite applicability and exact integer units. `edge_drop_units` sums native losses on physical and synthetic edges. Row ids/endpoints/reference values and nullable `pool` metadata remain present; a pool names the private ingress and its cost contribution. Combined sources asked with `TE_ECMP_16_LSP` or `TE_ECMP_UP_TO_256_LSP` share one private head, for placement and capacity alike: preparation builds it for each such demand and MaxFlow step (one pool per source set for a MaxFlow step), and a library `CapacityQuery` with that preset as its `declaration` uses the prepared pool of exactly its sources, or is refused. `resolve_demands` refuses a pool id whose sources differ from its prepared ingress.
+
+With `export_details=True`, rows additionally project call delivery/undelivered/delta/drop fields, admitted units, named sparse drops, per-source and per-tunnel values, and the native plan. Unrequested detail fields are absent. Native optional arrays/cuts and `export_cost_distribution` keep their independent controls: requesting details performs no extra solve or cost-report preparation.
+
+Domain records are immutable from construction: nodes, links, risk groups, components, conditions, selectors, failure rules, modes and policies, demand declarations and built-in workflow steps. Each constructor checks its fields once. A scalar is stored as its built-in value: a subclass of `str`, `int` or `float` becomes its plain value, ignoring overridden conversions, and NumPy or other non-built-in scalars are refused with the field's label. `attrs` and condition operands must be finite JSON data and are stored read-only; tuples and sets in them are refused, so use lists. Record collections are stored as tuples and frozensets. Edit through the `Network` methods (`add_node`, `add_link`, `replace_node`, `replace_link`, the enable/disable and risk-group toggles) or `dataclasses.replace`: assigning a record field raises `dataclasses.FrozenInstanceError`, and editing read-only attrs raises `TypeError`. `Network.add_link` assigns a link's id once; a link already in a network is refused by another, so add `dataclasses.replace(link)` there. `replace_link` keeps a link's endpoints; to move a link, add a new one. A YAML declaration's identity is declared data that `dataclasses.replace` keeps: `DemandSpec.yaml_label`, `declaration_ordinal` and `expand_leaf_index`, and a step's `yaml_label` and `derived_seed` (its `seed_source` is `scenario-derived` while its seed equals that derived seed).
+
+`Network` and `ComponentsLibrary` keep editable dicts. `prepare` changes nothing in its input: the returned `PreparedScenario` holds read-only views of those dicts, each copied on its own under plain string keys, that share the immutable records, so later edits of the caller's collections never reach it, and editing a prepared view raises `TypeError`. A failed `prepare` leaves its input as it was.
+
+A custom step's own data is its own: it is neither copied nor frozen, and the step can change it and its later answers. `prepare` records each step's name and seed, so a later edit of those does not reach the prepared scenario. `copy.copy`, `copy.deepcopy` and pickle of a record give an equal immutable value; records that hold native values are shared by copies, and native values cannot be pickled.

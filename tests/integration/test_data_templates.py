@@ -5,7 +5,7 @@ Template categories:
 - NetworkTemplates: Common network topologies (linear, star, mesh, tree)
 - BlueprintTemplates: Reusable blueprint patterns for hierarchies
 - FailurePolicyTemplates: Standard failure scenario configurations
-- TrafficDemandTemplates: Traffic demand patterns and distributions
+- DemandTemplates: Traffic demand patterns and distributions
 - WorkflowTemplates: Common analysis workflow configurations
 - ScenarioTemplateBuilder: High-level builder for complete scenarios
 - CommonScenarios: Pre-built scenarios for typical use cases
@@ -171,23 +171,8 @@ class FailurePolicyTemplates:
             ],
         }
 
-    @staticmethod
-    def single_node_failure() -> Dict[str, Any]:
-        """Template for single node failure policy."""
-        return {
-            "attrs": {
-                "description": "Single node failure scenario",
-            },
-            "modes": [
-                {
-                    "weight": 1.0,
-                    "rules": [{"scope": "node", "mode": "choice", "count": 1}],
-                }
-            ],
-        }
 
-
-class TrafficDemandTemplates:
+class DemandTemplates:
     """Templates for common traffic demand patterns."""
 
     @staticmethod
@@ -237,7 +222,7 @@ class WorkflowTemplates:
                     "mode": mode,
                     "iterations": 1,
                     "failure_policy": None,
-                    "shortest_path": True,
+                    "preset": "SHORTEST_PATHS_MAXFLOW",
                 }
             )
 

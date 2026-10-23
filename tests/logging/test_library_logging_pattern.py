@@ -10,22 +10,11 @@ import logging
 import subprocess
 import sys
 
-import pytest
-
 from ngraph.logging import (
     get_logger,
-    reset_logging,
     set_global_log_level,
     setup_root_logger,
 )
-
-
-@pytest.fixture(autouse=True)
-def _reset_logging_each_test():
-    """Reset logging state before and after each test to avoid cross-test bleed."""
-    reset_logging()
-    yield
-    reset_logging()
 
 
 def test_import_attaches_only_null_handler():

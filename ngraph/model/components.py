@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import math
 import numbers
-from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
 import yaml
 
+from ngraph.utils.values import frozen_attrs, own_scalars, owned_dict
 from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
 
 
-@dataclass
+@dataclass(frozen=True)
 class Component:
     """Hardware component such as a chassis, line card, or optic.
 
@@ -29,9 +29,10 @@ class Component:
         capacity (float): A generic capacity measure (e.g., platform capacity).
         ports (int): Number of ports if relevant for this component.
         count (int): How many identical copies of this component are present.
-        attrs (Dict[str, Any]): Arbitrary key-value attributes for extra metadata.
+        attrs (Dict[str, Any]): Finite JSON metadata, checked and stored
+            read-only at construction.
         children (Dict[str, Component]): Nested child components (e.g., line cards
-            inside a chassis), keyed by child name.
+            inside a chassis), keyed by child name; read-only.
     """
 
     name: str
@@ -48,6 +49,30 @@ class Component:
 
     attrs: Dict[str, Any] = field(default_factory=dict)
     children: Dict[str, Component] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        own_scalars(self, "component", ("name",))
+        label = f"component {self.name}"
+        own_scalars(
+            self,
+            label,
+            (
+                "component_type",
+                "description",
+                "capex",
+                "power_watts",
+                "power_watts_max",
+                "capacity",
+                "ports",
+                "count",
+            ),
+        )
+        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
+        if not all(isinstance(c, Component) for c in self.children.values()):
+            raise TypeError(f"{label}.children: expected Component values")
+        object.__setattr__(
+            self, "children", owned_dict(self.children, f"{label}.children")
+        )
 
     def total_capex(self) -> float:
         """Return capex of this component and all descendants, times ``count``."""
@@ -122,11 +147,12 @@ class Component:
         return data
 
 
-@dataclass
+@dataclass(frozen=True)
 class ComponentsLibrary:
     """Named Component templates for capex, power, and capacity lookups.
 
-    Each entry is a top-level template and may have nested children.
+    Each entry is a top-level template and may have nested children. The
+    ``components`` dict stays editable; ``prepare`` keeps a read-only view.
 
     Example (YAML-like):
         components:
@@ -150,6 +176,10 @@ class ComponentsLibrary:
     """
 
     components: Dict[str, Component] = field(default_factory=dict)
+
+    def snapshot(self) -> ComponentsLibrary:
+        """Return a read-only view sharing this library's immutable components."""
+        return ComponentsLibrary(owned_dict(self.components, "components"))
 
     def get(self, name: str) -> Optional[Component]:
         """Retrieves a Component by its name from the library.
@@ -185,13 +215,13 @@ class ComponentsLibrary:
         return self
 
     def clone(self) -> ComponentsLibrary:
-        """Creates a deep copy of this ComponentsLibrary.
+        """Creates an independent copy of this ComponentsLibrary.
 
         Returns:
-            ComponentsLibrary: Independent copy; changes to it do not affect
-                this library.
+            ComponentsLibrary: Copy with its own dict; components are
+                immutable and shared.
         """
-        return ComponentsLibrary(components=deepcopy(self.components))
+        return ComponentsLibrary(components=dict(self.components))
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> ComponentsLibrary:

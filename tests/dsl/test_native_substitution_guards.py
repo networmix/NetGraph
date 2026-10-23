@@ -10,17 +10,16 @@ import pytest
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
 from ngraph.dsl.expansion.brackets import expand_risk_group_refs
-from ngraph.dsl.selectors import normalize_selector
-from ngraph.model.demand.builder import build_demand_set
-from ngraph.model.selectors import NodeSelector
+from ngraph.dsl.inputs import demand_sets
+from ngraph.model.selectors import Selector, normalize_selector
 
 
 class TestSelectorPathGuard:
     """Selector 'path' must be a string."""
 
-    def test_node_selector_rejects_non_string_path(self):
+    def test_selector_rejects_non_string_path(self):
         with pytest.raises(ValueError, match="Selector 'path' must be a string"):
-            NodeSelector(path=1)  # type: ignore[arg-type]
+            Selector(path=1)  # type: ignore[arg-type]
 
     def test_normalize_selector_dict_rejects_non_string_path(self):
         with pytest.raises(ValueError, match="Selector 'path' must be a string"):
@@ -70,10 +69,8 @@ class TestDemandSourceTargetGuard:
     """Demand source/target must be a string or selector dict at build time."""
 
     def test_int_source_rejected_with_set_context(self):
-        with pytest.raises(
-            ValueError, match="Demand 'source' in set 'tm' must be a string"
-        ):
-            build_demand_set({"tm": [{"source": 1, "target": "^B$"}]})
+        with pytest.raises(ValueError, match="Selector must be string or dict"):
+            demand_sets({"tm": [{"source": 1, "target": "^B$"}]})
 
     def test_native_var_source_rejected_at_build(self):
         """Expansion substituting an int source fails at build, not analysis."""
@@ -87,7 +84,5 @@ class TestDemandSourceTargetGuard:
                 }
             ]
         }
-        with pytest.raises(
-            ValueError, match="Demand 'source' in set 'tm' must be a string"
-        ):
-            build_demand_set(demands)
+        with pytest.raises(ValueError, match="Selector must be string or dict"):
+            demand_sets(demands)

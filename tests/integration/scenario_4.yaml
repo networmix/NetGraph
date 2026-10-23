@@ -414,8 +414,7 @@ workflow:
     source: "dc1_poda_rack.*/servers/.*"
     target: "dc1_podb_rack.*/servers/.*"
     mode: "combine"
-    shortest_path: false
-    flow_placement: "PROPORTIONAL"
+    preset: TE_MAXFLOW_UNLIM
     iterations: 1
     failure_policy: null
 
@@ -425,30 +424,27 @@ workflow:
     source: "dc1_podb_rack.*/servers/.*"
     target: "dc1_poda_rack.*/servers/.*"
     mode: "combine"
-    shortest_path: false
-    flow_placement: "PROPORTIONAL"
+    preset: TE_MAXFLOW_UNLIM
     iterations: 1
     failure_policy: null
 
-  # Forward inter-DC capacity analysis
+  # Forward inter-DC static equal shortest-path capacity
   - type: MaxFlow
-    name: inter_dc_capacity_forward
+    name: inter_dc_ecmp_capacity_forward
     source: "dc1_.*servers/.*"
     target: "dc2_.*servers/.*"
     mode: "combine"
-    shortest_path: false
-    flow_placement: "EQUAL_BALANCED"
+    preset: SHORTEST_PATHS_ECMP
     iterations: 1
     failure_policy: null
 
-  # Reverse inter-DC capacity analysis
+  # Reverse inter-DC static equal shortest-path capacity
   - type: MaxFlow
-    name: inter_dc_capacity_reverse
+    name: inter_dc_ecmp_capacity_reverse
     source: "dc2_.*servers/.*"
     target: "dc1_.*servers/.*"
     mode: "combine"
-    shortest_path: false
-    flow_placement: "EQUAL_BALANCED"
+    preset: SHORTEST_PATHS_ECMP
     iterations: 1
     failure_policy: null
 
@@ -460,17 +456,15 @@ workflow:
     mode: "combine"
     failure_policy: "single_link_failure"
     iterations: 10 # 10 iterations for test efficiency
-    parallelism: 2 # 2-way parallelism
-    shortest_path: false
-    flow_placement: "PROPORTIONAL"
+    workers: 2
+    preset: TE_MAXFLOW_UNLIM
 
   - type: MaxFlow
-    name: spine_failure_analysis
+    name: inter_dc_ecmp_node_failures
     source: "dc1_.*servers/.*"
     target: "dc2_.*servers/.*"
     mode: "combine"
     failure_policy: "single_node_failure"
     iterations: 20 # 20 iterations for test efficiency
-    parallelism: 2 # 2-way parallelism
-    shortest_path: false
-    flow_placement: "EQUAL_BALANCED"
+    workers: 2
+    preset: SHORTEST_PATHS_ECMP

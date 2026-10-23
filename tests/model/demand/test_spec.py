@@ -1,102 +1,103 @@
+"""Immutable demand inputs keep physical values and acquire stable preparation IDs."""
+
+from dataclasses import FrozenInstanceError, replace
+
+import netgraph_core as ngc
 import pytest
 
-from ngraph.model.demand.spec import TrafficDemand
-from ngraph.model.flow.policy_config import FlowPolicyPreset
+from ngraph import (
+    DemandSet,
+    DemandSpec,
+    FlowPolicyPreset,
+    Network,
+    Node,
+    Scenario,
+    Selector,
+    UnitsSettings,
+    prepare,
+)
 
 
 def test_defaults_and_id_generation() -> None:
-    """TrafficDemand sets sane defaults and generates a unique, structured id."""
-    demand = TrafficDemand(source="Src", target="Dst")
-
-    # Defaults
-    assert demand.priority == 0
-    assert demand.volume == 0.0
-    assert demand.mode == "combine"
-    assert demand.attrs == {}
-
-    # ID structure: "<source>|<sink>|<uuid>" and uniqueness across instances
-    parts = demand.id.split("|")
-    assert parts[0] == "Src"
-    assert parts[1] == "Dst"
-    assert len(parts) == 3
-    assert all(parts)
-
-    demand2 = TrafficDemand(source="Src", target="Dst")
-    assert demand2.id != demand.id
+    demand = DemandSpec(Selector("^Src$"), Selector("^Dst$"), 0)
+    assert demand.priority == 0 and demand.volume == 0.0 and demand.mode == "combine"
+    assert demand.attrs == {} and demand.id is None
+    network = Network()
+    for name in ("Src", "Dst"):
+        network.add_node(Node(name))
+    scenario = Scenario(
+        network,
+        demand_sets={"load": DemandSet("load", (demand,))},
+        units=UnitsSettings(1),
+    )
+    first, second = (prepare(scenario, demand_sets=("load",)) for _ in range(2))
+    assert [d.id for d in first.demand_sets["load"].demands] == ["load|0|0"]
+    assert first.demand_sets["load"].expansion_template[0].base_id == "load|0"
+    assert (
+        first.demand_sets["load"].demands[0].id
+        == second.demand_sets["load"].demands[0].id
+    )
+    assert demand.id is None
 
 
 def test_explicit_id_preserved() -> None:
-    """TrafficDemand with explicit ID preserves it unchanged."""
-    demand = TrafficDemand(
-        id="my-explicit-id",
-        source="Src",
-        target="Dst",
-        volume=100.0,
-    )
+    demand = DemandSpec(Selector("^Src$"), Selector("^Dst$"), 100, id="my-explicit-id")
     assert demand.id == "my-explicit-id"
-
-
-def test_explicit_id_round_trip() -> None:
-    """TrafficDemand ID survives serialization to dict and reconstruction."""
-    original = TrafficDemand(source="A", target="B", volume=50.0)
-    original_id = original.id
-
-    # Simulate serialization (as done in workflow steps)
-    config = {
-        "id": original.id,
-        "source": original.source,
-        "target": original.target,
-        "volume": original.volume,
-        "mode": original.mode,
-        "priority": original.priority,
-    }
-
-    # Simulate reconstruction (as done in flow.py)
-    reconstructed = TrafficDemand(
-        id=config.get("id"),
-        source=config["source"],
-        target=config["target"],
-        volume=config["volume"],
-        mode=config.get("mode", "pairwise"),
-        priority=config.get("priority", 0),
+    network = Network()
+    for name in ("Src", "Dst"):
+        network.add_node(Node(name))
+    scenario = Scenario(
+        network,
+        demand_sets={"load": DemandSet("load", (demand,))},
+        units=UnitsSettings(1),
     )
-
-    assert reconstructed.id == original_id
+    value = prepare(scenario, demand_sets=("load",)).demand_sets["load"]
+    assert value.expansion_template[0].base_id == "my-explicit-id"
+    assert (
+        value.demands[0].base_id == "my-explicit-id"
+        and value.demands[0].id == "my-explicit-id|0"
+    )
 
 
 def test_attrs_isolation_between_instances() -> None:
-    """Each instance gets its own attrs dict; mutating one does not affect others."""
-    d1 = TrafficDemand(source="A", target="B")
-    d2 = TrafficDemand(source="A", target="B")
-
-    d1.attrs["k"] = "v"
-    assert d1.attrs == {"k": "v"}
-    assert d2.attrs == {}
+    original = {"nested": ["original"]}
+    first = DemandSpec(Selector("A"), Selector("B"), 0, attrs=original)
+    second = DemandSpec(Selector("A"), Selector("B"), 0)
+    original["nested"].append("changed")
+    assert first.attrs == {"nested": ["original"]} and second.attrs == {}
+    with pytest.raises(TypeError):
+        first.attrs["extra"] = 1
+    assert (
+        DemandSpec(Selector("A"), Selector("B"), 0, attrs={"extra": 1}).attrs["extra"]
+        == 1
+    )
 
 
 def test_custom_assignment_including_policy_config() -> None:
-    """Custom field values are preserved, including mode and policy config."""
-    demand = TrafficDemand(
-        source="SourceNode",
-        target="TargetNode",
+    demand = DemandSpec(
+        Selector("SourceNode"),
+        Selector("TargetNode"),
+        42.5,
         priority=5,
-        volume=42.5,
         attrs={"description": "test"},
         mode="pairwise",
-        flow_policy=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
+        policy=FlowPolicyPreset.SHORTEST_PATHS_ECMP,
     )
+    assert demand.source.path == "SourceNode" and demand.target.path == "TargetNode"
+    assert demand.priority == 5 and demand.volume == 42.5 and demand.mode == "pairwise"
+    assert (
+        demand.attrs == {"description": "test"}
+        and demand.policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
+    )
+    with pytest.raises(FrozenInstanceError):
+        demand.volume = 43
+    changed = replace(demand, volume=43)
+    assert changed.volume == 43 and demand.volume == 42.5
 
-    assert demand.source == "SourceNode"
-    assert demand.target == "TargetNode"
-    assert demand.priority == 5
-    assert demand.volume == 42.5
-    assert demand.attrs == {"description": "test"}
-    assert demand.mode == "pairwise"
-    assert demand.flow_policy == FlowPolicyPreset.SHORTEST_PATHS_ECMP
 
-
-def test_flow_policy_must_be_preset() -> None:
-    """Preset names and integers are parsed by the builder, not the dataclass."""
-    for value in ("SHORTEST_PATHS_ECMP", 1):
-        with pytest.raises(ValueError, match="flow_policy must be a FlowPolicyPreset"):
-            TrafficDemand(source="A", target="B", flow_policy=value)
+def test_policy_requires_a_typed_model_or_preset() -> None:
+    for value in ("SHORTEST_PATHS_ECMP", 1, {}, True):
+        with pytest.raises(TypeError, match="demand.policy"):
+            DemandSpec(Selector("A"), Selector("B"), 0, policy=value)
+    config = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths())
+    assert DemandSpec(Selector("A"), Selector("B"), 0, policy=config).policy is config

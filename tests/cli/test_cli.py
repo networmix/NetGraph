@@ -1,6 +1,8 @@
 import io
 import json
 import logging
+import os
+import stat
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,10 +21,35 @@ def test_run_writes_results_file_and_contains_build_graph(tmp_path: Path) -> Non
 
     assert results_path.exists()
     data = json.loads(results_path.read_text())
-    assert "steps" in data and "workflow" in data
-    # built step is named 'build_graph'
-    assert "build_graph" in data["steps"]
-    assert "graph" in data["steps"]["build_graph"]["data"]
+    assert set(data) == {"metadata", "units_report", "steps"}
+    (step,) = data["steps"]
+    assert step["name"] == "build_graph" and step["execution_order"] == 0
+    assert step["result"]["kind"] == "build_graph"
+    assert len(step["result"]["graph"]["nodes"]) == 6
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes")
+def test_results_files_get_the_umask_mode_or_keep_their_own(tmp_path: Path) -> None:
+    scenario = str(Path("tests/integration/scenario_1.yaml"))
+    fresh, existing = tmp_path / "fresh.json", tmp_path / "existing.json"
+    existing.write_text("{}")
+    existing.chmod(0o640)
+    previous = os.umask(0o027)
+    try:
+        for path in (fresh, existing):
+            cli.main(["--quiet", "run", scenario, "--results", str(path)])
+    finally:
+        os.umask(previous)
+    # As open() would: 0o666 under the umask, or the file's own mode.
+    assert stat.S_IMODE(fresh.stat().st_mode) == 0o640
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o640
+    previous = os.umask(0o022)
+    try:
+        cli.main(["--quiet", "run", scenario, "--results", str(tmp_path / "o.json")])
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE((tmp_path / "o.json").stat().st_mode) == 0o644
+    assert json.loads(existing.read_text())["steps"][0]["name"] == "build_graph"
 
 
 def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> None:
@@ -34,7 +61,7 @@ def test_run_stdout_and_default_results(tmp_path: Path, capsys, monkeypatch) -> 
     # stdout must be pure JSON (status banners go to stderr)
     payload = json.loads(captured.out)
 
-    assert "steps" in payload and "build_graph" in payload["steps"]
+    assert [step["name"] for step in payload["steps"]] == ["build_graph"]
     assert "Results written to" in captured.err
     # default <scenario_name>.results.json is created when --results not passed
     assert (tmp_path / "scenario_1.results.json").exists()
@@ -65,7 +92,7 @@ def test_run_stdout_no_results_emits_pure_json(
 
     # The full stdout stream must parse as JSON (safe to pipe to jq)
     payload = json.loads(captured.out)
-    assert "steps" in payload and "build_graph" in payload["steps"]
+    assert [step["name"] for step in payload["steps"]] == ["build_graph"]
 
 
 def test_run_custom_results_path_disables_default(tmp_path: Path, monkeypatch) -> None:
@@ -123,10 +150,11 @@ def test_run_filter_by_step_names_subsets_results(tmp_path: Path, monkeypatch) -
     )
     filtered_data = json.loads(filtered_path.read_text())
 
-    assert set(filtered_data.get("steps", {}).keys()) == {"capacity_analysis_forward"}
-    assert set(filtered_data.get("steps", {}).keys()).issubset(
-        set(all_data.get("steps", {}).keys())
-    )
+    (filtered,) = filtered_data["steps"]
+    assert filtered["name"] == "capacity_analysis_forward"
+    assert filtered["execution_order"] == 1
+    assert filtered == all_data["steps"][1]
+    assert [step["execution_order"] for step in all_data["steps"]] == list(range(5))
 
 
 def test_run_filter_nonexistent_step_fails_before_running(
@@ -169,7 +197,7 @@ workflow:
 
     assert out_path.exists()
     data = json.loads(out_path.read_text())
-    assert "steps" in data and "stats" in data["steps"]
+    assert [step["name"] for step in data["steps"]] == ["stats"]
 
 
 # Flag validation and logging levels
@@ -390,7 +418,9 @@ workflow:
     assert "demand/capacity: 50.00%" in out
 
 
-def test_run_profile_uses_output_dir_profiles(tmp_path: Path, monkeypatch) -> None:
+def test_run_profile_reports_steps_with_output_results(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
     scenario_file = tmp_path / "p.yaml"
     scenario_file.write_text(
         """
@@ -425,8 +455,13 @@ workflow:
     )
 
     assert res_path.exists()
-    # Worker profiles directory should be created under output dir, named '<prefix>.profiles'
-    assert (out_dir / "p.profiles").exists()
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "PERFORMANCE REPORT" in captured.err and "stats" in captured.err
+    assert (
+        json.loads(res_path.read_text())["steps"][0]["result"]["kind"]
+        == "network_stats"
+    )
 
 
 def test_main_with_no_args_exits() -> None:

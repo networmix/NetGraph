@@ -5,7 +5,7 @@ Each example must parse and match the "Expected:" line in its docstring.
 
 import pytest
 
-from ngraph.scenario import Scenario
+from ngraph.scenario import Scenario, prepare, run
 
 
 def test_example_1_simple_data_center():
@@ -76,10 +76,10 @@ workflow:
     for name in expected_nodes:
         assert name in scenario.network.nodes, f"Missing node: {name}"
 
-    demands = scenario.demand_set.get_set("default")
+    demands = scenario.demand_sets["default"].demands
     assert len(demands) == 1
 
-    policy = scenario.failure_policy_set.get_policy("single_link")
+    policy = scenario.failure_policies["single_link"]
     assert policy is not None
     assert len(policy.modes) == 1
 
@@ -536,7 +536,7 @@ demands:
       target: "^metro1/pop2/.*"
       volume: 15000.0
       mode: pairwise
-      flow_policy: TE_WCMP_UNLIM
+      preset: TE_MAXFLOW_UNLIM
 
 failures:
   single_link:
@@ -560,11 +560,8 @@ workflow:
 
     assert len(scenario.workflow) == 1
 
-    scenario.run()
-
-    results = scenario.results.to_dict()
-    assert "network_statistics" in results["steps"]
-    assert results["steps"]["network_statistics"]["data"]["node_count"] == 40
+    (step,) = run(prepare(scenario)).steps
+    assert step.name == "network_statistics" and step.result.node_count == 40
 
 
 def test_example_10_group_by():
@@ -606,7 +603,7 @@ demands:
         f"Expected 2 links, got {len(scenario.network.links)}"
     )
 
-    demands = scenario.demand_set.get_set("inter_dc")
+    demands = scenario.demand_sets["inter_dc"].demands
     assert len(demands) == 1
 
 
@@ -710,7 +707,7 @@ failures:
         f"Expected 3 risk groups, got {len(scenario.network.risk_groups)}"
     )
 
-    policy = scenario.failure_policy_set.get_policy("mixed_failures")
+    policy = scenario.failure_policies["mixed_failures"]
     assert len(policy.modes) == 4, f"Expected 4 modes, got {len(policy.modes)}"
     assert policy.expand_groups is True
 
@@ -950,7 +947,7 @@ demands:
       mode: pairwise
       group_mode: per_group
       priority: 1
-      flow_policy: SHORTEST_PATHS_WCMP
+      preset: SHORTEST_PATHS_WCMP
 """
     scenario = Scenario.from_yaml(yaml_content)
 
@@ -959,12 +956,12 @@ demands:
     )
 
     # Validate inter_dc demands were expanded
-    inter_dc_demands = scenario.demand_set.get_set("inter_dc")
+    inter_dc_demands = scenario.demand_sets["inter_dc"].demands
     assert len(inter_dc_demands) == 2, (
         f"Expected 2 inter_dc demands, got {len(inter_dc_demands)}"
     )
 
-    grouped_demands = scenario.demand_set.get_set("grouped")
+    grouped_demands = scenario.demand_sets["grouped"].demands
     assert len(grouped_demands) == 1
 
 
@@ -1038,7 +1035,7 @@ failures:
     rack1 = scenario.network.risk_groups["Rack1"]
     assert len(rack1.children) == 2, f"Expected 2 children, got {len(rack1.children)}"
 
-    policy = scenario.failure_policy_set.get_policy("hierarchical")
+    policy = scenario.failure_policies["hierarchical"]
     assert policy.expand_groups is True
 
 
@@ -1274,7 +1271,7 @@ demands:
         f"Expected 3 links, got {len(scenario.network.links)}"
     )
 
-    demands = scenario.demand_set.get_set("filtered")
+    demands = scenario.demand_sets["filtered"].demands
     assert len(demands) == 3, f"Expected 3 demands, got {len(demands)}"
 
 

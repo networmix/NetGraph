@@ -160,46 +160,42 @@ workflow:
   - type: BuildGraph
     name: build_graph
 
-  # Forward direction, PROPORTIONAL placement
+  # Forward direction, optimized capacity on shortest-path support
   - type: MaxFlow
     name: capacity_analysis_forward
     source: my_clos1/b.*/t1
     target: my_clos2/b.*/t1
     mode: combine
-    shortest_path: true
-    flow_placement: PROPORTIONAL
+    preset: SHORTEST_PATHS_MAXFLOW
     iterations: 1
     failure_policy: null
 
-  # Reverse direction, PROPORTIONAL placement
+  # Reverse direction, optimized capacity on shortest-path support
   - type: MaxFlow
     name: capacity_analysis_reverse
     source: my_clos2/b.*/t1
     target: my_clos1/b.*/t1
     mode: combine
-    shortest_path: true
-    flow_placement: PROPORTIONAL
+    preset: SHORTEST_PATHS_MAXFLOW
     iterations: 1
     failure_policy: null
 
-  # Forward direction, EQUAL_BALANCED placement
+  # Forward direction, equal shortest-path splitting
   - type: MaxFlow
     name: capacity_analysis_forward_balanced
     source: my_clos1/b.*/t1
     target: my_clos2/b.*/t1
     mode: combine
-    shortest_path: true
-    flow_placement: EQUAL_BALANCED
+    preset: SHORTEST_PATHS_ECMP
     iterations: 1
     failure_policy: null
 
-  # Reverse direction, EQUAL_BALANCED placement
+  # Reverse direction, equal shortest-path splitting
   - type: MaxFlow
     name: capacity_analysis_reverse_balanced
     source: my_clos2/b.*/t1
     target: my_clos1/b.*/t1
     mode: combine
-    shortest_path: true
-    flow_placement: EQUAL_BALANCED
+    preset: SHORTEST_PATHS_ECMP
     iterations: 1
     failure_policy: null

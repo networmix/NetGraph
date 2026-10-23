@@ -1,8 +1,7 @@
-from unittest.mock import MagicMock
-
 import pytest
 
-from ngraph.scenario import Scenario
+from ngraph import Network, StepContext, StepOutput
+from ngraph.scenario import Scenario, prepare, run
 from ngraph.workflow.base import (
     WORKFLOW_STEP_REGISTRY,
     WorkflowStep,
@@ -27,8 +26,8 @@ def test_register_workflow_step_decorator() -> None:
 
     @register_workflow_step("TestStep")
     class TestStep(WorkflowStep):
-        def run(self, scenario) -> None:
-            pass
+        def run(self, context: StepContext) -> StepOutput:
+            return StepOutput({}, {})
 
     assert "TestStep" in WORKFLOW_STEP_REGISTRY
     assert WORKFLOW_STEP_REGISTRY["TestStep"] == TestStep
@@ -40,13 +39,17 @@ def test_workflow_step_subclass_run_method() -> None:
     """
 
     class ConcreteStep(WorkflowStep):
-        def run(self, scenario) -> None:
+        def run(self, context: StepContext) -> StepOutput:
             # Set a flag on the step instance to confirm invocation
             self._ran = True
+            return StepOutput({}, {"ran": True})
 
-    mock_scenario = MagicMock(spec=Scenario)
     step_instance = ConcreteStep(name="test_step")
-    step_instance.run(mock_scenario)
+    context = StepContext(
+        prepare(Scenario(Network())), {}, "test_step", 0, None, "none"
+    )
+    output = step_instance.run(context)
+    assert output.result == {"ran": True}
 
     assert getattr(step_instance, "_ran", False) is True
     assert step_instance.name == "test_step"
@@ -54,25 +57,21 @@ def test_workflow_step_subclass_run_method() -> None:
 
 def test_execute_records_metadata_including_seed_fields() -> None:
     """Execute a minimal step and verify metadata includes seed fields."""
-    from ngraph.results import Results
 
     class Dummy(WorkflowStep):
-        def run(self, scenario) -> None:
-            scenario.results.put("metadata", {"ok": True})
+        def run(self, context: StepContext) -> StepOutput:
+            return StepOutput({"operation": "dummy"}, {"ok": True})
 
-    scen = MagicMock(spec=Scenario)
-    scen.results = Results()
-    scen.seed = 1010
-    scen._execution_counter = 0
     step = Dummy(name="d1")
-    step.execute(scen)
-
-    md = scen.results.get_step_metadata("d1")
-    assert md is not None
+    md = run(prepare(Scenario(Network(), (step,), seed=1010))).steps[0]
     assert md.step_type == "Dummy"
-    assert md.step_name == "d1"
-    assert isinstance(md.execution_order, int) and md.execution_order >= 0
+    assert md.name == "d1" and md.execution_order == 0
     # Seed fields
-    assert hasattr(md, "scenario_seed") and md.scenario_seed == 1010
-    assert hasattr(md, "step_seed")
-    assert hasattr(md, "seed_source")
+    assert (
+        md.scenario_seed == 1010 and md.step_seed is None and md.seed_source == "none"
+    )
+    explicit = run(
+        prepare(Scenario(Network(), (Dummy(name="d2", seed=42),), seed=1010))
+    ).steps[0]
+    assert explicit.step_seed == 42 and explicit.seed_source == "explicit-step"
+    assert md.result == {"ok": True}

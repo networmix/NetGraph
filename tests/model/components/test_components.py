@@ -195,9 +195,9 @@ def test_components_library_clone() -> None:
 
     assert clone_lib is not original
     assert clone_lib.components is not original.components
-    # The components should be deep-copied, meaning not the same references
-    assert clone_lib.get("CompA") is not original.get("CompA")
-    assert clone_lib.get("CompB") is not original.get("CompB")
+    # Components are immutable, so the copy shares them.
+    assert clone_lib.get("CompA") is original.get("CompA")
+    assert clone_lib.get("CompB") is original.get("CompB")
 
 
 def test_components_library_from_dict() -> None:

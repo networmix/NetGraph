@@ -1,313 +1,295 @@
-"""Tests for max flow calculations through analyze() and AnalysisContext."""
+"""Named capacity questions on prepared physical topologies."""
 
 import pytest
 
-from ngraph import Link, Mode, Network, Node, analyze
+from ngraph.analysis.capacity import CapacityQuery, capacity
+from ngraph.analysis.failures import FailureRequest
+from ngraph.analysis.units import UnitsSettings
+from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
+from ngraph.model.network import Link, Network, Node
+from ngraph.model.selectors import Selector
+from ngraph.scenario import Scenario, prepare
+
+
+def _network(nodes, links):
+    network = Network(nodes={name: Node(name) for name in nodes})
+    for source, target, amount in links:
+        network.add_link(Link(source, target, amount, 1))
+    return network
+
+
+def _prepared(network):
+    return prepare(Scenario(network, units=UnitsSettings(1)))
 
 
 class TestMaxFlow:
-    """Tests for maximum flow calculations."""
-
     def test_max_flow_simple(self):
-        """Test max flow on a simple bottleneck scenario."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-
-        net.add_link(Link("A", "B", capacity=5))
-        net.add_link(Link("B", "C", capacity=3))
-
-        flow_value = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-        assert flow_value == {("^A$", "^C$"): 3.0}
+        prepared = _prepared(_network(("A", "B", "C"), (("A", "B", 5), ("B", "C", 3))))
+        result = capacity(
+            prepared, CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1)
+        )
+        (row,) = result.cases[0].states["converged"].rows
+        assert row.endpoints.sources == ("A",) and row.endpoints.destinations == ("C",)
+        assert row.result.delivered == 3
 
     def test_max_flow_multi_parallel(self):
-        """Test max flow with parallel paths."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_node(Node("D"))
-
-        net.add_link(Link("A", "B", capacity=5))
-        net.add_link(Link("B", "C", capacity=5))
-        net.add_link(Link("A", "D", capacity=5))
-        net.add_link(Link("D", "C", capacity=5))
-
-        flow_value = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-        assert flow_value == {("^A$", "^C$"): 10.0}
+        prepared = _prepared(
+            _network(
+                ("A", "B", "C", "D"),
+                (("A", "B", 5), ("B", "C", 5), ("A", "D", 5), ("D", "C", 5)),
+            )
+        )
+        result = capacity(
+            prepared, CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1)
+        )
+        assert result.cases[0].states["converged"].rows[0].result.delivered == 10
 
     def test_max_flow_no_source(self):
-        """Test max flow when no source nodes match the pattern."""
-        net = Network()
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("B", "C", capacity=10))
-
-        with pytest.raises(ValueError, match="No source nodes found matching"):
-            analyze(net).max_flow("^A$", "^C$")
+        prepared = _prepared(_network(("B", "C"), (("B", "C", 10),)))
+        with pytest.raises(ValueError, match="source.*empty|no source"):
+            capacity(
+                prepared, CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1)
+            )
+        assert (
+            capacity(
+                prepared, CapacityQuery(Selector("^B$"), Selector("^C$"), workers=1)
+            )
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 10
+        )
 
     def test_max_flow_no_sink(self):
-        """Test max flow when no sink nodes match the pattern."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=10))
-
-        with pytest.raises(ValueError, match="No sink nodes found matching"):
-            analyze(net).max_flow("^A$", "^C$")
+        prepared = _prepared(_network(("A", "B"), (("A", "B", 10),)))
+        with pytest.raises(ValueError, match="target.*empty|no target"):
+            capacity(
+                prepared, CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1)
+            )
+        assert (
+            capacity(
+                prepared, CapacityQuery(Selector("^A$"), Selector("^B$"), workers=1)
+            )
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 10
+        )
 
     def test_max_flow_with_attribute_grouping_combine(self):
-        """Test max flow when grouping sources/sinks by attribute directive."""
-        net = Network()
-        # Sources group: src_group=src
-        net.add_node(Node("S1", attrs={"src_group": "src"}))
-        net.add_node(Node("S2", attrs={"src_group": "src"}))
-        # Sink group: dst_group=dst
-        net.add_node(Node("T1", attrs={"dst_group": "dst"}))
-
-        net.add_link(Link("S1", "T1", capacity=5.0))
-        net.add_link(Link("S2", "T1", capacity=3.0))
-
-        flow = analyze(net).max_flow(
-            {"group_by": "src_group"}, {"group_by": "dst_group"}, mode=Mode.COMBINE
+        network = _network(("S1", "S2", "T1"), (("S1", "T1", 5), ("S2", "T1", 3)))
+        for name in ("S1", "S2"):
+            network.replace_node(name, attrs={"src_group": "src"})
+        network.replace_node("T1", attrs={"dst_group": "dst"})
+        result = capacity(
+            _prepared(network),
+            CapacityQuery(
+                Selector(group_by="src_group"),
+                Selector(group_by="dst_group"),
+                workers=1,
+            ),
         )
-        assert flow == {("src", "dst"): 8.0}
+        (row,) = result.cases[0].states["converged"].rows
+        assert row.endpoints.sources == ("S1", "S2") and row.endpoints.destinations == (
+            "T1",
+        )
+        assert row.result.delivered == 8
 
     def test_max_flow_with_mixed_attr_and_regex(self):
-        """Mix attribute directive with regex path selection."""
-        net = Network()
-        net.add_node(Node("S1", attrs={"role": "edge"}))
-        net.add_node(Node("S2", attrs={"role": "edge"}))
-        net.add_node(Node("T1"))
-        net.add_node(Node("T2"))
-
-        net.add_link(Link("S1", "T1", capacity=2.0))
-        net.add_link(Link("S2", "T2", capacity=3.0))
-
-        flow = analyze(net).max_flow({"group_by": "role"}, r"^T\d$", mode=Mode.PAIRWISE)
-        # Groups: sources -> {"edge": [S1, S2]}, sinks -> {"T1": [T1], "T2": [T2]}
-        # In pairwise mode with group_by: role, we get (edge, T1), (edge, T2)
-        # The sink pattern r"^T\d$" creates individual labels per node
-        assert len(flow) >= 1
-        # Total flow for pairwise is computed per pair entries
-        for _key, val in flow.items():
-            assert isinstance(val, (int, float))
-            assert val >= 0.0
+        network = _network(("S1", "S2", "T1", "T2"), (("S1", "T1", 2), ("S2", "T2", 3)))
+        for name in ("S1", "S2"):
+            network.replace_node(name, attrs={"role": "edge"})
+        result = capacity(
+            _prepared(network),
+            CapacityQuery(
+                Selector(group_by="role"),
+                Selector(r"^T\d$", group_by="name"),
+                mode="pairwise",
+                workers=1,
+            ),
+        )
+        rows = result.cases[0].states["converged"].rows
+        assert [
+            (row.endpoints.sources, row.endpoints.destinations, row.result.delivered)
+            for row in rows
+        ] == [(("S1", "S2"), ("T1",), 2), (("S1", "S2"), ("T2",), 3)]
 
     def test_max_flow_overlap_detection_coverage(self):
-        """Combine mode returns 0 flow when source and sink groups overlap."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=5.0))
-        net.add_link(Link("B", "C", capacity=3.0))
-
-        flow_result = analyze(net).max_flow(
-            r"^(A|B)$",  # Matches A and B
-            r"^(B|C)$",  # Matches B and C (B overlaps!)
-            mode=Mode.COMBINE,
+        prepared = _prepared(_network(("A", "B", "C"), (("A", "B", 5), ("B", "C", 3))))
+        with pytest.raises(ValueError, match="overlap.*B"):
+            capacity(
+                prepared,
+                CapacityQuery(Selector("^[AB]$"), Selector("^[BC]$"), workers=1),
+            )
+        assert (
+            capacity(
+                prepared, CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1)
+            )
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 3
         )
 
-        # Should return 0 flow due to B being in both source and sink groups
-        assert len(flow_result) == 1
-        assert list(flow_result.values())[0] == 0.0
-
     def test_max_flow_disabled_nodes_coverage(self):
-        """max_flow raises when the only matching source node is disabled."""
-        net = Network()
-        net.add_node(Node("A", disabled=True))  # Disabled source
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=10))
-        net.add_link(Link("B", "C", capacity=10))
-
-        # Source A is disabled, so no active source nodes match - should raise
-        with pytest.raises(ValueError, match="No source nodes found"):
-            analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
+        network = _network(("A", "B", "C"), (("A", "B", 10), ("B", "C", 10)))
+        network.disable_node("A")
+        with pytest.raises(ValueError, match="source.*empty|no source"):
+            capacity(
+                _prepared(network),
+                CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1),
+            )
+        network.enable_node("A")
+        assert (
+            capacity(
+                _prepared(network),
+                CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1),
+            )
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 10
+        )
 
     def test_max_flow_disabled_link_coverage(self):
-        """A disabled link on the only path yields 0 flow."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_link(Link("A", "B", capacity=10, disabled=True))  # Disabled link
-        net.add_link(Link("B", "C", capacity=10))
-
-        # Link A->B is disabled, so no flow should be possible
-        flow = analyze(net).max_flow("^A$", "^C$", mode=Mode.COMBINE)
-        assert flow[("^A$", "^C$")] == 0.0
+        network = _network(("A", "B", "C"), (("A", "B", 10), ("B", "C", 10)))
+        network.disable_link("A|B|0")
+        result = capacity(
+            _prepared(network),
+            CapacityQuery(Selector("^A$"), Selector("^C$"), workers=1),
+        )
+        assert result.cases[0].states["converged"].rows[0].result.delivered == 0
 
 
 class TestMaxFlowPairwise:
-    """Tests for pairwise mode max flow."""
-
     def test_pairwise_mode_basic(self):
-        """Test pairwise mode returns flows per pair."""
-        net = Network()
-        net.add_node(Node("S1"))
-        net.add_node(Node("S2"))
-        net.add_node(Node("T1"))
-        net.add_node(Node("T2"))
-
-        net.add_link(Link("S1", "T1", capacity=5.0))
-        net.add_link(Link("S2", "T2", capacity=3.0))
-
-        # Use capturing groups to get individual node labels
-        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE)
-
-        # Should have flows for S1->T1 and S2->T2
-        assert ("S1", "T1") in flow
-        assert ("S2", "T2") in flow
-        assert flow[("S1", "T1")] == 5.0
-        assert flow[("S2", "T2")] == 3.0
+        prepared = _prepared(
+            _network(("S1", "S2", "T1", "T2"), (("S1", "T1", 5), ("S2", "T2", 3)))
+        )
+        result = capacity(
+            prepared,
+            CapacityQuery(
+                Selector(r"^(S\d)$"), Selector(r"^(T\d)$"), mode="pairwise", workers=2
+            ),
+        )
+        rows = result.cases[0].states["converged"].rows
+        assert [
+            (row.endpoints.sources, row.endpoints.destinations, row.result.delivered)
+            for row in rows
+        ] == [
+            (("S1",), ("T1",), 5),
+            (("S1",), ("T2",), 0),
+            (("S2",), ("T1",), 0),
+            (("S2",), ("T2",), 3),
+        ]
 
     def test_pairwise_with_shared_intermediate(self):
-        """Test pairwise mode with shared intermediate node."""
-        net = Network()
-        net.add_node(Node("S1"))
-        net.add_node(Node("S2"))
-        net.add_node(Node("X"))  # Shared intermediate
-        net.add_node(Node("T1"))
-        net.add_node(Node("T2"))
-
-        net.add_link(Link("S1", "X", capacity=10.0))
-        net.add_link(Link("S2", "X", capacity=10.0))
-        net.add_link(Link("X", "T1", capacity=5.0))
-        net.add_link(Link("X", "T2", capacity=5.0))
-
-        # Use capturing groups to get individual node labels
-        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.PAIRWISE)
-
-        # In pairwise, each pair is independent
-        assert ("S1", "T1") in flow
-        assert ("S1", "T2") in flow
-        assert ("S2", "T1") in flow
-        assert ("S2", "T2") in flow
+        prepared = _prepared(
+            _network(
+                ("S1", "S2", "X", "T1", "T2"),
+                (("S1", "X", 10), ("S2", "X", 10), ("X", "T1", 5), ("X", "T2", 5)),
+            )
+        )
+        result = capacity(
+            prepared,
+            CapacityQuery(
+                Selector(r"^(S\d)$"), Selector(r"^(T\d)$"), mode="pairwise", workers=2
+            ),
+        )
+        rows = result.cases[0].states["converged"].rows
+        assert len(rows) == 4 and all(row.result.delivered == 5 for row in rows)
 
 
 class TestMaxFlowCombine:
-    """Tests for combine mode max flow."""
-
     def test_combine_mode_aggregates(self):
-        """Test combine mode aggregates sources and sinks."""
-        net = Network()
-        net.add_node(Node("S1"))
-        net.add_node(Node("S2"))
-        net.add_node(Node("X"))
-        net.add_node(Node("T1"))
-        net.add_node(Node("T2"))
-
-        net.add_link(Link("S1", "X", capacity=5.0))
-        net.add_link(Link("S2", "X", capacity=5.0))
-        net.add_link(Link("X", "T1", capacity=5.0))
-        net.add_link(Link("X", "T2", capacity=5.0))
-
-        # Use capturing groups - labels become captured values joined with |
-        flow = analyze(net).max_flow(r"^(S\d)$", r"^(T\d)$", mode=Mode.COMBINE)
-
-        # Should have single combined result (labels are S1|S2 and T1|T2)
-        assert len(flow) == 1
-        key = list(flow.keys())[0]
-        # Combined flow limited by middle node X: 10 in, 10 out
-        assert flow[key] == 10.0
+        prepared = _prepared(
+            _network(
+                ("S1", "S2", "X", "T1", "T2"),
+                (("S1", "X", 5), ("S2", "X", 5), ("X", "T1", 5), ("X", "T2", 5)),
+            )
+        )
+        (row,) = (
+            capacity(
+                prepared,
+                CapacityQuery(Selector(r"^(S\d)$"), Selector(r"^(T\d)$"), workers=1),
+            )
+            .cases[0]
+            .states["converged"]
+            .rows
+        )
+        assert row.endpoints.sources == ("S1", "S2") and row.endpoints.destinations == (
+            "T1",
+            "T2",
+        )
+        assert row.result.delivered == 10
 
 
 class TestExclusions:
-    """Tests for node and link exclusions."""
-
-    def test_exclude_node(self):
-        """Test excluding a node reduces flow."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_node(Node("D"))
-
-        net.add_link(Link("A", "B", capacity=5))
-        net.add_link(Link("B", "D", capacity=5))
-        net.add_link(Link("A", "C", capacity=3))
-        net.add_link(Link("C", "D", capacity=3))
-
-        # Full flow through both paths
-        full_flow = analyze(net).max_flow("^A$", "^D$", mode=Mode.COMBINE)
-        assert full_flow[("^A$", "^D$")] == 8.0
-
-        # Exclude B, only C path available
-        reduced_flow = analyze(net).max_flow(
-            "^A$", "^D$", mode=Mode.COMBINE, excluded_nodes={"B"}
+    @pytest.mark.parametrize("scope,path", [("node", "^B$"), ("link", r"^A\|B$")])
+    def test_exclude_node_or_link(self, scope, path):
+        prepared = _prepared(
+            _network(
+                ("A", "B", "C", "D"),
+                (("A", "B", 5), ("B", "D", 5), ("A", "C", 3), ("C", "D", 3)),
+            )
         )
-        assert reduced_flow[("^A$", "^D$")] == 3.0
-
-    def test_exclude_link(self):
-        """Test excluding a link reduces flow."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_node(Node("D"))
-
-        link_ab = Link("A", "B", capacity=5)
-        link_bd = Link("B", "D", capacity=5)
-        link_ac = Link("A", "C", capacity=3)
-        link_cd = Link("C", "D", capacity=3)
-
-        net.add_link(link_ab)
-        net.add_link(link_bd)
-        net.add_link(link_ac)
-        net.add_link(link_cd)
-
-        # Get the A->B link ID
-        ab_link_id = None
-        for link_id, link in net.links.items():
-            if link.source == "A" and link.target == "B":
-                ab_link_id = link_id
-                break
-
-        # Without A->B only the A-C-D path (capacity 3) remains
-        reduced_flow = analyze(net).max_flow(
-            "^A$", "^D$", mode=Mode.COMBINE, excluded_links={ab_link_id}
+        policy = FailurePolicy(modes=[FailureMode(1, [FailureRule(scope, path=path)])])
+        result = capacity(
+            prepared,
+            CapacityQuery(
+                Selector("^A$"),
+                Selector("^D$"),
+                failures=FailureRequest(policy, 1, 42),
+                workers=2,
+            ),
         )
-        assert reduced_flow[("^A$", "^D$")] == 3.0
+        assert [
+            case.states["converged"].rows[0].result.delivered for case in result.cases
+        ] == [8, 3]
 
 
-class TestBoundContext:
-    """Tests for bound AnalysisContext."""
-
-    def test_bound_context_basic(self):
-        """Test bound context for repeated analysis."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_node(Node("C"))
-        net.add_node(Node("D"))
-
-        net.add_link(Link("A", "B", capacity=5))
-        net.add_link(Link("B", "D", capacity=5))
-        net.add_link(Link("A", "C", capacity=3))
-        net.add_link(Link("C", "D", capacity=3))
-
-        ctx = analyze(net, source="^A$", sink="^D$", mode=Mode.COMBINE)
-
-        # Multiple calls should work
-        flow1 = ctx.max_flow()
-        flow2 = ctx.max_flow(excluded_nodes={"B"})
-        flow3 = ctx.max_flow(excluded_nodes={"C"})
-
-        assert flow1[("^A$", "^D$")] == 8.0
-        assert flow2[("^A$", "^D$")] == 3.0
-        assert flow3[("^A$", "^D$")] == 5.0
-
-    def test_bound_context_rejects_source_sink(self):
-        """Test that bound context rejects source/sink arguments."""
-        net = Network()
-        net.add_node(Node("A"))
-        net.add_node(Node("B"))
-        net.add_link(Link("A", "B", capacity=10))
-
-        ctx = analyze(net, source="^A$", sink="^B$", mode=Mode.COMBINE)
-
-        with pytest.raises(ValueError, match="Bound context"):
-            ctx.max_flow(source="^X$", sink="^Y$")
+class TestPreparedRepeat:
+    def test_repeated_cases(self):
+        prepared = _prepared(
+            _network(
+                ("A", "B", "C", "D"),
+                (("A", "B", 5), ("B", "D", 5), ("A", "C", 3), ("C", "D", 3)),
+            )
+        )
+        query = CapacityQuery(Selector("^A$"), Selector("^D$"), workers=1)
+        assert (
+            capacity(prepared, query)
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 8
+        )
+        for name, expected in (("B", 3), ("C", 5)):
+            policy = FailurePolicy(
+                modes=[FailureMode(1, [FailureRule("node", path=f"^{name}$")])]
+            )
+            result = capacity(
+                prepared,
+                CapacityQuery(
+                    Selector("^A$"),
+                    Selector("^D$"),
+                    failures=FailureRequest(policy, 1, 42),
+                    workers=1,
+                ),
+            )
+            assert (
+                result.cases[1].states["converged"].rows[0].result.delivered == expected
+            )
+        assert (
+            capacity(prepared, query)
+            .cases[0]
+            .states["converged"]
+            .rows[0]
+            .result.delivered
+            == 8
+        )

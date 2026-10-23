@@ -440,13 +440,11 @@ class TestFlattenedRiskGroupsSorted:
     """flatten_node_attrs/flatten_link_attrs expose sorted risk_groups."""
 
     def test_node_risk_groups_sorted(self) -> None:
-        node = Node("n1")
-        node.risk_groups = {"rg1", "rg3", "beta", "alpha", "rg2"}
+        node = Node("n1", risk_groups={"rg1", "rg3", "beta", "alpha", "rg2"})
         attrs = flatten_node_attrs(node)
         assert attrs["risk_groups"] == ["alpha", "beta", "rg1", "rg2", "rg3"]
 
     def test_link_risk_groups_sorted(self) -> None:
-        link = Link(source="a", target="b")
-        link.risk_groups = {"zeta", "alpha", "mid"}
+        link = Link(source="a", target="b", risk_groups={"zeta", "alpha", "mid"})
         attrs = flatten_link_attrs(link, "link-id-1")
         assert attrs["risk_groups"] == ["alpha", "mid", "zeta"]

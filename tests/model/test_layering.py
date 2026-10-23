@@ -1,9 +1,8 @@
 """Tests for model/DSL package layering.
 
-The runtime selector engine lives in ``ngraph.model.selectors`` so that the
-model layer (failure policies in particular) evaluates selectors without
-importing the DSL package. ``ngraph.dsl.selectors`` keeps only YAML-facing
-parsing.
+The selector parser and engine live in ``ngraph.model.selectors`` so that the
+model layer (failure policies in particular) builds and evaluates selectors
+without importing the DSL package.
 
 The subprocess tests stub parent packages with path-only modules so that
 importing a model module does not execute ``ngraph/__init__.py`` (which pulls
@@ -43,13 +42,12 @@ def test_failure_policy_import_does_not_load_dsl() -> None:
         for name, path in [
             ("ngraph", {str(_NGRAPH_DIR)!r}),
             ("ngraph.model", {str(_NGRAPH_DIR / "model")!r}),
-            ("ngraph.model.failure", {str(_NGRAPH_DIR / "model" / "failure")!r}),
         ]:
             mod = types.ModuleType(name)
             mod.__path__ = [path]
             sys.modules[name] = mod
 
-        import ngraph.model.failure.policy  # noqa: F401
+        import ngraph.model.failure  # noqa: F401
 
         dsl_modules = sorted(m for m in sys.modules if m.startswith("ngraph.dsl"))
         assert not dsl_modules, f"policy import pulled in DSL modules: {{dsl_modules}}"
@@ -59,7 +57,7 @@ def test_failure_policy_import_does_not_load_dsl() -> None:
 
 
 def test_model_packages_do_not_load_dsl_selectors() -> None:
-    """Importing the model packages must not load ngraph.dsl.selectors modules.
+    """Importing model packages must not load a DSL selector parser.
 
     The only accepted residual model -> dsl dependency is the dependency-free
     string expansion helpers in ``ngraph.dsl.expansion``.
@@ -75,7 +73,7 @@ def test_model_packages_do_not_load_dsl_selectors() -> None:
 
         import ngraph.model  # noqa: F401
         import ngraph.model.failure  # noqa: F401
-        import ngraph.model.failure.parser  # noqa: F401
+        import ngraph.model.risk  # noqa: F401
         import ngraph.model.selectors  # noqa: F401
 
         unexpected = sorted(

@@ -1,99 +1,83 @@
-"""Tests for mode='random' selection behavior in FailurePolicy.
-
-Pin the semantics of the binomial-count + uniform-sample implementation:
-exact behavior at probability 0 and 1, seeded determinism, candidate-subset
-containment (including the prepared-matches tuple path), and the marginal
-failure rate.
-"""
-
-from __future__ import annotations
+"""Per-entity Bernoulli observations and weighted draws through public cases."""
 
 import pytest
 
-from ngraph.model.failure.policy import FailureMode, FailurePolicy, FailureRule
+from ngraph.analysis.failures import FailureRequest, failure_cases
+from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
+from ngraph.model.network import Network, Node
+from ngraph.scenario import Scenario, prepare
+from tests.failure_fixture import draw
 
 
-def _random_policy(probability: float) -> FailurePolicy:
-    rule = FailureRule(scope="node", mode="random", probability=probability)
-    return FailurePolicy(modes=[FailureMode(weight=1.0, rules=[rule])])
-
-
-def test_random_probability_zero_selects_none() -> None:
-    policy = _random_policy(0.0)
-    nodes = {f"N{i}": {} for i in range(20)}
-    for seed in range(10):
-        assert policy.apply_failures(nodes, {}, seed=seed) == []
-
-
-def test_random_probability_one_selects_all() -> None:
-    policy = _random_policy(1.0)
-    nodes = {f"N{i}": {} for i in range(20)}
-    for seed in range(10):
-        assert set(policy.apply_failures(nodes, {}, seed=seed)) == set(nodes)
-
-
-def test_random_seeded_determinism_and_subset() -> None:
-    policy = _random_policy(0.4)
-    nodes = {f"N{i}": {} for i in range(30)}
-
-    failed1 = policy.apply_failures(nodes, {}, seed=123)
-    failed2 = policy.apply_failures(nodes, {}, seed=123)
-    assert failed1 == failed2
-    assert set(failed1).issubset(set(nodes))
-
-    # Different seeds should eventually produce different selections
-    results = {tuple(policy.apply_failures(nodes, {}, seed=s)) for s in range(30)}
-    assert len(results) > 1
-
-
-def test_random_with_prepared_matches_tuple() -> None:
-    """Prepared candidate tuples are used as-is and yield identical results."""
-    policy = _random_policy(0.5)
-    nodes = {f"N{i}": {} for i in range(25)}
-    prepared = policy.prepare_matches(nodes, {}, {})
-
-    for seed in range(10):
-        baseline = policy.apply_failures(nodes, {}, seed=seed)
-        with_prepared = policy.apply_failures(
-            nodes, {}, seed=seed, prepared_matches=prepared
-        )
-        assert with_prepared == baseline
-
-
-def test_random_marginal_rate_matches_probability() -> None:
-    """Mean failure fraction over many seeds must be close to the probability."""
-    probability = 0.5
-    policy = _random_policy(probability)
-    n_entities = 100
-    nodes = {f"N{i:03d}": {} for i in range(n_entities)}
-
-    trials = 200
-    total_failed = sum(
-        len(policy.apply_failures(nodes, {}, seed=seed)) for seed in range(trials)
+def _prepared(count=30):
+    return prepare(
+        Scenario(Network(nodes={f"N{i:03d}": Node(f"N{i:03d}") for i in range(count)}))
     )
-    mean_fraction = total_failed / (trials * n_entities)
-    # Std of the mean is ~0.0035; 0.05 tolerance is far beyond noise.
-    assert abs(mean_fraction - probability) < 0.05
+
+
+def _random_policy(probability):
+    return FailurePolicy(
+        modes=[
+            FailureMode(
+                1, [FailureRule("node", mode="random", probability=probability)]
+            )
+        ]
+    )
+
+
+def test_random_probability_zero_selects_none():
+    cases = failure_cases(_prepared(), FailureRequest(_random_policy(0), 10, 0))
+    assert len(cases) == 1 and cases[0].occurrences == 10
+    assert cases[0].pattern.excluded_nodes == ()
+
+
+def test_random_probability_one_selects_all():
+    prepared = _prepared()
+    cases = failure_cases(prepared, FailureRequest(_random_policy(1), 10, 0))
+    assert len(cases) == 2 and cases[1].occurrences == 10
+    assert cases[1].pattern.excluded_nodes == tuple(prepared.scenario.network.nodes)
+    assert cases[1].pattern.excluded_links == ()
+
+
+def test_random_seeded_determinism_and_subset():
+    prepared = _prepared()
+    policy = _random_policy(0.4)
+    patterns = set()
+    for seed in range(30):
+        first = draw(prepared, policy, seed).pattern
+        assert draw(prepared, policy, seed).pattern == first
+        assert set(first.excluded_nodes) <= set(prepared.scenario.network.nodes)
+        patterns.add(first)
+    assert len(patterns) > 1
+
+
+def test_random_marginal_rate_matches_probability():
+    cases = failure_cases(_prepared(100), FailureRequest(_random_policy(0.5), 200, 0))
+    failed = sum(case.occurrences * len(case.pattern.excluded_nodes) for case in cases)
+    assert abs(failed / 20000 - 0.5) < 0.05
 
 
 class TestWeightedSamplingExtremeScales:
-    """Regression: E-S keys are computed in the log domain, so weighted
-    selection stays proportional for tiny (e.g. per-hour failure rates) and
-    huge weight scales instead of degenerating into descending-id order."""
-
     @pytest.mark.parametrize("scale", [1e-6, 1e-3, 1.0, 1e6, 1e17])
-    def test_selection_proportional_across_scales(self, scale: float) -> None:
-        import random
-        from collections import Counter
-
-        weights = {"a": 2.0 * scale, "b": 1.0 * scale, "c": 1.0 * scale}
-        rng = random.Random(7)
-        counts: Counter[str] = Counter()
-        trials = 6000
-        for _ in range(trials):
-            counts.update(
-                FailurePolicy._weighted_sample_without_replacement(weights, 1, rng)
-            )
-        # "a" carries half the total weight; allow generous sampling noise.
-        assert abs(counts["a"] / trials - 0.5) < 0.05
+    def test_selection_proportional_across_scales(self, scale):
+        network = Network(
+            nodes={
+                name: Node(name, attrs={"weight": weight * scale})
+                for name, weight in (("a", 2), ("b", 1), ("c", 1))
+            }
+        )
+        prepared = prepare(Scenario(network))
+        policy = FailurePolicy(
+            modes=[
+                FailureMode(
+                    1, [FailureRule("node", mode="choice", count=1, weight_by="weight")]
+                )
+            ]
+        )
+        cases = failure_cases(prepared, FailureRequest(policy, 6000, 0))
+        counts = {
+            case.pattern.excluded_nodes[0]: case.occurrences for case in cases[1:]
+        }
+        assert set(counts) == {"a", "b", "c"}
+        assert abs(counts["a"] / 6000 - 0.5) < 0.05
         assert counts["b"] > 0 and counts["c"] > 0

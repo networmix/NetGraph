@@ -4,7 +4,7 @@ Tests for the scenario data templates in test_data_templates.
 
 import pytest
 
-from ngraph.scenario import Scenario
+from ngraph.scenario import Scenario, prepare, run
 
 from .expectations import (
     SCENARIO_1_EXPECTATIONS,
@@ -14,10 +14,10 @@ from .helpers import create_scenario_helper
 from .test_data_templates import (
     BlueprintTemplates,
     CommonScenarios,
+    DemandTemplates,
     FailurePolicyTemplates,
     NetworkTemplates,
     ScenarioTemplateBuilder,
-    TrafficDemandTemplates,
     WorkflowTemplates,
 )
 
@@ -97,10 +97,10 @@ class TestFailurePolicyTemplates:
 
 
 @pytest.mark.slow
-class TestTrafficDemandTemplates:
+class TestDemandTemplates:
     def test_all_to_all_uniform_demands_minimal(self):
         nodes = ["A", "B", "C"]
-        demands = TrafficDemandTemplates.all_to_all_uniform(nodes, demand_value=15.0)
+        demands = DemandTemplates.all_to_all_uniform(nodes, demand_value=15.0)
         assert len(demands) == 6
 
 
@@ -125,12 +125,8 @@ class TestScenarioTemplateBuilder:
             .build()
         )
         scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
+        result = run(prepare(scenario))
+        graph = create_scenario_helper(scenario, result).graph
         assert len(graph.nodes) == 4
 
 
@@ -139,12 +135,8 @@ class TestCommonScenarios:
     def test_minimal_test_scenario_minimal(self):
         yaml_content = CommonScenarios.minimal_test_scenario()
         scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
+        result = run(prepare(scenario))
+        graph = create_scenario_helper(scenario, result).graph
         assert len(graph.nodes) == 3
 
 
@@ -165,7 +157,7 @@ class TestTemplateComposition:
         clos_blueprint = BlueprintTemplates.two_tier_blueprint(4, 4, "mesh", 25.0)
         builder.builder.with_blueprint("clos", clos_blueprint)
 
-        demands = TrafficDemandTemplates.all_to_all_uniform(backbone_nodes, 10.0)
+        demands = DemandTemplates.all_to_all_uniform(backbone_nodes, 10.0)
         builder.builder.data["demands"] = {"default": demands}
 
         policy = FailurePolicyTemplates.single_link_failure()
@@ -176,18 +168,12 @@ class TestTemplateComposition:
 
         yaml_content = builder.build()
         scenario = Scenario.from_yaml(yaml_content)
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
-        helper.set_graph(graph)
+        result = run(prepare(scenario))
+        helper = create_scenario_helper(scenario, result)
+        graph = helper.graph
 
         assert len(graph.nodes) >= 3  # At least backbone nodes
-        assert len(scenario.failure_policy_set.get_all_policies()) > 0
+        assert scenario.failure_policies
 
     def test_template_parameterization(self):
         """Test linear backbones at three sizes: node count and link capacity."""
@@ -212,13 +198,8 @@ class TestTemplateComposition:
             yaml_content = builder.build()
 
             scenario = Scenario.from_yaml(yaml_content)
-            scenario.run()
-
-            exported = scenario.results.to_dict()
-            graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-            import networkx as nx
-
-            graph = nx.node_link_graph(graph_dict, edges="edges")
+            result = run(prepare(scenario))
+            graph = create_scenario_helper(scenario, result).graph
             assert graph is not None, (
                 f"BuildGraph should produce a graph for scale {scale['nodes']}"
             )
@@ -244,7 +225,7 @@ class TestTemplateValidation:
         assert blueprint_zero["nodes"]["tier1"]["count"] == 0
 
         # Templates pass negative volumes through unchanged
-        demands_negative = TrafficDemandTemplates.all_to_all_uniform(
+        demands_negative = DemandTemplates.all_to_all_uniform(
             ["A", "B"], demand_value=-5.0
         )
         assert len(demands_negative) == 2  # A->B and B->A
@@ -260,8 +241,8 @@ class TestTemplateValidation:
 
         assert network1 == network2
 
-        demands1 = TrafficDemandTemplates.all_to_all_uniform(nodes, 5.0)
-        demands2 = TrafficDemandTemplates.all_to_all_uniform(nodes, 5.0)
+        demands1 = DemandTemplates.all_to_all_uniform(nodes, 5.0)
+        demands2 = DemandTemplates.all_to_all_uniform(nodes, 5.0)
 
         assert demands1 == demands2
 
@@ -345,15 +326,8 @@ class TestMainScenarioVariants:
         builder.builder.data["workflow"] = workflow
 
         scenario = builder.builder.build_scenario()
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
-        helper.set_graph(graph)
+        result = run(prepare(scenario))
+        helper = create_scenario_helper(scenario, result)
 
         helper.validate_network_structure(SCENARIO_1_EXPECTATIONS)
         helper.validate_traffic_demands(4)
@@ -504,14 +478,9 @@ class TestMainScenarioVariants:
         builder.builder.data["workflow"] = workflow
 
         scenario = builder.builder.build_scenario()
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
+        result = run(prepare(scenario))
+        helper = create_scenario_helper(scenario, result)
+        graph = helper.graph
 
         # Loose bound: the template blueprints do not reproduce scenario 2 exactly
         assert len(graph.nodes) > 15  # Should have many nodes from blueprint expansion
@@ -594,8 +563,7 @@ class TestMainScenarioVariants:
                 "source": "my_clos1/b.*/t1",
                 "target": "my_clos2/b.*/t1",
                 "mode": "combine",
-                "shortest_path": True,
-                "flow_placement": "PROPORTIONAL",
+                "preset": "SHORTEST_PATHS_MAXFLOW",
                 "iterations": 1,
                 "failure_policy": None,
             },
@@ -605,8 +573,7 @@ class TestMainScenarioVariants:
                 "source": "my_clos1/b.*/t1",
                 "target": "my_clos2/b.*/t1",
                 "mode": "combine",
-                "shortest_path": True,
-                "flow_placement": "EQUAL_BALANCED",
+                "preset": "SHORTEST_PATHS_ECMP",
                 "iterations": 1,
                 "failure_policy": None,
             },
@@ -614,15 +581,8 @@ class TestMainScenarioVariants:
         builder.builder.data["workflow"] = workflow
 
         scenario = builder.builder.build_scenario()
-        scenario.run()
-
-        helper = create_scenario_helper(scenario)
-        exported = scenario.results.to_dict()
-        graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-        import networkx as nx
-
-        graph = nx.node_link_graph(graph_dict, edges="edges")
-        helper.set_graph(graph)
+        result = run(prepare(scenario))
+        helper = create_scenario_helper(scenario, result)
 
         helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)
         helper.validate_traffic_demands(0)  # No traffic demands in scenario 3
@@ -652,14 +612,9 @@ class TestMainScenarioVariants:
 
             scenario_yaml = builder.build()
             scenario = Scenario.from_yaml(scenario_yaml)
-            scenario.run()
-
-            helper = create_scenario_helper(scenario)
-            exported = scenario.results.to_dict()
-            graph_dict = exported["steps"]["build_graph"]["data"]["graph"]
-            import networkx as nx
-
-            graph = nx.node_link_graph(graph_dict, edges="edges")
+            result = run(prepare(scenario))
+            helper = create_scenario_helper(scenario, result)
+            graph = helper.graph
 
             assert graph is not None, (
                 f"Build graph failed for configuration {i}: {config}"

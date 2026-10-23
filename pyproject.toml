@@ -48,9 +48,6 @@ dev = [
     "pytest>=8",
     "pytest-cov",
     "pytest-timeout",
-    # perf/visualization (dev/perf)
-    "matplotlib",
-    "seaborn",
     # docs
     "mkdocs-material",
     # style + type checking
@@ -93,7 +90,7 @@ include = ["ngraph*"]
 
 # Include schema files in the package for runtime validation
 [tool.setuptools.package-data]
-"ngraph.schemas" = ["scenario.json"]
+"ngraph.schemas" = ["scenario.json", "results.json"]
 "ngraph" = ["py.typed"]
 
 # ---------------------------------------------------------------------

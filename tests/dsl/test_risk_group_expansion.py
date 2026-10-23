@@ -443,7 +443,7 @@ risk_groups:
         assert rg.name == "Building_DC1"
         assert rg.disabled is False
         assert rg.attrs == {}
-        assert rg.children == []
+        assert rg.children == ()
 
     def test_string_shorthand_with_bracket_expansion(self) -> None:
         """String shorthand also supports bracket expansion."""
