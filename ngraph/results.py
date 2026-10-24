@@ -25,10 +25,12 @@ from typing import (
 
 import netgraph_core as ngc
 
+from ngraph.model.network import DirectedLink
 from ngraph.utils.values import JSONValue, frozen_attrs, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.capacity import CapacityQuery
+    from ngraph.analysis.controller import DestinationTable
     from ngraph.analysis.msd import MSDQuery
     from ngraph.analysis.paths import PathQuery
     from ngraph.analysis.placement import PlacementQuery
@@ -202,11 +204,75 @@ class ResolvedDemand(_ResultRecord):
 
 
 @_record
+class MemberWeight(_ResultRecord):
+    """One member of a programmed router and its integer weight (0 included)."""
+
+    edge: DirectedLink
+    weight: int
+
+
+@_record
+class ProgrammedRouter(_ResultRecord):
+    router: str
+    members: tuple[MemberWeight, ...]
+
+
+@_record
+class SourceWeight(_ResultRecord):
+    """A source's nominal physical demand toward the destination and its weight."""
+
+    source: str
+    nominal_physical: Fraction
+    weight: int
+
+
+@_record
+class TableReport(_ResultRecord):
+    """The WCMP controller's table toward one destination, by name.
+
+    ``programmed`` lists the routers the controller programs; any other router
+    splits equally over its members (ECMP).
+    """
+
+    destination: str
+    programmed: tuple[ProgrammedRouter, ...]
+    source_weights: tuple[SourceWeight, ...] | None
+
+
+def approximations(demands: ResolvedDemandSet) -> tuple[WeightApproximation, ...]:
+    """The weight approximations of a demand set's controller tables."""
+    return tuple(
+        entry
+        for _, table in demands.controller_tables
+        for entry in table.approximations
+    )
+
+
+@_record
 class ResolvedDemandSet(_ResultRecord):
+    """Resolved demands; a set the WCMP controller programs also holds its tables.
+
+    ``controller_tables`` are the internal tables with their destination
+    names; ``controller`` is their report (None when the controller programs
+    nothing).
+    """
+
     name: str
     demands: tuple[ResolvedDemand, ...]
     accounting: tuple[ExpansionAccounting, ...]
     expansion_template: tuple[ExpansionParent, ...]
+    controller_tables: tuple[tuple[str, DestinationTable], ...] = ()
+    controller: tuple[TableReport, ...] | None = None
+
+    def controller_table(self, destination: str) -> DestinationTable:
+        """The internal table toward one destination router."""
+        for name, table in self.controller_tables:
+            if name == destination:
+                return table
+        raise KeyError(
+            f"demand set {self.name}: the WCMP controller has no table toward "
+            f"{destination}"
+        )
 
 
 @_record
@@ -333,6 +399,22 @@ class PrecisionMiss(_ResultRecord):
 
 
 @_record
+class WeightApproximation(_ResultRecord):
+    """Controller weights whose exact values reached 2^62 and were apportioned.
+
+    The label names a router (``controller.<set>.<t>.router.<r>``) or, for an
+    ``all_routers`` source vector, its source with the largest error
+    (``controller.<set>.<t>.source.<s>``). ``max_relative_error`` is the
+    largest relative error of the normalized shares over the positive members
+    or sources.
+    """
+
+    kind: ClassVar[Literal["weight_approximation"]] = "weight_approximation"
+    label: str
+    max_relative_error: Fraction
+
+
+@_record
 class UnitsReport(_ResultRecord):
     q: float
     exponent: int
@@ -359,12 +441,26 @@ class UnitsReport(_ResultRecord):
     nominal_split_count: int
     nominal_splits: tuple[SplitConstraint, ...]
     misses: tuple[PrecisionMiss, ...]
+    weight_approximations: tuple[WeightApproximation, ...] = ()
 
     def with_misses(self, misses: tuple[PrecisionMiss, ...]) -> UnitsReport:
         """This report with further precision misses appended."""
         if not misses:
             return self
         return replace(self, target_met=False, misses=(*self.misses, *misses))
+
+    def with_approximations(
+        self, entries: tuple[WeightApproximation, ...]
+    ) -> UnitsReport:
+        """This report with the controller's weight approximations, each once.
+
+        They change neither ``target_met`` nor the binding constraints.
+        """
+        known = {entry.label for entry in self.weight_approximations}
+        new = tuple(entry for entry in entries if entry.label not in known)
+        if not new:
+            return self
+        return replace(self, weight_approximations=(*self.weight_approximations, *new))
 
 
 @_record
@@ -423,7 +519,9 @@ class MarginalCurve(_ResultRecord):
 
 
 CostReport: TypeAlias = DeliveredByPathCost | MarginalCurve
-CostUnavailableReason: TypeAlias = Literal["mixed_cost_dag", "unsupported_model"]
+CostUnavailableReason: TypeAlias = Literal[
+    "mixed_cost_dag", "unsupported_model", "controller_table"
+]
 
 
 @_record
@@ -500,7 +598,12 @@ class _PreparedResult(_ResultRecord):
 
     @property
     def units_report(self) -> UnitsReport:
-        return self.prepared.units_report.with_misses(self.misses)
+        report = self.prepared.units_report.with_misses(self.misses)
+        # A demand set bound after preparation brings its own approximations.
+        demands = getattr(getattr(self, "query", None), "demands", None)
+        if demands is None:
+            return report
+        return report.with_approximations(approximations(demands))
 
 
 @_record

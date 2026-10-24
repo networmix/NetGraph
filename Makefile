@@ -127,6 +127,7 @@ lint:
 	@$(RUFF) format --check .
 	@$(RUFF) check .
 	@$(PYTHON) -m pyright
+	@$(PYTHON) -m pyright -p tests/typing/pyrightconfig.json --pythonpath "$$($(PYTHON) -c 'import sys; print(sys.executable)')"
 
 format:
 	@echo "✨ Auto-formatting code..."

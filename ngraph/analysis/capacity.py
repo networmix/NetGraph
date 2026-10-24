@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 import netgraph_core as ngc
 
-from ngraph.analysis.demands import pooled, selected_pairs
+from ngraph.analysis.demands import controlled, pooled, selected_pairs
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
@@ -173,6 +173,11 @@ def question_pairs(prepared: PreparedScenario, query: CapacityQuery, label: str)
     A singleton self pair is not evaluated. A pooled pair starts at its pool head.
     """
     topology = prepared.topology
+    if controlled(prepared.scenario.wcmp_controller, query.declaration):
+        raise ValueError(
+            f"{label}: SHORTEST_PATHS_WCMP is programmed by the WCMP controller "
+            "for demand sets only; ask a placement, or give the native model"
+        )
     endpoints = selected_pairs(
         prepared.scenario.network, query.source, query.target, query.mode, label
     )

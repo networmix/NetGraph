@@ -24,14 +24,19 @@ if TYPE_CHECKING:
     from ngraph.export import register_result_exporter, write_json
     from ngraph.model.components import Component, ComponentsLibrary
     from ngraph.model.demand import (
+        ControllerGroup,
         DemandSet,
         DemandSpec,
         EdgeWeight,
         FlowPolicyPreset,
+        ForwardingGroup,
+        GroupChild,
         PhysicalAmount,
         PinnedRoutes,
         RouteSpec,
+        RoutingDomain,
         SupportSpec,
+        WCMPController,
         WeightSpec,
     )
     from ngraph.model.failure import FailureMode, FailurePolicy, FailureRule
@@ -122,8 +127,9 @@ _MODULES = {
     "ngraph.export": "register_result_exporter write_json",
     "ngraph.model.components": "Component ComponentsLibrary",
     "ngraph.model.demand": (
-        "DemandSet DemandSpec EdgeWeight FlowPolicyPreset PhysicalAmount "
-        "PinnedRoutes RouteSpec SupportSpec WeightSpec"
+        "ControllerGroup DemandSet DemandSpec EdgeWeight FlowPolicyPreset "
+        "ForwardingGroup GroupChild PhysicalAmount PinnedRoutes RouteSpec "
+        "RoutingDomain SupportSpec WCMPController WeightSpec"
     ),
     "ngraph.model.failure": "FailureMode FailurePolicy FailureRule",
     "ngraph.model.network": "DirectedLink Link Network Node",
@@ -191,6 +197,7 @@ __all__ = [
     "Component",
     "ComponentsLibrary",
     "Condition",
+    "ControllerGroup",
     "CostPowerResult",
     "CostReport",
     "CostUnavailableReason",
@@ -217,6 +224,8 @@ __all__ = [
     "FailureSelection",
     "FailureTrace",
     "FlowPolicyPreset",
+    "ForwardingGroup",
+    "GroupChild",
     "HardwareRow",
     "InputConstraint",
     "InputQuantization",
@@ -259,6 +268,7 @@ __all__ = [
     "ResolvedDemandSet",
     "RiskGroup",
     "RouteSpec",
+    "RoutingDomain",
     "RunMetadata",
     "RunResult",
     "SamplingMetadata",
@@ -279,6 +289,7 @@ __all__ = [
     "UnitsSettings",
     "UnverifiedConstraint",
     "UpperCertificate",
+    "WCMPController",
     "WeightSpec",
     "Workers",
     "WorkflowStep",

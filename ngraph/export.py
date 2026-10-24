@@ -20,7 +20,7 @@ from typing import IO, TYPE_CHECKING, Any, TypeVar, cast
 
 import netgraph_core as ngc
 
-from ngraph.analysis.demands import declared_split
+from ngraph.analysis.demands import controlled, declared_split
 from ngraph.analysis.metadata import run_metadata
 from ngraph.model.demand import PinnedRoutes
 from ngraph.model.network import DirectedLink
@@ -45,6 +45,7 @@ from ngraph.results import (
     InputQuantization,
     MarginalCostBin,
     MarginalCurve,
+    MemberWeight,
     MSDAnalysis,
     MSDProbe,
     NetworkStatsResult,
@@ -58,6 +59,7 @@ from ngraph.results import (
     PoolMetadata,
     PrecisionMiss,
     PreparationScope,
+    ProgrammedRouter,
     RangeConstraint,
     RangeRefusal,
     ReportLocation,
@@ -66,11 +68,14 @@ from ngraph.results import (
     SamplingMetadata,
     SelfPair,
     SensitivityAnalysis,
+    SourceWeight,
     SplitConstraint,
     SyntheticIngress,
+    TableReport,
     UnitsReport,
     UnverifiedConstraint,
     UpperCertificate,
+    WeightApproximation,
     exact_alpha,
 )
 from ngraph.utils.values import (
@@ -107,6 +112,7 @@ _PLAIN = frozenset(
         InputQuantization,
         MarginalCostBin,
         MarginalCurve,
+        MemberWeight,
         MSDProbe,
         NetworkStatsResult,
         OutputSelection,
@@ -116,17 +122,21 @@ _PLAIN = frozenset(
         PoolMetadata,
         PrecisionMiss,
         PreparationScope,
+        ProgrammedRouter,
         RangeConstraint,
         RangeRefusal,
         ReportLocation,
         RunMetadata,
         SamplingMetadata,
         SelfPair,
+        SourceWeight,
         SplitConstraint,
         SyntheticIngress,
+        TableReport,
         UnitsReport,
         UnverifiedConstraint,
         UpperCertificate,
+        WeightApproximation,
     )
 )
 
@@ -311,10 +321,22 @@ def _model(prepared: PreparedScenario, config, declaration=None):
             "cost_ceiling",
             "min_unreserved_bandwidth_units",
             "route_names",
+            "controller",
         )
     )
     data.update(supplied_support=False, supplied_program=False)
     data["admission"] = "lossless" if admission == ngc.Admission.LOSSLESS else "lossy"
+    controller = prepared.scenario.wcmp_controller
+    if controlled(controller, declaration):
+        # The controller's weights live in the analysis's controller key.
+        assert controller is not None
+        data.update(
+            routing="shortest_paths",
+            allocation="weighted",
+            source_allocation="equal",
+            controller=controller.scope,
+        )
+        return data
     allocation, basis = declared_split(prepared._named, config, declaration)
     if allocation is not None:
         data["allocation"] = allocation.name.lower()
@@ -855,7 +877,15 @@ def _placement(value, context):
         "alpha": project(value.alpha),
         "accounting": project(value.accounting),
         "cases": _cases(value.cases, context.topology, value.outputs),
+        **_controller(value.query.demands),
     }
+
+
+def _controller(demands):
+    """The controller's tables of a programmed demand set; nothing for another set."""
+    if demands.controller is None:
+        return {}
+    return {"controller": project(demands.controller)}
 
 
 def _sensitivity(value, context):
@@ -932,6 +962,7 @@ def _msd(value, context):
         if value.best_rows is None
         else [_row(row, context.topology, outputs) for row in value.best_rows],
         "best_accounting": project(value.best_accounting),
+        **_controller(value.query.demands),
     }
     if value.probe_rows is not None:
         data["probe_rows"] = [

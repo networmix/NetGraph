@@ -28,10 +28,17 @@ def cost_distribution(
     pool=None,
     records=None,
     shortest_costs=None,
+    programmed=False,
 ) -> tuple[
     CostReport | None, Mapping[Literal["cost_distribution"], CostUnavailableReason]
 ]:
-    """Project only determined costs; callers invoke this only when requested."""
+    """Project only determined costs; callers invoke this only when requested.
+
+    A demand the WCMP controller ``programmed`` forwards on a pooled table,
+    which does not attribute delivery to walk costs.
+    """
+    if programmed:
+        return None, MappingProxyType({"cost_distribution": "controller_table"})
     model = config.routing
     domain: Literal["analysis_graph", "physical_network"] = (
         "analysis_graph" if pool is not None else "physical_network"

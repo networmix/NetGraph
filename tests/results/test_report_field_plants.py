@@ -78,6 +78,7 @@ def fixture():
         "nominal_split_count": 0,
         "nominal_splits": [],
         "misses": [],
+        "weight_approximations": [],
     }
     expected = {
         "metadata": {
@@ -151,6 +152,7 @@ def fixture():
         "zeroed_examples",
         "nominal_splits",
         "misses",
+        "weight_approximations",
     ):
         expected_python[name] = ()
     for name in ("max_absolute_input_error", "max_relative_input_error"):

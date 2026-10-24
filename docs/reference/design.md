@@ -24,6 +24,12 @@ Selectors resolve on the nominal physical population. A failure changes eligibil
 
 Equal and weighted router splitting pool traffic where source routes meet. Admission, source injection, carried traffic, edge losses and reservations are separate native quantities. A reservation is not carried traffic and is not added to the carried vector. Exact tunnel count describes a layout; it does not promise that every offered unit is delivered.
 
+A WCMP controller (`wcmp_controller`) programs `SHORTEST_PATHS_WCMP` demands toward one BGP-edge router: one DAG of
+routes per destination through one IGP domain, and one weight table per demand set and destination. `next_hop`
+weights source routers by progressive filling, `group` by declared trees whose root shares are fixed caps, and
+`all_routers` every router from one native flow in demand proportions; other routers keep ECMP. Each demand forwards
+on the shared table through its own native program; the controller forwards nothing itself.
+
 Demand expansion stores a fixed tree of physical parents and integer split leaves. A scaled run multiplies the original parent total, quantizes it once and distributes the resulting units in deterministic quotient/remainder order. Filtered, empty-selection and singleton-self shares remain accounted rather than silently redistributed.
 
 Private traffic-engineering ingresses connect the selected physical heads with finite capacity bounds and cost 1. They belong to their declared demand or MaxFlow question, are labelled as synthetic and cannot become ordinary transit endpoints. Their pool budget is zero; the supported pool question is lossless. Opt-in cost reports distinguish analysis-graph cost from physical-network cost.

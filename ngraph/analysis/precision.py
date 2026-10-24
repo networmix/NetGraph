@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal
 
 import netgraph_core as ngc
 
-from ngraph.analysis.demands import residual_weights
+from ngraph.analysis.demands import controlled, residual_weights
 from ngraph.analysis.topology import NamedRoutes, PreparedTopology
 from ngraph.analysis.units import (
     input_constraint,
@@ -84,30 +84,16 @@ def expansion_bounds(plans, q, precision, alpha=1.0):
     return tuple(constraints), incoming
 
 
-def dag_bounds(
-    topology,
-    dags,
-    injections,
-    destinations,
-    allocation,
-    weights,
-    label,
-    precision,
-    *,
-    allowed_edges=None,
-):
-    """Rational split propagation over native-selected DAGs, without capacity/admission."""
+def effective_rows(topology, edges, destinations, allocation, weights):
+    """Native preparation's split rows over a set of DAG edges.
+
+    Native W prunes zero-capacity members even for positive EXPLICIT weights,
+    then removes branches with no effective continuation to a destination;
+    EQUAL keeps every member. Returns each router's members in EdgeId order,
+    with their weights (1 for EQUAL).
+    """
     graph = topology.graph
     sources, targets = graph.edge_sources(), graph.edge_destinations()
-    edges = set()
-    for dag in dags:
-        if dag.graph_uid() != graph.uid():
-            raise ValueError(f"{label}: precision DAG belongs to another graph")
-        edges.update(int(edge) for edge in dag.via_edges())
-    if allowed_edges is not None:
-        edges.intersection_update(allowed_edges)
-    # Native W prunes zero-capacity members even for positive EXPLICIT weights,
-    # then removes branches with no effective continuation to a destination.
     capacities = graph.edge_capacity_units()
     effective_edges = {
         edge
@@ -128,57 +114,104 @@ def dag_bounds(
             if source not in reachable:
                 reachable.add(source)
                 pending.append(source)
-    edges = {edge for edge in effective_edges if int(targets[edge]) in reachable}
-    outgoing = [[] for _ in range(graph.num_nodes())]
+    rows: dict[int, list[tuple[int, int]]] = {}
+    for edge in sorted(effective_edges):
+        if int(targets[edge]) in reachable:
+            share = 1 if allocation == ngc.RouteAllocation.EQUAL else int(weights[edge])
+            rows.setdefault(int(sources[edge]), []).append((edge, share))
+    return rows
+
+
+def propagate(graph, rows, injections, *, reached_only=False):
+    """Exact rational propagation of injected amounts through split rows.
+
+    ``rows`` maps a router to its members (EdgeId, positive weight); a router
+    splits what it holds in proportion to the weights. Returns the nodes in
+    processing order (with ``reached_only``, only those the injections reach),
+    the amount each node holds and the amount on each edge. Amounts at a node
+    without a row stay there (a destination, or a loss).
+    """
+    targets = graph.edge_destinations()
     indegree = [0] * graph.num_nodes()
-    for edge in sorted(edges):
-        source, target = int(sources[edge]), int(targets[edge])
-        outgoing[source].append(edge)
-        indegree[target] += 1
-    ready = deque(i for i, degree in enumerate(indegree) if degree == 0)
-    incoming = [Fraction(0) for _ in indegree]
-    for source, amount in injections.items():
-        incoming[source] += amount
-    constraints = []
+    if reached_only:
+        nodes, pending = set(injections), list(injections)
+        while pending:
+            for edge, _ in rows.get(pending.pop(), ()):
+                target = int(targets[edge])
+                indegree[target] += 1
+                if target not in nodes:
+                    nodes.add(target)
+                    pending.append(target)
+    else:
+        nodes = range(graph.num_nodes())
+        for members in rows.values():
+            for edge, _ in members:
+                indegree[int(targets[edge])] += 1
+    ready = deque(node for node in sorted(nodes) if indegree[node] == 0)
+    incoming: list[Fraction | int] = [0] * len(indegree)
+    for node, amount in injections.items():
+        incoming[node] += Fraction(amount)
+    order, load = [], {}
     while ready:
         node = ready.popleft()
-        members = outgoing[node]
-        if node not in destinations and incoming[node] > 0:
-            effective = (
-                members
-                if allocation == ngc.RouteAllocation.EQUAL
-                else [edge for edge in members if weights[edge] > 0]
-            )
-            count = len(effective)
-            if count > 1:
-                name = (
-                    topology.node_names[node]
-                    if node < len(topology.node_names)
-                    else f"private[{node}]"
-                )
-                constraints.append(
-                    split_constraint(
-                        "router",
-                        f"{label}.router.{name}",
-                        incoming[node],
-                        count,
-                        topology.q,
-                        precision,
-                    )
-                )
-            denominator = (
-                count
-                if allocation == ngc.RouteAllocation.EQUAL
-                else sum(weights[edge] for edge in effective)
-            )
-            for edge in effective:
-                share = 1 if allocation == ngc.RouteAllocation.EQUAL else weights[edge]
-                incoming[int(targets[edge])] += incoming[node] * share / denominator
-        for edge in members:
+        order.append(node)
+        members = rows.get(node, ())
+        if incoming[node] > 0 and members:
+            denominator = sum(weight for _, weight in members)
+            for edge, weight in members:
+                share = incoming[node] * weight / denominator
+                load[edge] = load.get(edge, 0) + share
+                incoming[int(targets[edge])] += share
+        for edge, _ in members:
             target = int(targets[edge])
             indegree[target] -= 1
             if indegree[target] == 0:
                 ready.append(target)
+    return order, incoming, load
+
+
+def dag_bounds(
+    topology,
+    dags,
+    injections,
+    destinations,
+    allocation,
+    weights,
+    label,
+    precision,
+    *,
+    allowed_edges=None,
+):
+    """Rational split propagation over native-selected DAGs, without capacity/admission."""
+    graph = topology.graph
+    edges = set()
+    for dag in dags:
+        if dag.graph_uid() != graph.uid():
+            raise ValueError(f"{label}: precision DAG belongs to another graph")
+        edges.update(int(edge) for edge in dag.via_edges())
+    if allowed_edges is not None:
+        edges.intersection_update(allowed_edges)
+    rows = effective_rows(topology, edges, destinations, allocation, weights)
+    order, incoming, _ = propagate(graph, rows, injections)
+    constraints = []
+    for node in order:
+        count = len(rows.get(node, ()))
+        if node not in destinations and incoming[node] > 0 and count > 1:
+            name = (
+                topology.node_names[node]
+                if node < len(topology.node_names)
+                else f"private[{node}]"
+            )
+            constraints.append(
+                split_constraint(
+                    "router",
+                    f"{label}.router.{name}",
+                    incoming[node],
+                    count,
+                    topology.q,
+                    precision,
+                )
+            )
     return tuple(constraints)
 
 
@@ -215,8 +248,14 @@ def _equal_sources(model: ngc.ShortestPaths) -> bool:
     return allocation == ngc.SourceAllocation.EQUAL
 
 
-def _model_splits(topology, named, model, declaration, label, amount, facts, precision):
-    """Apply the split rules of one native model to one observed amount."""
+def _model_splits(
+    topology, named, model, declaration, label, amount, facts, precision, table=None
+):
+    """Apply the split rules of one native model to one observed amount.
+
+    A demand the WCMP controller programs (``table``) splits equally over its
+    sources, then by its destination table.
+    """
     constraints = []
 
     def add(kind, suffix, incoming, members):
@@ -227,7 +266,11 @@ def _model_splits(topology, named, model, declaration, label, amount, facts, pre
                 )
             )
 
-    if isinstance(model, ngc.Pinned) and not isinstance(declaration, PinnedRoutes):
+    if (
+        table is None
+        and isinstance(model, ngc.Pinned)
+        and not isinstance(declaration, PinnedRoutes)
+    ):
         return constraints, (UnverifiedConstraint(label),)
     if amount <= 0:
         return constraints, ()
@@ -243,25 +286,27 @@ def _model_splits(topology, named, model, declaration, label, amount, facts, pre
                 amount / len(heads),
                 model.tunnel_count.per_head,
             )
-    elif isinstance(model, ngc.ShortestPaths):
-        roster, dags = facts.shortest(model)
-        if _equal_sources(model):
+    elif table is not None or isinstance(model, ngc.ShortestPaths):
+        if table is None:
+            assert isinstance(model, ngc.ShortestPaths)
+            roster, dags = facts.shortest(model)
+            equal, allocation = _equal_sources(model), model.allocation
+            basis, explicit = model.weight_basis, model.edge_weights
+        else:
+            roster, dags = facts.sources, (table.dag,)
+            equal, allocation = True, table.encoding
+            basis, explicit = ngc.WeightBasis.EXPLICIT, table.weights
+        if equal:
             add("source", "sources", amount, len(roster))
-        if model.allocation != ngc.RouteAllocation.OPTIMIZED and roster:
+        if allocation != ngc.RouteAllocation.OPTIMIZED and roster:
             constraints.extend(
                 dag_bounds(
                     topology,
                     dags,
                     {source: amount / len(roster) for source in roster},
                     facts.destinations,
-                    model.allocation,
-                    _vector(
-                        topology,
-                        model.allocation,
-                        model.weight_basis,
-                        model.edge_weights,
-                        facts.residual,
-                    ),
+                    allocation,
+                    _vector(topology, allocation, basis, explicit, facts.residual),
                     label,
                     precision,
                 )
@@ -433,6 +478,9 @@ def placement_splits(
             incoming[demand.id],
             facts,
             precision,
+            demands.controller_table(demand.endpoints.destinations[0])
+            if controlled(demands.controller, parents[demand.base_id].policy)
+            else None,
         )
         constraints.extend(local)
         extra.extend(opaque)

@@ -86,8 +86,9 @@ jsonschema.validate(data, schema)
 - `supports` - Named forwarding supports
 - `weights` - Named edge weights
 - `units` - Automatic or manual quantum and precision target
+- `routing`, `wcmp_controller`, `forwarding_groups` - The WCMP controller's domain, scope and group trees
 
-Unknown input keys are refused with their location. Forwarding groups, routing domains, controller scopes, stale/repair states, simultaneous forwarding and tunnel-count queries are not accepted inputs. Native tunnel-count settings inside a supported flow model remain valid.
+Unknown input keys are refused with their location. Stale/repair states, simultaneous forwarding and tunnel-count queries are not accepted inputs. Native tunnel-count settings inside a supported flow model remain valid.
 
 ## Schema Maintenance
 
@@ -96,4 +97,7 @@ Update the schema whenever a top-level section, a field's type, or a workflow st
 
 ## Result detail selection
 
-The result schema checks the enclosing analysis `outputs.details` against its rows: false forbids native detail fields, true requires the complete selected field group. Scalar drop totals remain exact in compact rows. Nullable row `pool` metadata is required in both modes; per-source/tunnel/plan detail lists keep their native applicability when selected. Native array/cut flags and cost-report selection remain independent. MSD history remains compact regardless of detail selection.
+The result schema checks the enclosing analysis `outputs.details` against its rows: false forbids native detail fields, true requires the complete selected field group. Scalar drop totals remain exact in compact rows. Nullable row `pool` metadata is required in both modes; per-source/tunnel/plan detail lists keep their native applicability when selected. Native array/cut flags and cost-report selection remain independent. MSD history remains compact regardless of detail selection. Question models carry `controller` (the scope of a
+controller-programmed demand, null otherwise); placement and MSD analyses of a controlled demand set add a
+`controller` list of tables; every units report carries `weight_approximations`, empty unless controller weights
+reached 2^62.

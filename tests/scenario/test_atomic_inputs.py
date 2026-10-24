@@ -96,15 +96,6 @@ def test_complete_named_route_weight_and_support_workflow_native_and_wire():
     assert set(wire["steps"][0]["result"]["cases"][0]["states"]) == {"converged"}
 
 
-@pytest.mark.parametrize("key", ["forwarding_groups", "routing", "wcmp_controller"])
-def test_deferred_root_input_refuses_by_name_and_complete_control(key):
-    data = yaml.safe_load(EXPLICIT)
-    data[key] = {}
-    with pytest.raises(jsonschema.ValidationError, match=key):
-        Scenario.from_yaml(yaml.safe_dump(data))
-    assert len(run(prepare(Scenario.from_yaml(EXPLICIT))).steps) == 2
-
-
 @pytest.mark.parametrize(
     "key",
     [

@@ -64,10 +64,12 @@ from ngraph.results import (
     PreparationScope,
     ResolvedDemandSet,
     UnitsReport,
+    approximations,
 )
 from ngraph.utils.values import physical
 
 if TYPE_CHECKING:
+    from ngraph.analysis.controller import ControllerSetup
     from ngraph.scenario import Scenario
     from ngraph.workflow.base import SeedSource
 
@@ -120,6 +122,8 @@ class PreparedScenario:
     _steps: tuple[tuple[str, int | None, SeedSource], ...] = field(
         repr=False, compare=False
     )
+    # The WCMP controller resolved on this graph, if the scenario declares one.
+    _controller: ControllerSetup | None = field(default=None, repr=False, compare=False)
 
 
 def _nominal_splits(prepared, demands, precision):
@@ -230,11 +234,41 @@ def _step_pools(network, capacities, pools):
         pools[pool_id] = pair.sources
 
 
+def _check_controller(setup, resolved, failing):
+    """Refuse an uncalled controller, an ignored tree and failures on a programmed set."""
+    if not any(demands.controller is not None for demands in resolved.values()):
+        raise ValueError(
+            "wcmp_controller: no SHORTEST_PATHS_WCMP demand in the prepared demand sets"
+        )
+    if setup.scope == "group":
+        used = {
+            router
+            for demands in resolved.values()
+            for _, table in demands.controller_tables
+            for router in table.programmed
+        }
+        for router, (name, tree, _) in setup.trees.items():
+            if router not in used:
+                raise ValueError(
+                    f"forwarding_groups.{name}: router {tree.router} is programmed "
+                    "toward no destination, so the tree would be ignored"
+                )
+    for step, name, demand_set in failing:
+        if resolved[demand_set].controller is not None:
+            raise _labelled(
+                step,
+                ValueError(
+                    f"workflow.{name}.failure_policy: demand set {demand_set!r} is "
+                    "programmed by the WCMP controller, whose tables are nominal only"
+                ),
+            )
+
+
 def prepare_scenario(
     scenario: Scenario, settings: UnitsSettings, requested: tuple[str, ...]
 ) -> PreparedScenario:
     """Prepare a read-only scenario view; the steps' needs decide what is bound."""
-    numerical, active, capacities, providers = [], [], [], set()
+    numerical, active, capacities, providers, failing = [], [], [], set(), []
     for step in scenario.workflow:
         name = step.name or type(step).__name__
         needs = step.needs()
@@ -249,6 +283,8 @@ def prepare_scenario(
                 )
             if needs.demand_set not in active:
                 active.append(needs.demand_set)
+        if needs.failure_policy is not None and needs.demand_set is not None:
+            failing.append((step, name, needs.demand_set))
         if (
             needs.failure_policy is not None
             and needs.failure_policy not in scenario.failure_policies
@@ -342,10 +378,18 @@ def prepare_scenario(
                 supports=scenario.supports,
                 weights=scenario.weights,
             )
+        setup = None
+        if scenario.wcmp_controller is not None:
+            # The controller loads only for scenarios that declare it.
+            from ngraph.analysis.controller import compile_setup
+
+            setup = compile_setup(topology, scenario)
         resolved = {
-            name: bind_plans(topology, named, name, values)
+            name: bind_plans(topology, named, name, values, setup)
             for name, values in plans_by_name.items()
         }
+        if setup is not None:
+            _check_controller(setup, resolved, failing)
         observations = input_observations(inputs, q, settings.precision)
         report = make_report(
             q,
@@ -355,6 +399,14 @@ def prepare_scenario(
             int(topology.graph.edge_capacity_units().sum()),
             int(topology.graph.edge_costs().sum()),
             observations=observations,
+        )
+        # The chosen candidate's report holds exactly its own tables' approximations.
+        report = report.with_approximations(
+            tuple(
+                entry
+                for demands in resolved.values()
+                for entry in approximations(demands)
+            )
         )
         prepared = PreparedScenario(
             scenario,
@@ -366,6 +418,7 @@ def prepare_scenario(
             owned_inputs,
             observations,
             steps,
+            setup,
         )
         splits, unverified = [], []
         for demands in resolved.values():

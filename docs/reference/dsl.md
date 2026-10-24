@@ -203,6 +203,9 @@ demands: {}              # Traffic demand definitions
 failures: {}             # Failure simulation policies
 workflow: []             # Analysis execution steps
 seed: 42                 # Master seed for reproducibility (integer)
+routing: {}              # IGP domain and BGP-edge routers for the WCMP controller
+wcmp_controller: {}      # WCMP controller scope
+forwarding_groups: {}    # Fixed group shares at programmed routers
 ```
 
 | Key | Required | Description |
@@ -216,6 +219,9 @@ seed: 42                 # Master seed for reproducibility (integer)
 | `failures` | No | Failure policies for simulation |
 | `workflow` | No | Analysis workflow steps to execute |
 | `seed` | No | Master seed (integer) for reproducible random operations |
+| `routing` | With `wcmp_controller` | IGP domain and BGP-edge populations ([WCMP controller](#routing-domains-and-the-wcmp-controller)) |
+| `wcmp_controller` | No | Controller scope for `SHORTEST_PATHS_WCMP` demands |
+| `forwarding_groups` | No | Declared group trees at routers the controller programs (needs `wcmp_controller`) |
 
 All sections are optional. A scenario that omits `network` entirely, or sets it to an empty mapping (`network: {}`), builds with an empty topology. A bare `network:` with no value is a YAML null and fails schema validation. Any unrecognized top-level key is rejected during JSON Schema validation with `jsonschema.ValidationError` (the schema sets `additionalProperties: false`).
 
@@ -1222,6 +1228,59 @@ model:
 
 `distributed_te` requires `tunnel_count: {per_head: N}` and accepts `min_unreserved_bandwidth` in physical units plus `cost_ceiling: {type: absolute, value: C}` or `{type: stretch, value: "3/2"}`. Stretch values are exact integers or fraction strings. `centralized_te` requires `source_allocation: optimized` or `equal`, accepts an optional `tunnel_count` with `up_to`, and `prefer_headroom`. Native model applicability and integer/range restrictions are enforced at preparation.
 
+### Routing domains and the WCMP controller
+
+A WCMP controller programs every `SHORTEST_PATHS_WCMP` demand toward one BGP-edge router with one destination-wide
+weight table per demand set and destination:
+
+```yaml
+routing:
+  igp_domain: {path: '^(A|B)[12]$'}
+  bgp_edge: {path: '^DC_'}
+wcmp_controller: {scope: group}      # next_hop (default) | group | all_routers
+forwarding_groups:
+  ingress:
+    router: DC_A
+    groups:
+      - children: [{edge: {link: 'DC_A|A1|0', direction: forward}}]
+      - share: "1/2"
+        children: [{edge: {link: 'DC_A|A2|0', direction: forward}}]
+```
+
+`routing` constrains the controller only; ECMP and TE demands keep their native models. Both populations are
+required, nonempty and disjoint (selected like demand endpoints, so disabled nodes are outside them). Toward a
+destination t the routes are one DAG: one reverse shortest-path search inside the IGP domain from the exits (domain
+nodes with an eligible link to t), every eligible exit link, and every eligible uplink from another BGP-edge router
+into a domain node that reaches an exit. Nothing enters a BGP-edge router but t, so no other one carries transit. With
+no exit the DAG is empty and the demand finds no route.
+
+A programmed demand has one destination, in `bgp_edge`, and its sources lie in either population. The scopes:
+
+- `next_hop`: the source routers of demands with a positive volume split over their next hops by progressive
+  filling: each next hop grows in proportion to what it carries alone, and stops when a link it uses fills. Routers
+  are processed downstream first, so a programmed router's integer weights shape the loads of routers above it.
+- `group`: each programmed source router splits by its declared tree. Root shares are fixed caps, normalized once;
+  child shares split within their parent. A member that can carry nothing alone (it meets a zero-capacity link or a
+  dead branch) gets 0 and its group re-flattens over its live members within its cap. A root group with no live
+  member is refused: the preset's lossless admission would stop the demand at the first unit sent into it. Every
+  programmed router needs a tree whose leaves are exactly its members toward t. Under `group` every declared tree
+  must be used, so a tree at a router the controller never programs is refused, while a source with no route (an
+  empty DAG) is not programmed and needs none; under `next_hop` and `all_routers` trees are validated and unused.
+- `all_routers`: every router on the sources' walks is programmed from one native flow over the DAG whose sources
+  send in proportion to the demands' exact nominal volumes (a multi-source demand divides its volume over its sources
+  that reach t). The table is fixed for every alpha and the whole MSD series.
+
+Every other router splits equally over its members, zero-capacity ones included (ECMP). Shares are exact: an integer,
+a `"p/q"` or decimal string (YAML floats are refused); a positive share whose children all have share 0 is refused.
+Weights whose exact reduced integers reach 2^62 are apportioned over 2^62 - 1 (one unit for each positive member, then
+highest averages, earlier member on ties) and reported in `units_report.weight_approximations` with the exact largest
+relative error: one entry per router (`controller.<set>.<t>.router.<r>`) and, under `all_routers`, one per source
+vector, naming the source with the largest error (`controller.<set>.<t>.source.<s>`). Source weights are the volumes'
+exact binary values reduced to integers, so volumes 1000 and 0.1 (whose binary value has a 2^55 denominator) are
+apportioned and reported, while 1e6 and 1.0 stay exact. Placement and MSD results report the tables under
+`controller`; a router not listed there splits by ECMP. A controlled demand set
+takes no failure policy: its tables are nominal.
+
 ### Selector Fields
 
 The `source` and `target` fields accept either:
@@ -1278,7 +1337,7 @@ Demands that omit both `preset` and `model` use `SHORTEST_PATHS_ECMP`. A `MaxFlo
 
 - `SHORTEST_PATHS_ECMP`: IP/IGP routing with hash-based ECMP; equal split across equal-cost paths, admitted without loss. `placed` is what the network carries with no drops; a next hop filled by an earlier demand blocks later demands hashed onto it
 - `SHORTEST_PATHS_ECMP_LOSSY`: the same routing with best-effort forwarding; native results retain delivered traffic, source losses and losses at each edge
-- `SHORTEST_PATHS_WCMP`: capacity-weighted static shortest-path routing with lossless equal source allocation
+- `SHORTEST_PATHS_WCMP`: capacity-weighted static shortest-path routing with lossless equal source allocation; with a `wcmp_controller`, the controller's table instead (a MaxFlow step then refuses this preset)
 - `SHORTEST_PATHS_MAXFLOW`: optimized capacity on the union of the selected shortest-path supports
 - `TE_MAXFLOW_UNLIM`: unrestricted optimized lossless traffic engineering
 - `TE_ECMP_16_LSP`: MPLS-TE with exactly 16 ECMP LSPs per demand

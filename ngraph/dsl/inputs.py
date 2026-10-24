@@ -1,18 +1,21 @@
 """Closed YAML declarations for native routing and named physical references."""
 
-from fractions import Fraction
-
 import netgraph_core as ngc
 
 from ngraph.dsl.expansion import ExpansionSpec, expand_block
 from ngraph.model.demand import (
+    ControllerGroup,
     DemandSet,
     DemandSpec,
     EdgeWeight,
     FlowPolicyPreset,
+    ForwardingGroup,
+    GroupChild,
     PinnedRoutes,
     RouteSpec,
+    RoutingDomain,
     SupportSpec,
+    WCMPController,
     WeightSpec,
     _CentralizedTEInput,
     _DistributedTEInput,
@@ -21,7 +24,7 @@ from ngraph.model.demand import (
 )
 from ngraph.model.network import DirectedLink
 from ngraph.model.selectors import normalize_selector
-from ngraph.utils.values import integer, physical
+from ngraph.utils.values import exact_fraction, integer, physical
 from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
 
 OUTPUT_FLAGS = (
@@ -99,16 +102,7 @@ def ceiling(value, label):
     if value["type"] == "absolute":
         return ngc.AbsoluteCost(integer(value["value"], label + ".value"))
     if value["type"] == "stretch":
-        atom = value["value"]
-        if isinstance(atom, bool) or not isinstance(atom, (int, str)):
-            raise ValueError(
-                f"{label}.value: expected exact integer or fraction string"
-            )
-        try:
-            ratio = Fraction(atom)
-        except (ValueError, ZeroDivisionError) as exc:
-            raise ValueError(f"{label}.value: invalid exact fraction") from exc
-        return ngc.CostStretch(ratio)
+        return ngc.CostStretch(exact_fraction(value["value"], f"{label}.value"))
     raise ValueError(f"{label}.type: expected absolute or stretch")
 
 
@@ -327,6 +321,66 @@ def named_declarations(data):
             spec.get("weight", 1),
         )
     return routes, supports, weights
+
+
+def _group_child(value, label):
+    value = closed(value, ("share", "edge", "children"), label)
+    children = value.get("children")
+    if children is not None:
+        if not isinstance(children, list):
+            raise ValueError(f"{label}.children: expected list")
+        children = tuple(
+            _group_child(child, f"{label}.children[{i}]")
+            for i, child in enumerate(children)
+        )
+    return GroupChild(
+        exact_fraction(value.get("share", 1), f"{label}.share"),
+        None if "edge" not in value else directed(value["edge"], f"{label}.edge"),
+        children,
+    )
+
+
+def controller_declarations(data):
+    """The routing domain, the WCMP controller and the forwarding groups, if declared."""
+    routing = data.get("routing")
+    if routing is not None:
+        routing = closed(routing, ("igp_domain", "bgp_edge"), "routing")
+        if set(routing) != {"igp_domain", "bgp_edge"}:
+            raise ValueError("routing: igp_domain and bgp_edge are required")
+        routing = RoutingDomain(
+            normalize_selector(routing["igp_domain"], "demand"),
+            normalize_selector(routing["bgp_edge"], "demand"),
+        )
+    controller = data.get("wcmp_controller")
+    if controller is not None:
+        controller = WCMPController(**closed(controller, ("scope",), "wcmp_controller"))
+    groups = {}
+    raw = normalize_yaml_dict_keys(
+        mapping(data.get("forwarding_groups", {}), "forwarding_groups")
+    )
+    for name, spec in raw.items():
+        label = f"forwarding_groups.{name}"
+        spec = closed(spec, ("router", "groups"), label)
+        if set(spec) != {"router", "groups"} or not isinstance(spec["groups"], list):
+            raise ValueError(f"{label}: router and a list of groups are required")
+        roots = []
+        for i, group in enumerate(spec["groups"]):
+            group_label = f"{label}.groups[{i}]"
+            group = closed(group, ("share", "children"), group_label)
+            children = group.get("children")
+            if not isinstance(children, list):
+                raise ValueError(f"{group_label}.children: expected list")
+            roots.append(
+                ControllerGroup(
+                    tuple(
+                        _group_child(child, f"{group_label}.children[{j}]")
+                        for j, child in enumerate(children)
+                    ),
+                    exact_fraction(group.get("share", 1), f"{group_label}.share"),
+                )
+            )
+        groups[name] = ForwardingGroup(spec["router"], tuple(roots))
+    return routing, controller, groups
 
 
 def demand_sets(raw):

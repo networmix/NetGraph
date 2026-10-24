@@ -181,6 +181,7 @@ def oracle(variant):
                 "examples": observed_examples,
             }
         ],
+        "weight_approximations": [],
     }
     exact(project(analysis)["units_report"], expected)
 
@@ -243,6 +244,7 @@ def opaque_oracle():
                 "examples": [],
             }
         ],
+        "weight_approximations": [],
     }
     exact(project(result)["units_report"], expected)
 

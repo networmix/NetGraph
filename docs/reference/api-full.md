@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 50
+Modules auto-discovered: 51
 
 ---
 
@@ -596,6 +596,15 @@ Immutable MarginalCurve record.
 - `cost_domain` (Literal['physical_network', 'analysis_graph'])
 - `bins` (tuple[MarginalCostBin, ...])
 
+### MemberWeight
+
+One member of a programmed router and its integer weight (0 included).
+
+**Attributes:**
+
+- `edge` (DirectedLink)
+- `weight` (int)
+
 ### NetworkStatsResult
 
 Immutable NetworkStatsResult record.
@@ -754,6 +763,15 @@ Immutable PreparationScope record.
 - `workflow_demand_sets` (tuple[str, ...])
 - `library_demand_sets` (tuple[str, ...])
 
+### ProgrammedRouter
+
+Immutable ProgrammedRouter record.
+
+**Attributes:**
+
+- `router` (str)
+- `members` (tuple[MemberWeight, ...])
+
 ### RangeConstraint
 
 Immutable RangeConstraint record.
@@ -806,7 +824,11 @@ Immutable ResolvedDemand record.
 
 ### ResolvedDemandSet
 
-Immutable ResolvedDemandSet record.
+Resolved demands; a set the WCMP controller programs also holds its tables.
+
+``controller_tables`` are the internal tables with their destination
+names; ``controller`` is their report (None when the controller programs
+nothing).
 
 **Attributes:**
 
@@ -814,6 +836,12 @@ Immutable ResolvedDemandSet record.
 - `demands` (tuple[ResolvedDemand, ...])
 - `accounting` (tuple[ExpansionAccounting, ...])
 - `expansion_template` (tuple[ExpansionParent, ...])
+- `controller_tables` (tuple[tuple[str, DestinationTable], ...]) = ()
+- `controller` (tuple[TableReport, ...] | None)
+
+**Methods:**
+
+- `controller_table(self, destination: 'str') -> 'DestinationTable'` - The internal table toward one destination router.
 
 ### RunMetadata
 
@@ -883,6 +911,16 @@ Immutable SensitivityAnalysis record.
 - `result` (ngc.SensitivityResult)
 - `query` (SensitivityQuery)
 
+### SourceWeight
+
+A source's nominal physical demand toward the destination and its weight.
+
+**Attributes:**
+
+- `source` (str)
+- `nominal_physical` (Fraction)
+- `weight` (int)
+
 ### SplitConstraint
 
 Immutable SplitConstraint record.
@@ -943,6 +981,19 @@ Immutable SyntheticIngress record.
 - `pool_id` (str)
 - `source` (str)
 
+### TableReport
+
+The WCMP controller's table toward one destination, by name.
+
+``programmed`` lists the routers the controller programs; any other router
+splits equally over its members (ECMP).
+
+**Attributes:**
+
+- `destination` (str)
+- `programmed` (tuple[ProgrammedRouter, ...])
+- `source_weights` (tuple[SourceWeight, ...] | None)
+
 ### UnitsReport
 
 Immutable UnitsReport record.
@@ -970,9 +1021,11 @@ Immutable UnitsReport record.
 - `nominal_split_count` (int)
 - `nominal_splits` (tuple[SplitConstraint, ...])
 - `misses` (tuple[PrecisionMiss, ...])
+- `weight_approximations` (tuple[WeightApproximation, ...]) = ()
 
 **Methods:**
 
+- `with_approximations(self, entries: 'tuple[WeightApproximation, ...]') -> 'UnitsReport'` - This report with the controller's weight approximations, each once.
 - `with_misses(self, misses: 'tuple[PrecisionMiss, ...]') -> 'UnitsReport'` - This report with further precision misses appended.
 
 ### UnverifiedConstraint
@@ -996,6 +1049,26 @@ Immutable UpperCertificate record.
 - `upper` (ExactAlpha)
 - `lower_probe_index` (int)
 - `upper_probe_index` (int)
+
+### WeightApproximation
+
+Controller weights whose exact values reached 2^62 and were apportioned.
+
+The label names a router (``controller.<set>.<t>.router.<r>``) or, for an
+``all_routers`` source vector, its source with the largest error
+(``controller.<set>.<t>.source.<s>``). ``max_relative_error`` is the
+largest relative error of the normalized shares over the positive members
+or sources.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['weight_approximation']]) = weight_approximation
+- `label` (str)
+- `max_relative_error` (Fraction)
+
+### approximations(demands: 'ResolvedDemandSet') -> 'tuple[WeightApproximation, ...]'
+
+The weight approximations of a demand set's controller tables.
 
 ### exact_alpha(value: 'float') -> 'ExactAlpha'
 
@@ -1027,6 +1100,9 @@ reach a prepared scenario. ``dataclasses.replace`` builds an edited copy.
 - `routes` (Mapping[str, RouteSpec]) = {}
 - `supports` (Mapping[str, SupportSpec]) = {}
 - `weights` (Mapping[str, WeightSpec]) = {}
+- `forwarding_groups` (Mapping[str, ForwardingGroup]) = {}
+- `routing` (RoutingDomain | None)
+- `wcmp_controller` (WCMPController | None)
 
 **Methods:**
 
@@ -1191,6 +1267,15 @@ Returns:
 
 Immutable demand declarations and native preset values.
 
+### ControllerGroup
+
+A root group of one router: its share is a fixed cap, normalized once.
+
+**Attributes:**
+
+- `children` (tuple[GroupChild, ...])
+- `share` (Fraction)
+
 ### DemandSet
 
 DemandSet(name: 'str', demands: 'tuple[DemandSpec, ...]')
@@ -1232,6 +1317,28 @@ EdgeWeight(edge: 'DirectedLink', value: 'int')
 
 Named questions with one immutable native configuration each.
 
+### ForwardingGroup
+
+The declared root groups of one router.
+
+**Attributes:**
+
+- `router` (str)
+- `groups` (tuple[ControllerGroup, ...])
+
+### GroupChild
+
+A member edge, or a conditional subtree, with its share within its parent.
+
+Exactly one of ``edge`` and ``children`` is set; preparation checks the
+structure and the share's range. The share is stored as a Fraction.
+
+**Attributes:**
+
+- `share` (Fraction)
+- `edge` (DirectedLink | None)
+- `children` (tuple[GroupChild, ...] | None)
+
 ### PinnedRoutes
 
 PinnedRoutes(routes: 'tuple[str, ...]', admission: 'ngc.Admission' = <Admission.LOSSLESS: 0>, allocation: 'ngc.RouteAllocation | None' = None, weight_basis: 'ngc.WeightBasis | None' = None, edge_weights: 'str | None' = None)
@@ -1256,6 +1363,15 @@ RouteSpec(head: 'str', nodes: 'tuple[str, ...] | None' = None, edges: 'tuple[Dir
 - `support` (str | None)
 - `weight` (int) = 1
 
+### RoutingDomain
+
+One IGP domain and the BGP-edge routers around it.
+
+**Attributes:**
+
+- `igp_domain` (Selector)
+- `bgp_edge` (Selector)
+
 ### SupportSpec
 
 SupportSpec(edges: 'tuple[DirectedLink, ...]')
@@ -1263,6 +1379,14 @@ SupportSpec(edges: 'tuple[DirectedLink, ...]')
 **Attributes:**
 
 - `edges` (tuple[DirectedLink, ...])
+
+### WCMPController
+
+Which routers the controller programs for SHORTEST_PATHS_WCMP demands.
+
+**Attributes:**
+
+- `scope` (Literal['next_hop', 'group', 'all_routers']) = next_hop
 
 ### WeightSpec
 
@@ -2411,6 +2535,10 @@ No documentation available.
 
 No documentation available.
 
+### controller_declarations(data)
+
+The routing domain, the WCMP controller and the forwarding groups, if declared.
+
 ### demand_sets(raw)
 
 No documentation available.
@@ -2655,6 +2783,13 @@ Usage:
 
 Validation of domain input values and their immutable JSON form.
 
+### exact_fraction(value: 'object', label: 'str') -> 'Fraction'
+
+An exact ratio from an integer, a ``p/q`` or decimal string, or a Fraction.
+
+Floats and booleans are refused: a binary64 value is not the exact ratio
+the declaration means.
+
 ### frozen_attrs(value: 'object', label: 'str' = 'attrs') -> 'dict[str, JSONValue]'
 
 Validate an attribute mapping once and return its read-only JSON form.
@@ -2801,13 +2936,139 @@ No documentation available.
 
 ---
 
+## ngraph.analysis.controller
+
+The WCMP controller: one destination-wide weight table per demand set and destination.
+
+A routing domain (an IGP domain and the BGP-edge routers around it) gives
+each destination one DAG of routes. The controller programs the source
+routers of the ``SHORTEST_PATHS_WCMP`` demands toward that destination:
+``next_hop`` weights their next hops by progressive filling, ``group`` uses
+their declared forwarding groups, whose root shares are fixed caps. Every
+other router keeps equal-cost splitting (ECMP). Each demand forwards on the
+one table through its own native program; nothing here forwards traffic.
+
+### ControllerSetup
+
+The controller declaration resolved on one prepared graph.
+
+**Attributes:**
+
+- `scope` (str)
+- `domain` (frozenset[int])
+- `edge` (frozenset[int])
+- `trees` (Mapping[int, tuple[str, ForwardingGroup, tuple[DirectedLink, ...]]])
+
+**Methods:**
+
+- `check_leaf(self, topology: 'PreparedTopology', endpoints: 'Endpoints', label)` - Refuse a programmed demand the declared domain cannot place.
+- `leaf_config(self, topology: 'PreparedTopology', table: 'DestinationTable', endpoints) -> 'ngc.FlowPolicyConfig'` - One demand's native program on the shared table, with its own endpoints.
+- `tables(self, topology, set_name, consumers)` - One table and its report per destination of a demand set.
+
+### DestinationTable
+
+The controller's table toward one destination, on one prepared graph.
+
+``weights`` is the one weight vector, by EdgeId: programmed rows carry
+their integer weights, other DAG routers weight 1 on every member.
+``encoding`` is how the table reaches native forwarding (EQUAL when every
+programmed row that receives traffic is equal and positive).
+``approximations`` hold each router whose exact weights reached 2^62, with
+the largest relative error of its apportioned shares; for ``all_routers``,
+the one source vector's entry names the source with the largest error.
+``source_weights`` holds each ``all_routers`` source's nominal physical
+demand and its integer weight.
+
+**Attributes:**
+
+- `destination` (int)
+- `dag` (ngc.PredecessorDAG)
+- `weights` (tuple[int, ...])
+- `encoding` (ngc.RouteAllocation)
+- `programmed` (tuple[int, ...])
+- `approximations` (tuple[WeightApproximation, ...])
+- `source_weights` (tuple[tuple[int, Fraction, int], ...] | None)
+
+### apportion(exact: 'Sequence[int]', total: 'int') -> 'list[int]'
+
+Highest averages over ``total`` units with one unit reserved per positive member.
+
+Equal to giving every positive member one unit, then each further unit to
+the largest ``weight / (held + 1)``, earlier member on ties; computed from
+the proportional floor, then adjusted by the same quotients.
+
+### apportioned(shares: 'Sequence[Fraction]') -> 'tuple[list[int], dict[int, Fraction]]'
+
+Exact rational shares as reduced integers, and their errors by member.
+
+Weights that reach 2^62 are apportioned over a total of 2^62 - 1: every
+positive member first holds one unit, then each unit goes to the largest
+``share / (held + 1)``, earlier member on ties. The second value holds each
+positive member's relative error of its normalized share (empty when exact).
+
+### compile_setup(topology: 'PreparedTopology', scenario) -> 'ControllerSetup'
+
+Resolve the domain populations and check every forwarding group once.
+
+### destination_table(topology, setup, set_name, t, leaves, mask) -> 'tuple[DestinationTable, TableReport]'
+
+The one table toward t and its report, from the leaves' (sources, exact amount).
+
+``next_hop`` and ``group`` program the sources of positive leaves,
+downstream first; ``all_routers`` programs every router from one flow.
+
+### encode(topology, members, programmed, rows, weights) -> 'ngc.RouteAllocation'
+
+EQUAL when every programmed row that receives traffic is equal and positive.
+
+Otherwise WEIGHTED, which prunes zero-capacity members and dead branches.
+Zero-alone members carry weight 0 and a root group with no live member is
+refused, so no router that receives traffic keeps a member WEIGHTED prunes.
+
+### fill(columns: 'Sequence[Mapping[int, Fraction]]', alone, capacity)
+
+Normalized progressive filling of one router's members.
+
+Every active member grows in proportion to what it carries alone; when an
+edge saturates, every active member using it stops. Members that carry
+nothing alone get 0.
+
+### flatten(tree: 'ForwardingGroup', members: 'Mapping', alive: 'Mapping') -> 'list[Fraction]'
+
+Each member's share of the router's traffic under the fixed root caps.
+
+``members`` maps each declared leaf ``DirectedLink`` to its index; each
+root group re-flattens over its live members only, within its own cap.
+The caller refuses a positive root group with no live member.
+
+### integer_weights(shares: 'Sequence[Fraction]') -> 'tuple[list[int], Fraction | None]'
+
+``apportioned`` with the largest relative error (None when exact).
+
+### member_column(graph, rows, edge, t) -> 'tuple[dict[int, Fraction], Fraction]'
+
+The load one unit entering ``edge`` puts on every edge, and what it carries alone.
+
+``rows`` are the table's rows so far: finalized programmed rows, and every
+member at other routers. A unit that meets a zero-capacity edge, or stops
+at a router other than t with no member, carries nothing alone.
+
+### table_report(topology: 'PreparedTopology', table: 'DestinationTable', members) -> 'TableReport'
+
+The table by name; ``members`` are its DAG's members by router.
+
+---
+
 ## ngraph.analysis.costs
 
 Opt-in exact path-cost bins or native marginal-cost pieces.
 
-### cost_distribution(topology: ngraph.analysis.topology.PreparedTopology, config: _netgraph_core.FlowPolicyConfig, result: _netgraph_core.PlacementResult, destinations, mask: _netgraph_core.Eligibility, *, pool=None, records=None, shortest_costs=None) -> tuple[ngraph.results.DeliveredByPathCost | ngraph.results.MarginalCurve | None, collections.abc.Mapping[typing.Literal['cost_distribution'], typing.Literal['mixed_cost_dag', 'unsupported_model']]]
+### cost_distribution(topology: ngraph.analysis.topology.PreparedTopology, config: _netgraph_core.FlowPolicyConfig, result: _netgraph_core.PlacementResult, destinations, mask: _netgraph_core.Eligibility, *, pool=None, records=None, shortest_costs=None, programmed=False) -> tuple[ngraph.results.DeliveredByPathCost | ngraph.results.MarginalCurve | None, collections.abc.Mapping[typing.Literal['cost_distribution'], typing.Literal['mixed_cost_dag', 'unsupported_model', 'controller_table']]]
 
 Project only determined costs; callers invoke this only when requested.
+
+A demand the WCMP controller ``programmed`` forwards on a pooled table,
+which does not attribute delivery to walk costs.
 
 ---
 
@@ -2815,9 +3076,16 @@ Project only determined costs; callers invoke this only when requested.
 
 Canonical physical selections and total-preserving demand expansion.
 
-### bind_plans(topology: 'PreparedTopology', named: 'NamedRoutes', name: 'str', plans: 'Sequence[_Expansion]') -> 'ResolvedDemandSet'
+### bind_plans(topology: 'PreparedTopology', named: 'NamedRoutes', name: 'str', plans: 'Sequence[_Expansion]', controller=None) -> 'ResolvedDemandSet'
 
-No documentation available.
+Bind a demand set's leaves; ``controller`` is the prepared controller setup.
+
+The controller's tables are built once per destination, from every
+programmed leaf of the set, before any leaf's program.
+
+### controlled(controller, policy) -> 'bool'
+
+Whether the WCMP controller programs a demand of this declared policy.
 
 ### declared_split(named: 'NamedRoutes', config: 'ngc.FlowPolicyConfig | None', policy: 'object' = None) -> 'tuple[ngc.RouteAllocation | None, ngc.WeightBasis | None]'
 
@@ -2835,6 +3103,10 @@ No documentation available.
 ### expansion_plans(network: 'Network', specs: 'DemandSet') -> 'tuple[_Expansion, ...]'
 
 Resolve physical endpoints once; zero and discarded leaves remain in the tree.
+
+### leaf_amounts(root, volume: 'float') -> 'dict[str, Fraction]'
+
+Each leaf's exact physical share of its declaration, before any rounding.
 
 ### leaves(root: 'ExpansionSplit | ExpansionLeaf') -> 'tuple[ExpansionLeaf, ...]'
 
@@ -3033,6 +3305,15 @@ searches a capacity evaluator would make on an empty ledger.
 
 Rational split propagation over native-selected DAGs, without capacity/admission.
 
+### effective_rows(topology, edges, destinations, allocation, weights)
+
+Native preparation's split rows over a set of DAG edges.
+
+Native W prunes zero-capacity members even for positive EXPLICIT weights,
+then removes branches with no effective continuation to a destination;
+EQUAL keeps every member. Returns each router's members in EdgeId order,
+with their weights (1 for EQUAL).
+
 ### expansion_bounds(plans, q, precision, alpha=1.0)
 
 Describe continuous declared splits on the fixed ordered tree.
@@ -3052,6 +3333,16 @@ The missed local targets of one placement on the fixed prepared q.
 ### placement_splits(topology: 'PreparedTopology', named: 'NamedRoutes', demands, owners, results, record_sets, mask, alpha, precision)
 
 Describe actual native records; never rerun a placement to obtain a report.
+
+### propagate(graph, rows, injections, *, reached_only=False)
+
+Exact rational propagation of injected amounts through split rows.
+
+``rows`` maps a router to its members (EdgeId, positive weight); a router
+splits what it holds in proportion to the weights. Returns the nodes in
+processing order (with ``reached_only``, only those the injections reach),
+the amount each node holds and the amount on each edge. Amounts at a node
+without a row stay there (a destination, or a loss).
 
 ### query_has_splits(query) -> 'bool'
 
@@ -3108,6 +3399,7 @@ returns its own precision misses beside it.
 - `_inputs` (Mapping[str, tuple[_InputKind, float]])
 - `_input_observations` (Mapping[str, tuple[InputQuantization, InputConstraint | None]])
 - `_steps` (tuple[tuple[str, int | None, SeedSource], ...])
+- `_controller` (ControllerSetup | None)
 
 ### StepNeeds
 
@@ -3145,6 +3437,21 @@ Resolve declared physical routes, supports and weights into native programs.
 ### compile_named(topology, *, routes=None, supports=None, weights=None)
 
 Validate all named references and own one native value per graph/name.
+
+### dag_from_edges(graph: 'ngc.Graph', edges) -> 'ngc.PredecessorDAG'
+
+One native DAG over a set of EdgeIds; validation (cycles included) is native.
+
+### domain_dag(topology: 'PreparedTopology', domain: 'frozenset[int]', edge: 'frozenset[int]', destination: 'int', mask: 'ngc.Eligibility') -> 'ngc.PredecessorDAG'
+
+The routes toward one BGP-edge destination through one IGP domain.
+
+Exits are domain nodes with an eligible link to the destination; one
+reverse search from all of them, inside the domain and blind to capacity,
+gives each domain node its nearest exits. The DAG adds every eligible exit
+link and every eligible uplink from another BGP-edge node into a domain
+node that reaches an exit; nothing enters a BGP-edge node but the
+destination, so no other one carries transit. No exit gives an empty DAG.
 
 ### edge_id(topology: 'PreparedTopology', ref: 'DirectedLink', label: 'str') -> 'int'
 

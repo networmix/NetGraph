@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from fractions import Fraction
 from itertools import product
 from types import MappingProxyType
 from typing import TYPE_CHECKING
@@ -375,28 +376,94 @@ def scaled_expansion(
     return MappingProxyType(amounts), tuple(accounting)
 
 
+def leaf_amounts(root, volume: float) -> dict[str, Fraction]:
+    """Each leaf's exact physical share of its declaration, before any rounding."""
+    amounts: dict[str, Fraction] = {}
+
+    def visit(node, amount):
+        if isinstance(node, ExpansionLeaf):
+            amounts[node.id] = amount
+            return
+        for child in node.children:
+            visit(child, amount / len(node.children))
+
+    visit(root, Fraction(volume))
+    return amounts
+
+
+def controlled(controller, policy) -> bool:
+    """Whether the WCMP controller programs a demand of this declared policy."""
+    return controller is not None and policy == FlowPolicyPreset.SHORTEST_PATHS_WCMP
+
+
+def _plan_label(plan, name):
+    if plan.spec.yaml_label is not None:
+        return plan.spec.yaml_label
+    return f"demands.{name}[{plan.declaration_ordinal}]({plan.base_id})"
+
+
 def bind_plans(
     topology: PreparedTopology,
     named: NamedRoutes,
     name: str,
     plans: Sequence[_Expansion],
+    controller=None,
 ) -> ResolvedDemandSet:
+    """Bind a demand set's leaves; ``controller`` is the prepared controller setup.
+
+    The controller's tables are built once per destination, from every
+    programmed leaf of the set, before any leaf's program.
+    """
+    tables, reports = (), None
+    consumers = [
+        (plan, leaf)
+        for plan in plans
+        if controlled(controller, plan.spec.policy)
+        for leaf in leaves(plan.root)
+        if leaf.endpoints is not None
+    ]
+    if consumers:
+        assert controller is not None
+        for plan, leaf in consumers:
+            controller.check_leaf(topology, leaf.endpoints, _plan_label(plan, name))
+        amounts = {
+            plan.base_id: leaf_amounts(plan.root, plan.spec.volume)
+            for plan in plans
+            if controlled(controller, plan.spec.policy)
+        }
+        tables, reports = controller.tables(
+            topology,
+            name,
+            [
+                (leaf.endpoints, amounts[plan.base_id][leaf.id])
+                for plan, leaf in consumers
+            ],
+        )
+    by_name = dict(tables)
     parents, resolved = [], []
     for plan in plans:
         error_label = plan.spec.yaml_label
         first_config = None
+        programmed = controlled(controller, plan.spec.policy)
         for leaf in leaves(plan.root):
             if leaf.endpoints is None:
                 continue
             try:
-                config = (
-                    first_config
-                    if first_config is not None
-                    and not isinstance(plan.spec.policy, PinnedRoutes)
-                    else materialize_config(
+                if programmed:
+                    assert controller is not None
+                    config = controller.leaf_config(
+                        topology,
+                        by_name[leaf.endpoints.destinations[0]],
+                        leaf.endpoints,
+                    )
+                elif first_config is not None and not isinstance(
+                    plan.spec.policy, PinnedRoutes
+                ):
+                    config = first_config
+                else:
+                    config = materialize_config(
                         topology, named, leaf.endpoints, plan.spec.policy
                     )
-                )
             except (ValueError, TypeError) as exc:
                 if error_label is None:
                     raise
@@ -457,7 +524,7 @@ def bind_plans(
         replace(d, nominal_units=amounts[d.id])
         for d in sorted(resolved, key=lambda d: (d.priority, d.order))
     )
-    return ResolvedDemandSet(name, demands, accounting, tuple(parents))
+    return ResolvedDemandSet(name, demands, accounting, tuple(parents), tables, reports)
 
 
 def resolve_demands(prepared: PreparedScenario, specs: DemandSet) -> ResolvedDemandSet:
@@ -484,4 +551,6 @@ def resolve_demands(prepared: PreparedScenario, specs: DemandSet) -> ResolvedDem
             f"demand set {specs.name}: pools {changed} select other sources than "
             "their prepared ingress; prepare again"
         )
-    return bind_plans(topology, prepared._named, specs.name, plans)
+    return bind_plans(
+        topology, prepared._named, specs.name, plans, prepared._controller
+    )

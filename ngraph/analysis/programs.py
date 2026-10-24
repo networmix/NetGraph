@@ -19,14 +19,8 @@ def edge_id(topology: PreparedTopology, ref: DirectedLink, label: str) -> int:
     return topology._edge_id_by_ref[ref]
 
 
-def support_dag(
-    topology: PreparedTopology, spec: SupportSpec, label: str
-) -> ngc.PredecessorDAG:
-    """Build the declared DAG once, validating duplicate and cyclic supports natively."""
-    graph = topology.graph
-    edges = [edge_id(topology, ref, label) for ref in spec.edges]
-    if len(set(edges)) != len(edges):
-        raise ValueError(f"{label}: duplicate support edge")
+def dag_from_edges(graph: ngc.Graph, edges) -> ngc.PredecessorDAG:
+    """One native DAG over a set of EdgeIds; validation (cycles included) is native."""
     sources, targets = graph.edge_sources(), graph.edge_destinations()
     by_child = [[] for _ in range(graph.num_nodes())]
     for edge in edges:
@@ -37,10 +31,72 @@ def support_dag(
             parents.append(int(sources[edge]))
             via.append(edge)
         offsets.append(len(via))
+    return ngc.PredecessorDAG.from_csr(graph, offsets, parents, via)
+
+
+def support_dag(
+    topology: PreparedTopology, spec: SupportSpec, label: str
+) -> ngc.PredecessorDAG:
+    """Build the declared DAG once, validating duplicate and cyclic supports natively."""
+    edges = [edge_id(topology, ref, label) for ref in spec.edges]
+    if len(set(edges)) != len(edges):
+        raise ValueError(f"{label}: duplicate support edge")
     try:
-        return ngc.PredecessorDAG.from_csr(graph, offsets, parents, via)
+        return dag_from_edges(topology.graph, edges)
     except (ValueError, TypeError) as exc:
         raise ValueError(f"{label}: {exc}") from exc
+
+
+def domain_dag(
+    topology: PreparedTopology,
+    domain: frozenset[int],
+    edge: frozenset[int],
+    destination: int,
+    mask: ngc.Eligibility,
+) -> ngc.PredecessorDAG:
+    """The routes toward one BGP-edge destination through one IGP domain.
+
+    Exits are domain nodes with an eligible link to the destination; one
+    reverse search from all of them, inside the domain and blind to capacity,
+    gives each domain node its nearest exits. The DAG adds every eligible exit
+    link and every eligible uplink from another BGP-edge node into a domain
+    node that reaches an exit; nothing enters a BGP-edge node but the
+    destination, so no other one carries transit. No exit gives an empty DAG.
+    """
+    graph = topology.graph
+    sources, targets = graph.edge_sources(), graph.edge_destinations()
+    allowed = mask.edge_allowed()
+    usable = [e for e in range(graph.num_edges()) if allowed[e]]
+    exit_links = [
+        e
+        for e in usable
+        if int(targets[e]) == destination and int(sources[e]) in domain
+    ]
+    if not exit_links:
+        return dag_from_edges(graph, ())
+    inside = ngc.Eligibility.intersect(
+        mask,
+        graph.eligibility(
+            excluded_nodes=[n for n in range(graph.num_nodes()) if n not in domain]
+        ),
+    )
+    search = ngc.spf(
+        graph,
+        sorted({int(sources[e]) for e in exit_links}),
+        ngc.SpfOptions(ngc.Direction.REVERSE, eligibility=inside),
+    )
+    costs = search.costs
+    assert costs is not None
+    uplinks = [
+        e
+        for e in usable
+        if int(sources[e]) in edge
+        and int(sources[e]) != destination
+        and int(targets[e]) in domain
+        and costs[int(targets[e])] != ngc.UNREACHABLE
+    ]
+    tight = [int(e) for e in search.dag.via_edges()]
+    return dag_from_edges(graph, {*tight, *exit_links, *uplinks})
 
 
 def explicit_weights(

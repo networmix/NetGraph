@@ -11,16 +11,19 @@ from ngraph import (
     CapacityQuery,
     DemandSet,
     DemandSpec,
+    FlowPolicyPreset,
     Link,
     MSDQuery,
     Network,
     Node,
     PathQuery,
     PlacementQuery,
+    RoutingDomain,
     Scenario,
     Selector,
     SensitivityQuery,
     UnitsSettings,
+    WCMPController,
     capacity,
     edge_sensitivity,
     maximum_supported_demand,
@@ -48,6 +51,7 @@ MODEL_FIELDS = (
     "cost_ceiling",
     "min_unreserved_bandwidth_units",
     "route_names",
+    "controller",
     "supplied_support",
     "supplied_program",
 )
@@ -320,6 +324,64 @@ def samples():
                 "max_bracket_iters": 4,
                 "max_bisect_iters": 3,
                 "export_probe_rows": True,
+            },
+        )
+    )
+    # A demand the WCMP controller programs names the controller, not a program.
+    domain = Network(nodes={name: Node(name) for name in ("S", "U", "T")})
+    domain.add_link(Link("S", "U", 4, 1))
+    domain.add_link(Link("U", "T", 4, 1))
+    programmed = DemandSet(
+        "wcmp",
+        (
+            DemandSpec(
+                Selector("^S$"),
+                Selector("^T$"),
+                2,
+                FlowPolicyPreset.SHORTEST_PATHS_WCMP,
+                id="dc",
+            ),
+        ),
+    )
+    controlled = prepare(
+        Scenario(
+            domain,
+            demand_sets={"wcmp": programmed},
+            units=UnitsSettings(1),
+            routing=RoutingDomain(Selector("^U$"), Selector("^(S|T)$")),
+            wcmp_controller=WCMPController("next_hop"),
+            forwarding_groups={},
+        ),
+        demand_sets=("wcmp",),
+    )
+    result.append(
+        (
+            place(
+                controlled, PlacementQuery(controlled.demand_sets["wcmp"], workers=1)
+            ),
+            {
+                "kind": "placement",
+                "demand_set": "wcmp",
+                "demands": [
+                    {
+                        "source": {**SOURCE, "path": "^S$", "active_only": None},
+                        "target": {**SOURCE, "path": "^T$", "active_only": None},
+                        "priority": 0,
+                        "id": "dc",
+                        "model": model(
+                            routing="shortest_paths",
+                            allocation="weighted",
+                            source_allocation="equal",
+                            controller="next_hop",
+                        ),
+                        "physical_volume": 2.0,
+                        "mode": "combine",
+                        "group_mode": "flatten",
+                    }
+                ],
+                "alpha": {"value": 1.0, "numerator": 1, "denominator": 1},
+                "alpha_source": {"kind": "query", "step": None},
+                "failures": None,
             },
         )
     )

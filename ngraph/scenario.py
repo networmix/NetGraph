@@ -10,7 +10,15 @@ from ngraph.analysis.metadata import run_metadata
 from ngraph.analysis.preparation import PreparedScenario, prepare_scenario
 from ngraph.analysis.units import UnitsSettings
 from ngraph.model.components import ComponentsLibrary
-from ngraph.model.demand import DemandSet, RouteSpec, SupportSpec, WeightSpec
+from ngraph.model.demand import (
+    DemandSet,
+    ForwardingGroup,
+    RouteSpec,
+    RoutingDomain,
+    SupportSpec,
+    WCMPController,
+    WeightSpec,
+)
 from ngraph.model.failure import FailurePolicy
 from ngraph.model.network import Network
 from ngraph.results import (
@@ -61,6 +69,11 @@ class Scenario:
     routes: Mapping[str, RouteSpec] = field(default_factory=frozen_dict)
     supports: Mapping[str, SupportSpec] = field(default_factory=frozen_dict)
     weights: Mapping[str, WeightSpec] = field(default_factory=frozen_dict)
+    forwarding_groups: Mapping[str, ForwardingGroup] = field(
+        default_factory=frozen_dict
+    )
+    routing: RoutingDomain | None = None
+    wcmp_controller: WCMPController | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.network, Network):
@@ -86,8 +99,24 @@ class Scenario:
             ("routes", RouteSpec),
             ("supports", SupportSpec),
             ("weights", WeightSpec),
+            ("forwarding_groups", ForwardingGroup),
         ):
             object.__setattr__(self, name, _named(getattr(self, name), kind, name))
+        if self.routing is not None and not isinstance(self.routing, RoutingDomain):
+            raise TypeError("Scenario.routing: expected RoutingDomain or None")
+        if self.wcmp_controller is not None and not isinstance(
+            self.wcmp_controller, WCMPController
+        ):
+            raise TypeError("Scenario.wcmp_controller: expected WCMPController or None")
+        # The routing domain and the forwarding groups serve the controller only.
+        if self.wcmp_controller is not None and self.routing is None:
+            raise ValueError("wcmp_controller: requires routing")
+        if self.wcmp_controller is None and self.routing is not None:
+            raise ValueError(
+                "routing: constrains the WCMP controller only; declare wcmp_controller"
+            )
+        if self.wcmp_controller is None and self.forwarding_groups:
+            raise ValueError("forwarding_groups: require wcmp_controller")
         for name, value in self.demand_sets.items():
             if name != value.name:
                 raise ValueError(
@@ -100,7 +129,12 @@ class Scenario:
     ) -> Scenario:
         """Parse one closed scenario declaration and retain editable domain inputs."""
         from ngraph.dsl.blueprints.expand import expand_network_dsl
-        from ngraph.dsl.inputs import closed, demand_sets, named_declarations
+        from ngraph.dsl.inputs import (
+            closed,
+            controller_declarations,
+            demand_sets,
+            named_declarations,
+        )
         from ngraph.dsl.loader import load_scenario_yaml
         from ngraph.model.failure import build_failure_policies
         from ngraph.model.risk import (
@@ -156,6 +190,7 @@ class Scenario:
             data.get("units", {}), ("resolution", "precision"), "units"
         )
         routes, supports, weights = named_declarations(data)
+        routing, controller, forwarding_groups = controller_declarations(data)
         seeds = SeedManager(master)
         return cls(
             network,
@@ -171,6 +206,9 @@ class Scenario:
             routes=routes,
             supports=supports,
             weights=weights,
+            forwarding_groups=forwarding_groups,
+            routing=routing,
+            wcmp_controller=controller,
         )
 
 

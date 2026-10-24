@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Routing domains and a WCMP controller: `routing: {igp_domain, bgp_edge}` with `wcmp_controller: {scope}` programs every `SHORTEST_PATHS_WCMP` demand toward one BGP-edge router with one destination-wide weight table per demand set: `next_hop` (default) weights each source router's next hops by progressive filling, `group` uses declared `forwarding_groups` shares as fixed caps, `all_routers` programs every router from one flow whose sources send in proportion to the demands; other routers keep equal-cost splitting. Question models gain `controller` (the scope, or null), units reports gain `weight_approximations` (router and `all_routers` source weights whose exact integers reach 2^62 are apportioned over 2^62 - 1, each table entry with its exact largest relative error), and placement and MSD results report the tables under `controller` (`RoutingDomain`, `WCMPController`, `ForwardingGroup`, `ControllerGroup`, `GroupChild`). Other demands keep their native models.
+
 ### Changed
 
 - **BREAKING**: analyses run as `Scenario` → `prepare` → `run` on native NetGraph-Core results. `prepare` chooses one bandwidth unit and builds the graph once, without changing its input; `run(prepare(scenario))` returns a `RunResult`. Library questions are `capacity`, `place`, `paths`, `edge_sensitivity` and `maximum_supported_demand` with typed queries (`CapacityQuery`, `PlacementQuery`, `PathQuery`, `SensitivityQuery`, `MSDQuery`) and `FailureRequest` for failure cases.

@@ -667,7 +667,8 @@
     "CostUnavailableReasonJSON": {
       "enum": [
         "mixed_cost_dag",
-        "unsupported_model"
+        "unsupported_model",
+        "controller_table"
       ]
     },
     "CustomQuestionJSON": {
@@ -1449,6 +1450,12 @@
         },
         "query": {
           "$ref": "#/$defs/MSDQueryJSON"
+        },
+        "controller": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TableReportJSON"
+          }
         }
       },
       "required": [
@@ -1946,6 +1953,22 @@
       ],
       "additionalProperties": false
     },
+    "MemberWeightJSON": {
+      "type": "object",
+      "properties": {
+        "edge": {
+          "$ref": "#/$defs/DirectedLinkJSON"
+        },
+        "weight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "edge",
+        "weight"
+      ],
+      "additionalProperties": false
+    },
     "ModelJSON": {
       "type": "object",
       "properties": {
@@ -2105,6 +2128,20 @@
             }
           ]
         },
+        "controller": {
+          "anyOf": [
+            {
+              "enum": [
+                "next_hop",
+                "group",
+                "all_routers"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "supplied_support": {
           "type": "boolean"
         },
@@ -2127,6 +2164,7 @@
         "cost_ceiling",
         "min_unreserved_bandwidth_units",
         "route_names",
+        "controller",
         "supplied_support",
         "supplied_program"
       ],
@@ -2868,6 +2906,12 @@
         },
         "query": {
           "$ref": "#/$defs/PlacementQueryJSON"
+        },
+        "controller": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TableReportJSON"
+          }
         }
       },
       "required": [
@@ -3386,6 +3430,25 @@
       "required": [
         "index",
         "rows"
+      ],
+      "additionalProperties": false
+    },
+    "ProgrammedRouterJSON": {
+      "type": "object",
+      "properties": {
+        "router": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MemberWeightJSON"
+          }
+        }
+      },
+      "required": [
+        "router",
+        "members"
       ],
       "additionalProperties": false
     },
@@ -4021,6 +4084,26 @@
         }
       ]
     },
+    "SourceWeightJSON": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "nominal_physical": {
+          "$ref": "#/$defs/FractionJSON"
+        },
+        "weight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "nominal_physical",
+        "weight"
+      ],
+      "additionalProperties": false
+    },
     "SplitConstraintJSON": {
       "type": "object",
       "properties": {
@@ -4605,6 +4688,39 @@
       "required": [],
       "additionalProperties": false
     },
+    "TableReportJSON": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string"
+        },
+        "programmed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProgrammedRouterJSON"
+          }
+        },
+        "source_weights": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SourceWeightJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "destination",
+        "programmed",
+        "source_weights"
+      ],
+      "additionalProperties": false
+    },
     "TunnelCountJSON": {
       "type": "object",
       "properties": {
@@ -4915,6 +5031,12 @@
           "items": {
             "$ref": "#/$defs/PrecisionMissJSON"
           }
+        },
+        "weight_approximations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WeightApproximationJSON"
+          }
         }
       },
       "required": [
@@ -4938,7 +5060,8 @@
         "augmented_cost_sum",
         "nominal_split_count",
         "nominal_splits",
-        "misses"
+        "misses",
+        "weight_approximations"
       ],
       "additionalProperties": false
     },
@@ -4994,6 +5117,28 @@
         "upper",
         "lower_probe_index",
         "upper_probe_index"
+      ],
+      "additionalProperties": false
+    },
+    "WeightApproximationJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "weight_approximation"
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "max_relative_error": {
+          "$ref": "#/$defs/FractionJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "max_relative_error"
       ],
       "additionalProperties": false
     }

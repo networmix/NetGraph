@@ -744,6 +744,33 @@
           }
         }
       ]
+    },
+    "groupChild": {
+      "type": "object",
+      "properties": {
+        "share": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
+        },
+        "edge": {
+          "$ref": "#/$defs/directedLink"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/groupChild"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
     }
   },
   "properties": {
@@ -1650,6 +1677,86 @@
       },
       "required": [],
       "additionalProperties": false
+    },
+    "routing": {
+      "type": "object",
+      "properties": {
+        "igp_domain": {
+          "$ref": "#/$defs/selectorOrString"
+        },
+        "bgp_edge": {
+          "$ref": "#/$defs/selectorOrString"
+        }
+      },
+      "required": [
+        "igp_domain",
+        "bgp_edge"
+      ],
+      "additionalProperties": false
+    },
+    "wcmp_controller": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "enum": [
+            "next_hop",
+            "group",
+            "all_routers"
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "forwarding_groups": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "router": {
+            "type": "string",
+            "minLength": 1
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "share": {
+                  "oneOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  ]
+                },
+                "children": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/groupChild"
+                  }
+                }
+              },
+              "required": [
+                "children"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "router",
+          "groups"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

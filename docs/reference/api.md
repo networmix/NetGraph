@@ -67,6 +67,14 @@ assert placement.cases[0].states["converged"].totals.delivered_units == 4
 
 `maximum_supported_demand(prepared, MSDQuery(resolved_set))` keeps one native ledger and the same owners throughout the probe series. Each probe scales the original physical parent totals, quantizes once and removes every previous owner before submitting the complete matrix. Feasibility uses exact integer accounting.
 
+With `routing=RoutingDomain(...)`, `wcmp_controller=WCMPController(scope)` and `forwarding_groups` of
+`ForwardingGroup(router, (ControllerGroup(children, share), ...))` (children are `GroupChild(share, edge=...)` or
+nested `GroupChild(share, children=...)`; shares are exact), every `SHORTEST_PATHS_WCMP` demand forwards on the
+controller's table toward its destination. `ResolvedDemandSet.controller` holds the tables as `TableReport` records
+(programmed routers and their member weights, and for `all_routers` each source's nominal volume and weight).
+On such a set `place` refuses a `FailureRequest` that names a failure policy (one without a policy is the baseline
+alone), and `capacity` refuses `SHORTEST_PATHS_WCMP` as its declaration.
+
 Read `alpha_feasible` as the largest tested feasible factor, or `None` when none was found. `history` contains every actual probe. `search_status` is one of `feasible`, `none_feasible`, `range`, `stagnation`, `limit`, `trivial`; `stop_reason` explains the termination. An upper certificate exists only for a proved downward-closed class. Multiple controllers and tunnel redesigns are conservatively unproved. Python callers may request `export_probe_rows=True`; YAML has no such input.
 
 ## Failure cases

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import KW_ONLY, dataclass, field
 from enum import StrEnum
+from fractions import Fraction
 from types import MappingProxyType
 from typing import Literal, TypeAlias
 
@@ -14,6 +15,7 @@ from ngraph.model.network import DirectedLink
 from ngraph.model.selectors.schema import Selector
 from ngraph.utils.values import (
     JSONValue,
+    exact_fraction,
     frozen_attrs,
     integer,
     own_scalars,
@@ -276,3 +278,97 @@ class DemandSet:
         if not all(isinstance(demand, DemandSpec) for demand in self.demands):
             raise TypeError(f"demand set {self.name}: expected DemandSpec values")
         own_scalars(self, "demand set", ("name",))
+
+
+ExactShare: TypeAlias = int | str | Fraction
+"""An exact share: an integer, a ``p/q`` or decimal string, or a Fraction."""
+
+
+@dataclass(frozen=True, init=False)
+class GroupChild:
+    """A member edge, or a conditional subtree, with its share within its parent.
+
+    Exactly one of ``edge`` and ``children`` is set; preparation checks the
+    structure and the share's range. The share is stored as a Fraction.
+    """
+
+    share: Fraction
+    edge: DirectedLink | None
+    children: tuple[GroupChild, ...] | None
+
+    def __init__(
+        self,
+        share: ExactShare = 1,
+        edge: DirectedLink | None = None,
+        children: Sequence[GroupChild] | None = None,
+    ) -> None:
+        object.__setattr__(self, "share", exact_fraction(share, "group_child.share"))
+        if edge is not None and not isinstance(edge, DirectedLink):
+            raise TypeError("group_child.edge: expected DirectedLink")
+        object.__setattr__(self, "edge", edge)
+        if children is not None:
+            children = tuple(children)
+            if not all(isinstance(child, GroupChild) for child in children):
+                raise TypeError("group_child.children: expected GroupChild values")
+        object.__setattr__(self, "children", children)
+
+
+@dataclass(frozen=True, init=False)
+class ControllerGroup:
+    """A root group of one router: its share is a fixed cap, normalized once."""
+
+    children: tuple[GroupChild, ...]
+    share: Fraction
+
+    def __init__(self, children: Sequence[GroupChild], share: ExactShare = 1) -> None:
+        object.__setattr__(
+            self, "share", exact_fraction(share, "controller_group.share")
+        )
+        children = tuple(children)
+        if not all(isinstance(child, GroupChild) for child in children):
+            raise TypeError("controller_group.children: expected GroupChild values")
+        object.__setattr__(self, "children", children)
+
+
+@dataclass(frozen=True)
+class ForwardingGroup:
+    """The declared root groups of one router."""
+
+    router: str
+    groups: tuple[ControllerGroup, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.router, str) or not self.router:
+            raise ValueError("forwarding_group.router: expected a nonempty node name")
+        own_scalars(self, "forwarding_group", ("router",))
+        object.__setattr__(self, "groups", tuple(self.groups))
+        if not all(isinstance(group, ControllerGroup) for group in self.groups):
+            raise TypeError("forwarding_group.groups: expected ControllerGroup values")
+
+
+@dataclass(frozen=True)
+class RoutingDomain:
+    """One IGP domain and the BGP-edge routers around it."""
+
+    igp_domain: Selector
+    bgp_edge: Selector
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.igp_domain, Selector) or not isinstance(
+            self.bgp_edge, Selector
+        ):
+            raise TypeError("routing: expected Selector populations")
+
+
+@dataclass(frozen=True)
+class WCMPController:
+    """Which routers the controller programs for SHORTEST_PATHS_WCMP demands."""
+
+    scope: Literal["next_hop", "group", "all_routers"] = "next_hop"
+
+    def __post_init__(self) -> None:
+        own_scalars(self, "wcmp_controller", ("scope",))
+        if self.scope not in ("next_hop", "group", "all_routers"):
+            raise ValueError(
+                "wcmp_controller.scope: expected next_hop, group or all_routers"
+            )

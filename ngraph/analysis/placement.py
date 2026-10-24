@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import netgraph_core as ngc
 
-from ngraph.analysis.demands import residual_weights, scaled_expansion
+from ngraph.analysis.demands import controlled, residual_weights, scaled_expansion
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
@@ -183,6 +183,11 @@ def _place_case(prepared, query, case, amounts, observations, cost_distribution)
             owners,
             costs=query.export_cost_distribution,
         )
+        programmed = {
+            parent.base_id
+            for parent in query.demands.expansion_template
+            if controlled(query.demands.controller, parent.policy)
+        }
         rows = []
         for demand, result, snapshots, reference in zip(
             query.demands.demands, results, records, requests, strict=True
@@ -200,6 +205,7 @@ def _place_case(prepared, query, case, amounts, observations, cost_distribution)
                     case.eligibility,
                     pool=demand.pool,
                     records=snapshots,
+                    programmed=demand.base_id in programmed,
                 )
             rows.append(
                 PlacementRow(
@@ -241,6 +247,16 @@ def place(prepared: PreparedScenario, query: PlacementQuery) -> PlacementAnalysi
         from ngraph.analysis.costs import cost_distribution
 
     topology = prepared.topology
+    # A request without a policy asks the baseline alone.
+    if (
+        query.failures is not None
+        and query.failures.policy is not None
+        and query.demands.controller is not None
+    ):
+        raise ValueError(
+            f"placement.failures: demand set {query.demands.name} is programmed by "
+            "the WCMP controller, whose tables are nominal only"
+        )
     alpha = exact_alpha(query.alpha)
     amounts, accounting = scaled_expansion(query.demands, alpha.value, topology.q)
     cases = failure_cases(prepared, query.failures)

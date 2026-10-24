@@ -16,6 +16,7 @@ from ngraph import (
     CapacityRow,
     CaseResult,
     CaseState,
+    ControllerGroup,
     CostPowerResult,
     CostReport,
     DeliveredByPathCost,
@@ -28,6 +29,9 @@ from ngraph import (
     FailureCase,
     FailurePolicy,
     FailureRequest,
+    FlowPolicyPreset,
+    ForwardingGroup,
+    GroupChild,
     InputConstraint,
     JSONValue,
     MarginalCurve,
@@ -47,6 +51,7 @@ from ngraph import (
     RangeConstraint,
     ResolvedDemandSet,
     RouteSpec,
+    RoutingDomain,
     RunResult,
     Scenario,
     Selector,
@@ -60,6 +65,7 @@ from ngraph import (
     UnitsReport,
     UnitsSettings,
     UnverifiedConstraint,
+    WCMPController,
     WeightSpec,
     WorkflowStep,
     capacity,
@@ -92,6 +98,9 @@ def populated(
     routes: Mapping[str, RouteSpec],
     supports: Mapping[str, SupportSpec],
     weights: Mapping[str, WeightSpec],
+    forwarding_groups: Mapping[str, ForwardingGroup],
+    routing: RoutingDomain | None = None,
+    wcmp_controller: WCMPController | None = None,
 ) -> RunResult:
     return run(
         prepare(
@@ -106,6 +115,9 @@ def populated(
                 routes=routes,
                 supports=supports,
                 weights=weights,
+                forwarding_groups=forwarding_groups,
+                routing=routing,
+                wcmp_controller=wcmp_controller,
             ),
             demand_sets=tuple(demand_sets),
         )
@@ -149,7 +161,69 @@ def read_units(report: UnitsReport) -> float:
         for sample in miss.examples:
             error: Fraction = sample.error
             assert sample.binary64_hex and isinstance(error, Fraction)
+    for approximation in report.weight_approximations:
+        kind: Literal["weight_approximation"] = approximation.kind
+        relative_error: Fraction = approximation.max_relative_error
+        assert approximation.label and kind and relative_error >= 0
     return q
+
+
+def controlled_example() -> tuple[int, list[tuple[str, int]]]:
+    """A WCMP controller with forwarding groups: delivered units and the reported row."""
+    network = Network()
+    for name in ("S", "X1", "X2", "T"):
+        network.add_node(Node(name))
+    for target in ("X1", "X2"):
+        network.add_link(Link("S", target, capacity=10, cost=1))
+        network.add_link(Link(target, "T", capacity=10, cost=1))
+    tree = ForwardingGroup(
+        "S",
+        (
+            ControllerGroup((GroupChild(edge=DirectedLink("S|X1|0", "forward")),)),
+            ControllerGroup(
+                (GroupChild(edge=DirectedLink("S|X2|0", "forward")),), share="1/2"
+            ),
+        ),
+    )
+    # Stored shares are exact Fractions, whatever form declared them.
+    caps: Fraction = sum((group.share for group in tree.groups), Fraction(0))
+    child: Fraction = tree.groups[0].children[0].share
+    assert (caps, child) == (Fraction(3, 2), Fraction(1))
+    demands = DemandSet(
+        "wcmp",
+        (
+            DemandSpec(
+                Selector("^S$"),
+                Selector("^T$"),
+                9,
+                policy=FlowPolicyPreset.SHORTEST_PATHS_WCMP,
+                id="dc",
+            ),
+        ),
+    )
+    prepared = prepare(
+        Scenario(
+            network,
+            demand_sets={"wcmp": demands},
+            units=UnitsSettings(resolution=1),
+            forwarding_groups={"ingress": tree},
+            routing=RoutingDomain(Selector("^X[12]$"), Selector("^(S|T)$")),
+            wcmp_controller=WCMPController("group"),
+        ),
+        demand_sets=("wcmp",),
+    )
+    resolved: ResolvedDemandSet = prepared.demand_sets["wcmp"]
+    tables = resolved.controller
+    assert tables is not None
+    members = [
+        (member.edge.link, member.weight)
+        for router in tables[0].programmed
+        for member in router.members
+    ]
+    analysis = place(prepared, PlacementQuery(resolved, workers=1))
+    read_units(analysis.units_report)
+    row = analysis.cases[0].states["converged"].rows[0]
+    return row.result.delivered, members
 
 
 def read_cost(row: CostReport) -> int:
@@ -334,7 +408,7 @@ def read_paths(value: PathAnalysis) -> list[int | None]:
     if isinstance(options, ngc.KspOptions):
         assert value.algorithm == "ksp"
     else:
-        assert value.algorithm == "spf" and options.min_residual >= 1
+        assert value.algorithm == "spf" and int(options.min_residual) >= 1
     return costs
 
 

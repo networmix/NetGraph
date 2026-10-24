@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from enum import Enum
+from fractions import Fraction
 from numbers import Real
 from typing import Any, NoReturn, TypeAlias, cast
 
@@ -112,6 +113,20 @@ def integer(
     if value < minimum or (maximum is not None and value >= maximum):
         raise ValueError(f"{label}: integer outside [{minimum}, {maximum})")
     return value
+
+
+def exact_fraction(value: object, label: str) -> Fraction:
+    """An exact ratio from an integer, a ``p/q`` or decimal string, or a Fraction.
+
+    Floats and booleans are refused: a binary64 value is not the exact ratio
+    the declaration means.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str, Fraction)):
+        raise ValueError(f"{label}: expected exact integer or fraction string")
+    try:
+        return Fraction(value)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise ValueError(f"{label}: invalid exact fraction") from exc
 
 
 def _type_name(value: object) -> str:

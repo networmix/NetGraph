@@ -1161,6 +1161,12 @@
         },
         "query": {
           "$ref": "#/$defs/PlacementQueryJSON"
+        },
+        "controller": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TableReportJSON"
+          }
         }
       },
       "required": [
@@ -1762,6 +1768,12 @@
         },
         "query": {
           "$ref": "#/$defs/MSDQueryJSON"
+        },
+        "controller": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TableReportJSON"
+          }
         }
       },
       "required": [
@@ -2889,6 +2901,20 @@
             }
           ]
         },
+        "controller": {
+          "anyOf": [
+            {
+              "enum": [
+                "next_hop",
+                "group",
+                "all_routers"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "supplied_support": {
           "type": "boolean"
         },
@@ -2911,6 +2937,7 @@
         "cost_ceiling",
         "min_unreserved_bandwidth_units",
         "route_names",
+        "controller",
         "supplied_support",
         "supplied_program"
       ],
