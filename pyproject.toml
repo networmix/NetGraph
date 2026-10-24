@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # ---------------------------------------------------------------------
 [project]
 name = "ngraph"
-version = "0.24.0"
+version = "0.24.1"
 description = "A tool and a library for network modeling and analysis."
 readme = "README.md"
 authors = [{ name = "Andrey Golovanov" }]
@@ -35,7 +35,7 @@ dependencies = [
     "numpy>=1.23.2",
     "pyyaml>=6.0",
     "jsonschema>=4.0",
-    "netgraph-core>=0.10.0",
+    "netgraph-core>=0.10.0,<0.12",
 ]
 
 [project.urls]
