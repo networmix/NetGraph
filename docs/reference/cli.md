@@ -168,7 +168,7 @@ jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}'
 - **MaximumSupportedDemand** returns `alpha_feasible`, probe history, search status and any proved upper certificate.
 - **NetworkStats** returns its physical counts/statistics directly under `result`.
 
-Numerical values are integer units and the report records their quantum. Optional costs, cuts and edge arrays appear only when requested and applicable. See [workflow results](workflow.md) and the packaged `results.json` schema. Encoding completes before a results file is atomically replaced.
+Numerical values are integer units and the report records their quantum. Optional costs, cuts and edge arrays appear only when requested and applicable. See [workflow results](workflow.md) and the packaged `results.json` schema. The results file and `--stdout` carry the same compact JSON: one line with no indentation, then a newline (`jq .` prints it indented). Encoding completes before a results file is atomically replaced.
 
 ## Output Behavior
 

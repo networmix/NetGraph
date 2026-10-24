@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failure random rules draw one Bernoulli trial per matched entity on every supported Python, so random-rule draws on Python 3.12 and later differ from 0.24.0; choice-rule seeds are unchanged. Results record the runtime, seed and draw order.
 - Nested risk-group declarations that reuse a name must be identical; conflicting ones are refused with both paths.
 - `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
+- JSON results (`write_json`, the CLI results file and `--stdout`) are written as one compact line with the same content and key order, roughly half the size or less; use `jq .` to read them indented.
 
 ### Removed
 

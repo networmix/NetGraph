@@ -1,10 +1,12 @@
 """CLI exports once, preserves real order when filtered, and replaces atomically."""
 
 import json
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
+from ngraph import Scenario, prepare, run, write_json
 from ngraph.cli import _inspect_scenario, _run_scenario
 
 
@@ -44,6 +46,36 @@ def test_filter_only_second_keeps_actual_order_one_and_one_encoder(
     ]
     assert wire["steps"][0]["result"]["total_capacity"] == 5
     assert not list(tmp_path.glob(".result.json.*.tmp"))
+
+
+def test_results_are_one_compact_line_in_the_file_on_stdout_and_from_write_json(
+    tmp_path, capsys
+):
+    path = tmp_path / "zürich.yaml"
+    path.write_text(
+        "network: {nodes: {zürich: {}, b: {}}, links: [{source: zürich, target: b}]}\n"
+        "workflow: [{type: NetworkStats, name: stats}]\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "result.json"
+    _run_scenario(path, output, False, True)
+    library = StringIO()
+    write_json(
+        run(prepare(Scenario.from_yaml(path.read_text(encoding="utf-8")))), library
+    )
+    texts = {
+        "file": output.read_text(encoding="utf-8"),
+        "stdout": capsys.readouterr().out,
+        "write_json": library.getvalue(),
+    }
+    for where, text in texts.items():
+        # No indentation or spaces after separators; key order and raw non-ASCII kept.
+        compact = json.dumps(
+            json.loads(text), ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        )
+        assert text == compact + "\n", where
+        assert "zürich" in text, where
+    assert texts["file"] == texts["stdout"]
 
 
 @pytest.mark.parametrize("failure", ["encoder", "replace"])

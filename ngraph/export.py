@@ -641,7 +641,9 @@ def _encode_json(result: RunResult | AnalysisResult) -> str:
             "analysis": projected,
             "units_report": project(result.units_report),
         }
-    return json.dumps(projected, ensure_ascii=False, allow_nan=False, indent=2)
+    return json.dumps(
+        projected, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    )
 
 
 def write_json(result: RunResult | AnalysisResult, file: IO[str]) -> None:
