@@ -12,7 +12,7 @@ one table through its own native program; nothing here forwards traffic.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import gcd, lcm
 from types import MappingProxyType
@@ -21,12 +21,13 @@ from typing import cast
 import netgraph_core as ngc
 
 from ngraph.analysis.demands import selected_groups
-from ngraph.analysis.precision import propagate
-from ngraph.analysis.programs import domain_dag, edge_id
+from ngraph.analysis.precision import effective_rows, propagate
+from ngraph.analysis.programs import dag_from_edges, domain_dag, edge_id
 from ngraph.analysis.topology import PreparedTopology
 from ngraph.model.demand import PRESETS, FlowPolicyPreset, ForwardingGroup
 from ngraph.model.network import DirectedLink
 from ngraph.results import (
+    DeadCap,
     Endpoints,
     MemberWeight,
     ProgrammedRouter,
@@ -50,7 +51,12 @@ class DestinationTable:
     the largest relative error of its apportioned shares; for ``all_routers``,
     the one source vector's entry names the source with the largest error.
     ``source_weights`` holds each ``all_routers`` source's nominal physical
-    demand and its integer weight.
+    demand and its integer weight. ``leaves`` are the (sources, exact amount)
+    the table was built from, so a failure case can build its own.
+
+    A failure case's group table keeps a dead root group's members at their
+    nominal shares: ``dropped`` are those members, where its forwarding drops
+    the traffic (``holes`` excludes them), and ``dead_caps`` the dead groups.
     """
 
     destination: int
@@ -60,6 +66,10 @@ class DestinationTable:
     programmed: tuple[int, ...]
     approximations: tuple[WeightApproximation, ...]
     source_weights: tuple[tuple[int, Fraction, int], ...] | None = None
+    leaves: tuple[tuple[tuple[int, ...], Fraction], ...] = ()
+    dropped: tuple[int, ...] = ()
+    dead_caps: tuple[DeadCap, ...] = ()
+    holes: ngc.Eligibility | None = None
 
 
 def apportion(exact: Sequence[int], total: int) -> list[int]:
@@ -236,7 +246,7 @@ class ControllerSetup:
             )
         tables, reports = [], []
         for name, leaves in sorted(by_destination.items()):
-            table, report = destination_table(
+            table, members = destination_table(
                 topology,
                 self,
                 set_name,
@@ -244,14 +254,22 @@ class ControllerSetup:
                 leaves,
                 topology.disabled,
             )
-            tables.append((name, table))
-            reports.append(report)
+            tables.append((name, replace(table, leaves=tuple(leaves))))
+            reports.append(table_report(topology, table, members))
         return tuple(tables), tuple(reports)
 
     def leaf_config(
-        self, topology: PreparedTopology, table: DestinationTable, endpoints
+        self,
+        topology: PreparedTopology,
+        table: DestinationTable,
+        endpoints,
+        black_holes: ngc.Eligibility | None = None,
     ) -> ngc.FlowPolicyConfig:
-        """One demand's native program on the shared table, with its own endpoints."""
+        """One demand's native program on the shared table, with its own endpoints.
+
+        A failure case's table forwards with the case's failures and the
+        table's dropped members as black holes.
+        """
         weighted = table.encoding == ngc.RouteAllocation.WEIGHTED
         program = ngc.ForwardingProgram.from_dag(
             topology.graph,
@@ -262,10 +280,47 @@ class ControllerSetup:
             weight_basis=ngc.WeightBasis.EXPLICIT if weighted else None,
             edge_weights=table.weights if weighted else None,
         )
+        if black_holes is not None and table.holes is not None:
+            black_holes = ngc.Eligibility.intersect(black_holes, table.holes)
         return ngc.FlowPolicyConfig(
-            routing=ngc.Pinned(program),
+            routing=ngc.Pinned(program, black_holes=black_holes),
             admission=PRESETS[FlowPolicyPreset.SHORTEST_PATHS_WCMP].admission,
         )
+
+    def case_tables(self, topology, demands, mask, *, repair=False, context=""):
+        """Each destination's table of a demand set in one failure case.
+
+        Converged tables are built on the failed topology; a group repair
+        table on the nominal routes that survive the mask. ``context`` names
+        the case and state in a refusal.
+        """
+        return {
+            name: destination_table(
+                topology,
+                self,
+                demands.name,
+                nominal.destination,
+                nominal.leaves,
+                mask,
+                nominal=nominal if self.scope == "group" else None,
+                repair=repair,
+                context=context,
+            )[0]
+            for name, nominal in demands.controller_tables
+        }
+
+    def check_failure_states(self, topology, demands, states, label):
+        """Refuse group converged and repair at a programmed router inside the domain."""
+        if self.scope != "group" or not {"converged", "repair"} & set(states):
+            return
+        for _, table in demands.controller_tables:
+            for router in table.programmed:
+                if router in self.domain:
+                    raise ValueError(
+                        f"{label}: forwarding_groups.{self.trees[router][0]}: router "
+                        f"{topology.node_names[router]} is inside routing.igp_domain; "
+                        "converged and repair need programmed routers at the BGP edge"
+                    )
 
 
 def _population(topology, network, selector, label) -> frozenset[int]:
@@ -408,7 +463,14 @@ def _heights(graph, members, t):
     return height
 
 
-def _group_shares(topology, setup, t, router, members, alone):
+def _group_shares(topology, setup, t, router, members, alone, nominal=None):
+    """The router's members and their shares under the fixed root caps.
+
+    With the ``nominal`` table (a failure case), a declared leaf that is no
+    member is dead, and a root group with no live member keeps its nominally
+    live leaves at their nominal shares within its cap; those members and the
+    groups' caps are returned too.
+    """
     if router not in setup.trees:
         raise ValueError(
             f"forwarding_groups: router {topology.node_names[router]} is programmed "
@@ -417,7 +479,7 @@ def _group_shares(topology, setup, t, router, members, alone):
     name, tree, declared = setup.trees[router]
     index = {topology.edge_refs[e]: i for i, e in enumerate(members)}
     missing = [ref for ref in index if ref not in declared]
-    extra = [ref for ref in declared if ref not in index]
+    extra = [] if nominal else [ref for ref in declared if ref not in index]
     if missing or extra:
         raise ValueError(
             f"forwarding_groups.{name}: router {topology.node_names[router]} toward "
@@ -425,35 +487,85 @@ def _group_shares(topology, setup, t, router, members, alone):
             f"{[f'{r.link} {r.direction}' for r in missing]}, leaves that are not "
             f"members {[f'{r.link} {r.direction}' for r in extra]}"
         )
-    alive = {
-        topology.edge_refs[e]: value > 0
+    alive = dict.fromkeys(declared, False)
+    alive.update(
+        (topology.edge_refs[e], value > 0)
         for e, value in zip(members, alone, strict=True)
-    }
-    for i, group in enumerate(tree.groups):
-        if group.share > 0 and not any(
-            _live(c, alive) for c in group.children if c.share > 0
-        ):
-            # Lossless admission would stop at the first unit sent into the group.
-            raise ValueError(
-                f"forwarding_groups.{name}.groups[{i}]: no member can carry traffic "
-                f"from router {topology.node_names[router]} toward "
-                f"{topology.node_names[t]}"
+    )
+    dead = [
+        i
+        for i, group in enumerate(tree.groups)
+        if group.share > 0
+        and not any(_live(c, alive) for c in group.children if c.share > 0)
+    ]
+    if nominal is not None and dead:
+        total = sum(group.share for group in tree.groups)
+        retained = []
+        for i in dead:
+            for ref in _leaves(tree.groups[i].children):
+                edge = edge_id(topology, ref, f"forwarding_groups.{name}")
+                alive[ref] = nominal.weights[edge] > 0
+                if alive[ref]:
+                    retained.append(edge)
+        edges = sorted({*members, *retained})
+        index = {topology.edge_refs[e]: i for i, e in enumerate(edges)}
+        caps = tuple(
+            DeadCap(
+                topology.node_names[t],
+                topology.node_names[router],
+                name,
+                i,
+                tree.groups[i].share / total,
             )
-    return flatten(tree, index, alive)
+            for i in dead
+        )
+        return edges, flatten(tree, index, alive), tuple(retained), caps
+    if dead:
+        # Lossless admission would stop at the first unit sent into the group.
+        raise ValueError(
+            f"forwarding_groups.{name}.groups[{dead[0]}]: no member can carry "
+            f"traffic from router {topology.node_names[router]} toward "
+            f"{topology.node_names[t]}"
+        )
+    return members, flatten(tree, index, alive), (), ()
+
+
+def _leaves(children):
+    for child in children:
+        if child.edge is not None:
+            yield child.edge
+        else:
+            yield from _leaves(child.children)
 
 
 def destination_table(
-    topology, setup, set_name, t, leaves, mask
-) -> tuple[DestinationTable, TableReport]:
-    """The one table toward t and its report, from the leaves' (sources, exact amount).
+    topology,
+    setup,
+    set_name,
+    t,
+    leaves,
+    mask,
+    *,
+    nominal: DestinationTable | None = None,
+    repair=False,
+    context="",
+) -> tuple[DestinationTable, dict[int, list[int]]]:
+    """The one table toward t and its members by router, from the leaves' (sources, exact amount).
 
     ``next_hop`` and ``group`` program the sources of positive leaves,
     downstream first; ``all_routers`` programs every router from one flow.
+    A failure case's group table passes its ``nominal`` table: dead root
+    groups keep their caps (`_group_shares`), and with ``repair`` the routes
+    are the nominal ones that survive the mask instead of a new search.
     """
     graph = topology.graph
     sources = graph.edge_sources()
     capacity = graph.edge_capacity_units()
-    dag = domain_dag(topology, setup.domain, setup.edge, t, mask)
+    if repair:
+        assert nominal is not None
+        dag = surviving_dag(graph, nominal.dag, mask, t)
+    else:
+        dag = domain_dag(topology, setup.domain, setup.edge, t, mask)
     members: dict[int, list[int]] = {}
     for edge in sorted(int(e) for e in dag.via_edges()):
         members.setdefault(int(sources[edge]), []).append(edge)
@@ -464,13 +576,13 @@ def destination_table(
             weights[edge] = 1
     if setup.scope == "all_routers":
         table = _all_routers(topology, set_name, t, dag, members, rows, weights, leaves)
-        return table, table_report(topology, table, members)
+        return table, members
     programmed = {s for sources, amount in leaves if amount > 0 for s in sources}
     heights = _heights(graph, members, t)
     order = sorted(
         (r for r in programmed if r in members), key=lambda r: (heights[r], r)
     )
-    approximations = []
+    approximations, dropped, caps = [], [], []
     for router in order:
         columns, alone = [], []
         for edge in members[router]:
@@ -480,7 +592,11 @@ def destination_table(
         if setup.scope == "next_hop":
             shares = fill(columns, alone, capacity)
         else:
-            shares = _group_shares(topology, setup, t, router, members[router], alone)
+            members[router], shares, retained, dead = _group_shares(
+                topology, setup, t, router, members[router], alone, nominal
+            )
+            dropped.extend(retained)
+            caps.extend(dead)
         row, error = integer_weights(shares)
         if error is not None:
             approximations.append(
@@ -495,11 +611,112 @@ def destination_table(
         rows[router] = [
             (e, w) for e, w in zip(members[router], row, strict=True) if w > 0
         ]
+    holes = None
+    if dropped:
+        assert nominal is not None
+        dag = _continue(graph, nominal, dag, dropped, members, rows, weights, t)
+        holes = graph.eligibility(excluded_edges=dropped)
     encoding = encode(topology, members, set(order), rows, weights)
     table = DestinationTable(
-        t, dag, tuple(weights), encoding, tuple(order), tuple(approximations)
+        t,
+        dag,
+        tuple(weights),
+        encoding,
+        tuple(order),
+        tuple(approximations),
+        dropped=tuple(sorted(dropped)),
+        dead_caps=tuple(caps),
+        holes=holes,
     )
-    return table, table_report(topology, table, members)
+    if nominal is not None:
+        _check_encoding(topology, setup, table, members, context)
+    return table, members
+
+
+def surviving_dag(graph, dag, mask, t) -> ngc.PredecessorDAG:
+    """The DAG's edges the mask keeps that still lead to t (native repair's pruning)."""
+    allowed, targets = mask.edge_allowed(), graph.edge_destinations()
+    kept = [int(e) for e in dag.via_edges() if allowed[int(e)]]
+    parents: dict[int, list[int]] = {}
+    for edge in kept:
+        parents.setdefault(int(targets[edge]), []).append(edge)
+    sources = graph.edge_sources()
+    reach, pending = {t}, [t]
+    while pending:
+        for edge in parents.get(pending.pop(), ()):
+            if int(sources[edge]) not in reach:
+                reach.add(int(sources[edge]))
+                pending.append(int(sources[edge]))
+    return dag_from_edges(graph, [e for e in kept if int(targets[e]) in reach])
+
+
+def _continue(graph, nominal, dag, dropped, members, rows, weights, t):
+    """Lead each dropped member to t: nominal rows at routers with no row of their own.
+
+    The members' traffic is dropped on them; the walk keeps them in the
+    program. A router with rows keeps them, so live traffic is unchanged.
+    """
+    sources, targets = graph.edge_sources(), graph.edge_destinations()
+    nominal_rows: dict[int, list[int]] = {}
+    for edge in sorted(int(e) for e in nominal.dag.via_edges()):
+        nominal_rows.setdefault(int(sources[edge]), []).append(edge)
+    edges = {int(e) for e in dag.via_edges()} | set(dropped)
+    pending = [int(targets[e]) for e in dropped]
+    while pending:
+        node = pending.pop()
+        if node == t or node in members:
+            continue
+        members[node] = nominal_rows.get(node, [])
+        rows[node] = [(e, nominal.weights[e]) for e in members[node]]
+        for edge in members[node]:
+            weights[edge] = nominal.weights[edge]
+            edges.add(edge)
+            pending.append(int(targets[edge]))
+    return dag_from_edges(graph, edges)
+
+
+def _check_encoding(topology, setup, table, members, context):
+    """Refuse a failure table whose native program splits differently from its rows.
+
+    The reference is each programmed router's finalized integer row, a
+    dropped member delivering nothing; native preparation's pruning of the
+    encoded program must leave every member's delivered fraction unchanged.
+    Live members carry something alone, so only a dead group's member can
+    make them differ.
+    """
+    graph, t = topology.graph, table.destination
+    targets = graph.edge_destinations()
+    edges = [int(e) for e in table.dag.via_edges()]
+    native = effective_rows(topology, edges, [t], table.encoding, table.weights)
+    dropped = set(table.dropped)
+    for router in table.programmed:
+        total = sum(table.weights[e] for e in members[router])
+        effective = dict(native.get(router, ()))
+        for edge in members[router]:
+            reference = 0 if edge in dropped else Fraction(table.weights[edge], total)
+            encoded = Fraction(0)
+            if edge in effective and edge not in dropped:
+                start = {int(targets[edge]): 1}
+                _, held, _ = propagate(graph, native, start, reached_only=True)
+                encoded = held[t] * effective[edge] / sum(effective.values())
+            if encoded != reference:
+                # Name the dead group whose retained member native pruning removed.
+                name, (_, tree, _) = topology.node_names[router], setup.trees[router]
+                pruned = {
+                    topology.edge_refs[e]
+                    for e in members[router]
+                    if e in dropped and e not in effective
+                }
+                dead = [c.group for c in table.dead_caps if c.router == name]
+                group = next(
+                    (g for g in dead if pruned & set(_leaves(tree.groups[g].children))),
+                    dead[0],
+                )
+                raise ValueError(
+                    f"forwarding_groups.{setup.trees[router][0]}.groups[{group}]: "
+                    f"{context}: toward {topology.node_names[t]}, router {name} "
+                    "forwards this dead group's share differently from its fixed cap"
+                )
 
 
 def _reached(graph, start, out) -> set[int]:

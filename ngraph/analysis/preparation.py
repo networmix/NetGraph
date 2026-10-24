@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
+from functools import cache
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,8 @@ from ngraph.analysis.capacity import (
 from ngraph.analysis.demands import (
     bind_plans,
     expansion_plans,
+    leaves,
+    pool_budgets,
     pool_requirements,
     selected_pairs,
 )
@@ -45,6 +48,7 @@ from ngraph.analysis.topology import (
     PreparedTopology,
     compile_topology,
     cost_units,
+    outgoing_units,
 )
 from ngraph.analysis.units import (
     LIMIT,
@@ -90,6 +94,11 @@ class StepNeeds:
     numerical: bool = False
     demand_set: str | None = None
     failure_policy: str | None = None
+    # The failure states a placement step reports for each case, its
+    # interaction, and its scale when known at preparation (None: from MSD).
+    states: tuple[str, ...] = ()
+    interaction: str = "ordered"
+    alpha: float | None = 1.0
     alpha_from_step: str | None = None
     provides_alpha: bool = False
     capacity: Callable[[PreparedScenario], CapacityQuery] | None = None
@@ -234,8 +243,8 @@ def _step_pools(network, capacities, pools):
         pools[pool_id] = pair.sources
 
 
-def _check_controller(setup, resolved, failing):
-    """Refuse an uncalled controller, an ignored tree and failures on a programmed set."""
+def _check_controller(topology, setup, resolved, failing):
+    """Refuse an uncalled controller, an ignored tree and unsupported failure states."""
     if not any(demands.controller is not None for demands in resolved.values()):
         raise ValueError(
             "wcmp_controller: no SHORTEST_PATHS_WCMP demand in the prepared demand sets"
@@ -253,15 +262,17 @@ def _check_controller(setup, resolved, failing):
                     f"forwarding_groups.{name}: router {tree.router} is programmed "
                     "toward no destination, so the tree would be ignored"
                 )
-    for step, name, demand_set in failing:
+    for step, name, demand_set, states in failing:
         if resolved[demand_set].controller is not None:
-            raise _labelled(
-                step,
-                ValueError(
-                    f"workflow.{name}.failure_policy: demand set {demand_set!r} is "
-                    "programmed by the WCMP controller, whose tables are nominal only"
-                ),
-            )
+            try:
+                setup.check_failure_states(
+                    topology,
+                    resolved[demand_set],
+                    states,
+                    f"workflow.{name}.failure_states",
+                )
+            except ValueError as exc:
+                raise _labelled(step, exc) from None
 
 
 def prepare_scenario(
@@ -269,6 +280,7 @@ def prepare_scenario(
 ) -> PreparedScenario:
     """Prepare a read-only scenario view; the steps' needs decide what is bound."""
     numerical, active, capacities, providers, failing = [], [], [], set(), []
+    simultaneous = []
     for step in scenario.workflow:
         name = step.name or type(step).__name__
         needs = step.needs()
@@ -284,7 +296,11 @@ def prepare_scenario(
             if needs.demand_set not in active:
                 active.append(needs.demand_set)
         if needs.failure_policy is not None and needs.demand_set is not None:
-            failing.append((step, name, needs.demand_set))
+            failing.append((step, name, needs.demand_set, needs.states))
+        if needs.interaction == "simultaneous" and needs.demand_set is not None:
+            simultaneous.append(
+                (step, name, needs.demand_set, needs.alpha, needs.alpha_from_step)
+            )
         if (
             needs.failure_policy is not None
             and needs.failure_policy not in scenario.failure_policies
@@ -317,6 +333,41 @@ def prepare_scenario(
             identities[plan.base_id] = name
     pools = pool_requirements(plans)
     _step_pools(network, capacities, pools)
+    lossy_plans = []
+    for step, name, demand_set, alpha, source in simultaneous:
+        values = plans_by_name[demand_set]
+        pooled = [
+            leaf.id for plan in values for leaf in leaves(plan.root) if leaf.id in pools
+        ]
+        if alpha is None and pooled:
+            raise _labelled(
+                step,
+                ValueError(
+                    f"workflow.{name}.interaction: demand {pooled[0]}: its scale comes "
+                    f"from MSD step {source}, unknown at "
+                    f"preparation, so TE ingress pool {pooled[0]} has no lossy offer "
+                    "budget"
+                ),
+            )
+        if alpha is not None:
+            lossy_plans.extend((plan, alpha) for plan in values)
+
+    @cache
+    def budgets(q):
+        """Each pool's largest known simultaneous request in units at q."""
+        return pool_budgets(lossy_plans, q)
+
+    def budget_excess(q):
+        """Capacity the budgets add above their sources' outgoing capacity."""
+        if not budgets(q):
+            return 0
+        outgoing = outgoing_units(network, q)
+        return sum(
+            max(0, budget - outgoing[source])
+            for pool, budget in budgets(q).items()
+            for source in pools[pool]
+        )
+
     inputs = {}
     for _, name, needs in capacities:
         for field_name, atom in needs.inputs.items():
@@ -366,7 +417,7 @@ def prepare_scenario(
         nonlocal membership
         if membership is None:
             membership = MembershipIndex.build(network)
-        topology = compile_topology(network, q, pools=pools)
+        topology = compile_topology(network, q, pools=pools, budgets=budgets(q))
         named = NO_ROUTES
         if any(declared):
             # Programs load only for scenarios that declare routes or weights.
@@ -389,7 +440,7 @@ def prepare_scenario(
             for name, values in plans_by_name.items()
         }
         if setup is not None:
-            _check_controller(setup, resolved, failing)
+            _check_controller(topology, setup, resolved, failing)
         observations = input_observations(inputs, q, settings.precision)
         report = make_report(
             q,
@@ -440,6 +491,7 @@ def prepare_scenario(
         coefficients,
         (c.q_upper_bound for c in expansion),
         candidate,
+        budget_excess,
     )
     if finer_failure is not None:
         report = prepared.units_report

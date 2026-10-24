@@ -31,6 +31,7 @@ from ngraph.results import (
     CapacityAnalysis,
     CapacityRow,
     CostPowerResult,
+    DeadCap,
     DeliveredByPathCost,
     DiscardedShare,
     Endpoints,
@@ -40,6 +41,7 @@ from ngraph.results import (
     FailurePattern,
     FailureSelection,
     FailureTrace,
+    ForwardingFailure,
     HardwareRow,
     InputConstraint,
     InputQuantization,
@@ -100,6 +102,7 @@ _PLAIN = frozenset(
         BuildGraphResult,
         DeliveredByPathCost,
         DirectedLink,
+        DeadCap,
         DiscardedShare,
         Endpoints,
         ExactAlpha,
@@ -107,6 +110,7 @@ _PLAIN = frozenset(
         FailurePattern,
         FailureSelection,
         FailureTrace,
+        ForwardingFailure,
         HardwareRow,
         InputConstraint,
         InputQuantization,
@@ -489,6 +493,8 @@ def _placement_query(value, prepared):
             "step": value.alpha_from_step,
         },
         "failures": _failures(value.failures),
+        "states": list(value.states),
+        "interaction": value.interaction,
     }
 
 
@@ -842,18 +848,25 @@ def _failure_case(value):
     return data
 
 
+def _state(value, topology, outputs):
+    data = {
+        "rows": [_row(row, topology, outputs) for row in value.rows],
+        "totals": project(value.totals),
+    }
+    if value.failure is not None:
+        data["failure"] = project(value.failure)
+    if value.dead_caps is not None:
+        data["dead_caps"] = project(value.dead_caps)
+    return data
+
+
 def _cases(values, topology, outputs):
     return [
         {
             "case": _failure_case(value.case),
             "states": {
-                "converged": {
-                    "rows": [
-                        _row(row, topology, outputs)
-                        for row in value.states["converged"].rows
-                    ],
-                    "totals": project(value.states["converged"].totals),
-                }
+                name: _state(state, topology, outputs)
+                for name, state in value.states.items()
             },
         }
         for value in values

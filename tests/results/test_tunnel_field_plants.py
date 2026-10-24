@@ -114,6 +114,7 @@ def oracle(kind):
                 workers=1,
                 outputs=ngc.OutputOptions(edge_flows=True, edge_reservations=True),
                 export_details=True,
+                states=("converged",),
             ),
         )
         head = {"pool_id": "service|0", "physical_sources": ["s1", "s2"]}

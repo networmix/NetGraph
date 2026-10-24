@@ -142,5 +142,6 @@ def test_prepared_topology_holds_the_graph_and_its_labels_only():
         "disabled",
         "q",
         "pool_heads",
+        "pool_budgets",
         "_edge_id_by_ref",
     ]

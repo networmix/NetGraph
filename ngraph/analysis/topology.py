@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from numbers import Integral, Real
@@ -24,7 +25,8 @@ if TYPE_CHECKING:
 class PreparedTopology:
     """One graph with network labels; native edge arrays remain authoritative.
 
-    ``pool_heads`` maps each finite TE ingress pool to its synthetic head node.
+    ``pool_heads`` maps each finite TE ingress pool to its synthetic head node;
+    ``pool_budgets`` holds a pool's lossy offer budget in units, when it has one.
     """
 
     graph: ngc.Graph
@@ -35,6 +37,7 @@ class PreparedTopology:
     disabled: ngc.Eligibility
     q: float
     pool_heads: Mapping[str, int]
+    pool_budgets: Mapping[str, int]
     _edge_id_by_ref: Mapping[DirectedLink | SyntheticIngress, int] = field(
         repr=False, compare=False
     )
@@ -80,13 +83,29 @@ def cost_units(value, label):
     return cost
 
 
+def outgoing_units(network: Network, q: float) -> Counter[str]:
+    """Each node's outgoing directed capacity in units at q."""
+    outgoing: Counter[str] = Counter()
+    for link_id, link in network.links.items():
+        units = quantize(link.capacity, q, f"link.{link_id}.capacity")
+        outgoing[link.source] += units
+        outgoing[link.target] += units
+    return outgoing
+
+
 def compile_topology(
     network: Network,
     q: float,
     *,
     pools: Mapping[str, tuple[str, ...]] | None = None,
+    budgets: Mapping[str, int] | None = None,
 ) -> PreparedTopology:
-    """Compile a candidate graph, refusing directed capacity/cost sums out of range."""
+    """Compile a candidate graph, refusing directed capacity/cost sums out of range.
+
+    A pool's attachments carry its source's outgoing capacity, or its lossy
+    offer budget (units) when that is larger.
+    """
+    budgets = dict(budgets or {})
     validate_resolution(q)
     names = tuple(sorted(network.nodes))
     node_ids = {name: i for i, name in enumerate(names)}
@@ -96,7 +115,6 @@ def compile_topology(
     pool_members = dict(pools or {})
     heads = {name: len(names) + i for i, name in enumerate(sorted(pool_members))}
     sources, targets, capacities, costs, refs = [], [], [], [], []
-    outgoing = {name: 0 for name in names}
     for link_id, link in sorted(network.links.items()):
         if (
             link.id != link_id
@@ -118,7 +136,7 @@ def compile_topology(
             refs.append(
                 DirectedLink(link_id, cast(Literal["forward", "reverse"], direction))
             )
-            outgoing[source] += capacity
+    outgoing = outgoing_units(network, q) if heads else Counter()
     for pool_id, head in heads.items():
         members = tuple(sorted(set(pool_members[pool_id])))
         if not members:
@@ -128,7 +146,7 @@ def compile_topology(
                 raise ValueError(f"pool.{pool_id}: unknown source {source}")
             sources.append(head)
             targets.append(node_ids[source])
-            capacities.append(outgoing[source])
+            capacities.append(max(outgoing[source], budgets.get(pool_id, 0)))
             costs.append(1)
             refs.append(SyntheticIngress(pool_id, source))
     capsum, costsum = sum(capacities), sum(costs)
@@ -167,6 +185,7 @@ def compile_topology(
         disabled,
         q,
         MappingProxyType(heads),
+        MappingProxyType({p: b for p, b in budgets.items() if p in heads}),
         MappingProxyType(edge_ids),
     )
 

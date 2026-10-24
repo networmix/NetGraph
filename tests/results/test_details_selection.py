@@ -26,6 +26,7 @@ from ngraph import (
     place,
     prepare,
 )
+from tests.analysis.test_failure_states import ALL, e80, run
 from tests.results.test_analysis_wire import VALIDATOR, project
 
 COMPACT = {
@@ -119,6 +120,7 @@ def observed(kind, details, *, flags=False, costs=False):
                 outputs=outputs,
                 export_cost_distribution=costs,
                 export_details=details,
+                states=("converged",),
             ),
         )
     wire = project(value)["analysis"]
@@ -326,3 +328,25 @@ def test_query_details_requires_actual_boolean(bad):
     ]:
         with pytest.raises((TypeError, ValueError), match="export_details"):
             ctor(*args, export_details=bad)
+
+
+@pytest.mark.parametrize("details", [False, True])
+def test_every_placement_state_follows_the_detail_selection(details):
+    # Detailed rows carry the replay plan in every state, compact rows in none, and
+    # the schema refuses either swapped in any state.
+    wire = project(run(e80(), states=ALL, export_details=details))
+    VALIDATOR.validate(wire)
+    for state in ALL:
+        rows = wire["analysis"]["cases"][0]["states"][state]["rows"]
+        assert all(("plan" in row["result"]) is details for row in rows)
+        result = rows[0]["result"]
+        if details:
+            plan = result.pop("plan")
+        else:
+            result["plan"] = None
+        with pytest.raises(jsonschema.ValidationError):
+            VALIDATOR.validate(wire)
+        if details:
+            result["plan"] = plan
+        else:
+            del result["plan"]

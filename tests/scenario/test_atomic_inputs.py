@@ -99,9 +99,7 @@ def test_complete_named_route_weight_and_support_workflow_native_and_wire():
 @pytest.mark.parametrize(
     "key",
     [
-        "failure_states",
         "states",
-        "interaction",
         "counts",
         "up_to",
         "parallelism",

@@ -10,7 +10,6 @@ import pytest
 
 import ngraph.export as exporting
 from ngraph import (
-    FailureRequest,
     FlowPolicyPreset,
     MSDQuery,
     PlacementQuery,
@@ -423,52 +422,6 @@ def test_wcmp_scope_next_hop_and_group():
     )
     assert expected == 166
     assert value == 166
-
-
-def test_a_failure_request_on_a_programmed_set_is_refused():
-    from ngraph import Scenario
-    from tests.controller.test_declarations import FIXTURE
-
-    failures = "failures:\n  single:\n    modes:\n      - weight: 1\n        rules: [{scope: link, mode: choice, count: 1}]\n"
-    policy = Scenario.from_yaml(FIXTURE + failures).failure_policies["single"]
-    prep = stacked(S_DEMAND)
-    for request in (FailureRequest(policy, 0), FailureRequest(policy, 3)):
-        with pytest.raises(
-            ValueError,
-            match="placement.failures: demand set d is programmed by the WCMP controller",
-        ):
-            place(
-                prep, PlacementQuery(prep.demand_sets["d"], failures=request, workers=1)
-            )
-    # Controls: no request, and a request without a policy (the baseline alone).
-    assert delivered(prep)[0] == {"s|0": 30}
-    baseline = place(
-        prep,
-        PlacementQuery(
-            prep.demand_sets["d"], failures=FailureRequest(None, 3), workers=1
-        ),
-    )
-    assert [c.case.occurrences for c in baseline.cases] == [3]
-    text = (
-        FIXTURE.replace(
-            "demand_set: ebb, workers: 1}",
-            "demand_set: ebb, workers: 1, failure_policy: single, iterations: 0}",
-        )
-        + failures
-    )
-    with pytest.raises(
-        ValueError,
-        match="workflow.baseline.failure_policy: demand set 'ebb' is programmed",
-    ):
-        prepare(Scenario.from_yaml(text))
-    # The same YAML step without a failure policy runs.
-    from ngraph import run
-
-    result = run(prepare(Scenario.from_yaml(FIXTURE)))
-    assert (
-        result.steps[0].result.cases[0].states["converged"].rows[0].result.delivered
-        == 6400
-    )
 
 
 def test_precision_describes_programmed_rows_with_exact_downstream_amounts():

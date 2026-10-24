@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 51
+Modules auto-discovered: 52
 
 ---
 
@@ -333,16 +333,21 @@ Immutable CaseResult record.
 **Attributes:**
 
 - `case` (FailureCase)
-- `states` (Mapping[Literal['converged'], CaseState[RowT]])
+- `states` (Mapping[StateName, CaseState[RowT]])
 
 ### CaseState
 
-Immutable CaseState record.
+One state of a case: its rows and totals, or its forwarding failure.
+
+``dead_caps`` lists the dead root groups of a group-scope demand set in the
+converged and repair states; it is None elsewhere.
 
 **Attributes:**
 
 - `rows` (tuple[RowT, ...])
 - `totals` (PlacementTotals | None)
+- `failure` (ForwardingFailure | None)
+- `dead_caps` (tuple[DeadCap, ...] | None)
 
 ### CostPowerResult
 
@@ -354,6 +359,20 @@ Immutable CostPowerResult record.
 - `include_disabled` (bool)
 - `aggregation_level` (int)
 - `levels` (Mapping[int, tuple[HardwareRow, ...]])
+
+### DeadCap
+
+A declared root group with no live member in a case, and its fixed cap.
+
+Its traffic is dropped at its router; ``group`` is its index in the tree.
+
+**Attributes:**
+
+- `destination` (str)
+- `router` (str)
+- `forwarding_group` (str)
+- `group` (int)
+- `cap` (Fraction)
 
 ### DeliveredByPathCost
 
@@ -501,6 +520,15 @@ Immutable FailureTrace record.
 - `selections` (tuple[FailureSelection, ...])
 - `expanded_nodes` (tuple[str, ...])
 - `expanded_links` (tuple[str, ...])
+
+### ForwardingFailure
+
+Native lossy forwarding found no fixed point for this case and state.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['loss_iteration']]) = loss_iteration
+- `message` (str)
 
 ### HardwareRow
 
@@ -733,12 +761,12 @@ Immutable PoolHead record.
 
 ### PoolMetadata
 
-Immutable PoolMetadata record.
+A TE ingress pool; ``offer_limit_units`` is its prepared lossy offer budget.
 
 **Attributes:**
 
 - `head` (PoolHead)
-- `offer_limit_units` (ClassVar[Literal[0]]) = 0
+- `offer_limit_units` (int) = 0
 - `synthetic_ingress_cost` (ClassVar[Literal[1]]) = 1
 
 ### PrecisionMiss
@@ -2247,7 +2275,7 @@ Ordered native traffic placement with typed earlier-MSD scale selection.
 
 ### TrafficMatrixPlacement
 
-TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', failure_policy: str | None = None, iterations: int = 1, workers: int | Literal['auto'] = 'auto', failure_trace: bool = False, outputs: _netgraph_core.OutputOptions = <factory>, export_cost_distribution: bool = False, export_details: bool = False, alpha: float | None = None, alpha_from_step: str | None = None, *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
+TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: str = '', failure_policy: str | None = None, iterations: int = 1, workers: int | Literal['auto'] = 'auto', failure_trace: bool = False, outputs: _netgraph_core.OutputOptions = <factory>, export_cost_distribution: bool = False, export_details: bool = False, alpha: float | None = None, alpha_from_step: str | None = None, failure_states: tuple[typing.Literal['converged', 'stale', 'repair'], ...] = ('converged',), interaction: Literal['ordered', 'simultaneous'] = 'ordered', *, yaml_label: 'str | None' = None, derived_seed: 'int | None' = None)
 
 **Attributes:**
 
@@ -2265,6 +2293,8 @@ TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: 
 - `export_details` (bool) = False
 - `alpha` (Union)
 - `alpha_from_step` (Union)
+- `failure_states` (tuple) = ('converged',)
+- `interaction` (Literal) = ordered
 
 **Methods:**
 
@@ -2961,8 +2991,10 @@ The controller declaration resolved on one prepared graph.
 
 **Methods:**
 
+- `case_tables(self, topology, demands, mask, *, repair=False, context='')` - Each destination's table of a demand set in one failure case.
+- `check_failure_states(self, topology, demands, states, label)` - Refuse group converged and repair at a programmed router inside the domain.
 - `check_leaf(self, topology: 'PreparedTopology', endpoints: 'Endpoints', label)` - Refuse a programmed demand the declared domain cannot place.
-- `leaf_config(self, topology: 'PreparedTopology', table: 'DestinationTable', endpoints) -> 'ngc.FlowPolicyConfig'` - One demand's native program on the shared table, with its own endpoints.
+- `leaf_config(self, topology: 'PreparedTopology', table: 'DestinationTable', endpoints, black_holes: 'ngc.Eligibility | None' = None) -> 'ngc.FlowPolicyConfig'` - One demand's native program on the shared table, with its own endpoints.
 - `tables(self, topology, set_name, consumers)` - One table and its report per destination of a demand set.
 
 ### DestinationTable
@@ -2977,7 +3009,12 @@ programmed row that receives traffic is equal and positive).
 the largest relative error of its apportioned shares; for ``all_routers``,
 the one source vector's entry names the source with the largest error.
 ``source_weights`` holds each ``all_routers`` source's nominal physical
-demand and its integer weight.
+demand and its integer weight. ``leaves`` are the (sources, exact amount)
+the table was built from, so a failure case can build its own.
+
+A failure case's group table keeps a dead root group's members at their
+nominal shares: ``dropped`` are those members, where its forwarding drops
+the traffic (``holes`` excludes them), and ``dead_caps`` the dead groups.
 
 **Attributes:**
 
@@ -2988,6 +3025,10 @@ demand and its integer weight.
 - `programmed` (tuple[int, ...])
 - `approximations` (tuple[WeightApproximation, ...])
 - `source_weights` (tuple[tuple[int, Fraction, int], ...] | None)
+- `leaves` (tuple[tuple[tuple[int, ...], Fraction], ...]) = ()
+- `dropped` (tuple[int, ...]) = ()
+- `dead_caps` (tuple[DeadCap, ...]) = ()
+- `holes` (ngc.Eligibility | None)
 
 ### apportion(exact: 'Sequence[int]', total: 'int') -> 'list[int]'
 
@@ -3010,12 +3051,15 @@ positive member's relative error of its normalized share (empty when exact).
 
 Resolve the domain populations and check every forwarding group once.
 
-### destination_table(topology, setup, set_name, t, leaves, mask) -> 'tuple[DestinationTable, TableReport]'
+### destination_table(topology, setup, set_name, t, leaves, mask, *, nominal: 'DestinationTable | None' = None, repair=False, context='') -> 'tuple[DestinationTable, dict[int, list[int]]]'
 
-The one table toward t and its report, from the leaves' (sources, exact amount).
+The one table toward t and its members by router, from the leaves' (sources, exact amount).
 
 ``next_hop`` and ``group`` program the sources of positive leaves,
 downstream first; ``all_routers`` programs every router from one flow.
+A failure case's group table passes its ``nominal`` table: dead root
+groups keep their caps (`_group_shares`), and with ``repair`` the routes
+are the nominal ones that survive the mask instead of a new search.
 
 ### encode(topology, members, programmed, rows, weights) -> 'ngc.RouteAllocation'
 
@@ -3052,6 +3096,10 @@ The load one unit entering ``edge`` puts on every edge, and what it carries alon
 ``rows`` are the table's rows so far: finalized programmed rows, and every
 member at other routers. A unit that meets a zero-capacity edge, or stops
 at a router other than t with no member, carries nothing alone.
+
+### surviving_dag(graph, dag, mask, t) -> 'ngc.PredecessorDAG'
+
+The DAG's edges the mask keeps that still lead to t (native repair's pruning).
 
 ### table_report(topology: 'PreparedTopology', table: 'DestinationTable', members) -> 'TableReport'
 
@@ -3115,6 +3163,12 @@ No documentation available.
 ### materialize_config(topology: 'PreparedTopology', named: 'NamedRoutes', endpoints: 'Endpoints', policy) -> 'ngc.FlowPolicyConfig'
 
 No documentation available.
+
+### pool_budgets(scaled, q) -> 'dict[str, int]'
+
+Each pool leaf's largest request in units over the (plan, alpha) pairs.
+
+The run's own expansion: the parent scaled and quantized once, then split.
 
 ### pool_requirements(plans: 'Sequence[_Expansion]') -> 'dict[str, tuple[str, ...]]'
 
@@ -3260,7 +3314,7 @@ Ordered native policy actions and explicit ledger ownership.
 
 ### PlacementQuery
 
-PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, alpha_from_step: 'str | None' = None)
+PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'FailureRequest | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_cost_distribution: 'bool' = False, export_details: 'bool' = False, alpha_from_step: 'str | None' = None, states: 'tuple[StateName, ...]' = ('converged',), interaction: "Literal['ordered', 'simultaneous']" = 'ordered')
 
 **Attributes:**
 
@@ -3272,14 +3326,19 @@ PlacementQuery(demands: 'ResolvedDemandSet', alpha: 'float' = 1.0, failures: 'Fa
 - `export_cost_distribution` (bool) = False
 - `export_details` (bool) = False
 - `alpha_from_step` (str | None)
+- `states` (tuple[StateName, ...]) = ('converged',)
+- `interaction` (Literal['ordered', 'simultaneous']) = ordered
 
 ### place(prepared: 'PreparedScenario', query: 'PlacementQuery') -> 'PlacementAnalysis'
 
 No documentation available.
 
-### policy_roster(topology: 'PreparedTopology', demands: 'Sequence[ResolvedDemand]', mask: 'ngc.Eligibility') -> 'tuple[ngc.FlowLedger, tuple[ngc.FlowPolicy, ...]]'
+### policy_roster(topology: 'PreparedTopology', demands: 'Sequence[ResolvedDemand]', mask: 'ngc.Eligibility', entries=None) -> 'tuple[ngc.FlowLedger, tuple[ngc.FlowPolicy, ...]]'
 
 Create one private ledger and stable policy identities for a case or series.
+
+``entries`` give each demand its own (config, eligibility, request);
+otherwise every demand uses its declared config under ``mask``.
 
 ### remove_policies(policies: 'Sequence[ngc.FlowPolicy]') -> 'None'
 
@@ -3288,6 +3347,10 @@ Release every owner explicitly; destruction is not a cleanup operation.
 ### replace_matrix(ledger: 'ngc.FlowLedger', policies: 'Sequence[ngc.FlowPolicy]', requests: 'Sequence[int]', outputs: 'ngc.OutputOptions | None' = None) -> 'tuple[ngc.PlacementResult, ...]'
 
 Remove the whole previous matrix, then submit full Replace requests once.
+
+### state_names(value, label) -> 'tuple[StateName, ...]'
+
+Requested failure states: nonempty and unique, held in canonical order.
 
 ---
 
@@ -3326,13 +3389,20 @@ Reuse exact prepared atoms; scaled or query-local atoms remain local.
 
 The input observations shared by cases of one fixed-alpha question.
 
-### placement_miss(prepared: 'PreparedScenario', demands, owners, results, records, mask, alpha, location, observations) -> 'PrecisionMiss | None'
+### placement_miss(prepared: 'PreparedScenario', demands, owners, results, records, mask, alpha, location, observations, tables=None, ordered=True) -> 'PrecisionMiss | None'
 
 The missed local targets of one placement on the fixed prepared q.
 
-### placement_splits(topology: 'PreparedTopology', named: 'NamedRoutes', demands, owners, results, record_sets, mask, alpha, precision)
+``tables`` are a failure case's controller tables by destination.
+
+### placement_splits(topology: 'PreparedTopology', named: 'NamedRoutes', demands, owners, results, record_sets, mask, alpha, precision, tables=None, ordered=True)
 
 Describe actual native records; never rerun a placement to obtain a report.
+
+A row is described by its demand's declared model, from the participant's
+records. A controlled row is described from its table: the set's nominal
+one, or the case's own (``tables``, by destination). Under a SIMULTANEOUS
+list (not ``ordered``) every participant was prepared on one common view.
 
 ### propagate(graph, rows, injections, *, reached_only=False)
 
@@ -3418,6 +3488,9 @@ whose combined sources are a pool: preparation gives them a private head.
 - `numerical` (bool) = False
 - `demand_set` (str | None)
 - `failure_policy` (str | None)
+- `states` (tuple[str, ...]) = ()
+- `interaction` (str) = ordered
+- `alpha` (float | None) = 1.0
 - `alpha_from_step` (str | None)
 - `provides_alpha` (bool) = False
 - `capacity` (Callable[[PreparedScenario], CapacityQuery] | None)
@@ -3509,6 +3582,53 @@ No documentation available.
 
 ---
 
+## ngraph.analysis.states
+
+What each failure state forwards: one case's native demand configs per state.
+
+``converged`` evaluates the declared demands on the failed topology (a WCMP
+controller set on the case's own tables); ``stale`` forwards each demand's
+baseline program unchanged, LOSSY, at its baseline admitted total, with the
+case's failures as black holes; ``repair`` forwards the baseline program under
+the failure mask (native repair: survivors re-split, no new search) at the
+declared request, except that declared group caps get a table recompiled from
+the surviving routes. Nothing here forwards traffic.
+
+### Baseline
+
+Each demand's baseline program and admitted total, by demand id.
+
+**Attributes:**
+
+- `programs` (Mapping[str, ngc.ForwardingProgram])
+- `admitted` (Mapping[str, int])
+
+**Methods:**
+
+- `of(state: 'CaseState') -> 'Baseline'`
+
+### forwarding_failure(exc: 'ValueError') -> 'ForwardingFailure | None'
+
+The case outcome a native error stands for, or None for any other error.
+
+### participants(topology, setup, demands, controlled, case: 'FailureCase', state, requests, baseline, tables)
+
+Per demand, in demand order: (native config, policy eligibility, request).
+
+``controlled`` holds the demand ids the WCMP controller programs;
+``tables`` the case's tables by destination (None: the demands' own
+configs, as in the baseline case).
+
+### simultaneous_role(routing) -> 'str'
+
+How a model joins a SIMULTANEOUS list (CONTRACT 11.1).
+
+``tunnels`` (T1, T2) are set up first and forwarded; a live
+``controller`` cannot be LOSSY, so its prepared program is imported;
+every other model is replaced directly on the common view.
+
+---
+
 ## ngraph.analysis.topology
 
 Compile named physical links and finite TE ingresses into one native graph.
@@ -3534,7 +3654,8 @@ Declared routes, supports and weights, and their native forms on one graph.
 
 One graph with network labels; native edge arrays remain authoritative.
 
-``pool_heads`` maps each finite TE ingress pool to its synthetic head node.
+``pool_heads`` maps each finite TE ingress pool to its synthetic head node;
+``pool_budgets`` holds a pool's lossy offer budget in units, when it has one.
 
 **Attributes:**
 
@@ -3546,11 +3667,15 @@ One graph with network labels; native edge arrays remain authoritative.
 - `disabled` (ngc.Eligibility)
 - `q` (float)
 - `pool_heads` (Mapping[str, int])
+- `pool_budgets` (Mapping[str, int])
 - `_edge_id_by_ref` (Mapping[DirectedLink | SyntheticIngress, int])
 
-### compile_topology(network: 'Network', q: 'float', *, pools: 'Mapping[str, tuple[str, ...]] | None' = None) -> 'PreparedTopology'
+### compile_topology(network: 'Network', q: 'float', *, pools: 'Mapping[str, tuple[str, ...]] | None' = None, budgets: 'Mapping[str, int] | None' = None) -> 'PreparedTopology'
 
 Compile a candidate graph, refusing directed capacity/cost sums out of range.
+
+A pool's attachments carry its source's outgoing capacity, or its lossy
+offer budget (units) when that is larger.
 
 ### cost_units(value, label)
 
@@ -3559,6 +3684,10 @@ Positive integral costs keep their value; no offset or rounding.
 ### eligibility(topology: 'PreparedTopology', excluded_nodes=(), excluded_links=(), excluded_edges=()) -> 'ngc.Eligibility'
 
 Intersect physical failures with declared disabled nodes and links.
+
+### outgoing_units(network: 'Network', q: 'float') -> 'Counter[str]'
+
+Each node's outgoing directed capacity in units at q.
 
 ---
 
@@ -3589,14 +3718,16 @@ One physical unit and the local relative precision target.
 - `resolution` (float | Literal['auto']) = auto
 - `precision` (float) = 0.001
 
-### choose_resolution(settings: 'UnitsSettings', inputs: 'Mapping[str, tuple[_InputKind, float]]', coefficients: 'Mapping[str, int]', split_bounds: 'Iterable[Fraction]', candidate: 'Callable[[float], tuple[Candidate, bool]]') -> 'tuple[Candidate, RangeConstraint | None]'
+### choose_resolution(settings: 'UnitsSettings', inputs: 'Mapping[str, tuple[_InputKind, float]]', coefficients: 'Mapping[str, int]', split_bounds: 'Iterable[Fraction]', candidate: 'Callable[[float], tuple[Candidate, bool]]', extra: 'Callable[[float], int] | None' = None) -> 'tuple[Candidate, RangeConstraint | None]'
 
 Choose q by the fixed recipe and return the chosen candidate.
 
 ``coefficients`` counts each link capacity's directed copies in the
 augmented graph; ``split_bounds`` are the declared expansion bounds, which
 like the input bounds do not depend on q. ``candidate(q)`` prepares one
-resolution and says whether it meets the target. Automatic choice takes the
+resolution and says whether it meets the target; ``extra(q)`` adds the
+capacity that pool offer budgets add above their sources' outgoing
+capacity. Automatic choice takes the
 coarsest range-valid q within the declared bounds that meets the target,
 else the finest range-valid one. The second value is the range failure of
 the next finer q, which the caller reports as binding.

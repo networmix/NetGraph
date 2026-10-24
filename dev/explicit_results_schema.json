@@ -802,7 +802,23 @@
           }
         },
         "totals": {
-          "$ref": "#/$defs/PlacementTotalsJSON"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlacementTotalsJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "failure": {
+          "$ref": "#/$defs/ForwardingFailureJSON"
+        },
+        "dead_caps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeadCapJSON"
+          }
         }
       },
       "required": [
@@ -842,12 +858,17 @@
       "properties": {
         "converged": {
           "$ref": "#/$defs/PlacementStateJSON"
+        },
+        "stale": {
+          "$ref": "#/$defs/PlacementStateJSON"
+        },
+        "repair": {
+          "$ref": "#/$defs/PlacementStateJSON"
         }
       },
-      "required": [
-        "converged"
-      ],
-      "additionalProperties": false
+      "required": [],
+      "additionalProperties": false,
+      "minProperties": 1
     },
     "CapacityStatesJSON": {
       "type": "object",
@@ -1284,6 +1305,168 @@
                               }
                             }
                           }
+                        },
+                        "stale": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "not": {
+                                        "anyOf": [
+                                          {
+                                            "required": [
+                                              "call_delivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_undelivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "delivery_delta_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_source_drop_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "admitted_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_source"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_tunnel"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "plan"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "repair": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "not": {
+                                        "anyOf": [
+                                          {
+                                            "required": [
+                                              "call_delivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_undelivered_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "delivery_delta_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "call_source_drop_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "admitted_units"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "edge_drops"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_source"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "by_tunnel"
+                                            ]
+                                          },
+                                          {
+                                            "required": [
+                                              "plan"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
                         }
                       }
                     }
@@ -1319,6 +1502,84 @@
                     "states": {
                       "properties": {
                         "converged": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "required": [
+                                        "call_delivered_units",
+                                        "call_undelivered_units",
+                                        "delivery_delta_units",
+                                        "call_edge_drops",
+                                        "call_source_drop_units",
+                                        "admitted_units",
+                                        "edge_drops",
+                                        "by_source",
+                                        "by_tunnel",
+                                        "plan"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "stale": {
+                          "properties": {
+                            "rows": {
+                              "items": {
+                                "if": {
+                                  "properties": {
+                                    "kind": {
+                                      "enum": [
+                                        "capacity",
+                                        "placement"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "kind"
+                                  ]
+                                },
+                                "then": {
+                                  "properties": {
+                                    "result": {
+                                      "required": [
+                                        "call_delivered_units",
+                                        "call_undelivered_units",
+                                        "delivery_delta_units",
+                                        "call_edge_drops",
+                                        "call_source_drop_units",
+                                        "admitted_units",
+                                        "edge_drops",
+                                        "by_source",
+                                        "by_tunnel",
+                                        "plan"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "repair": {
                           "properties": {
                             "rows": {
                               "items": {
@@ -3166,6 +3427,24 @@
               "type": "null"
             }
           ]
+        },
+        "states": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "converged",
+              "stale",
+              "repair"
+            ]
+          }
+        },
+        "interaction": {
+          "enum": [
+            "ordered",
+            "simultaneous"
+          ]
         }
       },
       "required": [
@@ -3174,7 +3453,9 @@
         "demands",
         "alpha",
         "alpha_source",
-        "failures"
+        "failures",
+        "states",
+        "interaction"
       ],
       "additionalProperties": false
     },

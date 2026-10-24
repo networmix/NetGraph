@@ -253,13 +253,16 @@ def choose_resolution(
     coefficients: Mapping[str, int],
     split_bounds: Iterable[Fraction],
     candidate: Callable[[float], tuple[Candidate, bool]],
+    extra: Callable[[float], int] | None = None,
 ) -> tuple[Candidate, RangeConstraint | None]:
     """Choose q by the fixed recipe and return the chosen candidate.
 
     ``coefficients`` counts each link capacity's directed copies in the
     augmented graph; ``split_bounds`` are the declared expansion bounds, which
     like the input bounds do not depend on q. ``candidate(q)`` prepares one
-    resolution and says whether it meets the target. Automatic choice takes the
+    resolution and says whether it meets the target; ``extra(q)`` adds the
+    capacity that pool offer budgets add above their sources' outgoing
+    capacity. Automatic choice takes the
     coarsest range-valid q within the declared bounds that meets the target,
     else the finest range-valid one. The second value is the range failure of
     the next finer q, which the caller reports as binding.
@@ -286,8 +289,11 @@ def choose_resolution(
                 label: quantize(value, q, label)
                 for label, (_, value) in sorted(inputs.items())
             }
+            extra_units = extra(q) if extra else 0
         except UnitRangeError as exc:
-            exact = Fraction(float(inputs[exc.label][1])) / Fraction(q)
+            if exc.reason == "scaled_nonfinite":
+                raise
+            exact = Fraction(float.fromhex(exc.binary64_hex)) / Fraction(q)
             unit_estimate = (2 * exact.numerator + exact.denominator) // (
                 2 * exact.denominator
             )
@@ -295,7 +301,7 @@ def choose_resolution(
                 "amount", exc.label, q, unit_estimate, LIMIT, False
             )
             return False
-        capsum = sum(
+        capsum = extra_units + sum(
             units[f"link.{link_id}.capacity"] * multiplier
             for link_id, multiplier in coefficients.items()
         )

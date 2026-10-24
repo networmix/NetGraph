@@ -46,7 +46,7 @@ Capacity uses native scalar or pair evaluators. Directed sensitivity uses the ev
 
 One membership resolver supplies editable network mutations and prepared failure exclusions. It keeps node and link namespaces separate, traverses unregistered descendants and refuses cycles. Identical inline group declarations share a resolution; conflicts name both parent paths. A registered top-level declaration is authoritative.
 
-Sampling consumes rules in declaration order over sorted entity identifiers. Random rules use per-entity Bernoulli. Expanded physical patterns are deduplicated before execution, preserving multiplicities and optional first traces. Baseline presence and sampled multiplicity are separate. Each case reports the converged state through a common states mapping.
+Sampling consumes rules in declaration order over sorted entity identifiers. Random rules use per-entity Bernoulli. Expanded physical patterns are deduplicated before execution, preserving multiplicities and optional first traces. Baseline presence and sampled multiplicity are separate. Each case reports its states through a common states mapping: capacity its converged state, placement its requested failure states (converged by default, stale and repair on request), each on its own ledger; stale and repair replay the baseline case's programs.
 
 Independent cases can have private ledgers on worker threads. Native pair evaluators can use native workers. Drawing and output order do not depend on worker completion. Failed work does not run through an alternative engine.
 

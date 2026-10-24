@@ -88,7 +88,7 @@ jsonschema.validate(data, schema)
 - `units` - Automatic or manual quantum and precision target
 - `routing`, `wcmp_controller`, `forwarding_groups` - The WCMP controller's domain, scope and group trees
 
-Unknown input keys are refused with their location. Stale/repair states, simultaneous forwarding and tunnel-count queries are not accepted inputs. Native tunnel-count settings inside a supported flow model remain valid.
+Unknown input keys are refused with their location. Tunnel-count queries are not accepted inputs. Native tunnel-count settings inside a supported flow model remain valid.
 
 ## Schema Maintenance
 

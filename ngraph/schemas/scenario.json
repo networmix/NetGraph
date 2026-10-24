@@ -1529,6 +1529,26 @@
                 "alpha_from_step": {
                   "type": "string",
                   "minLength": 1
+                },
+                "failure_states": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "converged",
+                      "stale",
+                      "repair"
+                    ]
+                  },
+                  "description": "Failure states each case reports: converged (demands computed again on the failed network) by default; stale (the unfailed network's programs forwarded unchanged) and repair (surviving original routes) only when listed."
+                },
+                "interaction": {
+                  "enum": [
+                    "ordered",
+                    "simultaneous"
+                  ],
+                  "description": "ordered (default) places demands in priority order; simultaneous forwards every demand's fixed program at once, LOSSY, sharing losses on common links."
                 }
               },
               "required": [

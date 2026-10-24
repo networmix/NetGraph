@@ -75,11 +75,23 @@ workflow:
     alpha: 1
     failure_policy: random_link
     iterations: 100
+    failure_states: [converged, stale]
+    interaction: ordered
     workers: auto
     outputs: {cost_distribution: true}
 ```
 
-Places the complete demand matrix in priority/declaration order through native policies. The result includes stable row IDs, endpoint labels, exact reference requests and totals, and discarded-share accounting. Every case uses one private ledger and reports its converged state. Failures change eligibility; they do not remove the declared volume of a failed endpoint.
+Places the complete demand matrix in priority/declaration order through native policies. The result includes stable row IDs, endpoint labels, exact reference requests and totals, and discarded-share accounting. Failures change eligibility; they do not remove the declared volume of a failed endpoint.
+
+Each case reports the requested `failure_states`, each computed on its own ledger (default `[converged]`; `stale` and `repair` only when listed):
+
+- `converged`: the demands computed again on the failed network. Controller tables are rebuilt for the case; declared forwarding-group shares stay fixed caps. A root group with no live member keeps its cap, dropped at its router, and is listed in the state's `dead_caps`; a case whose program would forward such a share differently is refused with the group, case and state.
+- `stale`: each demand's program from the case without failures, forwarded unchanged and lossy at that baseline's admitted total; traffic that reaches a failed node or link is lost there.
+- `repair`: the same programs with failed routes removed and survivors re-split (no new route search), at the declared request and admission; group shares stay caps.
+
+`reference_request_units` stays the scaled request in every state; the native `requested` and `offered` describe each call. Cost reports and precision misses come from converged rows only. For an explicit-route demand alone, converged and repair forward the same program. A lossy forwarding that finds no fixed point reports that case and state as `failure` (no rows); in the baseline it stops the step when stale or repair needs its programs. Group scope refuses converged and repair under a failure policy when it programs a router inside the IGP domain.
+
+`interaction: simultaneous` forwards every demand at once in one native list, sharing losses on common links, as a lossy question on fixed programs: each model that can be lossy forwards a lossy copy of itself (tunnel models are set up first and keep their reservations), and a live controller (`TE_MAXFLOW_UNLIM`, `SHORTEST_PATHS_MAXFLOW`) is computed, then its program forwarded lossy. Its lossy copy is created after the other participants, in every state, so it loses one-unit ties to them. Rows are not comparable with the default `ordered` rows. A TE ingress pool in a simultaneous step gets a lossy offer budget, its largest known request, reported as the row's `pool.offer_limit_units`. Budgets are prepared once for the scenario: every placement step on that preparation reports them, and they count in the choice of `q`. A simultaneous step that takes its alpha from an MSD step cannot have pool demands.
 
 Use either `alpha` or `alpha_from_step`, never both. Omitting both uses 1. An earlier MSD step supplies its actual largest tested feasible factor; missing, forward, wrong-type and no-feasible dependencies refuse. The consuming step records the producer name and effective alpha.
 

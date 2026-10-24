@@ -292,6 +292,8 @@ def samples():
                 "alpha": {"value": 1.5, "numerator": 3, "denominator": 2},
                 "alpha_source": {"kind": "query", "step": None},
                 "failures": None,
+                "states": ["converged"],
+                "interaction": "ordered",
             },
         )
     )
@@ -382,6 +384,8 @@ def samples():
                 "alpha": {"value": 1.0, "numerator": 1, "denominator": 1},
                 "alpha_source": {"kind": "query", "step": None},
                 "failures": None,
+                "states": ["converged"],
+                "interaction": "ordered",
             },
         )
     )

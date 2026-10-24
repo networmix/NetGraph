@@ -452,8 +452,16 @@ def placement_splits(
     mask,
     alpha,
     precision,
+    tables=None,
+    ordered=True,
 ):
-    """Describe actual native records; never rerun a placement to obtain a report."""
+    """Describe actual native records; never rerun a placement to obtain a report.
+
+    A row is described by its demand's declared model, from the participant's
+    records. A controlled row is described from its table: the set's nominal
+    one, or the case's own (``tables``, by destination). Under a SIMULTANEOUS
+    list (not ``ordered``) every participant was prepared on one common view.
+    """
     expansion, incoming = expansion_bounds(
         demands.expansion_template, topology.q, precision, alpha
     )
@@ -465,20 +473,24 @@ def placement_splits(
         if residual_weights(named, demands.expansion_template)
         else None
     )
-    for demand, policy, result, records in zip(
-        demands.demands, owners, results, record_sets, strict=True
+    for demand, result, records in zip(
+        demands.demands, results, record_sets, strict=True
     ):
         facts = _Placed(topology, named, demand, result, records, mask, before)
         local, opaque = _model_splits(
             topology,
             named,
-            policy.config.routing,
+            demand.config.routing,
             parents[demand.base_id].policy,
             f"demand.{demand.id}",
             incoming[demand.id],
             facts,
             precision,
-            demands.controller_table(demand.endpoints.destinations[0])
+            (
+                tables[demand.endpoints.destinations[0]]
+                if tables is not None
+                else demands.controller_table(demand.endpoints.destinations[0])
+            )
             if controlled(demands.controller, parents[demand.base_id].policy)
             else None,
         )
@@ -486,7 +498,7 @@ def placement_splits(
         extra.extend(opaque)
         # Service and reservation baselines are distinct; only carried flows
         # change the next ordered policy's RESIDUAL_SNAPSHOT weights.
-        if before is not None:
+        if before is not None and ordered:
             for record in records:
                 for edge, units in record.edge_flows:
                     before[edge] -= units
@@ -807,8 +819,13 @@ def placement_miss(
     alpha,
     location,
     observations,
+    tables=None,
+    ordered=True,
 ) -> PrecisionMiss | None:
-    """The missed local targets of one placement on the fixed prepared q."""
+    """The missed local targets of one placement on the fixed prepared q.
+
+    ``tables`` are a failure case's controller tables by destination.
+    """
     samples, constraints = observations
     splits, opaque = placement_splits(
         prepared.topology,
@@ -820,6 +837,8 @@ def placement_miss(
         mask,
         alpha,
         prepared.units_report.precision,
+        tables,
+        ordered,
     )
     return precision_miss(location, samples, (*constraints, *splits, *opaque))
 

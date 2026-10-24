@@ -164,7 +164,7 @@ jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}'
 ```
 
 - **BuildGraph** returns node-link data under `result.graph`.
-- **MaxFlow** and **TrafficMatrixPlacement** return `result.cases`, baseline first. Each case contains physical pattern metadata, sampled `occurrences` and `states.converged` rows; placement also has exact totals and expansion accounting.
+- **MaxFlow** and **TrafficMatrixPlacement** return `result.cases`, baseline first. Each case contains physical pattern metadata, sampled `occurrences` and a `states` mapping: `converged` rows for capacity, the requested failure states for placement, which also has exact totals and expansion accounting.
 - **MaximumSupportedDemand** returns `alpha_feasible`, probe history, search status and any proved upper certificate.
 - **NetworkStats** returns its physical counts/statistics directly under `result`.
 

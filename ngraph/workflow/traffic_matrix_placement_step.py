@@ -1,13 +1,14 @@
 """Ordered native traffic placement with typed earlier-MSD scale selection."""
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 import netgraph_core as ngc
 
 from ngraph.analysis.failures import FailureRequest, Workers, resolve_workers
-from ngraph.analysis.placement import PlacementQuery, place
+from ngraph.analysis.placement import PlacementQuery, place, state_names
 from ngraph.analysis.preparation import StepNeeds
-from ngraph.results import MSDAnalysis, StepContext, StepOutput
+from ngraph.results import MSDAnalysis, StateName, StepContext, StepOutput
 from ngraph.utils.values import own_scalars, physical, shared_copy
 from ngraph.workflow.base import (
     WorkflowStep,
@@ -30,9 +31,24 @@ class TrafficMatrixPlacement(WorkflowStep):
     export_details: bool = False
     alpha: float | None = None
     alpha_from_step: str | None = None
+    failure_states: tuple[StateName, ...] = ("converged",)
+    interaction: Literal["ordered", "simultaneous"] = "ordered"
 
     def __post_init__(self):
         super().__post_init__()
+        object.__setattr__(
+            self,
+            "failure_states",
+            state_names(
+                self.failure_states,
+                f"workflow.{self.name or 'TrafficMatrixPlacement'}.failure_states",
+            ),
+        )
+        if self.interaction not in ("ordered", "simultaneous"):
+            raise ValueError(
+                f"workflow.{self.name or 'TrafficMatrixPlacement'}.interaction: "
+                f"expected ordered or simultaneous, got {self.interaction!r}"
+            )
         if not isinstance(self.export_details, bool):
             raise TypeError("export_details: expected bool")
         if not isinstance(self.demand_set, str) or not self.demand_set:
@@ -73,6 +89,7 @@ class TrafficMatrixPlacement(WorkflowStep):
                 "export_cost_distribution",
                 "export_details",
                 "alpha_from_step",
+                "interaction",
             ),
         )
 
@@ -88,6 +105,9 @@ class TrafficMatrixPlacement(WorkflowStep):
             demand_set=self.demand_set,
             failure_policy=self.failure_policy,
             alpha_from_step=self.alpha_from_step,
+            states=self.failure_states,
+            interaction=self.interaction,
+            alpha=None if self.alpha_from_step is not None else (self.alpha or 1.0),
         )
 
     def run(self, context: StepContext) -> StepOutput:
@@ -117,6 +137,8 @@ class TrafficMatrixPlacement(WorkflowStep):
                 self.export_cost_distribution,
                 self.export_details,
                 self.alpha_from_step,
+                self.failure_states,
+                self.interaction,
             ),
         )
         return StepOutput(value.query, value)

@@ -83,6 +83,7 @@ from ngraph import (
 )
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
+from ngraph.results import DeadCap, ForwardingFailure
 
 
 def minimal(network: Network, workflow: Sequence[WorkflowStep]) -> RunResult:
@@ -424,8 +425,9 @@ def read_placement(value: PlacementAnalysis) -> None:
         assert reference >= 0
         for row in state.rows:
             if row.pool is not None:
-                zero_budget: Literal[0] = row.pool.offer_limit_units
-                assert zero_budget == 0
+                # An ordered workflow prepares no lossy pool budget.
+                budget: int = row.pool.offer_limit_units
+                assert budget == 0
             if row.cost_distribution is not None:
                 read_cost(row.cost_distribution)
 
@@ -511,7 +513,11 @@ def read_run(value: RunResult) -> None:
             for case in step.result.cases:
                 state: CaseState[PlacementRow] = case.states["converged"]
                 assert state.totals is not None
-                assert tuple(case.states) == ("converged",)
+                assert tuple(case.states) == ("converged", "stale")
+                stale: CaseState[PlacementRow] = case.states["stale"]
+                failure: ForwardingFailure | None = stale.failure
+                caps: tuple[DeadCap, ...] | None = stale.dead_caps
+                assert failure is None and caps is None
         elif isinstance(step.result, MSDAnalysis):
             read_msd(step.result)
         elif isinstance(

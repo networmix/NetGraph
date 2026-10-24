@@ -247,6 +247,24 @@ def pool_requirements(plans: Sequence[_Expansion]) -> dict[str, tuple[str, ...]]
     return pools
 
 
+def pool_budgets(scaled, q) -> dict[str, int]:
+    """Each pool leaf's largest request in units over the (plan, alpha) pairs.
+
+    The run's own expansion: the parent scaled and quantized once, then split.
+    """
+    budgets: dict[str, int] = {}
+    for plan, alpha in scaled:
+        if not pooled(plan.spec.mode, plan.spec.policy):
+            continue
+        total = scaled_units(
+            plan.spec.volume, alpha, q, f"demand.{plan.base_id}.volume"
+        )
+        for leaf, units in expand_units(plan.root, total):
+            if leaf.endpoints is not None:
+                budgets[leaf.id] = max(budgets.get(leaf.id, 0), units)
+    return budgets
+
+
 def materialize_config(
     topology: PreparedTopology,
     named: NamedRoutes,
@@ -471,7 +489,10 @@ def bind_plans(
             first_config = first_config or config
             pool = None
             if leaf.id in topology.pool_heads:
-                pool = PoolMetadata(PoolHead(leaf.id, leaf.endpoints.sources))
+                pool = PoolMetadata(
+                    PoolHead(leaf.id, leaf.endpoints.sources),
+                    topology.pool_budgets.get(leaf.id, 0),
+                )
             resolved.append(
                 ResolvedDemand(
                     leaf.id,

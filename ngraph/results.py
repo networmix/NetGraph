@@ -168,8 +168,10 @@ class PoolHead(_ResultRecord):
 
 @_record
 class PoolMetadata(_ResultRecord):
+    """A TE ingress pool; ``offer_limit_units`` is its prepared lossy offer budget."""
+
     head: PoolHead
-    offer_limit_units: ClassVar[Literal[0]] = 0
+    offer_limit_units: int = 0
     synthetic_ingress_cost: ClassVar[Literal[1]] = 1
 
 
@@ -568,17 +570,51 @@ class PlacementTotals(_ResultRecord):
 
 RowT = TypeVar("RowT")
 
+StateName: TypeAlias = Literal["converged", "stale", "repair"]
+# The order in which a case computes and reports its states.
+STATE_ORDER: tuple[StateName, ...] = ("converged", "stale", "repair")
+
+
+@_record
+class DeadCap(_ResultRecord):
+    """A declared root group with no live member in a case, and its fixed cap.
+
+    Its traffic is dropped at its router; ``group`` is its index in the tree.
+    """
+
+    destination: str
+    router: str
+    forwarding_group: str
+    group: int
+    cap: Fraction
+
+
+@_record
+class ForwardingFailure(_ResultRecord):
+    """Native lossy forwarding found no fixed point for this case and state."""
+
+    kind: ClassVar[Literal["loss_iteration"]] = "loss_iteration"
+    message: str
+
 
 @_record
 class CaseState(_ResultRecord, Generic[RowT]):
+    """One state of a case: its rows and totals, or its forwarding failure.
+
+    ``dead_caps`` lists the dead root groups of a group-scope demand set in the
+    converged and repair states; it is None elsewhere.
+    """
+
     rows: tuple[RowT, ...]
     totals: PlacementTotals | None
+    failure: ForwardingFailure | None = None
+    dead_caps: tuple[DeadCap, ...] | None = None
 
 
 @_record
 class CaseResult(_ResultRecord, Generic[RowT]):
     case: FailureCase
-    states: Mapping[Literal["converged"], CaseState[RowT]]
+    states: Mapping[StateName, CaseState[RowT]]
 
 
 class _PreparedResult(_ResultRecord):

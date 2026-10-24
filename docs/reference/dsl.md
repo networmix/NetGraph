@@ -1278,8 +1278,8 @@ relative error: one entry per router (`controller.<set>.<t>.router.<r>`) and, un
 vector, naming the source with the largest error (`controller.<set>.<t>.source.<s>`). Source weights are the volumes'
 exact binary values reduced to integers, so volumes 1000 and 0.1 (whose binary value has a 2^55 denominator) are
 apportioned and reported, while 1e6 and 1.0 stay exact. Placement and MSD results report the tables under
-`controller`; a router not listed there splits by ECMP. A controlled demand set
-takes no failure policy: its tables are nominal.
+`controller`; a router not listed there splits by ECMP. These are the nominal tables: a failure case forwards on
+its own tables, which are not exported (see TrafficMatrixPlacement failure states in the workflow reference).
 
 ### Selector Fields
 
