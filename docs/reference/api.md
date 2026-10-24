@@ -72,10 +72,37 @@ With `routing=RoutingDomain(...)`, `wcmp_controller=WCMPController(scope)` and `
 nested `GroupChild(share, children=...)`; shares are exact), every `SHORTEST_PATHS_WCMP` demand forwards on the
 controller's table toward its destination. `ResolvedDemandSet.controller` holds the tables as `TableReport` records
 (programmed routers and their member weights, and for `all_routers` each source's nominal volume and weight).
-On such a set `place` refuses a `FailureRequest` that names a failure policy (one without a policy is the baseline
-alone), and `capacity` refuses `SHORTEST_PATHS_WCMP` as its declaration.
+On such a set `place` accepts failure policies: in `converged` each failure case forwards on tables computed again
+on the failed network, in `stale` on the tables without failures (traffic that reaches a failed element is lost
+there), and in `repair` on the surviving original routes; a dead group's cap is reported under `dead_caps`.
+`capacity` refuses `SHORTEST_PATHS_WCMP` as its declaration.
 
-Read `alpha_feasible` as the largest tested feasible factor, or `None` when none was found. `history` contains every actual probe. `search_status` is one of `feasible`, `none_feasible`, `range`, `stagnation`, `limit`, `trivial`; `stop_reason` explains the termination. An upper certificate exists only for a proved downward-closed class. Multiple controllers and tunnel redesigns are conservatively unproved. Python callers may request `export_probe_rows=True`; YAML has no such input.
+Read `alpha_feasible` as the largest tested feasible factor, or `None` when none was found. `history` contains every actual probe. `search_status` is one of `feasible`, `none_feasible`, `range`, `stagnation`, `limit`, `trivial`; `stop_reason` explains the termination. An upper certificate exists only for a proved downward-closed class. Multiple controllers and tunnel redesigns are conservatively unproved. A demand set the WCMP controller programs forwards on fixed tables, built once at preparation, and is a fixed program; one centralized-TE demand without a tunnel count (weighted sources included), or one optimized shortest-paths demand with a static route choice (`FEWER_HOPS` or `HIGHER_CAPACITY`), alone in its set, is a single controller; a TE ingress pool is a tunnel redesign. Python callers may request `export_probe_rows=True`; YAML has no such input.
+
+## Tunnel counts
+
+```python
+from ngraph import DemandSet, DemandSpec, TunnelCountQuery, tunnel_counts
+
+te = ngc.FlowPolicyConfig(routing=ngc.CentralizedTE(
+    source_allocation=ngc.SourceAllocation.EQUAL,
+    tunnel_count=ngc.TunnelCount(1),
+))
+tunnels = DemandSet("tunnels", (
+    DemandSpec(Selector("^A$"), Selector("^C$"), volume=0, policy=te, id="te"),
+))
+counted = prepare(Scenario(network, demand_sets={"tunnels": tunnels},
+                           units=UnitsSettings(resolution=1)),
+                  demand_sets=("tunnels",))
+counts = tunnel_counts(counted, TunnelCountQuery(
+    counted.demand_sets["tunnels"], counts=(2, 4), design_demand=4, offer=6,
+))
+two, four = counts.rows
+assert (two.count, two.result.plan.tunnels_per_head, two.result.delivered) == (2, 2, 5)
+assert two.lossless_at_design_units == 4
+```
+
+`tunnel_counts(prepared, TunnelCountQuery(demands, counts, design_demand, offer, up_to=None, eligibility=None, ...))` evaluates each tunnelled centralized-TE demand once per count (and once up to `up_to`), each a fresh native evaluation lossy at `offer` and planned for `design_demand`, the same two amounts for every demand. Each `TunnelCountRow` holds the native result (its `plan` is the tunnel layout), the row's `count` and `up_to`, `lossless_at_design_units` (min(design, the plan's largest lossless offer)) and `physical_tunnel_cost` (a pool row's tunnel cost without its one cost-1 ingress hop per tunnel). An `eligibility` asks the question on a failed network. An offer above a TE ingress pool's prepared budget is refused: declare a `TunnelCountAnalysis` step with that offer and prepare again.
 
 ## Failure cases
 

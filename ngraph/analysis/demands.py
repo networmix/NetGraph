@@ -265,6 +265,20 @@ def pool_budgets(scaled, q) -> dict[str, int]:
     return budgets
 
 
+def offer_budgets(offers, q) -> dict[str, int]:
+    """Each pool leaf's largest fixed offer in units over (plans, offer, label)."""
+    budgets: dict[str, int] = {}
+    for plans, offer, label in offers:
+        units = quantize(offer, q, label)
+        for plan in plans:
+            if not pooled(plan.spec.mode, plan.spec.policy):
+                continue
+            for leaf in leaves(plan.root):
+                if leaf.endpoints is not None:
+                    budgets[leaf.id] = max(budgets.get(leaf.id, 0), units)
+    return budgets
+
+
 def materialize_config(
     topology: PreparedTopology,
     named: NamedRoutes,

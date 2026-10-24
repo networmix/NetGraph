@@ -119,6 +119,47 @@ The search uses one persistent ledger, removes all owners before every probe and
 
 Only a proved downward-closed class receives an upper certificate. The bounded search on an unproved composition is a heuristic. The result does not claim an untested global maximum. YAML has no full-probe-row export input; Python's `MSDQuery.export_probe_rows` is an explicit opt-in.
 
+## TunnelCountAnalysis
+
+```yaml
+units: {resolution: 1}
+network:
+  nodes: {S: {}, a: {}, b: {}, T: {}}
+  links:
+    - {source: S, target: T, capacity: 1, cost: 1}
+    - {source: S, target: T, capacity: 100, cost: 2}
+    - {source: a, target: T, capacity: 2, cost: 1}
+    - {source: b, target: T, capacity: 10, cost: 1}
+demands:
+  te:
+    - {id: pooled, source: '^S$', target: '^T$', volume: 0, preset: TE_ECMP_16_LSP}
+    - id: heads
+      source: '^(a|b)$'
+      target: '^T$'
+      volume: 0
+      model:
+        routing: {type: centralized_te, source_allocation: equal, tunnel_count: {per_head: 1}}
+        admission: lossless
+workflow:
+  - type: TunnelCountAnalysis
+    name: counts
+    demand_set: te
+    counts: [2]
+    up_to: 3
+    design_demand: 2
+    offer: 1000
+    workers: auto
+    outputs: {details: false}
+```
+
+Evaluates every demand of the set once per listed tunnel count, then once "up to" the `up_to` limit, each row a fresh native evaluation of the demand's centralized-TE model with that count, lossy at `offer` and planned for `design_demand`. Every demand of the set uses the same `design_demand` and `offer`; the rows read no declared volume. The set must hold tunnelled centralized-TE demands only (`centralized_te` with a `tunnel_count`, or the `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` presets); any other model is refused at preparation. Discarded shares (self pairs, filtered selections) have no rows.
+
+Rows follow the set's demands, then the listed counts in order, then the `up_to` row. A row's `count` is the requested count per head (for the `up_to` row, its limit); the chosen count is `plan.tunnels_per_head`. The `plan` (fluid and whole-unit tunnel size, planned bandwidth, tunnel cost, headroom penalty, the largest lossless offer and `insufficient_resolution`) is written in every row; `result` holds what the offer delivers and loses. `lossless_at_design_units` is the lossless delivery at the design, min(design, largest lossless offer). Rows are not monotone in the count, and "up to" picks the smallest count that carries the live heads' design shares, not the count that delivers most of the offer.
+
+In the example, the pooled demand delivers 1 + 100 of its offer of 1000 with two tunnels (one per link) and its up-to row chooses one tunnel, on the wide link; the two heads deliver 2 + 10 with two tunnels each and choose one. A pool row's `plan.total_tunnel_cost` is on the analysis graph: its `pool` section's `synthetic_ingress_cost` of 1 is paid once per tunnel, which `physical_tunnel_cost` leaves out (3 and 2 here).
+
+The step's offer is a known lossy offer for the TE ingress pools of its set: each pool's attachments widen to carry it (the headroom penalty prices them), and a library `tunnel_counts` query above that budget is refused. The offer and design take part in choosing `q`, and so can make `q` finer for every step of the run. Naming the set makes it part of the run's prepared traffic like any step's set: its declared volumes and models still take part in choosing `q` and are validated at preparation.
+
 ## Cases, seeds and exports
 
 No failure request means one baseline. With sampling, `occurrences` sum to the requested iterations, including sampled empty patterns on the baseline. Optional traces keep the first draw producing each physical pattern. A failed link excludes both directions. All supported Python versions use per-entity Bernoulli for random rules.
@@ -132,7 +173,7 @@ Custom steps implement `run(StepContext) -> StepOutput`; earlier successful step
 
 ## Output selection
 
-`MaxFlow` and `TrafficMatrixPlacement` accept `outputs.details` (false by default) alongside their native output flags and `cost_distribution`. It adds per-source, per-tunnel, plan and call details to compact exact JSON rows. Pool metadata stays present in either mode so synthetic-ingress costs remain identifiable. `MaximumSupportedDemand` accepts `outputs: {details: true}` for its best rows; this step accepts no other output keys. Python callers can independently request retained historical probe rows with `MSDQuery.export_probe_rows`.
+`MaxFlow` and `TrafficMatrixPlacement` accept `outputs.details` (false by default) alongside their native output flags and `cost_distribution`; `TunnelCountAnalysis` accepts the native flags and `details` (its rows have no cost report). It adds per-source, per-tunnel, plan and call details to compact exact JSON rows. Pool metadata stays present in either mode so synthetic-ingress costs remain identifiable. `MaximumSupportedDemand` accepts `outputs: {details: true}` for its best rows; this step accepts no other output keys. Python callers can independently request retained historical probe rows with `MSDQuery.export_probe_rows`.
 
 Details do not enable cost bins, cuts or arrays. For example `outputs: {details: false, min_cut: true}` keeps compact capacity rows with a requested cut; `outputs: {details: true}` emits native details without a cost report or cut. Python query/workflow constructors spell the single detail selector `export_details`; that spelling is refused in YAML. The former `include_flow_details` migration is only to `outputs.cost_distribution`.
 

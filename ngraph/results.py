@@ -31,6 +31,7 @@ from ngraph.utils.values import JSONValue, frozen_attrs, physical
 if TYPE_CHECKING:
     from ngraph.analysis.capacity import CapacityQuery
     from ngraph.analysis.controller import DestinationTable
+    from ngraph.analysis.counts import TunnelCountQuery
     from ngraph.analysis.msd import MSDQuery
     from ngraph.analysis.paths import PathQuery
     from ngraph.analysis.placement import PlacementQuery
@@ -769,12 +770,47 @@ class MSDAnalysis(_PreparedResult):
     probe_rows: Mapping[int, tuple[PlacementRow, ...]] | None
 
 
+@_record
+class TunnelCountRow(_ResultRecord):
+    """One demand's evaluation at one tunnel count.
+
+    ``count`` is the requested count per head, or the limit of an ``up_to``
+    row; the chosen count is ``result.plan.tunnels_per_head``. The plan's
+    tunnel cost is on the analysis graph: a pool row adds one cost-1 ingress
+    hop per tunnel, which ``physical_tunnel_cost`` leaves out.
+    ``lossless_at_design_units`` is min(design, the plan's largest lossless
+    offer).
+    """
+
+    id: str
+    base_id: str
+    endpoints: Endpoints
+    count: int
+    up_to: bool
+    result: ngc.PlacementResult
+    pool: PoolMetadata | None
+    lossless_at_design_units: int
+    physical_tunnel_cost: int
+
+
+@_record
+class TunnelCountAnalysis(_PreparedResult):
+    kind: ClassVar[Literal["tunnel_counts"]] = "tunnel_counts"
+    prepared: PreparedScenario
+    misses: tuple[PrecisionMiss, ...]
+    metadata: AnalysisMetadata
+    outputs: OutputSelection
+    rows: tuple[TunnelCountRow, ...]
+    query: TunnelCountQuery
+
+
 AnalysisResult: TypeAlias = (
     CapacityAnalysis
     | PlacementAnalysis
     | SensitivityAnalysis
     | PathAnalysis
     | MSDAnalysis
+    | TunnelCountAnalysis
 )
 
 
@@ -925,6 +961,7 @@ if TYPE_CHECKING:
         | SensitivityQuery
         | PathQuery
         | MSDQuery
+        | TunnelCountQuery
         | BuildGraph
         | NetworkStats
         | CostPower

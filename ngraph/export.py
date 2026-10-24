@@ -74,6 +74,7 @@ from ngraph.results import (
     SplitConstraint,
     SyntheticIngress,
     TableReport,
+    TunnelCountAnalysis,
     UnitsReport,
     UnverifiedConstraint,
     UpperCertificate,
@@ -161,6 +162,11 @@ def _output_options(value: ngc.OutputOptions) -> dict[str, JSONValue]:
     }
 
 
+def _qualified(kind: type) -> str:
+    """A class's module and name: two public classes can share a name."""
+    return f"{kind.__module__}.{kind.__qualname__}"
+
+
 def project(value: object) -> JSONValue:
     """Write a plain record, its exact field values and finite JSON data."""
     kind = type(value)
@@ -177,7 +183,7 @@ def project(value: object) -> JSONValue:
         return json_copy(value)
     if kind is ngc.OutputOptions:
         return _output_options(cast(ngc.OutputOptions, value))
-    raise TypeError(f"export: no encoder for {kind.__name__}")
+    raise TypeError(f"export: no encoder for {_qualified(kind)}")
 
 
 def register_result_exporter(
@@ -215,7 +221,7 @@ def owned_step_result(value: object) -> object:
     try:
         return frozen_json(value, "step result", strict_objects=True)
     except ValueError as exc:
-        raise TypeError(f"unregistered result type {type(value).__name__}") from exc
+        raise TypeError(f"unregistered result type {_qualified(type(value))}") from exc
 
 
 def _export_registered(value: object, context: ExportContext) -> JSONValue:
@@ -225,7 +231,7 @@ def _export_registered(value: object, context: ExportContext) -> JSONValue:
     try:
         return json_copy(value, "step result", strict_objects=True)
     except ValueError as exc:
-        raise TypeError(f"unregistered result type {type(value).__name__}") from exc
+        raise TypeError(f"unregistered result type {_qualified(type(value))}") from exc
 
 
 def _cost_power(value, context):
@@ -558,6 +564,22 @@ def _msd_query(value, prepared):
     }
 
 
+def _tunnel_count_query(value, prepared):
+    topology = prepared.topology
+    nodes, edges = _excluded(topology, _mask(topology, value.eligibility))
+    return {
+        "kind": "tunnel_counts",
+        "demand_set": value.demands.name,
+        "demands": _demands(value.demands, prepared),
+        "counts": list(value.counts),
+        "up_to": value.up_to,
+        "design_demand": value.design_demand,
+        "offer": value.offer,
+        "excluded_nodes": nodes,
+        "excluded_edges": edges,
+    }
+
+
 # Each analysis query, named by module and class so that checking a question
 # imports no analysis module the run did not load.
 _QUERIES = {
@@ -566,6 +588,7 @@ _QUERIES = {
     ("ngraph.analysis.sensitivity", "SensitivityQuery"): _sensitivity_query,
     ("ngraph.analysis.paths", "PathQuery"): _path_query,
     ("ngraph.analysis.msd", "MSDQuery"): _msd_query,
+    ("ngraph.analysis.counts", "TunnelCountQuery"): _tunnel_count_query,
 }
 
 
@@ -990,12 +1013,42 @@ def _msd(value, context):
     return data
 
 
+def _tunnel_counts(value, context):
+    topology, outputs = context.topology, value.outputs
+    rows = []
+    for row in value.rows:
+        native = _native(row.result, topology, outputs, row.pool)
+        # The plan is the analysis's subject: always written, once, beside the row.
+        native.pop("plan", None)
+        rows.append(
+            {
+                "id": row.id,
+                "base_id": row.base_id,
+                "endpoints": project(row.endpoints),
+                "count": row.count,
+                "up_to": row.up_to,
+                "pool": project(row.pool),
+                "lossless_at_design_units": row.lossless_at_design_units,
+                "physical_tunnel_cost": row.physical_tunnel_cost,
+                "plan": _tunnel_plan(row.result.plan, topology, row.pool),
+                "result": native,
+            }
+        )
+    return {
+        "kind": value.kind,
+        "metadata": project(value.metadata),
+        "outputs": project(value.outputs),
+        "rows": rows,
+    }
+
+
 _ANALYSIS_TYPES = (
     CapacityAnalysis,
     PlacementAnalysis,
     SensitivityAnalysis,
     PathAnalysis,
     MSDAnalysis,
+    TunnelCountAnalysis,
 )
 _EXPORTERS.update(
     {
@@ -1004,6 +1057,7 @@ _EXPORTERS.update(
         SensitivityAnalysis: _sensitivity,
         PathAnalysis: _paths,
         MSDAnalysis: _msd,
+        TunnelCountAnalysis: _tunnel_counts,
     }
 )
 _BUILTIN_TYPES.update(_ANALYSIS_TYPES)

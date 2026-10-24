@@ -168,7 +168,12 @@ def test_unknown_result_does_not_discover_to_dict_and_has_registered_control():
             return StepOutput({}, Value())
 
     prepared = prepare(Scenario(Network(), [Step()]))
-    with pytest.raises(TypeError, match="unregistered result type Value"):
+    with pytest.raises(
+        TypeError,
+        match=r"^unregistered result type "
+        r"tests\.results\.test_typed_step_export\.test_unknown_result_does_not_"
+        r"discover_to_dict_and_has_registered_control\.<locals>\.Value$",
+    ):
         run(prepared)
     register_result_exporter(Value, lambda value, context: {"registered": True})
     output = StringIO()
@@ -383,7 +388,10 @@ def test_a_read_only_record_collection_is_not_a_json_result_or_question():
 
     network = Network(nodes={"s": Node("s")})
     for first, message in (
-        (PublishesNodes(name="nodes"), r"^unregistered result type _FrozenDict$"),
+        (
+            PublishesNodes(name="nodes"),
+            r"^unregistered result type ngraph\.utils\.values\._FrozenDict$",
+        ),
         (AsksNodes(name="nodes"), "expected finite JSON data, got .*Node$"),
     ):
         prepared = prepare(Scenario(network, (first, Later(name="later"))))

@@ -1640,6 +1640,108 @@
               ],
               "additionalProperties": false
             }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "TunnelCountAnalysis"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "demand_set": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "counts": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "uniqueItems": true
+                },
+                "up_to": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "design_demand": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "offer": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "workers": {
+                  "oneOf": [
+                    {
+                      "enum": [
+                        "auto"
+                      ]
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  ]
+                },
+                "outputs": {
+                  "type": "object",
+                  "properties": {
+                    "edge_flows": {
+                      "type": "boolean"
+                    },
+                    "residual": {
+                      "type": "boolean"
+                    },
+                    "edge_reservations": {
+                      "type": "boolean"
+                    },
+                    "saturated_boundary_edges": {
+                      "type": "boolean"
+                    },
+                    "min_cut": {
+                      "type": "boolean"
+                    },
+                    "details": {
+                      "type": "boolean",
+                      "default": false
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "type",
+                "demand_set",
+                "design_demand",
+                "offer"
+              ],
+              "additionalProperties": false
+            }
           }
         ]
       }

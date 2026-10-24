@@ -29,6 +29,7 @@ from ngraph.results import (
     RunResult,
     SensitivityAnalysis,
     StepContext,
+    TunnelCountAnalysis,
 )
 from ngraph.utils.values import frozen_dict, own_scalars
 from ngraph.workflow.base import WorkflowStep, validate_unique_step_names
@@ -272,6 +273,7 @@ def run(
                 SensitivityAnalysis,
                 PathAnalysis,
                 MSDAnalysis,
+                TunnelCountAnalysis,
             ),
         ):
             # An analysis belongs to a preparation of the same graph and report.

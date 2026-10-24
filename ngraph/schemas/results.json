@@ -46,25 +46,32 @@
                 {
                   "anyOf": [
                     {
-                      "$ref": "#/$defs/CapacityAnalysisJSON"
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/CapacityAnalysisJSON"
+                        },
+                        {
+                          "$ref": "#/$defs/PlacementAnalysisJSON"
+                        }
+                      ]
                     },
                     {
-                      "$ref": "#/$defs/PlacementAnalysisJSON"
+                      "$ref": "#/$defs/SensitivityAnalysisJSON"
                     }
                   ]
                 },
                 {
-                  "$ref": "#/$defs/SensitivityAnalysisJSON"
+                  "$ref": "#/$defs/PathAnalysisJSON"
                 }
               ]
             },
             {
-              "$ref": "#/$defs/PathAnalysisJSON"
+              "$ref": "#/$defs/MSDAnalysisJSON"
             }
           ]
         },
         {
-          "$ref": "#/$defs/MSDAnalysisJSON"
+          "$ref": "#/$defs/TunnelCountAnalysisJSON"
         }
       ]
     },
@@ -4516,25 +4523,32 @@
                         {
                           "anyOf": [
                             {
-                              "$ref": "#/$defs/CapacityQueryJSON"
+                              "anyOf": [
+                                {
+                                  "$ref": "#/$defs/CapacityQueryJSON"
+                                },
+                                {
+                                  "$ref": "#/$defs/PlacementQueryJSON"
+                                }
+                              ]
                             },
                             {
-                              "$ref": "#/$defs/PlacementQueryJSON"
+                              "$ref": "#/$defs/SensitivityQueryJSON"
                             }
                           ]
                         },
                         {
-                          "$ref": "#/$defs/SensitivityQueryJSON"
+                          "$ref": "#/$defs/PathQueryJSON"
                         }
                       ]
                     },
                     {
-                      "$ref": "#/$defs/PathQueryJSON"
+                      "$ref": "#/$defs/MSDQueryJSON"
                     }
                   ]
                 },
                 {
-                  "$ref": "#/$defs/MSDQueryJSON"
+                  "$ref": "#/$defs/TunnelCountQueryJSON"
                 }
               ]
             },
@@ -4811,6 +4825,43 @@
               "question": {
                 "properties": {
                   "kind": {
+                    "const": "tunnel_counts"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "question"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/TunnelCountAnalysisJSON"
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "query"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "question": {
+                "properties": {
+                  "kind": {
                     "const": "build_graph"
                   }
                 },
@@ -5046,6 +5097,162 @@
       ],
       "additionalProperties": false
     },
+    "TunnelCountAnalysisJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "tunnel_counts"
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/AnalysisMetadataJSON"
+        },
+        "outputs": {
+          "$ref": "#/$defs/OutputSelectionJSON"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TunnelCountRowJSON"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/TunnelCountQueryJSON"
+        }
+      },
+      "required": [
+        "kind",
+        "metadata",
+        "outputs",
+        "rows"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": false
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "result": {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "call_delivered_units"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "call_undelivered_units"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "delivery_delta_units"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "call_edge_drops"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "call_source_drop_units"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "admitted_units"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "edge_drops"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "by_source"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "by_tunnel"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outputs": {
+                "properties": {
+                  "details": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "details"
+                ]
+              }
+            },
+            "required": [
+              "outputs"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rows": {
+                "items": {
+                  "properties": {
+                    "result": {
+                      "required": [
+                        "call_delivered_units",
+                        "call_undelivered_units",
+                        "delivery_delta_units",
+                        "call_edge_drops",
+                        "call_source_drop_units",
+                        "admitted_units",
+                        "edge_drops",
+                        "by_source",
+                        "by_tunnel"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "TunnelCountJSON": {
       "type": "object",
       "properties": {
@@ -5059,6 +5266,154 @@
       "required": [
         "per_head",
         "up_to"
+      ],
+      "additionalProperties": false
+    },
+    "TunnelCountQueryJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "tunnel_counts"
+          ]
+        },
+        "demand_set": {
+          "type": "string"
+        },
+        "demands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DemandQuestionJSON"
+          }
+        },
+        "counts": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "up_to": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_demand": {
+          "type": "number",
+          "minimum": 0
+        },
+        "offer": {
+          "type": "number",
+          "minimum": 0
+        },
+        "excluded_nodes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "excluded_edges": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/DirectedLinkJSON"
+              },
+              {
+                "$ref": "#/$defs/SyntheticIngressJSON"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "demand_set",
+        "demands",
+        "counts",
+        "up_to",
+        "design_demand",
+        "offer",
+        "excluded_nodes",
+        "excluded_edges"
+      ],
+      "additionalProperties": false
+    },
+    "TunnelCountRowJSON": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "base_id": {
+          "type": "string"
+        },
+        "endpoints": {
+          "$ref": "#/$defs/EndpointsJSON"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "up_to": {
+          "type": "boolean"
+        },
+        "pool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PoolMetadataJSON"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lossless_at_design_units": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "physical_tunnel_cost": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "plan": {
+          "$ref": "#/$defs/TunnelPlanJSON"
+        },
+        "result": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/NativePlacementJSON"
+            },
+            {
+              "not": {
+                "required": [
+                  "plan"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "base_id",
+        "endpoints",
+        "count",
+        "up_to",
+        "pool",
+        "lossless_at_design_units",
+        "physical_tunnel_cost",
+        "plan",
+        "result"
       ],
       "additionalProperties": false
     },

@@ -12,6 +12,7 @@ from ngraph import logging as _logging  # noqa: F401  (attaches the NullHandler)
 if TYPE_CHECKING:
     __version__: str
     from ngraph.analysis.capacity import CapacityQuery, capacity
+    from ngraph.analysis.counts import TunnelCountQuery, tunnel_counts
     from ngraph.analysis.demands import resolve_demands
     from ngraph.analysis.failures import FailureRequest, Workers, failure_cases
     from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
@@ -107,6 +108,8 @@ if TYPE_CHECKING:
         StepQuestion,
         StepResult,
         SyntheticIngress,
+        TunnelCountAnalysis,
+        TunnelCountRow,
         UnitConstraint,
         UnitsReport,
         UnverifiedConstraint,
@@ -117,6 +120,7 @@ if TYPE_CHECKING:
 
 _MODULES = {
     "ngraph.analysis.capacity": "CapacityQuery capacity",
+    "ngraph.analysis.counts": "TunnelCountQuery tunnel_counts",
     "ngraph.analysis.demands": "resolve_demands",
     "ngraph.analysis.failures": "FailureRequest Workers failure_cases",
     "ngraph.analysis.msd": "MSDQuery maximum_supported_demand",
@@ -154,7 +158,8 @@ _MODULES = {
         "ResolvedDemand ResolvedDemandSet RunMetadata RunResult "
         "SamplingMetadata SelfPair SensitivityAnalysis "
         "SplitConstraint StepContext StepOutput StepQuestion "
-        "StepResult SyntheticIngress UnitConstraint UnitsReport "
+        "StepResult SyntheticIngress TunnelCountAnalysis TunnelCountRow "
+        "UnitConstraint UnitsReport "
         "UnverifiedConstraint UpperCertificate"
     ),
     "ngraph.scenario": "PreparedScenario Scenario prepare run",
@@ -284,6 +289,9 @@ __all__ = [
     "StepResult",
     "SupportSpec",
     "SyntheticIngress",
+    "TunnelCountAnalysis",
+    "TunnelCountQuery",
+    "TunnelCountRow",
     "UnitConstraint",
     "UnitsReport",
     "UnitsSettings",
@@ -305,5 +313,6 @@ __all__ = [
     "register_workflow_step",
     "resolve_demands",
     "run",
+    "tunnel_counts",
     "write_json",
 ]

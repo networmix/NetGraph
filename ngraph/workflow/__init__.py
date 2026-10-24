@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .maximum_supported_demand_step import MaximumSupportedDemand
     from .network_stats import NetworkStats
     from .traffic_matrix_placement_step import TrafficMatrixPlacement
+    from .tunnel_count_step import TunnelCountAnalysis
 
 
 def __getattr__(name):
@@ -32,4 +33,5 @@ __all__ = [
     "MaximumSupportedDemand",
     "NetworkStats",
     "TrafficMatrixPlacement",
+    "TunnelCountAnalysis",
 ]

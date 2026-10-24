@@ -62,6 +62,8 @@ from ngraph import (
     StepContext,
     StepOutput,
     SupportSpec,
+    TunnelCountAnalysis,
+    TunnelCountQuery,
     UnitsReport,
     UnitsSettings,
     UnverifiedConstraint,
@@ -79,11 +81,13 @@ from ngraph import (
     register_workflow_step,
     resolve_demands,
     run,
+    tunnel_counts,
     write_json,
 )
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
-from ngraph.results import DeadCap, ForwardingFailure
+from ngraph.results import DeadCap, ForwardingFailure, PoolMetadata
+from ngraph.workflow import TunnelCountAnalysis as TunnelCountStep
 
 
 def minimal(network: Network, workflow: Sequence[WorkflowStep]) -> RunResult:
@@ -482,6 +486,58 @@ def read_msd(value: MSDAnalysis) -> MSDStatus:
     bounds: float = value.query.alpha_max
     assert bounds > 0
     return status
+
+
+def read_counts(value: TunnelCountAnalysis) -> list[tuple[int, bool, int]]:
+    """Each row's requested count or limit, whether it is an up-to row, and the chosen count."""
+    out: list[tuple[int, bool, int]] = []
+    for row in value.rows:
+        count: int = row.count
+        up_to: bool = row.up_to
+        plan: ngc.TunnelPlan | None = row.result.plan
+        assert plan is not None
+        chosen: int = plan.tunnels_per_head
+        lossless: int = row.lossless_at_design_units
+        cost: int = row.physical_tunnel_cost
+        pool: PoolMetadata | None = row.pool
+        assert lossless >= 0 and cost >= 0
+        assert pool is None or pool.offer_limit_units >= 0
+        out.append((count, up_to, chosen))
+    query: TunnelCountQuery = value.query
+    assert query.offer >= 0 and query.design_demand >= 0
+    return out
+
+
+def counts_example() -> list[tuple[int, bool, int]]:
+    """Two heads behind links of 2 and 10, two tunnels per head, design and offer 12."""
+    network = Network()
+    for name in ("A", "B", "T"):
+        network.add_node(Node(name))
+    network.add_link(Link("A", "T", capacity=2, cost=1))
+    network.add_link(Link("B", "T", capacity=10, cost=1))
+    model = ngc.FlowPolicyConfig(
+        routing=ngc.CentralizedTE(
+            source_allocation=ngc.SourceAllocation.EQUAL,
+            tunnel_count=ngc.TunnelCount(2),
+        )
+    )
+    demands = DemandSet(
+        "te", (DemandSpec(Selector("^(A|B)$"), Selector("^T$"), 0, model),)
+    )
+    step = TunnelCountStep(
+        "counts", demand_set="te", counts=(2,), up_to=2, design_demand=12, offer=12
+    )
+    prepared = prepare(
+        Scenario(network, (step,), demand_sets={"te": demands}, units=UnitsSettings(1))
+    )
+    result = run(prepared)
+    analysis = result.steps[0].result
+    assert isinstance(analysis, TunnelCountAnalysis)
+    library = tunnel_counts(
+        prepared, TunnelCountQuery(prepared.demand_sets["te"], (2,), 12, 12, up_to=2)
+    )
+    assert read_counts(library) == read_counts(analysis)
+    return read_counts(analysis)
 
 
 def read_domain(value: DomainResult) -> float:

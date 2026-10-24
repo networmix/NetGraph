@@ -26,6 +26,7 @@ from ngraph.analysis.demands import (
     bind_plans,
     expansion_plans,
     leaves,
+    offer_budgets,
     pool_budgets,
     pool_requirements,
     selected_pairs,
@@ -74,6 +75,7 @@ from ngraph.utils.values import physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.controller import ControllerSetup
+    from ngraph.analysis.counts import TunnelCountQuery
     from ngraph.scenario import Scenario
     from ngraph.workflow.base import SeedSource
 
@@ -89,6 +91,9 @@ class StepNeeds:
     candidate resolution; ``inputs`` are that question's physical amounts, by
     field name. ``pool_endpoints`` are the source and target of a question
     whose combined sources are a pool: preparation gives them a private head.
+    ``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
+    receives; ``counts`` builds a tunnel-count question, whose split targets
+    preparation observes once per candidate resolution.
     """
 
     numerical: bool = False
@@ -106,6 +111,8 @@ class StepNeeds:
         default_factory=lambda: MappingProxyType({})
     )
     pool_endpoints: tuple[Selector, Selector] | None = None
+    offer_budget: float | None = None
+    counts: Callable[[PreparedScenario], TunnelCountQuery] | None = None
 
 
 @dataclass(frozen=True)
@@ -280,7 +287,7 @@ def prepare_scenario(
 ) -> PreparedScenario:
     """Prepare a read-only scenario view; the steps' needs decide what is bound."""
     numerical, active, capacities, providers, failing = [], [], [], set(), []
-    simultaneous = []
+    simultaneous, counting, declared_inputs = [], [], []
     for step in scenario.workflow:
         name = step.name or type(step).__name__
         needs = step.needs()
@@ -316,6 +323,9 @@ def prepare_scenario(
             providers.add(name)
         if needs.capacity is not None:
             capacities.append((step, name, needs))
+        if needs.counts is not None:
+            counting.append((step, name, needs))
+        declared_inputs.append((name, needs.inputs))
     scope = PreparationScope(tuple(numerical), tuple(active), requested)
     network = scenario.network
     plans_by_name = {
@@ -352,10 +362,19 @@ def prepare_scenario(
         if alpha is not None:
             lossy_plans.extend((plan, alpha) for plan in values)
 
+    offers = [
+        (plans_by_name[needs.demand_set], needs.offer_budget, f"workflow.{name}.offer")
+        for _, name, needs in counting
+        if needs.offer_budget is not None and needs.demand_set is not None
+    ]
+
     @cache
     def budgets(q):
-        """Each pool's largest known simultaneous request in units at q."""
-        return pool_budgets(lossy_plans, q)
+        """Each pool's largest known lossy request in units at q."""
+        values = pool_budgets(lossy_plans, q)
+        for leaf, units in offer_budgets(offers, q).items():
+            values[leaf] = max(values.get(leaf, 0), units)
+        return values
 
     def budget_excess(q):
         """Capacity the budgets add above their sources' outgoing capacity."""
@@ -369,8 +388,8 @@ def prepare_scenario(
         )
 
     inputs = {}
-    for _, name, needs in capacities:
-        for field_name, atom in needs.inputs.items():
+    for name, values in declared_inputs:
+        for field_name, atom in values.items():
             inputs[f"workflow.{name}.{field_name}"] = atom
     for link_id, link in network.links.items():
         inputs[f"link.{link_id}.capacity"] = ("capacity", link.capacity)
@@ -480,6 +499,21 @@ def prepare_scenario(
             local, opaque = _capacity_splits(
                 prepared, step, name, needs, settings.precision
             )
+            splits.extend(local)
+            unverified.extend(opaque)
+        for step, name, needs in counting:
+            # Count questions load only for scenarios that ask them.
+            from ngraph.analysis.counts import count_splits
+
+            try:
+                local, opaque = count_splits(
+                    prepared,
+                    needs.counts(prepared),
+                    f"workflow.{name}",
+                    topology.disabled,
+                )
+            except (ValueError, TypeError) as exc:
+                raise _labelled(step, exc) from exc
             splits.extend(local)
             unverified.extend(opaque)
         report = with_splits(report, tuple(splits), tuple(unverified))

@@ -687,9 +687,22 @@ def query_has_splits(query) -> bool:
 
 
 def query_splits(
-    topology, named, query, pair, delivered, mask, label, precision, pool=None
+    topology,
+    named,
+    query,
+    pair,
+    delivered,
+    mask,
+    label,
+    precision,
+    pool=None,
+    facts=None,
 ):
-    """Describe this native evaluation's splits, without another traffic solve."""
+    """Describe this native evaluation's splits, without another traffic solve.
+
+    ``facts`` reuses one pair's searches across questions that differ only in
+    their tunnel count.
+    """
     if not query_has_splits(query):
         return (), ()
     model = query.config.routing
@@ -707,7 +720,8 @@ def query_splits(
         amount = Fraction(delivered) * Fraction(topology.q)
     else:
         amount = Fraction(float(amount))
-    facts = _Searched(topology, named, model, pair, mask, pool)
+    if facts is None:
+        facts = _Searched(topology, named, model, pair, mask, pool)
     declaration = getattr(query, "declaration", None)  # sensitivity has none
     constraints, opaque = _model_splits(
         topology, named, model, declaration, label, amount, facts, precision

@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 52
+Modules auto-discovered: 54
 
 ---
 
@@ -1021,6 +1021,43 @@ splits equally over its members (ECMP).
 - `destination` (str)
 - `programmed` (tuple[ProgrammedRouter, ...])
 - `source_weights` (tuple[SourceWeight, ...] | None)
+
+### TunnelCountAnalysis
+
+Immutable TunnelCountAnalysis record.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['tunnel_counts']]) = tunnel_counts
+- `prepared` (PreparedScenario)
+- `misses` (tuple[PrecisionMiss, ...])
+- `metadata` (AnalysisMetadata)
+- `outputs` (OutputSelection)
+- `rows` (tuple[TunnelCountRow, ...])
+- `query` (TunnelCountQuery)
+
+### TunnelCountRow
+
+One demand's evaluation at one tunnel count.
+
+``count`` is the requested count per head, or the limit of an ``up_to``
+row; the chosen count is ``result.plan.tunnels_per_head``. The plan's
+tunnel cost is on the analysis graph: a pool row adds one cost-1 ingress
+hop per tunnel, which ``physical_tunnel_cost`` leaves out.
+``lossless_at_design_units`` is min(design, the plan's largest lossless
+offer).
+
+**Attributes:**
+
+- `id` (str)
+- `base_id` (str)
+- `endpoints` (Endpoints)
+- `count` (int)
+- `up_to` (bool)
+- `result` (ngc.PlacementResult)
+- `pool` (PoolMetadata | None)
+- `lossless_at_design_units` (int)
+- `physical_tunnel_cost` (int)
 
 ### UnitsReport
 
@@ -2305,6 +2342,44 @@ TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: 
 
 ---
 
+## ngraph.workflow.tunnel_count_step
+
+Evaluate each tunnelled TE demand of a set at fixed tunnel counts, design and offer.
+
+### TunnelCountAnalysis
+
+One native evaluation per demand and tunnel count (or ``up_to`` limit).
+
+Every demand uses the same ``design_demand`` and ``offer``; the set's
+declared volumes are not read by the rows, though they still take part in
+choosing the resolution, as every demand set a step names does.
+
+**Attributes:**
+
+- `name` (str)
+- `seed` (int | None)
+- `yaml_label` (str | None)
+- `derived_seed` (int | None)
+- `demand_set` (str)
+- `counts` (tuple) = ()
+- `up_to` (Union)
+- `design_demand` (Union)
+- `offer` (Union)
+- `workers` (Union) = auto
+- `outputs` (OutputOptions)
+- `export_details` (bool) = False
+
+**Methods:**
+
+- `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
+- `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
+- `query(self, prepared: ngraph.analysis.preparation.PreparedScenario) -> ngraph.analysis.counts.TunnelCountQuery`
+- `query_for(self, demands) -> ngraph.analysis.counts.TunnelCountQuery`
+- `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
+- `yaml_arguments(arguments: dict, name: str) -> dict` - Turn this step type's YAML keys into constructor arguments.
+
+---
+
 ## ngraph.dsl.blueprints.expand
 
 Blueprint and network DSL expansion.
@@ -3120,6 +3195,44 @@ which does not attribute delivery to walk costs.
 
 ---
 
+## ngraph.analysis.counts
+
+Tunnel-count questions: one fresh native T2 evaluation per demand and count.
+
+Every row evaluates one demand's declared centralized-TE model with the
+row's tunnel count (or "up to" limit), LOSSY at the query's offer and with
+its design demand; the plan, delivery and losses are the native result's.
+Every demand of the set uses the same design and offer.
+
+### TunnelCountQuery
+
+TunnelCountQuery(demands: 'ResolvedDemandSet', counts: 'tuple[int, ...]', design_demand: 'float', offer: 'float', up_to: 'int | None' = None, eligibility: 'ngc.Eligibility | None' = None, workers: 'Workers' = 'auto', outputs: 'ngc.OutputOptions' = <factory>, export_details: 'bool' = False)
+
+**Attributes:**
+
+- `demands` (ResolvedDemandSet)
+- `counts` (tuple[int, ...])
+- `design_demand` (float)
+- `offer` (float)
+- `up_to` (int | None)
+- `eligibility` (ngc.Eligibility | None)
+- `workers` (Workers) = auto
+- `outputs` (ngc.OutputOptions)
+- `export_details` (bool) = False
+
+### count_splits(prepared: 'PreparedScenario', query: 'TunnelCountQuery', label, mask)
+
+The rows' split constraints, declared from the offer, design and live heads.
+
+One reverse search per demand finds its live heads for all its rows; no
+traffic is solved.
+
+### tunnel_counts(prepared: 'PreparedScenario', query: 'TunnelCountQuery') -> 'TunnelCountAnalysis'
+
+No documentation available.
+
+---
+
 ## ngraph.analysis.demands
 
 Canonical physical selections and total-preserving demand expansion.
@@ -3163,6 +3276,10 @@ No documentation available.
 ### materialize_config(topology: 'PreparedTopology', named: 'NamedRoutes', endpoints: 'Endpoints', policy) -> 'ngc.FlowPolicyConfig'
 
 No documentation available.
+
+### offer_budgets(offers, q) -> 'dict[str, int]'
+
+Each pool leaf's largest fixed offer in units over (plans, offer, label).
 
 ### pool_budgets(scaled, q) -> 'dict[str, int]'
 
@@ -3429,9 +3546,12 @@ The missed local targets of one capacity question's evaluations.
 ``observations`` holds (pair, delivered units, eligibility, label, pool)
 rows.
 
-### query_splits(topology, named, query, pair, delivered, mask, label, precision, pool=None)
+### query_splits(topology, named, query, pair, delivered, mask, label, precision, pool=None, facts=None)
 
 Describe this native evaluation's splits, without another traffic solve.
+
+``facts`` reuses one pair's searches across questions that differ only in
+their tunnel count.
 
 ### question_inputs(offer, design_demand, declaration)
 
@@ -3482,6 +3602,9 @@ the step's capacity question, which preparation evaluates once per
 candidate resolution; ``inputs`` are that question's physical amounts, by
 field name. ``pool_endpoints`` are the source and target of a question
 whose combined sources are a pool: preparation gives them a private head.
+``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
+receives; ``counts`` builds a tunnel-count question, whose split targets
+preparation observes once per candidate resolution.
 
 **Attributes:**
 
@@ -3496,6 +3619,8 @@ whose combined sources are a pool: preparation gives them a private head.
 - `capacity` (Callable[[PreparedScenario], CapacityQuery] | None)
 - `inputs` (Mapping[str, tuple[_InputKind, float]]) = {}
 - `pool_endpoints` (tuple[Selector, Selector] | None)
+- `offer_budget` (float | None)
+- `counts` (Callable[[PreparedScenario], TunnelCountQuery] | None)
 
 ### prepare_scenario(scenario: 'Scenario', settings: 'UnitsSettings', requested: 'tuple[str, ...]') -> 'PreparedScenario'
 

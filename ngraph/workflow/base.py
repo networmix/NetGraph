@@ -29,6 +29,7 @@ BUILTIN_STEP_MODULES = {
     "MaximumSupportedDemand": "ngraph.workflow.maximum_supported_demand_step",
     "NetworkStats": "ngraph.workflow.network_stats",
     "TrafficMatrixPlacement": "ngraph.workflow.traffic_matrix_placement_step",
+    "TunnelCountAnalysis": "ngraph.workflow.tunnel_count_step",
 }
 
 
@@ -146,7 +147,10 @@ class WorkflowStep(ABC):
     def execute(self, context: StepContext) -> StepResult:
         """Run once, validate/own its boundary, and publish one immutable result."""
         logger.info(
-            "Starting workflow step: %s (%s)", context.step_name, type(self).__name__
+            "Starting workflow step: %s (%s.%s)",
+            context.step_name,
+            type(self).__module__,
+            type(self).__qualname__,
         )
         output = self.run(context)
         if not isinstance(output, StepOutput):
@@ -164,7 +168,10 @@ class WorkflowStep(ABC):
             question,
         )
         logger.info(
-            "Completed workflow step: %s (%s)", context.step_name, type(self).__name__
+            "Completed workflow step: %s (%s.%s)",
+            context.step_name,
+            type(self).__module__,
+            type(self).__qualname__,
         )
         return completed
 
