@@ -103,7 +103,7 @@ def _normalize_markdown_lists(markdown: str) -> str:
             line = (" " * indent_len) + "- " + stripped[2:]
             stripped = line.lstrip()
 
-        is_list, list_kind = is_list_item(line)
+        is_list, _ = is_list_item(line)
 
         # Insert a blank line before a list (MD032)
         if is_list:
@@ -223,12 +223,9 @@ def discover_modules():
             "model",
             "workflow",
             "dsl",
-            "results",
             "profiling",
-            "types",
             "utils",
             "analysis",
-            "lib",
         ]
         if len(parts) >= 3 and parts[1] in order:
             return (1 + order.index(parts[1]), ".".join(parts[2:]))

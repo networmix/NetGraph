@@ -5,22 +5,26 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import stat
 import sys
 from contextlib import contextmanager
+from dataclasses import replace
 from enum import Enum
 from pathlib import Path
 from statistics import median
 from time import perf_counter
-from typing import Any, Dict, Iterator, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional
 
 from ngraph.logging import get_logger, set_global_log_level, setup_root_logger
-from ngraph.scenario import Scenario
 from ngraph.utils.output_paths import (
     ensure_parent_dir,
     results_path_for_run,
 )
-from ngraph.workflow.base import WorkflowStep
+
+if TYPE_CHECKING:
+    from ngraph.model.selectors import Selector
+    from ngraph.workflow.base import WorkflowStep
 
 logger = get_logger(__name__)
 
@@ -117,76 +121,109 @@ def _format_duration(seconds: float) -> str:
     return f"{minutes}m {rem:.1f}s"
 
 
-def _collect_step_path_fields(step: Any) -> list[tuple[str, str]]:
-    """Return (field, pattern) pairs for a step's node selector fields.
+def _selector_label(selector: Selector) -> str:
+    """Return a selector's preview label: its path (``*`` without one), then its other parts.
 
-    Fields considered, when their value is a non-empty string:
-    - `source` and `target`
-    - names ending with "_path" or "_regex"
-
-    Private fields (leading underscore) are skipped.
+    Examples: ``^A``; ``^A [match: role == edge or tier == 1]``;
+    ``^A [match: role exists]``; ``* [group_by: role]``; ``^A [active_only: false]``.
     """
-    fields: list[tuple[str, str]] = []
-    for key, value in step.__dict__.items():
-        if key.startswith("_"):
-            continue
-        from ngraph.model.selectors import Selector
 
-        if isinstance(value, Selector):
-            value = value.path
-        if not isinstance(value, str):
-            continue
-        if not value.strip():
-            continue
-        if (
-            key in ("source", "target")
-            or key.endswith("_path")
-            or key.endswith("_regex")
-        ):
-            fields.append((key, value))
-    return fields
+    def text(value: Any) -> str:
+        if isinstance(value, (list, tuple)):
+            return "[" + ", ".join(str(item) for item in value) + "]"
+        return str(value)
+
+    parts = [selector.path if selector.path is not None else "*"]
+    if selector.match is not None:
+        conditions = f" {selector.match.logic} ".join(
+            f"{c.attr} {c.op}"
+            if c.op in ("exists", "not_exists")
+            else f"{c.attr} {c.op} {text(c.value)}"
+            for c in selector.match.conditions
+        )
+        parts.append(f"[match: {conditions}]")
+    if selector.group_by is not None:
+        parts.append(f"[group_by: {selector.group_by}]")
+    if selector.active_only is False:
+        parts.append("[active_only: false]")
+    return " ".join(parts)
 
 
-def _summarize_pattern(pattern: str, net: Any) -> Dict[str, Any]:
-    """Count the node groups and nodes that a selector pattern matches.
+def _summarize_selector(selector: Selector, net: Any) -> Dict[str, Any]:
+    """Count what a selector matches with the selector engine, its active filter lifted.
 
     Returns:
-        Dict with ``pattern``, ``groups``, ``nodes``, ``enabled_nodes`` and
-        ``labels`` (first five group labels), or ``pattern`` and ``error``
-        when selection raises.
+        Dict with ``label``, ``groups``, ``nodes`` (all matches), ``enabled_nodes``
+        (the enabled ones among them) and ``labels`` (first five group labels), or
+        ``label`` and ``error`` when the selector engine refuses it (for example
+        an invalid regex, a group key too long to write as text, or a compared
+        number too large for a float).
     """
-    try:
-        groups = net.select_node_groups_by_path(pattern)
-    except Exception as exc:  # pragma: no cover (defensive)
-        return {"pattern": pattern, "error": f"{type(exc).__name__}: {exc}"}
+    from ngraph.model.selectors import select_nodes
 
+    label = _selector_label(selector)
+    try:
+        groups = select_nodes(
+            net, replace(selector, active_only=False), default_active_only=False
+        )
+    except (re.error, ValueError, OverflowError) as exc:
+        return {"label": label, "error": f"{type(exc).__name__}: {exc}"}
     labels = list(groups.keys())
-    total_nodes = sum(len(nodes) for nodes in groups.values())
-    enabled_nodes = sum(
-        1 for nodes in groups.values() for nd in nodes if not nd.disabled
-    )
     return {
-        "pattern": pattern,
+        "label": label,
         "groups": len(labels),
-        "nodes": total_nodes,
-        "enabled_nodes": enabled_nodes,
+        "nodes": sum(len(nodes) for nodes in groups.values()),
+        "enabled_nodes": sum(
+            1 for nodes in groups.values() for nd in nodes if not nd.disabled
+        ),
         "labels": labels[:5],
     }
 
 
 def _summarize_node_matches(step: Any, net: Any) -> Dict[str, Dict[str, Any]]:
-    """Map each node selector field of a workflow step to its match summary."""
-    summary: Dict[str, Dict[str, Any]] = {}
-    fields = _collect_step_path_fields(step)
-    if not fields:
-        return summary
-    for name, pattern in fields:
-        summary[name] = _summarize_pattern(pattern, net)
-    return summary
+    """Map each selector field of a workflow step to its match summary."""
+    from ngraph.model.selectors import Selector
+
+    return {
+        name: _summarize_selector(value, net)
+        for name, value in vars(step).items()
+        if not name.startswith("_") and isinstance(value, Selector)
+    }
+
+
+def _match_text(info: Dict[str, Any]) -> str:
+    """``groups``/``nodes`` (``enabled``) of a summary, or its error."""
+    if "error" in info:
+        return f"ERROR {info['error']}"
+    return f"{info['groups']}g/{info['nodes']}n ({info['enabled_nodes']}e)"
+
+
+def _preview_text(info: Dict[str, Any]) -> str:
+    """One preview phrase of a summary, or its error."""
+    if "error" in info:
+        return f"ERROR {info['error']}"
+    return (
+        f"{info['groups']} groups, {info['nodes']} nodes "
+        f"({info['enabled_nodes']} enabled)"
+    )
+
+
+def _parameter_text(value: Any) -> str:
+    """A step parameter as text; native output options by their fields."""
+    import netgraph_core as ngc
+
+    from ngraph.export import _output_options
+
+    if isinstance(value, Enum):
+        return value.name
+    if isinstance(value, ngc.OutputOptions):
+        fields = ", ".join(f"{k}={v}" for k, v in _output_options(value).items())
+        return f"OutputOptions({fields})"
+    return str(value)
 
 
 def _print_network_structure(
-    network: Any, components_library: Any, detail: bool
+    network: Any, components_library: Any, detail: bool, active: Dict[str, bool]
 ) -> float:
     """Print network structure summary and return total enabled link capacity.
 
@@ -195,6 +232,9 @@ def _print_network_structure(
         components_library: Components library used for hierarchy analysis.
         detail: Print the full hierarchy, every violation, and per-node and
             per-link tables instead of previews.
+        active: Whether each link (by key) is enabled: it and both of its end
+            nodes are enabled (``ngraph.hardware.link_active``). Every figure
+            below uses it.
 
     Returns:
         Total capacity across enabled links as a float. Returns 0.0 when
@@ -208,8 +248,8 @@ def _print_network_structure(
 
     enabled_nodes = [n for n in nodes.values() if not n.disabled]
     disabled_nodes = [n for n in nodes.values() if n.disabled]
-    enabled_links = [link for link in links.values() if not link.disabled]
-    disabled_links = [link for link in links.values() if link.disabled]
+    enabled_links = [link for key, link in links.items() if active[key]]
+    disabled_links = [link for key, link in links.items() if not active[key]]
 
     # Per-node attached capacity and enabled-link counts, computed in a single
     # O(E) pass shared by the detail-mode node table and the statistics block.
@@ -261,118 +301,113 @@ def _print_network_structure(
                 max_external_lines=8 if detail else 4,
                 line_prefix="   ",
             )
-        except Exception as e:
+        except ValueError as e:
+            # Invalid hardware (a count or a non-mapping value) is reported here.
             print(f"   Network Hierarchy: Unable to analyze ({e})")
         finally:
             pkg_logger.setLevel(original_level)
 
-        # Best effort: a failure here is logged at debug level and skipped.
-        try:
-            if explorer is not None:
-                node_utils = explorer.get_node_utilization()
-                link_issues = explorer.get_link_issues()
+        if explorer is not None:
+            node_utils = explorer.get_node_utilization()
+            link_issues = explorer.get_link_issues()
 
-                cap_viol = [u for u in node_utils if u.capacity_violation]
-                port_viol = [u for u in node_utils if u.ports_violation]
+            cap_viol = [u for u in node_utils if u.capacity_violation]
+            port_viol = [u for u in node_utils if u.ports_violation]
 
-                print("\n   Validation & Hardware Utilization:")
-                print(
-                    f"     nodes with capacity violations: {len(cap_viol):,}; ports violations: {len(port_viol):,}"
+            print("\n   Validation & Hardware Utilization:")
+            print(
+                f"     nodes with capacity violations: {len(cap_viol):,}; ports violations: {len(port_viol):,}"
+            )
+
+            if cap_viol:
+                cap_viol_sorted = sorted(
+                    cap_viol,
+                    key=lambda u: (u.capacity_utilization, u.node_name),
+                    reverse=True,
                 )
-
-                if cap_viol:
-                    cap_viol_sorted = sorted(
-                        cap_viol,
-                        key=lambda u: (u.capacity_utilization, u.node_name),
-                        reverse=True,
-                    )
-                    top = cap_viol_sorted if detail else cap_viol_sorted[:10]
-                    rows: list[list[str]] = []
-                    for u in top:
-                        rows.append(
-                            [
-                                u.node_name,
-                                str(u.component_name or "-"),
-                                f"{u.hw_count:g}",
-                                f"{u.capacity_supported:,.1f}",
-                                f"{u.attached_capacity_active:,.1f}",
-                                f"{u.capacity_utilization:,.2f}",
-                            ]
-                        )
-                    print("     Over-capacity nodes:")
-                    tbl = _format_table(
+                top = cap_viol_sorted if detail else cap_viol_sorted[:10]
+                rows: list[list[str]] = []
+                for u in top:
+                    rows.append(
                         [
-                            "Node",
-                            "Component",
-                            "HW Cnt",
-                            "Supported",
-                            "Attached",
-                            "Util",
-                        ],
-                        rows,
-                        max_col_width=48,
+                            u.node_name,
+                            str(u.component_name or "-"),
+                            f"{u.hw_count:g}",
+                            f"{u.capacity_supported:,.1f}",
+                            f"{u.attached_capacity_active:,.1f}",
+                            f"{u.capacity_utilization:,.2f}",
+                        ]
                     )
-                    print("\n".join(f"       {ln}" for ln in tbl.split("\n")))
-                    if not detail and len(cap_viol_sorted) > len(top):
-                        print(f"       ... and {len(cap_viol_sorted) - len(top)} more")
+                print("     Over-capacity nodes:")
+                tbl = _format_table(
+                    [
+                        "Node",
+                        "Component",
+                        "HW Cnt",
+                        "Supported",
+                        "Attached",
+                        "Util",
+                    ],
+                    rows,
+                    max_col_width=48,
+                )
+                print("\n".join(f"       {ln}" for ln in tbl.split("\n")))
+                if not detail and len(cap_viol_sorted) > len(top):
+                    print(f"       ... and {len(cap_viol_sorted) - len(top)} more")
 
-                if detail and port_viol:
-                    port_sorted = sorted(
-                        port_viol,
-                        key=lambda u: (u.ports_utilization, u.node_name),
-                        reverse=True,
-                    )
-                    rows2: list[list[str]] = []
-                    for u in port_sorted:
-                        rows2.append(
-                            [
-                                u.node_name,
-                                str(u.component_name or "-"),
-                                f"{u.hw_count:g}",
-                                f"{u.ports_available:,.1f}",
-                                f"{u.ports_used:,.1f}",
-                                f"{u.ports_utilization:,.2f}",
-                            ]
-                        )
-                    print("     Port capacity violations:")
-                    tbl2 = _format_table(
+            if detail and port_viol:
+                port_sorted = sorted(
+                    port_viol,
+                    key=lambda u: (u.ports_utilization, u.node_name),
+                    reverse=True,
+                )
+                rows2: list[list[str]] = []
+                for u in port_sorted:
+                    rows2.append(
                         [
-                            "Node",
-                            "Component",
-                            "HW Cnt",
-                            "Ports Avail",
-                            "Ports Used",
-                            "Util",
-                        ],
-                        rows2,
-                        max_col_width=48,
+                            u.node_name,
+                            str(u.component_name or "-"),
+                            f"{u.hw_count:g}",
+                            f"{u.ports_available:,.1f}",
+                            f"{u.ports_used:,.1f}",
+                            f"{u.ports_utilization:,.2f}",
+                        ]
                     )
-                    print("\n".join(f"       {ln}" for ln in tbl2.split("\n")))
+                print("     Port capacity violations:")
+                tbl2 = _format_table(
+                    [
+                        "Node",
+                        "Component",
+                        "HW Cnt",
+                        "Ports Avail",
+                        "Ports Used",
+                        "Util",
+                    ],
+                    rows2,
+                    max_col_width=48,
+                )
+                print("\n".join(f"       {ln}" for ln in tbl2.split("\n")))
 
-                if link_issues:
-                    issues = link_issues if detail else link_issues[:10]
-                    rows3: list[list[str]] = []
-                    for iss in issues:
-                        rows3.append(
-                            [
-                                iss.source,
-                                iss.target,
-                                f"{iss.capacity:,.1f}",
-                                f"{iss.limit:,.1f}",
-                                iss.reason,
-                            ]
-                        )
-                    print(
-                        f"     links exceeding per-end HW capacity: {len(link_issues):,}"
+            if link_issues:
+                issues = link_issues if detail else link_issues[:10]
+                rows3: list[list[str]] = []
+                for iss in issues:
+                    rows3.append(
+                        [
+                            iss.source,
+                            iss.target,
+                            f"{iss.capacity:,.1f}",
+                            f"{iss.limit:,.1f}",
+                            iss.reason,
+                        ]
                     )
-                    tbl3 = _format_table(
-                        ["Source", "Target", "Capacity", "Limit", "Reason"], rows3
-                    )
-                    print("\n".join(f"       {ln}" for ln in tbl3.split("\n")))
-                    if not detail and len(link_issues) > len(issues):
-                        print(f"       ... and {len(link_issues) - len(issues)} more")
-        except Exception as exc:
-            logger.debug("Failed to display hardware utilization: %s", exc)
+                print(f"     links exceeding per-end HW capacity: {len(link_issues):,}")
+                tbl3 = _format_table(
+                    ["Source", "Target", "Capacity", "Limit", "Reason"], rows3
+                )
+                print("\n".join(f"       {ln}" for ln in tbl3.split("\n")))
+                if not detail and len(link_issues) > len(issues):
+                    print(f"       ... and {len(link_issues) - len(issues)} more")
 
     if detail:
         if nodes:
@@ -399,8 +434,8 @@ def _print_network_structure(
         if links:
             print("\n   Links:")
             link_rows = []
-            for _link_id, link in links.items():
-                status = "disabled" if link.disabled else "enabled"
+            for link_id, link in links.items():
+                status = "enabled" if active[link_id] else "disabled"
                 capacity = f"{link.capacity:,.0f}"
                 cost = _format_cost(link.cost)
 
@@ -549,8 +584,11 @@ def _print_demand_sets(
 ) -> None:
     """Print demand sets summary and capacity-vs-demand ratio if available.
 
+    Selectors are counted and previewed one entry per whole selector (keyed by
+    its repr), so two selectors that share a path stay apart.
+
     Args:
-        network: Network instance for node pattern summarization.
+        network: Network instance for node selection previews.
         ds: Demand set collection to summarize.
         detail: Whether to print detailed tables.
         total_enabled_link_capacity: Sum of capacities of enabled links.
@@ -563,29 +601,26 @@ def _print_demand_sets(
         return
 
     # Totals across all sets print before the per-set breakdown.
-    try:
-        grand_total_demand = 0.0
-        grand_demand_count = 0
-        for demand_set in ds.values():
-            demands = demand_set.demands
-            grand_demand_count += len(demands)
-            for d in demands:
-                grand_total_demand += float(d.volume)
+    grand_total_demand = 0.0
+    grand_demand_count = 0
+    for demand_set in ds.values():
+        demands = demand_set.demands
+        grand_demand_count += len(demands)
+        for d in demands:
+            grand_total_demand += float(d.volume)
 
-        print("\n   Capacity vs Demand:")
-        print(f"     enabled link capacity: {total_enabled_link_capacity:,.1f}")
-        print(
-            f"     total demand (all sets): {grand_total_demand:,.1f} ({grand_demand_count:,} demands)"
-        )
-        if total_enabled_link_capacity > 0.0 and grand_total_demand > 0.0:
-            cap_per_demand = total_enabled_link_capacity / grand_total_demand
-            demand_util = grand_total_demand / total_enabled_link_capacity
-            print(f"     capacity/demand: {cap_per_demand:,.2f}x")
-            print(f"     demand/capacity: {demand_util:,.2%}")
-        else:
-            print("     ratio: N/A (zero capacity or zero demand)")
-    except Exception as exc:  # pragma: no cover (defensive)
-        print(f"   Capacity vs Demand: unable to compute ({type(exc).__name__}: {exc})")
+    print("\n   Capacity vs Demand:")
+    print(f"     enabled link capacity: {total_enabled_link_capacity:,.1f}")
+    print(
+        f"     total demand (all sets): {grand_total_demand:,.1f} ({grand_demand_count:,} demands)"
+    )
+    if total_enabled_link_capacity > 0.0 and grand_total_demand > 0.0:
+        cap_per_demand = total_enabled_link_capacity / grand_total_demand
+        demand_util = grand_total_demand / total_enabled_link_capacity
+        print(f"     capacity/demand: {cap_per_demand:,.2f}x")
+        print(f"     demand/capacity: {demand_util:,.2%}")
+    else:
+        print("     ratio: N/A (zero capacity or zero demand)")
 
     set_items = list(ds.items())[:5]
     for set_name, demand_set in set_items:
@@ -596,17 +631,18 @@ def _print_demand_sets(
             f"     {set_name}: {demand_count} demand{'s' if demand_count != 1 else ''}"
         )
 
+        selectors: Dict[str, Any] = {}
         src_counts: Dict[str, int] = {}
         tgt_counts: Dict[str, int] = {}
         pair_counts: Dict[tuple[str, str], Dict[str, float | int]] = {}
         for d in demands:
-            # Handle both string and dict selectors
-            src_key = d.source.path or str(d.source)
-            tgt_key = d.target.path or str(d.target)
+            src_key, tgt_key = repr(d.source), repr(d.target)
+            selectors[src_key], selectors[tgt_key] = d.source, d.target
             src_counts[src_key] = src_counts.get(src_key, 0) + 1
             tgt_counts[tgt_key] = tgt_counts.get(tgt_key, 0) + 1
-            key = (src_key, tgt_key)
-            stats = pair_counts.setdefault(key, {"count": 0, "volume": 0.0})
+            stats = pair_counts.setdefault(
+                (src_key, tgt_key), {"count": 0, "volume": 0.0}
+            )
             stats["count"] = int(stats["count"]) + 1
             stats["volume"] = float(stats["volume"]) + float(d.volume)
 
@@ -617,28 +653,18 @@ def _print_demand_sets(
             )
 
             rows: list[list[str]] = []
-            for (src_pat, tgt_pat), stats in list(pair_counts.items())[:10]:
-                src_info = _summarize_pattern(src_pat, network)
-                tgt_info = _summarize_pattern(tgt_pat, network)
-                src_match = (
-                    f"{src_info['groups']}g/{src_info['nodes']}n ({src_info['enabled_nodes']}e)"
-                    if "error" not in src_info
-                    else f"ERROR {src_info['error']}"
-                )
-                tgt_match = (
-                    f"{tgt_info['groups']}g/{tgt_info['nodes']}n ({tgt_info['enabled_nodes']}e)"
-                    if "error" not in tgt_info
-                    else f"ERROR {tgt_info['error']}"
-                )
+            for (src_key, tgt_key), stats in list(pair_counts.items())[:10]:
+                src_info = _summarize_selector(selectors[src_key], network)
+                tgt_info = _summarize_selector(selectors[tgt_key], network)
                 label_preview = ", ".join(src_info.get("labels", [])) or "-"
                 rows.append(
                     [
-                        src_pat,
-                        tgt_pat,
+                        src_info["label"],
+                        tgt_info["label"],
                         str(int(stats["count"])),
                         f"{float(stats['volume']):,.0f}",
-                        src_match,
-                        tgt_match,
+                        _match_text(src_info),
+                        _match_text(tgt_info),
                         label_preview,
                     ]
                 )
@@ -658,73 +684,45 @@ def _print_demand_sets(
                 )
                 print("\n".join(f"         {line}" for line in table.split("\n")))
 
-            try:
-                top_n = 5
-                sorted_demands = sorted(
-                    demands,
-                    key=lambda d: float(d.volume),
-                    reverse=True,
-                )[:top_n]
-                if sorted_demands:
-                    print("       Top demands (by offered volume):")
-                    top_rows: list[list[str]] = []
-                    for d in sorted_demands:
-                        src = d.source.path or str(d.source)
-                        tgt = d.target.path or str(d.target)
-                        top_rows.append(
-                            [
-                                src,
-                                tgt,
-                                f"{float(d.volume):,.1f}",
-                                str(d.priority),
-                            ]
-                        )
-                    top_table = _format_table(
-                        ["Source", "Target", "Offered", "Priority"],
-                        top_rows,
-                    )
-                    print(
-                        "\n".join(f"         {line}" for line in top_table.split("\n"))
-                    )
-            except Exception as exc:
-                logger.debug("Failed to display top demands: %s", exc)
+            top_n = 5
+            sorted_demands = sorted(
+                demands,
+                key=lambda d: float(d.volume),
+                reverse=True,
+            )[:top_n]
+            if sorted_demands:
+                print("       Top demands (by offered volume):")
+                top_rows = [
+                    [
+                        _selector_label(d.source),
+                        _selector_label(d.target),
+                        f"{float(d.volume):,.1f}",
+                        str(d.priority),
+                    ]
+                    for d in sorted_demands
+                ]
+                top_table = _format_table(
+                    ["Source", "Target", "Offered", "Priority"],
+                    top_rows,
+                )
+                print("\n".join(f"         {line}" for line in top_table.split("\n")))
 
-            if demands:
-                for i, demand in enumerate(demands[:3]):
-                    src = (
-                        demand.source
-                        if isinstance(demand.source, str)
-                        else str(demand.source)
-                    )
-                    tgt = (
-                        demand.target
-                        if isinstance(demand.target, str)
-                        else str(demand.target)
-                    )
-                    print(f"       {i + 1}. {src} -> {tgt} ({demand.volume})")
-                if demand_count > 3:
-                    print(f"       ... and {demand_count - 3} more demands")
+            for i, demand in enumerate(demands[:3]):
+                print(
+                    f"       {i + 1}. {_selector_label(demand.source)} -> "
+                    f"{_selector_label(demand.target)} ({demand.volume})"
+                )
+            if demand_count > 3:
+                print(f"       ... and {demand_count - 3} more demands")
         else:
             print(f"       total demand: {total_volume:,.0f}")
             print("       Node selection preview:")
             top_src = sorted(src_counts.items(), key=lambda kv: -kv[1])[:2]
             top_tgt = sorted(tgt_counts.items(), key=lambda kv: -kv[1])[:2]
-            for name, _ in top_src:
-                info = _summarize_pattern(name, network)
-                if "error" in info:
-                    print(f"         source {name}: ERROR {info['error']}")
-                else:
-                    print(
-                        f"         source {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
-                    )
-            for name, _ in top_tgt:
-                info = _summarize_pattern(name, network)
-                if "error" in info:
-                    print(f"         target {name}: ERROR {info['error']}")
-                else:
-                    print(
-                        f"         target {name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
-                    )
+            for role, top in (("source", top_src), ("target", top_tgt)):
+                for key, _ in top:
+                    info = _summarize_selector(selectors[key], network)
+                    print(f"         {role} {info['label']}: {_preview_text(info)}")
 
     if set_count > 5:
         remaining = set_count - 5
@@ -737,22 +735,22 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
     Args:
         scenario: Scenario object providing the ``workflow`` sequence.
         detail: When True, include step parameters and node match tables.
-        network: Network used to summarize node selection field matches.
+        network: Network used to summarize the steps' selector fields.
     """
+    from ngraph.workflow.base import step_name
+
     print("\n7. WORKFLOW STEPS")
     print("-" * 30)
     step_count = len(scenario.workflow)
     print(f"   Total: {step_count}")
     if not scenario.workflow:
         return
+    determinism = "deterministic" if scenario.seed is not None else "random"
     if not detail:
-        workflow_rows = []
-        for i, step in enumerate(scenario.workflow):
-            step_name = step.name or f"step_{i + 1}"
-            step_type = step.__class__.__name__
-            determinism = "deterministic" if scenario.seed is not None else "random"
-            workflow_rows.append([str(i + 1), step_name, step_type, determinism])
-
+        workflow_rows = [
+            [str(i + 1), step_name(step), step.__class__.__name__, determinism]
+            for i, step in enumerate(scenario.workflow)
+        ]
         # Column shows determinism (scenario-level), not the numeric step seed
         workflow_table = _format_table(
             ["#", "Name", "Type", "Determinism"], workflow_rows
@@ -766,37 +764,28 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
             if not match_info:
                 continue
             any_preview = True
-            parts: list[str] = []
-            for field_name, info in match_info.items():
-                if "error" in info:
-                    parts.append(f"{field_name}: ERROR {info['error']}")
-                else:
-                    parts.append(
-                        f"{field_name}: {info['groups']} groups, {info['nodes']} nodes ({info['enabled_nodes']} enabled)"
-                    )
-            label = step.name or step.__class__.__name__
-            print(f"     {i + 1}. {label}: " + "; ".join(parts))
+            parts = [
+                f"{field_name}: {_preview_text(info)}"
+                for field_name, info in match_info.items()
+            ]
+            print(f"     {i + 1}. {step_name(step)}: " + "; ".join(parts))
         if not any_preview:
             print("     (no node selection fields in workflow steps)")
     else:
         for i, step in enumerate(scenario.workflow):
-            step_name = step.name or f"step_{i + 1}"
             step_type = step.__class__.__name__
-            determinism = "deterministic" if scenario.seed is not None else "random"
             seed_info = (
                 f" (seed: {step.seed}, {determinism})"
                 if step.seed is not None
                 else f" ({determinism})"
             )
-            print(f"     {i + 1}. {step_name} ({step_type}){seed_info}")
+            print(f"     {i + 1}. {step_name(step)} ({step_type}){seed_info}")
 
-            step_dict = step.__dict__
-            param_rows = []
-            for key, value in step_dict.items():
-                if key not in ["name", "seed"] and not key.startswith("_"):
-                    shown = value.name if isinstance(value, Enum) else str(value)
-                    param_rows.append([key, shown])
-
+            param_rows = [
+                [key, _parameter_text(value)]
+                for key, value in step.__dict__.items()
+                if key not in ["name", "seed"] and not key.startswith("_")
+            ]
             if param_rows:
                 param_table = _format_table(["Parameter", "Value"], param_rows)
                 indented_table = "\n".join(
@@ -809,14 +798,7 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
                 rows: list[List[str]] = []
                 for field_name, info in match_info.items():
                     if "error" in info:
-                        rows.append(
-                            [
-                                field_name,
-                                info["pattern"],
-                                "ERROR",
-                                info["error"],
-                            ]
-                        )
+                        rows.append([field_name, info["label"], "ERROR", info["error"]])
                     else:
                         label_preview = (
                             ", ".join(info["labels"]) if info["labels"] else "-"
@@ -824,20 +806,19 @@ def _print_workflow_steps(scenario: Any, detail: bool, network: Any) -> None:
                         rows.append(
                             [
                                 field_name,
-                                info["pattern"],
+                                info["label"],
                                 f"{info['groups']} groups / {info['nodes']} nodes",
                                 f"{info['enabled_nodes']} enabled; labels: {label_preview}",
                             ]
                         )
-                if rows:
-                    print("        Node matches:")
-                    match_table = _format_table(
-                        ["Field", "Pattern", "Matches", "Details"], rows
-                    )
-                    indented = "\n".join(
-                        f"        {line}" for line in match_table.split("\n")
-                    )
-                    print(indented)
+                print("        Node matches:")
+                match_table = _format_table(
+                    ["Field", "Pattern", "Matches", "Details"], rows
+                )
+                indented = "\n".join(
+                    f"        {line}" for line in match_table.split("\n")
+                )
+                print(indented)
                 if all(
                     (info.get("nodes", 0) == 0) and ("error" not in info)
                     for info in match_info.values()
@@ -855,9 +836,11 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         detail: Include full node and link tables, all names, and step
             parameters.
     """
+    from ngraph.hardware import link_active
+    from ngraph.scenario import Scenario
+
     logger.info(f"Inspecting scenario from: {path}")
     _start_time = perf_counter()
-
     try:
         yaml_text = path.read_text()
         logger.info("✓ YAML file loaded")
@@ -877,66 +860,55 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
         print("NETGRAPH SCENARIO INSPECTION")
         print("=" * 60)
 
-        try:
-            network = scenario.network
-            nodes = network.nodes
-            links = network.links
-            enabled_nodes = [n for n in nodes.values() if not n.disabled]
-            enabled_links = [lk for lk in links.values() if not lk.disabled]
-            en_nodes_pct = (len(enabled_nodes) / len(nodes) * 100.0) if nodes else 0.0
-            en_links_pct = (len(enabled_links) / len(links) * 100.0) if links else 0.0
-            total_enabled_capacity = float(
-                sum(float(lk.capacity) for lk in enabled_links)
-            )
+        network = scenario.network
+        nodes = network.nodes
+        links = network.links
+        active = {key: link_active(network, link) for key, link in links.items()}
+        enabled_nodes = [n for n in nodes.values() if not n.disabled]
+        enabled_links = [lk for key, lk in links.items() if active[key]]
+        en_nodes_pct = (len(enabled_nodes) / len(nodes) * 100.0) if nodes else 0.0
+        en_links_pct = (len(enabled_links) / len(links) * 100.0) if links else 0.0
+        total_enabled_capacity = float(sum(float(lk.capacity) for lk in enabled_links))
 
-            ds = scenario.demand_sets
-            set_count = len(ds)
-            total_demands = 0
-            total_demand_volume = 0.0
-            for demand_set in ds.values():
-                demands = demand_set.demands
-                total_demands += len(demands)
-                for d in demands:
-                    total_demand_volume += float(d.volume)
+        ds = scenario.demand_sets
+        set_count = len(ds)
+        total_demands = 0
+        total_demand_volume = 0.0
+        for demand_set in ds.values():
+            demands = demand_set.demands
+            total_demands += len(demands)
+            for d in demands:
+                total_demand_volume += float(d.volume)
 
-            util = (
-                (total_demand_volume / total_enabled_capacity)
-                if total_enabled_capacity > 0
-                else 0.0
-            )
+        util = (
+            (total_demand_volume / total_enabled_capacity)
+            if total_enabled_capacity > 0
+            else 0.0
+        )
 
-            rg_total = len(network.risk_groups)
-            rg_disabled = (
-                sum(1 for rg in network.risk_groups.values() if rg.disabled)
-                if rg_total
-                else 0
-            )
+        rg_total = len(network.risk_groups)
+        rg_disabled = sum(1 for rg in network.risk_groups.values() if rg.disabled)
 
-            wf_steps = len(scenario.workflow)
-
-            print("\nOVERVIEW")
-            print("-" * 30)
-            rows: List[List[str]] = [
-                ["Nodes", f"{len(nodes):,}"],
-                ["Links", f"{len(links):,}"],
-                [
-                    "Enabled",
-                    f"{len(enabled_nodes):,} nodes ({en_nodes_pct:.1f}%), {len(enabled_links):,} links ({en_links_pct:.1f}%)",
-                ],
-                ["Capacity (enabled)", f"{total_enabled_capacity:,.1f}"],
-                [
-                    "Demand (all sets)",
-                    f"{total_demand_volume:,.1f} ({total_demands:,} demands across {set_count} sets)",
-                ],
-                ["Utilization", f"{util:,.2%}"],
-                ["Risk groups", f"{rg_total} total; {rg_disabled} disabled"],
-                ["Workflow steps", f"{wf_steps}"],
-            ]
-            overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
-            print(overview_table)
-        except Exception as exc:
-            # Best effort; the numbered sections below still print.
-            logger.debug("Failed to display overview section: %s", exc)
+        print("\nOVERVIEW")
+        print("-" * 30)
+        rows: List[List[str]] = [
+            ["Nodes", f"{len(nodes):,}"],
+            ["Links", f"{len(links):,}"],
+            [
+                "Enabled",
+                f"{len(enabled_nodes):,} nodes ({en_nodes_pct:.1f}%), {len(enabled_links):,} links ({en_links_pct:.1f}%)",
+            ],
+            ["Capacity (enabled)", f"{total_enabled_capacity:,.1f}"],
+            [
+                "Demand (all sets)",
+                f"{total_demand_volume:,.1f} ({total_demands:,} demands across {set_count} sets)",
+            ],
+            ["Utilization", f"{util:,.2%}"],
+            ["Risk groups", f"{rg_total} total; {rg_disabled} disabled"],
+            ["Workflow steps", f"{len(scenario.workflow)}"],
+        ]
+        overview_table = _format_table(["Metric", "Value"], rows, max_col_width=64)
+        print(overview_table)
 
         print("\n1. SCENARIO METADATA")
         print("-" * 30)
@@ -951,9 +923,8 @@ def _inspect_scenario(path: Path, detail: bool = False) -> None:
 
         print("\n2. NETWORK STRUCTURE")
         print("-" * 30)
-        network = scenario.network
         total_enabled_link_capacity = _print_network_structure(
-            network, scenario.components_library, detail
+            network, scenario.components_library, detail, active
         )
         _print_risk_groups(network, detail)
         _print_components_library(scenario.components_library, detail)
@@ -1005,17 +976,17 @@ def _run_scenario(
     File output replaces the destination atomically after complete encoding.
     """
     import tempfile
-    from dataclasses import replace
 
     from ngraph.export import _encode_json
-    from ngraph.scenario import prepare, run
+    from ngraph.scenario import Scenario, prepare, run
+    from ngraph.workflow.base import step_name
 
     logger.info("Loading scenario from: %s", path)
     started = perf_counter()
     try:
         scenario = Scenario.from_yaml(path.read_text())
         if keys:
-            names = {step.name or type(step).__name__ for step in scenario.workflow}
+            names = {step_name(step) for step in scenario.workflow}
             unknown = sorted(set(keys) - names)
             if unknown:
                 raise ValueError(
@@ -1033,9 +1004,7 @@ def _run_scenario(
 
             @contextmanager
             def profile_step(step: WorkflowStep) -> Iterator[None]:
-                with profiler.profile_step(
-                    step.name or type(step).__name__, type(step).__name__
-                ):
+                with profiler.profile_step(step_name(step), type(step).__name__):
                     yield
 
             result = run(prepared, step_hook=profile_step)

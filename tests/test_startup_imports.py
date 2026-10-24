@@ -1,9 +1,13 @@
 """Importing the package loads only what a run uses."""
 
+import ast
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
+
+import ngraph
 
 
 def check(code: str) -> None:
@@ -19,6 +23,8 @@ def test_public_names_load_their_modules_on_first_use_and_keep_identity():
         """
 import sys
 import ngraph
+loaded = {m for m in sys.modules if m == "ngraph" or m.startswith("ngraph.")}
+assert loaded == {"ngraph", "ngraph.logging"}, sorted(loaded)
 for module in ("ngraph.analysis.paths", "ngraph.analysis.sensitivity",
                "ngraph.results", "ngraph.scenario", "ngraph.explorer"):
     assert module not in sys.modules, module
@@ -114,6 +120,64 @@ routed = replace(s, routes={"fixed": RouteSpec("A", nodes=("A", "B"))})
 compiled = prepare(routed, demand_sets=("d",))
 assert "ngraph.analysis.programs" in sys.modules
 assert "fixed" in compiled._named.routes
+print("verified")
+"""
+    )
+
+
+def test_the_three_public_name_declarations_agree():
+    """TYPE_CHECKING imports, the lazy-load map and __all__ name the same symbols."""
+    source = Path(ngraph.__file__).read_text()
+    typed = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
+            for item in node.body:
+                if isinstance(item, ast.ImportFrom):
+                    typed |= {alias.asname or alias.name for alias in item.names}
+    mapped = set(ngraph._EXPORTS)
+    exported = set(ngraph.__all__) - {"__version__"}
+    assert typed == mapped == exported
+    assert len(exported) == 123
+
+
+def test_command_line_help_loads_no_engine():
+    """`ngraph --help` and argument errors need no Core, NumPy, YAML or analysis module."""
+    check(
+        """
+import contextlib, io, sys
+from ngraph.cli import main
+with contextlib.redirect_stdout(io.StringIO()) as help_text:
+    try:
+        main(["--help"])
+    except SystemExit as exc:
+        assert exc.code == 0
+assert "usage: ngraph" in help_text.getvalue()
+for module in ("netgraph_core", "_netgraph_core", "numpy", "yaml", "ngraph.scenario",
+               "ngraph.hardware", "ngraph.workflow.base", "ngraph.explorer"):
+    assert module not in sys.modules, module
+loaded = sorted(m for m in sys.modules if m == "ngraph" or m.startswith("ngraph."))
+assert loaded == ["ngraph", "ngraph.cli", "ngraph.logging", "ngraph.utils",
+                  "ngraph.utils.output_paths"], loaded
+print("verified")
+"""
+    )
+
+
+@pytest.mark.slow
+def test_a_cost_power_run_loads_the_inventory_not_the_explorer():
+    """CostPower reads ngraph.hardware; the explorer stays unloaded."""
+    check(
+        """
+import sys
+from ngraph.scenario import Scenario, prepare, run
+scenario = Scenario.from_yaml(
+    "network: {nodes: {A: {attrs: {hardware: {component: C}}}}}\\n"
+    "components: {C: {capex: 2}}\\n"
+    "workflow: [{type: CostPower, name: c, aggregation_level: 0}]\\n"
+)
+assert run(prepare(scenario)).steps[0].result.levels[0][0].capex_total == 2.0
+assert "ngraph.hardware" in sys.modules
+assert "ngraph.explorer" not in sys.modules
 print("verified")
 """
     )

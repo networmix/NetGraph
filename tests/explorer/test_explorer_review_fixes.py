@@ -1,7 +1,7 @@
 """Regression tests for NetworkExplorer.
 
 Covers:
-- get_bom_map include_root/root_label contract.
+- whole-network and subtree BOMs.
 - get_node_utilization covers enabled nodes only.
 - Node utilization and strict validation computed via the O(E) adjacency pre-pass.
 - External link details name the opposite endpoint's full path.
@@ -43,36 +43,18 @@ def _network_with_hw() -> Network:
     return net
 
 
-class TestGetBomMapIncludeRoot:
-    """get_bom_map must honor include_root and not duplicate the root entry."""
+class TestSubtreeBom:
+    """The whole-network BOM and each subtree's own BOM."""
 
-    def test_include_root_false_omits_root(self) -> None:
+    def test_root_and_subtree_boms(self) -> None:
         explorer = NetworkExplorer.explore_network(
             _network_with_hw(), components_library=_library()
         )
-        bom_map = explorer.get_bom_map(include_root=False)
-        assert "" not in bom_map
-        # Subtree entries remain present.
-        assert "dc1" in bom_map
-        assert "dc2/b" in bom_map
-        assert bom_map["dc1"] == {"box": 1.0}
-
-    def test_include_root_default_label_yields_single_root_entry(self) -> None:
-        explorer = NetworkExplorer.explore_network(
-            _network_with_hw(), components_library=_library()
-        )
-        bom_map = explorer.get_bom_map(include_root=True)
-        assert bom_map[""] == explorer.get_bom()
-        assert bom_map[""] == {"box": 2.0}
-
-    def test_include_root_custom_label_not_duplicated(self) -> None:
-        explorer = NetworkExplorer.explore_network(
-            _network_with_hw(), components_library=_library()
-        )
-        bom_map = explorer.get_bom_map(include_root=True, root_label="ROOT")
-        assert bom_map["ROOT"] == explorer.get_bom()
-        # Root must not also appear under its path-map key "".
-        assert "" not in bom_map
+        root = explorer.root_node
+        assert root is not None
+        assert explorer.get_bom() == dict(root.stats.bom) == {"box": 2.0}
+        assert dict(root.children["dc1"].stats.bom) == {"box": 1.0}
+        assert dict(root.children["dc2"].children["b"].stats.bom) == {"box": 1.0}
 
 
 class TestGetNodeUtilizationEnabledOnly:

@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from ngraph import cli
+from ngraph.hardware import link_active
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.network import Link, Network, Node
 
@@ -22,6 +23,14 @@ def _capture_print(func, *args, **kwargs) -> str:
     with patch("sys.stdout", new=io.StringIO()), patch("builtins.print") as mprint:
         func(*args, **kwargs)
     return "\n".join(str(c.args[0]) for c in mprint.call_args_list if c.args)
+
+
+def _structure(net: Network, detail: bool) -> str:
+    """The printed network structure, each link enabled as ``link_active`` says."""
+    active = {key: link_active(net, link) for key, link in net.links.items()}
+    return _capture_print(
+        cli._print_network_structure, net, ComponentsLibrary(), detail, active
+    )
 
 
 def _table_rows(output: str, heading: str) -> list[list[str]]:
@@ -59,9 +68,7 @@ def _build_network_with_self_loop() -> Network:
 
 def test_node_table_capacity_and_link_counts_single_pass() -> None:
     net = _build_network_with_self_loop()
-    out = _capture_print(
-        cli._print_network_structure, net, ComponentsLibrary(), detail=True
-    )
+    out = _structure(net, detail=True)
 
     rows = _table_rows(out, "Nodes:")
     # Drop header row
@@ -79,9 +86,7 @@ def test_node_table_capacity_and_link_counts_single_pass() -> None:
 
 def test_node_capacity_statistics_match_naive_aggregation() -> None:
     net = _build_network_with_self_loop()
-    out = _capture_print(
-        cli._print_network_structure, net, ComponentsLibrary(), detail=False
-    )
+    out = _structure(net, detail=False)
 
     rows = _table_rows(out, "Node Capacity Statistics:")
     stats = {r[0]: r[1] for r in rows if len(r) >= 2}
@@ -99,9 +104,7 @@ def test_node_capacity_statistics_exclude_isolated_nodes() -> None:
         net.add_node(Node(name=name))
     net.add_link(Link(source="A", target="B", capacity=8.0))
 
-    out = _capture_print(
-        cli._print_network_structure, net, ComponentsLibrary(), detail=False
-    )
+    out = _structure(net, detail=False)
 
     rows = _table_rows(out, "Node Capacity Statistics:")
     stats = {r[0]: r[1] for r in rows if len(r) >= 2}

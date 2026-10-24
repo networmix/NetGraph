@@ -84,48 +84,49 @@ def test_node_capacity_validation_strict() -> None:
     assert "Node 'A' total attached capacity" in str(exc.value)
 
 
-def test_link_capacity_validation_strict() -> None:
-    """Link capacity must be <= link HW capacity * hw_count if set."""
+def _optic_link(capacity: float, count: float, platforms: bool) -> Network:
     net = Network()
-    net.nodes["A"] = Node(name="A")
-    net.nodes["B"] = Node(name="B")
-    # Link requires optic capacity 100, but capacity is 120 -> should fail
+    for name in ("A", "B"):
+        attrs = {"hardware": {"component": "box"}} if platforms else {}
+        net.nodes[name] = Node(name=name, attrs=attrs)
     net.links["L1"] = Link(
         source="A",
         target="B",
-        capacity=120.0,
+        capacity=capacity,
         attrs={
             "hardware": {
-                "source": {"component": "optic", "count": 1},
-                "target": {"component": "optic", "count": 1},
+                "source": {"component": "optic", "count": count},
+                "target": {"component": "optic", "count": count},
             }
         },
     )
+    return net
 
+
+def test_link_ends_without_platforms_form_no_limit() -> None:
+    """Optics count only where the endpoint has a platform, so no limit forms here."""
     lib = _lib_with_box_and_optic()
-    # Without node hardware on endpoints, optics and their capacity are ignored.
-    # This should not raise.
-    NetworkExplorer.explore_network(net, components_library=lib)
-
-
-def test_link_capacity_with_multiplier_allows() -> None:
-    """Multiplier on link HW allows higher capacity within bounds."""
-    net = Network()
-    net.nodes["A"] = Node(name="A")
-    net.nodes["B"] = Node(name="B")
-    # Optic capacity 100 each end, count=2 -> min(200, 200) allows 180
-    net.links["L1"] = Link(
-        source="A",
-        target="B",
-        capacity=180.0,
-        attrs={
-            "hardware": {
-                "source": {"component": "optic", "count": 2},
-                "target": {"component": "optic", "count": 2},
-            }
-        },
+    explorer = NetworkExplorer.explore_network(
+        _optic_link(120.0, 1, platforms=False), components_library=lib
     )
+    assert explorer.get_link_issues() == []
+    with pytest.raises(ValueError, match="capacity 120 exceeds per-end hardware"):
+        NetworkExplorer.explore_network(
+            _optic_link(120.0, 1, platforms=True), components_library=lib
+        )
 
+
+def test_link_limit_scales_with_the_optic_count() -> None:
+    """Two optics of capacity 100 per end allow 180 and refuse 220 (limit 200)."""
     lib = _lib_with_box_and_optic()
-    # Should not raise
-    NetworkExplorer.explore_network(net, components_library=lib)
+    NetworkExplorer.explore_network(
+        _optic_link(180.0, 2, platforms=True), components_library=lib
+    )
+    explorer = NetworkExplorer.explore_network(
+        _optic_link(220.0, 2, platforms=True),
+        components_library=lib,
+        strict_validation=False,
+    )
+    assert [(i.capacity, i.limit) for i in explorer.get_link_issues()] == [
+        (220.0, 200.0)
+    ]

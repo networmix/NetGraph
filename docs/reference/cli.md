@@ -64,7 +64,9 @@ After loading and validating the scenario file, `inspect` reports:
 - **Components library**: components available to the scenario
 - **Failure policies**: each policy's mode count (modes and rules in detail mode)
 - **Demand sets**: demand patterns and volumes, capacity-vs-demand summary
-- **Workflow steps**: the steps that would run, in order
+- **Workflow steps**: the steps that would run, in order, with their parameters in detail mode
+
+A link counts as enabled when it and both of its end nodes are enabled, in every figure. A selector preview reads `<label>: G groups, N nodes (E enabled)`: the label is the selector's path (`*` without one) followed by its other parts, for example `^A [match: role == edge or tier == 1]`, `* [group_by: role]` or `^A [active_only: false]`; N counts every node the selector matches with its `active_only` filter lifted, E the enabled ones among them, and G the groups of those N nodes. Each distinct selector is listed on its own, also when two share a path. An invalid selector (for example an unterminated regex) prints `ERROR` with the reason, and invalid hardware prints under the hierarchy as `Unable to analyze (...)`; `inspect` still finishes.
 
 **Examples:**
 
@@ -99,7 +101,7 @@ ngraph [--verbose|--quiet] run <scenario_file> [options]
 - `--no-results`: Disable results file generation
 - `--stdout`: Print results to stdout in addition to saving file. Log output, status banners, the `--profile` performance report, and run error messages all go to stderr, so stdout contains only the JSON results (safe to pipe to `jq`)
 - `--keys`, `-k`: Space-separated list of workflow step names to include in output; an unknown name is an error
-- `--profile`: Print per-step elapsed times and the Python call profile to stderr
+- `--profile`: Print per-step wall time, process CPU time and the Python call profile to stderr
 - `--profile-memory`: Also track peak memory per step (requires `--profile`)
 - `--output`, `-o`: Output directory for the results file
 
@@ -153,7 +155,7 @@ ngraph run scenarios/backbone_clos.yml --profile --results analysis.json
 ngraph run scenarios/backbone_clos.yml --profile --profile-memory --keys tm_placement
 ```
 
-The report lists total elapsed time, time per step, steps taking more than 10% of the total and the Python call profile within those steps. It does not attribute work inside native routines to individual C++ functions. The report is printed to stderr.
+The report lists total elapsed time, time per step, steps taking more than 10% of the total and the Python call profile within those steps. A step's CPU time is the process's CPU time while it runs, across all threads and native work included, so CPU efficiency (CPU time over wall time) can exceed 100% when worker threads run. The function table ranks cProfile's internal time on the profiled thread; work on other threads appears only in the CPU totals, and work inside native routines is not split by C++ function. The report is printed to stderr.
 
 ### Output Format
 

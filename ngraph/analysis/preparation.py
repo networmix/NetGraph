@@ -72,6 +72,7 @@ from ngraph.results import (
     approximations,
 )
 from ngraph.utils.values import physical
+from ngraph.workflow.base import step_name
 
 if TYPE_CHECKING:
     from ngraph.analysis.controller import ControllerSetup
@@ -289,7 +290,7 @@ def prepare_scenario(
     numerical, active, capacities, providers, failing = [], [], [], set(), []
     simultaneous, counting, declared_inputs = [], [], []
     for step in scenario.workflow:
-        name = step.name or type(step).__name__
+        name = step_name(step)
         needs = step.needs()
         if needs is None:
             continue
@@ -423,7 +424,7 @@ def prepare_scenario(
     expansion, _ = expansion_bounds(plans, 1.0, settings.precision)
     steps: tuple[tuple[str, int | None, SeedSource], ...] = tuple(
         (
-            step.name or type(step).__name__,
+            step_name(step),
             step.seed,
             step.seed_source,
         )

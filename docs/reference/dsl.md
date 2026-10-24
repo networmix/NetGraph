@@ -795,7 +795,7 @@ network:
           target: {component: "Optic400G", count: 4}
 ```
 
-`count` (default 1) must be a finite positive number; any other value raises `ValueError` when the hardware is resolved (by the `CostPower` step or the network explorer). A link end may also set `exclusive: true` to mark its hardware as not shared with other links; the explorer's bill of materials then rounds that end's count up to a whole unit.
+`hardware`, and each of a link's `source` and `target`, must be a mapping (`null` counts as absent). `count` (default 1) must be a finite positive number that fits a float, whether or not the node or link is enabled; the `CostPower` step and the network explorer refuse any other value with a `ValueError` naming the node or link end (for example `link a|b|0 source end: ...`), before any capacity or port check. A link end counts only where its endpoint node has hardware. A link end may also set `exclusive: true` to mark its hardware as not shared with other links; the explorer's bill of materials then rounds that end's count up to a whole unit, while cost, power and ports use the declared count. Bill-of-materials counts are float sums: integer counts are exact while a total stays at most 2^53.
 
 ## `risk_groups` - Risk Modeling
 

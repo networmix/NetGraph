@@ -25,10 +25,6 @@ def prepared():
     return prepare_network(network)
 
 
-def named_hops(topology, path):
-    return tuple(tuple(topology.edge_refs[edge] for edge in hop) for hop in path.hops())
-
-
 def test_spf_combine_keeps_global_minimum_and_costs_only_skips_expansion():
     context = prepared()
     query = PathQuery(Selector("^s"), Selector("^t$"))

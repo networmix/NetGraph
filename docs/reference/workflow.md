@@ -38,7 +38,7 @@ workflow:
     aggregation_level: 2
 ```
 
-Returns hardware rows grouped by hierarchy level, with platform and link-end optics capex/power. The aggregation level is a nonnegative integer. Hardware validation remains available through the explorer and `inspect`.
+Returns hardware rows grouped by hierarchy level, with platform and link-end optics capex/power. The aggregation level is a nonnegative integer. Hardware validation remains available through the explorer and `inspect`. Both read one hardware inventory: an optic counts only where its endpoint node has hardware, `include_disabled: false` keeps enabled nodes and links whose two end nodes are enabled, and invalid hardware (see the DSL `components` section) is refused in either view.
 
 ## MaxFlow
 

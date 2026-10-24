@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import numbers
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 import yaml
@@ -356,18 +357,38 @@ def _positive_count(value: Any) -> float:
     """Return a hardware ``count`` as a finite positive float.
 
     Raises:
-        ValueError: If ``value`` is not a finite number greater than zero.
+        ValueError: If ``value`` is not a finite number greater than zero,
+            including an integer too large for a float.
     """
-    count = (
-        float(value)
-        if isinstance(value, numbers.Real) and not isinstance(value, bool)
-        else float("nan")
-    )
+    try:
+        count = (
+            float(value)
+            if isinstance(value, numbers.Real) and not isinstance(value, bool)
+            else float("nan")
+        )
+    except OverflowError:
+        count = float("inf")
     if not (count > 0 and math.isfinite(count)):
+        # Decimal writes any int (bool aside) past Python's int-to-str digit limit.
+        if isinstance(value, int) and not isinstance(value, bool):
+            text = str(Decimal(value))
+        else:
+            text = repr(value)
         raise ValueError(
-            f"Hardware 'count' must be a finite positive number, got {value!r}"
+            f"Hardware 'count' must be a finite positive number, got {text}"
         )
     return count
+
+
+def _require_mapping(value: Any) -> Dict[str, Any]:
+    """Return a ``hardware`` value that is a mapping.
+
+    Raises:
+        ValueError: If ``value`` is not a mapping.
+    """
+    if not isinstance(value, dict):
+        raise ValueError(f"hardware must be a mapping, got {value!r}")
+    return value
 
 
 def resolve_node_hardware(
@@ -377,7 +398,7 @@ def resolve_node_hardware(
 
     Expects the mapping: ``{"hardware": {"component": NAME, "count": N}}``.
     ``count`` defaults to 1. If ``component`` is missing or unknown, the
-    component is None.
+    component is None; an absent or null ``hardware`` has none.
 
     Args:
         attrs: Node attributes mapping.
@@ -387,13 +408,14 @@ def resolve_node_hardware(
         Tuple of (component or None, positive multiplier).
 
     Raises:
-        ValueError: If ``count`` is not a finite positive number.
+        ValueError: If ``hardware`` is not a mapping or ``count`` is not a
+            finite positive number.
     """
     hw = attrs.get("hardware")
-    if not isinstance(hw, dict):
+    if hw is None:
         return None, 1.0
 
-    name_raw = hw.get("component")
+    name_raw = _require_mapping(hw).get("component")
     comp = library.get(str(name_raw)) if name_raw else None
     return comp, _positive_count(hw.get("count", 1))
 
@@ -416,6 +438,30 @@ def totals_with_multiplier(
     return capex, power, capacity
 
 
+def resolve_link_end(
+    spec: Dict[str, Any], library: ComponentsLibrary
+) -> Tuple[Optional[Component], float, bool]:
+    """Resolve one link end's hardware: ``{"component": NAME, "count": N}``.
+
+    ``count`` defaults to 1. An optional ``exclusive: true`` marks unsharable
+    use; the bill of materials rounds such an end's count up to an integer.
+
+    Returns:
+        (component or None when the name is absent or unknown, count, exclusive).
+
+    Raises:
+        ValueError: If ``spec`` is not a mapping or ``count`` is not a finite
+            positive number.
+    """
+    comp_name = _require_mapping(spec).get("component")
+    comp = library.get(str(comp_name)) if comp_name is not None else None
+    return (
+        comp,
+        _positive_count(spec.get("count", 1)),
+        bool(spec.get("exclusive", False)),
+    )
+
+
 def resolve_link_end_components(
     attrs: Dict[str, Any],
     library: ComponentsLibrary,
@@ -429,8 +475,8 @@ def resolve_link_end_components(
     ``hardware`` key only:
       ``{"hardware": {"source": {"component": NAME, "count": N},
                        "target": {"component": NAME, "count": N}}}``
-    An optional ``exclusive: true`` per end indicates unsharable usage; BOM
-    counting rounds the count of an exclusive end up to an integer.
+    Each end resolves with ``resolve_link_end``; an absent or null end has no
+    component.
 
     Args:
         attrs: Link attributes mapping.
@@ -442,22 +488,15 @@ def resolve_link_end_components(
         unknown.
 
     Raises:
-        ValueError: If an end's ``count`` is not a finite positive number.
+        ValueError: If ``hardware`` or an end is not a mapping, or an end's
+            ``count`` is not a finite positive number.
     """
-
-    def _from_mapping(
-        mapping: Dict[str, Any],
-    ) -> tuple[Optional[Component], float, bool]:
-        comp_name = mapping.get("component")
-        count_val = mapping.get("count", 1)
-        exclusive = bool(mapping.get("exclusive", False))
-        comp = library.get(str(comp_name)) if comp_name is not None else None
-        return comp, _positive_count(count_val), exclusive
-
-    hw_struct = attrs.get("hardware")
-    if not isinstance(hw_struct, dict):
+    hw = attrs.get("hardware")
+    if hw is None:
         return (None, 1.0, False), (None, 1.0, False)
-    return (
-        _from_mapping(hw_struct.get("source", {})),
-        _from_mapping(hw_struct.get("target", {})),
+    _require_mapping(hw)
+    source, target = (
+        resolve_link_end({} if hw.get(end) is None else hw[end], library)
+        for end in ("source", "target")
     )
+    return source, target

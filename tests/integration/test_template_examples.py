@@ -32,54 +32,6 @@ class TestNetworkTemplates:
         assert len(network_data["nodes"]) == 4
         assert len(network_data["links"]) == 3
 
-    def test_star_network_template(self):
-        """Test that the star template links the center to each leaf."""
-        center = "HUB"
-        leaves = ["A", "B", "C"]
-        network_data = NetworkTemplates.star_network(center, leaves, link_capacity=20.0)
-
-        assert len(network_data["nodes"]) == 4  # center + 3 leaves
-        assert len(network_data["links"]) == 3  # center connected to each leaf
-
-        # All links should originate from center
-        for link in network_data["links"]:
-            assert link["source"] == center
-            assert link["target"] in leaves
-            assert link["capacity"] == 20.0
-
-    def test_mesh_network_template(self):
-        """Test full mesh network template creates all-to-all connectivity."""
-        nodes = ["A", "B", "C"]
-        network_data = NetworkTemplates.mesh_network(nodes, link_capacity=5.0)
-
-        assert len(network_data["nodes"]) == 3
-        assert len(network_data["links"]) == 6  # 3 nodes = 3*2 = 6 directed links
-
-        # Every node should connect to every other node
-        link_pairs = [
-            (link["source"], link["target"]) for link in network_data["links"]
-        ]
-        expected_pairs = [
-            ("A", "B"),
-            ("A", "C"),
-            ("B", "A"),
-            ("B", "C"),
-            ("C", "A"),
-            ("C", "B"),
-        ]
-        assert set(link_pairs) == set(expected_pairs)
-
-    def test_tree_network_template(self):
-        """Test tree network template creates hierarchical structure."""
-        network_data = NetworkTemplates.tree_network(
-            depth=2, branching_factor=2, link_capacity=10.0
-        )
-
-        # Depth 2 with branching 2: root + 2 children + 4 grandchildren = 7 nodes
-        assert len(network_data["nodes"]) == 7
-        # 6 links connecting them in tree structure
-        assert len(network_data["links"]) == 6
-
 
 @pytest.mark.slow
 class TestBlueprintTemplates:

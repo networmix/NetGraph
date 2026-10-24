@@ -10,7 +10,7 @@ from ngraph.results import (
     StepOutput,
 )
 from ngraph.utils.values import own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 
 def _names(values, label):
@@ -41,7 +41,7 @@ class NetworkStats(WorkflowStep):
             object.__setattr__(
                 self, name, _names(getattr(self, name), f"NetworkStats.{name}")
             )
-        own_scalars(self, f"workflow step {self.name}", ("include_disabled",))
+        own_scalars(self, f"workflow step {step_name(self)}", ("include_disabled",))
 
     def run(self, context: StepContext) -> StepOutput:
         network = context.prepared.scenario.network

@@ -157,6 +157,20 @@ class TestLinkUtilities:
         no_links = net.find_links(source_regex="nonexistent")
         assert len(no_links) == 0
 
+    def test_find_links_searches_anywhere_in_the_name(self):
+        """Patterns are unanchored (re.search), unlike selector paths."""
+        net = Network()
+        for name in ("x-core-1", "core-2", "edge"):
+            net.add_node(Node(name))
+        first, second = Link("x-core-1", "edge"), Link("core-2", "edge")
+        net.add_link(first)
+        net.add_link(second)
+        assert [link.id for link in net.find_links(source_regex="core")] == [
+            first.id,
+            second.id,
+        ]
+        assert net.find_links(source_regex="^core") == [second]
+
     def test_find_links_any_direction(self):
         """Test finding links in any direction (bidirectional search)."""
         net = Network()

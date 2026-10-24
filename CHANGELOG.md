@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failure states for placement: each case of a `TrafficMatrixPlacement` (or `PlacementQuery`) reports the requested `failure_states` (Python `states`): `converged`, the demands computed again on the failed network with declared forwarding-group shares kept as fixed caps; `stale`, the programs of the network without failures forwarded unchanged, so traffic that reaches a failed element is lost there; and `repair`, only when requested, the surviving original routes. The default is `[converged]`. Demand sets programmed by the WCMP controller accept failure policies; a dead group's cap is reported under `dead_caps`, and a lossy forwarding without a fixed point under `failure`.
 - `interaction: simultaneous` forwards every demand's program at once, sharing losses on common links, as a lossy fixed-program question; the default `ordered` places demands in priority order. A TE ingress pool in such a step gets an offer budget for its known request, reported as the row's `pool.offer_limit_units`.
 - `TunnelCountAnalysis` (YAML) and `tunnel_counts(prepared, TunnelCountQuery)`: for each tunnelled TE demand of a set and each tunnel count (plus an optional `up_to` row), one independent evaluation at one fixed `design_demand` and `offer` for every demand: the plan's tunnel sizes, chosen count, planned bandwidth, tunnel cost and headroom penalty, the largest lossless offer, `insufficient_resolution`, what the offer delivers and loses, and the lossless delivery at the design (`lossless_at_design_units`), with `physical_tunnel_cost` for TE ingress pools (`TunnelCountRow`, `TunnelCountAnalysis`). The named set's declared demands still take part in choosing the resolution; a TE ingress pool's offer budget covers the step's offer.
+- `ngraph.hardware`: `hardware_inventory`, `HardwareInventory`, `HardwareUse` and `link_active`, the hardware inventory and the enabled-link rule; `ngraph.workflow.base.step_name`, a step's run name; `ngraph.model.components.resolve_link_end`, one link end's hardware.
 
 ### Changed
 
@@ -30,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
 - Step log lines and export type errors name the class by module (`ngraph.workflow.max_flow_step.MaxFlow`), since two public classes are named `TunnelCountAnalysis`.
 - JSON results (`write_json`, the CLI results file and `--stdout`) are written as one compact line with the same content and key order, roughly half the size or less; use `jq .` to read them indented.
+- `NetworkExplorer` and `CostPower` read one hardware inventory (`ngraph.hardware.hardware_inventory`), one row per node platform and link-end optic; their totals are unchanged.
+- Hardware is validated before any capacity or port check, and each refusal names its node or link end (`node n3: Hardware 'count' must be ...`); an input with an invalid count and an over-capacity node now reports the count.
+- `ngraph inspect` calls a link enabled only when it and both end nodes are enabled, in every figure, as `NetworkStats` does.
+- `ngraph inspect --detail` prints a step's output options by their fields (`OutputOptions(edge_flows=False, ...)`) instead of a native object address, so two runs print the same text, and lists each set's first demands by their selector labels (`^A -> ^B`) instead of the selectors' Python representation.
+- `ngraph --help` and command-line errors no longer load the analysis engine.
 
 ### Removed
 
@@ -41,10 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: `from_networkx`, `to_networkx`, `NodeMap` and `EdgeMap`; `BuildGraph` exports node-link JSON.
 - `FailurePolicySet`, `build_failure_policy` and `build_failure_policy_set`; use the `Scenario.failure_policies` mapping of `FailurePolicy` values.
 - `validate_risk_group_hierarchy` and `validate_risk_group_references`; `prepare` validates risk groups.
+- `NetworkExplorer.get_bom_by_path` and `get_bom_map`; use `get_bom` or a tree node's `stats.bom`.
+- Worker profiles of `run --profile` (`NGRAPH_PROFILE_DIR`, the `<scenario>.profiles` directory, `PerformanceProfiler.merge_child_profiles`, `StepProfile.worker_profiles_merged`) and `PerformanceProfiler.get_top_functions`/`save_detailed_profile`; the report covers the main process.
+- `ngraph.logging.reset_logging`, `ngraph.utils.output_paths.profiles_dir_for_run` and `ngraph.utils.ids.new_base64_uuid`.
 
 ### Fixed
 
 - Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24.0 picked the last mode, or fell back to name order); other draws are unchanged.
+- `ngraph inspect` previews selectors as analyses select: attribute conditions and `group_by` apply, and selectors sharing a path are listed apart (they were matched and merged as node-name patterns).
+- The `--profile` report's CPU time is the process CPU time of each step, all threads and native code included, and can exceed the wall time (it was the profiled wall time); the function table is labelled as cProfile time and the CPU-intensive advice no longer suggests parallelization.
+- A `hardware` value that is not a mapping, on a node, a link or a link end, is refused (before, a node's value crashed the explorer and was ignored by `CostPower`, a link's value was ignored by both, and a link end's value crashed both); `CostPower` refuses an invalid hardware `count` on a disabled link or a link to a disabled node, as it did on a disabled node; a count too large for a float is refused as an invalid count (`ValueError`, was `OverflowError`), whatever its number of digits.
+- The explorer counts both optic ends of a self-loop as used ports, so a node without the ports is refused.
+- A workflow step built in Python without a name labels its refusals with its own class name (a `TrafficMatrixPlacement` subclass used its parent's, and a `MaxFlow` selection refusal an empty name).
 
 ## [0.24.0] - 2026-10-02
 

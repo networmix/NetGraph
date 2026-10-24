@@ -1,10 +1,13 @@
 """Tests for performance profiling instrumentation."""
 
 import time
+import tracemalloc
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+import ngraph.profiling.profiler as profiler_module
 from ngraph.profiling.profiler import (
     PerformanceProfiler,
     PerformanceReporter,
@@ -28,66 +31,139 @@ class TestPerformanceProfiler:
         profiler = PerformanceProfiler()
 
         with profiler.profile_step("test_step", "TestStep"):
-            time.sleep(0.01)  # Small delay for testing
+            time.sleep(0.3)  # waiting, not computing
 
         assert len(profiler.results.step_profiles) == 1
         profile = profiler.results.step_profiles[0]
         assert profile.step_name == "test_step"
         assert profile.step_type == "TestStep"
-        assert profile.wall_time > 0
-        assert profile.cpu_time >= 0.0  # CPU profiling is always enabled
-        assert profile.function_calls >= 0
+        assert profile.wall_time >= 0.3
+        # Process CPU time, not the wall time spent in the sleep.
+        assert profile.cpu_time < 0.1
+        assert profile.function_calls >= 1
 
     def test_step_profiling_with_memory(self):
         """Test step profiling with memory tracking enabled."""
         profiler = PerformanceProfiler(track_memory=True)
 
         with profiler.profile_step("mem_step", "MemStep"):
-            # Allocate some memory to bump peak
-            _ = [0] * 10000
+            block = bytearray(2_000_000)
+            del block
 
-        assert len(profiler.results.step_profiles) == 1
-        profile = profiler.results.step_profiles[0]
+        (profile,) = profiler.results.step_profiles
         assert profile.step_name == "mem_step"
-        assert profile.memory_peak is None or profile.memory_peak >= 0
+        assert profile.memory_peak is not None and profile.memory_peak >= 2_000_000
+
+    def test_memory_peak_is_none_without_tracking_or_when_already_tracing(self, caplog):
+        """No tracking: None; another tracemalloc session: None and a warning."""
+        profiler = PerformanceProfiler()
+        with profiler.profile_step("plain", "Step"):
+            _ = bytearray(1_000_000)
+        assert profiler.results.step_profiles[0].memory_peak is None
+        tracking = PerformanceProfiler(track_memory=True)
+        tracemalloc.start()
+        try:
+            with caplog.at_level("WARNING", logger="ngraph"):
+                with tracking.profile_step("traced", "Step"):
+                    _ = bytearray(1_000_000)
+            assert tracemalloc.is_tracing()
+        finally:
+            tracemalloc.stop()
+        assert tracking.results.step_profiles[0].memory_peak is None
+        assert any("already tracing" in r.getMessage() for r in caplog.records)
 
     @patch("cProfile.Profile")
-    def test_step_profiling_detail(self, mock_profile_class):
-        """Test step profiling with detail mode."""
-        mock_profiler = MagicMock()
-        mock_profile_class.return_value = mock_profiler
-
-        # Mock stats data
+    def test_function_calls_sum_primitive_calls(self, mock_profile_class):
+        """function_calls sums cProfile's primitive calls (cc), not all calls (nc)."""
+        mock_profile_class.return_value = MagicMock()
         mock_stats = MagicMock()
         # pstats.Stats.stats values are tuples: (cc, nc, tt, ct, callers)
-        # cc=call count, nc=number of calls, tt=total time, ct=cumulative time
         mock_stats.stats = {
-            ("file.py", 1, "func1"): (
-                10,
-                10,
-                0.1,
-                0.1,
-                {},
-            ),  # (cc, nc, tt, ct, callers)
-            ("file.py", 2, "func2"): (5, 5, 0.05, 0.05, {}),
+            ("file.py", 1, "func1"): (10, 40, 0.1, 0.1, {}),
+            ("file.py", 2, "func2"): (5, 20, 0.05, 0.05, {}),
         }
-
         with patch("pstats.Stats", return_value=mock_stats):
             profiler = PerformanceProfiler()
-
             with profiler.profile_step("test_step", "TestStep"):
-                time.sleep(0.01)
+                pass
+        (profile,) = profiler.results.step_profiles
+        assert profile.function_calls == 15
+        assert profile.cprofile_stats is mock_stats
 
-        assert len(profiler.results.step_profiles) == 1
-        profile = profiler.results.step_profiles[0]
-        assert profile.step_name == "test_step"
-        assert profile.step_type == "TestStep"
-        assert profile.wall_time > 0
+    @pytest.mark.parametrize("fails", [False, True])
+    def test_cpu_time_is_the_process_cpu_clock(self, monkeypatch, fails):
+        """Deterministic clocks: wall 1, process CPU 2, calling thread 0.1, cProfile 0.7."""
+
+        def clock(*values):
+            readings = iter(values)
+            return lambda: next(readings)
+
+        monkeypatch.setattr(
+            profiler_module,
+            "time",
+            SimpleNamespace(
+                perf_counter=clock(0.0, 10.0, 11.0, 1.0),
+                process_time=clock(5.0, 7.0),
+                thread_time=clock(3.0, 3.1),
+            ),
+        )
+        mock_stats = MagicMock()
+        mock_stats.stats = {("f.py", 1, "g"): (3, 3, 0.7, 0.7, {})}
+        profiler = PerformanceProfiler()
+        profiler.start_scenario()
+        with patch("pstats.Stats", return_value=mock_stats):
+            if fails:
+                with pytest.raises(RuntimeError):
+                    with profiler.profile_step("step", "Step"):
+                        raise RuntimeError("step failed")
+            else:
+                with profiler.profile_step("step", "Step"):
+                    pass
+        profiler.end_scenario()
+        profiler.analyze_performance()
+        (profile,) = profiler.results.step_profiles
+        assert (profile.wall_time, profile.cpu_time) == (1.0, 2.0)
+        assert profiler.results.total_cpu_time == 2.0
+        assert profiler.results.analysis_summary["cpu_efficiency"] == 2.0
+        report = PerformanceReporter(profiler.results).generate_report()
+        assert "Total CPU Time (process, all threads): 2.000 seconds" in report
         assert (
-            pytest.approx(profile.cpu_time, rel=1e-3) == 0.15
-        )  # Sum of totaltime values
-        assert profile.function_calls == 15  # Sum of callcount values
-        assert profile.cprofile_stats is not None
+            "CPU Efficiency: 200.0% (process CPU across all threads / wall time; "
+            "can exceed 100%)" in report
+        )
+
+    def test_total_cpu_is_the_sum_and_step_efficiency_is_not_capped(self, monkeypatch):
+        """Two steps, wall 1 and 1, process CPU 2 and 3: total 5, the second at 300 %."""
+
+        def clock(*values):
+            readings = iter(values)
+            return lambda: next(readings)
+
+        monkeypatch.setattr(
+            profiler_module,
+            "time",
+            SimpleNamespace(
+                perf_counter=clock(0.0, 10.0, 11.0, 20.0, 21.0, 2.0),
+                process_time=clock(0.0, 2.0, 5.0, 8.0),
+                thread_time=clock(0.0, 0.1, 0.2, 0.3),
+            ),
+        )
+        mock_stats = MagicMock()
+        mock_stats.stats = {}
+        profiler = PerformanceProfiler()
+        profiler.start_scenario()
+        with patch("pstats.Stats", return_value=mock_stats):
+            for name in ("one", "two"):
+                with profiler.profile_step(name, "Step"):
+                    pass
+        profiler.end_scenario()
+        profiler.analyze_performance()
+        assert [p.cpu_time for p in profiler.results.step_profiles] == [2.0, 3.0]
+        assert profiler.results.total_cpu_time == 5.0
+        report = PerformanceReporter(profiler.results).generate_report()
+        assert (
+            "   CPU Efficiency: 300.0% (CPU-intensive workload)" in report.splitlines()
+        )
 
     def test_analyze_performance_no_profiles(self):
         """Test performance analysis with no step profiles."""
@@ -239,8 +315,12 @@ class TestPerformanceReporter:
         report = reporter.generate_report()
 
         assert "DETAILED FUNCTION ANALYSIS" in report
-        assert "Top CPU-consuming functions in 'slow_step'" in report
+        assert (
+            "Top functions by cProfile internal time (profiled thread) in 'slow_step':"
+            in report
+        )
         assert "file.py:1(func1)" in report
+        assert "Top CPU-consuming" not in report
 
     def test_insights_and_recommendations(self):
         """Test performance insights generation."""
@@ -331,3 +411,74 @@ def test_step_report_has_only_live_step_profile_fields():
     report = PerformanceReporter(results).generate_report()
     assert "one" in report and "BuildGraph" in report
     assert "Workers" not in report
+
+
+def test_a_step_at_exactly_ten_percent_is_no_bottleneck():
+    """Bottleneck iff the wall share is above 10 %."""
+    profiler = PerformanceProfiler()
+    profiler.results.total_wall_time = 10.0
+    profiler.results.step_profiles = [
+        StepProfile("tenth", "Step", 1.0, 1.0, 1),
+        StepProfile("rest", "Step", 9.0, 9.0, 1),
+    ]
+    profiler.analyze_performance()
+    assert [b["step_name"] for b in profiler.results.bottlenecks] == ["rest"]
+
+
+def test_top_functions_are_ranked_by_internal_time():
+    """The function table lists cProfile internal time, highest first."""
+    stats = MagicMock()
+    stats.stats = {
+        ("f.py", 1, "many_calls"): (100, 100, 0.1, 0.1, {}),
+        ("f.py", 2, "slow"): (1, 1, 1.0, 1.0, {}),
+    }
+    results = ProfileResults(
+        step_profiles=[StepProfile("s", "Step", 2.0, 2.0, 101, cprofile_stats=stats)],
+        total_wall_time=2.0,
+        bottlenecks=[
+            {
+                "step_name": "s",
+                "step_type": "Step",
+                "wall_time": 2.0,
+                "cpu_time": 2.0,
+                "percentage": 100.0,
+                "function_calls": 101,
+                "efficiency_ratio": 1.0,
+            }
+        ],
+    )
+    report = PerformanceReporter(results).generate_report()
+    assert report.index("f.py:2(slow)") < report.index("f.py:1(many_calls)")
+
+
+@pytest.mark.parametrize(
+    ("efficiency", "workload", "advice"),
+    [
+        (2.0, "CPU-intensive workload", "Consider algorithmic optimization"),
+        (1.05, "CPU-intensive workload", "Consider algorithmic optimization"),
+        (0.9, "CPU-intensive workload", "Consider algorithmic optimization"),
+        (0.5, "Mixed workload", "Profile individual functions"),
+        (0.2, "I/O-bound workload", "Investigate I/O operations"),
+    ],
+)
+def test_bottleneck_classes_keep_their_thresholds(efficiency, workload, advice):
+    """No class above 100 %; the CPU-intensive advice does not suggest parallelization."""
+    results = ProfileResults(
+        step_profiles=[StepProfile("s", "Step", 1.0, efficiency, 1)],
+        total_wall_time=1.0,
+        bottlenecks=[
+            {
+                "step_name": "s",
+                "step_type": "Step",
+                "wall_time": 1.0,
+                "cpu_time": efficiency,
+                "percentage": 100.0,
+                "function_calls": 1,
+                "efficiency_ratio": efficiency,
+            }
+        ],
+    )
+    report = PerformanceReporter(results).generate_report()
+    assert f"({workload})" in report
+    assert f"Recommendation: {advice}" in report
+    assert "parallelization" not in report

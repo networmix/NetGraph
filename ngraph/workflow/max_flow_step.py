@@ -17,6 +17,7 @@ from ngraph.utils.values import own_scalars, physical, shared_copy
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
+    step_name,
     workflow_failures,
 )
 
@@ -69,7 +70,7 @@ class MaxFlow(WorkflowStep):
             raise TypeError("MaxFlow.export_cost_distribution: expected bool")
         own_scalars(
             self,
-            f"workflow step {self.name}",
+            f"workflow step {step_name(self)}",
             (
                 "mode",
                 "failure_policy",
@@ -123,11 +124,11 @@ class MaxFlow(WorkflowStep):
             self.source,
             self.target,
             self.mode,
-            f"step {self.name}",
+            f"step {step_name(self)}",
         )
         if isinstance(self.declaration, PinnedRoutes) and len(pairs) != 1:
             raise ValueError(
-                f"step {self.name}: pinned model requires one endpoint pair"
+                f"step {step_name(self)}: pinned model requires one endpoint pair"
             )
         config = materialize_config(
             prepared.topology, prepared._named, pairs[0], self.declaration

@@ -13,6 +13,7 @@ from ngraph.utils.values import own_scalars, physical, shared_copy
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
+    step_name,
     workflow_failures,
 )
 
@@ -41,12 +42,12 @@ class TrafficMatrixPlacement(WorkflowStep):
             "failure_states",
             state_names(
                 self.failure_states,
-                f"workflow.{self.name or 'TrafficMatrixPlacement'}.failure_states",
+                f"workflow.{step_name(self)}.failure_states",
             ),
         )
         if self.interaction not in ("ordered", "simultaneous"):
             raise ValueError(
-                f"workflow.{self.name or 'TrafficMatrixPlacement'}.interaction: "
+                f"workflow.{step_name(self)}.interaction: "
                 f"expected ordered or simultaneous, got {self.interaction!r}"
             )
         if not isinstance(self.export_details, bool):
@@ -79,7 +80,7 @@ class TrafficMatrixPlacement(WorkflowStep):
             raise TypeError("TrafficMatrixPlacement: invalid outputs")
         own_scalars(
             self,
-            f"workflow step {self.name}",
+            f"workflow step {step_name(self)}",
             (
                 "demand_set",
                 "failure_policy",

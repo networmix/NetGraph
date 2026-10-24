@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 54
+Modules auto-discovered: 55
 
 ---
 
@@ -82,7 +82,6 @@ included) and 'active' (enabled only).
 
 - `explore_network(network: 'Network', components_library: 'Optional[ComponentsLibrary]' = None, strict_validation: 'bool' = True) -> 'NetworkExplorer'` - Build the hierarchy tree and compute 'all' and 'active' statistics.
 - `get_bom(self, include_disabled: 'bool' = True) -> 'Dict[str, float]'` - Return aggregated hardware BOM for the whole network.
-- `get_bom_map(self, include_disabled: 'bool' = True, include_root: 'bool' = True, root_label: 'str' = '') -> 'Dict[str, Dict[str, float]]'` - Return a mapping from hierarchy path to BOM for each subtree.
 - `get_link_issues(self) -> 'List[LinkCapacityIssue]'` - Return link capacity violations recorded in non-strict mode.
 - `get_node_utilization(self) -> 'List[NodeUtilization]'` - Return hardware utilization per node based on active topology.
 - `print_tree(self, node: 'Optional[TreeNode]' = None, indent: 'int' = 0, max_depth: 'Optional[int]' = None, skip_leaves: 'bool' = False, detailed: 'bool' = False, include_disabled: 'bool' = True, max_external_lines: 'Optional[int]' = None, line_prefix: 'str' = '') -> 'None'` - Print the hierarchy from 'node' down (default: root).
@@ -216,6 +215,80 @@ Register one explicit encoder for exactly this result type.
 ### write_json(result: 'RunResult | AnalysisResult', file: 'IO[str]') -> 'None'
 
 Project once and encode before writing, so encoder errors write nothing.
+
+---
+
+## ngraph.hardware
+
+One inventory of the hardware installed in a network.
+
+Each node platform and each link-end optic is one ``HardwareUse``. The
+explorer and the CostPower step both read the inventory; each groups it in
+its own way.
+
+### HardwareInventory
+
+The hardware uses of a network and its references to unknown components.
+
+Attributes:
+    uses: Node platforms in node order, then each link's source end and
+        target end in link order (the order of every sum over them).
+    unknown: ``(owner, end, name)`` for each reference to a component the
+        library lacks: a node name with end None, or a link key with its
+        end.
+
+**Attributes:**
+
+- `uses` (tuple[HardwareUse, ...])
+- `unknown` (tuple[tuple[str, Optional[str], object], ...])
+
+### HardwareUse
+
+One installed platform or link-end optic.
+
+Attributes:
+    node: Node the hardware sits at; consumers group by this name.
+    link: Key of the link in ``Network.links`` for an optic; None for a
+        node platform.
+    end: ``"source"`` or ``"target"`` for an optic; None for a platform.
+    component: The library component.
+    count: Declared count.
+    bom_count: Count in the bill of materials: the count, rounded up for
+        an exclusive link end.
+    capex: Component capex (children included) times ``count``.
+    power_watts: Component typical power times ``count``.
+    capacity: Component capacity times ``count``.
+    active: In the enabled view: the node is enabled (platform), or the
+        link is active (optic, see ``link_active``).
+
+**Attributes:**
+
+- `node` (str)
+- `link` (Optional[str])
+- `end` (Optional[str])
+- `component` (Component)
+- `count` (float)
+- `bom_count` (float)
+- `capex` (float)
+- `power_watts` (float)
+- `capacity` (float)
+- `active` (bool)
+
+### hardware_inventory(network: 'Network', library: 'ComponentsLibrary') -> 'HardwareInventory'
+
+Resolve every node's and link end's hardware, in that order.
+
+A link end counts only where its endpoint node has a platform.
+
+Raises:
+    ValueError: If any node, link or link end has a ``hardware`` value
+        that is not a mapping or a count that is not a finite positive
+        number; the message starts with the entity
+        (``node <name>``, ``link <key>``, ``link <key> source end``).
+
+### link_active(network: 'Network', link: 'Link') -> 'bool'
+
+Return True when the link and both of its end nodes are enabled.
 
 ---
 
@@ -1274,6 +1347,20 @@ Example (YAML-like):
 - `merge(self, other: 'ComponentsLibrary', override: 'bool' = True) -> 'ComponentsLibrary'` - Merges another ComponentsLibrary into this one.
 - `snapshot(self) -> 'ComponentsLibrary'` - Return a read-only view sharing this library's immutable components.
 
+### resolve_link_end(spec: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float, bool]'
+
+Resolve one link end's hardware: ``{"component": NAME, "count": N}``.
+
+``count`` defaults to 1. An optional ``exclusive: true`` marks unsharable
+use; the bill of materials rounds such an end's count up to an integer.
+
+Returns:
+    (component or None when the name is absent or unknown, count, exclusive).
+
+Raises:
+    ValueError: If ``spec`` is not a mapping or ``count`` is not a finite
+        positive number.
+
 ### resolve_link_end_components(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'tuple[tuple[Optional[Component], float, bool], tuple[Optional[Component], float, bool]]'
 
 Resolve per-end hardware components for a link.
@@ -1282,8 +1369,8 @@ Input format inside ``link.attrs`` is a structured mapping under the
 ``hardware`` key only:
   ``{"hardware": {"source": {"component": NAME, "count": N},
                    "target": {"component": NAME, "count": N}}}``
-An optional ``exclusive: true`` per end indicates unsharable usage; BOM
-counting rounds the count of an exclusive end up to an integer.
+Each end resolves with ``resolve_link_end``; an absent or null end has no
+component.
 
 Args:
     attrs: Link attributes mapping.
@@ -1295,7 +1382,8 @@ Returns:
     unknown.
 
 Raises:
-    ValueError: If an end's ``count`` is not a finite positive number.
+    ValueError: If ``hardware`` or an end is not a mapping, or an end's
+        ``count`` is not a finite positive number.
 
 ### resolve_node_hardware(attrs: 'Dict[str, Any]', library: 'ComponentsLibrary') -> 'Tuple[Optional[Component], float]'
 
@@ -1303,7 +1391,7 @@ Resolve node hardware from ``attrs['hardware']``.
 
 Expects the mapping: ``{"hardware": {"component": NAME, "count": N}}``.
 ``count`` defaults to 1. If ``component`` is missing or unknown, the
-component is None.
+component is None; an absent or null ``hardware`` has none.
 
 Args:
     attrs: Node attributes mapping.
@@ -1313,7 +1401,8 @@ Returns:
     Tuple of (component or None, positive multiplier).
 
 Raises:
-    ValueError: If ``count`` is not a finite positive number.
+    ValueError: If ``hardware`` is not a mapping or ``count`` is not a
+        finite positive number.
 
 ### totals_with_multiplier(comp: 'Component', hw_count: 'float') -> 'Tuple[float, float, float]'
 
@@ -2112,6 +2201,10 @@ prepared scenario.
 
 Register one concrete step class for a nonempty YAML type name.
 
+### step_name(step: 'WorkflowStep') -> 'str'
+
+Return the name a step runs under: its name, or its class name when unnamed.
+
 ### step_type(name: 'str') -> 'type[WorkflowStep] | None'
 
 Return the registered step class for a YAML type name, if any.
@@ -2713,9 +2806,10 @@ Raises:
 
 Profiling for NetGraph workflow execution.
 
-Times each workflow step (CPU and wall clock) with ``cProfile`` and can record
-peak memory with ``tracemalloc``. Steps that take more than 10% of total wall
-time are reported as bottlenecks.
+Times each workflow step: wall clock, and process CPU time across all threads
+(native work included). ``cProfile`` records the Python calls of the profiled
+thread, and ``tracemalloc`` can record peak memory. Steps that take more than
+10% of total wall time are reported as bottlenecks.
 
 ### PerformanceProfiler
 
@@ -2748,7 +2842,7 @@ Profiling results for a scenario execution.
 Attributes:
     step_profiles: List of individual step performance profiles.
     total_wall_time: Total wall-clock time for entire scenario.
-    total_cpu_time: Total CPU time across all steps.
+    total_cpu_time: Total process CPU time across all steps.
     total_function_calls: Total function calls across all steps.
     bottlenecks: List of performance bottlenecks (>10% execution time).
     analysis_summary: Aggregate metrics computed by ``analyze_performance``.
@@ -2770,7 +2864,8 @@ Attributes:
     step_name: Name of the workflow step.
     step_type: Class name of the workflow step.
     wall_time: Total wall-clock time in seconds.
-    cpu_time: CPU time in seconds (sum of cProfile internal times).
+    cpu_time: Process CPU time in seconds over the step, all threads and
+        native work included; it can exceed ``wall_time``.
     function_calls: Number of function calls during execution.
     memory_peak: Peak traced memory in bytes; None unless memory
         tracking ran for this step.

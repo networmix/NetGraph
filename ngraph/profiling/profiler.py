@@ -1,14 +1,14 @@
 """Profiling for NetGraph workflow execution.
 
-Times each workflow step (CPU and wall clock) with ``cProfile`` and can record
-peak memory with ``tracemalloc``. Steps that take more than 10% of total wall
-time are reported as bottlenecks.
+Times each workflow step: wall clock, and process CPU time across all threads
+(native work included). ``cProfile`` records the Python calls of the profiled
+thread, and ``tracemalloc`` can record peak memory. Steps that take more than
+10% of total wall time are reported as bottlenecks.
 """
 
 from __future__ import annotations
 
 import cProfile
-import io
 import pstats
 import time
 import tracemalloc
@@ -43,7 +43,8 @@ class StepProfile:
         step_name: Name of the workflow step.
         step_type: Class name of the workflow step.
         wall_time: Total wall-clock time in seconds.
-        cpu_time: CPU time in seconds (sum of cProfile internal times).
+        cpu_time: Process CPU time in seconds over the step, all threads and
+            native work included; it can exceed ``wall_time``.
         function_calls: Number of function calls during execution.
         memory_peak: Peak traced memory in bytes; None unless memory
             tracking ran for this step.
@@ -66,7 +67,7 @@ class ProfileResults:
     Attributes:
         step_profiles: List of individual step performance profiles.
         total_wall_time: Total wall-clock time for entire scenario.
-        total_cpu_time: Total CPU time across all steps.
+        total_cpu_time: Total process CPU time across all steps.
         total_function_calls: Total function calls across all steps.
         bottlenecks: List of performance bottlenecks (>10% execution time).
         analysis_summary: Aggregate metrics computed by ``analyze_performance``.
@@ -148,6 +149,7 @@ class PerformanceProfiler:
         logger.debug(f"Starting profiling for step: {step_name} ({step_type})")
 
         start_time = time.perf_counter()
+        start_cpu = time.process_time()
         profiler = cProfile.Profile()
         profiler.enable()
 
@@ -166,19 +168,18 @@ class PerformanceProfiler:
         try:
             yield
         finally:
-            end_time = time.perf_counter()
-            wall_time = end_time - start_time
+            # The CPU reading sits inside the wall-clock window.
+            cpu_time = time.process_time() - start_cpu
+            wall_time = time.perf_counter() - start_time
 
             profiler.disable()
 
-            stats_stream = io.StringIO()
-            stats = pstats.Stats(profiler, stream=stats_stream)
+            stats = pstats.Stats(profiler)
 
             # pstats keeps per-function tuples (cc, nc, tt, ct, callers) in an
             # undeclared `stats` attribute: primitive calls, total calls,
-            # internal time, cumulative time. CPU time sums tt; calls sum cc.
+            # internal time, cumulative time. Calls sum cc.
             stats_data = getattr(stats, "stats", {})
-            cpu_time = sum(stat_tuple[2] for stat_tuple in stats_data.values())
             function_calls = sum(stat_tuple[0] for stat_tuple in stats_data.values())
 
             memory_peak: Optional[float] = None
@@ -313,8 +314,9 @@ class PerformanceReporter:
             "1. SUMMARY",
             "-" * 40,
             f"Total Execution Time: {self.results.total_wall_time:.3f} seconds",
-            f"Total CPU Time: {self.results.total_cpu_time:.3f} seconds",
-            f"CPU Efficiency: {summary.get('cpu_efficiency', 0.0):.1%}",
+            f"Total CPU Time (process, all threads): {self.results.total_cpu_time:.3f} seconds",
+            f"CPU Efficiency: {summary.get('cpu_efficiency', 0.0):.1%} "
+            "(process CPU across all threads / wall time; can exceed 100%)",
             f"Total Workflow Steps: {summary.get('total_steps', 0)}",
             f"Average Step Time: {summary.get('avg_step_time', 0.0):.3f} seconds",
             f"Total Function Calls: {summary.get('total_function_calls', 0):,}",
@@ -405,7 +407,7 @@ class PerformanceReporter:
                 recommendation = "Investigate I/O operations, external dependencies, or process coordination"
             elif efficiency > 0.8:
                 workload_type = "CPU-intensive workload"
-                recommendation = "Consider algorithmic optimization or parallelization"
+                recommendation = "Consider algorithmic optimization"
             else:
                 workload_type = "Mixed workload"
                 recommendation = (
@@ -427,12 +429,19 @@ class PerformanceReporter:
         return lines
 
     def _generate_detailed_analysis(self) -> List[str]:
-        """Return section 4: top five functions per bottleneck step."""
+        """Return section 4: top five functions per bottleneck step.
+
+        The functions are ranked by cProfile's internal time, which covers the
+        profiled thread only; worker threads count only in the process CPU.
+        """
         lines = ["4. DETAILED FUNCTION ANALYSIS", "-" * 40, ""]
 
         for bottleneck in self.results.bottlenecks:
             step_name = bottleneck["step_name"]
-            lines.append(f"Top CPU-consuming functions in '{step_name}':")
+            lines.append(
+                "Top functions by cProfile internal time (profiled thread) in "
+                f"'{step_name}':"
+            )
 
             profiler = None
             for profile in self.results.step_profiles:

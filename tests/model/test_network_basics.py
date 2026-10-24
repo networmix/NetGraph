@@ -205,6 +205,24 @@ class TestNodeLinkManagement:
         assert net.nodes["B"].disabled is False
         assert net.links[link.id].disabled is False
 
+    def test_enable_all_disable_all_leave_risk_group_flags(self, basic_network):
+        """Only nodes and links change; a risk group keeps its own flag."""
+        from ngraph.model.risk import RiskGroup
+
+        net, _ = basic_network
+        net.risk_groups["off"] = RiskGroup("off", disabled=True)
+        net.risk_groups["on"] = RiskGroup("on")
+        net.enable_all()
+        assert (net.risk_groups["off"].disabled, net.risk_groups["on"].disabled) == (
+            True,
+            False,
+        )
+        net.disable_all()
+        assert (net.risk_groups["off"].disabled, net.risk_groups["on"].disabled) == (
+            True,
+            False,
+        )
+
 
 class TestLinkUtilities:
     """Minimal link utility tests; full coverage lives in tests/model/test_selection.py."""

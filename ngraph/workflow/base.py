@@ -59,12 +59,17 @@ def register_workflow_step(name: str) -> Callable[[type[StepT]], type[StepT]]:
     return register
 
 
+def step_name(step: WorkflowStep) -> str:
+    """Return the name a step runs under: its name, or its class name when unnamed."""
+    return step.name or type(step).__name__
+
+
 def validate_unique_step_names(workflow: Sequence[WorkflowStep]) -> None:
     seen = set()
     for step in workflow:
         if not isinstance(step, WorkflowStep):
             raise TypeError("workflow: expected WorkflowStep values")
-        name = step.name or type(step).__name__
+        name = step_name(step)
         if name in seen:
             raise ValueError(f"Duplicate workflow step name: {name}")
         seen.add(name)

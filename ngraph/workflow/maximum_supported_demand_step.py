@@ -6,7 +6,7 @@ from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import ResolvedDemandSet, StepContext, StepOutput
 from ngraph.utils.values import own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 
 @dataclass
@@ -40,7 +40,7 @@ class MaximumSupportedDemand(WorkflowStep):
             object.__setattr__(self, name, getattr(query, name))
         own_scalars(
             self,
-            f"workflow step {self.name}",
+            f"workflow step {step_name(self)}",
             ("demand_set", "max_bracket_iters", "max_bisect_iters", "export_details"),
         )
 

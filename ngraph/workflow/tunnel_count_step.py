@@ -10,7 +10,7 @@ from ngraph.analysis.failures import Workers
 from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
 from ngraph.utils.values import own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step
+from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 
 @dataclass
@@ -46,13 +46,12 @@ class TunnelCountAnalysis(WorkflowStep):
                 results.ResolvedDemandSet(self.demand_set, (), (), ())
             )
         except (TypeError, ValueError) as exc:
-            name = self.name or type(self).__name__
-            raise type(exc)(f"workflow step {name}: {exc}") from exc
+            raise type(exc)(f"workflow step {step_name(self)}: {exc}") from exc
         for name in ("counts", "up_to", "design_demand", "offer"):
             object.__setattr__(self, name, getattr(query, name))
         own_scalars(
             self,
-            f"workflow step {self.name}",
+            f"workflow step {step_name(self)}",
             ("demand_set", "workers", "export_details"),
         )
 

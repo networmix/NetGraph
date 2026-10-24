@@ -7,33 +7,15 @@ counts, capacity, capex/power, and hardware bills of materials (BOM).
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set
 
+from ngraph.hardware import HardwareUse, hardware_inventory, link_active
 from ngraph.logging import get_logger
-from ngraph.model.components import (
-    ComponentsLibrary,
-    resolve_link_end_components,
-    resolve_node_hardware,
-    totals_with_multiplier,
-)
-from ngraph.model.network import Link, Network, Node
-
-if TYPE_CHECKING:
-    from ngraph.model.components import Component
+from ngraph.model.components import ComponentsLibrary
+from ngraph.model.network import Network, Node
 
 logger = get_logger(__name__)
-
-
-def _node_is_disabled(node: Node) -> bool:
-    """Return the node's disabled flag as a bool."""
-    return bool(node.disabled)
-
-
-def _link_is_disabled(link: Link) -> bool:
-    """Return the link's disabled flag as a bool."""
-    return bool(link.disabled)
 
 
 @dataclass
@@ -224,7 +206,8 @@ class NetworkExplorer:
         - active_stats.bom: counts by component for the enabled topology only
 
         Shared optics add fractional counts; exclusive link ends are rounded up
-        per link.
+        per link. Counts are float sums in inventory order: integer counts are
+        exact while a total stays at most 2^53.
 
         Args:
             network: Network to explore.
@@ -282,7 +265,7 @@ class NetworkExplorer:
         for child in node.children.values():
             collected |= self._compute_subtree_sets_active(child)
         for nd in node.raw_nodes:
-            if not _node_is_disabled(nd):
+            if not nd.disabled:
                 collected.add(nd.name)
         node.active_subtree_nodes = collected
         return collected
@@ -337,12 +320,35 @@ class NetworkExplorer:
         """Fill ``stats`` and ``active_stats`` on every tree node.
 
         ``stats`` includes disabled nodes and links; ``active_stats`` covers
-        only the enabled topology.
+        only the enabled topology. Hardware comes from one inventory, which
+        refuses invalid hardware before any capacity or port check.
         """
         self._reset_all_stats()
         self._compute_node_counts()
-        node_has_hw = self._compute_node_costs_and_utilization()
-        self._compute_link_stats(node_has_hw)
+        inventory = hardware_inventory(self.network, self.components_library)
+        for owner, end, name in inventory.unknown:
+            if end is None:
+                logger.warning(
+                    "Node '%s' references unknown node hardware component '%s'.",
+                    owner,
+                    name,
+                )
+            else:
+                link = self.network.links[owner]
+                logger.warning(
+                    "Link '%s->%s' unknown %s hardware component '%s'.",
+                    link.source,
+                    link.target,
+                    "src" if end == "source" else "dst",
+                    name,
+                )
+        for use in inventory.uses:
+            for an in self._get_ancestors(self._node_map[use.node]):
+                _add_hardware(an.stats, use)
+                if use.active:
+                    _add_hardware(an.active_stats, use)
+        self._compute_link_stats()
+        self._validate_hardware(inventory.uses)
 
     def _reset_all_stats(self) -> None:
         """Zero out stats on all tree nodes."""
@@ -368,150 +374,127 @@ class NetworkExplorer:
         if self.root_node:
             set_node_counts(self.root_node)
 
-    def _compute_node_costs_and_utilization(self) -> Dict[str, bool]:
-        """Accumulate node capex/power and validate hardware capacity.
+    def _compute_link_stats(self) -> None:
+        """Accumulate internal and external link counts and capacities.
 
-        Also validates that sum of endpoint optics usage does not exceed node port count.
-        Tracks which nodes have chassis/hardware assigned; optics at a link endpoint
-        contribute cost/power only when the endpoint node has hardware.
-
-        Returns:
-            Mapping from node name to whether it has hardware assigned.
+        A link is internal to the common ancestors of its endpoints and
+        external to the others; the enabled view counts active links only.
         """
-        # One O(E) pass: index enabled links by endpoint so per-node utilization
-        # validation iterates only that node's attached links instead of all links.
-        links_by_node: Dict[str, List[Link]] = {}
-        for lk in self.network.links.values():
-            if _link_is_disabled(lk):
-                continue
-            links_by_node.setdefault(lk.source, []).append(lk)
-            if lk.target != lk.source:
-                links_by_node.setdefault(lk.target, []).append(lk)
-
-        node_has_hw: Dict[str, bool] = {}
-        for nd in self.network.nodes.values():
-            comp, hw_count = resolve_node_hardware(nd.attrs, self.components_library)
-            node_has_hw[nd.name] = comp is not None
-            if nd.attrs.get("hardware") and comp is None:
-                logger.warning(
-                    "Node '%s' references unknown node hardware component '%s'.",
-                    nd.name,
-                    (nd.attrs.get("hardware") or {}).get("component"),
-                )
-
-            if comp is not None:
-                cost_val, power_val, node_comp_capacity = totals_with_multiplier(
-                    comp, hw_count
-                )
-            else:
-                cost_val = 0.0
-                power_val = 0.0
-                node_comp_capacity = 0.0
-
-            tree_node = self._node_map[nd.name]
-            # "All" includes disabled
-            for an in self._get_ancestors(tree_node):
-                an.stats.total_capex += cost_val
-                an.stats.total_power += power_val
-                if comp is not None:
-                    an.stats.bom[comp.name] = an.stats.bom.get(comp.name, 0.0) + float(
-                        hw_count
+        for link in self.network.links.values():
+            src_node = self._node_map[link.source]
+            dst_node = self._node_map[link.target]
+            src_path = self._node_path_map[src_node]
+            dst_path = self._node_path_map[dst_node]
+            a_src = self._get_ancestors(src_node)
+            a_dst = self._get_ancestors(dst_node)
+            active = link_active(self.network, link)
+            for an in a_src & a_dst:
+                for stats in (an.stats, an.active_stats) if active else (an.stats,):
+                    stats.internal_link_count += 1
+                    stats.internal_link_capacity += link.capacity
+            for an in a_src ^ a_dst:
+                other_path = dst_path if an in a_src else src_path
+                for stats in (an.stats, an.active_stats) if active else (an.stats,):
+                    stats.external_link_count += 1
+                    stats.external_link_capacity += link.capacity
+                    bd = stats.external_link_details.setdefault(
+                        other_path, ExternalLinkBreakdown()
                     )
+                    bd.link_count += 1
+                    bd.link_capacity += link.capacity
 
-            # "Active" excludes disabled
-            if not _node_is_disabled(nd):
-                for an in self._get_ancestors(tree_node):
-                    an.active_stats.total_capex += cost_val
-                    an.active_stats.total_power += power_val
-                    if comp is not None:
-                        an.active_stats.bom[comp.name] = an.active_stats.bom.get(
-                            comp.name, 0.0
-                        ) + float(hw_count)
+    def _validate_hardware(self, uses: tuple[HardwareUse, ...]) -> None:
+        """Record node utilization and link issues; raise on violations if strict.
 
-            if (
-                comp is not None
-                and node_comp_capacity > 0.0
-                and not _node_is_disabled(nd)
-            ):
+        Nodes are checked in node order (capacity before ports), then links in
+        link order. Attached capacity counts each active link once, a self-loop
+        included; ports count each active optic end at the node.
+
+        Raises:
+            ValueError: On a node capacity, port, or link capacity violation
+                when ``strict_validation`` is True.
+        """
+        attached: Dict[str, float] = {}
+        for link in self.network.links.values():
+            if link_active(self.network, link):
+                for endpoint in dict.fromkeys((link.source, link.target)):
+                    attached[endpoint] = attached.get(endpoint, 0.0) + float(
+                        link.capacity
+                    )
+        optics: Dict[str, List[HardwareUse]] = {}
+        end_capacity: Dict[str, Dict[Optional[str], float]] = {}
+        for use in uses:
+            if use.link is not None:
+                optics.setdefault(use.node, []).append(use)
+                end_capacity.setdefault(use.link, {})[use.end] = use.capacity
+        for use in uses:
+            if use.link is None and use.active and use.capacity > 0.0:
                 self._validate_node_utilization(
-                    nd,
-                    comp,
-                    hw_count,
-                    node_comp_capacity,
-                    links_by_node.get(nd.name, []),
+                    use, attached.get(use.node, 0.0), optics.get(use.node, [])
                 )
-
-        return node_has_hw
+        for key, link in self.network.links.items():
+            capacities = end_capacity.get(key, {})
+            if len(capacities) < 2 or not link_active(self.network, link):
+                continue
+            limit = min(capacities.values())
+            if limit <= 0.0 or float(link.capacity) <= limit:
+                continue
+            if self.strict_validation:
+                raise ValueError(
+                    (
+                        "Link '%s->%s' capacity %.6g exceeds per-end hardware "
+                        "capacity limit %.6g (min of src/dst ends)."
+                    )
+                    % (link.source, link.target, float(link.capacity), limit)
+                )
+            self._link_issues.append(
+                LinkCapacityIssue(
+                    source=link.source,
+                    target=link.target,
+                    capacity=float(link.capacity),
+                    limit=float(limit),
+                    reason="link_capacity_exceeds_end_hw",
+                )
+            )
 
     def _validate_node_utilization(
-        self,
-        nd: Node,
-        comp: "Component",
-        hw_count: float,
-        node_comp_capacity: float,
-        attached_links: List[Link],
+        self, platform: HardwareUse, attached_capacity: float, optics: List[HardwareUse]
     ) -> None:
         """Record a node's hardware utilization and check it against limits.
 
-        Compares attached link capacity with the hardware capacity, and ports
-        used by link-end optics with the ports available. The NodeUtilization
-        snapshot is recorded before any error is raised.
-
-        Args:
-            nd: Node being validated.
-            comp: Resolved hardware component for the node.
-            hw_count: Hardware multiplicity for the node.
-            node_comp_capacity: Total capacity supported by node hardware.
-            attached_links: Enabled links attached to this node.
+        Compares attached link capacity with the platform capacity, and ports
+        used by the node's active link-end optics (declared count times ports)
+        with the ports available; a violation needs more than 1e-9 extra
+        ports. The NodeUtilization snapshot is recorded before any error.
 
         Raises:
             ValueError: On a capacity or port violation when
                 ``strict_validation`` is True.
         """
-        attached_capacity = 0.0
+        comp = platform.component
         used_ports = 0.0
-        for lk in attached_links:
-            # A link to a disabled neighbor is not active.
-            other = lk.target if lk.source == nd.name else lk.source
-            other_node = self.network.nodes.get(other)
-            if other_node is not None and _node_is_disabled(other_node):
-                continue
-            attached_capacity += float(lk.capacity)
-
-            src_end, dst_end = resolve_link_end_components(
-                lk.attrs, self.components_library
-            )
-            end_comp, end_cnt, _end_excl = src_end if lk.source == nd.name else dst_end
-            if end_comp is not None and end_comp.ports > 0:
-                # Fractional optic counts give fractional port usage.
-                used_ports += end_cnt * float(end_comp.ports)
-
-        total_ports_available = float(comp.ports) * float(hw_count)
-        capacity_violation = attached_capacity > node_comp_capacity
+        for use in optics:
+            if use.active and use.component.ports > 0:
+                used_ports += use.count * float(use.component.ports)
+        total_ports_available = float(comp.ports) * float(platform.count)
+        capacity_violation = attached_capacity > platform.capacity
         ports_violation = comp.ports > 0 and used_ports > total_ports_available + 1e-9
-
-        capacity_utilization = (
-            (attached_capacity / node_comp_capacity)
-            if node_comp_capacity > 0.0
-            else 0.0
-        )
         ports_utilization = (
             (used_ports / total_ports_available) if total_ports_available > 0.0 else 0.0
         )
-        self._node_utilization[nd.name] = NodeUtilization(
-            node_name=nd.name,
+        self._node_utilization[platform.node] = NodeUtilization(
+            node_name=platform.node,
             component_name=comp.name,
-            hw_count=float(hw_count),
-            capacity_supported=float(node_comp_capacity),
+            hw_count=float(platform.count),
+            capacity_supported=float(platform.capacity),
             attached_capacity_active=float(attached_capacity),
-            capacity_utilization=float(capacity_utilization),
+            capacity_utilization=float(attached_capacity / platform.capacity),
             ports_available=float(total_ports_available),
             ports_used=float(used_ports),
             ports_utilization=float(ports_utilization),
             capacity_violation=bool(capacity_violation),
             ports_violation=bool(ports_violation),
         )
-
         if capacity_violation and self.strict_validation:
             raise ValueError(
                 (
@@ -519,11 +502,11 @@ class NetworkExplorer:
                     "capacity %.6g from component '%s' (hw_count=%.6g)."
                 )
                 % (
-                    nd.name,
+                    platform.node,
                     attached_capacity,
-                    node_comp_capacity,
+                    platform.capacity,
                     comp.name,
-                    hw_count,
+                    platform.count,
                 )
             )
         if ports_violation and self.strict_validation:
@@ -533,187 +516,13 @@ class NetworkExplorer:
                     "are available on '%s' (count=%.6g)."
                 )
                 % (
-                    nd.name,
+                    platform.node,
                     used_ports,
                     total_ports_available,
                     comp.name,
-                    hw_count,
+                    platform.count,
                 )
             )
-
-    def _compute_link_stats(self, node_has_hw: Dict[str, bool]) -> None:
-        """Accumulate per-link counts, capacity, capex/power, and BOM.
-
-        Also checks link capacity against per-end hardware on active links.
-        Violations raise in strict mode and go to ``_link_issues`` otherwise.
-        """
-        for link in self.network.links.values():
-            src = link.source
-            dst = link.target
-
-            src_end, dst_end = resolve_link_end_components(
-                link.attrs, self.components_library
-            )
-
-            link_comp_capacity = 0.0
-            src_comp, src_cnt, src_exclusive = src_end
-            dst_comp, dst_cnt, dst_exclusive = dst_end
-
-            # Raw component names, so warnings can name unknown components.
-            hw_struct = link.attrs.get("hardware")
-            src_name = None
-            dst_name = None
-            if isinstance(hw_struct, dict):
-                src_map = hw_struct.get("source", {})
-                dst_map = hw_struct.get("target", {})
-                src_name = src_map.get("component")
-                dst_name = dst_map.get("component")
-
-            if src_comp is None and src_name:
-                logger.warning(
-                    "Link '%s->%s' unknown src hardware component '%s'.",
-                    src,
-                    dst,
-                    src_name,
-                )
-            if dst_comp is None and dst_name:
-                logger.warning(
-                    "Link '%s->%s' unknown dst hardware component '%s'.",
-                    src,
-                    dst,
-                    dst_name,
-                )
-
-            # Optics contribute only if the endpoint node has hardware
-            src_endpoint_has_hw = node_has_hw.get(src, False)
-            if src_comp is not None and src_endpoint_has_hw:
-                # For BOM, apply ceiling for exclusive use
-                src_cnt_bom = float(math.ceil(src_cnt) if src_exclusive else src_cnt)
-                src_cost, src_power, src_cap = totals_with_multiplier(src_comp, src_cnt)
-            else:
-                src_cost, src_power, src_cap = 0.0, 0.0, 0.0
-                src_cnt_bom = 0.0
-                # Prevent BOM accumulation below
-                if not src_endpoint_has_hw:
-                    src_comp = None
-
-            dst_endpoint_has_hw = node_has_hw.get(dst, False)
-            if dst_comp is not None and dst_endpoint_has_hw:
-                dst_cnt_bom = float(math.ceil(dst_cnt) if dst_exclusive else dst_cnt)
-                dst_cost, dst_power, dst_cap = totals_with_multiplier(dst_comp, dst_cnt)
-            else:
-                dst_cost, dst_power, dst_cap = 0.0, 0.0, 0.0
-                dst_cnt_bom = 0.0
-                if not dst_endpoint_has_hw:
-                    dst_comp = None
-
-            # Capacity limit: only enforce if both ends specify positive capacity
-            if src_cap > 0.0 and dst_cap > 0.0:
-                link_comp_capacity = min(src_cap, dst_cap)
-            cap = link.capacity
-
-            src_node = self._node_map[src]
-            dst_node = self._node_map[dst]
-            src_path = self._node_path_map[src_node]
-            dst_path = self._node_path_map[dst_node]
-            A_src = self._get_ancestors(src_node)
-            A_dst = self._get_ancestors(dst_node)
-
-            inter_anc = A_src & A_dst  # sees link as "internal"
-            xor_anc = A_src ^ A_dst  # sees link as "external"
-
-            # ----- "ALL" stats -----
-            for an in inter_anc:
-                an.stats.internal_link_count += 1
-                an.stats.internal_link_capacity += cap
-            for an in xor_anc:
-                an.stats.external_link_count += 1
-                an.stats.external_link_capacity += cap
-                other_path = dst_path if an in A_src else src_path
-                bd = an.stats.external_link_details.setdefault(
-                    other_path, ExternalLinkBreakdown()
-                )
-                bd.link_count += 1
-                bd.link_capacity += cap
-
-            # Attribute per-end hardware cost/power/BOM only to that endpoint's ancestors
-            for an in A_src:
-                an.stats.total_capex += src_cost
-                an.stats.total_power += src_power
-                if src_comp is not None:
-                    an.stats.bom[src_comp.name] = (
-                        an.stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                    )
-            for an in A_dst:
-                an.stats.total_capex += dst_cost
-                an.stats.total_power += dst_power
-                if dst_comp is not None:
-                    an.stats.bom[dst_comp.name] = (
-                        an.stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                    )
-
-            # ----- "ACTIVE" stats and validations -----
-            if _link_is_disabled(link):
-                continue
-            if _node_is_disabled(self.network.nodes[src]):
-                continue
-            if _node_is_disabled(self.network.nodes[dst]):
-                continue
-
-            if link_comp_capacity > 0.0:
-                if float(cap) > link_comp_capacity:
-                    if self.strict_validation:
-                        raise ValueError(
-                            (
-                                "Link '%s->%s' capacity %.6g exceeds per-end hardware "
-                                "capacity limit %.6g (min of src/dst ends)."
-                            )
-                            % (
-                                src,
-                                dst,
-                                float(cap),
-                                link_comp_capacity,
-                            )
-                        )
-                    else:
-                        self._link_issues.append(
-                            LinkCapacityIssue(
-                                source=src,
-                                target=dst,
-                                capacity=float(cap),
-                                limit=float(link_comp_capacity),
-                                reason="link_capacity_exceeds_end_hw",
-                            )
-                        )
-
-            for an in inter_anc:
-                an.active_stats.internal_link_count += 1
-                an.active_stats.internal_link_capacity += cap
-            for an in xor_anc:
-                an.active_stats.external_link_count += 1
-                an.active_stats.external_link_capacity += cap
-                other_path = dst_path if an in A_src else src_path
-                bd = an.active_stats.external_link_details.setdefault(
-                    other_path, ExternalLinkBreakdown()
-                )
-                bd.link_count += 1
-                bd.link_capacity += cap
-
-            # Attribute active per-end cost/power/BOM only to the endpoint's ancestors
-            for an in A_src:
-                an.active_stats.total_capex += src_cost
-                an.active_stats.total_power += src_power
-                if src_comp is not None:
-                    an.active_stats.bom[src_comp.name] = (
-                        an.active_stats.bom.get(src_comp.name, 0.0) + src_cnt_bom
-                    )
-            for an in A_dst:
-                an.active_stats.total_capex += dst_cost
-                an.active_stats.total_power += dst_power
-                if dst_comp is not None:
-                    an.active_stats.bom[dst_comp.name] = (
-                        an.active_stats.bom.get(dst_comp.name, 0.0) + dst_cnt_bom
-                    )
 
     def print_tree(
         self,
@@ -847,34 +656,6 @@ class NetworkExplorer:
         )
         return dict(stats.bom)
 
-    def get_bom_map(
-        self,
-        include_disabled: bool = True,
-        include_root: bool = True,
-        root_label: str = "",
-    ) -> Dict[str, Dict[str, float]]:
-        """Return a mapping from hierarchy path to BOM for each subtree.
-
-        Args:
-            include_disabled: Include disabled nodes/links in BOMs.
-            include_root: Include the root entry under ``root_label``.
-            root_label: Label for the root entry (default: "").
-
-        Returns:
-            Dict mapping path -> {component_name -> count}.
-        """
-        result: Dict[str, Dict[str, float]] = {}
-        if include_root:
-            result[root_label] = self.get_bom(include_disabled=include_disabled)
-        for path, node in self._path_map.items():
-            # Root is registered under "" in the path map; its inclusion is
-            # governed solely by include_root/root_label above.
-            if path == "":
-                continue
-            stats = node.stats if include_disabled else node.active_stats
-            result[path] = dict(stats.bom)
-        return result
-
     # ---------------------- Validation/utilization accessors ----------------------
     def get_node_utilization(self) -> List[NodeUtilization]:
         """Return hardware utilization per node based on active topology.
@@ -890,3 +671,11 @@ class NetworkExplorer:
     def get_link_issues(self) -> List[LinkCapacityIssue]:
         """Return link capacity violations recorded in non-strict mode."""
         return list(self._link_issues)
+
+
+def _add_hardware(stats: TreeStats, use: HardwareUse) -> None:
+    """Add one hardware use to a subtree's capex, power and BOM."""
+    stats.total_capex += use.capex
+    stats.total_power += use.power_watts
+    name = use.component.name
+    stats.bom[name] = stats.bom.get(name, 0.0) + use.bom_count
