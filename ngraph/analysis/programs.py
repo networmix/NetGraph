@@ -149,9 +149,7 @@ def route_definition(
     else:
         allowed = topology.disabled.edge_allowed()
         if spec.nodes is not None:
-            if len(spec.nodes) < 2:
-                raise ValueError(f"{label}: a node route needs at least two nodes")
-            hops = []
+            hops = []  # at least two nodes, checked by the route
             for source, target in zip(spec.nodes, spec.nodes[1:], strict=False):
                 if (
                     source not in topology.node_id_by_name
@@ -173,7 +171,7 @@ def route_definition(
             for ref, (edge,) in zip(spec.edges, hops, strict=True):
                 if not allowed[edge]:
                     raise ValueError(f"{label}: disabled link {ref.link} or endpoint")
-        if not hops or int(topology.graph.edge_sources()[hops[0][0]]) != head:
+        if int(topology.graph.edge_sources()[hops[0][0]]) != head:
             raise ValueError(f"{label}: path must begin at its declared head")
         try:
             route = ngc.Path(topology.graph, hops)
@@ -216,8 +214,10 @@ def compile_named(topology, *, routes=None, supports=None, weights=None):
 
 
 def validate_pinned(declaration, routes, weights):
-    if not declaration.routes:
-        raise ValueError("pinned.routes: expected a nonempty ordered list")
+    """What a pinned declaration needs of the scenario's named routes and weights.
+
+    Its own fields were checked when it was built.
+    """
     for name in declaration.routes:
         if name not in routes:
             raise ValueError(f"route.{name}: unknown route")
@@ -231,28 +231,6 @@ def validate_pinned(declaration, routes, weights):
         )
     ):
         raise ValueError("pinned: split fields require a DAG route")
-    if declaration.allocation not in (
-        None,
-        ngc.RouteAllocation.EQUAL,
-        ngc.RouteAllocation.WEIGHTED,
-    ):
-        raise ValueError("pinned.allocation: expected equal or weighted")
-    if declaration.weight_basis not in (
-        None,
-        ngc.WeightBasis.CAPACITY,
-        ngc.WeightBasis.EXPLICIT,
-    ):
-        raise ValueError("pinned.weight_basis: expected capacity or explicit")
-    if declaration.allocation != ngc.RouteAllocation.WEIGHTED and (
-        declaration.weight_basis is not None or declaration.edge_weights is not None
-    ):
-        raise ValueError("pinned: weights require weighted allocation")
-    if (declaration.weight_basis == ngc.WeightBasis.EXPLICIT) != (
-        declaration.edge_weights is not None
-    ):
-        raise ValueError(
-            "pinned: explicit basis requires named edge_weights and conversely"
-        )
     if declaration.edge_weights is not None and declaration.edge_weights not in weights:
         raise ValueError(f"weights.{declaration.edge_weights}: unknown weights")
 

@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import logging
 import os
-import re
 import stat
 import sys
 from contextlib import contextmanager
@@ -81,19 +80,9 @@ def _format_table(
     return "\n".join(lines)
 
 
-def _format_cost(value: float) -> str:
-    """Return cost formatted with up to three decimals.
-
-    Uses thousands separators, trims trailing zeros and the decimal point when
-    not needed.
-
-    Examples:
-        0.1 -> "0.1"; 10.0 -> "10"; 1234.567 -> "1,234.567".
-    """
-    s = f"{float(value):,.3f}"
-    if "." in s:
-        s = s.rstrip("0").rstrip(".")
-    return s
+def _format_cost(value: int) -> str:
+    """Return an integer link cost with thousands separators: 1234 -> "1,234"."""
+    return f"{value:,}"
 
 
 def _result_mode(destination: Path) -> int:
@@ -156,7 +145,7 @@ def _summarize_selector(selector: Selector, net: Any) -> Dict[str, Any]:
         Dict with ``label``, ``groups``, ``nodes`` (all matches), ``enabled_nodes``
         (the enabled ones among them) and ``labels`` (first five group labels), or
         ``label`` and ``error`` when the selector engine refuses it (for example
-        an invalid regex, a group key too long to write as text, or a compared
+        a group key too long to write as text, or a compared
         number too large for a float).
     """
     from ngraph.model.selectors import select_nodes
@@ -166,7 +155,7 @@ def _summarize_selector(selector: Selector, net: Any) -> Dict[str, Any]:
         groups = select_nodes(
             net, replace(selector, active_only=False), default_active_only=False
         )
-    except (re.error, ValueError, OverflowError) as exc:
+    except (ValueError, OverflowError) as exc:
         return {"label": label, "error": f"{type(exc).__name__}: {exc}"}
     labels = list(groups.keys())
     return {

@@ -294,7 +294,10 @@ def test_components_library_from_yaml_invalid_top_level() -> None:
 """
     with pytest.raises(ValueError) as exc:
         _ = ComponentsLibrary.from_yaml(yaml_str)
-    assert "Top-level must be a dict" in str(exc.value)
+    assert (
+        str(exc.value)
+        == "components = [{'name': 'NotADict', 'cost': 100}]: expected a mapping"
+    )
 
 
 def test_components_library_from_yaml_invalid_components_type() -> None:
@@ -308,7 +311,7 @@ components:
 """
     with pytest.raises(ValueError) as exc:
         _ = ComponentsLibrary.from_yaml(yaml_str)
-    assert "'components' must be a dict if present." in str(exc.value)
+    assert str(exc.value) == "components = [{'NotAValidDict': 1}]: expected a mapping"
 
 
 def test_components_library_yaml_boolean_keys():

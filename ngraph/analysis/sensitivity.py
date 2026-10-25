@@ -13,12 +13,12 @@ from ngraph.analysis.capacity import (
     validate_capacity_inputs,
 )
 from ngraph.analysis.demands import selected_pairs
-from ngraph.analysis.failures import Workers, resolve_workers
+from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.precision import query_inputs, query_miss
 from ngraph.model.selectors import Selector
 from ngraph.results import OutputSelection, ReportLocation, SensitivityAnalysis
-from ngraph.utils.values import physical
+from ngraph.utils.values import flag, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -38,14 +38,10 @@ class SensitivityQuery:
     export_details: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.export_details, bool):
-            raise ValueError("export_details: expected bool")
         validate_capacity_inputs(
             self.source,
             self.target,
             self.config,
-            self.offer,
-            self.design_demand,
             self.outputs,
         )
         if self.offer is not None:
@@ -59,9 +55,14 @@ class SensitivityQuery:
         if self.eligibility is not None and not isinstance(
             self.eligibility, ngc.Eligibility
         ):
-            raise TypeError("sensitivity.eligibility: expected native Eligibility")
-        if self.workers != "auto":
-            resolve_workers(self.workers)
+            raise TypeError(
+                f"sensitivity.eligibility: expected native Eligibility, got {self.eligibility!r}"
+            )
+        own(
+            self,
+            workers=checked_workers(self.workers),
+            export_details=flag(self.export_details, "export_details"),
+        )
 
 
 def edge_sensitivity(

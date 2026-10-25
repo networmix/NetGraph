@@ -382,7 +382,10 @@ def test_each_network_collection_is_owned_on_its_own(editable):
         (lambda v: RiskGroup("r", attrs={"x": v}), "risk group r.attrs.x"),
         (lambda v: Component("hw", attrs={"x": v}), "component hw.attrs.x"),
         (lambda v: FailureMode(1, attrs={"x": v}), "failure mode attrs.x"),
-        (lambda v: FailurePolicy({"x": v}), "failure policy attrs.x"),
+        (
+            lambda v: FailurePolicy({"x": v}, modes=(FailureMode(1),)),
+            "failure policy attrs.x",
+        ),
         (
             lambda v: DemandSpec(Selector("a"), Selector("b"), 1, attrs={"x": v}),
             "attrs.x",
@@ -402,7 +405,10 @@ def test_json_values_are_checked_and_frozen_at_construction(build, label):
     ):
         with pytest.raises(ValueError) as error:
             build(bad)
-        assert str(error.value) == f"{label}: expected finite JSON data, got {kind}"
+        assert (
+            str(error.value)
+            == f"{label}: expected finite JSON data, got {kind} = {bad!r}"
+        )
     caller = [Rank.ONE, np.float64(2), MutableFloat(3), {Text("key"): [4]}]
     record = build(caller)
     stored = record.value["x"] if isinstance(record, Condition) else record.attrs["x"]
@@ -425,31 +431,50 @@ def test_json_values_are_checked_and_frozen_at_construction(build, label):
 
 
 @pytest.mark.parametrize(
-    "build,label,kind",
+    "build,field,stored",
     [
-        (lambda: Node("A", disabled=np.True_), "node A.disabled", "numpy.bool"),
-        (
-            lambda: RiskGroup("r", disabled=np.True_),
-            "risk group r.disabled",
-            "numpy.bool",
-        ),
-        (lambda: Link("a", "b", cost=np.int64(2)), "link a->b.cost", "numpy.int64"),
-        (
-            lambda: Component("hw", count=np.int64(2)),
-            "component hw.count",
-            "numpy.int64",
-        ),
-        (
-            lambda: Component("hw", capex=np.float32(1)),
-            "component hw.capex",
-            "numpy.float32",
-        ),
+        (lambda: Node("A", disabled=np.True_), "disabled", True),
+        (lambda: RiskGroup("r", disabled=np.True_), "disabled", True),
+        (lambda: Link("a", "b", cost=np.int64(2)), "cost", 2),
+        (lambda: Link("a", "b", cost=np.float64(2.0)), "cost", 2),
+        (lambda: Component("hw", count=np.int64(2)), "count", 2),
+        (lambda: Component("hw", capex=np.float32(1)), "capex", 1.0),
+        (lambda: Node(np.str_("A")), "name", "A"),
     ],
 )
-def test_scalar_fields_refuse_non_built_in_values_at_construction(build, label, kind):
+def test_a_numpy_scalar_of_the_fields_kind_is_stored_as_its_built_in_value(
+    build, field, stored
+):
+    value = getattr(build(), field)
+    assert value == stored and type(value) is type(stored)
+
+
+@pytest.mark.parametrize(
+    "build,message",
+    [
+        (
+            lambda: Node("A", disabled=np.int64(1)),
+            "node A.disabled: expected bool, got np.int64(1)",
+        ),
+        (
+            lambda: Link("a", "b", cost=np.float64(2.5)),
+            "link a->b.cost: expected an integer, got np.float64(2.5)",
+        ),
+        (
+            lambda: Link("a", "b", cost=np.True_),
+            "link a->b.cost: expected an integer, got np.True_",
+        ),
+        (
+            lambda: Component("hw", capex=np.True_),
+            "component hw.capex: expected a finite real number, got np.True_",
+        ),
+        (lambda: Node(np.int64(1)), "node.name: expected text, got np.int64(1)"),
+    ],
+)
+def test_a_numpy_scalar_of_another_kind_is_refused(build, message):
     with pytest.raises(ValueError) as error:
         build()
-    assert str(error.value) == f"{label}: expected a built-in scalar, got {kind}"
+    assert str(error.value) == message
 
 
 def test_scalar_subclasses_are_stored_as_their_plain_values():

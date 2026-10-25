@@ -9,7 +9,8 @@
       "oneOf": [
         {
           "type": "string",
-          "description": "String shorthand for a simple child risk group"
+          "description": "String shorthand for a simple child risk group",
+          "minLength": 1
         },
         {
           "type": "object",
@@ -17,7 +18,8 @@
           "properties": {
             "name": {
               "type": "string",
-              "description": "Unique risk group name"
+              "description": "Unique risk group name",
+              "minLength": 1
             },
             "attrs": {
               "type": "object",
@@ -44,7 +46,8 @@
       "properties": {
         "attr": {
           "type": "string",
-          "description": "Attribute name to evaluate (supports dot-notation for nested attributes, e.g., 'hardware.vendor')"
+          "description": "Attribute name to evaluate (supports dot-notation for nested attributes, e.g., 'hardware.vendor')",
+          "minLength": 1
         },
         "op": {
           "type": "string",
@@ -72,7 +75,34 @@
         "attr",
         "op"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "op": {
+                "enum": [
+                  "in",
+                  "not_in"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
+          },
+          "then": {
+            "properties": {
+              "value": {
+                "type": "array"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      ]
     },
     "matchSpec": {
       "type": "object",
@@ -104,18 +134,35 @@
       "description": "Node selector with path, group_by, match, and active_only",
       "properties": {
         "path": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Regex pattern on node.name"
         },
         "group_by": {
-          "type": "string",
-          "description": "Attribute name to group nodes by"
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Attribute name to group nodes by",
+          "minLength": 1
         },
         "match": {
-          "$ref": "#/$defs/matchSpec"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/matchSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "active_only": {
-          "type": "boolean",
+          "type": [
+            "boolean",
+            "null"
+          ],
           "description": "Whether to exclude disabled nodes"
         }
       },
@@ -180,6 +227,9 @@
           "description": "Nested child nodes (inline hierarchy without blueprints)",
           "additionalProperties": {
             "$ref": "#/$defs/nodeDefinition"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "attrs": {
@@ -193,7 +243,8 @@
         "risk_groups": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": "Risk groups this node belongs to"
         }
@@ -227,11 +278,14 @@
         },
         "capacity": {
           "type": "number",
-          "description": "Link capacity"
+          "description": "Link capacity",
+          "minimum": 0
         },
         "cost": {
-          "type": "number",
-          "description": "Link cost"
+          "type": "integer",
+          "description": "Link cost, an integer from 1 to below 2^62",
+          "minimum": 1,
+          "exclusiveMaximum": 4611686018427387904
         },
         "disabled": {
           "type": "boolean",
@@ -240,7 +294,8 @@
         "risk_groups": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": "Risk groups this link belongs to"
         },
@@ -269,22 +324,29 @@
           "type": "string"
         },
         "capex": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0
         },
         "power_watts": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0
         },
         "power_watts_max": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0
         },
         "capacity": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0
         },
         "ports": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 0
         },
         "count": {
-          "type": "integer"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 179769313486231580793728971405303415079934132710037826936173778980444968292764750946649017977587207096330286416692887910946555547851940402630657488671505820681908902000708383676273854845817711531764475730270069855571366959622842914819860834936475292719074168444365510704342711559699508093042880177904174497791
         },
         "attrs": {
           "type": "object"
@@ -417,18 +479,23 @@
             "source_allocation": {
               "enum": [
                 "equal",
-                "optimized"
+                "optimized",
+                null
               ]
             },
             "weight_basis": {
               "enum": [
                 "capacity",
                 "explicit",
-                "residual_snapshot"
+                "residual_snapshot",
+                null
               ]
             },
             "edge_weights": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "minLength": 1
             },
             "tie_break": {
@@ -463,7 +530,14 @@
               "$ref": "#/$defs/tunnelCount"
             },
             "cost_ceiling": {
-              "$ref": "#/$defs/costCeiling"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/costCeiling"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "min_unreserved_bandwidth": {
               "type": "number",
@@ -502,7 +576,14 @@
               ]
             },
             "tunnel_count": {
-              "$ref": "#/$defs/tunnelCount"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/tunnelCount"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "prefer_headroom": {
               "type": "boolean"
@@ -533,17 +614,22 @@
             "allocation": {
               "enum": [
                 "equal",
-                "weighted"
+                "weighted",
+                null
               ]
             },
             "weight_basis": {
               "enum": [
                 "capacity",
-                "explicit"
+                "explicit",
+                null
               ]
             },
             "edge_weights": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "minLength": 1
             }
           },
@@ -610,7 +696,7 @@
           "items": {
             "$ref": "#/$defs/directedLink"
           },
-          "minItems": 0
+          "minItems": 1
         }
       },
       "required": [
@@ -662,7 +748,10 @@
           "exclusiveMaximum": 4611686018427387904
         },
         "nodes": {
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string",
             "minLength": 1
@@ -670,14 +759,20 @@
           "minItems": 2
         },
         "edges": {
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "$ref": "#/$defs/directedLink"
           },
           "minItems": 1
         },
         "support": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "minLength": 1
         }
       },
@@ -687,61 +782,142 @@
       "additionalProperties": false,
       "oneOf": [
         {
-          "required": [
-            "nodes"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "edges"
-                ]
-              },
-              {
-                "required": [
-                  "support"
+          "allOf": [
+            {
+              "required": [
+                "nodes"
+              ],
+              "properties": {
+                "nodes": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "edges"
+                    ],
+                    "properties": {
+                      "edges": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "support"
+                    ],
+                    "properties": {
+                      "support": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
                 ]
               }
-            ]
-          }
+            }
+          ]
         },
         {
-          "required": [
-            "edges"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "nodes"
-                ]
-              },
-              {
-                "required": [
-                  "support"
+          "allOf": [
+            {
+              "required": [
+                "edges"
+              ],
+              "properties": {
+                "edges": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "nodes"
+                    ],
+                    "properties": {
+                      "nodes": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "support"
+                    ],
+                    "properties": {
+                      "support": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
                 ]
               }
-            ]
-          }
+            }
+          ]
         },
         {
-          "required": [
-            "support"
-          ],
-          "not": {
-            "anyOf": [
-              {
-                "required": [
-                  "nodes"
-                ]
-              },
-              {
-                "required": [
-                  "edges"
+          "allOf": [
+            {
+              "required": [
+                "support"
+              ],
+              "properties": {
+                "support": {
+                  "not": {
+                    "type": "null"
+                  }
+                }
+              }
+            },
+            {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "nodes"
+                    ],
+                    "properties": {
+                      "nodes": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "edges"
+                    ],
+                    "properties": {
+                      "edges": {
+                        "not": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  }
                 ]
               }
-            ]
-          }
+            }
+          ]
         }
       ]
     },
@@ -751,7 +927,8 @@
         "share": {
           "oneOf": [
             {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0
             },
             {
               "type": "string",
@@ -760,13 +937,24 @@
           ]
         },
         "edge": {
-          "$ref": "#/$defs/directedLink"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/directedLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "children": {
-          "type": "array",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "$ref": "#/$defs/groupChild"
-          }
+          },
+          "minItems": 1
         }
       },
       "required": [],
@@ -779,7 +967,10 @@
       "description": "YAML anchors and variable definitions for reuse throughout the scenario"
     },
     "seed": {
-      "type": "integer",
+      "type": [
+        "integer",
+        "null"
+      ],
       "description": "Master seed for reproducible random operations across the scenario"
     },
     "network": {
@@ -806,6 +997,9 @@
           "description": "Node definitions (single nodes or counted groups distinguished by 'count' field)",
           "additionalProperties": {
             "$ref": "#/$defs/nodeDefinition"
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "links": {
@@ -837,7 +1031,8 @@
               "risk_groups": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "expand": {
@@ -868,10 +1063,14 @@
                 "description": "Filter by the link's own attributes"
               },
               "capacity": {
-                "type": "number"
+                "type": "number",
+                "minimum": 0
               },
               "cost": {
-                "type": "number"
+                "type": "integer",
+                "description": "Link cost, an integer from 1 to below 2^62",
+                "minimum": 1,
+                "exclusiveMaximum": 4611686018427387904
               },
               "disabled": {
                 "type": "boolean"
@@ -879,7 +1078,8 @@
               "risk_groups": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 }
               },
               "attrs": {
@@ -930,7 +1130,8 @@
         "oneOf": [
           {
             "type": "string",
-            "description": "String shorthand for simple risk group"
+            "description": "String shorthand for simple risk group",
+            "minLength": 1
           },
           {
             "type": "object",
@@ -938,7 +1139,8 @@
             "properties": {
               "name": {
                 "type": "string",
-                "description": "Unique risk group name"
+                "description": "Unique risk group name",
+                "minLength": 1
               },
               "disabled": {
                 "type": "boolean",
@@ -969,11 +1171,21 @@
                     "description": "Type of entities to match"
                   },
                   "path": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "description": "Regex filter on entity name"
                   },
                   "match": {
-                    "$ref": "#/$defs/matchSpec"
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/matchSpec"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -1012,7 +1224,10 @@
                     "description": "Template for generated group names. Use ${value} as placeholder"
                   },
                   "path": {
-                    "type": "string",
+                    "type": [
+                      "string",
+                      "null"
+                    ],
                     "description": "Regex filter on entity name"
                   },
                   "attrs": {
@@ -1037,7 +1252,10 @@
       }
     },
     "failures": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "Named failure policies for simulation",
       "additionalProperties": {
         "type": "object",
@@ -1078,11 +1296,21 @@
                         "description": "What entities this rule applies to"
                       },
                       "path": {
-                        "type": "string",
+                        "type": [
+                          "string",
+                          "null"
+                        ],
                         "description": "Regex filter on entity name"
                       },
                       "match": {
-                        "$ref": "#/$defs/matchSpec"
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/matchSpec"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "mode": {
                         "type": "string",
@@ -1105,8 +1333,12 @@
                         "description": "Number of entities to affect for choice mode"
                       },
                       "weight_by": {
-                        "type": "string",
-                        "description": "Attribute name used for weighted sampling in choice mode"
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Attribute name used for weighted sampling in choice mode",
+                        "minLength": 1
                       }
                     },
                     "required": [
@@ -1121,14 +1353,21 @@
                 "rules"
               ],
               "additionalProperties": false
-            }
+            },
+            "minItems": 1
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "required": [
+          "modes"
+        ]
       }
     },
     "demands": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "Named traffic demand sets",
       "additionalProperties": {
         "type": "array",
@@ -1146,7 +1385,8 @@
             },
             "volume": {
               "type": "number",
-              "description": "Traffic demand volume"
+              "description": "Traffic demand volume",
+              "minimum": 0
             },
             "priority": {
               "type": "integer",
@@ -1177,7 +1417,10 @@
               "description": "Additional demand attributes"
             },
             "id": {
-              "type": "string",
+              "type": [
+                "string",
+                "null"
+              ],
               "minLength": 1
             },
             "preset": {
@@ -1202,10 +1445,16 @@
       }
     },
     "components": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "Hardware component library: component name -> definition",
       "additionalProperties": {
         "$ref": "#/$defs/component"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "workflow": {
@@ -1395,7 +1644,8 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "minLength": 1
                 },
                 "iterations": {
                   "type": "integer",
@@ -1433,17 +1683,37 @@
                   ]
                 },
                 "preset": {
-                  "$ref": "#/$defs/preset"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/preset"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "model": {
-                  "$ref": "#/$defs/model"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/model"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "offer": {
-                  "type": "number",
+                  "type": [
+                    "number",
+                    "null"
+                  ],
                   "minimum": 0
                 },
                 "design_demand": {
-                  "type": "number",
+                  "type": [
+                    "number",
+                    "null"
+                  ],
                   "minimum": 0
                 }
               },
@@ -1457,7 +1727,19 @@
                 "required": [
                   "preset",
                   "model"
-                ]
+                ],
+                "properties": {
+                  "preset": {
+                    "not": {
+                      "type": "null"
+                    }
+                  },
+                  "model": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                }
               },
               "description": "Without preset or model, MaxFlow asks unrestricted optimized lossless maximum flow (TE_MAXFLOW_UNLIM). Demand declarations separately default to SHORTEST_PATHS_ECMP."
             }
@@ -1493,7 +1775,8 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "minLength": 1
                 },
                 "iterations": {
                   "type": "integer",
@@ -1523,11 +1806,17 @@
                   "minLength": 1
                 },
                 "alpha": {
-                  "type": "number",
+                  "type": [
+                    "number",
+                    "null"
+                  ],
                   "exclusiveMinimum": 0
                 },
                 "alpha_from_step": {
-                  "type": "string",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "minLength": 1
                 },
                 "failure_states": {
@@ -1601,7 +1890,7 @@
                 },
                 "growth_factor": {
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 1
                 },
                 "alpha_min": {
                   "type": "number",
@@ -1682,7 +1971,10 @@
                   "uniqueItems": true
                 },
                 "up_to": {
-                  "type": "integer",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
                   "minimum": 1,
                   "maximum": 10000
                 },
@@ -1747,7 +2039,10 @@
       }
     },
     "routes": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "propertyNames": {
         "type": "string",
         "minLength": 1
@@ -1757,7 +2052,10 @@
       }
     },
     "supports": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "propertyNames": {
         "type": "string",
         "minLength": 1
@@ -1767,7 +2065,10 @@
       }
     },
     "weights": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "propertyNames": {
         "type": "string",
         "minLength": 1
@@ -1777,7 +2078,10 @@
       }
     },
     "units": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
         "resolution": {
           "oneOf": [
@@ -1788,7 +2092,8 @@
             },
             {
               "type": "number",
-              "exclusiveMinimum": 0
+              "minimum": 2.3283064365386963e-10,
+              "maximum": 4294967296
             }
           ]
         },
@@ -1801,7 +2106,10 @@
       "additionalProperties": false
     },
     "routing": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
         "igp_domain": {
           "$ref": "#/$defs/selectorOrString"
@@ -1817,7 +2125,10 @@
       "additionalProperties": false
     },
     "wcmp_controller": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
         "scope": {
           "enum": [
@@ -1831,7 +2142,10 @@
       "additionalProperties": false
     },
     "forwarding_groups": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "propertyNames": {
         "type": "string",
         "minLength": 1
@@ -1851,7 +2165,8 @@
                 "share": {
                   "oneOf": [
                     {
-                      "type": "integer"
+                      "type": "integer",
+                      "minimum": 0
                     },
                     {
                       "type": "string",
@@ -1863,14 +2178,16 @@
                   "type": "array",
                   "items": {
                     "$ref": "#/$defs/groupChild"
-                  }
+                  },
+                  "minItems": 1
                 }
               },
               "required": [
                 "children"
               ],
               "additionalProperties": false
-            }
+            },
+            "minItems": 1
           }
         },
         "required": [

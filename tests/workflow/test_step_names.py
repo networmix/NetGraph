@@ -45,6 +45,7 @@ def test_a_subclass_labels_its_failure_states_refusal_with_its_class():
 
 
 def _unnamed_steps():
+    """Each built-in step without a name, and one field it refuses."""
     from ngraph.workflow import (
         build_graph,
         cost_power,
@@ -56,43 +57,39 @@ def _unnamed_steps():
     )
 
     return [
-        (build_graph, lambda: build_graph.BuildGraph()),
-        (cost_power, lambda: cost_power.CostPower()),
-        (max_flow_step, lambda: max_flow_step.MaxFlow()),
+        (build_graph.BuildGraph, {}, "add_reverse"),
+        (cost_power.CostPower, {}, "include_disabled"),
+        (max_flow_step.MaxFlow, {}, "failure_trace"),
         (
-            maximum_supported_demand_step,
-            lambda: maximum_supported_demand_step.MaximumSupportedDemand(
-                demand_set="d"
-            ),
+            maximum_supported_demand_step.MaximumSupportedDemand,
+            {"demand_set": "d"},
+            "export_details",
         ),
-        (network_stats, lambda: network_stats.NetworkStats()),
+        (network_stats.NetworkStats, {}, "include_disabled"),
         (
-            traffic_matrix_placement_step,
-            lambda: traffic_matrix_placement_step.TrafficMatrixPlacement(
-                demand_set="d"
-            ),
+            traffic_matrix_placement_step.TrafficMatrixPlacement,
+            {"demand_set": "d"},
+            "failure_trace",
         ),
         (
-            tunnel_count_step,
-            lambda: tunnel_count_step.TunnelCountAnalysis(
-                demand_set="d", counts=(1,), design_demand=1.0, offer=1.0
-            ),
+            tunnel_count_step.TunnelCountAnalysis,
+            {"demand_set": "d", "counts": (1,), "design_demand": 1.0, "offer": 1.0},
+            "export_details",
         ),
     ]
 
 
 @pytest.mark.parametrize(
-    ("module", "build"),
+    ("kind", "fields", "flag"),
     _unnamed_steps(),
-    ids=lambda v: getattr(v, "__name__", "").rpartition(".")[2],
+    ids=lambda v: getattr(v, "__name__", ""),
 )
-def test_an_unnamed_steps_field_labels_use_its_class_name(monkeypatch, module, build):
-    labels = []
-    monkeypatch.setattr(
-        module, "own_scalars", lambda record, label, names: labels.append(label)
-    )
-    step = build()
-    assert labels == [f"workflow step {type(step).__name__}"]
+def test_an_unnamed_steps_field_refusals_use_its_class_name(kind, fields, flag):
+    kind(**fields)  # control: the fields alone build the step
+    with pytest.raises(ValueError) as error:
+        kind(**fields, **{flag: "yes"})
+    where = str(error.value).split(": ")[0]
+    assert kind.__name__ in where and str(error.value).endswith("got 'yes'")
 
 
 def test_an_unnamed_max_flows_query_refusals_use_its_class_name():

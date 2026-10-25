@@ -334,14 +334,8 @@ def _population(topology, network, selector, label) -> frozenset[int]:
     return frozenset(topology.node_id_by_name[name] for name in names)
 
 
-def _check_share(share, label):
-    if share < 0:
-        raise ValueError(f"{label}.share: expected a nonnegative share, got {share}")
-
-
 def _check_children(topology, router, children, label, positive, leaves):
-    if not children:
-        raise ValueError(f"{label}.children: expected at least one child")
+    # Each group and child checked its share, shape and children when built.
     if positive and all(child.share == 0 for child in children):
         raise ValueError(
             f"{label}: a positive share at router {topology.node_names[router]} "
@@ -350,11 +344,6 @@ def _check_children(topology, router, children, label, positive, leaves):
     sources = topology.graph.edge_sources()
     for j, child in enumerate(children):
         child_label = f"{label}.children[{j}]"
-        _check_share(child.share, child_label)
-        if (child.edge is None) == (child.children is None):
-            raise ValueError(
-                f"{child_label}: expected exactly one of edge and children"
-            )
         if child.edge is None:
             _check_children(
                 topology,
@@ -392,12 +381,9 @@ def _trees(topology, declared):
                 f"{label}: router {tree.router} already has the tree "
                 f"forwarding_groups.{trees[router][0]}"
             )
-        if not tree.groups:
-            raise ValueError(f"{label}.groups: expected at least one group")
         leaves: dict = {}
         for i, group in enumerate(tree.groups):
             group_label = f"{label}.groups[{i}]"
-            _check_share(group.share, group_label)
             _check_children(
                 topology, router, group.children, group_label, group.share > 0, leaves
             )

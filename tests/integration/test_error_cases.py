@@ -1,6 +1,5 @@
 """YAML refusals and degenerate physical topologies through preparation/run."""
 
-import jsonschema
 import pytest
 from yaml.parser import ParserError
 
@@ -14,7 +13,7 @@ def _graph(scenario):
     (step,) = run(prepare(scenario)).steps
     assert isinstance(step.result, BuildGraphResult)
     assert step.result.node_count == len(step.result.graph["nodes"])
-    assert step.result.link_count == len(step.result.graph["edges"])
+    assert step.result.edge_count == len(step.result.graph["edges"])
     return step.result.graph
 
 
@@ -29,8 +28,9 @@ def _builder(nodes=()):
 @pytest.mark.slow
 class TestMalformedYAML:
     def test_invalid_yaml_syntax(self):
-        with pytest.raises(ParserError):
+        with pytest.raises(ValueError, match="invalid YAML") as error:
             Scenario.from_yaml("network:\n  nodes:\n    NodeA: {\n")
+        assert isinstance(error.value.__cause__, ParserError)
         assert (
             _graph(_builder(("NodeA",)).build_scenario())["nodes"][0]["id"] == "NodeA"
         )
@@ -41,9 +41,7 @@ class TestMalformedYAML:
         assert run(prepare(scenario)).steps == ()
 
     def test_invalid_node_definitions(self):
-        with pytest.raises(
-            jsonschema.ValidationError, match="Additional properties are not allowed"
-        ):
+        with pytest.raises(ValueError, match="Additional properties are not allowed"):
             Scenario.from_yaml(
                 "network:\n  nodes:\n    NodeA:\n      invalid_field: should_not_exist\n      disabled: not_a_boolean\n"
             )
@@ -53,7 +51,10 @@ class TestMalformedYAML:
         )
 
     def test_nonexistent_link_endpoints(self):
-        scenario = Scenario.from_yaml("""
+        with pytest.raises(
+            ValueError, match="target 'NonexistentNode' matches no node"
+        ):
+            Scenario.from_yaml("""
 network:
   nodes: {NodeA: {}}
   links:
@@ -61,9 +62,6 @@ network:
 workflow:
   - {type: BuildGraph, name: build_graph}
 """)
-        graph = _graph(scenario)
-        assert [node["id"] for node in graph["nodes"]] == ["NodeA"]
-        assert not graph["edges"] and not scenario.network.links
 
 
 @pytest.mark.slow
@@ -91,7 +89,7 @@ class TestBlueprintErrors:
         builder.data["network"]["links"] = [
             {"source": "A", "target": "B", "pattern": "invalid_pattern", "capacity": 10}
         ]
-        with pytest.raises(jsonschema.ValidationError):
+        with pytest.raises(ValueError):
             builder.build_scenario()
         builder.data["network"]["links"][0]["pattern"] = "mesh"
         assert len(_graph(builder.build_scenario())["edges"]) == 2
@@ -102,7 +100,7 @@ class TestWorkflowErrors:
     def test_nonexistent_workflow_step_type(self):
         builder = _builder(("A",))
         builder.with_workflow_step("NonexistentStepType", "invalid_step")
-        with pytest.raises((ValueError, KeyError, jsonschema.ValidationError)):
+        with pytest.raises((ValueError, KeyError)):
             builder.build_scenario()
         builder.data["workflow"].pop()
         assert len(_graph(builder.build_scenario())["nodes"]) == 1

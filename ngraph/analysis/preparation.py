@@ -48,7 +48,6 @@ from ngraph.analysis.topology import (
     NamedRoutes,
     PreparedTopology,
     compile_topology,
-    cost_units,
     outgoing_units,
 )
 from ngraph.analysis.units import (
@@ -94,7 +93,8 @@ class StepNeeds:
     whose combined sources are a pool: preparation gives them a private head.
     ``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
     receives; ``counts`` builds a tunnel-count question, whose split targets
-    preparation observes once per candidate resolution.
+    preparation observes once per candidate resolution. ``nodes`` and ``links``
+    are names the step reads that must exist in the network.
     """
 
     numerical: bool = False
@@ -114,6 +114,8 @@ class StepNeeds:
     pool_endpoints: tuple[Selector, Selector] | None = None
     offer_budget: float | None = None
     counts: Callable[[PreparedScenario], TunnelCountQuery] | None = None
+    nodes: tuple[str, ...] = ()
+    links: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -296,6 +298,13 @@ def prepare_scenario(
             continue
         if needs.numerical:
             numerical.append(name)
+        for kind, names, known in (
+            ("node", needs.nodes, scenario.network.nodes),
+            ("link", needs.links, scenario.network.links),
+        ):
+            unknown = [value for value in names if value not in known]
+            if unknown:
+                raise ValueError(f"step {name}: unknown {kind} {unknown[0]!r}")
         if needs.demand_set is not None:
             if needs.demand_set not in scenario.demand_sets:
                 raise ValueError(
@@ -415,10 +424,9 @@ def prepare_scenario(
         link_id: 2 + occurrences[link.source] + occurrences[link.target]
         for link_id, link in network.links.items()
     }
-    cost_sum = 2 * sum(
-        cost_units(link.cost, f"link.{link_id}.cost")
-        for link_id, link in network.links.items()
-    ) + sum(len(members) for members in pools.values())
+    cost_sum = 2 * sum(link.cost for link in network.links.values()) + sum(
+        len(members) for members in pools.values()
+    )
     if cost_sum >= LIMIT:
         raise ValueError(f"topology augmented cost sum {cost_sum} must be below 2^62")
     expansion, _ = expansion_bounds(plans, 1.0, settings.precision)

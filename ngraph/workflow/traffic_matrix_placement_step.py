@@ -5,11 +5,19 @@ from typing import Literal
 
 import netgraph_core as ngc
 
-from ngraph.analysis.failures import FailureRequest, Workers, resolve_workers
+from ngraph.analysis.failures import FailureRequest, Workers, checked_workers
 from ngraph.analysis.placement import PlacementQuery, place, state_names
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import MSDAnalysis, StateName, StepContext, StepOutput
-from ngraph.utils.values import own_scalars, physical, shared_copy
+from ngraph.utils.values import (
+    flag,
+    integer,
+    optional_text,
+    own,
+    physical,
+    shared_copy,
+    text,
+)
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
@@ -45,16 +53,13 @@ class TrafficMatrixPlacement(WorkflowStep):
                 f"workflow.{step_name(self)}.failure_states",
             ),
         )
-        if self.interaction not in ("ordered", "simultaneous"):
+        if not isinstance(self.interaction, str) or self.interaction not in (
+            "ordered",
+            "simultaneous",
+        ):
             raise ValueError(
                 f"workflow.{step_name(self)}.interaction: "
                 f"expected ordered or simultaneous, got {self.interaction!r}"
-            )
-        if not isinstance(self.export_details, bool):
-            raise TypeError("export_details: expected bool")
-        if not isinstance(self.demand_set, str) or not self.demand_set:
-            raise ValueError(
-                "TrafficMatrixPlacement.demand_set: expected nonempty name"
             )
         if self.alpha is not None:
             object.__setattr__(
@@ -66,32 +71,36 @@ class TrafficMatrixPlacement(WorkflowStep):
                 raise ValueError(
                     "TrafficMatrixPlacement: alpha and alpha_from_step are exclusive"
                 )
-        if self.alpha_from_step is not None and (
-            not isinstance(self.alpha_from_step, str) or not self.alpha_from_step
-        ):
-            raise ValueError(
-                "TrafficMatrixPlacement.alpha_from_step: expected nonempty name"
+        request = FailureRequest(
+            None,
+            integer(self.iterations, "TrafficMatrixPlacement.iterations", minimum=0),
+            self.seed,
+            flag(self.failure_trace, "TrafficMatrixPlacement.failure_trace"),
+        )
+        if not isinstance(self.outputs, ngc.OutputOptions):
+            raise TypeError(
+                f"TrafficMatrixPlacement.outputs: expected native OutputOptions, got {self.outputs!r}"
             )
-        FailureRequest(None, self.iterations, self.seed, self.failure_trace)
-        resolve_workers(self.workers)
-        if not isinstance(self.outputs, ngc.OutputOptions) or not isinstance(
-            self.export_cost_distribution, bool
-        ):
-            raise TypeError("TrafficMatrixPlacement: invalid outputs")
-        own_scalars(
+        own(
             self,
-            f"workflow step {step_name(self)}",
-            (
-                "demand_set",
-                "failure_policy",
-                "iterations",
-                "workers",
-                "failure_trace",
-                "export_cost_distribution",
-                "export_details",
-                "alpha_from_step",
-                "interaction",
+            demand_set=text(self.demand_set, "TrafficMatrixPlacement.demand_set"),
+            failure_policy=optional_text(
+                self.failure_policy, "TrafficMatrixPlacement.failure_policy"
             ),
+            iterations=request.iterations,
+            workers=checked_workers(self.workers),
+            failure_trace=request.failure_trace,
+            export_cost_distribution=flag(
+                self.export_cost_distribution,
+                "TrafficMatrixPlacement.export_cost_distribution",
+            ),
+            export_details=flag(
+                self.export_details, "TrafficMatrixPlacement.export_details"
+            ),
+            alpha_from_step=optional_text(
+                self.alpha_from_step, "TrafficMatrixPlacement.alpha_from_step"
+            ),
+            interaction=str.__str__(self.interaction),
         )
 
     @classmethod

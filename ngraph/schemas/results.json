@@ -152,7 +152,7 @@
           "description": "Nodes in the exported graph.",
           "type": "integer"
         },
-        "link_count": {
+        "edge_count": {
           "description": "Edges in the exported graph (two per link with add_reverse).",
           "type": "integer"
         },
@@ -168,7 +168,7 @@
         "kind",
         "add_reverse",
         "node_count",
-        "link_count",
+        "edge_count",
         "graph"
       ],
       "additionalProperties": false
@@ -2852,11 +2852,11 @@
         },
         "min_cost": {
           "description": "The smallest link cost.",
-          "type": "number"
+          "type": "integer"
         },
         "max_cost": {
           "description": "The largest link cost.",
-          "type": "number"
+          "type": "integer"
         },
         "mean_degree": {
           "description": "The mean node degree.",

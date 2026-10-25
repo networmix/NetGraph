@@ -84,13 +84,16 @@ def test_finite_pools_outgoing_sums_positive_cost_and_private_head():
     assert int(costs.sum()) == 16 + 3
 
 
-@pytest.mark.parametrize("cost", [0, -1, True, 0.5, float("nan"), float("inf")])
+@pytest.mark.parametrize("cost", [0, -1, True, 0.5, float("nan"), float("inf"), 2**62])
 def test_bad_cost_labels_and_control(cost):
+    # The link refuses the cost where it is given, so the network keeps its link.
     n = sample()
-    n.replace_link("a|m|0", cost=cost)
-    with pytest.raises(ValueError, match="a\\|m\\|0.*cost"):
-        compile_topology(n, 1)
-    n.replace_link("a|m|0", cost=1.0)
+    before = n.links["a|m|0"]
+    with pytest.raises(ValueError, match=r"^link a->m\.cost: .*got "):
+        n.replace_link("a|m|0", cost=cost)
+    assert n.links["a|m|0"] is before
+    n.replace_link("a|m|0", cost=2.0)
+    assert n.links["a|m|0"].cost == 2 and type(n.links["a|m|0"].cost) is int
     assert compile_topology(n, 1).graph.num_edges() == 6
 
 

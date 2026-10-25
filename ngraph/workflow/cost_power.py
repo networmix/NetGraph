@@ -11,9 +11,10 @@ from ngraph.results import (
     HardwareRow,
     StepContext,
     StepOutput,
+    _CostPowerLevels,
 )
-from ngraph.utils.values import integer, own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
+from ngraph.utils.values import flag, integer, own, shared_copy
+from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
 @register_workflow_step("CostPower")
@@ -28,13 +29,12 @@ class CostPower(WorkflowStep):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if not isinstance(self.include_disabled, bool):
-            raise ValueError("CostPower.include_disabled: expected bool")
-        integer(self.aggregation_level, "CostPower.aggregation_level", minimum=0)
-        own_scalars(
+        own(
             self,
-            f"workflow step {step_name(self)}",
-            ("include_disabled", "aggregation_level"),
+            include_disabled=flag(self.include_disabled, "CostPower.include_disabled"),
+            aggregation_level=integer(
+                self.aggregation_level, "CostPower.aggregation_level", minimum=0
+            ),
         )
 
     def run(self, context: StepContext) -> StepOutput:
@@ -42,8 +42,12 @@ class CostPower(WorkflowStep):
         inventory = hardware_inventory(scenario.network, scenario.components_library)
         # level -> path -> [platform_capex, platform_power, optics_capex, optics_power],
         # float sums from 0.0
+        deepest = max(
+            (len([p for p in name.split("/") if p]) for name in scenario.network.nodes),
+            default=0,
+        )
         levels: Dict[int, Dict[str, List[float]]] = {
-            level: {} for level in range(self.aggregation_level + 1)
+            level: {} for level in range(min(self.aggregation_level, deepest) + 1)
         }
         for use in inventory.uses:
             if not (self.include_disabled or use.active):
@@ -57,12 +61,16 @@ class CostPower(WorkflowStep):
         result = CostPowerResult(
             self.include_disabled,
             self.aggregation_level,
-            {
-                level: tuple(
-                    HardwareRow(path, pc, pp, oc, op, pc + oc, pp + op)
-                    for path, (pc, pp, oc, op) in mapping.items()
-                )
-                for level, mapping in levels.items()
-            },
+            _CostPowerLevels(
+                tuple(
+                    tuple(
+                        HardwareRow(path, pc, pp, oc, op, pc + oc, pp + op)
+                        for path, (pc, pp, oc, op) in sorted(mapping.items())
+                    )
+                    for mapping in levels.values()
+                ),
+                self.aggregation_level,
+            ),
         )
+
         return StepOutput(self, result)

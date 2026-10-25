@@ -3,9 +3,11 @@
 from importlib import import_module
 from typing import TYPE_CHECKING
 
-from .base import BUILTIN_STEP_MODULES, WorkflowStep, register_workflow_step
+from .base import BUILTIN_STEP_MODULES, WorkflowStep, register_workflow_step, step_name
 
 if TYPE_CHECKING:
+    from ngraph.analysis.preparation import StepNeeds
+
     from .build_graph import BuildGraph
     from .cost_power import CostPower
     from .max_flow_step import MaxFlow
@@ -16,6 +18,10 @@ if TYPE_CHECKING:
 
 
 def __getattr__(name):
+    if name == "StepNeeds":
+        value = import_module("ngraph.analysis.preparation").StepNeeds
+        globals()[name] = value
+        return value
     module = BUILTIN_STEP_MODULES.get(name)
     if module is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -26,6 +32,8 @@ def __getattr__(name):
 
 __all__ = [
     "WorkflowStep",
+    "StepNeeds",
+    "step_name",
     "register_workflow_step",
     "BuildGraph",
     "CostPower",

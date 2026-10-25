@@ -89,15 +89,21 @@ network:
   nodes: {{{source}: {{}}, {target}: {{}}}}
   links: [{{source: {source}, target: {target}, capacity: -1}}]
 """
-    with pytest.raises(ValueError) as error:
-        if input_kind == "python":
+    # The same rule refuses the value in both; each message names the endpoints.
+    if input_kind == "python":
+        with pytest.raises(ValueError) as error:
             Link(source, target, -1)
-        else:
+        assert str(error.value) == (
+            f"link {source}->{target}.capacity: expected a finite nonnegative amount, "
+            "got -1"
+        )
+    else:
+        with pytest.raises(ValueError) as error:
             Scenario.from_yaml(text)
-    assert (
-        str(error.value)
-        == f"link {source}->{target}.capacity: expected a finite nonnegative amount"
-    )
+        assert str(error.value) == (
+            f"network.links[0] ({source}->{target}).capacity = -1: "
+            "-1 is less than the minimum of 0"
+        )
     if input_kind == "python":
         assert Link(source, target, 1).capacity == 1.0
     else:

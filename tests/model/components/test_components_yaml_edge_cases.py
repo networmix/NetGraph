@@ -46,7 +46,9 @@ components:
         ComponentsLibrary.from_yaml(yaml_str)
 
     nested = {"Chassis": {"children": {"Card": {"vendor": "x"}}}}
-    with pytest.raises(ValueError, match="Component 'Card'.*vendor"):
+    with pytest.raises(
+        ValueError, match=r"components\.Chassis\.children\.Card.*vendor"
+    ):
         ComponentsLibrary.from_dict(nested)
 
 

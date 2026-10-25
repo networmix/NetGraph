@@ -9,23 +9,27 @@ from __future__ import annotations
 
 import re
 from base64 import urlsafe_b64encode
+from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import uuid4
 
-from ngraph.model.risk import MembershipIndex
+from ngraph.model.risk import MembershipIndex, RiskGroup
 from ngraph.utils.values import (
+    collection,
+    flag,
     frozen_attrs,
     frozen_dict,
-    own_scalars,
+    integer,
+    json_copy,
+    own,
     owned_dict,
     physical,
-    scalar,
+    text,
 )
 
-if TYPE_CHECKING:
-    from ngraph.model.risk import RiskGroup
+COST_LIMIT = 1 << 62  # a link cost is below 2^62, the native graph's bound
 
 
 @dataclass(frozen=True)
@@ -38,11 +42,13 @@ class DirectedLink:
     """The direction of the physical link: forward (source to target) or reverse."""
 
     def __post_init__(self) -> None:
-        if not isinstance(self.link, str) or not self.link:
-            raise ValueError("link: expected a nonempty physical link id")
-        if self.direction not in ("forward", "reverse"):
-            raise ValueError(f"link {self.link}: direction must be forward or reverse")
-        own_scalars(self, "directed link", ("link", "direction"))
+        link = text(self.link, "directed link.link")
+        direction = text(self.direction, f"link {link}.direction")
+        if direction not in ("forward", "reverse"):
+            raise ValueError(
+                f"link {link}: direction must be forward or reverse, got {direction!r}"
+            )
+        own(self, link=link, direction=direction)
 
 
 @dataclass(frozen=True)
@@ -64,11 +70,15 @@ class Node:
     attrs: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        own_scalars(self, "node", ("name",))
-        label = f"node {self.name}"
-        own_scalars(self, label, ("disabled",))
-        object.__setattr__(self, "risk_groups", _names(self.risk_groups, label))
-        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
+        name = text(self.name, "node.name")
+        label = f"node {name}"
+        own(
+            self,
+            name=name,
+            disabled=flag(self.disabled, f"{label}.disabled"),
+            risk_groups=_names(self.risk_groups, label),
+            attrs=frozen_attrs(self.attrs, f"{label}.attrs"),
+        )
 
 
 @dataclass(frozen=True)
@@ -85,7 +95,8 @@ class Link:
         target (str): Name of the target node.
         capacity (float): Finite nonnegative link capacity (default 1.0),
             promoted to binary64 at construction.
-        cost (float): Link cost (default 1.0).
+        cost (int): Link cost, an integer from 1 to below 2^62 (default 1); an
+            exactly integral float such as 2.0 is stored as 2.
         disabled (bool): Whether the link is disabled.
         risk_groups (AbstractSet[str]): Names of the risk groups this link belongs
             to, stored as a frozenset.
@@ -100,7 +111,7 @@ class Link:
     source: str
     target: str
     capacity: float = 1.0
-    cost: float = 1.0
+    cost: int = 1
     disabled: bool = False
     risk_groups: AbstractSet[str] = frozenset()
     attrs: Dict[str, Any] = field(default_factory=dict)
@@ -113,22 +124,28 @@ class Link:
         "source|target|<seq>" form; the uuid suffix only guarantees
         uniqueness for links never added to a Network.
         """
-        own_scalars(self, "link", ("source", "target"))
-        label = f"link {self.source}->{self.target}"
-        own_scalars(self, label, ("cost", "disabled"))
-        object.__setattr__(
-            self, "capacity", physical(self.capacity, f"{label}.capacity")
+        source = text(self.source, "link.source")
+        target = text(self.target, "link.target")
+        label = f"link {source}->{target}"
+        own(
+            self,
+            source=source,
+            target=target,
+            capacity=physical(self.capacity, f"{label}.capacity"),
+            cost=integer(self.cost, f"{label}.cost", minimum=1, maximum=COST_LIMIT),
+            disabled=flag(self.disabled, f"{label}.disabled"),
+            risk_groups=_names(self.risk_groups, label),
+            attrs=frozen_attrs(self.attrs, f"{label}.attrs"),
         )
-        object.__setattr__(self, "risk_groups", _names(self.risk_groups, label))
-        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
         suffix = urlsafe_b64encode(uuid4().bytes)[:-2].decode("ascii")
         object.__setattr__(self, "id", f"{self.source}|{self.target}|{suffix}")
 
 
 def _names(values: Any, label: str) -> frozenset[str]:
-    if isinstance(values, str):
-        raise ValueError(f"{label}.risk_groups: expected a collection of names")
-    return frozenset(scalar(name, f"{label}.risk_groups") for name in values)
+    return frozenset(
+        text(name, f"{label}.risk_groups")
+        for name in collection(values, f"{label}.risk_groups")
+    )
 
 
 @dataclass(frozen=True)
@@ -155,6 +172,25 @@ class Network:
     risk_groups: Dict[str, RiskGroup] = field(default_factory=dict)
     attrs: Dict[str, Any] = field(default_factory=dict)
     _link_seq: Dict[tuple, int] = field(default_factory=dict, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        for name, kind in (
+            ("nodes", Node),
+            ("links", Link),
+            ("risk_groups", RiskGroup),
+        ):
+            values = getattr(self, name)
+            if not isinstance(values, Mapping) or not all(
+                isinstance(key, str) and isinstance(value, kind)
+                for key, value in values.items()
+            ):
+                raise TypeError(
+                    f"network.{name}: expected a mapping of names to {kind.__name__} "
+                    f"values, got {values!r}"
+                )
+        checked = frozen_attrs(self.attrs, "network.attrs")
+        if checked is not self.attrs:
+            object.__setattr__(self, "attrs", json_copy(checked, "network.attrs"))
 
     def snapshot(self) -> Network:
         """Return a read-only view sharing this network's immutable records.

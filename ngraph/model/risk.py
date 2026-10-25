@@ -16,6 +16,7 @@ from typing import (
     Literal,
     Optional,
     Set,
+    cast,
 )
 
 from ngraph.logging import get_logger
@@ -30,8 +31,21 @@ from ngraph.model.selectors import (
     parse_match_spec,
     resolve_attr_path,
 )
-from ngraph.utils.values import frozen_attrs, frozen_json, own_scalars
-from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
+from ngraph.utils.values import (
+    _shown,
+    collection,
+    flag,
+    frozen_attrs,
+    frozen_json,
+    optional_pattern,
+    own,
+    text,
+)
+from ngraph.utils.yaml_utils import (
+    check_no_extra_keys,
+    declared,
+    normalize_yaml_dict_keys,
+)
 
 if TYPE_CHECKING:
     from ngraph.model.network import Network
@@ -54,17 +68,20 @@ class RiskGroup:
     _membership_raw: dict[str, Any] | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
-        own_scalars(self, "risk group", ("name",))
-        label = f"risk group {self.name}"
-        own_scalars(self, label, ("disabled",))
-        object.__setattr__(self, "children", tuple(self.children))
-        if not all(isinstance(child, RiskGroup) for child in self.children):
-            raise TypeError(f"{label}.children: expected RiskGroup values")
-        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
-        object.__setattr__(
+        name = text(self.name, "risk group.name")
+        label = f"risk group {name}"
+        children = collection(self.children, f"{label}.children")
+        if not all(isinstance(child, RiskGroup) for child in children):
+            raise TypeError(
+                f"{label}.children: expected RiskGroup values, got {self.children!r}"
+            )
+        own(
             self,
-            "_membership_raw",
-            frozen_json(self._membership_raw, f"{label}.membership"),
+            name=name,
+            children=children,
+            disabled=flag(self.disabled, f"{label}.disabled"),
+            attrs=frozen_attrs(self.attrs, f"{label}.attrs"),
+            _membership_raw=frozen_json(self._membership_raw, f"{label}.membership"),
         )
 
 
@@ -121,9 +138,7 @@ class MembershipIndex:
             return signatures[identity]
 
         def visit(group: RiskGroup, path: tuple[str, ...]) -> None:
-            if not isinstance(group.name, str) or not group.name:
-                raise ValueError("risk group: expected a nonempty name")
-            name = group.name
+            name = group.name  # a nonempty name, checked by the group
             # A child naming a registered group refers to its top-level declaration.
             # Inline descendants without a registered declaration retain their own tree.
             group = network.risk_groups.get(name, group)
@@ -276,6 +291,26 @@ class GenerateSpec:
     path: Optional[str] = None
     attrs: Dict[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        scope = text(self.scope, "generate.scope")
+        if scope not in ("node", "link"):
+            raise ValueError(
+                f"generate.scope: expected node or link, got {self.scope!r}"
+            )
+        name = text(self.name, "generate.name")
+        if "${value}" not in name:
+            raise ValueError(
+                f"generate.name: must contain '${{value}}', got {self.name!r}"
+            )
+        own(
+            self,
+            scope=scope,
+            group_by=text(self.group_by, "generate.group_by"),
+            name=name,
+            path=optional_pattern(self.path, "generate.path", empty=True),
+            attrs=frozen_attrs(self.attrs, "generate.attrs"),
+        )
+
 
 def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGroup]:
     """Generate risk groups from unique attribute values.
@@ -293,8 +328,9 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
         List of newly created RiskGroup objects.
 
     Raises:
-        ValueError: If `group_by` resolves to an unhashable value, or if the
-            name template renders the same group name for two distinct values.
+        ValueError: If `group_by` resolves to an unhashable value, its value
+            cannot be rendered as a group name, or the name template renders
+            the same group name for two distinct values.
     """
     path_pattern = re.compile(spec.path) if spec.path else None
 
@@ -334,24 +370,30 @@ def generate_risk_groups(network: "Network", spec: GenerateSpec) -> List[RiskGro
                 groups[value].append((entity_id, entity))
             except TypeError as exc:
                 raise ValueError(
-                    f"generate block group_by '{spec.group_by}' resolved to an "
+                    f"generate.group_by: {spec.group_by!r} resolved to an "
                     f"unhashable {type(value).__name__} on entity "
-                    f"'{entity_id}'; group_by requires scalar attribute values"
+                    f"'{entity_id}'; group_by requires scalar attribute values, got {_shown(value)}"
                 ) from exc
 
     result: List[RiskGroup] = []
     seen_names: Dict[str, Any] = {}
     joined: Dict[str, Set[str]] = defaultdict(set)
     for value, members in groups.items():
-        name = spec.name.replace("${value}", str(value))
+        try:
+            rendered = str(value)
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise ValueError(
+                f"generate.group_by: cannot render a group name from {_shown(value)}"
+            ) from exc
+        name = spec.name.replace("${value}", rendered)
         if name in seen_names:
             # Distinct group_by values (e.g. int 1 and str "1") can render to
             # the same string; a silent merge or a generic downstream conflict
             # error would hide the real cause.
             raise ValueError(
-                f"generate block name template '{spec.name}' renders the same "
+                f"generate.name: template {spec.name!r} renders the same "
                 f"group name '{name}' for distinct group_by values "
-                f"{seen_names[name]!r} and {value!r}"
+                f"{_shown(seen_names[name])} and {_shown(value)}"
             )
         seen_names[name] = value
 
@@ -390,33 +432,12 @@ def parse_generate_spec(raw: Dict[str, Any]) -> GenerateSpec:
     check_no_extra_keys(
         raw, {"scope", "path", "group_by", "name", "attrs"}, "generate block"
     )
-    scope = raw.get("scope")
-    if not scope:
-        raise ValueError("generate requires 'scope' field (node or link)")
-    if scope not in ("node", "link"):
-        raise ValueError(f"generate scope must be 'node' or 'link', got '{scope}'")
-
-    path = raw.get("path")
-
-    group_by = raw.get("group_by")
-    if not group_by:
-        raise ValueError("generate requires 'group_by' field")
-
-    name = raw.get("name")
-    if not name:
-        raise ValueError("generate requires 'name' field")
-
-    if "${value}" not in name:
-        raise ValueError("generate name must contain '${value}' placeholder")
-
-    attrs = raw.get("attrs", {})
-
     return GenerateSpec(
-        scope=scope,
-        group_by=group_by,
-        name=name,
-        path=path,
-        attrs=attrs,
+        scope=cast(Any, raw.get("scope")),
+        group_by=cast(Any, raw.get("group_by")),
+        name=cast(Any, raw.get("name")),
+        path=raw.get("path"),
+        attrs=raw.get("attrs", {}),
     )
 
 
@@ -436,8 +457,26 @@ class MembershipSpec:
     path: Optional[str] = None
     match: Optional[MatchSpec] = None
 
+    def __post_init__(self) -> None:
+        scope = text(self.scope, "membership.scope")
+        if scope not in ("node", "link", "risk_group"):
+            raise ValueError(
+                f"membership.scope: expected node, link or risk_group, got {self.scope!r}"
+            )
+        if self.match is not None and not isinstance(self.match, MatchSpec):
+            raise TypeError(
+                f"membership.match: expected MatchSpec or None, got {self.match!r}"
+            )
+        own(
+            self,
+            scope=scope,
+            path=optional_pattern(self.path, "membership.path", empty=True),
+        )
 
-def resolve_membership_rules(network: "Network") -> None:
+
+def resolve_membership_rules(
+    network: "Network", locations: Dict[str, str] | None = None
+) -> None:
     """Apply membership rules to populate entity risk_groups sets.
 
     For each risk group with a `_membership_raw` specification:
@@ -479,15 +518,16 @@ def resolve_membership_rules(network: "Network") -> None:
 
     for rg_name in list(network.risk_groups):
         rg = network.risk_groups[rg_name]
-        if rg._membership_raw is None:
+        membership_raw = rg._membership_raw
+        if membership_raw is None:
             continue
 
-        try:
-            spec = _parse_membership_spec(rg._membership_raw)
-        except ValueError as e:
-            raise ValueError(
-                f"Invalid membership rule for risk group '{rg_name}': {e}"
-            ) from e
+        location = (locations or {}).get(rg_name, f"risk group {rg_name}.membership")
+        spec = declared(
+            location,
+            lambda raw=membership_raw: _parse_membership_spec(raw),
+            "membership",
+        )
 
         matched_count = 0
         if spec.scope == "risk_group":
@@ -541,11 +581,13 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
             f"scope must be 'node', 'link', or 'risk_group', got '{scope}'"
         )
 
-    path = raw.get("path")
+    path = optional_pattern(raw.get("path"), "membership.path", empty=True)
     match_raw = raw.get("match")
 
     if path is None and match_raw is None:
-        raise ValueError("membership requires at least 'path' or 'match'")
+        raise ValueError(
+            f"membership: expected at least 'path' or 'match', got {raw!r}"
+        )
 
     match_spec = None
     if match_raw is not None:
@@ -555,7 +597,7 @@ def _parse_membership_spec(raw: Dict[str, Any]) -> MembershipSpec:
             match_raw,
             default_logic="and",
             require_conditions=True,
-            context="membership rule",
+            context="membership.match",
         )
 
     return MembershipSpec(scope=scope, path=path, match=match_spec)
@@ -684,61 +726,75 @@ def build_risk_groups(
     """
     from ngraph.dsl.expansion import expand_name_patterns
 
-    def normalize_entry(entry: Any) -> Dict[str, Any]:
+    def normalize_entry(entry: Any, location: str) -> Dict[str, Any]:
         """Normalize entry to dict format, handling string shorthand."""
         if isinstance(entry, str):
             return {"name": entry}
         if isinstance(entry, dict):
             return entry
         raise ValueError(
-            f"RiskGroup entry must be a string or dict, got {type(entry).__name__}"
+            f"{location}: RiskGroup entry must be a string or dict, got {entry!r}"
         )
 
-    def build_one(d: Dict[str, Any]) -> RiskGroup:
+    def build_one(d: Dict[str, Any], location: str) -> RiskGroup:
         """Build a single RiskGroup (name already expanded)."""
-        name = d.get("name")
-        if not name:
-            raise ValueError("RiskGroup entry missing 'name' field.")
+        name = d["name"]
         disabled = d.get("disabled", False)
         children_list = d.get("children", [])
-        child_objs = expand_and_build(children_list, in_children=True)
+        child_objs = expand_and_build(
+            children_list, location + ".children", in_children=True
+        )
         attrs = normalize_yaml_dict_keys(d.get("attrs", {}))
         # Resolved later by resolve_membership_rules, once all groups exist.
         membership_raw = d.get("membership")
-        return RiskGroup(
-            name=name,
-            disabled=disabled,
-            children=child_objs,
-            attrs=attrs,
-            _membership_raw=membership_raw,
+        return declared(
+            location,
+            lambda: RiskGroup(
+                name=name,
+                disabled=disabled,
+                children=child_objs,
+                attrs=attrs,
+                _membership_raw=membership_raw,
+            ),
+            f"risk group {name}",
         )
 
     def expand_and_build(
-        entries: List[Any], *, in_children: bool = False
+        entries: List[Any],
+        path: str = "risk_groups",
+        *,
+        in_children: bool = False,
+        positions: List[int] | None = None,
     ) -> List[RiskGroup]:
         """Expand names and build RiskGroups for a list of entries."""
         result: List[RiskGroup] = []
-        for entry in entries:
-            normalized = normalize_entry(entry)
+        for index, entry in enumerate(entries):
+            position = positions[index] if positions is not None else index
+            location = f"{path}[{position}]"
+            normalized = normalize_entry(entry, location)
             if "generate" in normalized:
-                raise ValueError("'generate' blocks not allowed in children")
+                raise ValueError(
+                    f"{location}: 'generate' blocks not allowed in children, got {entry!r}"
+                )
             if in_children:
                 # Only top-level groups are registered in network.risk_groups,
                 # so membership rules and disabled flags on nested children
                 # would be silently ignored. Reject them instead.
                 if "membership" in normalized:
                     raise ValueError(
-                        "'membership' rules not allowed in children; define "
+                        f"{location} = {entry!r}: 'membership' rules not allowed in children; define "
                         "the group at top level and reference it as a child"
                     )
                 if "disabled" in normalized:
                     raise ValueError(
-                        "'disabled' not allowed in children; define the group "
+                        f"{location} = {entry!r}: 'disabled' not allowed in children; define the group "
                         "at top level and reference it as a child"
                     )
             name = normalized.get("name", "")
             if not name:
-                raise ValueError("RiskGroup entry missing 'name' field.")
+                raise ValueError(
+                    f"{location}: RiskGroup entry missing 'name' field, got {entry!r}"
+                )
             check_no_extra_keys(
                 normalized,
                 _RG_CHILD_KEYS if in_children else _RG_KEYS,
@@ -748,18 +804,22 @@ def build_risk_groups(
             for exp_name in expanded_names:
                 modified = dict(normalized)
                 modified["name"] = exp_name
-                result.append(build_one(modified))
+                result.append(build_one(modified, location))
         return result
 
     # Generate blocks need the built network, so they are returned unprocessed.
     explicit_entries: List[Any] = []
+    explicit_positions: List[int] = []
     generate_specs: List[Dict[str, Any]] = []
 
-    for entry in rg_data:
+    for position, entry in enumerate(rg_data):
         if isinstance(entry, dict) and "generate" in entry:
             check_no_extra_keys(entry, {"generate"}, "risk group generate entry")
             generate_specs.append(entry["generate"])
         else:
             explicit_entries.append(entry)
+            explicit_positions.append(position)
 
-    return expand_and_build(explicit_entries), generate_specs
+    return expand_and_build(
+        explicit_entries, positions=explicit_positions
+    ), generate_specs

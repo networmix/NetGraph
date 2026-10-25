@@ -410,7 +410,8 @@ def test_the_largest_count():
     assert (p.total_tunnel_cost, row.result.delivered) == (30000, 10000)
     with pytest.raises(
         ValueError,
-        match=r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\]$",
+        match=r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\], "
+        r"got 10001$",
     ):
         ask(prep, (10001,), 1, 1)
 
@@ -552,12 +553,15 @@ def test_an_offer_above_a_prepared_budget_is_refused():
         ({"counts": ()}, r"^tunnel_counts\.counts: give at least one count or up_to$"),
         (
             {"counts": (0,)},
-            r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\]$",
+            r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\], got 0$",
         ),
         ({"counts": (1, 10001)}, r"^tunnel_counts\.counts\[1\]: expected an integer"),
         ({"counts": (True,)}, r"^tunnel_counts\.counts\[0\]: expected an integer"),
         ({"counts": (3, 3)}, r"^tunnel_counts\.counts: duplicate count 3$"),
-        ({"up_to": 0}, r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\]$"),
+        (
+            {"up_to": 0},
+            r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\], got 0$",
+        ),
         (
             {"offer": float("nan")},
             r"^tunnel_counts\.offer: expected a finite nonnegative",
@@ -568,18 +572,21 @@ def test_an_offer_above_a_prepared_budget_is_refused():
         ),
         ({"offer": -1}, r"^tunnel_counts\.offer: expected a finite nonnegative"),
         ({"design_demand": float("inf")}, r"^tunnel_counts\.design_demand: expected"),
-        ({"offer": True}, r"^tunnel_counts\.offer: expected a finite real number$"),
+        (
+            {"offer": True},
+            r"^tunnel_counts\.offer: expected a finite real number, got True$",
+        ),
         (
             {"counts": (1.5,)},
-            r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\]$",
+            r"^tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\], got 1\.5$",
         ),
         (
             {"up_to": True},
-            r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\]$",
+            r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\], got True$",
         ),
         (
-            {"up_to": 2.0},
-            r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\]$",
+            {"up_to": 2.5},
+            r"^tunnel_counts\.up_to: expected an integer in \[1, 10000\], got 2\.5$",
         ),
     ],
 )
@@ -595,9 +602,12 @@ def test_query_refusals(fields, message):
     [
         (
             {"eligibility": "a"},
-            r"^tunnel_counts\.eligibility: expected native Eligibility$",
+            r"^tunnel_counts\.eligibility: expected native Eligibility, got 'a'$",
         ),
-        ({"outputs": {}}, r"^tunnel_counts\.outputs: expected native OutputOptions$"),
+        (
+            {"outputs": {}},
+            r"^tunnel_counts\.outputs: expected native OutputOptions, got \{\}$",
+        ),
     ],
 )
 def test_query_type_refusals(fields, message):

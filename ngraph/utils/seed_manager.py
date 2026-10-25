@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Optional
 
+from ngraph.utils.values import optional_integer
+
 
 class SeedManager:
     """Derives per-component seeds from one master seed.
@@ -26,7 +28,9 @@ class SeedManager:
             master_seed: Master seed for deterministic operations. If None,
                         derive_seed() returns None (non-deterministic).
         """
-        self.master_seed = master_seed
+        self.master_seed = optional_integer(
+            master_seed, "SeedManager.master_seed", minimum=None
+        )
 
     def derive_seed(self, *components: Any) -> Optional[int]:
         """Derive a deterministic seed from master seed and component identifiers.

@@ -9,7 +9,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Optional, get_args
 
-from ngraph.utils.values import frozen_json, own_scalars
+from ngraph.utils.values import (
+    collection,
+    frozen_json,
+    optional_flag,
+    optional_pattern,
+    optional_text,
+    own,
+    text,
+)
 
 EntityScope = Literal["node", "link", "risk_group"]
 """Type of network entity for condition-based selection."""
@@ -54,14 +62,20 @@ class Condition:
     value: Any = None
 
     def __post_init__(self) -> None:
-        own_scalars(self, "condition", ("attr", "op"))
-        if self.op not in VALID_OPERATORS:
+        attr = text(self.attr, "condition.attr")
+        if not isinstance(self.op, str) or self.op not in VALID_OPERATORS:
             raise ValueError(
-                f"Invalid operator '{self.op}'. "
-                f"Valid operators: {sorted(VALID_OPERATORS)}"
+                f"condition.op: expected one of {sorted(VALID_OPERATORS)}, got {self.op!r}"
             )
-        object.__setattr__(
-            self, "value", frozen_json(self.value, f"condition {self.attr}.value")
+        if self.op in ("in", "not_in") and not isinstance(self.value, list):
+            raise ValueError(
+                f"condition {attr}.value: {self.op!r} requires a list, got {self.value!r}"
+            )
+        own(
+            self,
+            attr=attr,
+            op=str.__str__(self.op),
+            value=frozen_json(self.value, f"condition {attr}.value"),
         )
 
 
@@ -78,10 +92,14 @@ class MatchSpec:
     logic: Literal["and", "or"] = "or"
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "conditions", tuple(self.conditions))
-        if not all(isinstance(c, Condition) for c in self.conditions):
-            raise TypeError("match conditions: expected Condition values")
-        own_scalars(self, "match", ("logic",))
+        conditions = collection(self.conditions, "match.conditions")
+        if not all(isinstance(c, Condition) for c in conditions):
+            raise TypeError(
+                f"match.conditions: expected Condition values, got {conditions!r}"
+            )
+        if not isinstance(self.logic, str) or self.logic not in ("and", "or"):
+            raise ValueError(f"match.logic: expected and or or, got {self.logic!r}")
+        own(self, conditions=conditions, logic=str.__str__(self.logic))
 
 
 @dataclass(frozen=True)
@@ -109,20 +127,18 @@ class Selector:
     active_only: Optional[bool] = None
 
     def __post_init__(self) -> None:
-        own_scalars(self, "selector", ("path", "group_by", "active_only"))
         if self.path is None and self.group_by is None and self.match is None:
             raise ValueError(
                 "Selector requires at least one of: path, group_by, or match"
             )
-        if self.path is not None and not isinstance(self.path, str):
-            raise ValueError(
-                f"Selector 'path' must be a string, got {type(self.path).__name__}"
-            )
-        if self.group_by is not None and (
-            not isinstance(self.group_by, str) or not self.group_by
-        ):
-            raise ValueError("Selector 'group_by' must be a nonempty string")
-        if self.active_only is not None and not isinstance(self.active_only, bool):
-            raise ValueError("Selector 'active_only' must be bool or None")
+        own(
+            self,
+            # An empty path matches every node name.
+            path=optional_pattern(self.path, "selector.path", empty=True),
+            group_by=optional_text(self.group_by, "selector.group_by"),
+            active_only=optional_flag(self.active_only, "selector.active_only"),
+        )
         if self.match is not None and not isinstance(self.match, MatchSpec):
-            raise TypeError("Selector 'match' must be MatchSpec or None")
+            raise TypeError(
+                f"Selector 'match' must be MatchSpec or None, got {self.match!r}"
+            )

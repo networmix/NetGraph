@@ -31,7 +31,14 @@ from ngraph.results import (
     FailureTrace,
     SamplingMetadata,
 )
-from ngraph.utils.values import JSONValue, integer, physical
+from ngraph.utils.values import (
+    JSONValue,
+    flag,
+    integer,
+    optional_integer,
+    optional_text,
+    own,
+)
 
 if TYPE_CHECKING:
     from ngraph.scenario import PreparedScenario
@@ -56,20 +63,30 @@ class FailureRequest:
     seed_source: Literal["query", "step", "scenario"] = "query"
 
     def __post_init__(self) -> None:
-        integer(self.iterations, "failure iterations", minimum=0)
-        if self.seed is not None:
-            if isinstance(self.seed, bool) or not isinstance(self.seed, int):
-                raise ValueError("failure seed: expected an integer")
-        if not isinstance(self.failure_trace, bool):
-            raise ValueError("failure_trace: expected bool")
         if self.policy is not None and not isinstance(self.policy, FailurePolicy):
-            raise TypeError("failure policy: expected FailurePolicy or None")
-        if self.policy_name is not None and (
-            not isinstance(self.policy_name, str) or self.policy is None
-        ):
+            raise TypeError(
+                f"failure policy: expected FailurePolicy or None, got {self.policy!r}"
+            )
+        if self.policy_name is not None and self.policy is None:
             raise ValueError("failure policy_name: expected a name with its policy")
-        if self.seed_source not in ("query", "step", "scenario"):
-            raise ValueError("failure seed_source: expected query, step or scenario")
+        if not isinstance(self.seed_source, str) or self.seed_source not in (
+            "query",
+            "step",
+            "scenario",
+        ):
+            raise ValueError(
+                "failure seed_source: expected query, step or scenario, "
+                f"got {self.seed_source!r}"
+            )
+        own(
+            self,
+            # Work is linear in the number of draws.
+            iterations=integer(self.iterations, "failure iterations", minimum=0),
+            seed=optional_integer(self.seed, "failure seed", minimum=None),
+            failure_trace=flag(self.failure_trace, "failure_trace"),
+            policy_name=optional_text(self.policy_name, "failure policy_name"),
+            seed_source=str.__str__(self.seed_source),
+        )
 
 
 @dataclass(frozen=True)
@@ -100,10 +117,17 @@ class _Policy:
     mode_total: int = 0
 
 
+def checked_workers(workers: object) -> Workers:
+    """A worker count: "auto" or a positive integer."""
+    if isinstance(workers, str) and workers == "auto":
+        return "auto"
+    return integer(workers, "workers", minimum=1)
+
+
 def resolve_workers(workers: Workers) -> int:
     if workers == "auto":
         return os.cpu_count() or 1
-    return integer(workers, "workers", minimum=1)
+    return workers
 
 
 def sampling_metadata(request: FailureRequest | None) -> SamplingMetadata | None:
@@ -124,8 +148,6 @@ def _prepare(
     policy = request.policy
     if policy is None:
         return _Policy((), membership, False)
-    if not isinstance(policy.expand_groups, bool):
-        raise ValueError("failure policy expand_groups: expected bool")
     maps = {
         "node": {
             name: flatten_node_attrs(node) for name, node in network.nodes.items()
@@ -140,26 +162,16 @@ def _prepare(
     }
     modes: list[_Mode] = []
     for mode_index, mode in enumerate(policy.modes):
-        label = f"failure mode {mode_index}"
-        weight = physical(mode.weight, label + " weight")
+        # Each mode and rule checked its fields when it was built.
+        weight = mode.weight
         rules: list[_Rule] = []
         for rule_index, rule in enumerate(mode.rules):
             label = f"failure mode {mode_index} rule {rule_index}"
-            if rule.scope not in maps:
-                raise ValueError(f"{label}: unknown scope {rule.scope}")
-            if rule.mode not in ("all", "random", "choice"):
-                raise ValueError(f"{label}: unknown selection mode {rule.mode}")
-            count = integer(rule.count, label + " count", minimum=0)
-            probability = physical(rule.probability, label + " probability")
-            if probability > 1:
-                raise ValueError(f"{label}: probability must be in [0,1]")
+            count, probability = rule.count, rule.probability
             attrs = maps[rule.scope]
             matched = match_entity_ids(attrs, rule.conditions, rule.logic)
             if rule.path is not None:
-                try:
-                    pattern = re.compile(rule.path)
-                except (re.error, TypeError) as exc:
-                    raise ValueError(f"{label}: invalid path: {exc}") from exc
+                pattern = re.compile(rule.path)
                 matched = {
                     name
                     for name in matched

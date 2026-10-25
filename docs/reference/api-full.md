@@ -11,7 +11,7 @@ Quick links:
 - [CLI Reference](cli.md)
 - [DSL Reference](dsl.md)
 
-Modules auto-discovered: 55
+Modules auto-discovered: 56
 
 ---
 
@@ -367,7 +367,7 @@ Immutable BuildGraphResult record.
 - `kind` (ClassVar[Literal['build_graph']]) = build_graph
 - `add_reverse` (bool)
 - `node_count` (int)
-- `link_count` (int)
+- `edge_count` (int)
 - `graph` (Mapping[str, JSONValue])
 
 ### CapacityAnalysis
@@ -722,8 +722,8 @@ Immutable NetworkStatsResult record.
 - `max_capacity` (float)
 - `mean_cost` (float)
 - `median_cost` (float)
-- `min_cost` (float)
-- `max_cost` (float)
+- `min_cost` (int)
+- `max_cost` (int)
 - `mean_degree` (float)
 - `median_degree` (float)
 - `min_degree` (float)
@@ -1279,7 +1279,8 @@ Attributes:
     power_watts_max (float): Maximum/peak power usage (watts) for one instance.
     capacity (float): A generic capacity measure (e.g., platform capacity).
     ports (int): Number of ports if relevant for this component.
-    count (int): How many identical copies of this component are present.
+    count (int): How many identical copies of this component are present; a positive
+        integer whose conversion to float is finite.
     attrs (Dict[str, Any]): Finite JSON metadata, checked and stored
         read-only at construction.
     children (Dict[str, Component]): Nested child components (e.g., line cards
@@ -1484,8 +1485,9 @@ The declared root groups of one router.
 
 A member edge, or a conditional subtree, with its share within its parent.
 
-Exactly one of ``edge`` and ``children`` is set; preparation checks the
-structure and the share's range. The share is stored as a Fraction.
+Exactly one of ``edge`` and ``children`` is set, and the share is
+nonnegative, stored as a Fraction; preparation checks the tree against the
+network (edges leaving the router, zero shares, duplicates).
 
 **Attributes:**
 
@@ -1568,14 +1570,16 @@ FailureMode(weight: 'float', rules: 'Sequence[FailureRule]' = (), attrs: 'dict[s
 
 ### FailurePolicy
 
-FailurePolicy(attrs: 'dict[str, Any]' = <factory>, expand_groups: 'bool' = False, seed: 'int | None' = None, modes: 'Sequence[FailureMode]' = ())
+Failure modes drawn by weight; at least one mode has a positive weight.
+
+"No failures" is no policy, not an empty one.
 
 **Attributes:**
 
 - `attrs` (dict[str, Any]) = {}
 - `expand_groups` (bool) = False
 - `seed` (int | None)
-- `modes` (Sequence[FailureMode]) = ()
+- `modes` (Sequence[FailureMode])
 
 ### FailureRule
 
@@ -1633,7 +1637,8 @@ Attributes:
     target (str): Name of the target node.
     capacity (float): Finite nonnegative link capacity (default 1.0),
         promoted to binary64 at construction.
-    cost (float): Link cost (default 1.0).
+    cost (int): Link cost, an integer from 1 to below 2^62 (default 1); an
+        exactly integral float such as 2.0 is stored as 2.
     disabled (bool): Whether the link is disabled.
     risk_groups (AbstractSet[str]): Names of the risk groups this link belongs
         to, stored as a frozenset.
@@ -1649,7 +1654,7 @@ Attributes:
 - `source` (str)
 - `target` (str)
 - `capacity` (float) = 1.0
-- `cost` (float) = 1.0
+- `cost` (int) = 1
 - `disabled` (bool) = False
 - `risk_groups` (AbstractSet[str]) = frozenset()
 - `attrs` (Dict[str, Any]) = {}
@@ -1854,8 +1859,9 @@ Returns:
     List of newly created RiskGroup objects.
 
 Raises:
-    ValueError: If `group_by` resolves to an unhashable value, or if the
-        name template renders the same group name for two distinct values.
+    ValueError: If `group_by` resolves to an unhashable value, its value
+        cannot be rendered as a group name, or the name template renders
+        the same group name for two distinct values.
 
 ### parse_generate_spec(raw: 'Dict[str, Any]') -> 'GenerateSpec'
 
@@ -1872,7 +1878,7 @@ Raises:
         missing or is neither 'node' nor 'link', 'group_by' or 'name' is
         missing, or 'name' omits the '${value}' placeholder.
 
-### resolve_membership_rules(network: "'Network'") -> 'None'
+### resolve_membership_rules(network: "'Network'", locations: 'Dict[str, str] | None' = None) -> 'None'
 
 Apply membership rules to populate entity risk_groups sets.
 
@@ -1931,9 +1937,6 @@ Args:
 
 Returns:
     True if combined predicate passes.
-
-Raises:
-    ValueError: If logic is not "and" or "or".
 
 ### resolve_attr_path(attrs: 'Dict[str, Any]', path: 'str') -> 'Tuple[bool, Any]'
 
@@ -2367,7 +2370,7 @@ NetworkStats(name: 'str' = '', seed: 'int | None' = None, include_disabled: bool
 **Methods:**
 
 - `execute(self, context: 'StepContext') -> 'StepResult'` - Run once, validate/own its boundary, and publish one immutable result.
-- `needs(self) -> 'StepNeeds | None'` - What preparation must bind for this step; None asks for nothing.
+- `needs(self) -> ngraph.analysis.preparation.StepNeeds` - What preparation must bind for this step; None asks for nothing.
 - `run(self, context: ngraph.results.StepContext) -> ngraph.results.StepOutput` - Return this step's typed question and result without publishing state.
 - `yaml_arguments(arguments: 'dict', name: 'str') -> 'dict'` - Turn this step type's YAML keys into constructor arguments.
 
@@ -2514,7 +2517,7 @@ Attributes:
 
 - `blueprints` (Dict[str, Blueprint])
 - `network` (Network)
-- `pending_bp_links` (List[tuple[Dict[str, Any], str]]) = []
+- `pending_bp_links` (List[tuple[Dict[str, Any], str, str]]) = []
 
 ### expand_network_dsl(data: 'Dict[str, Any]') -> 'Network'
 
@@ -2797,8 +2800,8 @@ Raises:
     ValueError: If the top level is not a mapping, or a network, link, or
         risk group entry has the wrong shape (checked before the schema
         for clearer messages).
-    jsonschema.ValidationError: If the data does not match the packaged
-        schema, including unrecognized top-level keys.
+    ValueError: If the data does not match the packaged schema, including
+        unrecognized top-level keys. The schema error is retained as the cause.
 
 ---
 
@@ -2983,12 +2986,20 @@ Usage:
 
 Validation of domain input values and their immutable JSON form.
 
+### collection(value, label: 'str') -> 'tuple'
+
+Own an iterable collection, refusing scalars with its field and raw value.
+
 ### exact_fraction(value: 'object', label: 'str') -> 'Fraction'
 
 An exact ratio from an integer, a ``p/q`` or decimal string, or a Fraction.
 
 Floats and booleans are refused: a binary64 value is not the exact ratio
-the declaration means.
+the declaration means. NumPy integers and strings count as their kind.
+
+### flag(value: 'object', label: 'str') -> 'bool'
+
+A boolean field: a bool or a NumPy boolean, stored as bool.
 
 ### frozen_attrs(value: 'object', label: 'str' = 'attrs') -> 'dict[str, JSONValue]'
 
@@ -3008,37 +3019,63 @@ become read-only dicts and lists become read-only lists. A read-only
 container is checked like any other, since record collections share its
 type, and is shared when its contents are already in that form.
 
-### integer(value: 'object', label: 'str', *, minimum: 'int' = 0, maximum: 'int | None' = None) -> 'int'
+### integer(value: 'object', label: 'str', *, minimum: 'int | None' = 0, maximum: 'int | None' = None) -> 'int'
 
-Validate exact integer domain inputs without accepting booleans.
+An integer field: an int, a NumPy integer or an exactly integral float.
+
+Booleans and fractions are refused; the value is stored as int.
 
 ### json_copy(value: 'object', label: 'str' = 'attrs', *, strict_objects: 'bool' = False) -> 'JSONValue'
 
 Validate finite JSON data and return an editable plain copy.
 
-### own_scalars(record: 'object', label: 'str', names: 'tuple[str, ...]') -> 'None'
+### optional_flag(value: 'object', label: 'str') -> 'bool | None'
 
-Normalize the named scalar fields of a record during its construction.
+A boolean field that may be None.
+
+### optional_integer(value: 'object', label: 'str', *, minimum: 'int | None' = 0, maximum: 'int | None' = None) -> 'int | None'
+
+An integer field that may be None.
+
+### optional_pattern(value: 'object', label: 'str', *, empty: 'bool' = False) -> 'str | None'
+
+A regular-expression field that may be None.
+
+### optional_text(value: 'object', label: 'str', *, empty: 'bool' = False) -> 'str | None'
+
+A text field that may be None.
+
+### own(record: 'object', **values: 'object') -> 'None'
+
+Store checked field values on a frozen record during its construction.
 
 ### owned_dict(items: 'Mapping[Any, Any]', label: 'str') -> 'dict'
 
 Return a read-only dict of the given references under plain built-in keys.
 
+### pattern(value: 'object', label: 'str', *, empty: 'bool' = False) -> 'str'
+
+A regular-expression field: text that compiles.
+
 ### physical(value: 'object', label: 'str', *, positive: 'bool' = False) -> 'float'
 
-Promote a finite nonnegative physical input to binary64.
-
-### scalar(value: 'Any', label: 'str') -> 'Any'
-
-Store a scalar field as its exact built-in value; refuse other scalar types.
-
-None, bool, int, float, str and Enum members are kept; a subclass of str,
-int or float becomes its stored built-in value; anything else (a NumPy
-scalar, for example) is refused with the field's label.
+Promote a finite nonnegative real input (an amount or a ratio) to binary64.
 
 ### shared_copy(self, memo=None)
 
 Copies of an immutable record share it, with the native values it holds.
+
+### text(value: 'object', label: 'str', *, empty: 'bool' = False) -> 'str'
+
+A text field: a str (a subclass such as numpy.str_ is stored as str).
+
+A name is nonempty; whitespace is part of a name, as in every other text.
+
+---
+
+## ngraph.utils.yaml_load
+
+Safe YAML construction with source positions for failed scalar conversions.
 
 ---
 
@@ -3058,7 +3095,14 @@ Args:
 Raises:
     ValueError: If ``data`` contains any key not in ``allowed``.
 
-### normalize_yaml_dict_keys(data: Dict[Any, ~V]) -> Dict[str, ~V]
+### declared(where: str, build: Callable[[], ~T], record: str = '') -> ~T
+
+Build one record from YAML; a refusal also names where it is declared.
+
+A refusal labelled with the record's own name (``record``, as in
+"group_child.share: ...") is relabelled with the declaration's path.
+
+### normalize_yaml_dict_keys(data: Mapping[Any, ~V]) -> Dict[str, ~V]
 
 Convert YAML-parsed dictionary keys to strings.
 
@@ -3130,7 +3174,7 @@ ids; and the pool of each pooled one, by index.
 
 A singleton self pair is not evaluated. A pooled pair starts at its pool head.
 
-### validate_capacity_inputs(source, target, config, offer, design, outputs) -> 'None'
+### validate_capacity_inputs(source, target, config, outputs) -> 'None'
 
 No documentation available.
 
@@ -3437,6 +3481,10 @@ unnamed policy is recorded inline); ``seed_source`` records where a given
 - `policy_name` (str | None)
 - `seed_source` (Literal['query', 'step', 'scenario']) = query
 
+### checked_workers(workers: 'object') -> 'Workers'
+
+A worker count: "auto" or a positive integer.
+
 ### failure_cases(prepared: 'PreparedScenario', request: 'FailureRequest | None') -> 'tuple[FailureCase, ...]'
 
 The baseline, then each distinct drawn pattern with its draw count.
@@ -3699,7 +3747,8 @@ field name. ``pool_endpoints`` are the source and target of a question
 whose combined sources are a pool: preparation gives them a private head.
 ``offer_budget`` is a fixed lossy offer every pool leaf of ``demand_set``
 receives; ``counts`` builds a tunnel-count question, whose split targets
-preparation observes once per candidate resolution.
+preparation observes once per candidate resolution. ``nodes`` and ``links``
+are names the step reads that must exist in the network.
 
 **Attributes:**
 
@@ -3716,6 +3765,8 @@ preparation observes once per candidate resolution.
 - `pool_endpoints` (tuple[Selector, Selector] | None)
 - `offer_budget` (float | None)
 - `counts` (Callable[[PreparedScenario], TunnelCountQuery] | None)
+- `nodes` (tuple[str, ...]) = ()
+- `links` (tuple[str, ...]) = ()
 
 ### prepare_scenario(scenario: 'Scenario', settings: 'UnitsSettings', requested: 'tuple[str, ...]') -> 'PreparedScenario'
 
@@ -3772,7 +3823,9 @@ Build the declared DAG once, validating duplicate and cyclic supports natively.
 
 ### validate_pinned(declaration, routes, weights)
 
-No documentation available.
+What a pinned declaration needs of the scenario's named routes and weights.
+
+Its own fields were checked when it was built.
 
 ---
 
@@ -3895,10 +3948,6 @@ Compile a candidate graph, refusing directed capacity/cost sums out of range.
 
 A pool's attachments carry its source's outgoing capacity, or its lossy
 offer budget (units) when that is larger.
-
-### cost_units(value, label)
-
-Positive integral costs keep their value; no offset or rounding.
 
 ### eligibility(topology: 'PreparedTopology', excluded_nodes=(), excluded_links=()) -> 'ngc.Eligibility'
 

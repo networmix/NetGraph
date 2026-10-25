@@ -1,8 +1,7 @@
-"""Zero modes never win; YAML requires at least one positive mode."""
+"""Zero modes never win; a policy, in Python and YAML, needs one positive mode."""
 
 import pytest
 
-from ngraph.analysis.failures import FailureRequest, failure_cases
 from ngraph.model.failure import (
     FailureMode,
     FailurePolicy,
@@ -12,25 +11,16 @@ from ngraph.model.failure import (
 from tests.failure_fixture import draw, policy_network
 
 
-def test_all_zero_weight_modes_apply_no_failures():
-    policy = FailurePolicy(modes=[FailureMode(0, [FailureRule("node")])])
-    case = draw(policy_network(), policy, trace=True)
-    assert case.pattern.excluded_nodes == case.pattern.excluded_links == ()
-    assert case.trace.mode_index is None
-    assert dict(case.trace.mode_attrs) == {}
-    assert case.trace.selections == ()
-
-
-def test_all_zero_weight_modes_no_failures_across_seeds():
-    policy = FailurePolicy(
-        modes=[
-            FailureMode(0, [FailureRule("node")]),
-            FailureMode(0, [FailureRule("link")]),
-        ]
-    )
-    cases = failure_cases(policy_network(), FailureRequest(policy, 20, 0))
-    assert len(cases) == 1 and cases[0].occurrences == 20
-    assert cases[0].pattern.excluded_nodes == cases[0].pattern.excluded_links == ()
+@pytest.mark.parametrize("weights", [(0,), (0, 0)])
+def test_a_policy_whose_modes_all_weigh_zero_is_refused_where_it_is_built(weights):
+    modes = [FailureMode(w, [FailureRule("node")]) for w in weights]
+    with pytest.raises(
+        ValueError,
+        match="^failure policy modes: at least one mode must have positive weight$",
+    ):
+        FailurePolicy(modes=modes)
+    # Control: one positive mode makes it a policy.
+    assert FailurePolicy(modes=[*modes, FailureMode(1, [FailureRule("link")])])
 
 
 def test_zero_weight_mode_never_selected_among_positive():

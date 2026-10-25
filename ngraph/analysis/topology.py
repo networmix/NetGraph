@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import math
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from numbers import Integral, Real
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, SupportsInt, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import netgraph_core as ngc
 
 from ngraph.analysis.units import LIMIT, quantize, validate_resolution
 from ngraph.model.network import DirectedLink, Network
 from ngraph.results import SyntheticIngress
-from ngraph.utils.values import physical
 
 if TYPE_CHECKING:
     from ngraph.model.demand import RouteSpec, WeightSpec
@@ -67,21 +64,6 @@ class NamedRoutes:
 NO_ROUTES = NamedRoutes()
 
 
-def cost_units(value, label):
-    """Positive integral costs keep their value; no offset or rounding."""
-    if isinstance(value, bool) or not isinstance(value, Real):
-        raise ValueError(f"{label}: cost must be a positive integer")
-    if isinstance(value, Integral):
-        cost = int(value)
-    else:
-        if not math.isfinite(value) or value != int(cast(SupportsInt, value)):
-            raise ValueError(f"{label}: cost must be a positive integer")
-        cost = int(cast(SupportsInt, value))
-    if not 1 <= cost < LIMIT:
-        raise ValueError(f"{label}: cost must be in [1,2^62)")
-    return cost
-
-
 def outgoing_units(network: Network, q: float) -> Counter[str]:
     """Each node's outgoing directed capacity in units at q."""
     outgoing: Counter[str] = Counter()
@@ -109,7 +91,8 @@ def compile_topology(
     names = tuple(sorted(network.nodes))
     node_ids = {name: i for i, name in enumerate(names)}
     for name, node in network.nodes.items():
-        if not isinstance(name, str) or not name or node.name != name:
+        # Each node checks its own name; the network checks it is the node's key.
+        if node.name != name:
             raise ValueError(f"node {name!r}: invalid named identity")
     pool_members = dict(pools or {})
     heads = {name: len(names) + i for i, name in enumerate(sorted(pool_members))}
@@ -121,9 +104,8 @@ def compile_topology(
             or link.target not in node_ids
         ):
             raise ValueError(f"link {link_id}: invalid identity or endpoints")
-        physical_capacity = physical(link.capacity, f"link.{link_id}.capacity")
-        capacity = quantize(physical_capacity, q, f"link.{link_id}.capacity")
-        cost = cost_units(link.cost, f"link.{link_id}.cost")
+        capacity = quantize(link.capacity, q, f"link.{link_id}.capacity")
+        cost = link.cost  # an integer in [1, 2^62), checked by the link
         for direction, source, target in (
             ("forward", link.source, link.target),
             ("reverse", link.target, link.source),

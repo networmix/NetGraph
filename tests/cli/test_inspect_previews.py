@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import re
 from enum import Enum
 from pathlib import Path
 
@@ -197,18 +196,21 @@ def test_every_selector_valued_step_field_is_previewed():
     }
 
 
-def test_an_invalid_regex_is_reported_and_inspect_finishes(tmp_path):
-    """L5: the selection error is shown on the preview line; exit 0."""
+@pytest.mark.parametrize("flags", [(), ("--detail",)])
+def test_an_invalid_regex_is_refused_where_it_is_declared(tmp_path, flags):
+    """A pattern is checked where it is given: the load names it; exit 1."""
     text = (
         "network:\n  nodes: {A: {}, B: {}}\n  links: [{source: A, target: B, capacity: 1}]\n"
         'demands:\n  d: [{source: "[", target: "^B", volume: 1}]\n'
         "workflow: [{type: NetworkStats, name: s}]\n"
     )
-    lines = _inspect(tmp_path, text)
-    assert (
-        f"source [: ERROR {re.error.__name__}: unterminated character set at position 0"
-        in lines
-    )
+    path = tmp_path / "s.yaml"
+    path.write_text(text)
+    code, out, err = _cli(["--quiet", "inspect", str(path), *flags])
+    assert code == 1
+    assert "demands.d[0].source.path: invalid pattern '['" in out + err
+    # Control: a valid pattern inspects.
+    _inspect(tmp_path, text.replace('source: "["', 'source: "^A"'), *flags)
 
 
 def test_a_selection_failure_other_than_a_regex_is_reported(tmp_path):
@@ -405,21 +407,6 @@ def test_selectors_with_one_label_keep_their_own_entries(tmp_path):
     ]
 
 
-def test_a_demand_pattern_row_shows_the_selection_error(tmp_path):
-    lines = _inspect(tmp_path, _demand_lines(("[", "^B", 1)), "--detail")
-    assert _table_row(lines, "[", 7) == [
-        [
-            "[",
-            "^B",
-            "1",
-            "1",
-            f"ERROR {re.error.__name__}: unterminated character set at position 0",
-            "1g/1n (1e)",
-            "-",
-        ]
-    ]
-
-
 def test_an_exists_condition_is_labelled_without_a_value():
     for op in ("exists", "not_exists"):
         selector = Selector("^A", match=MatchSpec([Condition("role", op)]))
@@ -427,23 +414,18 @@ def test_an_exists_condition_is_labelled_without_a_value():
 
 
 def test_top_demands_and_detail_rows_use_selector_labels(tmp_path):
-    """Top demands and the first-demands list print labels; a step's detail match row
-    prints a selection error."""
+    """Top demands and the first-demands list print labels; a step's bad pattern is
+    refused where it is declared."""
     detail = _inspect(tmp_path, W7, "--detail")
     assert _table_row(detail, "^A [match: role == edge]", 4) == [
         ["^A [match: role == edge]", "* [group_by: role]", "1.0", "0"]
     ]
     assert "1. ^A [match: role == edge] -> * [group_by: role] (1.0)" in detail
-    bad_step = W7.replace('target: "^B"', 'target: "["')
-    detail = _inspect(tmp_path, bad_step, "--detail")
-    assert _table_row(detail, "target", 4) == [
-        [
-            "target",
-            "[",
-            "ERROR",
-            f"{re.error.__name__}: unterminated character set at position 0",
-        ]
-    ]
+    path = tmp_path / "bad.yaml"
+    path.write_text(W7.replace('target: "^B"', 'target: "["'))
+    code, out, err = _cli(["--quiet", "inspect", str(path), "--detail"])
+    assert code == 1
+    assert "workflow[1] (mf).target.path: invalid pattern '['" in out + err
 
 
 def test_a_summary_lists_the_first_five_group_labels():

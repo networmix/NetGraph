@@ -31,7 +31,7 @@ from ngraph.results import (
     StepContext,
     TunnelCountAnalysis,
 )
-from ngraph.utils.values import frozen_dict, own_scalars
+from ngraph.utils.values import _shown, collection, frozen_dict, optional_integer, own
 from ngraph.workflow.base import WorkflowStep, validate_unique_step_names
 
 
@@ -39,13 +39,13 @@ def _named(values, kind, label):
     if values is None:
         return frozen_dict()
     if not isinstance(values, Mapping):
-        raise TypeError(f"{label}: expected mapping")
+        raise TypeError(f"{label}: expected mapping, got {values!r}")
     owned = {}
     for name, value in values.items():
         if not isinstance(name, str) or not name:
-            raise ValueError(f"{label}: expected nonempty string names")
+            raise ValueError(f"{label}: expected nonempty string names, got {name!r}")
         if not isinstance(value, kind):
-            raise TypeError(f"{label}.{name}: expected {kind.__name__}")
+            raise TypeError(f"{label}.{name}: expected {kind.__name__}, got {value!r}")
         owned[str.__str__(name)] = value
     return frozen_dict(owned)
 
@@ -78,22 +78,26 @@ class Scenario:
 
     def __post_init__(self) -> None:
         if not isinstance(self.network, Network):
-            raise TypeError("Scenario.network: expected Network")
-        seed = self.seed
-        if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
-            raise ValueError("Scenario.seed: expected integer or None")
+            raise TypeError(f"Scenario.network: expected Network, got {self.network!r}")
+        own(self, seed=optional_integer(self.seed, "Scenario.seed", minimum=None))
         if self.units is None:
             object.__setattr__(self, "units", UnitsSettings())
         if not isinstance(self.units, UnitsSettings):
-            raise TypeError("Scenario.units: expected UnitsSettings")
+            raise TypeError(
+                f"Scenario.units: expected UnitsSettings, got {self.units!r}"
+            )
         if self.components_library is None:
             object.__setattr__(self, "components_library", ComponentsLibrary())
         if not isinstance(self.components_library, ComponentsLibrary):
-            raise TypeError("Scenario.components_library: expected ComponentsLibrary")
-        own_scalars(self, "Scenario", ("seed",))
-        object.__setattr__(self, "workflow", tuple(self.workflow))
-        if not all(isinstance(step, WorkflowStep) for step in self.workflow):
-            raise TypeError("Scenario.workflow: expected WorkflowStep values")
+            raise TypeError(
+                f"Scenario.components_library: expected ComponentsLibrary, got {self.components_library!r}"
+            )
+        workflow = collection(self.workflow, "Scenario.workflow")
+        if not all(isinstance(step, WorkflowStep) for step in workflow):
+            raise TypeError(
+                f"Scenario.workflow: expected WorkflowStep values, got {self.workflow!r}"
+            )
+        object.__setattr__(self, "workflow", workflow)
         for name, kind in (
             ("demand_sets", DemandSet),
             ("failure_policies", FailurePolicy),
@@ -104,11 +108,15 @@ class Scenario:
         ):
             object.__setattr__(self, name, _named(getattr(self, name), kind, name))
         if self.routing is not None and not isinstance(self.routing, RoutingDomain):
-            raise TypeError("Scenario.routing: expected RoutingDomain or None")
+            raise TypeError(
+                f"Scenario.routing: expected RoutingDomain or None, got {self.routing!r}"
+            )
         if self.wcmp_controller is not None and not isinstance(
             self.wcmp_controller, WCMPController
         ):
-            raise TypeError("Scenario.wcmp_controller: expected WCMPController or None")
+            raise TypeError(
+                f"Scenario.wcmp_controller: expected WCMPController or None, got {self.wcmp_controller!r}"
+            )
         # The routing domain and the forwarding groups serve the controller only.
         if self.wcmp_controller is not None and self.routing is None:
             raise ValueError("wcmp_controller: requires routing")
@@ -146,71 +154,112 @@ class Scenario:
             resolve_membership_rules,
         )
         from ngraph.utils.seed_manager import SeedManager
+        from ngraph.utils.yaml_utils import declared
         from ngraph.workflow.parse import build_workflow_steps
 
-        data = load_scenario_yaml(yaml_str)
-        master = data.get("seed")
-        if master is not None and (
-            isinstance(master, bool) or not isinstance(master, int)
-        ):
-            raise ValueError("seed: expected integer")
-        network = expand_network_dsl(data)
-        groups, generate = build_risk_groups(data.get("risk_groups", []))
-        for group in groups:
-            if group.name in network.risk_groups:
-                raise ValueError(f"Duplicate risk group name {group.name!r}")
-            network.risk_groups[group.name] = group
-        resolve_membership_rules(network)
-        if generate:
-            # Generation reads the resolved memberships; refuse a broken
-            # declaration with its own message before generating from it.
-            MembershipIndex.build(network)
-        for raw in generate:
-            for group in generate_risk_groups(network, parse_generate_spec(raw)):
+        try:
+            data = load_scenario_yaml(yaml_str)
+            # Policy and step seeds derive from the master seed before the scenario exists.
+            master = optional_integer(data.get("seed"), "Scenario.seed", minimum=None)
+            network = expand_network_dsl(data)
+            groups, generate = build_risk_groups(data.get("risk_groups", []))
+            from ngraph.dsl.expansion import expand_name_patterns
+
+            group_sources = (
+                (
+                    f"risk_groups[{position}].name",
+                    entry if isinstance(entry, str) else entry["name"],
+                )
+                for position, entry in enumerate(data.get("risk_groups", []))
+                if isinstance(entry, str) or "generate" not in entry
+                for _ in expand_name_patterns(
+                    entry if isinstance(entry, str) else entry["name"]
+                )
+            )
+            for group, (location, raw_name) in zip(groups, group_sources, strict=True):
                 if group.name in network.risk_groups:
                     raise ValueError(
-                        f"Generated risk group {group.name!r} conflicts with existing group"
+                        f"{location}: Duplicate risk group name {group.name!r}, got {_shown(raw_name)}"
                     )
                 network.risk_groups[group.name] = group
-        index = MembershipIndex.build(network)
-        for group in network.risk_groups.values():
-            if group.disabled:
-                members = index.members(group.name, recursive=True)
-                for node_name in sorted(members.nodes):
-                    network.disable_node(node_name)
-                for link_id in sorted(members.links):
-                    network.disable_link(link_id)
-        components = (
-            default_components.clone()
-            if default_components is not None
-            else ComponentsLibrary()
-        )
-        if data.get("components"):
-            components.merge(ComponentsLibrary.from_dict(data["components"]))
-        unit_values = closed(
-            data.get("units", {}), ("resolution", "precision"), "units"
-        )
-        routes, supports, weights = named_declarations(data)
-        routing, controller, forwarding_groups = controller_declarations(data)
-        seeds = SeedManager(master)
-        return cls(
-            network,
-            build_workflow_steps(
-                data.get("workflow", []),
-                lambda name: seeds.derive_seed("workflow_step", name),
-            ),
-            demand_sets=demand_sets(data.get("demands", {})),
-            failure_policies=build_failure_policies(data.get("failures", {}), master),
-            components_library=components,
-            seed=master,
-            units=UnitsSettings(**unit_values),
-            routes=routes,
-            supports=supports,
-            weights=weights,
-            forwarding_groups=forwarding_groups,
-            routing=routing,
-            wcmp_controller=controller,
-        )
+
+            membership_locations = {
+                name: f"risk_groups[{position}].membership"
+                for position, entry in enumerate(data.get("risk_groups", []))
+                if isinstance(entry, dict) and entry.get("membership") is not None
+                for name in expand_name_patterns(entry["name"])
+            }
+            resolve_membership_rules(network, membership_locations)
+            if generate:
+                # Generation reads the resolved memberships; refuse a broken
+                # declaration with its own message before generating from it.
+                MembershipIndex.build(network)
+            generate_positions = (
+                index
+                for index, entry in enumerate(data.get("risk_groups", []))
+                if isinstance(entry, dict) and "generate" in entry
+            )
+            for position, raw in zip(generate_positions, generate, strict=True):
+                spec = declared(
+                    f"risk_groups[{position}].generate",
+                    lambda raw=raw: parse_generate_spec(raw),
+                    "generate",
+                )
+                location = f"risk_groups[{position}].generate"
+                generated = declared(
+                    location,
+                    lambda spec=spec: generate_risk_groups(network, spec),
+                    "generate",
+                )
+                for group in generated:
+                    if group.name in network.risk_groups:
+                        raise ValueError(
+                            f"{location}.name: Generated risk group {group.name!r} conflicts with existing group, got {_shown(raw.get('name'))}"
+                        )
+                    network.risk_groups[group.name] = group
+            index = MembershipIndex.build(network)
+            for group in network.risk_groups.values():
+                if group.disabled:
+                    members = index.members(group.name, recursive=True)
+                    for node_name in sorted(members.nodes):
+                        network.disable_node(node_name)
+                    for link_id in sorted(members.links):
+                        network.disable_link(link_id)
+            components = (
+                default_components.clone()
+                if default_components is not None
+                else ComponentsLibrary()
+            )
+            if data.get("components"):
+                components.merge(ComponentsLibrary.from_dict(data["components"]))
+            unit_values = closed(
+                data.get("units") or {}, ("resolution", "precision"), "units"
+            )
+            routes, supports, weights = named_declarations(data)
+            routing, controller, forwarding_groups = controller_declarations(data)
+            seeds = SeedManager(master)
+            return cls(
+                network,
+                build_workflow_steps(
+                    data.get("workflow", []),
+                    lambda name: seeds.derive_seed("workflow_step", name),
+                ),
+                demand_sets=demand_sets(data.get("demands") or {}),
+                failure_policies=build_failure_policies(
+                    data.get("failures") or {}, master
+                ),
+                components_library=components,
+                seed=master,
+                units=UnitsSettings(**unit_values),
+                routes=routes,
+                supports=supports,
+                weights=weights,
+                forwarding_groups=forwarding_groups,
+                routing=routing,
+                wcmp_controller=controller,
+            )
+        except (TypeError, KeyError) as exc:
+            raise ValueError(f"scenario = {yaml_str!r}: {exc}") from exc
 
 
 def prepare(

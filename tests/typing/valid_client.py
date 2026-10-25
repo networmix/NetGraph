@@ -774,12 +774,12 @@ def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
             ),
         ),
     )
-    policy = FailurePolicy()
+    policy = FailurePolicy(modes=(FailureMode(1.0, (FailureRule("link"),)),))
     scenario = Scenario(
         network,
         (CountNodes(name="count"),),
         demand_sets={"example": demands},
-        failure_policies={"empty": policy},
+        failure_policies={"one_link": policy},
         components_library=ComponentsLibrary(),
         routes={
             "cheap": RouteSpec(head="A", nodes=("A", "B", "T")),
@@ -857,3 +857,15 @@ def example() -> tuple[RunResult, PlacementAnalysis, MSDAnalysis, str]:
     output = StringIO()
     write_json(placement, output)
     return result, placement, supported, output.getvalue()
+
+
+def public_submodule_boundaries(network: Network) -> None:
+    from ngraph.hardware import hardware_inventory, resolve_link_end
+    from ngraph.logging import get_logger, set_global_log_level, setup_root_logger
+    from ngraph.workflow import StepNeeds, step_name
+
+    needs: StepNeeds = StepNeeds(numerical=False)
+    assert not needs.numerical
+    assert callable(step_name) and callable(resolve_link_end)
+    assert callable(hardware_inventory) and callable(get_logger)
+    assert callable(set_global_log_level) and callable(setup_root_logger)

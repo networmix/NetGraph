@@ -9,8 +9,8 @@ from ngraph.results import (
     StepContext,
     StepOutput,
 )
-from ngraph.utils.values import own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
+from ngraph.utils.values import flag, own, shared_copy
+from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
 @register_workflow_step("BuildGraph")
@@ -24,9 +24,7 @@ class BuildGraph(WorkflowStep):
 
     def __post_init__(self) -> None:
         super().__post_init__()
-        if not isinstance(self.add_reverse, bool):
-            raise ValueError("BuildGraph.add_reverse: expected bool")
-        own_scalars(self, f"workflow step {step_name(self)}", ("add_reverse",))
+        own(self, add_reverse=flag(self.add_reverse, "BuildGraph.add_reverse"))
 
     def run(self, context: StepContext) -> StepOutput:
         import networkx as nx
@@ -40,7 +38,7 @@ class BuildGraph(WorkflowStep):
                 **link.attrs,
                 "id": identity,
                 "capacity": float(link.capacity),
-                "cost": float(link.cost),
+                "cost": link.cost,
                 "disabled": link.disabled,
             }
             graph.add_edge(link.source, link.target, **attrs)

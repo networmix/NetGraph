@@ -31,7 +31,7 @@ class TestScenario3:
     def test_scenario_parsing_and_execution(self, scenario_3_executed):
         result = scenario_3_executed.steps[0].result
         assert isinstance(result, BuildGraphResult)
-        assert result.node_count == 64 and result.link_count == 288
+        assert result.node_count == 64 and result.edge_count == 288
 
     def test_network_structure_validation(self, helper):
         helper.validate_network_structure(SCENARIO_3_EXPECTATIONS)

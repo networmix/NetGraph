@@ -60,7 +60,7 @@ class TestScenario4:
         built = scenario_4_executed.steps[0].result
         assert isinstance(built, BuildGraphResult)
         assert built.node_count == SCENARIO_4_EXPECTATIONS.count
-        assert built.link_count == SCENARIO_4_EXPECTATIONS.edge_count
+        assert built.edge_count == SCENARIO_4_EXPECTATIONS.edge_count
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations for large-scale topology."""

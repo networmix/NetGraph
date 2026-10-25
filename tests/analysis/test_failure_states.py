@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 
@@ -170,7 +169,7 @@ workflow:
         prepare(Scenario.from_yaml(base % ", failure_states: [repair, converged]"))
     ).steps[0]
     assert tuple(step.result.cases[0].states) == ("converged", "repair")
-    refused = (ValueError, jsonschema.ValidationError)
+    refused = ValueError
     for bad in (", failure_states: []", ", failure_states: [stale, stale]"):
         with pytest.raises(refused, match="failure_states|non-empty|unique"):
             Scenario.from_yaml(base % bad)

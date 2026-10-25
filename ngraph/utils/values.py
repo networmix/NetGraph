@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
-from enum import Enum
 from fractions import Fraction
-from numbers import Real
+from numbers import Integral, Real
 from typing import Any, NoReturn, TypeAlias, cast
+
+import numpy as np
 
 JSONValue: TypeAlias = (
     None | bool | int | float | str | list["JSONValue"] | dict[str, "JSONValue"]
@@ -89,44 +91,248 @@ def _frozen_list(items: list) -> list:
     return result
 
 
+# One rule per kind of input field, shared by every constructor and the YAML loader:
+# a field accepts its built-in type or the NumPy scalar of the same kind, stored as
+# the built-in value; integers also accept exactly integral floats; booleans are
+# never numbers. Each refusal names the field and the value.
+
+
+def _shown(value: object) -> str:
+    """Render an input without letting its representation replace a refusal."""
+    try:
+        rendered = repr(value)
+    except Exception:
+        try:
+            rendered = _safe_repr(value)
+        except Exception:
+            rendered = f"<unprintable {type(value).__name__}>"
+    return rendered if len(rendered) <= 60 else rendered[:57] + "..."
+
+
+def _safe_repr(value, seen=None):
+    try:
+        return repr(value)
+    except Exception:
+        pass
+    if isinstance(value, int):
+        number = abs(int.__int__(value))
+        digits = max(1, (number.bit_length() - 1) * 1233 // 4096 + 1)
+        while number >= 10**digits:
+            digits += 1
+        while digits > 1 and number < 10 ** (digits - 1):
+            digits -= 1
+        return f"an integer of {digits} digits"
+    seen = set() if seen is None else seen
+    if id(value) in seen:
+        return "..."
+    seen.add(id(value))
+    try:
+        if isinstance(value, dict):
+            return (
+                "{"
+                + ", ".join(
+                    f"{_safe_repr(k, seen)}: {_safe_repr(v, seen)}"
+                    for k, v in value.items()
+                )
+                + "}"
+            )
+        if isinstance(value, (list, tuple)):
+            left, right = ("[", "]") if isinstance(value, list) else ("(", ")")
+            return left + ", ".join(_safe_repr(v, seen) for v in value) + right
+        try:
+            return repr(value)
+        except Exception:
+            return f"<unprintable {type(value).__name__}>"
+    finally:
+        seen.remove(id(value))
+
+
+class _DiagnosticInteger(int):
+    def __repr__(self):
+        return _safe_repr(int.__int__(self))
+
+
+def _diagnostic_value(value):
+    """A schema-only view when its own diagnostic cannot print a supplied int.
+
+    The original parsed values are returned to callers. This fallback is used
+    only after jsonschema's error rendering fails, preserving its constraints,
+    selected field path and ValidationError cause.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
+        try:
+            repr(value)
+        except ValueError:
+            return _DiagnosticInteger(value)
+        return value
+    if isinstance(value, dict):
+        return {k: _diagnostic_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_diagnostic_value(v) for v in value]
+    return value
+
+
+def _is_flag(value: object) -> bool:
+    return isinstance(value, (bool, np.bool_))
+
+
+def _input_error(label: str, detail: str) -> ValueError:
+    """A refusal with a field-relative path, independent of its readable label."""
+    error = ValueError(f"{label}: {detail}")
+    error.__dict__["_input_path"] = ()
+    error.__dict__["_input_detail"] = detail
+    return error
+
+
+def text(value: object, label: str, *, empty: bool = False) -> str:
+    """A text field: a str (a subclass such as numpy.str_ is stored as str).
+
+    A name is nonempty; whitespace is part of a name, as in every other text.
+    """
+    if not isinstance(value, str):
+        raise _input_error(label, f"expected text, got {_shown(value)}")
+    plain = str.__str__(value)
+    if not plain and not empty:
+        raise _input_error(label, "expected a nonempty name, got ''")
+    return plain
+
+
+def optional_text(value: object, label: str, *, empty: bool = False) -> str | None:
+    """A text field that may be None."""
+    return None if value is None else text(value, label, empty=empty)
+
+
+def pattern(value: object, label: str, *, empty: bool = False) -> str:
+    """A regular-expression field: text that compiles."""
+    plain = text(value, label, empty=empty)
+    try:
+        re.compile(plain)
+    except re.error as exc:
+        raise ValueError(f"{label}: invalid pattern {plain!r}: {exc}") from exc
+    return plain
+
+
+def optional_pattern(value: object, label: str, *, empty: bool = False) -> str | None:
+    """A regular-expression field that may be None."""
+    return None if value is None else pattern(value, label, empty=empty)
+
+
+def flag(value: object, label: str) -> bool:
+    """A boolean field: a bool or a NumPy boolean, stored as bool."""
+    if not _is_flag(value):
+        raise _input_error(label, f"expected bool, got {_shown(value)}")
+    return bool(value)
+
+
+def optional_flag(value: object, label: str) -> bool | None:
+    """A boolean field that may be None."""
+    return None if value is None else flag(value, label)
+
+
 def physical(value: object, label: str, *, positive: bool = False) -> float:
-    """Promote a finite nonnegative physical input to binary64."""
-    if isinstance(value, bool) or not isinstance(value, Real):
-        raise ValueError(f"{label}: expected a finite real number")
+    """Promote a finite nonnegative real input (an amount or a ratio) to binary64."""
+    if _is_flag(value) or not isinstance(value, Real):
+        raise ValueError(f"{label}: expected a finite real number, got {_shown(value)}")
     try:
         number = float(value)
     except (OverflowError, ValueError) as exc:
-        raise ValueError(f"{label}: physical value is outside binary64 range") from exc
+        raise ValueError(
+            f"{label}: physical value is outside binary64 range, got {_shown(value)}"
+        ) from exc
     if not math.isfinite(number) or number < 0 or (positive and number == 0):
         raise ValueError(
-            f"{label}: expected a finite {'positive' if positive else 'nonnegative'} amount"
+            f"{label}: expected a finite {'positive' if positive else 'nonnegative'} "
+            f"amount, got {_shown(value)}"
         )
     return number
 
 
 def integer(
-    value: object, label: str, *, minimum: int = 0, maximum: int | None = None
+    value: object, label: str, *, minimum: int | None = 0, maximum: int | None = None
 ) -> int:
-    """Validate exact integer domain inputs without accepting booleans."""
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{label}: expected an integer")
-    if value < minimum or (maximum is not None and value >= maximum):
-        raise ValueError(f"{label}: integer outside [{minimum}, {maximum})")
-    return value
+    """An integer field: an int, a NumPy integer or an exactly integral float.
+
+    Booleans and fractions are refused; the value is stored as int.
+    """
+    if _is_flag(value):
+        raise _input_error(label, f"expected an integer, got {_shown(value)}")
+    # A subclass of int or float is read as its stored value, not its conversions.
+    if isinstance(value, int):
+        number = int.__int__(value)
+    elif isinstance(value, Integral):
+        number = int(value)
+    elif isinstance(value, float) and float.__float__(value).is_integer():
+        number = int(float.__float__(value))
+    elif isinstance(value, np.floating) and float(value).is_integer():
+        number = int(float(value))
+    else:
+        raise _input_error(label, f"expected an integer, got {_shown(value)}")
+    if (minimum is not None and number < minimum) or (
+        maximum is not None and number >= maximum
+    ):
+        raise _input_error(
+            label,
+            f"integer outside [{_bound(minimum)}, {_bound(maximum)}), "
+            f"got {_shown(value)}",
+        )
+    return number
+
+
+def _bound(n: int | None) -> str:
+    """A range bound as written in the docs: large powers of two as 2^k, none as inf."""
+    if n is None:
+        return "inf"
+    if n >= 1 << 20 and n & (n - 1) == 0:
+        return f"2^{n.bit_length() - 1}"
+    return str(n)
+
+
+def optional_integer(
+    value: object, label: str, *, minimum: int | None = 0, maximum: int | None = None
+) -> int | None:
+    """An integer field that may be None."""
+    if value is None:
+        return None
+    return integer(value, label, minimum=minimum, maximum=maximum)
+
+
+def collection(value, label: str) -> tuple:
+    """Own an iterable collection, refusing scalars with its field and raw value."""
+    if isinstance(value, (str, bytes, Mapping)):
+        raise TypeError(f"{label}: expected a collection, got {_shown(value)}")
+    try:
+        return tuple(value)
+    except TypeError as exc:
+        raise TypeError(f"{label}: expected a collection, got {_shown(value)}") from exc
+
+
+def own(record: object, **values: object) -> None:
+    """Store checked field values on a frozen record during its construction."""
+    for name, value in values.items():
+        if getattr(record, name) is not value:
+            object.__setattr__(record, name, value)
 
 
 def exact_fraction(value: object, label: str) -> Fraction:
     """An exact ratio from an integer, a ``p/q`` or decimal string, or a Fraction.
 
     Floats and booleans are refused: a binary64 value is not the exact ratio
-    the declaration means.
+    the declaration means. NumPy integers and strings count as their kind.
     """
-    if isinstance(value, bool) or not isinstance(value, (int, str, Fraction)):
-        raise ValueError(f"{label}: expected exact integer or fraction string")
+    if _is_flag(value) or not isinstance(value, (Integral, str, Fraction)):
+        raise ValueError(
+            f"{label}: expected exact integer or fraction string, got {_shown(value)}"
+        )
     try:
-        return Fraction(value)
+        return Fraction(value if isinstance(value, Fraction) else _exact(value))
     except (ValueError, ZeroDivisionError) as exc:
-        raise ValueError(f"{label}: invalid exact fraction") from exc
+        raise ValueError(
+            f"{label}: invalid exact fraction, got {_shown(value)}"
+        ) from exc
+
+
+def _exact(value: Integral | str) -> int | str:
+    return str.__str__(value) if isinstance(value, str) else int(value)
 
 
 def _type_name(value: object) -> str:
@@ -141,8 +347,12 @@ def _type_name(value: object) -> str:
 def _plain(value, label):
     """Return the stored built-in value of a str, int or float subclass."""
     try:
-        if isinstance(value, bool):
-            return value
+        if isinstance(value, (bool, np.bool_)):
+            return bool(value)
+        if isinstance(value, np.integer):
+            return int(value)
+        if isinstance(value, np.floating):
+            return float(value)
         if isinstance(value, str):
             return str.__str__(value)
         if isinstance(value, int):
@@ -152,37 +362,10 @@ def _plain(value, label):
     except MemoryError:
         raise
     except Exception as exc:
-        raise ValueError(
-            f"{label}: cannot normalize scalar {_type_name(value)}"
+        raise _input_error(
+            label, f"cannot normalize scalar {_type_name(value)}"
         ) from exc
     return value
-
-
-def scalar(value: Any, label: str) -> Any:
-    """Store a scalar field as its exact built-in value; refuse other scalar types.
-
-    None, bool, int, float, str and Enum members are kept; a subclass of str,
-    int or float becomes its stored built-in value; anything else (a NumPy
-    scalar, for example) is refused with the field's label.
-    """
-    if (
-        value is None
-        or type(value) in (bool, int, float, str)
-        or isinstance(value, Enum)
-    ):
-        return value
-    if isinstance(value, (str, int, float)):
-        return _plain(value, label)
-    raise ValueError(f"{label}: expected a built-in scalar, got {_type_name(value)}")
-
-
-def own_scalars(record: object, label: str, names: tuple[str, ...]) -> None:
-    """Normalize the named scalar fields of a record during its construction."""
-    for name in names:
-        value = getattr(record, name)
-        plain = scalar(value, f"{label}.{name}")
-        if plain is not value:
-            object.__setattr__(record, name, plain)
 
 
 def frozen_json(
@@ -202,18 +385,18 @@ def frozen_json(
         return value
     if type(value) is float and math.isfinite(value):
         return value
-    if isinstance(value, (bool, str, int, float)):
+    if isinstance(value, (bool, str, int, float, np.bool_, np.integer, np.floating)):
         try:
             plain = _plain(value, label)
         except ValueError as exc:
-            raise ValueError(
-                f"{label}: expected finite JSON data, got {_type_name(value)}"
+            raise _input_error(
+                label, f"expected finite JSON data, got {_type_name(value)}"
             ) from exc
         if not isinstance(plain, float) or math.isfinite(plain):
             return plain
     elif isinstance(value, list):
         items = [
-            frozen_json(item, f"{label}[{i}]", strict_objects=strict_objects)
+            _json_child(item, f"{label}[{i}]", i, strict_objects)
             for i, item in enumerate(value)
         ]
         if type(value) is _FrozenList and all(
@@ -223,24 +406,37 @@ def frozen_json(
         return _frozen_list(items)
     elif isinstance(value, Mapping):
         if strict_objects and not isinstance(value, dict):
-            raise ValueError(f"{label}: JSON objects must be dict values")
+            raise _input_error(
+                label, f"JSON objects must be dict values, got {_shown(value)}"
+            )
         result, same = {}, type(value) is _FrozenDict
         for key, item in value.items():
             if not isinstance(key, str):
-                raise ValueError(f"{label}: JSON object keys must be strings")
+                raise _input_error(
+                    label, f"JSON object keys must be strings, got {_shown(key)}"
+                )
             plain = _plain(key, label)
-            result[plain] = frozen_json(
-                item, f"{label}.{plain}", strict_objects=strict_objects
-            )
+            result[plain] = _json_child(item, f"{label}.{plain}", plain, strict_objects)
             same = same and plain is key and result[plain] is item
         return cast(dict, value) if same else frozen_dict(result)
-    raise ValueError(f"{label}: expected finite JSON data, got {_type_name(value)}")
+    raise _input_error(
+        label, f"expected finite JSON data, got {_type_name(value)} = {_shown(value)}"
+    )
+
+
+def _json_child(value, label, part, strict_objects):
+    """Keep a JSON key or sequence position intact when a child is refused."""
+    try:
+        return frozen_json(value, label, strict_objects=strict_objects)
+    except ValueError as exc:
+        exc.__dict__["_input_path"] = (part, *getattr(exc, "_input_path", ()))
+        raise
 
 
 def frozen_attrs(value: object, label: str = "attrs") -> dict[str, JSONValue]:
     """Validate an attribute mapping once and return its read-only JSON form."""
     if not isinstance(value, Mapping):
-        raise ValueError(f"{label}: expected a mapping")
+        raise _input_error(label, f"expected a mapping, got {_shown(value)}")
     result = frozen_json(value, label)
     assert isinstance(result, dict)
     return result
@@ -252,7 +448,7 @@ def json_copy(
     """Validate finite JSON data and return an editable plain copy."""
     if value is None:
         return None
-    if isinstance(value, (bool, str, int, float)):
+    if isinstance(value, (bool, str, int, float, np.bool_, np.integer, np.floating)):
         return frozen_json(value, label)
     if isinstance(value, list):
         return [
@@ -261,14 +457,20 @@ def json_copy(
         ]
     if isinstance(value, Mapping):
         if strict_objects and not isinstance(value, dict):
-            raise ValueError(f"{label}: JSON objects must be dict values")
+            raise ValueError(
+                f"{label}: JSON objects must be dict values, got {_shown(value)}"
+            )
         result = {}
         for key, item in value.items():
             if not isinstance(key, str):
-                raise ValueError(f"{label}: JSON object keys must be strings")
+                raise ValueError(
+                    f"{label}: JSON object keys must be strings, got {_shown(key)}"
+                )
             key = _plain(key, label)
             result[key] = json_copy(
                 item, f"{label}.{key}", strict_objects=strict_objects
             )
         return result
-    raise ValueError(f"{label}: expected finite JSON data, got {_type_name(value)}")
+    raise ValueError(
+        f"{label}: expected finite JSON data, got {_type_name(value)} = {_shown(value)}"
+    )

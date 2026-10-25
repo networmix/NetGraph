@@ -498,12 +498,12 @@ class TestConditionOperators:
 
     def test_invalid_operator_raises(self) -> None:
         """Invalid operator raises ValueError at construction time."""
-        with pytest.raises(ValueError, match="Invalid operator"):
+        with pytest.raises(ValueError, match=r"condition\.op: expected one of"):
             Condition("x", "invalid_op", 5)  # type: ignore
 
     def test_in_operator_requires_list(self) -> None:
         """in operator requires list value."""
-        with pytest.raises(ValueError, match="requires list"):
+        with pytest.raises(ValueError, match="requires a list"):
             evaluate_condition({"x": "a"}, Condition("x", "in", "abc"))
 
 
@@ -551,12 +551,14 @@ class TestEvaluateConditions:
         assert evaluate_conditions({}, [], "and") is True
         assert evaluate_conditions({}, [], "or") is True
 
-    def test_invalid_logic_raises(self) -> None:
-        """Invalid logic raises ValueError."""
-        # Provide non-empty conditions so we don't return early
+    def test_invalid_logic_is_refused_where_it_is_declared(self) -> None:
+        """The match that declares the logic refuses it; evaluation reads it only."""
         conds = [Condition("x", "==", 1)]
-        with pytest.raises(ValueError, match="Unsupported logic"):
-            evaluate_conditions({}, conds, "xor")
+        with pytest.raises(
+            ValueError, match=r"^match\.logic: expected and or or, got 'xor'$"
+        ):
+            MatchSpec(conds, "xor")
+        assert evaluate_conditions({"x": 1}, MatchSpec(conds, "and").conditions, "and")
 
 
 def test_selector_dict_rejects_unknown_keys() -> None:

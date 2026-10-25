@@ -373,7 +373,8 @@ def test_link_rule_capacity_refusal_names_the_link_it_updates() -> None:
     with pytest.raises(ValueError) as error:
         _process_link_rules(net, rules)
     assert (
-        str(error.value) == "link.a|b|0.capacity: expected a finite nonnegative amount"
+        str(error.value)
+        == "network.link_rules[0].capacity: expected a finite nonnegative amount, got -1"
     )
     rules["link_rules"][0]["capacity"] = 4
     _process_link_rules(net, rules)

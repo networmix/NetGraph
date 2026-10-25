@@ -1,19 +1,27 @@
 """Native capacity questions over one shared sequence of failure cases."""
 
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Literal
 
 import netgraph_core as ngc
 
 from ngraph.analysis.capacity import CapacityQuery, capacity
 from ngraph.analysis.demands import materialize_config, pooled, selected_pairs
-from ngraph.analysis.failures import FailureRequest, Workers, resolve_workers
+from ngraph.analysis.failures import FailureRequest, Workers, checked_workers
 from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
-from ngraph.model.demand import FlowPolicyPreset, PinnedRoutes
+from ngraph.model.demand import FlowPolicyPreset, PinnedRoutes, _ParsedModel
 from ngraph.model.selectors import Selector
 from ngraph.results import StepContext, StepOutput
-from ngraph.utils.values import own_scalars, physical, shared_copy
+from ngraph.utils.values import (
+    flag,
+    integer,
+    optional_text,
+    own,
+    physical,
+    shared_copy,
+)
 from ngraph.workflow.base import (
     WorkflowStep,
     register_workflow_step,
@@ -45,52 +53,74 @@ class MaxFlow(WorkflowStep):
 
     def __post_init__(self):
         super().__post_init__()
-        if not isinstance(self.export_details, bool):
-            raise TypeError("export_details: expected bool")
         if not isinstance(self.source, Selector) or not isinstance(
             self.target, Selector
         ):
-            raise TypeError("MaxFlow endpoints: expected Selectors")
-        if self.mode not in ("combine", "pairwise"):
-            raise ValueError("MaxFlow.mode: expected combine or pairwise")
+            raise TypeError(
+                f"MaxFlow endpoints: expected Selectors, got {(self.source, self.target)!r}"
+            )
+        if not isinstance(self.mode, str) or self.mode not in ("combine", "pairwise"):
+            raise ValueError(
+                f"MaxFlow.mode: expected combine or pairwise, got {self.mode!r}"
+            )
         if self.preset is not None and self.model is not None:
             raise ValueError("MaxFlow: preset and model are exclusive")
         if self.preset is not None and not isinstance(self.preset, FlowPolicyPreset):
-            raise TypeError("MaxFlow.preset: expected FlowPolicyPreset")
+            raise TypeError(
+                f"MaxFlow.preset: expected FlowPolicyPreset, got {self.preset!r}"
+            )
+        if self.model is not None and not isinstance(
+            self.model, (ngc.FlowPolicyConfig, PinnedRoutes, _ParsedModel)
+        ):
+            raise TypeError(
+                "MaxFlow.model: expected a declared model or native FlowPolicyConfig, "
+                f"got {self.model!r}"
+            )
         for name in ("offer", "design_demand"):
             if getattr(self, name) is not None:
                 object.__setattr__(
                     self, name, physical(getattr(self, name), f"MaxFlow.{name}")
                 )
-        FailureRequest(None, self.iterations, self.seed, self.failure_trace)
-        resolve_workers(self.workers)
+        request = FailureRequest(
+            None,
+            integer(self.iterations, "MaxFlow.iterations", minimum=0),
+            self.seed,
+            flag(self.failure_trace, "MaxFlow.failure_trace"),
+        )
         if not isinstance(self.outputs, ngc.OutputOptions):
-            raise TypeError("MaxFlow.outputs: expected native OutputOptions")
-        if not isinstance(self.export_cost_distribution, bool):
-            raise TypeError("MaxFlow.export_cost_distribution: expected bool")
-        own_scalars(
+            raise TypeError(
+                f"MaxFlow.outputs: expected native OutputOptions, got {self.outputs!r}"
+            )
+        own(
             self,
-            f"workflow step {step_name(self)}",
-            (
-                "mode",
-                "failure_policy",
-                "iterations",
-                "workers",
-                "failure_trace",
-                "export_cost_distribution",
-                "export_details",
+            mode=str.__str__(self.mode),
+            failure_policy=optional_text(self.failure_policy, "MaxFlow.failure_policy"),
+            iterations=request.iterations,
+            workers=checked_workers(self.workers),
+            failure_trace=request.failure_trace,
+            export_cost_distribution=flag(
+                self.export_cost_distribution, "MaxFlow.export_cost_distribution"
             ),
+            export_details=flag(self.export_details, "MaxFlow.export_details"),
         )
 
     @classmethod
     def yaml_arguments(cls, arguments: dict, name: str) -> dict:
         from ngraph.dsl.inputs import flow_outputs, policy
         from ngraph.model.selectors import normalize_selector
+        from ngraph.utils.yaml_utils import declared
 
         for endpoint in ("source", "target"):
             if endpoint not in arguments:
                 raise ValueError(f"workflow step {name}: {endpoint} is required")
-            arguments[endpoint] = normalize_selector(arguments[endpoint], "workflow")
+            arguments[endpoint] = declared(
+                f"workflow step {name}.{endpoint}",
+                partial(normalize_selector, arguments[endpoint], "workflow"),
+                "selector",
+            )
+        for optional in ("preset", "model"):
+            if arguments.get(optional) is None:
+                arguments.pop(optional, None)
         if "preset" in arguments or "model" in arguments:
             declaration = policy(arguments, f"workflow step {name}")
             arguments.pop("preset", None)

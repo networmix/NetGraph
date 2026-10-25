@@ -13,7 +13,6 @@ Covers:
 - Per-expansion mesh reversed-pair dedup semantics (pinned behavior).
 """
 
-import jsonschema
 import pytest
 
 from ngraph.dsl.blueprints.expand import expand_network_dsl
@@ -391,7 +390,7 @@ network:
   link_rules:
     - capacity: 99
 """
-        with pytest.raises(jsonschema.ValidationError):
+        with pytest.raises(ValueError):
             load_scenario_yaml(yaml_content)
 
     def test_expansion_raises_value_error_not_key_error(self) -> None:

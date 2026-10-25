@@ -996,7 +996,7 @@ class BuildGraphResult(_ResultRecord):
     """Whether the exported graph has a reverse edge per link."""
     node_count: int
     """Nodes in the exported graph."""
-    link_count: int
+    edge_count: int
     """Edges in the exported graph (two per link with add_reverse)."""
     graph: Mapping[str, JSONValue]
     """The node-link JSON of the network."""
@@ -1027,9 +1027,9 @@ class NetworkStatsResult(_ResultRecord):
     """The mean link cost."""
     median_cost: float
     """The median link cost."""
-    min_cost: float
+    min_cost: int
     """The smallest link cost."""
-    max_cost: float
+    max_cost: int
     """The largest link cost."""
     mean_degree: float
     """The mean node degree."""
@@ -1060,6 +1060,52 @@ class HardwareRow(_ResultRecord):
 
 
 @_record
+class _CostPowerLevels(_ResultRecord, Mapping[int, tuple[HardwareRow, ...]]):
+    """Requested levels sharing the final aggregate beyond the deepest name."""
+
+    rows: tuple[tuple[HardwareRow, ...], ...]
+    requested: int
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if not isinstance(other, Mapping):
+            return NotImplemented
+        if len(self) != len(other):
+            return False
+        return all(key in other and rows == other[key] for key, rows in self.items())
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __getitem__(self, level: int) -> tuple[HardwareRow, ...]:
+        key = level
+        try:
+            hashed = hash(key)
+        except TypeError:
+            # Let dict produce its interpreter-specific unhashable-key refusal.
+            return {}[key]
+        candidate = int(key) if type(key) in (int, bool) else None
+        if candidate is not None and candidate == key and hash(candidate) == hashed:
+            if 0 <= candidate <= self.requested:
+                return self.rows[min(candidate, len(self.rows) - 1)]
+            raise KeyError(key)
+        # Nonnegative integer keys hash to their value modulo this modulus.
+        # Inspect exactly that bucket, retaining dict's equality semantics for
+        # float, complex, Fraction and user-defined keys, without materializing it.
+        if hashed >= 0:
+            for candidate in range(hashed, self.requested + 1, sys.hash_info.modulus):
+                if candidate == key:
+                    return self.rows[min(candidate, len(self.rows) - 1)]
+        raise KeyError(key)
+
+    def __iter__(self):
+        return iter(range(self.requested + 1))
+
+    def __len__(self) -> int:
+        return self.requested + 1
+
+
+@_record
 class CostPowerResult(_ResultRecord):
     kind: ClassVar[Literal["cost_power"]] = "cost_power"
     include_disabled: bool
@@ -1067,6 +1113,9 @@ class CostPowerResult(_ResultRecord):
     levels: Mapping[int, tuple[HardwareRow, ...]]
 
     def __post_init__(self) -> None:
+        if isinstance(self.levels, _CostPowerLevels):
+            return
+
         object.__setattr__(
             self,
             "levels",

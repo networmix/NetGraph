@@ -305,7 +305,7 @@ workflow:
     assert "Links:" in out
 
 
-def test_inspect_detail_mode_cost_shows_decimals(tmp_path: Path) -> None:
+def test_inspect_detail_mode_shows_the_integer_cost(tmp_path: Path) -> None:
     scenario_file = tmp_path / "s_cost.yaml"
     scenario_file.write_text(
         """
@@ -318,7 +318,7 @@ network:
     - source: A
       target: B
       capacity: 10
-      cost: 0.1
+      cost: 1234
 workflow:
   - type: BuildGraph
 """
@@ -328,8 +328,7 @@ workflow:
         cli.main(["inspect", str(scenario_file), "--detail"])
 
     out = "\n".join(str(c.args[0]) for c in mprint.call_args_list)
-    # Expect decimal cost to be preserved, not rounded to integer "0"
-    assert "0.1" in out
+    assert "1,234" in out and "1,234.0" not in out
 
 
 def test_inspect_workflow_node_selection_preview_basic(tmp_path: Path) -> None:

@@ -20,7 +20,7 @@ units:
 
 Capacities, demand volumes, finite offers/designs and minimum unreserved bandwidth are physical quantities. A legal explicit resolution is one power of two from 2^-32 through 2^32. Preparation promotes each input to binary64, selects one quantum q and converts quantities with exact half-up rounding. Costs are positive integers; counts and weights are integers. Each finite native bandwidth input and each directed graph capacity/cost aggregate must stay below 2^62, including reverse and synthetic edges. Exact result totals can exceed 64 bits.
 
-The units report is always returned. It records input and local-split constraints, rounding counts, missed targets and unverified supplied programs. Failures and MSD probes keep q and report observation-specific misses. Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`.
+The units report is always returned. It records input and local-split constraints, rounding counts, missed targets and unverified supplied programs. Failures and MSD probes keep q and report observation-specific misses. Unknown keys refuse at their configuration boundary; arbitrary user metadata belongs under `attrs`. Every load refusal is a `ValueError` naming its field and raw value; a schema error is retained as the cause. An optional field accepts explicit `null` wherever its Python constructor accepts `None`.
 
 ## Template Syntaxes
 
@@ -241,7 +241,7 @@ forwarding_groups: {}    # Fixed group shares at programmed routers
 | `wcmp_controller` | No | Controller scope for `SHORTEST_PATHS_WCMP` demands |
 | `forwarding_groups` | No | Declared group trees at routers the controller programs (needs `wcmp_controller`) |
 
-All sections are optional. A scenario that omits `network` entirely, or sets it to an empty mapping (`network: {}`), builds with an empty topology. A bare `network:` with no value is a YAML null and fails schema validation. Any unrecognized top-level key is rejected during JSON Schema validation with `jsonschema.ValidationError` (the schema sets `additionalProperties: false`).
+All sections are optional. A scenario that omits `network` entirely, or sets it to an empty mapping (`network: {}`), builds with an empty topology. A bare `network:` with no value is a YAML null and fails schema validation. Any unrecognized top-level key is rejected during JSON Schema validation with a `ValueError` whose cause is the schema's `ValidationError` (the schema sets `additionalProperties: false`).
 
 **Seed:** YAML policy `name` derives its seed from SHA-256 of the UTF-8 string `<master>:failure_policy:failure_policy:<name>`. Read the first four bytes as a big-endian integer and mask with `0x7fffffff`. The repeated component preserves existing seeded draws: master `42` and policy `random_link` yield `2099469712`. An absent workflow step seed uses the same hash/truncation on `<master>:workflow_step:<effective-step-name>`. An explicit step seed wins. Failure draw `i` creates `random.Random(base_seed + i)`; an absent base creates an unseeded generator for that draw. Random rules draw one Bernoulli trial per matched entity in sorted identifier order on every supported Python runtime. Without a seed, results vary between runs.
 
@@ -291,6 +291,7 @@ Recognized keys for each node entry:
 
 ```yaml
 network:
+  nodes: {SEA: {}, SFO: {}}
   links:
     - source: SEA
       target: SFO
@@ -308,13 +309,15 @@ Recognized keys for each link entry:
 
 - `source`, `target`: node names (required)
 - `capacity`: link capacity (optional; default 1.0)
-- `cost`: link cost (optional; default 1.0; must be an integer value; fractional costs are rejected with `ValueError` when the analysis graph is built, because the core engine requires int64 costs)
+- `cost`: link cost (optional; default 1), an integer from 1 to below 2^62; an exactly integral value such as `1.0` is stored as `1`, and any other value is refused where it is given
 - `disabled`: boolean (optional)
 - `risk_groups`: list of risk-group names (optional)
 - `attrs`: mapping of attributes (optional)
-- `count`: integer number of parallel links to create (optional; default 1)
+- `count`: integer number of parallel links to create (optional; default 1); loading takes time linear in it
 
 ### Node Groups
+
+A link entry whose source or target matches no node is refused at load, naming its position and endpoints. Node and link rules that match nothing remain silent.
 
 **Node Groups with Count/Template:**
 
@@ -335,7 +338,7 @@ network:
 
 Creates: `leaf/leaf-1`, `leaf/leaf-2`, `leaf/leaf-3`, `leaf/leaf-4`, `spine/spine-1`, `spine/spine-2`
 
-The `{n}` placeholder is replaced with a 1-indexed counter (1, 2, 3, ...) up to `count`. The group name becomes the parent path, and template generates child node names. When `count` is given without `template`, the template defaults to `<group>-{n}` (so `leaf: {count: 2}` creates `leaf/leaf-1` and `leaf/leaf-2`).
+Loading a node group takes work linear in its `count`. The `{n}` placeholder is replaced with a 1-indexed counter (1, 2, 3, ...) up to `count`. The group name becomes the parent path, and template generates child node names. When `count` is given without `template`, the template defaults to `<group>-{n}` (so `leaf: {count: 2}` creates `leaf/leaf-1` and `leaf/leaf-2`).
 
 **Nested Nodes (Inline Hierarchy):**
 
@@ -371,6 +374,9 @@ Use nested nodes for one-off hierarchies. For structures repeated across the sce
 
 ```yaml
 network:
+  nodes:
+    leaf: {count: 4}
+    spine: {count: 2}
   links:
     - source: /leaf
       target: /spine
@@ -395,6 +401,9 @@ To filter the source or target node sets by attributes, replace a string `source
 
 ```yaml
 network:
+  nodes:
+    leaf: {count: 2, attrs: {role: leaf}}
+    spine: {count: 2, attrs: {role: spine}}
   links:
     - source:
         path: "/leaf"
@@ -437,6 +446,12 @@ Example with OR logic to match multiple roles:
 
 ```yaml
 network:
+  nodes:
+    metro1:
+      nodes:
+        dc1: {attrs: {role: dc}}
+        pop1: {attrs: {role: leaf}}
+        pop2: {attrs: {role: core}}
   links:
     - source:
         path: "/metro1/dc[1-1]"
@@ -753,7 +768,7 @@ network:
 - `source`, `target`: Regex patterns or selector objects for endpoint matching (both required on every rule)
 - `bidirectional`: Match links in both directions (default: `true`)
 - `link_match`: Filter by link's own attributes (not endpoint attributes)
-- `capacity`, `cost`, `disabled`: Override link properties (`cost` must be an integer value; fractional costs are rejected when the analysis graph is built)
+- `capacity`, `cost`, `disabled`: Override link properties, by the same rules as a link declaration (`cost` an integer from 1 to below 2^62)
 - `attrs`: Attributes to merge into matched links
 - `risk_groups`: Risk groups for matched links; **replaces** the link's existing `risk_groups` set (it does not add to it)
 - `expand`: Variable expansion block for templated rules
@@ -765,7 +780,7 @@ network:
 
 ## `components` - Hardware Library
 
-Define hardware components with attributes for cost and power modeling:
+Define hardware components with attributes for cost and power modeling. A component’s `count` is a positive integer whose conversion to float is finite, checked when the component is declared:
 
 ```yaml
 components:
@@ -810,6 +825,7 @@ network:
         hardware:
           component: "SpineRouter"
           count: 2   # Optional positive multiplier; defaults to 1
+    leaf-1: {}
   links:
     - source: spine-1
       target: leaf-1
@@ -1673,6 +1689,13 @@ workflow:
 
 ```yaml
 network:
+  nodes:
+    dc1:
+      nodes:
+        spine: {count: 2, attrs: {role: spine}}
+    dc2:
+      nodes:
+        leaf: {count: 2, attrs: {role: leaf}}
   links:
     - source:
         group_by: "role"

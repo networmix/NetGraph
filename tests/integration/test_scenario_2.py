@@ -46,7 +46,7 @@ class TestScenario2:
         (step,) = scenario_2_executed.steps
         assert step.name == "build_graph" and isinstance(step.result, BuildGraphResult)
         assert step.result.node_count == SCENARIO_2_EXPECTATIONS.count
-        assert step.result.link_count == SCENARIO_2_EXPECTATIONS.edge_count
+        assert step.result.edge_count == SCENARIO_2_EXPECTATIONS.edge_count
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations after blueprint expansion."""

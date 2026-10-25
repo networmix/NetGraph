@@ -351,7 +351,7 @@ workflow:
 
     (step,) = run(prepare(scenario)).steps
     assert step.name == "BuildGraph_0" and step.execution_order == 0
-    assert step.result.node_count == 2 and step.result.link_count == 0
+    assert step.result.node_count == 2 and step.result.edge_count == 0
     assert [node["id"] for node in step.result.graph["nodes"]] == ["node1", "node2"]
 
 
@@ -505,7 +505,6 @@ network:
 
 def test_unknown_adjacency_pattern_raises():
     """Unknown link pattern should raise ValidationError."""
-    import jsonschema
 
     yaml_content = """
 network:
@@ -518,7 +517,7 @@ network:
       pattern: non_existent_pattern
 """
 
-    with pytest.raises(jsonschema.ValidationError) as exc:
+    with pytest.raises(ValueError) as exc:
         Scenario.from_yaml(yaml_content)
     assert "is not one of ['mesh', 'one_to_one']" in str(exc.value)
 
@@ -594,8 +593,8 @@ network:
     assert "zip expansion requires equal-length lists" in str(exc.value)
 
 
-def test_direct_link_unknown_node_skipped():
-    """Referencing an unknown node in a direct link creates no links (pattern finds no target)."""
+def test_direct_link_to_an_unknown_node_is_refused():
+    """A link entry whose endpoint matches no node is refused, naming the entry."""
     yaml_content = """
 network:
   nodes:
@@ -605,10 +604,18 @@ network:
       target: UnknownNode
 """
 
-    # Link with unknown target node is silently skipped (no matching target)
-    scenario = Scenario.from_yaml(yaml_content)
-    assert "KnownNode" in scenario.network.nodes
-    assert len(scenario.network.links) == 0  # No link created
+    with pytest.raises(
+        ValueError,
+        match=r"^network\.links\[0\] \(KnownNode->UnknownNode\): link 'KnownNode' -> 'UnknownNode': target 'UnknownNode' matches no node$",
+    ):
+        Scenario.from_yaml(yaml_content)
+    # Control: a known target creates the link.
+    known = Scenario.from_yaml(
+        yaml_content.replace(
+            "    KnownNode: {}", "    KnownNode: {}\n    UnknownNode: {}"
+        )
+    )
+    assert len(known.network.links) == 1
 
 
 def test_group_by_selector_inside_blueprint():

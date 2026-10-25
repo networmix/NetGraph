@@ -70,7 +70,7 @@ def test_worker_resolution_and_native_semantic_control(
     assert placed.cases[0].states["converged"].totals.delivered_units == 3
 
 
-@pytest.mark.parametrize("workers", [True, False, 0, -1, 1.0, "many"])
+@pytest.mark.parametrize("workers", [True, False, 0, -1, 1.5, "many"])
 def test_invalid_worker_values_refuse_on_all_public_queries_with_valid_control(workers):
     source, target = Selector("^s$"), Selector("^t$")
     config = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths())
@@ -81,3 +81,5 @@ def test_invalid_worker_values_refuse_on_all_public_queries_with_valid_control(w
         with pytest.raises(ValueError, match="workers"):
             build(workers)
         assert build(1).workers == 1
+        # An exactly integral float is an integer, stored as int.
+        assert type(build(2.0).workers) is int and build(2.0).workers == 2

@@ -30,8 +30,8 @@ def test_loader_keeps_best_instance_error_without_rechecking_fixed_schema(monkey
     assert load_scenario_yaml("network: {nodes: {}, links: []}") == {
         "network": {"nodes": {}, "links": []}
     }
-    with pytest.raises(jsonschema.ValidationError, match="unknown_option") as error:
+    with pytest.raises(ValueError, match="unknown_option") as error:
         load_scenario_yaml("network: {nodes: {}, links: []}\nunknown_option: true")
-    assert error.value.validator == "additionalProperties"
-    assert list(error.value.path) == []
-    assert list(error.value.schema_path) == ["additionalProperties"]
+    assert error.value.__cause__.validator == "additionalProperties"
+    assert list(error.value.__cause__.path) == []
+    assert list(error.value.__cause__.schema_path) == ["additionalProperties"]

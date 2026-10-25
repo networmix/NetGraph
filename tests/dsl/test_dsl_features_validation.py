@@ -3,7 +3,6 @@
 Each test pins a documented behavior so the reference stays accurate.
 """
 
-import jsonschema
 import pytest
 
 from ngraph.scenario import Scenario
@@ -344,7 +343,7 @@ demands:
         path_alg: SPF
         flow_placement: PROPORTIONAL
 """
-        with pytest.raises((jsonschema.ValidationError, ValueError)):
+        with pytest.raises(ValueError):
             Scenario.from_yaml(yaml_str)
         valid = yaml_str.replace(
             "      flow_policy:\n        path_alg: SPF\n        flow_placement: PROPORTIONAL",
@@ -368,7 +367,7 @@ demands:
     good = "{type: centralized_te, source_allocation: optimized}"
     assert Scenario.from_yaml(base.replace("ROUTING", good)).demand_sets["test"]
     bad = "{type: centralized_te, source_allocation: optimized, support: x}"
-    with pytest.raises(jsonschema.ValidationError) as caught:
+    with pytest.raises(ValueError) as caught:
         Scenario.from_yaml(base.replace("ROUTING", bad))
-    reasons = [error.message for error in caught.value.context]
+    reasons = [error.message for error in caught.value.__cause__.context]
     assert "Additional properties are not allowed ('support' was unexpected)" in reasons

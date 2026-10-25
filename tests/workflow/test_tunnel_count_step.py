@@ -7,7 +7,6 @@ atoms q <= 2 * precision * x, and split targets q <= precision * y / (r - 1).
 import io
 from fractions import Fraction
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 
@@ -502,17 +501,17 @@ workflow:
         (
             {"counts": (1.5,)},
             ValueError,
-            r"tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\]",
+            r"tunnel_counts\.counts\[0\]: expected an integer in \[1, 10000\], got 1\.5",
         ),
         (
             {"up_to": True},
             ValueError,
-            r"tunnel_counts\.up_to: expected an integer in \[1, 10000\]",
+            r"tunnel_counts\.up_to: expected an integer in \[1, 10000\], got True",
         ),
         (
-            {"up_to": 2.0},
+            {"up_to": 2.5},
             ValueError,
-            r"tunnel_counts\.up_to: expected an integer in \[1, 10000\]",
+            r"tunnel_counts\.up_to: expected an integer in \[1, 10000\], got 2\.5",
         ),
         (
             {"counts": ()},
@@ -522,7 +521,7 @@ workflow:
         (
             {"outputs": {}},
             TypeError,
-            r"tunnel_counts\.outputs: expected native OutputOptions",
+            r"tunnel_counts\.outputs: expected native OutputOptions, got \{\}",
         ),
     ],
 )
@@ -562,7 +561,7 @@ def test_an_unnamed_step_names_itself_by_its_class():
     ],
 )
 def test_the_scenario_schema_refuses_what_the_step_does_not_take(extra, message):
-    with pytest.raises(jsonschema.ValidationError, match=message):
+    with pytest.raises(ValueError, match=message):
         from_yaml(extra)
 
 
@@ -579,11 +578,11 @@ def test_the_scenario_schema_refuses_what_the_step_does_not_take(extra, message)
         ),
         ({"export_details": True}, "unknown key export_details; use outputs.details"),
         ({"counts": 4}, "counts: expected a list of integers"),
-        ({"design_demand": None}, "TunnelCountAnalysis.design_demand: required"),
-        ({"offer": None}, "TunnelCountAnalysis.offer: required"),
+        ({"design_demand": None}, r"workflow\[0\] \(counts\).design_demand: required"),
+        ({"offer": None}, r"workflow\[0\] \(counts\).offer: required"),
         (
             {"counts": [1, 1]},
-            r"^workflow step counts: tunnel_counts\.counts: duplicate count 1$",
+            r"^workflow\[0\] \(counts\): workflow step counts: tunnel_counts\.counts: duplicate count 1$",
         ),
     ],
 )

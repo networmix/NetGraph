@@ -68,7 +68,7 @@ def test_domain_steps_typed_values_and_exact_json_preserve_their_behavior():
         model.nodes["dc/a"].attrs["label"].append("changed")
     result = run(prepared)
     graph, stats, cost = [step.result for step in result.steps]
-    assert graph.node_count == 2 and graph.link_count == 2 and graph.add_reverse
+    assert graph.node_count == 2 and graph.edge_count == 2 and graph.add_reverse
     assert graph.graph["directed"] and graph.graph["multigraph"]
     assert graph.graph["nodes"][0]["label"] == ["owned"]
     assert stats.node_count == 2 and stats.link_count == 1
@@ -392,7 +392,7 @@ def test_a_read_only_record_collection_is_not_a_json_result_or_question():
             PublishesNodes(name="nodes"),
             r"^unregistered result type ngraph\.utils\.values\._FrozenDict$",
         ),
-        (AsksNodes(name="nodes"), "expected finite JSON data, got .*Node$"),
+        (AsksNodes(name="nodes"), r"expected finite JSON data, got .*Node = Node\("),
     ):
         prepared = prepare(Scenario(network, (first, Later(name="later"))))
         with pytest.raises((TypeError, ValueError), match=message):

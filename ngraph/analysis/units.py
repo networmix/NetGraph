@@ -57,7 +57,9 @@ class UnitsSettings:
             "precision",
             physical(self.precision, "units.precision", positive=True),
         )
-        if self.resolution != "auto":
+        if isinstance(self.resolution, str) and self.resolution == "auto":
+            object.__setattr__(self, "resolution", "auto")
+        else:
             object.__setattr__(self, "resolution", validate_resolution(self.resolution))
 
 
@@ -65,7 +67,7 @@ def validate_resolution(q: float) -> float:
     value = physical(q, "units.resolution", positive=True)
     if value not in RESOLUTIONS:
         raise ValueError(
-            "units.resolution: expected a power of two from 2^-32 through 2^32"
+            f"units.resolution: expected a power of two from 2^-32 through 2^32, got {q!r}"
         )
     return value
 

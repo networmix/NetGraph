@@ -13,7 +13,7 @@ workflow:
     add_reverse: true
 ```
 
-Returns `BuildGraphResult` with node/link counts and physical NetworkX node-link JSON. Reverse export edges are enabled by default. This operation exports the domain network, including disabled entities and their flags.
+Returns `BuildGraphResult` with node and edge counts (`edge_count` is two per link with reverse edges) and physical NetworkX node-link JSON. Reverse export edges are enabled by default. This operation exports the domain network, including disabled entities and their flags.
 
 ## NetworkStats
 
@@ -29,6 +29,8 @@ workflow:
 Returns physical node/link counts and capacity, cost and degree statistics. The question records these effective filters.
 
 ## CostPower
+
+Aggregation stops at the deepest node name. Greater requested levels reuse its immutable rows without further computation or storage per level; exporting those repeated rows takes work proportional to the output size.
 
 ```yaml
 workflow:
@@ -168,7 +170,7 @@ The step's offer is a known lossy offer for the TE ingress pools of its set: eac
 
 ## Cases, seeds and exports
 
-No failure request means one baseline. With sampling, `occurrences` sum to the requested iterations, including sampled empty patterns on the baseline. Optional traces keep the first draw producing each physical pattern. A failed link excludes both directions. All supported Python versions use per-entity Bernoulli for random rules.
+No failure request means one baseline; a failure policy has at least one mode with a positive weight. The work is linear in the requested iterations. With sampling, `occurrences` sum to the requested iterations, including sampled empty patterns on the baseline. Optional traces keep the first draw producing each physical pattern. A failed link excludes both directions. All supported Python versions use per-entity Bernoulli for random rules.
 
 Policy seeds preserve the established recipe: SHA256 of UTF-8 `"<master>:failure_policy:failure_policy:<name>"`, first four bytes big-endian, masked with `0x7fffffff`. Master 42 and policy `random_link` yield 2099469712. Step derivation uses `"<master>:workflow_step:<effective-name>"` with the same truncation and mask. Metadata records seed source, runtime, RNG and draw order.
 

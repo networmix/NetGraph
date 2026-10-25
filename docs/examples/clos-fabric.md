@@ -68,7 +68,7 @@ from ngraph import Scenario, prepare, run
 scenario = Scenario.from_yaml(Path("clos.yaml").read_text())
 result = run(prepare(scenario))
 built, analysis, placed = [step.result for step in result.steps]
-assert built.node_count == 12 and built.link_count == 36
+assert built.node_count == 12 and built.edge_count == 36
 q = result.topology.q
 baseline, *failed = analysis.cases
 row = baseline.states["converged"].rows[0]

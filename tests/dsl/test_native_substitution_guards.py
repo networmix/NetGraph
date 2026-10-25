@@ -15,14 +15,20 @@ from ngraph.model.selectors import Selector, normalize_selector
 
 
 class TestSelectorPathGuard:
-    """Selector 'path' must be a string."""
+    """A selector path is text."""
 
     def test_selector_rejects_non_string_path(self):
-        with pytest.raises(ValueError, match="Selector 'path' must be a string"):
+        with pytest.raises(
+            ValueError,
+            match=r"^selector\.path: expected text, got ",
+        ):
             Selector(path=1)  # type: ignore[arg-type]
 
     def test_normalize_selector_dict_rejects_non_string_path(self):
-        with pytest.raises(ValueError, match="Selector 'path' must be a string"):
+        with pytest.raises(
+            ValueError,
+            match=r"^selector\.path: expected text, got ",
+        ):
             normalize_selector({"path": 1}, "demand")
 
     def test_node_rule_native_var_path_raises_value_error(self):
@@ -37,7 +43,10 @@ class TestSelectorPathGuard:
                 }
             ],
         }
-        with pytest.raises(ValueError, match="Selector 'path' must be a string"):
+        with pytest.raises(
+            ValueError,
+            match=r"^network\.node_rules\[0\]\.path: expected text, got ",
+        ):
             expand_network_dsl({"network": data})
 
 

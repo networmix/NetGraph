@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 
+from ngraph.model.failure import FailureRule
 from ngraph.model.selectors import Condition, evaluate_condition, evaluate_conditions
 
 
@@ -45,7 +46,7 @@ class TestEvaluateCondition:
         assert evaluate_condition(attrs, Condition("p", "not_exists")) is False
 
     def test_unsupported_operator_raises(self) -> None:
-        with pytest.raises(ValueError, match="Invalid operator"):
+        with pytest.raises(ValueError, match=r"condition\.op: expected one of"):
             Condition("x", "bad")  # type: ignore
 
 
@@ -60,8 +61,10 @@ class TestEvaluateConditions:
         assert evaluate_conditions(attrs, conds2, "and") is False
         assert evaluate_conditions(attrs, conds2, "or") is False
 
-    def test_unsupported_logic(self) -> None:
-        # Need non-empty conditions to trigger logic check
+    def test_unsupported_logic_is_refused_by_the_rule(self) -> None:
         conds = [Condition("x", "==", 1)]
-        with pytest.raises(ValueError, match="Unsupported logic"):
-            evaluate_conditions({}, conds, "xor")
+        with pytest.raises(
+            ValueError, match=r"^failure rule logic: expected and, or, got 'xor'$"
+        ):
+            FailureRule("node", conds, "xor")
+        assert evaluate_conditions({"x": 1}, conds, "or")

@@ -45,7 +45,7 @@ class TestScenario1:
         """Test that scenario 1 can be parsed and executed without errors."""
         (step,) = scenario_1_executed.steps
         assert step.name == "build_graph" and isinstance(step.result, BuildGraphResult)
-        assert step.result.node_count == 6 and step.result.link_count == 20
+        assert step.result.node_count == 6 and step.result.edge_count == 20
 
     def test_network_structure_validation(self, helper):
         """Test basic network structure matches expectations."""

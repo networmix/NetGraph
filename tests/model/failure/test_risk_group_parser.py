@@ -5,7 +5,6 @@ only top-level groups are registered in network.risk_groups, so 'membership',
 'disabled', and 'generate' blocks on children must fail fast.
 """
 
-import jsonschema
 import pytest
 
 from ngraph.model.risk import build_risk_groups
@@ -159,7 +158,7 @@ class TestScenarioChildMembershipRejection:
     """Scenario.from_yaml surfaces the child-key rejection to users.
 
     The JSON schema rejects these keys before the parser runs, so the
-    scenario-level error is a jsonschema.ValidationError; the parser's
+    scenario-level error is a ValueError; the parser's
     ValueError remains the guard for direct build_risk_groups callers.
     """
 
@@ -185,7 +184,7 @@ risk_groups:
                 value: leaf
 """
         with pytest.raises(
-            jsonschema.ValidationError,
+            ValueError,
             match="Additional properties are not allowed",
         ):
             Scenario.from_yaml(yaml_content)
@@ -204,7 +203,7 @@ risk_groups:
         disabled: true
 """
         with pytest.raises(
-            jsonschema.ValidationError,
+            ValueError,
             match="Additional properties are not allowed",
         ):
             Scenario.from_yaml(yaml_content)

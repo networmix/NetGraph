@@ -23,7 +23,11 @@ from ngraph.results import Endpoints, ResolvedDemand
 @pytest.mark.parametrize(
     "invalid,valid,message",
     [
-        (lambda: SupportSpec(("edge",)), lambda: SupportSpec(()), "support.edges"),
+        (
+            lambda: SupportSpec(("edge",)),
+            lambda: SupportSpec((DirectedLink("a|b|0", "forward"),)),
+            "support.edges",
+        ),
         (lambda: WeightSpec(("entry",)), lambda: WeightSpec(()), "weights.entries"),
         (
             lambda: RouteSpec("a", nodes="abt"),
@@ -112,11 +116,8 @@ def test_empty_cycle_duplicate_supports_and_explicit_weighted_dag():
     refs = (DirectedLink("a|b|0", "forward"), DirectedLink("b|t|0", "forward"))
     dag = support_dag(t, SupportSpec(refs), "dag")
     assert set(dag.via_edges()) == {t._edge_id_by_ref[ref] for ref in refs}
-    empty = support_dag(t, SupportSpec(()), "empty")
-    p = ngc.ForwardingProgram.from_dag(
-        t.graph, [t.node_id_by_name["a"]], [t.node_id_by_name["t"]], empty
-    )
-    assert p.sources == (t.node_id_by_name["a"],)
+    with pytest.raises(ValueError, match="support.edges: expected at least one edge"):
+        SupportSpec(())
     with pytest.raises(ValueError, match="duplicate"):
         support_dag(t, SupportSpec(refs + refs), "duplicate")
     with pytest.raises(ValueError, match="cycle|acyclic"):

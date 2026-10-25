@@ -14,6 +14,7 @@ from ngraph.hardware import HardwareUse, hardware_inventory, link_active
 from ngraph.logging import get_logger
 from ngraph.model.components import ComponentsLibrary
 from ngraph.model.network import Network, Node
+from ngraph.utils.values import flag
 
 logger = get_logger(__name__)
 
@@ -175,9 +176,24 @@ class NetworkExplorer:
         components_library: Optional[ComponentsLibrary] = None,
         strict_validation: bool = True,
     ) -> None:
+        if not isinstance(network, Network):
+            raise TypeError(
+                f"NetworkExplorer.network: expected Network, got {network!r}"
+            )
+        if components_library is not None and not isinstance(
+            components_library, ComponentsLibrary
+        ):
+            raise TypeError(
+                "NetworkExplorer.components_library: expected ComponentsLibrary or None, "
+                f"got {components_library!r}"
+            )
         self.network = network
-        self.components_library = components_library or ComponentsLibrary()
-        self.strict_validation = strict_validation
+        self.components_library = (
+            ComponentsLibrary() if components_library is None else components_library
+        )
+        self.strict_validation = flag(
+            strict_validation, "NetworkExplorer.strict_validation"
+        )
 
         self.root_node: Optional[TreeNode] = None
 

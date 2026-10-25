@@ -12,6 +12,7 @@ from ngraph.analysis.demands import controlled, pooled, selected_pairs
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
+    checked_workers,
     failure_cases,
     resolve_workers,
     schedule_cases,
@@ -32,7 +33,7 @@ from ngraph.results import (
     SelfPair,
     SyntheticIngress,
 )
-from ngraph.utils.values import physical
+from ngraph.utils.values import flag, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -63,14 +64,10 @@ class CapacityQuery:
     declaration: object = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.export_details, bool):
-            raise ValueError("export_details: expected bool")
         validate_capacity_inputs(
             self.source,
             self.target,
             self.config,
-            self.offer,
-            self.design_demand,
             self.outputs,
         )
         if self.offer is not None:
@@ -81,27 +78,38 @@ class CapacityQuery:
                 "design_demand",
                 physical(self.design_demand, "capacity.design_demand"),
             )
-        if self.mode not in ("combine", "pairwise"):
-            raise ValueError("capacity.mode: expected combine or pairwise")
-        if self.workers != "auto":
-            resolve_workers(self.workers)
-        if not isinstance(self.export_cost_distribution, bool):
-            raise ValueError("export_cost_distribution: expected bool")
+        if not isinstance(self.mode, str) or self.mode not in ("combine", "pairwise"):
+            raise ValueError(
+                f"capacity.mode: expected combine or pairwise, got {self.mode!r}"
+            )
         if self.failures is not None and not isinstance(self.failures, FailureRequest):
-            raise TypeError("capacity.failures: expected FailureRequest")
+            raise TypeError(
+                f"capacity.failures: expected FailureRequest, got {self.failures!r}"
+            )
+        own(
+            self,
+            mode=str.__str__(self.mode),
+            workers=checked_workers(self.workers),
+            export_cost_distribution=flag(
+                self.export_cost_distribution, "export_cost_distribution"
+            ),
+            export_details=flag(self.export_details, "export_details"),
+        )
 
 
-def validate_capacity_inputs(source, target, config, offer, design, outputs) -> None:
+def validate_capacity_inputs(source, target, config, outputs) -> None:
     if not isinstance(source, Selector) or not isinstance(target, Selector):
-        raise TypeError("capacity endpoints: expected Selectors")
+        raise TypeError(
+            f"capacity endpoints: expected Selectors, got {(source, target)!r}"
+        )
     if not isinstance(config, ngc.FlowPolicyConfig):
-        raise TypeError("capacity.config: expected native FlowPolicyConfig")
-    if offer is not None:
-        physical(offer, "capacity.offer")
-    if design is not None:
-        physical(design, "capacity.design_demand")
+        raise TypeError(
+            f"capacity.config: expected native FlowPolicyConfig, got {config!r}"
+        )
     if not isinstance(outputs, ngc.OutputOptions):
-        raise TypeError("capacity.outputs: expected native OutputOptions")
+        raise TypeError(
+            f"capacity.outputs: expected native OutputOptions, got {outputs!r}"
+        )
 
 
 def question_kind(config, offer, design):

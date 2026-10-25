@@ -12,12 +12,12 @@ def _build(policy: dict) -> None:
 
 
 def test_unknown_policy_key_raises() -> None:
-    with pytest.raises(ValueError, match="failure policy p.*expand_children"):
+    with pytest.raises(ValueError, match=r"failures\.p.*expand_children"):
         _build({"modes": [{"weight": 1.0, "rules": []}], "expand_children": True})
 
 
 def test_unknown_mode_key_raises() -> None:
-    with pytest.raises(ValueError, match="failure policy p mode.*probability"):
+    with pytest.raises(ValueError, match=r"failures\.p\.modes.*probability"):
         _build({"modes": [{"weight": 1.0, "rules": [], "probability": 0.5}]})
 
 

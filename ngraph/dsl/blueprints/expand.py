@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import re
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 from ngraph.dsl.blueprints import parser as _bp_parse
@@ -20,6 +21,7 @@ from ngraph.dsl.expansion import (
     expand_name_patterns,
     expand_risk_group_refs,
 )
+from ngraph.dsl.expansion.variables import _expand_declaration
 from ngraph.model.network import Link, Network, Node
 from ngraph.model.selectors import (
     evaluate_conditions,
@@ -28,8 +30,8 @@ from ngraph.model.selectors import (
     parse_match_spec,
     select_nodes,
 )
-from ngraph.utils.values import physical
-from ngraph.utils.yaml_utils import check_no_extra_keys
+from ngraph.utils.values import _input_error, _shown, flag, frozen_attrs, integer, text
+from ngraph.utils.yaml_utils import _declaration_error, check_no_extra_keys, declared
 
 
 @dataclass
@@ -63,7 +65,9 @@ class DSLExpansionContext:
 
     blueprints: Dict[str, Blueprint]
     network: Network
-    pending_bp_links: List[tuple[Dict[str, Any], str]] = field(default_factory=list)
+    pending_bp_links: List[tuple[Dict[str, Any], str, str]] = field(
+        default_factory=list
+    )
 
 
 def expand_network_dsl(data: Dict[str, Any]) -> Network:
@@ -120,7 +124,17 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     if not isinstance(network_data, dict):
         raise ValueError("'network' must be a dictionary if present.")
 
-    net = Network()
+    net = declared(
+        "network",
+        lambda: Network(
+            attrs={
+                key: network_data[key]
+                for key in ("name", "version")
+                if key in network_data
+            }
+        ),
+        "network.attrs",
+    )
     # Reject unrecognized top-level fields before anything is expanded
     for key in network_data.keys():
         if key not in (
@@ -133,33 +147,32 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
         ):
             raise ValueError(f"Unrecognized top-level key in 'network': {key}")
 
-    if "name" in network_data:
-        net.attrs["name"] = network_data["name"]
-    if "version" in network_data:
-        net.attrs["version"] = network_data["version"]
-
     ctx = DSLExpansionContext(blueprints=blueprint_map, network=net)
 
     # 3) Expand top-level node definitions
     for node_name, node_def in network_data.get("nodes", {}).items():
         if not isinstance(node_def, dict):
             raise ValueError(f"Node definition for '{node_name}' must be a dict.")
-        _expand_node_group(
-            ctx, parent_path="", group_name=node_name, group_def=node_def
+        declared(
+            f"network.nodes.{node_name}",
+            lambda node_name=node_name, node_def=node_def: _expand_node_group(
+                ctx, parent_path="", group_name=node_name, group_def=node_def
+            ),
+            f"node '{node_name}'",
         )
 
     # 4) Process node rules early so they influence link selection
     _process_node_rules(ctx.network, network_data)
 
     # 5) Expand deferred blueprint links
-    for _link_def, _parent in ctx.pending_bp_links:
-        _expand_link(ctx, _link_def, _parent, context="blueprint link")
+    for _link_def, _parent, _location in ctx.pending_bp_links:
+        _expand_link(ctx, _link_def, _parent, context=_location)
 
     # 6) Expand top-level link definitions
-    for link_def in network_data.get("links", []):
+    for link_index, link_def in enumerate(network_data.get("links", [])):
         if not isinstance(link_def, dict):
             raise ValueError("Each link entry must be a dictionary.")
-        _expand_link(ctx, link_def)
+        _expand_link(ctx, link_def, context=f"network.links[{link_index}]")
 
     # 7) Process link rules (in order)
     _process_link_rules(ctx.network, network_data)
@@ -167,64 +180,92 @@ def expand_network_dsl(data: Dict[str, Any]) -> Network:
     return net
 
 
-def _parent_merge_context(
-    group_def: Dict[str, Any],
-    group_name: str,
-    inherited_risk_groups: Set[str],
-) -> tuple[Dict[str, Any], bool, Set[str]]:
-    """Extract the parent attrs/disabled/risk_groups merged into child groups.
+def _node_mapping(value, label):
+    if not isinstance(value, dict):
+        raise _input_error(label, f"expected a mapping, got {_shown(value)}")
+    return value
 
-    Args:
-        group_def: Parent group definition.
-        group_name: Parent group name, used in error messages.
-        inherited_risk_groups: Risk groups inherited from a higher-level group.
 
-    Returns:
-        Tuple of (deep-copied parent attrs, parent disabled flag, parent risk
-        groups unioned with the inherited ones).
+def _node_attrs(value, label):
+    return frozen_attrs(_node_mapping(value, label), label)
 
-    Raises:
-        ValueError: If 'attrs' on the parent group is not a dict, or
-            'risk_groups' is not a list/set/tuple of names.
-    """
-    parent_attrs = copy.deepcopy(group_def.get("attrs", {}))
-    if not isinstance(parent_attrs, dict):
-        raise ValueError(f"'attrs' must be a dict in node '{group_name}'.")
-    parent_disabled = bool(group_def.get("disabled", False))
-    parent_risk_groups = set(inherited_risk_groups)
-    if "risk_groups" in group_def:
-        parent_risk_groups |= expand_risk_group_refs(group_def["risk_groups"])
-    return parent_attrs, parent_disabled, parent_risk_groups
+
+def _node_risk_groups(value, label):
+    if not isinstance(value, (list, set, tuple)):
+        raise _input_error(
+            label, f"expected a list/set/tuple of names, got {_shown(value)}"
+        )
+    names = [text(name, label) for name in value]
+    try:
+        return expand_risk_group_refs(names)
+    except ValueError as exc:
+        raise _input_error(label, f"{exc}; got {_shown(value)}") from exc
+
+
+_NODE_FIELD_CHECKS = {
+    "disabled": flag,
+    "attrs": _node_attrs,
+    "risk_groups": _node_risk_groups,
+    "count": partial(integer, minimum=1),
+    "template": text,
+    "nodes": _node_mapping,
+    "blueprint": text,
+    "params": _node_mapping,
+}
+
+
+def _check_node_definition(definition, location, sources):
+    """Check each supplied field before inheritance, using its own source."""
+    if not isinstance(definition, dict):
+        raise _declaration_error(
+            location, f"{location}: expected a mapping, got {_shown(definition)}"
+        )
+    allowed = {"disabled", "attrs", "risk_groups"}
+    allowed |= (
+        {"blueprint", "params"}
+        if "blueprint" in definition
+        else {"nodes"}
+        if "nodes" in definition
+        else {"count", "template"}
+    )
+    checked = {}
+    for name, value in definition.items():
+        if name not in allowed:
+            path = _source_path(sources, (str(name),), location)
+            raise _declaration_error(
+                path, f"{path}: unrecognized node field, got {_shown(value)}"
+            )
+        try:
+            checked[name] = _NODE_FIELD_CHECKS[name](value, name)
+        except (ValueError, TypeError) as exc:
+            parts = (name, *getattr(exc, "_input_path", ()))
+            path = _source_path(sources, parts, location)
+            detail = getattr(exc, "_input_detail", None)
+            if detail is None:
+                detail = f"{exc}; got {_shown(value)}"
+            raise _declaration_error(path, f"{path}: {detail}") from exc
+    return checked
+
+
+def _parent_merge_context(group_def, location, sources, inherited_risk_groups):
+    """Check a group and extract its inherited fields without changing its input."""
+    checked = _check_node_definition(group_def, location, sources)
+    attrs = checked.get("attrs", {})
+    disabled = checked.get("disabled", False)
+    groups = set(inherited_risk_groups) | checked.get("risk_groups", set())
+    return checked, attrs, disabled, groups
 
 
 def _merge_parent_into_child(
-    merged_def: Dict[str, Any],
-    context: str,
-    parent_attrs: Dict[str, Any],
-    parent_disabled: bool,
-    parent_risk_groups: Set[str],
-) -> None:
-    """Merge parent's disabled/attrs/risk_groups into a child definition in place.
-
-    Args:
-        merged_def: Child definition, mutated in place.
-        context: Child description used in error messages.
-        parent_attrs: Parent attrs; child keys win on conflict.
-        parent_disabled: When True, forces the child disabled.
-        parent_risk_groups: Unioned with the child's own risk_groups.
-
-    Raises:
-        ValueError: If the child's 'attrs' is not a dict, or its 'risk_groups'
-            is not a list/set/tuple of names.
-    """
-    if parent_disabled:
-        merged_def["disabled"] = True
-    child_attrs = merged_def.get("attrs", {})
-    if not isinstance(child_attrs, dict):
-        raise ValueError(f"Node {context} has non-dict 'attrs'.")
-    merged_def["attrs"] = {**parent_attrs, **child_attrs}
-    child_rgs = expand_risk_group_refs(merged_def.get("risk_groups", []))
-    merged_def["risk_groups"] = parent_risk_groups | child_rgs
+    merged_def, location, sources, parent_attrs, parent_disabled, parent_risk_groups
+):
+    """Check child fields at their sources before any parent can mask them."""
+    checked = _check_node_definition(merged_def, location, sources)
+    checked["disabled"] = parent_disabled or checked.get("disabled", False)
+    checked["attrs"] = {**parent_attrs, **checked.get("attrs", {})}
+    checked["risk_groups"] = parent_risk_groups | checked.get("risk_groups", set())
+    merged_def.clear()
+    merged_def.update(checked)
 
 
 def _expand_node_group(
@@ -233,6 +274,8 @@ def _expand_node_group(
     group_name: str,
     group_def: Dict[str, Any],
     inherited_risk_groups: Optional[Set[str]] = None,
+    location: str | None = None,
+    sources: dict[tuple[str, ...], str] | None = None,
 ) -> None:
     """Expand one node group definition into nodes.
 
@@ -260,14 +303,24 @@ def _expand_node_group(
         group_name: The current group's name (may have bracket expressions).
         group_def: The node definition (count, template, etc.).
         inherited_risk_groups: Risk groups inherited from a higher-level group.
+        location: Source declaration, independent of expanded node names.
+        sources: Source paths of fields replaced by parameters.
     """
+    location = location or f"network.nodes.{group_name}"
+    sources = {} if sources is None else sources
     if inherited_risk_groups is None:
         inherited_risk_groups = set()
     expanded_names = expand_name_patterns(group_name)
     if len(expanded_names) > 1 or expanded_names[0] != group_name:
         for expanded_name in expanded_names:
             _expand_node_group(
-                ctx, parent_path, expanded_name, group_def, inherited_risk_groups
+                ctx,
+                parent_path,
+                expanded_name,
+                group_def,
+                inherited_risk_groups,
+                location,
+                sources,
             )
         return
 
@@ -276,22 +329,17 @@ def _expand_node_group(
     else:
         effective_path = group_name
 
+    group_def, parent_attrs, parent_disabled, parent_risk_groups = (
+        _parent_merge_context(group_def, location, sources, inherited_risk_groups)
+    )
+
     if "blueprint" in group_def:
-        check_no_extra_keys(
-            group_def,
-            allowed={"blueprint", "params", "attrs", "disabled", "risk_groups"},
-            context=f"node '{group_name}' using blueprint",
-        )
         blueprint_name: str = group_def["blueprint"]
         bp = ctx.blueprints.get(blueprint_name)
         if not bp:
             raise ValueError(
-                f"Node '{group_name}' references unknown blueprint '{blueprint_name}'."
+                f"{_source_path(sources, ('blueprint',), location)}: unknown blueprint {_shown(blueprint_name)}"
             )
-
-        parent_attrs, parent_disabled, parent_risk_groups = _parent_merge_context(
-            group_def, group_name, inherited_risk_groups
-        )
 
         param_overrides: Dict[str, Any] = group_def.get("params", {})
         if not isinstance(param_overrides, dict):
@@ -324,12 +372,18 @@ def _expand_node_group(
 
         for bp_sub_name, bp_sub_def in bp.nodes.items():
             # _apply_parameters returns a deep copy, safe to mutate
-            merged_def = _apply_parameters(
-                bp_sub_name, bp_sub_def, param_overrides, override_to_group
+            merged_def, merged_sources = _apply_parameters(
+                bp_sub_name,
+                bp_sub_def,
+                param_overrides,
+                override_to_group,
+                sources,
+                location,
             )
             _merge_parent_into_child(
                 merged_def,
-                f"'{bp_sub_name}' inside blueprint '{blueprint_name}'",
+                f"blueprints.{blueprint_name}.nodes.{bp_sub_name}",
+                merged_sources,
                 parent_attrs,
                 parent_disabled,
                 parent_risk_groups,
@@ -341,36 +395,38 @@ def _expand_node_group(
                 group_name=bp_sub_name,
                 group_def=merged_def,
                 inherited_risk_groups=merged_def["risk_groups"],
+                location=f"blueprints.{blueprint_name}.nodes.{bp_sub_name}",
+                sources=merged_sources,
             )
 
         # Defer blueprint links under this parent's path to run after node rules
-        for link_def in bp.links:
-            ctx.pending_bp_links.append((link_def, effective_path))
+        for index, link_def in enumerate(bp.links):
+            ctx.pending_bp_links.append(
+                (
+                    link_def,
+                    effective_path,
+                    f"blueprints.{blueprint_name}.links[{index}] (instance {effective_path})",
+                )
+            )
 
     elif "nodes" in group_def:
-        check_no_extra_keys(
-            group_def,
-            allowed={"nodes", "attrs", "disabled", "risk_groups"},
-            context=f"nested node '{group_name}'",
-        )
-
-        parent_attrs, parent_disabled, parent_risk_groups = _parent_merge_context(
-            group_def, group_name, inherited_risk_groups
-        )
-
         nested_nodes = group_def["nodes"]
         if not isinstance(nested_nodes, dict):
             raise ValueError(f"'nodes' must be a dict in '{group_name}'.")
 
         for nested_name, nested_def in nested_nodes.items():
+            child_location = _source_path(sources, ("nodes", nested_name), location)
+            child_sources = _child_sources(sources, ("nodes", nested_name))
             if not isinstance(nested_def, dict):
-                raise ValueError(
-                    f"Nested node definition for '{nested_name}' must be a dict."
+                raise _declaration_error(
+                    child_location,
+                    f"{child_location}: expected a mapping, got {_shown(nested_def)}",
                 )
             merged_def = dict(nested_def)
             _merge_parent_into_child(
                 merged_def,
-                f"'{nested_name}' in '{group_name}'",
+                child_location,
+                child_sources,
                 parent_attrs,
                 parent_disabled,
                 parent_risk_groups,
@@ -382,16 +438,15 @@ def _expand_node_group(
                 group_name=nested_name,
                 group_def=merged_def,
                 inherited_risk_groups=merged_def["risk_groups"],
+                location=child_location,
+                sources=child_sources,
             )
 
     else:
-        check_no_extra_keys(
-            group_def,
-            allowed={"count", "template", "attrs", "disabled", "risk_groups"},
-            context=f"node '{group_name}'",
-        )
-        combined_attrs, group_disabled, final_risk_groups = _parent_merge_context(
-            group_def, group_name, inherited_risk_groups
+        combined_attrs, group_disabled, final_risk_groups = (
+            parent_attrs,
+            parent_disabled,
+            parent_risk_groups,
         )
 
         has_count = "count" in group_def
@@ -409,11 +464,11 @@ def _expand_node_group(
         else:
             count = group_def.get("count", 1)
             template = group_def.get("template", f"{group_name}-{{n}}")
-            if not isinstance(count, int) or count < 1:
-                raise ValueError(f"node '{group_name}' has invalid count: {count}")
 
             for i in range(1, count + 1):
-                label = template.format(n=i)
+                label = _format_node_template(
+                    template, i, _source_path(sources, ("template",), location)
+                )
                 node_name = f"{effective_path}/{label}" if effective_path else label
 
                 node = Node(
@@ -423,6 +478,16 @@ def _expand_node_group(
                     attrs=combined_attrs,
                 )
                 ctx.network.add_node(node)
+
+
+def _format_node_template(template, number, location):
+    """All str.format failures belong to the template's actual declaration."""
+    try:
+        return template.format(n=number)
+    except Exception as exc:
+        raise _declaration_error(
+            location, f"{location}: invalid template {template!r}: {exc}"
+        ) from exc
 
 
 def _join_parent(base: str, rel: str) -> str:
@@ -455,6 +520,7 @@ def _normalize_link_selector(sel: Any, base: str) -> Dict[str, Any]:
     Returns:
         Selector dict with the regex-escaped parent prefix joined onto 'path'.
     """
+    normalize_selector(sel, "link")
     if isinstance(sel, str):
         return {"path": _join_parent(base, sel)}
     if isinstance(sel, dict):
@@ -493,11 +559,18 @@ def _expand_link(
             links, the blueprint base path for blueprint links).
         context: Short description used in error messages.
     """
-    _bp_parse.check_link_keys(link_def, context=context)
+    location = f"{context} ({link_def.get('source')}->{link_def.get('target')})"
+    declared(
+        location, lambda: _expand_declared_link(ctx, link_def, parent_path, location)
+    )
+
+
+def _expand_declared_link(ctx, link_def, parent_path, location):
+    _bp_parse.check_link_keys(link_def, context=location)
 
     expand_spec = ExpansionSpec.from_dict(link_def)
     if expand_spec and not expand_spec.is_empty():
-        _expand_link_with_variables(ctx, link_def, expand_spec, parent_path)
+        _expand_link_with_variables(ctx, link_def, expand_spec, parent_path, location)
         return
 
     source_raw = link_def["source"]
@@ -505,10 +578,18 @@ def _expand_link(
     pattern = link_def.get("pattern", "mesh")
     count = link_def.get("count", 1)
 
-    src_sel = _normalize_link_selector(source_raw, parent_path)
-    tgt_sel = _normalize_link_selector(target_raw, parent_path)
+    src_sel = declared(
+        location + ".source",
+        lambda: _normalize_link_selector(source_raw, parent_path),
+        "selector",
+    )
+    tgt_sel = declared(
+        location + ".target",
+        lambda: _normalize_link_selector(target_raw, parent_path),
+        "selector",
+    )
 
-    _expand_link_pattern(ctx, src_sel, tgt_sel, pattern, link_def, count)
+    _expand_link_pattern(ctx, src_sel, tgt_sel, pattern, link_def, count, location)
 
 
 def _expand_link_with_variables(
@@ -516,6 +597,7 @@ def _expand_link_with_variables(
     link_def: Dict[str, Any],
     expand_spec: ExpansionSpec,
     parent_path: str,
+    location: str,
 ) -> None:
     """Expand a link definition once per combination in its 'expand' block.
 
@@ -533,8 +615,20 @@ def _expand_link_with_variables(
     # expand_block deep-copies, drops 'expand', and substitutes variables
     # recursively in every string field of the definition.
     for substituted in expand_block(link_def, expand_spec):
-        src_sel = _normalize_link_selector(substituted["source"], parent_path)
-        tgt_sel = _normalize_link_selector(substituted["target"], parent_path)
+        src_sel = declared(
+            location + ".source",
+            lambda substituted=substituted: _normalize_link_selector(
+                substituted["source"], parent_path
+            ),
+            "selector",
+        )
+        tgt_sel = declared(
+            location + ".target",
+            lambda substituted=substituted: _normalize_link_selector(
+                substituted["target"], parent_path
+            ),
+            "selector",
+        )
         _expand_link_pattern(
             ctx,
             src_sel,
@@ -542,6 +636,7 @@ def _expand_link_with_variables(
             substituted.get("pattern", "mesh"),
             substituted,
             substituted.get("count", 1),
+            location,
         )
 
 
@@ -552,6 +647,7 @@ def _expand_link_pattern(
     pattern: str,
     link_def: Dict[str, Any],
     count: int = 1,
+    location: str = "link",
 ) -> None:
     """Create links between the matched nodes using the chosen pattern.
 
@@ -577,11 +673,23 @@ def _expand_link_pattern(
         link_def: Link definition with flat properties.
         count: Number of parallel links to create for each pair.
     """
+    # Validate the declaration before matching, including self-pairs and empty selections.
+    _link_properties(link_def, location)
+    count = integer(count, location + ".count", minimum=1)
     source_nodes = _select_link_nodes(ctx.network, source_selector)
     target_nodes = _select_link_nodes(ctx.network, target_selector)
 
-    if not source_nodes or not target_nodes:
-        return
+    # A link entry whose endpoint matches no node declares nothing: refuse it, naming
+    # the entry, so that a mistyped name fails where it is given.
+    for end, nodes, selector in (
+        ("source", source_nodes, source_selector),
+        ("target", target_nodes, target_selector),
+    ):
+        if not nodes:
+            raise ValueError(
+                f"link {link_def.get('source')!r} -> {link_def.get('target')!r}: "
+                f"{end} {selector.get('path', selector)!r} matches no node"
+            )
 
     dedup_pairs: Set[tuple[str, str]] = set()
 
@@ -644,6 +752,22 @@ def _select_link_nodes(network: Network, selector: Any) -> List[Node]:
     return [node for nodes in groups.values() for node in nodes]
 
 
+def _link_properties(definition, location="link"):
+    return declared(
+        location,
+        lambda: Link(
+            "<source>",
+            "<target>",
+            capacity=definition.get("capacity", 1.0),
+            cost=definition.get("cost", 1),
+            disabled=definition.get("disabled", False),
+            attrs=definition.get("attrs", {}),
+            risk_groups=expand_risk_group_refs(definition.get("risk_groups", [])),
+        ),
+        "link <source>-><target>",
+    )
+
+
 def _create_link(
     net: Network,
     source: str,
@@ -658,8 +782,9 @@ def _create_link(
         source: Source node name for the link.
         target: Target node name for the link.
         link_def: Flat link properties (capacity, cost, disabled, risk_groups,
-            attrs). Capacity and cost default to 1.0.
-        count: Number of parallel links to create between source and target.
+            attrs). Capacity defaults to 1.0 and cost to 1.
+        count: Number of parallel links to create between source and target
+            (the work is linear in it).
     """
     for _ in range(count):
         net.add_link(
@@ -667,9 +792,9 @@ def _create_link(
                 source=source,
                 target=target,
                 capacity=link_def.get("capacity", 1.0),
-                cost=link_def.get("cost", 1.0),
+                cost=link_def.get("cost", 1),
                 attrs=link_def.get("attrs", {}),
-                disabled=bool(link_def.get("disabled", False)),
+                disabled=link_def.get("disabled", False),
                 risk_groups=expand_risk_group_refs(link_def.get("risk_groups", [])),
             )
         )
@@ -694,7 +819,7 @@ def _process_node_rules(net: Network, network_data: Dict[str, Any]) -> None:
     if not isinstance(node_rules, list):
         raise ValueError("'node_rules' must be a list.")
 
-    for rule in node_rules:
+    for index, rule in enumerate(node_rules):
         if not isinstance(rule, dict):
             raise ValueError("Each node_rule must be a dict.")
         check_no_extra_keys(
@@ -703,16 +828,29 @@ def _process_node_rules(net: Network, network_data: Dict[str, Any]) -> None:
             context="node rule",
         )
 
-        expand_spec = ExpansionSpec.from_dict(rule)
-        if expand_spec and not expand_spec.is_empty():
-            for expanded_rule in expand_block(rule, expand_spec):
-                _apply_node_rule(net, expanded_rule)
-        else:
-            _apply_node_rule(net, rule)
+        location = f"network.node_rules[{index}]"
+        _, rows = _expand_declaration(rule, location)
+        for expanded_rule in rows:
+            declared(
+                location,
+                lambda expanded_rule=expanded_rule, location=location: _apply_node_rule(
+                    net, expanded_rule, location
+                ),
+            )
 
 
-def _apply_node_rule(net: Network, rule: Dict[str, Any]) -> None:
+def _apply_node_rule(net: Network, rule: Dict[str, Any], location="node rule") -> None:
     """Apply a single node rule to matching nodes."""
+    declared(
+        location,
+        lambda: Node(
+            "<node>",
+            disabled=rule.get("disabled", False),
+            attrs=rule.get("attrs", {}),
+            risk_groups=expand_risk_group_refs(rule.get("risk_groups", [])),
+        ),
+        "node <node>",
+    )
     path = rule.get("path", ".*")
     match_spec = rule.get("match")
     top_level_disabled = rule.get("disabled", None)
@@ -723,7 +861,13 @@ def _apply_node_rule(net: Network, rule: Dict[str, Any]) -> None:
 
     attrs_to_set = rule.get("attrs", {})
     _update_nodes(
-        net, path, match_spec, attrs_to_set, top_level_disabled, rule_risk_groups
+        net,
+        path,
+        match_spec,
+        attrs_to_set,
+        top_level_disabled,
+        rule_risk_groups,
+        location,
     )
 
 
@@ -745,7 +889,7 @@ def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
     if not isinstance(link_rules, list):
         raise ValueError("'link_rules' must be a list.")
 
-    for link_rule in link_rules:
+    for index, link_rule in enumerate(link_rules):
         if not isinstance(link_rule, dict):
             raise ValueError("Each link_rule must be a dict.")
         check_no_extra_keys(
@@ -767,21 +911,25 @@ def _process_link_rules(net: Network, network_data: Dict[str, Any]) -> None:
         if "source" not in link_rule or "target" not in link_rule:
             raise ValueError("Each link_rule must include 'source' and 'target'.")
 
-        expand_spec = ExpansionSpec.from_dict(link_rule)
-        if expand_spec and not expand_spec.is_empty():
-            for expanded_rule in expand_block(link_rule, expand_spec):
-                _apply_link_rule(net, expanded_rule)
-        else:
-            _apply_link_rule(net, link_rule)
+        location = f"network.link_rules[{index}]"
+        _, rows = _expand_declaration(link_rule, location)
+        for expanded_rule in rows:
+            declared(
+                location,
+                lambda expanded_rule=expanded_rule, location=location: _apply_link_rule(
+                    net, expanded_rule, location
+                ),
+            )
 
 
-def _apply_link_rule(net: Network, rule: Dict[str, Any]) -> None:
+def _apply_link_rule(net: Network, rule: Dict[str, Any], location="link rule") -> None:
     """Apply a single link rule to matching links."""
+    _link_properties(rule, location)
     source = rule["source"]
     target = rule["target"]
-    bidirectional = rule.get("bidirectional", True)
+    bidirectional = flag(rule.get("bidirectional", True), "link rule.bidirectional")
 
-    _update_links(net, source, target, rule, bidirectional)
+    _update_links(net, source, target, rule, bidirectional, location)
 
 
 def _update_links(
@@ -790,6 +938,7 @@ def _update_links(
     target: Any,
     rule: Dict[str, Any],
     bidirectional: bool = True,
+    location: str = "link rule",
 ) -> None:
     """Update links between nodes selected by source and target.
 
@@ -805,8 +954,16 @@ def _update_links(
         rule: Rule dict with flat link properties.
         bidirectional: If True, also update reversed direction links.
     """
-    src_sel = normalize_selector(source, context="rule")
-    tgt_sel = normalize_selector(target, context="rule")
+    src_sel = declared(
+        location + ".source",
+        lambda: normalize_selector(source, context="rule"),
+        "selector",
+    )
+    tgt_sel = declared(
+        location + ".target",
+        lambda: normalize_selector(target, context="rule"),
+        "selector",
+    )
 
     source_node_groups = select_nodes(net, src_sel, default_active_only=False)
     target_node_groups = select_nodes(net, tgt_sel, default_active_only=False)
@@ -847,11 +1004,11 @@ def _update_links(
         changes: Dict[str, Any] = {}
         if new_capacity is not None:
             # A rule's capacity is labelled by the link it updates.
-            changes["capacity"] = physical(new_capacity, f"link.{link_id}.capacity")
+            changes["capacity"] = new_capacity
         if new_cost is not None:
             changes["cost"] = new_cost
         if new_disabled_val is not None:
-            changes["disabled"] = bool(new_disabled_val)
+            changes["disabled"] = flag(new_disabled_val, "link rule.disabled")
         if new_risk_groups is not None:
             changes["risk_groups"] = expand_risk_group_refs(new_risk_groups)
         if new_attrs:
@@ -867,6 +1024,7 @@ def _update_nodes(
     attrs: Dict[str, Any],
     disabled_val: Any = None,
     risk_groups_val: Any = None,
+    location: str = "node rule",
 ) -> None:
     """Update nodes matching a path pattern and optional match conditions.
 
@@ -883,12 +1041,14 @@ def _update_nodes(
     if match_spec:
         selector_dict["match"] = match_spec
 
-    normalized = normalize_selector(selector_dict, context="rule")
+    normalized = declared(
+        location, lambda: normalize_selector(selector_dict, context="rule"), "selector"
+    )
     node_groups = select_nodes(net, normalized, default_active_only=False)
 
     changes: Dict[str, Any] = {}
     if disabled_val is not None:
-        changes["disabled"] = bool(disabled_val)
+        changes["disabled"] = flag(disabled_val, location + ".disabled")
     if risk_groups_val is not None:
         changes["risk_groups"] = expand_risk_group_refs(risk_groups_val)
     for _, nodes in node_groups.items():
@@ -916,12 +1076,35 @@ def _longest_subgroup_prefix(key: str, group_names: Iterable[str]) -> Optional[s
     return max(matches, key=len) if matches else None
 
 
+def _render_source_path(base, parts):
+    return base + "".join(
+        f"[{part}]" if isinstance(part, int) else f".{part}" for part in parts
+    )
+
+
+def _source_path(sources, parts, location):
+    for size in range(len(parts), -1, -1):
+        if parts[:size] in sources:
+            return _render_source_path(sources[parts[:size]], parts[size:])
+    return _render_source_path(location, parts)
+
+
+def _child_sources(sources, parts):
+    return {
+        key[len(parts) :]: path
+        for key, path in sources.items()
+        if key[: len(parts)] == parts
+    }
+
+
 def _apply_parameters(
     subgroup_name: str,
     subgroup_def: Dict[str, Any],
     params_overrides: Dict[str, Any],
     override_to_group: Dict[str, str],
-) -> Dict[str, Any]:
+    parent_sources: dict[tuple[str, ...], str],
+    location: str,
+) -> tuple[Dict[str, Any], dict[tuple[str, ...], str]]:
     """Apply blueprint `params` overrides to one subgroup definition.
 
     Example:
@@ -938,18 +1121,34 @@ def _apply_parameters(
             resolved once by the caller via `_longest_subgroup_prefix` so a
             key applies to subgroup 'rack.a' rather than 'rack' when both
             exist and the key starts with 'rack.a.'.
+        parent_sources: Overrides that supplied this instance's parameter fields.
+        location: Source declaration of this instance.
 
     Returns:
-        Dict[str, Any]: A copy of subgroup_def with parameter overrides applied.
+        The copied definition and the source paths of its overridden fields.
+        Source metadata stays separate from node definitions.
     """
     out = copy.deepcopy(subgroup_def)
+    sources = {}
 
     for key, val in params_overrides.items():
         if override_to_group.get(key) == subgroup_name:
             subpath = key[len(subgroup_name) + 1 :].split(".")
+            label = _source_path(parent_sources, ("params", key), location)
+            if subpath == ["disabled"]:
+                val = flag(val, label)
+            elif subpath == ["template"]:
+                val = text(val, label)
+            # A later subtree assignment replaces any earlier descendant source;
+            # a later field assignment keeps the ancestor source for its siblings.
+            parts = tuple(subpath)
+            sources = {
+                p: origin for p, origin in sources.items() if p[: len(parts)] != parts
+            }
+            sources[parts] = label
             _apply_nested_path(out, subpath, val)
 
-    return out
+    return out, sources
 
 
 def _apply_nested_path(

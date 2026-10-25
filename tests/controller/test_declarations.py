@@ -3,7 +3,6 @@
 import re
 from fractions import Fraction
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 import yaml
@@ -11,6 +10,7 @@ import yaml
 from ngraph import (
     CapacityQuery,
     ControllerGroup,
+    DirectedLink,
     FlowPolicyPreset,
     ForwardingGroup,
     GroupChild,
@@ -102,7 +102,7 @@ def test_yaml_declarations_parse_into_records_with_exact_shares():
     ],
 )
 def test_exact_shares_from_python(value, stored):
-    assert GroupChild(value).share == stored
+    assert GroupChild(value, DirectedLink("S|U|0", "forward")).share == stored
 
 
 @pytest.mark.parametrize("value", [0.5, True, "x", "1/0"])
@@ -122,13 +122,13 @@ def test_inexact_shares_are_refused_at_construction(value):
     ],
 )
 def test_unknown_keys_refuse_in_every_new_object(path):
-    with pytest.raises(jsonschema.ValidationError, match="extra"):
+    with pytest.raises(ValueError, match="extra"):
         Scenario.from_yaml(fixture(**{path: 1}))
 
 
 @pytest.mark.parametrize("share", [0.5, True])
 def test_yaml_floats_and_booleans_are_not_exact_shares(share):
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises(ValueError):
         Scenario.from_yaml(
             fixture(**{"forwarding_groups.ingress.groups.0.share": share})
         )
@@ -278,27 +278,6 @@ def group_prepared(*trees, scope="group", links=GROUPS, demands=None):
             tree("Q", (1, [(1, "S|A|0")])),
             r"forwarding_groups.g0.router: unknown node 'Q'",
         ),
-        (tree("S"), "forwarding_groups.g0.groups: expected at least one group"),
-        (
-            tree("S", (1, [])),
-            r"forwarding_groups.g0.groups\[0\].children: expected at least one child",
-        ),
-        (
-            tree("S", (-1, [(1, "S|A|0")]), (1, [(1, "S|C|0")])),
-            r"groups\[0\].share: expected a nonnegative share",
-        ),
-        (
-            tree("S", (1, [(1, "S|A|0"), (-1, "S|C|0")])),
-            r"groups\[0\].children\[1\].share: expected a nonnegative share, got -1",
-        ),
-        (
-            tree("S", (1, [(1, [(1, "S|A|0"), (-1, "S|C|0")])])),
-            r"groups\[0\].children\[0\].children\[1\].share: expected a nonnegative",
-        ),
-        (
-            tree("S", (1, [(1, "S|A|0")]), (0, [(0, [(-1, "S|C|0")])])),
-            r"groups\[1\].children\[0\].children\[0\].share: expected a nonnegative",
-        ),
         (
             tree("S", (1, [(1, "S|A|0"), (1, "S|A|0")]), (1, [(1, "S|C|0")])),
             r"children\[1\].edge: S\|A\|0 forward is also declared",
@@ -324,30 +303,45 @@ def test_tree_declarations_refuse_what_the_input_contract_forbids(scope, value, 
         group_prepared(value, scope=scope)
 
 
+@pytest.mark.parametrize(
+    ("build", "match"),
+    [
+        (lambda: tree("S"), "forwarding_group.groups: expected at least one group"),
+        (
+            lambda: tree("S", (1, [])),
+            "controller_group.children: expected at least one child",
+        ),
+        (
+            lambda: tree("S", (-1, [(1, "S|A|0")])),
+            "controller_group.share: expected a nonnegative share, got -1",
+        ),
+        (
+            lambda: tree("S", (1, [(1, "S|A|0"), (-1, "S|C|0")])),
+            "group_child.share: expected a nonnegative share, got -1",
+        ),
+        (
+            lambda: tree("S", (1, [(1, [(1, "S|A|0"), (-1, "S|C|0")])])),
+            "group_child.share: expected a nonnegative share, got -1",
+        ),
+    ],
+)
+def test_a_tree_refuses_its_own_shape_where_it_is_built(build, match):
+    # A share, a child list and a group list are checked by the record that holds
+    # them; the tree against the network is checked at preparation (above).
+    with pytest.raises(ValueError, match=match):
+        build()
+
+
 def test_a_child_has_exactly_one_of_edge_and_children():
-    both = GroupChild(
-        1,
-        edge=tree("S", (1, [(1, "S|A|0")])).groups[0].children[0].edge,
-        children=(GroupChild(1),),
-    )
-    for child in (both, GroupChild(1)):
-        bad = ForwardingGroup(
-            "S",
-            (
-                ControllerGroup((child,)),
-                ControllerGroup(
-                    (
-                        GroupChild(
-                            1, tree("S", (1, [(1, "S|C|0")])).groups[0].children[0].edge
-                        ),
-                    )
-                ),
-            ),
-        )
+    edge = tree("S", (1, [(1, "S|A|0")])).groups[0].children[0].edge
+    for fields in ({"edge": edge, "children": (GroupChild(1, edge),)}, {}):
         with pytest.raises(
-            ValueError, match="expected exactly one of edge and children"
+            ValueError, match="group_child: expected exactly one of edge and children"
         ):
-            group_prepared(bad)
+            GroupChild(1, **fields)
+    # Control: either one alone is a child.
+    assert GroupChild(1, edge).edge == edge
+    assert GroupChild(1, children=(GroupChild(1, edge),)).children is not None
 
 
 def test_one_tree_per_router():
@@ -539,17 +533,22 @@ def test_a_positive_root_whose_children_are_zero_and_zero_is_refused(scope):
 
 
 @pytest.mark.parametrize(
-    ("share", "message"),
-    [("x", "invalid exact fraction"), (-1, "expected a nonnegative share, got -1")],
+    ("share", "kind", "message"),
+    [
+        ("x", ValueError, ".share: invalid exact fraction, got 'x'"),
+        (
+            -1,
+            ValueError,
+            ".share = -1: -1 is less than the minimum of 0",
+        ),
+    ],
 )
-def test_child_shares_are_checked_below_a_zero_share_too(share, message):
+def test_child_shares_are_checked_below_a_zero_share_too(share, kind, message):
     zero_parent = {"forwarding_groups.ingress.groups.1.share": 0}
     assert prepare(Scenario.from_yaml(fixture(**zero_parent)))
     bad = {**zero_parent, "forwarding_groups.ingress.groups.1.children.0.share": share}
     with pytest.raises(
-        ValueError,
-        match=re.escape(
-            f"forwarding_groups.ingress.groups[1].children[0].share: {message}"
-        ),
+        kind,
+        match=re.escape(f"forwarding_groups.ingress.groups[1].children[0]{message}"),
     ):
-        prepare(Scenario.from_yaml(fixture(**bad)))
+        Scenario.from_yaml(fixture(**bad))

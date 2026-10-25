@@ -314,7 +314,6 @@ class TestRiskGroupGenerationValidation:
 
     def test_missing_group_by(self) -> None:
         """Error when group_by is missing (schema validation)."""
-        import jsonschema
 
         yaml_content = """
 network:
@@ -326,14 +325,13 @@ risk_groups:
       scope: node
       name: Test_${value}
 """
-        with pytest.raises(jsonschema.ValidationError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             Scenario.from_yaml(yaml_content)
 
         assert "group_by" in str(exc_info.value)
 
     def test_missing_name(self) -> None:
         """Error when name is missing (schema validation)."""
-        import jsonschema
 
         yaml_content = """
 network:
@@ -345,7 +343,7 @@ risk_groups:
       scope: node
       group_by: facility.building_id
 """
-        with pytest.raises(jsonschema.ValidationError) as exc_info:
+        with pytest.raises(ValueError) as exc_info:
             Scenario.from_yaml(yaml_content)
 
         assert "'name' is a required property" in str(exc_info.value)

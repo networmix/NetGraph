@@ -4,14 +4,25 @@ from __future__ import annotations
 
 import math
 import numbers
+import sys
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
-import yaml
+from ngraph.utils.values import (
+    _shown,
+    frozen_attrs,
+    integer,
+    own,
+    owned_dict,
+    physical,
+    text,
+)
+from ngraph.utils.yaml_load import _load_yaml
+from ngraph.utils.yaml_utils import declared, normalize_yaml_dict_keys
 
-from ngraph.utils.values import frozen_attrs, own_scalars, owned_dict
-from ngraph.utils.yaml_utils import normalize_yaml_dict_keys
+_COUNT_LIMIT = int(sys.float_info.max) + int(math.ulp(sys.float_info.max)) // 2
 
 
 @dataclass(frozen=True)
@@ -29,7 +40,8 @@ class Component:
         power_watts_max (float): Maximum/peak power usage (watts) for one instance.
         capacity (float): A generic capacity measure (e.g., platform capacity).
         ports (int): Number of ports if relevant for this component.
-        count (int): How many identical copies of this component are present.
+        count (int): How many identical copies of this component are present; a positive
+            integer whose conversion to float is finite.
         attrs (Dict[str, Any]): Finite JSON metadata, checked and stored
             read-only at construction.
         children (Dict[str, Component]): Nested child components (e.g., line cards
@@ -52,27 +64,32 @@ class Component:
     children: Dict[str, Component] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        own_scalars(self, "component", ("name",))
-        label = f"component {self.name}"
-        own_scalars(
+        name = text(self.name, "component.name")
+        label = f"component {name}"
+        if not _components(self.children):
+            raise TypeError(
+                f"{label}.children: expected Component values by name, got {self.children!r}"
+            )
+        own(
             self,
-            label,
-            (
-                "component_type",
-                "description",
-                "capex",
-                "power_watts",
-                "power_watts_max",
-                "capacity",
-                "ports",
-                "count",
+            name=name,
+            component_type=text(
+                self.component_type, f"{label}.component_type", empty=True
             ),
-        )
-        object.__setattr__(self, "attrs", frozen_attrs(self.attrs, f"{label}.attrs"))
-        if not all(isinstance(c, Component) for c in self.children.values()):
-            raise TypeError(f"{label}.children: expected Component values")
-        object.__setattr__(
-            self, "children", owned_dict(self.children, f"{label}.children")
+            description=text(self.description, f"{label}.description", empty=True),
+            capex=physical(self.capex, f"{label}.capex"),
+            power_watts=physical(self.power_watts, f"{label}.power_watts"),
+            power_watts_max=physical(self.power_watts_max, f"{label}.power_watts_max"),
+            capacity=physical(self.capacity, f"{label}.capacity"),
+            ports=integer(self.ports, f"{label}.ports", minimum=0),
+            count=integer(
+                self.count,
+                f"{label}.count",
+                minimum=1,
+                maximum=_COUNT_LIMIT,
+            ),
+            attrs=frozen_attrs(self.attrs, f"{label}.attrs"),
+            children=owned_dict(self.children, f"{label}.children"),
         )
 
     def total_capex(self) -> float:
@@ -178,6 +195,18 @@ class ComponentsLibrary:
 
     components: Dict[str, Component] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        if not _components(self.components):
+            raise TypeError(
+                f"components: expected Component values by name, got {self.components!r}"
+            )
+        for key, component in self.components.items():
+            text(key, "components key")
+            if key != component.name:
+                raise ValueError(
+                    f"components.{key}: name/key disagreement, got {component.name!r}"
+                )
+
     def snapshot(self) -> ComponentsLibrary:
         """Return a read-only view sharing this library's immutable components."""
         return ComponentsLibrary(owned_dict(self.components, "components"))
@@ -239,6 +268,8 @@ class ComponentsLibrary:
                 that disagrees with its mapping key.
         """
         # Normalize dictionary keys to handle YAML boolean keys
+        if not isinstance(data, Mapping):
+            raise ValueError(f"components: expected a mapping, got {_shown(data)}")
         normalized_data = normalize_yaml_dict_keys(data)
         components_map: Dict[str, Component] = {}
         for comp_name, comp_def in normalized_data.items():
@@ -246,7 +277,9 @@ class ComponentsLibrary:
         return ComponentsLibrary(components=components_map)
 
     @classmethod
-    def _build_component(cls, name: str, definition_data: Dict[str, Any]) -> Component:
+    def _build_component(
+        cls, name: str, definition_data: Dict[str, Any], path: str | None = None
+    ) -> Component:
         """Recursively constructs a single Component from a dictionary definition.
 
         Args:
@@ -261,20 +294,31 @@ class ComponentsLibrary:
             ValueError: If the definition has keys other than the component
                 fields.
         """
+        path = path or f"components.{name}"
+        if not isinstance(definition_data, dict):
+            raise ValueError(
+                f"{path}: expected a mapping, got {_shown(definition_data)}"
+            )
         comp_type = definition_data.get("component_type", "generic")
-        capex = float(definition_data.get("capex", 0.0))
-        power = float(definition_data.get("power_watts", 0.0))
-        power_max = float(definition_data.get("power_watts_max", 0.0))
-        capacity = float(definition_data.get("capacity", 0.0))
-        ports = int(definition_data.get("ports", 0))
-        count = int(definition_data.get("count", 1))
+        capex = definition_data.get("capex", 0.0)
+        power = definition_data.get("power_watts", 0.0)
+        power_max = definition_data.get("power_watts_max", 0.0)
+        capacity = definition_data.get("capacity", 0.0)
+        ports = definition_data.get("ports", 0)
+        count = definition_data.get("count", 1)
 
         child_definitions = definition_data.get("children", {})
         # Normalize child dictionary keys to handle YAML boolean keys
+        if not isinstance(child_definitions, Mapping):
+            raise ValueError(
+                f"{path}.children: expected a mapping, got {_shown(child_definitions)}"
+            )
         normalized_children = normalize_yaml_dict_keys(child_definitions)
         children_map: Dict[str, Component] = {}
         for child_name, child_data in normalized_children.items():
-            children_map[child_name] = cls._build_component(child_name, child_data)
+            children_map[child_name] = cls._build_component(
+                child_name, child_data, f"{path}.children.{child_name}"
+            )
 
         recognized_keys = {
             "name",
@@ -292,31 +336,36 @@ class ComponentsLibrary:
         # ``as_dict`` output carries the name; it must agree with the mapping key.
         if definition_data.get("name", name) != name:
             raise ValueError(
-                f"Component '{name}' has mismatched name "
-                f"'{definition_data['name']}' in its definition"
+                f"{path}.name: mismatched name; expected {_shown(name)}, got {_shown(definition_data['name'])}"
             )
         unknown = sorted(str(k) for k in definition_data if k not in recognized_keys)
         if unknown:
             hint = " Use 'capex' for monetary cost." if "cost" in unknown else ""
             raise ValueError(
-                f"Component '{name}' has unrecognized key(s): {', '.join(unknown)}. "
+                f"{path} = {_shown(definition_data)}: unrecognized key(s): {', '.join(unknown)}. "
                 f"Put custom data under 'attrs'.{hint}"
             )
         # Normalize attrs keys to handle YAML boolean keys
-        attrs = normalize_yaml_dict_keys(dict(definition_data.get("attrs", {})))
+        attrs = definition_data.get("attrs", {})
+        if isinstance(attrs, Mapping):
+            attrs = normalize_yaml_dict_keys(attrs)
 
-        return Component(
-            name=name,
-            component_type=comp_type,
-            description=definition_data.get("description", ""),
-            capex=capex,
-            power_watts=power,
-            power_watts_max=power_max,
-            capacity=capacity,
-            ports=ports,
-            count=count,
-            attrs=attrs,
-            children=children_map,
+        return declared(
+            path,
+            lambda: Component(
+                name=name,
+                component_type=comp_type,
+                description=definition_data.get("description", ""),
+                capex=capex,
+                power_watts=power,
+                power_watts_max=power_max,
+                capacity=capacity,
+                ports=ports,
+                count=count,
+                attrs=attrs,
+                children=children_map,
+            ),
+            f"component {name}",
         )
 
     @classmethod
@@ -336,18 +385,20 @@ class ComponentsLibrary:
             ValueError: If the top-level is not a dictionary or if the 'components'
                 key is present but not a dictionary.
         """
-        data = yaml.safe_load(yaml_str)
+        data = _load_yaml(yaml_str, "components")
         if not isinstance(data, dict):
-            raise ValueError("Top-level must be a dict in Components YAML.")
+            raise ValueError(f"components = {_shown(data)}: expected a mapping")
 
         if "components" in data:
             # Presence-based dispatch: an explicit empty/null 'components'
             # mapping yields an empty library, not phantom components.
-            components_data = data["components"] or {}
+            components_data = {} if data["components"] is None else data["components"]
         else:
             components_data = data
         if not isinstance(components_data, dict):
-            raise ValueError("'components' must be a dict if present.")
+            raise ValueError(
+                f"components = {_shown(components_data)}: expected a mapping"
+            )
 
         return cls.from_dict(components_data)
 
@@ -500,3 +551,11 @@ def resolve_link_end_components(
         for end in ("source", "target")
     )
     return source, target
+
+
+def _components(values: object) -> bool:
+    """Whether a value maps names to components."""
+    return isinstance(values, Mapping) and all(
+        isinstance(key, str) and isinstance(value, Component)
+        for key, value in values.items()
+    )

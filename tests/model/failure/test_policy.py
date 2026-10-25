@@ -42,10 +42,12 @@ def test_failure_policy_evaluate_conditions_or_logic():
     )
 
 
-def test_failure_policy_evaluate_conditions_invalid_logic():
+def test_failure_policy_rule_logic_is_checked_where_it_is_declared():
     conditions = [Condition("vendor", "==", "cisco")]
-    with pytest.raises(ValueError, match="Unsupported logic: invalid"):
-        evaluate_conditions({"vendor": "cisco"}, conditions, "invalid")
+    with pytest.raises(
+        ValueError, match="failure rule logic: expected and, or, got 'invalid'"
+    ):
+        FailureRule("node", conditions, "invalid")
     assert evaluate_conditions({"vendor": "cisco"}, conditions, "and")
 
 
@@ -162,8 +164,11 @@ def test_missing_attributes():
     assert draw(policy_network(), policy).pattern.excluded_nodes == ()
 
 
-def test_empty_policy():
-    case = draw(policy_network(), FailurePolicy())
+def test_no_failures_is_no_policy():
+    # A policy has at least one mode with a positive weight; no failures is None.
+    with pytest.raises(ValueError, match="at least one mode must have positive weight"):
+        FailurePolicy(modes=())
+    case = draw(policy_network(), None)
     assert case.kind == "baseline"
     assert case.pattern.excluded_nodes == case.pattern.excluded_links == ()
 

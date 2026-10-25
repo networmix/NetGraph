@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import netgraph_core as ngc
 
-from ngraph.analysis.failures import Workers, resolve_workers
+from ngraph.analysis.failures import Workers, checked_workers, resolve_workers
 from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.placement import _endpoints
 from ngraph.analysis.precision import _Searched, query_inputs, query_splits
@@ -25,7 +25,7 @@ from ngraph.results import (
     TunnelCountAnalysis,
     TunnelCountRow,
 )
-from ngraph.utils.values import physical
+from ngraph.utils.values import flag, integer, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -34,13 +34,12 @@ MAX_COUNT = 10000
 
 
 def _count(value: object, label: str) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 1 <= value <= MAX_COUNT
-    ):
-        raise ValueError(f"{label}: expected an integer in [1, {MAX_COUNT}]")
-    return int(value)
+    try:
+        return integer(value, label, minimum=1, maximum=MAX_COUNT + 1)
+    except ValueError:
+        raise ValueError(
+            f"{label}: expected an integer in [1, {MAX_COUNT}], got {value!r}"
+        ) from None
 
 
 @dataclass(frozen=True)
@@ -57,11 +56,15 @@ class TunnelCountQuery:
 
     def __post_init__(self) -> None:
         if not isinstance(self.demands, ResolvedDemandSet):
-            raise TypeError("tunnel_counts.demands: expected ResolvedDemandSet")
+            raise TypeError(
+                f"tunnel_counts.demands: expected ResolvedDemandSet, got {self.demands!r}"
+            )
         if isinstance(self.counts, (str, bytes)) or not hasattr(
             self.counts, "__iter__"
         ):
-            raise TypeError("tunnel_counts.counts: expected a sequence of integers")
+            raise TypeError(
+                f"tunnel_counts.counts: expected a sequence of integers, got {self.counts!r}"
+            )
         counts = tuple(
             _count(value, f"tunnel_counts.counts[{index}]")
             for index, value in enumerate(self.counts)
@@ -83,13 +86,18 @@ class TunnelCountQuery:
         if self.eligibility is not None and not isinstance(
             self.eligibility, ngc.Eligibility
         ):
-            raise TypeError("tunnel_counts.eligibility: expected native Eligibility")
-        if self.workers != "auto":
-            resolve_workers(self.workers)
+            raise TypeError(
+                f"tunnel_counts.eligibility: expected native Eligibility, got {self.eligibility!r}"
+            )
         if not isinstance(self.outputs, ngc.OutputOptions):
-            raise TypeError("tunnel_counts.outputs: expected native OutputOptions")
-        if not isinstance(self.export_details, bool):
-            raise ValueError("export_details: expected bool")
+            raise TypeError(
+                f"tunnel_counts.outputs: expected native OutputOptions, got {self.outputs!r}"
+            )
+        own(
+            self,
+            workers=checked_workers(self.workers),
+            export_details=flag(self.export_details, "export_details"),
+        )
 
     @property
     def specs(self) -> tuple[tuple[int, bool], ...]:

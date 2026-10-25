@@ -132,3 +132,35 @@ def test_network_stats_with_exclusions(mock_scenario):
     # Should exclude node A and its links
     assert data.node_count == 2  # B, C (excluding A)
     assert data.link_count == 0  # All links connect to A, so none remain
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        ({"excluded_nodes": ("Z",)}, "step stats: unknown node 'Z'"),
+        ({"excluded_links": ("A|Z|0",)}, "step stats: unknown link 'A|Z|0'"),
+    ],
+)
+def test_an_unknown_exclusion_is_refused_at_preparation(mock_scenario, fields, message):
+    # Only the network knows its names, so preparation checks them.
+    step = NetworkStats(name="stats", **fields)
+    with pytest.raises(ValueError, match=f"^{message.replace('|', r'\|')}$"):
+        prepare(Scenario(mock_scenario.network, (step,)))
+    kind, name = next(iter(fields.items()))
+    text = f"""
+network:
+  nodes: {{A: {{}}, B: {{}}}}
+  links: [{{source: A, target: B}}]
+workflow: [{{type: NetworkStats, name: stats, {kind}: ["{name[0]}"]}}]
+"""
+    with pytest.raises(ValueError, match=f"^{message.replace('|', r'\|')}$"):
+        prepare(Scenario.from_yaml(text))
+    # Control: known names prepare and run.
+    known = (
+        {"excluded_nodes": ("A",)}
+        if "nodes" in kind
+        else {"excluded_links": ("A|B|0",)}
+    )
+    assert run(
+        prepare(Scenario(mock_scenario.network, (NetworkStats(name="stats", **known),)))
+    )

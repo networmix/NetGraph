@@ -91,8 +91,8 @@ class TestFailureTracePolicyLevel:
         assert case.trace.expanded_links == ("a|b|0",)
         assert case.pattern.excluded_nodes == ("a", "b")
 
-    def test_trace_no_modes_returns_null_mode_index(self):
-        trace = draw(policy_network(), FailurePolicy(), trace=True).trace
+    def test_trace_without_a_policy_returns_null_mode_index(self):
+        trace = draw(policy_network(), None, trace=True).trace
         assert trace.mode_index is None and dict(trace.mode_attrs) == {}
         assert trace.selections == ()
         assert trace.expanded_nodes == trace.expanded_links == ()

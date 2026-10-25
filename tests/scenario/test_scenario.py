@@ -334,9 +334,8 @@ def test_scenario_from_yaml_missing_step_type(missing_step_type_yaml: str) -> No
 
     Schema validation catches this and raises ValidationError.
     """
-    import jsonschema.exceptions
 
-    with pytest.raises(jsonschema.exceptions.ValidationError):
+    with pytest.raises(ValueError):
         Scenario.from_yaml(missing_step_type_yaml)
 
 
@@ -564,16 +563,18 @@ demands:
     assert demand_entry["model"]["admission"] == "lossless"
 
 
-def test_scenario_seed_rejects_float() -> None:
-    """The schema admits 5.0 as an integer; the loader must not."""
+def test_scenario_seed_is_an_integer_and_an_integral_float_counts() -> None:
+    """An exactly integral float is an integer (stored as int); a fraction is not."""
     yaml_str = """
 network:
   nodes:
     A: {}
-seed: 5.0
+seed: SEED
 """
-    with pytest.raises(ValueError, match="seed: expected integer"):
-        Scenario.from_yaml(yaml_str)
+    seed = Scenario.from_yaml(yaml_str.replace("SEED", "5.0")).seed
+    assert seed == 5 and type(seed) is int
+    with pytest.raises(ValueError, match="seed = 5.5"):
+        Scenario.from_yaml(yaml_str.replace("SEED", "5.5"))
 
 
 def test_duplicate_risk_group_names_raise() -> None:

@@ -13,6 +13,7 @@ from ngraph.analysis.demands import controlled, residual_weights, scaled_expansi
 from ngraph.analysis.failures import (
     FailureRequest,
     Workers,
+    checked_workers,
     failure_cases,
     resolve_workers,
     schedule_cases,
@@ -40,7 +41,7 @@ from ngraph.results import (
     StateName,
     exact_alpha,
 )
-from ngraph.utils.values import physical
+from ngraph.utils.values import flag, optional_text, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -64,30 +65,39 @@ class PlacementQuery:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "states", state_names(self.states, "placement.states"))
-        if self.interaction not in ("ordered", "simultaneous"):
+        if not isinstance(self.interaction, str) or self.interaction not in (
+            "ordered",
+            "simultaneous",
+        ):
             raise ValueError(
                 "placement.interaction: expected ordered or simultaneous, got "
                 f"{self.interaction!r}"
             )
-        if not isinstance(self.export_details, bool):
-            raise ValueError("export_details: expected bool")
         if not isinstance(self.demands, ResolvedDemandSet):
-            raise TypeError("placement.demands: expected ResolvedDemandSet")
-        if self.alpha_from_step is not None and (
-            not isinstance(self.alpha_from_step, str) or not self.alpha_from_step
-        ):
-            raise ValueError("placement.alpha_from_step: expected nonempty name")
-        object.__setattr__(
-            self, "alpha", physical(self.alpha, "placement.alpha", positive=True)
-        )
-        if self.workers != "auto":
-            resolve_workers(self.workers)
+            raise TypeError(
+                f"placement.demands: expected ResolvedDemandSet, got {self.demands!r}"
+            )
         if self.failures is not None and not isinstance(self.failures, FailureRequest):
-            raise TypeError("placement.failures: expected FailureRequest")
+            raise TypeError(
+                f"placement.failures: expected FailureRequest, got {self.failures!r}"
+            )
         if not isinstance(self.outputs, ngc.OutputOptions):
-            raise TypeError("placement.outputs: expected native OutputOptions")
-        if not isinstance(self.export_cost_distribution, bool):
-            raise ValueError("export_cost_distribution: expected bool")
+            raise TypeError(
+                f"placement.outputs: expected native OutputOptions, got {self.outputs!r}"
+            )
+        own(
+            self,
+            interaction=str.__str__(self.interaction),
+            alpha_from_step=optional_text(
+                self.alpha_from_step, "placement.alpha_from_step"
+            ),
+            alpha=physical(self.alpha, "placement.alpha", positive=True),
+            workers=checked_workers(self.workers),
+            export_cost_distribution=flag(
+                self.export_cost_distribution, "export_cost_distribution"
+            ),
+            export_details=flag(self.export_details, "export_details"),
+        )
 
 
 def state_names(value, label) -> tuple[StateName, ...]:

@@ -22,9 +22,6 @@ __all__ = [
 # Pattern to match $var or ${var} placeholders
 _VAR_PATTERN = re.compile(r"\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}|\$([a-zA-Z_][a-zA-Z0-9_]*)")
 
-# Maximum number of copies one expand: block may produce
-MAX_TEMPLATE_EXPANSIONS = 10_000
-
 
 def _lookup_var(var_name: str, var_dict: Dict[str, Any]) -> Any:
     """Return the value bound to var_name, raising the standard KeyError."""
@@ -106,25 +103,9 @@ def _generate_combinations(
     var_values = [vars_dict[k] for k in var_names]
 
     if mode == "zip":
-        lengths = [len(v) for v in var_values]
-        if len(set(lengths)) != 1:
-            raise ValueError(
-                f"zip expansion requires equal-length lists; got lengths {lengths}"
-            )
         combos: Iterator[tuple[Any, ...]] = zip(*var_values, strict=True)
-        expansion_size = lengths[0] if lengths else 0
     else:
-        expansion_size = 1
-        for v in var_values:
-            expansion_size *= len(v)
         combos = product(*var_values)
-
-    if expansion_size > MAX_TEMPLATE_EXPANSIONS:
-        raise ValueError(
-            f"Template expansion would create {expansion_size} items "
-            f"(limit: {MAX_TEMPLATE_EXPANSIONS}). "
-            f"Consider using fewer variables or splitting into multiple entries."
-        )
 
     for combo in combos:
         yield dict(zip(var_names, combo, strict=True))
@@ -155,3 +136,18 @@ def expand_block(
         expanded = copy.deepcopy(block)
         expanded.pop("expand", None)
         yield substitute_vars(expanded, var_dict)
+
+
+def _expand_declaration(declaration, location):
+    from ngraph.utils.yaml_utils import declared
+
+    from .schema import ExpansionSpec
+
+    def build():
+        spec = ExpansionSpec.from_dict(declaration)
+        expanded = spec is not None and not spec.is_empty()
+        return expanded, tuple(expand_block(declaration, spec)) if expanded else (
+            declaration,
+        )
+
+    return declared(f"{location} = {declaration!r}", build)

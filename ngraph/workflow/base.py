@@ -12,7 +12,7 @@ from ngraph.analysis.failures import FailureRequest
 from ngraph.export import is_question, owned_step_result
 from ngraph.logging import get_logger
 from ngraph.results import StepContext, StepOutput, StepResult
-from ngraph.utils.values import frozen_attrs, own_scalars
+from ngraph.utils.values import frozen_attrs, optional_integer, optional_text, own, text
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import StepNeeds
@@ -121,20 +121,15 @@ class WorkflowStep(ABC):
     _immutable = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.name, str):
-            raise ValueError("workflow step name: expected string")
-        for name in ("seed", "derived_seed"):
-            value = getattr(self, name)
-            if value is not None and (
-                isinstance(value, bool) or not isinstance(value, int)
-            ):
-                raise ValueError(f"workflow step {name}: expected integer or None")
-        if self.yaml_label is not None and (
-            not isinstance(self.yaml_label, str) or not self.yaml_label
-        ):
-            raise ValueError("workflow step yaml_label: expected a nonempty string")
-        own_scalars(
-            self, "workflow step", ("name", "seed", "yaml_label", "derived_seed")
+        # An empty name asks the scenario to name the step.
+        own(
+            self,
+            name=text(self.name, "workflow step name", empty=True),
+            seed=optional_integer(self.seed, "workflow step seed", minimum=None),
+            yaml_label=optional_text(self.yaml_label, "workflow step yaml_label"),
+            derived_seed=optional_integer(
+                self.derived_seed, "workflow step derived_seed", minimum=None
+            ),
         )
         if self._immutable:
             object.__setattr__(self, "_constructed", True)

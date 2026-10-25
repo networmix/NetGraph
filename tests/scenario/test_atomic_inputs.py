@@ -4,7 +4,6 @@ import json
 from fractions import Fraction
 from io import StringIO
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 import yaml
@@ -116,7 +115,7 @@ def test_complete_named_route_weight_and_support_workflow_native_and_wire():
 def test_deferred_and_removed_step_keys_refuse_by_name_with_control(key):
     data = yaml.safe_load(EXPLICIT)
     data["workflow"][0][key] = True
-    with pytest.raises((ValueError, jsonschema.ValidationError), match=key):
+    with pytest.raises(ValueError, match=key):
         Scenario.from_yaml(yaml.safe_dump(data))
     assert len(Scenario.from_yaml(EXPLICIT).workflow) == 2
 

@@ -108,7 +108,7 @@ def fixture():
                     "kind": "build_graph",
                     "add_reverse": True,
                     "node_count": 2,
-                    "link_count": 2,
+                    "edge_count": 2,
                     "graph": {
                         "directed": True,
                         "multigraph": True,
@@ -124,7 +124,7 @@ def fixture():
                                 "key": 0,
                                 "id": "S|T|0",
                                 "capacity": 4.0,
-                                "cost": 3.0,
+                                "cost": 3,
                                 "disabled": False,
                             },
                             {
@@ -133,7 +133,7 @@ def fixture():
                                 "key": 0,
                                 "id": "S|T|0_reverse",
                                 "capacity": 4.0,
-                                "cost": 3.0,
+                                "cost": 3,
                                 "disabled": False,
                             },
                         ],

@@ -1,8 +1,10 @@
 """Closed YAML declarations for native routing and named physical references."""
 
+from functools import partial
+
 import netgraph_core as ngc
 
-from ngraph.dsl.expansion import ExpansionSpec, expand_block
+from ngraph.dsl.expansion.variables import _expand_declaration
 from ngraph.model.demand import (
     ControllerGroup,
     DemandSet,
@@ -24,8 +26,12 @@ from ngraph.model.demand import (
 )
 from ngraph.model.network import DirectedLink
 from ngraph.model.selectors import normalize_selector
-from ngraph.utils.values import exact_fraction, integer, physical
-from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
+from ngraph.utils.values import exact_fraction, flag, integer, physical
+from ngraph.utils.yaml_utils import (
+    check_no_extra_keys,
+    declared,
+    normalize_yaml_dict_keys,
+)
 
 OUTPUT_FLAGS = (
     "edge_flows",
@@ -49,9 +55,7 @@ def closed(value, keys, label):
 
 
 def boolean(value, label):
-    if not isinstance(value, bool):
-        raise ValueError(f"{label}: expected bool")
-    return value
+    return flag(value, label)
 
 
 def enum(kind, value, label):
@@ -82,7 +86,11 @@ def directed(value, label):
     value = closed(value, ("link", "direction"), label)
     if set(value) != {"link", "direction"}:
         raise ValueError(f"{label}: link and direction are required")
-    return DirectedLink(value["link"], value["direction"])
+    return declared(
+        label,
+        lambda: DirectedLink(value["link"], value["direction"]),
+        f"link {value['link']}",
+    )
 
 
 def tunnel_count(value, label):
@@ -149,7 +157,7 @@ def policy(value, label):
             )
             source = (
                 None
-                if "source_allocation" not in routing
+                if routing.get("source_allocation") is None
                 else enum(
                     ngc.SourceAllocation,
                     routing["source_allocation"],
@@ -158,7 +166,7 @@ def policy(value, label):
             )
             basis = (
                 None
-                if "weight_basis" not in routing
+                if routing.get("weight_basis") is None
                 else enum(
                     ngc.WeightBasis, routing["weight_basis"], location + ".weight_basis"
                 )
@@ -206,7 +214,7 @@ def policy(value, label):
             )
             cap = (
                 None
-                if "cost_ceiling" not in routing
+                if routing.get("cost_ceiling") is None
                 else ceiling(routing["cost_ceiling"], location + ".cost_ceiling")
             )
             minimum = physical(
@@ -238,7 +246,7 @@ def policy(value, label):
             )
             count = (
                 None
-                if "tunnel_count" not in routing
+                if routing.get("tunnel_count") is None
                 else tunnel_count(routing["tunnel_count"], location + ".tunnel_count")
             )
             headroom = boolean(
@@ -258,12 +266,12 @@ def policy(value, label):
                 names(routing.get("routes"), location + ".routes", nonempty=True),
                 admission,
                 None
-                if "allocation" not in routing
+                if routing.get("allocation") is None
                 else enum(
                     ngc.RouteAllocation, routing["allocation"], location + ".allocation"
                 ),
                 None
-                if "weight_basis" not in routing
+                if routing.get("weight_basis") is None
                 else enum(
                     ngc.WeightBasis, routing["weight_basis"], location + ".weight_basis"
                 ),
@@ -281,7 +289,7 @@ def policy(value, label):
 def named_declarations(data):
     """Own the three separate namespaces without resolving physical identities yet."""
     supports, weights, routes = {}, {}, {}
-    for name, spec in mapping(data.get("supports", {}), "supports").items():
+    for name, spec in mapping(data.get("supports") or {}, "supports").items():
         closed(spec, ("edges",), f"supports.{name}")
         if not isinstance(spec.get("edges"), list):
             raise ValueError(f"supports.{name}.edges: expected list")
@@ -291,7 +299,7 @@ def named_declarations(data):
                 for i, edge in enumerate(spec["edges"])
             )
         )
-    for name, spec in mapping(data.get("weights", {}), "weights").items():
+    for name, spec in mapping(data.get("weights") or {}, "weights").items():
         closed(spec, ("entries",), f"weights.{name}")
         if not isinstance(spec.get("entries"), list):
             raise ValueError(f"weights.{name}.entries: expected list")
@@ -305,20 +313,32 @@ def named_declarations(data):
                 )
             )
         weights[name] = WeightSpec(tuple(entries))
-    for name, spec in mapping(data.get("routes", {}), "routes").items():
+    for name, spec in mapping(data.get("routes") or {}, "routes").items():
         label = f"routes.{name}"
         closed(spec, ("head", "nodes", "edges", "support", "weight"), label)
         edges = spec.get("edges")
-        if "edges" in spec and not isinstance(edges, list):
+        if edges is not None and not isinstance(edges, list):
             raise ValueError(f"{label}.edges: expected list")
-        routes[name] = RouteSpec(
-            spec.get("head"),
-            names(spec["nodes"], label + ".nodes") if "nodes" in spec else None,
+        nodes = (
+            names(spec["nodes"], label + ".nodes")
+            if spec.get("nodes") is not None
+            else None
+        )
+        hops = (
             None
             if edges is None
-            else tuple(directed(edge, label + ".edges") for edge in edges),
-            spec.get("support"),
-            spec.get("weight", 1),
+            else tuple(directed(edge, label + ".edges") for edge in edges)
+        )
+        routes[name] = declared(
+            label,
+            lambda spec=spec, nodes=nodes, hops=hops: RouteSpec(
+                spec.get("head"),
+                nodes,
+                hops,
+                spec.get("support"),
+                spec.get("weight", 1),
+            ),
+            "route",
         )
     return routes, supports, weights
 
@@ -333,10 +353,11 @@ def _group_child(value, label):
             _group_child(child, f"{label}.children[{i}]")
             for i, child in enumerate(children)
         )
-    return GroupChild(
-        exact_fraction(value.get("share", 1), f"{label}.share"),
-        None if "edge" not in value else directed(value["edge"], f"{label}.edge"),
-        children,
+    edge = (
+        None if value.get("edge") is None else directed(value["edge"], f"{label}.edge")
+    )
+    return declared(
+        label, lambda: GroupChild(value.get("share", 1), edge, children), "group_child"
     )
 
 
@@ -356,7 +377,7 @@ def controller_declarations(data):
         controller = WCMPController(**closed(controller, ("scope",), "wcmp_controller"))
     groups = {}
     raw = normalize_yaml_dict_keys(
-        mapping(data.get("forwarding_groups", {}), "forwarding_groups")
+        mapping(data.get("forwarding_groups") or {}, "forwarding_groups")
     )
     for name, spec in raw.items():
         label = f"forwarding_groups.{name}"
@@ -370,16 +391,26 @@ def controller_declarations(data):
             children = group.get("children")
             if not isinstance(children, list):
                 raise ValueError(f"{group_label}.children: expected list")
+            members = tuple(
+                _group_child(child, f"{group_label}.children[{j}]")
+                for j, child in enumerate(children)
+            )
             roots.append(
-                ControllerGroup(
-                    tuple(
-                        _group_child(child, f"{group_label}.children[{j}]")
-                        for j, child in enumerate(children)
+                declared(
+                    group_label,
+                    lambda members=members, group=group: ControllerGroup(
+                        members, group.get("share", 1)
                     ),
-                    exact_fraction(group.get("share", 1), f"{group_label}.share"),
+                    "controller_group",
                 )
             )
-        groups[name] = ForwardingGroup(spec["router"], tuple(roots))
+        groups[name] = declared(
+            label,
+            lambda spec=spec, roots=roots: ForwardingGroup(
+                spec["router"], tuple(roots)
+            ),
+            "forwarding_group",
+        )
     return routing, controller, groups
 
 
@@ -408,17 +439,27 @@ def demand_sets(raw):
                 ),
                 label,
             )
-            expansion = ExpansionSpec.from_dict(declaration)
-            expanded = expansion is not None and not expansion.is_empty()
-            for index, row in enumerate(
-                expand_block(declaration, expansion) if expanded else (declaration,)
-            ):
-                identity = row.get("id", f"{name}|{ordinal}")
+            expanded, rows = _expand_declaration(declaration, label)
+            for index, row in enumerate(rows):
+                identity = row.get("id")
+                if identity is None:
+                    identity = f"{name}|{ordinal}"
                 if not isinstance(identity, str) or not identity:
-                    raise ValueError(f"{label}.id: expected nonempty string")
-                demand = DemandSpec(
-                    normalize_selector(row["source"], "demand"),
-                    normalize_selector(row["target"], "demand"),
+                    raise ValueError(
+                        f"{label}.id: expected nonempty string, got {identity!r}"
+                    )
+                source, target = (
+                    declared(
+                        f"{label}.{end}",
+                        partial(normalize_selector, row[end], "demand"),
+                        "selector",
+                    )
+                    for end in ("source", "target")
+                )
+                build = partial(
+                    DemandSpec,
+                    source,
+                    target,
                     row.get("volume", 0),
                     policy(row, label),
                     identity,
@@ -431,6 +472,7 @@ def demand_sets(raw):
                     declaration_ordinal=ordinal,
                     expand_leaf_index=index if expanded else None,
                 )
+                demand = declared(label, build, "demand")
                 demands.append(demand)
         result[name] = DemandSet(name, tuple(demands))
     return result

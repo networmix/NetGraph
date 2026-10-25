@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, Dict, Literal, Union
 
-from ngraph.utils.yaml_utils import check_no_extra_keys
+from ngraph.utils.yaml_utils import check_no_extra_keys, declared
 
 from .schema import Condition, MatchSpec, Selector
 
@@ -53,7 +53,9 @@ def parse_match_spec(
     if not isinstance(conditions_raw, list):
         raise ValueError(f"'conditions' in {context} must be a list")
     if require_conditions and not conditions_raw:
-        raise ValueError(f"{context} requires at least one condition")
+        raise ValueError(
+            f"{context}.conditions: expected at least one condition, got {conditions_raw!r}"
+        )
 
     conditions = []
     for cond_dict in conditions_raw:
@@ -66,19 +68,15 @@ def parse_match_spec(
         check_no_extra_keys(
             cond_dict, {"attr", "op", "value"}, f"condition in {context}"
         )
-        if cond_dict["op"] in ("in", "not_in") and not isinstance(
-            cond_dict.get("value"), list
-        ):
-            raise ValueError(
-                f"Condition in {context}: operator '{cond_dict['op']}' "
-                "requires a list value"
-            )
-
         conditions.append(
-            Condition(
-                attr=cond_dict["attr"],
-                op=cond_dict["op"],
-                value=cond_dict.get("value"),
+            declared(
+                f"{context}.conditions[{len(conditions)}]",
+                lambda cond_dict=cond_dict: Condition(
+                    attr=cond_dict["attr"],
+                    op=cond_dict["op"],
+                    value=cond_dict.get("value"),
+                ),
+                f"condition {cond_dict['attr']}",
             )
         )
 
@@ -144,12 +142,14 @@ def _parse_dict(raw: Dict[str, Any], default_active_only: bool) -> Selector:
     """
     check_no_extra_keys(raw, {"path", "group_by", "match", "active_only"}, "selector")
     match_spec = None
-    if "match" in raw:
+    if raw.get("match") is not None:
         match_spec = parse_match_spec(raw["match"])
 
     return Selector(
         path=raw.get("path"),
         group_by=raw.get("group_by"),
         match=match_spec,
-        active_only=raw.get("active_only", default_active_only),
+        active_only=default_active_only
+        if raw.get("active_only") is None
+        else raw["active_only"],
     )

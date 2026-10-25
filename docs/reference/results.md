@@ -46,7 +46,7 @@ One of: [CapacityAnalysisJSON](#capacityanalysisjson) or [PlacementAnalysisJSON]
 | `kind` | `"build_graph"` | The record kind, a fixed tag. |
 | `add_reverse` | boolean | Whether the exported graph has a reverse edge per link. |
 | `node_count` | integer | Nodes in the exported graph. |
-| `link_count` | integer | Edges in the exported graph (two per link with add_reverse). |
+| `edge_count` | integer | Edges in the exported graph (two per link with add_reverse). |
 | `graph` | object | The node-link JSON of the network. |
 
 ## CapacityAnalysisJSON
@@ -546,8 +546,8 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | `max_capacity` | number | The largest link capacity. |
 | `mean_cost` | number | The mean link cost. |
 | `median_cost` | number | The median link cost. |
-| `min_cost` | number | The smallest link cost. |
-| `max_cost` | number | The largest link cost. |
+| `min_cost` | integer | The smallest link cost. |
+| `max_cost` | integer | The largest link cost. |
 | `mean_degree` | number | The mean node degree. |
 | `median_degree` | number | The median node degree. |
 | `min_degree` | number | The smallest node degree. |

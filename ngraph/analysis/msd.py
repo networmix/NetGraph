@@ -31,7 +31,7 @@ from ngraph.results import (
     UpperCertificate,
     exact_alpha,
 )
-from ngraph.utils.values import integer, physical
+from ngraph.utils.values import flag, integer, own, physical
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -52,10 +52,12 @@ class MSDQuery:
     export_details: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.export_details, bool):
-            raise ValueError("export_details: expected bool")
         if not isinstance(self.demands, ResolvedDemandSet):
-            raise TypeError("msd.demands: expected ResolvedDemandSet")
+            raise TypeError(
+                f"msd.demands: expected ResolvedDemandSet, got {self.demands!r}"
+            )
+        raw_growth = self.growth_factor
+        raw_bounds = (self.alpha_min, self.alpha_start, self.alpha_max)
         for name in (
             "alpha_start",
             "growth_factor",
@@ -67,13 +69,23 @@ class MSDQuery:
                 self, name, physical(getattr(self, name), f"msd.{name}", positive=True)
             )
         if self.growth_factor <= 1:
-            raise ValueError("msd.growth_factor: must exceed 1")
+            raise ValueError(f"msd.growth_factor: must exceed 1, got {raw_growth!r}")
         if not self.alpha_min <= self.alpha_start <= self.alpha_max:
-            raise ValueError("msd: require alpha_min <= alpha_start <= alpha_max")
-        integer(self.max_bracket_iters, "msd.max_bracket_iters", minimum=1)
-        integer(self.max_bisect_iters, "msd.max_bisect_iters", minimum=1)
-        if not isinstance(self.export_probe_rows, bool):
-            raise ValueError("msd.export_probe_rows: expected bool")
+            raise ValueError(
+                "msd: require alpha_min <= alpha_start <= alpha_max, "
+                f"got {raw_bounds!r}"
+            )
+        own(
+            self,
+            max_bracket_iters=integer(
+                self.max_bracket_iters, "msd.max_bracket_iters", minimum=1
+            ),
+            max_bisect_iters=integer(
+                self.max_bisect_iters, "msd.max_bisect_iters", minimum=1
+            ),
+            export_probe_rows=flag(self.export_probe_rows, "msd.export_probe_rows"),
+            export_details=flag(self.export_details, "export_details"),
+        )
 
 
 def _proof(demands: ResolvedDemandSet):

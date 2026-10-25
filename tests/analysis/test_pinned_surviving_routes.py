@@ -1,7 +1,6 @@
 """Pinned eligibility retains compiled paths and splits over surviving entries."""
 
 import pytest
-from jsonschema import ValidationError
 
 from ngraph import (
     DemandSet,
@@ -73,9 +72,9 @@ demands:
 workflow: [{type: TrafficMatrixPlacement, demand_set: d}]
 """
     prepare(Scenario.from_yaml(text.replace("BASIS", "capacity")))
-    with pytest.raises(ValidationError) as error:
+    with pytest.raises(ValueError) as error:
         Scenario.from_yaml(text.replace("BASIS", "residual_snapshot"))
-    message = str(error.value)
+    message = str(error.value.__cause__)
     assert (
         "residual_snapshot" in message
         and "capacity" in message

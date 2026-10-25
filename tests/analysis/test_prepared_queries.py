@@ -38,11 +38,12 @@ def prepared(model=None):
     )
 
 
-def test_fractional_cost_refuses_during_preparation_with_link_label_and_control():
+def test_fractional_cost_refuses_where_it_is_given_with_link_label_and_control():
     model = network()
-    model.replace_link("S1|T1|0", cost=2.5)
-    with pytest.raises(ValueError, match=r"link.S1\|T1\|0.cost.*positive integer"):
-        prepared(model)
+    with pytest.raises(
+        ValueError, match=r"^link S1->T1\.cost: expected an integer, got 2\.5$"
+    ):
+        model.replace_link("S1|T1|0", cost=2.5)
     model.replace_link("S1|T1|0", cost=2)
     assert prepared(model).topology.graph.num_edges() == 4
 

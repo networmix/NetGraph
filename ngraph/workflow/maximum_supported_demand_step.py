@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from ngraph.analysis.msd import MSDQuery, maximum_supported_demand
 from ngraph.analysis.preparation import StepNeeds
 from ngraph.results import ResolvedDemandSet, StepContext, StepOutput
-from ngraph.utils.values import own_scalars, shared_copy
-from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
+from ngraph.utils.values import own, shared_copy, text
+from ngraph.workflow.base import WorkflowStep, register_workflow_step
 
 
 @dataclass
@@ -25,24 +25,28 @@ class MaximumSupportedDemand(WorkflowStep):
 
     def __post_init__(self):
         super().__post_init__()
-        if not isinstance(self.demand_set, str) or not self.demand_set:
-            raise ValueError(
-                "MaximumSupportedDemand.demand_set: expected nonempty name"
-            )
-        query = self.query(ResolvedDemandSet(self.demand_set, (), (), ()))
+        own(self, demand_set=text(self.demand_set, "MaximumSupportedDemand.demand_set"))
+        try:
+            query = self.query(ResolvedDemandSet(self.demand_set, (), (), ()))
+        except (TypeError, ValueError) as exc:
+            message = str(exc)
+            if message.startswith("msd"):
+                message = "MaximumSupportedDemand" + message[3:]
+            else:
+                message = "MaximumSupportedDemand." + message
+            raise type(exc)(message) from exc
+        # The query checks every field it shares with the step.
         for name in (
             "alpha_start",
             "growth_factor",
             "alpha_min",
             "alpha_max",
             "alpha_tolerance",
+            "max_bracket_iters",
+            "max_bisect_iters",
+            "export_details",
         ):
             object.__setattr__(self, name, getattr(query, name))
-        own_scalars(
-            self,
-            f"workflow step {step_name(self)}",
-            ("demand_set", "max_bracket_iters", "max_bisect_iters", "export_details"),
-        )
 
     def query(self, demands):
         return MSDQuery(

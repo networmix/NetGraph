@@ -120,15 +120,9 @@ def evaluate_condition(attrs: Dict[str, Any], cond: "Condition") -> bool:
         return True
 
     if op == "in":
-        if not isinstance(expected, (list, tuple, set)):
-            raise ValueError(f"'in' operator requires list value, got {type(expected)}")
         return attr_value in expected
 
     if op == "not_in":
-        if not isinstance(expected, (list, tuple, set)):
-            raise ValueError(
-                f"'not_in' operator requires list value, got {type(expected)}"
-            )
         return attr_value not in expected
 
     raise ValueError(f"Unknown operator: {op}")
@@ -148,17 +142,12 @@ def evaluate_conditions(
 
     Returns:
         True if combined predicate passes.
-
-    Raises:
-        ValueError: If logic is not "and" or "or".
     """
     cond_list = list(conditions)
     if not cond_list:
         return True
 
+    # The declaring record checked that logic is "and" or "or".
     if logic == "and":
         return all(evaluate_condition(attrs, c) for c in cond_list)
-    if logic == "or":
-        return any(evaluate_condition(attrs, c) for c in cond_list)
-
-    raise ValueError(f"Unsupported logic: {logic}")
+    return any(evaluate_condition(attrs, c) for c in cond_list)

@@ -13,6 +13,8 @@ import logging
 import sys
 from typing import Optional
 
+__all__ = ["get_logger", "setup_root_logger", "set_global_log_level"]
+
 # Set once by setup_root_logger().
 _ROOT_LOGGER_CONFIGURED = False
 

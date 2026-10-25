@@ -1,11 +1,12 @@
 """Helpers for YAML parsing quirks and configuration key checks."""
 
-from typing import AbstractSet, Any, Dict, Mapping, TypeVar
+from typing import AbstractSet, Any, Callable, Dict, Mapping, TypeVar
 
 V = TypeVar("V")
+T = TypeVar("T")
 
 
-def normalize_yaml_dict_keys(data: Dict[Any, V]) -> Dict[str, V]:
+def normalize_yaml_dict_keys(data: Mapping[Any, V]) -> Dict[str, V]:
     """Convert YAML-parsed dictionary keys to strings.
 
     YAML 1.1 parses true/false/yes/no/on/off keys as Python booleans. Those
@@ -46,3 +47,50 @@ def check_no_extra_keys(
             f"Unrecognized key(s) in {context}: {', '.join(extra)}. "
             f"Allowed keys are: {sorted(allowed)}"
         )
+
+
+def _declaration_error(where: str, message: str) -> ValueError:
+    error = ValueError(message)
+    # Constructor labels such as "workflow step mf" are still relative;
+    # only actual YAML declaration roots stop an enclosing relabelling.
+    root = where.split(".", 1)[0].split("[", 1)[0]
+    if root in {
+        "network",
+        "blueprints",
+        "components",
+        "risk_groups",
+        "workflow",
+        "demands",
+        "failures",
+        "units",
+        "routes",
+        "supports",
+        "weights",
+        "routing",
+        "wcmp_controller",
+        "forwarding_groups",
+    }:
+        error.__dict__["_declaration_path"] = where
+    return error
+
+
+def declared(where: str, build: Callable[[], T], record: str = "") -> T:
+    """Build one record from YAML; a refusal also names where it is declared.
+
+    A refusal labelled with the record's own name (``record``, as in
+    "group_child.share: ...") is relabelled with the declaration's path.
+    """
+    try:
+        return build()
+    except (ValueError, TypeError, KeyError) as exc:
+        if getattr(exc, "_declaration_path", None) is not None:
+            raise
+        message = str(exc)
+        if record and message.startswith(record):
+            suffix = message[len(record) :]
+            if suffix.startswith(" "):
+                suffix = "." + suffix[1:]
+            raise _declaration_error(where, where + suffix) from exc
+        if message.startswith(where + ".") or message.startswith(where + ":"):
+            raise _declaration_error(where, message) from exc
+        raise _declaration_error(where, f"{where}: {message}") from exc

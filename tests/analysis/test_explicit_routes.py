@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 
-import jsonschema
 import netgraph_core as ngc
 import pytest
 import yaml
@@ -306,7 +305,7 @@ class TestScenarioYaml:
     def test_schema_rejects_empty_and_malformed_routes(self, route):
         data = _yaml_data()
         data["routes"]["short"] = route
-        with pytest.raises(jsonschema.ValidationError):
+        with pytest.raises(ValueError):
             prepare(Scenario.from_yaml(yaml.safe_dump(data)), demand_sets=("load",))
         assert (
             _place(
@@ -377,7 +376,7 @@ class TestTypedHops:
     def test_yaml_rejects_non_string_hops(self):
         data = _yaml_data()
         data["routes"]["short"]["nodes"] = ["A", ["B", "B"], "C"]
-        with pytest.raises(jsonschema.ValidationError):
+        with pytest.raises(ValueError):
             Scenario.from_yaml(yaml.safe_dump(data))
         with pytest.raises(ValueError, match="route.nodes"):
             RouteSpec("A", nodes=("A", ["B"], "C"))

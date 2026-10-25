@@ -9,7 +9,7 @@ from ngraph.analysis.counts import TunnelCountQuery, tunnel_counts
 from ngraph.analysis.failures import Workers
 from ngraph.analysis.precision import question_inputs
 from ngraph.analysis.preparation import PreparedScenario, StepNeeds
-from ngraph.utils.values import own_scalars, shared_copy
+from ngraph.utils.values import own, shared_copy, text
 from ngraph.workflow.base import WorkflowStep, register_workflow_step, step_name
 
 
@@ -35,8 +35,7 @@ class TunnelCountAnalysis(WorkflowStep):
 
     def __post_init__(self):
         super().__post_init__()
-        if not isinstance(self.demand_set, str) or not self.demand_set:
-            raise ValueError("TunnelCountAnalysis.demand_set: expected nonempty name")
+        own(self, demand_set=text(self.demand_set, "TunnelCountAnalysis.demand_set"))
         for name in ("design_demand", "offer"):
             if getattr(self, name) is None:
                 raise ValueError(f"TunnelCountAnalysis.{name}: required")
@@ -49,11 +48,7 @@ class TunnelCountAnalysis(WorkflowStep):
             raise type(exc)(f"workflow step {step_name(self)}: {exc}") from exc
         for name in ("counts", "up_to", "design_demand", "offer"):
             object.__setattr__(self, name, getattr(query, name))
-        own_scalars(
-            self,
-            f"workflow step {step_name(self)}",
-            ("demand_set", "workers", "export_details"),
-        )
+        own(self, workers=query.workers, export_details=query.export_details)
 
     def query_for(self, demands) -> TunnelCountQuery:
         assert self.design_demand is not None and self.offer is not None

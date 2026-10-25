@@ -9,7 +9,11 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Callable, Dict, List, Optional
 
-from ngraph.utils.yaml_utils import check_no_extra_keys, normalize_yaml_dict_keys
+from ngraph.utils.yaml_utils import (
+    check_no_extra_keys,
+    declared,
+    normalize_yaml_dict_keys,
+)
 from ngraph.workflow.base import WorkflowStep
 from ngraph.workflow.base import step_type as registered_step
 
@@ -61,14 +65,23 @@ def build_workflow_steps(
 
         if step_name in assigned_names:
             raise ValueError(
-                f"Duplicate workflow step name '{step_name}'. Each step must have a unique name."
+                f"workflow[{step_index}].name: Duplicate workflow step name {step_name!r}. Each step must have a unique name; got {normalized_ctor_args.get('name')!r}."
             )
         assigned_names.add(step_name)
 
         normalized_ctor_args["name"] = step_name
 
         # Each step type turns its own YAML keys into constructor arguments.
-        normalized_ctor_args = step_cls.yaml_arguments(normalized_ctor_args, step_name)
+        location = f"workflow[{step_index}] ({step_name})"
+        normalized_ctor_args = declared(
+            location,
+            lambda step_cls=step_cls,
+            normalized_ctor_args=normalized_ctor_args,
+            step_name=step_name: step_cls.yaml_arguments(
+                normalized_ctor_args, step_name
+            ),
+            f"workflow step {step_name}",
+        )
 
         # Declaration provenance is the parser's, never a YAML key.
         init_fields = {f.name for f in dataclasses.fields(step_cls) if f.init} - {
@@ -83,6 +96,14 @@ def build_workflow_steps(
             derived = derive_seed(step_name)
             if derived is not None:
                 normalized_ctor_args["seed"] = provenance["derived_seed"] = derived
-        steps.append(step_cls(**normalized_ctor_args, **provenance))
+        steps.append(
+            declared(
+                location,
+                lambda step_cls=step_cls,
+                normalized_ctor_args=normalized_ctor_args,
+                provenance=provenance: step_cls(**normalized_ctor_args, **provenance),
+                step_type,
+            )
+        )
 
     return steps

@@ -1052,20 +1052,21 @@ def test_the_shipped_scenario_with_components_reads_one_inventory():
     assert rows[0][0][5] == pytest.approx(sum(u.capex for u in inventory.uses))
 
 
-def test_an_empty_component_name_is_none_on_a_node_and_looked_up_on_a_link_end():
-    """H21 (D13, unchanged): a node needs a nonempty name; a link end looks any name up."""
-    lib = ComponentsLibrary(
-        {"": Component("", capex=5.0), "C": Component("C", capex=1.0)}
-    )
+def test_an_empty_component_name_is_never_a_component():
+    """A component's name is nonempty, so an empty reference names no component:
+    none on a node, an unknown one on a link end."""
+    with pytest.raises(ValueError, match="^component.name: expected a nonempty name"):
+        Component("", capex=5.0)
+    lib = ComponentsLibrary({"C": Component("C", capex=1.0)})
     net = Network()
     net.add_node(Node("a", attrs={"hardware": {"component": ""}}))
     net.add_node(Node("b", attrs=_hw("C")))
     net.add_link(Link("b", "b", attrs={"hardware": {"source": {"component": ""}}}))
-    uses = hardware_inventory(net, lib).uses
-    assert [(u.node, u.component.name, u.capex) for u in uses] == [
-        ("b", "C", 1.0),
-        ("b", "", 5.0),
+    inventory = hardware_inventory(net, lib)
+    assert [(u.node, u.component.name, u.capex) for u in inventory.uses] == [
+        ("b", "C", 1.0)
     ]
+    assert [name for _, _, name in inventory.unknown] == [""]
 
 
 def test_a_zero_capacity_end_forms_no_limit():

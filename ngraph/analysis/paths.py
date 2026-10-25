@@ -15,7 +15,7 @@ from ngraph.analysis.metadata import analysis_metadata
 from ngraph.analysis.topology import PreparedTopology
 from ngraph.model.selectors import Selector
 from ngraph.results import PathAnalysis, PathRow
-from ngraph.utils.values import integer
+from ngraph.utils.values import flag, optional_flag, optional_integer, own
 
 if TYPE_CHECKING:
     from ngraph.analysis.preparation import PreparedScenario
@@ -37,13 +37,22 @@ class PathQuery:
         if not isinstance(self.source, Selector) or not isinstance(
             self.target, Selector
         ):
-            raise TypeError("paths endpoints: expected Selectors")
-        if self.mode not in ("combine", "pairwise"):
-            raise ValueError("paths.mode: expected combine or pairwise")
+            raise TypeError(
+                f"paths endpoints: expected Selectors, got {(self.source, self.target)!r}"
+            )
+        if not isinstance(self.mode, str) or self.mode not in ("combine", "pairwise"):
+            raise ValueError(
+                f"paths.mode: expected combine or pairwise, got {self.mode!r}"
+            )
         if not isinstance(self.options, (ngc.SpfOptions, ngc.KspOptions)):
-            raise TypeError("paths.options: expected native SpfOptions or KspOptions")
-        if not isinstance(self.costs_only, bool):
-            raise ValueError("paths.costs_only: expected bool")
+            raise TypeError(
+                f"paths.options: expected native SpfOptions or KspOptions, got {self.options!r}"
+            )
+        own(
+            self,
+            mode=str.__str__(self.mode),
+            costs_only=flag(self.costs_only, "paths.costs_only"),
+        )
         if isinstance(self.options, ngc.SpfOptions):
             if (
                 self.options.direction != ngc.Direction.FORWARD
@@ -60,12 +69,15 @@ class PathQuery:
                 raise ValueError(
                     "paths SPF tie_break requires multipath=False or parallel_edges=False"
                 )
-            if self.max_paths is not None:
-                integer(self.max_paths, "paths.max_paths", minimum=1)
-            if self.split_parallel_edges is not None and not isinstance(
-                self.split_parallel_edges, bool
-            ):
-                raise ValueError("paths.split_parallel_edges: expected bool or None")
+            own(
+                self,
+                max_paths=optional_integer(
+                    self.max_paths, "paths.max_paths", minimum=1
+                ),
+                split_parallel_edges=optional_flag(
+                    self.split_parallel_edges, "paths.split_parallel_edges"
+                ),
+            )
         else:
             if self.max_paths is not None:
                 raise ValueError("paths.max_paths: SPF-only")
