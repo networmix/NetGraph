@@ -232,3 +232,63 @@ def test_group_matrix_has_exact_nine_capacities_without_pseudo_attachments():
         context.topology.graph.num_edges() == 4
         and context.topology.graph.num_nodes() == 12
     )
+
+
+def two_routes():
+    # s-a-t costs 2 and s-b-t costs 4, capacity 10 each: maximum flow 20, the shortest
+    # route alone 10.
+    model = Network()
+    for name in ("s", "a", "b", "t"):
+        model.add_node(Node(name))
+    for source, target, cost in (
+        ("s", "a", 1),
+        ("a", "t", 1),
+        ("s", "b", 2),
+        ("b", "t", 2),
+    ):
+        model.add_link(Link(source, target, 10, cost))
+    return model
+
+
+def test_a_mask_of_another_preparation_is_refused_and_the_own_mask_answers():
+    one, two = prepared(two_routes()), prepared(two_routes())
+    config = CapacityQuery(Selector("^s$"), Selector("^t$")).config
+
+    def baseline(mask):
+        query = SensitivityQuery(
+            Selector("^s$"), Selector("^t$"), config, eligibility=mask, workers=1
+        )
+        return edge_sensitivity(one, query).result.baseline.delivered
+
+    assert baseline(one.topology.disabled) == 20
+    with pytest.raises(ValueError, match="belong to different graphs"):
+        baseline(two.topology.disabled)
+
+
+def test_a_support_of_another_preparation_is_refused_and_the_own_support_restricts():
+    one, two = prepared(two_routes()), prepared(two_routes())
+
+    def delivered(owner):
+        topology = owner.topology
+        support = ngc.spf(
+            topology.graph,
+            [topology.node_id_by_name["s"]],
+            ngc.SpfOptions(
+                ngc.Direction.FORWARD, targets=topology.node_id_by_name["t"]
+            ),
+        ).dag
+        config = ngc.FlowPolicyConfig(
+            routing=ngc.CentralizedTE(
+                source_allocation=ngc.SourceAllocation.OPTIMIZED, support=support
+            )
+        )
+        query = CapacityQuery(
+            Selector("^s$"), Selector("^t$"), config=config, workers=1
+        )
+        (row,) = capacity(one, query).cases[0].states["converged"].rows
+        return row.result.delivered
+
+    # Only the cost-2 route is on the shortest-path support: 10, not the maximum flow 20.
+    assert delivered(one) == 10
+    with pytest.raises(ValueError, match="support belongs to another graph"):
+        delivered(two)

@@ -11,8 +11,11 @@ import glob
 import importlib
 import inspect
 import os
+import platform
 import re
 import sys
+import types
+import typing
 from pathlib import Path
 
 
@@ -235,11 +238,63 @@ def discover_modules():
     return modules
 
 
+class _Shown:
+    """An annotation already rendered; signatures print it as is."""
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return self.text
+
+
+def _union_text(annotation):
+    """Render a union as ``X | Y``, or return None for any other annotation.
+
+    Python 3.14 prints ``X | None`` as ``Union`` by name and earlier versions
+    print ``Optional[X]`` in signatures; one spelling keeps the reference the
+    same whichever supported interpreter generates it.
+    """
+    if typing.get_origin(annotation) not in (typing.Union, types.UnionType):
+        return None
+    return " | ".join(
+        "None" if arg is type(None) else inspect.formatannotation(arg)
+        for arg in typing.get_args(annotation)
+    )
+
+
+def _signature(obj):
+    """``str(inspect.signature(obj))`` with unions rendered by ``_union_text``."""
+
+    def shown(annotation):
+        text = _union_text(annotation)
+        return annotation if text is None else _Shown(text)
+
+    sig = inspect.signature(obj)
+    params = [
+        p.replace(annotation=shown(p.annotation)) for p in sig.parameters.values()
+    ]
+    return str(
+        sig.replace(parameters=params, return_annotation=shown(sig.return_annotation))
+    )
+
+
 def get_class_info(cls):
     """Collect a class's docstring, public methods, and dataclass fields."""
+    doc = inspect.getdoc(cls)
+    if dataclasses.is_dataclass(cls):
+        # A dataclass without a docstring gets its signature as one, printed
+        # by the running interpreter; render it the same way on every version.
+        try:
+            if doc == cls.__name__ + str(inspect.signature(cls)).replace(
+                " -> None", ""
+            ):
+                doc = cls.__name__ + _signature(cls).replace(" -> None", "")
+        except (ValueError, TypeError):
+            pass
     info = {
         "name": cls.__name__,
-        "doc": inspect.getdoc(cls) or "No documentation available.",
+        "doc": doc or "No documentation available.",
         "methods": [],
         "attributes": [],
     }
@@ -250,7 +305,7 @@ def get_class_info(cls):
             inspect.ismethod(method) or inspect.isfunction(method)
         ):
             try:
-                sig = str(inspect.signature(method))
+                sig = _signature(method)
             except (ValueError, TypeError):
                 sig = "()"
 
@@ -269,7 +324,9 @@ def get_class_info(cls):
 
     if hasattr(cls, "__dataclass_fields__"):
         for field_name, field in cls.__dataclass_fields__.items():
-            field_type = getattr(field.type, "__name__", str(field.type))
+            field_type = _union_text(field.type) or getattr(
+                field.type, "__name__", str(field.type)
+            )
 
             if field.default is not dataclasses.MISSING:
                 default_val = field.default
@@ -289,12 +346,19 @@ def get_class_info(cls):
             # and makes the generated file differ between runs.
             if default_str is not None and " object at 0x" in default_str:
                 default_str = None
+            # Likewise a value taken from the interpreter that generates the page.
+            if default_str == platform.python_version():
+                default_str = None
 
+            # A result record states when a field is None in its field metadata (the
+            # same fact the results schema renders as "Null when ...").
+            null_when = field.metadata.get("null_when")
             info["attributes"].append(
                 {
                     "name": field_name,
                     "type": field_type,
                     "default": default_str,
+                    "none_when": null_when,
                 }
             )
 
@@ -304,7 +368,7 @@ def get_class_info(cls):
 def get_function_info(func):
     """Collect a function's name, signature, and docstring."""
     try:
-        sig = str(inspect.signature(func))
+        sig = _signature(func)
     except (ValueError, TypeError):
         sig = "()"
 
@@ -351,8 +415,16 @@ def document_module(module_name):
             for attr in cls_info["attributes"]:
                 type_info = f" ({attr['type']})" if attr["type"] != "typing.Any" else ""
                 default_info = f" = {attr['default']}" if attr["default"] else ""
+                when = attr.get("none_when")
+                none_info = (
+                    ""
+                    if not when
+                    else ": always None"
+                    if when == "always"
+                    else f": None when {when}"
+                )
                 # Keep attributes as a single-level list line to satisfy Markdown linters
-                doc += f"- `{attr['name']}`{type_info}{default_info}\n"
+                doc += f"- `{attr['name']}`{type_info}{default_info}{none_info}\n"
             doc += "\n"
 
         if cls_info["methods"]:

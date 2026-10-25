@@ -1,6 +1,6 @@
 """Tunnel-count rows: one fresh native T2 evaluation per demand and count.
 
-Expected plans are the contract's worked T2 examples, derived by hand; the
+Expected plans are worked T2 examples, derived by hand; the
 stated lossless delivery is checked against a separate native LOSSLESS
 evaluation at the design, which no production code calls.
 """

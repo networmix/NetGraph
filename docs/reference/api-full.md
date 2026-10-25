@@ -356,7 +356,7 @@ Immutable AnalysisMetadata record.
 **Attributes:**
 
 - `workers` (int)
-- `sampling` (SamplingMetadata | None)
+- `sampling` (SamplingMetadata | None): None when the analysis draws no failures
 
 ### BuildGraphResult
 
@@ -482,9 +482,9 @@ Immutable ExactAlpha record.
 
 **Attributes:**
 
-- `value` (Annotated[float, {'exclusiveMinimum': 0}])
+- `value` (float)
 - `numerator` (int)
-- `denominator` (Annotated[int, {'minimum': 1}])
+- `denominator` (int)
 
 ### ExpansionAccounting
 
@@ -588,7 +588,7 @@ Immutable FailureTrace record.
 **Attributes:**
 
 - `draw_index` (int)
-- `mode_index` (int | None)
+- `mode_index` (int | None): None when the policy has no modes
 - `mode_attrs` (Mapping[str, JSONValue])
 - `selections` (tuple[FailureSelection, ...])
 - `expanded_nodes` (tuple[str, ...])
@@ -640,7 +640,7 @@ Immutable InputQuantization record.
 - `binary64_hex` (str)
 - `units` (int)
 - `error` (Fraction)
-- `relative_error` (Fraction | None)
+- `relative_error` (Fraction | None): None when the input is zero
 
 ### MSDAnalysis
 
@@ -675,8 +675,8 @@ Immutable MSDProbe record.
 - `index` (int)
 - `alpha` (ExactAlpha)
 - `outcome` (Literal['feasible', 'infeasible', 'below_resolution', 'range'])
-- `totals` (PlacementTotals | None)
-- `range_refusal` (RangeRefusal | None)
+- `totals` (PlacementTotals | None): None when the probe was out of range
+- `range_refusal` (RangeRefusal | None): None when the probe was in range
 
 ### MarginalCostBin
 
@@ -895,7 +895,7 @@ Immutable RangeRefusal record.
 - `label` (str)
 - `reason` (Literal['scaled_nonfinite', 'native_units_range'])
 - `message` (str)
-- `binary64_hex` (str | None)
+- `binary64_hex` (str | None): None when the refused amount is not a binary64 value
 
 ### ReportLocation
 
@@ -903,9 +903,9 @@ Immutable ReportLocation record.
 
 **Attributes:**
 
-- `step` (str | None)
-- `case_id` (str | None)
-- `probe_index` (int | None)
+- `step` (str | None): None when the report is outside a workflow
+- `case_id` (str | None): None when the report is outside failure cases
+- `probe_index` (int | None): None when the report is outside MSD
 
 ### ResolvedDemand
 
@@ -955,7 +955,7 @@ Immutable RunMetadata record.
 - `core_version` (str)
 - `core_extension_sha256` (str)
 - `python_version` (str)
-- `seed` (int | None)
+- `seed` (int | None): None when the scenario sets no seed
 
 ### RunResult
 
@@ -976,8 +976,8 @@ Immutable SamplingMetadata record.
 
 - `random_rule_algorithm` (ClassVar[Literal['per_entity_bernoulli']]) = per_entity_bernoulli
 - `rng` (ClassVar[Literal['random.Random']]) = random.Random
-- `python_version` (ClassVar[str]) = 3.14.5
-- `seed` (int | None)
+- `python_version` (ClassVar[str])
+- `seed` (int | None): None when the draws are unseeded
 - `seed_source` (Literal['query', 'step', 'scenario', 'policy', 'unseeded'])
 - `draw_seed_rule` (ClassVar[Literal['base_plus_draw_index']]) = base_plus_draw_index
 - `entity_order` (ClassVar[Literal['sorted_identifier']]) = sorted_identifier
@@ -1032,7 +1032,7 @@ Immutable SplitConstraint record.
 - `label` (str)
 - `incoming_physical` (Fraction)
 - `basis` (Literal['declared', 'observed'])
-- `members` (Annotated[int, {'minimum': 2}])
+- `members` (int)
 - `q_upper_bound` (Fraction)
 - `met` (bool)
 
@@ -1093,7 +1093,7 @@ splits equally over its members (ECMP).
 
 - `destination` (str)
 - `programmed` (tuple[ProgrammedRouter, ...])
-- `source_weights` (tuple[SourceWeight, ...] | None)
+- `source_weights` (tuple[SourceWeight, ...] | None): None when the scope is not all_routers
 
 ### TunnelCountAnalysis
 
@@ -2289,13 +2289,13 @@ Evaluate independent endpoint capacities with explicit native routing.
 - `source` (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)
 - `target` (Selector) = Selector(path='.*', group_by=None, match=None, active_only=None)
 - `mode` (Literal) = combine
-- `preset` (Union)
+- `preset` (ngraph.model.demand.FlowPolicyPreset | None)
 - `model` (object)
-- `offer` (Union)
-- `design_demand` (Union)
-- `failure_policy` (Union)
+- `offer` (float | None)
+- `design_demand` (float | None)
+- `failure_policy` (str | None)
 - `iterations` (int) = 1
-- `workers` (Union) = auto
+- `workers` (int | Literal['auto']) = auto
 - `failure_trace` (bool) = False
 - `outputs` (OutputOptions)
 - `export_cost_distribution` (bool) = False
@@ -2414,15 +2414,15 @@ TrafficMatrixPlacement(name: 'str' = '', seed: 'int | None' = None, demand_set: 
 - `yaml_label` (str | None)
 - `derived_seed` (int | None)
 - `demand_set` (str)
-- `failure_policy` (Union)
+- `failure_policy` (str | None)
 - `iterations` (int) = 1
-- `workers` (Union) = auto
+- `workers` (int | Literal['auto']) = auto
 - `failure_trace` (bool) = False
 - `outputs` (OutputOptions)
 - `export_cost_distribution` (bool) = False
 - `export_details` (bool) = False
-- `alpha` (Union)
-- `alpha_from_step` (Union)
+- `alpha` (float | None)
+- `alpha_from_step` (str | None)
 - `failure_states` (tuple) = ('converged',)
 - `interaction` (Literal) = ordered
 
@@ -2455,10 +2455,10 @@ choosing the resolution, as every demand set a step names does.
 - `derived_seed` (int | None)
 - `demand_set` (str)
 - `counts` (tuple) = ()
-- `up_to` (Union)
-- `design_demand` (Union)
-- `offer` (Union)
-- `workers` (Union) = auto
+- `up_to` (int | None)
+- `design_demand` (float | None)
+- `offer` (float | None)
+- `workers` (int | Literal['auto']) = auto
 - `outputs` (OutputOptions)
 - `export_details` (bool) = False
 
@@ -3841,7 +3841,7 @@ configs, as in the baseline case).
 
 ### simultaneous_role(routing) -> 'str'
 
-How a model joins a SIMULTANEOUS list (CONTRACT 11.1).
+How a model joins a SIMULTANEOUS list.
 
 ``tunnels`` (T1, T2) are set up first and forwarded; a live
 ``controller`` cannot be LOSSY, so its prepared program is imported;
@@ -3860,7 +3860,6 @@ Declared routes, supports and weights, and their native forms on one graph.
 **Attributes:**
 
 - `route_specs` (Mapping[str, RouteSpec]) = {}
-- `support_specs` (Mapping[str, SupportSpec]) = {}
 - `weight_specs` (Mapping[str, WeightSpec]) = {}
 - `routes` (Mapping[str, ngc.RouteDefinition]) = {}
 - `supports` (Mapping[str, ngc.PredecessorDAG]) = {}
@@ -3901,7 +3900,7 @@ offer budget (units) when that is larger.
 
 Positive integral costs keep their value; no offset or rounding.
 
-### eligibility(topology: 'PreparedTopology', excluded_nodes=(), excluded_links=(), excluded_edges=()) -> 'ngc.Eligibility'
+### eligibility(topology: 'PreparedTopology', excluded_nodes=(), excluded_links=()) -> 'ngc.Eligibility'
 
 Intersect physical failures with declared disabled nodes and links.
 

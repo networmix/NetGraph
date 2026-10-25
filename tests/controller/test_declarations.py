@@ -1,5 +1,6 @@
 """Controller declarations: YAML and Python forms, and every refusal before native work."""
 
+import re
 from fractions import Fraction
 
 import jsonschema
@@ -520,3 +521,35 @@ def test_an_unused_tree_under_group_scope_is_refused():
 def test_constructors_refuse_wrong_types_and_an_unknown_scope(make, error, match):
     with pytest.raises(error, match=match):
         make()
+
+
+@pytest.mark.parametrize("scope", SCOPES)
+def test_a_positive_root_whose_children_are_zero_and_zero_is_refused(scope):
+    with pytest.raises(
+        ValueError,
+        match=r"forwarding_groups.g0.groups\[0\]: a positive share at router S has only zero child shares",
+    ):
+        group_prepared(tree("S", (1, [(0, "S|A|0"), (0, "S|C|0")])), scope=scope)
+    # Control: the same members with one positive child.
+    assert (
+        group_prepared(tree("S", (1, [(1, "S|A|0"), (0, "S|C|0")])), scope=scope)
+        .demand_sets["d"]
+        .controller
+    )
+
+
+@pytest.mark.parametrize(
+    ("share", "message"),
+    [("x", "invalid exact fraction"), (-1, "expected a nonnegative share, got -1")],
+)
+def test_child_shares_are_checked_below_a_zero_share_too(share, message):
+    zero_parent = {"forwarding_groups.ingress.groups.1.share": 0}
+    assert prepare(Scenario.from_yaml(fixture(**zero_parent)))
+    bad = {**zero_parent, "forwarding_groups.ingress.groups.1.children.0.share": share}
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"forwarding_groups.ingress.groups[1].children[0].share: {message}"
+        ),
+    ):
+        prepare(Scenario.from_yaml(fixture(**bad)))

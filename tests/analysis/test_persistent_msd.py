@@ -177,3 +177,45 @@ def test_rows_are_built_only_for_retained_probes_and_new_best_probes(
         assert result.probe_rows[result.best_probe_index] == result.best_rows
     else:
         assert result.probe_rows is None and result.best_rows == (built[-1],)
+
+
+def test_every_probe_is_quantized_at_the_prepared_q():
+    # Automatic resolution: q is chosen once at preparation and never again for a probe.
+    # Each probe's request is then alpha x volume / q units: growing with alpha. A q
+    # chosen again from the probe's scaled volume would grow with alpha instead and keep
+    # the request near the first probe's units.
+    from ngraph.analysis.units import UnitsSettings
+    from ngraph.scenario import Scenario, prepare
+
+    network = Network()
+    network.add_node(Node("s"))
+    network.add_node(Node("t"))
+    network.add_link(Link("s", "t", 64, 1))
+    context = prepare(Scenario(network, units=UnitsSettings()))
+    q = context.topology.q
+    assert context.units_report.mode == "auto" and context.units_report.q == q
+    demands = resolve_demands(
+        context,
+        DemandSet(
+            "load",
+            (
+                DemandSpec(
+                    Selector("^s$"),
+                    Selector("^t$"),
+                    1,
+                    FlowPolicyPreset.TE_MAXFLOW_UNLIM,
+                ),
+            ),
+        ),
+    )
+    result = maximum_supported_demand(context, MSDQuery(demands))
+    probed = [p for p in result.history if p.totals is not None]
+    assert [p.alpha.value for p in probed][:7] == [1, 2, 4, 8, 16, 32, 64]
+    for probe in probed:
+        # Half-up of the exact scaled request at the prepared q (q = 1/8 here: alpha
+        # 64.0625 asks 512.5 -> 513 units).
+        exact = Fraction(probe.alpha.numerator, probe.alpha.denominator) / Fraction(q)
+        assert probe.totals.reference_request_units == int(exact + Fraction(1, 2))
+    # The capacity is 64 / q = 512 units: the best probe asks exactly those.
+    best = result.history[result.best_probe_index]
+    assert best.totals.reference_request_units == 512 == best.totals.delivered_units

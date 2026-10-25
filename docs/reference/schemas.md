@@ -48,7 +48,7 @@ make validate
 make check
 ```
 
-`ngraph/schemas/results.json` is generated: `python dev/generate_results_schema.py` writes it from the result record declarations (plain records and their `Annotated` refinements) and the explicit fragments in `dev/explicit_results_schema.json`; `make validate` fails when the committed file differs. The pre-commit hook runs `make validate` when scenario or integration YAML files, or the schema, change; CI runs it on every push and pull request, and the integration tests load every bundled scenario.
+`ngraph/schemas/results.json` is generated: `python dev/generate_results_schema.py` writes it from the result record declarations (plain records and their `Annotated` refinements) and the explicit fragments in `dev/explicit_results_schema.json`; `make validate` fails when the committed file differs. Every result field has one description, where it is declared: the attribute docstring of a record field, or the `description` of a fragment node; the generator refuses a field without one and writes the [Results Reference](results.md) from the schema. Scenario inputs are described in the [DSL](dsl.md) and [Workflow](workflow.md) references, which name every `scenario.json` property (a test checks it). The pre-commit hook runs `make validate` when scenario or integration YAML files, or the schema, change; CI runs it on every push and pull request, and the integration tests load every bundled scenario.
 
 ### Python API
 

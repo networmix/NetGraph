@@ -42,6 +42,8 @@ Returns hardware rows grouped by hierarchy level, with platform and link-end opt
 
 ## MaxFlow
 
+<!-- example: unprepared -->
+
 ```yaml
 workflow:
   - type: MaxFlow
@@ -67,6 +69,8 @@ The result contains ordered cases with `states.converged.rows`. Rows retain nati
 
 ## TrafficMatrixPlacement
 
+<!-- example: unprepared -->
+
 ```yaml
 workflow:
   - type: TrafficMatrixPlacement
@@ -89,13 +93,15 @@ Each case reports the requested `failure_states`, each computed on its own ledge
 - `stale`: each demand's program from the case without failures, forwarded unchanged and lossy at that baseline's admitted total; traffic that reaches a failed node or link is lost there.
 - `repair`: the same programs with failed routes removed and survivors re-split (no new route search), at the declared request and admission; group shares stay caps.
 
-`reference_request_units` stays the scaled request in every state; the native `requested` and `offered` describe each call. Cost reports and precision misses come from converged rows only. For an explicit-route demand alone, converged and repair forward the same program. A lossy forwarding that finds no fixed point reports that case and state as `failure` (no rows); in the baseline it stops the step when stale or repair needs its programs. Group scope refuses converged and repair under a failure policy when it programs a router inside the IGP domain.
+`reference_request_units` stays the scaled request in every state; the native `requested` and `offered` describe each call. Cost reports and precision misses come from converged rows only. For an explicit-route demand alone, converged and repair forward the same program. A lossy forwarding that finds no fixed point reports that case and state as `failure` (no rows); in the baseline it stops the step when stale or repair needs its programs. Group scope refuses converged and repair under a failure policy when it programs a router inside the IGP domain, where other demands can transit the router after a failure and a dead group's dropped share would cut them too; `stale` works there.
 
 `interaction: simultaneous` forwards every demand at once in one native list, sharing losses on common links, as a lossy question on fixed programs: each model that can be lossy forwards a lossy copy of itself (tunnel models are set up first and keep their reservations), and a live controller (`TE_MAXFLOW_UNLIM`, `SHORTEST_PATHS_MAXFLOW`) is computed, then its program forwarded lossy. Its lossy copy is created after the other participants, in every state, so it loses one-unit ties to them. Rows are not comparable with the default `ordered` rows. A TE ingress pool in a simultaneous step gets a lossy offer budget, its largest known request, reported as the row's `pool.offer_limit_units`. Budgets are prepared once for the scenario: every placement step on that preparation reports them, and they count in the choice of `q`. A simultaneous step that takes its alpha from an MSD step cannot have pool demands.
 
 Use either `alpha` or `alpha_from_step`, never both. Omitting both uses 1. An earlier MSD step supplies its actual largest tested feasible factor; missing, forward, wrong-type and no-feasible dependencies refuse. The consuming step records the producer name and effective alpha.
 
 ## MaximumSupportedDemand
+
+<!-- example: unprepared -->
 
 ```yaml
 workflow:
@@ -173,11 +179,23 @@ Custom steps implement `run(StepContext) -> StepOutput`; earlier successful step
 
 ## Output selection
 
+| `outputs` key | Steps | Adds to each row |
+| --- | --- | --- |
+| `edge_flows` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the units each directed link carries |
+| `residual` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | each directed link's residual capacity after the row |
+| `edge_reservations` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | each directed link's strict tunnel holds |
+| `saturated_boundary_edges` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the saturated links at the sources' reachable boundary |
+| `min_cut` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis | the minimum cut closest to the sources, where defined (unrestricted optimized maximum flow); null otherwise |
+| `cost_distribution` | MaxFlow, TrafficMatrixPlacement | the cost report: delivered units per path cost, or the native marginal cost curve |
+| `details` | MaxFlow, TrafficMatrixPlacement, TunnelCountAnalysis, MaximumSupportedDemand | native per-source, per-tunnel, plan and call fields |
+
+All are false by default. Every row field is described in the [Results Reference](results.md).
+
 `MaxFlow` and `TrafficMatrixPlacement` accept `outputs.details` (false by default) alongside their native output flags and `cost_distribution`; `TunnelCountAnalysis` accepts the native flags and `details` (its rows have no cost report). It adds per-source, per-tunnel, plan and call details to compact exact JSON rows. Pool metadata stays present in either mode so synthetic-ingress costs remain identifiable. `MaximumSupportedDemand` accepts `outputs: {details: true}` for its best rows; this step accepts no other output keys. Python callers can independently request retained historical probe rows with `MSDQuery.export_probe_rows`.
 
-Details do not enable cost bins, cuts or arrays. For example `outputs: {details: false, min_cut: true}` keeps compact capacity rows with a requested cut; `outputs: {details: true}` emits native details without a cost report or cut. Python query/workflow constructors spell the single detail selector `export_details`; that spelling is refused in YAML. The former `include_flow_details` migration is only to `outputs.cost_distribution`.
+Details do not enable cost bins, cuts or arrays. For example `outputs: {details: false, min_cut: true}` keeps compact capacity rows with a requested cut; `outputs: {details: true}` emits native details without a cost report or cut. Python query/workflow constructors spell the single detail selector `export_details`; that spelling is refused in YAML.
 
-Capacity and traffic-matrix placement resolve `workers: auto` to the CPU count, a fixed rule for each analysis kind selected by paired measurements on the shipped scenarios. Explicit positive worker counts override it. MSD is serial.
+Capacity and traffic-matrix placement resolve `workers: auto` to the CPU count; explicit positive worker counts override it, and results are the same for any number of workers. MSD is serial.
 
 An MSD probe with a positive physical leaf rounded to zero requested units has outcome `below_resolution`. It is never feasible or a certificate endpoint; search moves upward from it. If no verified feasible probe is found at the unit-resolution boundary, MSD returns `none_feasible` with stop reason `unit_resolution`. An `alpha_from_step` placement refuses such a result because it has no tested feasible alpha. Placement’s own totals retain their exact integer-unit meaning.
 

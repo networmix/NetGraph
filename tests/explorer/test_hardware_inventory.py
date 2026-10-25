@@ -832,8 +832,9 @@ def test_capacity_overflow_reaches_the_export_refusal():
     step = CostPower(name="cp", include_disabled=True, aggregation_level=0)
     result = run(prepare(Scenario(net, (step,), components_library=lib)))
     assert result.steps[0].result.levels[0][0].platform_capex == float("inf")
+    # Python 3.12 and later append the value (": inf") to this message.
     with pytest.raises(
-        ValueError, match="Out of range float values are not JSON compliant: inf"
+        ValueError, match="Out of range float values are not JSON compliant"
     ):
         write_json(result, io.StringIO())
     assert _explore(net, lib).root_node.stats.total_capex == float("inf")

@@ -80,7 +80,7 @@ def physical(units, q):
     return Fraction(units) * Fraction(q)
 
 
-# --- tunnel counts (PLAN 5.3: S2 curve, S1-S6 rows at 32, 64 and up to 256) -------------
+# --- tunnel counts: the S2 count curve; the S1-S6 rows at 32, 64 and up to 256 ----------
 
 
 def t2(k, up_to=False):
@@ -187,8 +187,8 @@ def test_the_s2_count_curve_at_the_final_q():
     assert physical(rows[5].result.delivered, q) == 2200
 
 
-def test_the_s2_count_curve_at_q_1_is_e2s_curve():
-    # Labelled comparison: E2's figures were whole units at q = 1.
+def test_the_s2_count_curve_at_q_1_in_whole_units():
+    # At q = 1 every figure is a whole unit: the curve as derived by hand at that q.
     prep, rows = count_rows("S2", S2_CURVE, q=1)
     assert [r.lossless_at_design_units for r in rows[:-1]] == [
         800,

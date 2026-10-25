@@ -231,3 +231,67 @@ def test_a_native_refusal_of_the_weighted_solve_names_the_destination(monkeypatc
     monkeypatch.setattr(controller.ngc, "evaluate_demand", refuse)
     with pytest.raises(ValueError, match=r"^controller\.t: planted$"):
         merge_at_m(A2, B1)
+
+
+def test_the_weighted_solve_has_complete_flows_and_stale_replays_it_unchanged():
+    # One weighted solve H(16, [2, 1]) = [11, 5] at q = 1/8: B's 5 over B->X; A's 11 into
+    # M, 3 to X and 8 to Y; X->t carries 5 + 3 = 8 and Y->t 8. Stale with M-Y failed
+    # replays that program unchanged: M still sends 3 of A's 11 to X and drops 8 at the
+    # failed link; B's 5 are unaffected.
+    import netgraph_core as ngc
+
+    from ngraph import (
+        FailureMode,
+        FailurePolicy,
+        FailureRequest,
+        FailureRule,
+        PlacementQuery,
+        place,
+    )
+
+    prep = merge_at_m(A2, B1)
+    refs = prep.topology.edge_refs
+
+    def flows(result):
+        return {
+            refs[e].link: int(v)
+            for e, v in enumerate(result.edge_flows)
+            if v and refs[e].direction == "forward"
+        }
+
+    failure = FailureRequest(
+        FailurePolicy(
+            modes=[FailureMode(1, [FailureRule("link", mode="all", path="^M\\|Y$")])]
+        ),
+        1,
+        1,
+    )
+    analysis = place(
+        prep,
+        PlacementQuery(
+            prep.demand_sets["d"],
+            failures=failure,
+            states=("converged", "stale"),
+            workers=1,
+            outputs=ngc.OutputOptions(edge_flows=True),
+        ),
+    )
+    baseline = analysis.cases[0].states["converged"].rows
+    assert {r.id: r.result.delivered for r in baseline} == {"a|0": 11, "b|0": 5}
+    total = {}
+    for r in baseline:
+        for link, value in flows(r.result).items():
+            total[link] = total.get(link, 0) + value
+    assert total == {
+        "A|M|0": 11,
+        "B|X|0": 5,
+        "M|X|0": 3,
+        "M|Y|0": 8,
+        "X|t|0": 8,
+        "Y|t|0": 8,
+    }
+    stale = analysis.cases[1].states["stale"].rows
+    assert {r.id: r.result.delivered for r in stale} == {"a|0": 3, "b|0": 5}
+    a_stale = next(r for r in stale if r.id == "a|0").result
+    assert flows(a_stale) == {"A|M|0": 11, "M|X|0": 3, "X|t|0": 3}
+    assert sum(units for _, units in a_stale.edge_drops) == 8

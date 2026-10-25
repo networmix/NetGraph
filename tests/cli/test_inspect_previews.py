@@ -457,9 +457,9 @@ def test_a_summary_lists_the_first_five_group_labels():
 def test_parameters_print_enums_by_name():
     """An enum prints its name (a plain Enum's str() would add the class)."""
 
-    class Mode(Enum):
+    class Pace(Enum):
         FAST = 1
 
-    assert cli._parameter_text(Mode.FAST) == "FAST"
+    assert cli._parameter_text(Pace.FAST) == "FAST"
     assert cli._parameter_text(FlowPolicyPreset.TE_MAXFLOW_UNLIM) == "TE_MAXFLOW_UNLIM"
     assert cli._parameter_text(3) == "3"

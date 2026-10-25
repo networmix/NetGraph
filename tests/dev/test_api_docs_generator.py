@@ -37,3 +37,43 @@ def test_list_outside_code_gets_surrounding_blank_lines() -> None:
     assert (
         normalize("Intro:\n- one\n- two\nAfter.") == "Intro:\n\n- one\n- two\n\nAfter."
     )
+
+
+def test_the_api_reference_shows_plain_types_and_says_when_a_field_is_none():
+    import dataclasses
+    import inspect
+    import pydoc
+    import re
+    from pathlib import Path
+
+    import ngraph.results as results
+
+    page = (
+        Path(__file__).resolve().parents[2] / "docs/reference/api-full.md"
+    ).read_text()
+    # Field metadata (schema keywords, presence facts) is for the generators, not users.
+    assert "Annotated[" not in page
+    assert not re.search(r"\{'(null_when|absent_when|minimum|exclusiveMinimum)'", page)
+    records = [
+        kind
+        for kind in vars(results).values()
+        if isinstance(kind, type)
+        and dataclasses.is_dataclass(kind)
+        and kind.__module__ == "ngraph.results"
+    ]
+    stated = 0
+    for kind in records:
+        text = pydoc.render_doc(kind, renderer=pydoc.plaintext) + str(
+            inspect.signature(kind)
+        )
+        assert "Annotated" not in text and "null_when" not in text, kind.__name__
+        for item in dataclasses.fields(kind):
+            when = item.metadata.get("null_when")
+            if when:
+                # The same metadata says when, in words, on the page.
+                assert f"- `{item.name}` (" in page and f": None when {when}" in page, (
+                    kind.__name__,
+                    item.name,
+                )
+                stated += 1
+    assert stated >= 12

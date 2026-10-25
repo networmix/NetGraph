@@ -216,7 +216,7 @@ def filling_oracle(columns, capacity):
 
 
 def highest_averages(x, weights):
-    """CONTRACT 2.3's H(x, w): one unit at a time to the largest w/(a+1), earlier on ties."""
+    """Highest averages H(x, w): one unit at a time to the largest w/(a+1), earlier on ties."""
     a = [0] * len(weights)
     if not any(weights):
         return a

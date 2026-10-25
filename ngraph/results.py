@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Mapping
-from dataclasses import MISSING, FrozenInstanceError, dataclass, fields, replace
+from dataclasses import MISSING, FrozenInstanceError, dataclass, field, fields, replace
 from fractions import Fraction
 from functools import cache
 from reprlib import recursive_repr
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
-    Annotated,
     ClassVar,
     Generic,
     Literal,
@@ -47,19 +46,19 @@ if TYPE_CHECKING:
 
 @cache
 def _record_fields(kind: type) -> tuple[str, ...]:
-    return tuple(field.name for field in fields(kind))
+    return tuple(item.name for item in fields(kind))
 
 
 def _compile_init(kind: type):
     """Build a record class's constructor, as ``dataclasses`` would write it."""
     names, defaults = [], {}
-    for field in fields(kind):
-        assert field.default_factory is MISSING and not field.kw_only, field.name
-        if field.default is not MISSING:
-            defaults[f"_default_{field.name}"] = field.default
-            names.append(f"{field.name}=_default_{field.name}")
+    for item in fields(kind):
+        assert item.default_factory is MISSING and not item.kw_only, item.name
+        if item.default is not MISSING:
+            defaults[f"_default_{item.name}"] = item.default
+            names.append(f"{item.name}=_default_{item.name}")
         else:
-            names.append(field.name)
+            names.append(item.name)
     body = [f"    _set(self, {f.name!r}, {f.name})" for f in fields(kind)]
     if hasattr(kind, "__post_init__"):
         body.append("    self.__post_init__()")
@@ -122,7 +121,7 @@ class _ResultRecord:
 _RecordT = TypeVar("_RecordT")
 
 
-@dataclass_transform(frozen_default=True, eq_default=False)
+@dataclass_transform(frozen_default=True, eq_default=False, field_specifiers=(field,))
 def _record(cls: type[_RecordT]) -> type[_RecordT]:
     # Fields and constructor signatures are documented separately. Supplying a
     # docstring also avoids dataclasses inspecting all signatures at import.
@@ -138,33 +137,43 @@ def _record(cls: type[_RecordT]) -> type[_RecordT]:
     return result
 
 
-# A record field's declaration is also its output schema: an ``Annotated``
-# mapping adds JSON Schema keywords to the schema of its type.
+# A record field's declaration is also its output schema: its field metadata adds
+# JSON Schema keywords to the schema of its type, and states when the field is null
+# (``null_when``); the results generator reads both. The type stays plain for users.
 
 
 @_record
 class ExactAlpha(_ResultRecord):
-    value: Annotated[float, {"exclusiveMinimum": 0}]
+    value: float = field(metadata={"exclusiveMinimum": 0})
+    """Alpha as a binary64 value."""
     numerator: int
-    denominator: Annotated[int, {"minimum": 1}]
+    """Alpha's exact numerator."""
+    denominator: int = field(metadata={"minimum": 1})
+    """Alpha's exact denominator."""
 
 
 @_record
 class Endpoints(_ResultRecord):
     sources: tuple[str, ...]
+    """Source node names, sorted."""
     destinations: tuple[str, ...]
+    """Destination node names, sorted."""
 
 
 @_record
 class SyntheticIngress(_ResultRecord):
     pool_id: str
+    """The pool's identifier."""
     source: str
+    """The physical source this attachment feeds."""
 
 
 @_record
 class PoolHead(_ResultRecord):
     pool_id: str
+    """The pool's identifier."""
     physical_sources: tuple[str, ...]
+    """The physical sources behind the pool head."""
 
 
 @_record
@@ -172,24 +181,35 @@ class PoolMetadata(_ResultRecord):
     """A TE ingress pool; ``offer_limit_units`` is its prepared lossy offer budget."""
 
     head: PoolHead
+    """The pool head and its physical sources."""
     offer_limit_units: int = 0
+    """The prepared lossy offer budget of the pool (integer units of q)."""
     synthetic_ingress_cost: ClassVar[Literal[1]] = 1
+    """The cost of each pool attachment (1)."""
 
 
 @_record
 class DiscardedShare(_ResultRecord):
     label: str
+    """The discarded expansion leaf."""
     units: int
+    """Its discarded units."""
     reason: Literal["self_pair", "filtered", "empty_selection"]
+    """Why it was discarded: a self pair, filtered, or an empty selection."""
 
 
 @_record
 class ExpansionAccounting(_ResultRecord):
     base_id: str
+    """The declared demand's identifier, before expansion."""
     declared_units: int
+    """The declared demand's units after one quantization of its scaled total."""
     resolved_units: int
+    """Units of its resolved leaves."""
     discarded_units: int
+    """Units of its discarded leaves."""
     discards: tuple[DiscardedShare, ...]
+    """Each discarded leaf with its reason."""
 
 
 @_record
@@ -211,13 +231,17 @@ class MemberWeight(_ResultRecord):
     """One member of a programmed router and its integer weight (0 included)."""
 
     edge: DirectedLink
+    """The member: a directed link leaving the router."""
     weight: int
+    """Its integer weight (0 included)."""
 
 
 @_record
 class ProgrammedRouter(_ResultRecord):
     router: str
+    """The programmed router."""
     members: tuple[MemberWeight, ...]
+    """Its members with their integer weights."""
 
 
 @_record
@@ -225,8 +249,11 @@ class SourceWeight(_ResultRecord):
     """A source's nominal physical demand toward the destination and its weight."""
 
     source: str
+    """The source node."""
     nominal_physical: Fraction
+    """Its nominal physical demand toward the destination (a fraction)."""
     weight: int
+    """Its integer source weight."""
 
 
 @_record
@@ -238,8 +265,13 @@ class TableReport(_ResultRecord):
     """
 
     destination: str
+    """The destination of the table."""
     programmed: tuple[ProgrammedRouter, ...]
-    source_weights: tuple[SourceWeight, ...] | None
+    """The routers the controller programs, with their member weights."""
+    source_weights: tuple[SourceWeight, ...] | None = field(
+        metadata={"null_when": "the scope is not all_routers"}
+    )
+    """all_routers: each source's nominal demand and weight."""
 
 
 def approximations(demands: ResolvedDemandSet) -> tuple[WeightApproximation, ...]:
@@ -283,7 +315,9 @@ class FailurePattern(_ResultRecord):
     """Canonical failure mask used as a scheduling and sampling key."""
 
     excluded_nodes: tuple[str, ...]
+    """Failed nodes, sorted."""
     excluded_links: tuple[str, ...]
+    """Failed links (both directions), sorted."""
 
     def __eq__(self, other):
         if self is other:
@@ -302,18 +336,27 @@ class FailurePattern(_ResultRecord):
 @_record
 class FailureSelection(_ResultRecord):
     rule_index: int
+    """The rule's index in its mode."""
     scope: Literal["node", "link", "risk_group"]
+    """What the rule selects: node, link or risk_group."""
     selected: tuple[str, ...]
+    """The selected entities."""
 
 
 @_record
 class FailureTrace(_ResultRecord):
     draw_index: int
-    mode_index: int | None
+    """The draw that first produced the pattern."""
+    mode_index: int | None = field(metadata={"null_when": "the policy has no modes"})
+    """The mode drawn."""
     mode_attrs: Mapping[str, JSONValue]
+    """The drawn mode's attributes."""
     selections: tuple[FailureSelection, ...]
+    """What each rule selected."""
     expanded_nodes: tuple[str, ...]
+    """Nodes the selections expand to."""
     expanded_links: tuple[str, ...]
+    """Links the selections expand to."""
 
 
 @_record
@@ -328,63 +371,98 @@ class FailureCase(_ResultRecord):
 
 @_record
 class ReportLocation(_ResultRecord):
-    step: str | None
-    case_id: str | None
-    probe_index: int | None
+    step: str | None = field(metadata={"null_when": "the report is outside a workflow"})
+    """The step."""
+    case_id: str | None = field(
+        metadata={"null_when": "the report is outside failure cases"}
+    )
+    """The case."""
+    probe_index: int | None = field(metadata={"null_when": "the report is outside MSD"})
+    """The MSD probe."""
 
 
 @_record
 class PreparationScope(_ResultRecord):
     workflow_steps: tuple[str, ...]
+    """The workflow steps prepared."""
     workflow_demand_sets: tuple[str, ...]
+    """The demand sets the workflow names."""
     library_demand_sets: tuple[str, ...]
+    """The demand sets the library caller named."""
 
 
 @_record
 class InputQuantization(_ResultRecord):
     label: str
+    """The input or constraint label: where the value is declared."""
     kind: Literal["capacity", "demand", "offer", "design", "min_unreserved"]
+    """What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth."""
     binary64_value: float
+    """The physical input as given."""
     binary64_hex: str
+    """The physical input in hexadecimal."""
     units: int
+    """Its quantized value (integer units of q)."""
     error: Fraction
-    relative_error: Fraction | None
+    """The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up."""
+    relative_error: Fraction | None = field(metadata={"null_when": "the input is zero"})
+    """The signed relative error, the error divided by the input."""
 
 
 @_record
 class InputConstraint(_ResultRecord):
     kind: ClassVar[Literal["input"]] = "input"
+    """The record kind, a fixed tag."""
     label: str
+    """The input or constraint label: where the value is declared."""
     q_upper_bound: Fraction
+    """The largest q at which rounding this input is guaranteed within the precision: 2 times the precision times the input (rounding moves it half a unit at most)."""
     met: bool
+    """Whether the chosen q meets it."""
 
 
 @_record
 class SplitConstraint(_ResultRecord):
     kind: Literal["expansion", "source", "router", "tunnel"]
+    """Where the split is: expansion, sources, a router or tunnels."""
     label: str
+    """The input or constraint label: where the value is declared."""
     incoming_physical: Fraction
+    """The physical amount split (a fraction)."""
     basis: Literal["declared", "observed"]
-    members: Annotated[int, {"minimum": 2}]
+    """declared (from the demands) or observed (from an analysis)."""
+    members: int = field(metadata={"minimum": 2})
+    """The members the amount is split over."""
     q_upper_bound: Fraction
+    """The q bound this split records: the precision times the incoming amount divided by (members - 1). It bounds q, not the split's own error."""
     met: bool
+    """Whether the chosen q meets it."""
 
 
 @_record
 class RangeConstraint(_ResultRecord):
     kind: Literal["capacity_sum", "cost_sum", "amount"]
+    """What is bounded: a capacity sum, a cost sum, or one amount."""
     label: str
+    """The input or constraint label: where the value is declared."""
     tested_q: float
+    """The q tested."""
     units_value: int
+    """The value at that q (integer units of q)."""
     exclusive_limit: int
+    """The exclusive native limit (2^62)."""
     met: bool
+    """Whether the value is below the limit."""
 
 
 @_record
 class UnverifiedConstraint(_ResultRecord):
     kind: ClassVar[Literal["unverified"]] = "unverified"
+    """The record kind, a fixed tag."""
     label: str
+    """The input or constraint label: where the value is declared."""
     reason: ClassVar[Literal["opaque_program"]] = "opaque_program"
+    """The split is inside a supplied native program NetGraph cannot inspect."""
 
 
 UnitConstraint: TypeAlias = (
@@ -395,10 +473,15 @@ UnitConstraint: TypeAlias = (
 @_record
 class PrecisionMiss(_ResultRecord):
     location: ReportLocation
+    """Where the miss was observed: step, case and probe."""
     constraints: tuple[InputConstraint | SplitConstraint | UnverifiedConstraint, ...]
+    """The constraints the chosen q does not meet there."""
     inexact_inputs: int
+    """Inputs not exact at q there."""
     zeroed_inputs: int
+    """Positive inputs that quantize to zero there."""
     examples: tuple[InputQuantization, ...]
+    """Example inputs that miss."""
 
 
 @_record
@@ -413,38 +496,63 @@ class WeightApproximation(_ResultRecord):
     """
 
     kind: ClassVar[Literal["weight_approximation"]] = "weight_approximation"
+    """The record kind, a fixed tag."""
     label: str
+    """The router (controller.<set>.<t>.router.<r>) or all_routers source (controller.<set>.<t>.source.<s>) whose weights were apportioned."""
     max_relative_error: Fraction
+    """The largest relative error of the apportioned weights (a fraction)."""
 
 
 @_record
 class UnitsReport(_ResultRecord):
     q: float
+    """The bandwidth quantum: one unit is q physical units."""
     exponent: int
+    """q as a power of two: q = 2^exponent."""
     mode: Literal["auto", "manual"]
+    """auto (chosen by the recipe) or manual (declared)."""
     precision: float
+    """The relative precision target."""
     target_met: bool
+    """Whether every declared input and split meets the precision at q."""
     input_convention: ClassVar[Literal["promoted_binary64_half_up"]] = (
         "promoted_binary64_half_up"
     )
+    """Physical inputs round half-up from their binary64 value."""
     display_convention: ClassVar[Literal["units_authoritative_binary64_display"]] = (
         "units_authoritative_binary64_display"
     )
+    """Units are authoritative; physical values are binary64 displays."""
     scope: PreparationScope
+    """What the preparation covered."""
     binding_constraints: tuple[UnitConstraint, ...]
+    """The constraints that limited q."""
     input_count: int
+    """Physical inputs quantized."""
     inexact_inputs: int
+    """Inputs not exact at q."""
     zeroed_inputs: int
+    """Positive inputs that quantize to zero."""
     inexact_examples: tuple[InputQuantization, ...]
+    """Example inexact inputs."""
     zeroed_examples: tuple[InputQuantization, ...]
+    """Example zeroed inputs."""
     max_absolute_input_error: Fraction
+    """The largest absolute input error (physical, a fraction)."""
     max_relative_input_error: Fraction
+    """The largest absolute relative input error (a fraction)."""
     augmented_capacity_sum_units: int
+    """The graph's capacity sum with pool attachments (integer units of q)."""
     augmented_cost_sum: int
+    """The graph's cost sum with pool attachments."""
     nominal_split_count: int
+    """Splits of the nominal (no-failure) demands."""
     nominal_splits: tuple[SplitConstraint, ...]
+    """Those splits with their bounds on q."""
     misses: tuple[PrecisionMiss, ...]
+    """Precision misses observed in analyses."""
     weight_approximations: tuple[WeightApproximation, ...] = ()
+    """Controller weights apportioned because they reached 2^62."""
 
     def with_misses(self, misses: tuple[PrecisionMiss, ...]) -> UnitsReport:
         """This report with further precision misses appended."""
@@ -469,8 +577,11 @@ class UnitsReport(_ResultRecord):
 @_record
 class OutputSelection(_ResultRecord):
     native: ngc.OutputOptions
+    """The native output flags."""
     cost_distribution: bool
+    """Whether cost reports are exported."""
     details: bool = False
+    """Whether native per-source, per-tunnel, plan and call fields are exported."""
 
 
 @_record
@@ -478,47 +589,71 @@ class SamplingMetadata(_ResultRecord):
     random_rule_algorithm: ClassVar[Literal["per_entity_bernoulli"]] = (
         "per_entity_bernoulli"
     )
+    """The random-rule algorithm: one Bernoulli trial per entity."""
     rng: ClassVar[Literal["random.Random"]] = "random.Random"
+    """The random number generator."""
     python_version: ClassVar[str] = sys.version.split()[0]
-    seed: int | None
+    """The Python version that drew."""
+    seed: int | None = field(metadata={"null_when": "the draws are unseeded"})
+    """The base seed."""
     seed_source: Literal["query", "step", "scenario", "policy", "unseeded"]
+    """Where the base seed comes from."""
     draw_seed_rule: ClassVar[Literal["base_plus_draw_index"]] = "base_plus_draw_index"
+    """Draw i uses the base seed plus i."""
     entity_order: ClassVar[Literal["sorted_identifier"]] = "sorted_identifier"
+    """Entities are drawn in sorted identifier order."""
     rule_order: ClassVar[Literal["declaration"]] = "declaration"
+    """Rules are applied in declaration order."""
     iterations: int
+    """The number of draws."""
 
 
 @_record
 class AnalysisMetadata(_ResultRecord):
     workers: int
-    sampling: SamplingMetadata | None
+    """The effective number of workers."""
+    sampling: SamplingMetadata | None = field(
+        metadata={"null_when": "the analysis draws no failures"}
+    )
+    """The failure sampling metadata."""
 
 
 @_record
 class PathCostBin(_ResultRecord):
     cost: int
+    """The path cost (analysis graph for a pool)."""
     physical_path_cost: int
+    """The path cost without the pool attachment."""
     delivered_units: int
+    """The units delivered over paths of this cost."""
 
 
 @_record
 class MarginalCostBin(_ResultRecord):
     marginal_cost: int
+    """The increase of the minimum total cost per additional unit."""
     units: int
+    """The units delivered at that marginal cost."""
 
 
 @_record
 class DeliveredByPathCost(_ResultRecord):
     kind: ClassVar[Literal["delivered_by_path_cost"]] = "delivered_by_path_cost"
+    """The record kind, a fixed tag."""
     cost_domain: Literal["physical_network", "analysis_graph"]
+    """physical_network, or analysis_graph when costs include the pool attachment's 1."""
     bins: tuple[PathCostBin, ...]
+    """Delivered units per path cost, in ascending cost."""
 
 
 @_record
 class MarginalCurve(_ResultRecord):
     kind: ClassVar[Literal["marginal_curve"]] = "marginal_curve"
+    """The record kind, a fixed tag."""
     cost_domain: Literal["physical_network", "analysis_graph"]
+    """physical_network, or analysis_graph when costs include the pool attachment's 1."""
     bins: tuple[MarginalCostBin, ...]
+    """The native marginal cost curve: each piece's marginal cost and units, in ascending cost."""
 
 
 CostReport: TypeAlias = DeliveredByPathCost | MarginalCurve
@@ -552,21 +687,33 @@ class CapacityRow(_ResultRecord):
 @_record
 class SelfPair(_ResultRecord):
     kind: ClassVar[Literal["self"]] = "self"
+    """The record kind, a fixed tag."""
     id: str
+    """The row's stable identifier within its analysis."""
     node: str
+    """The node that is both source and target."""
     capacity_units: ClassVar[Literal[0]] = 0
+    """Always 0: a node's capacity to itself is not a question."""
 
 
 @_record
 class PlacementTotals(_ResultRecord):
     reference_request_units: int
+    """The scaled declared requests over the rows (integer units of q)."""
     delivered_units: int
+    """Units delivered over the rows."""
     unadmitted_units: int
+    """LOSSLESS units not admitted over the rows."""
     source_drop_units: int
+    """LOSSY units lost at sources over the rows."""
     edge_drop_units: int
+    """LOSSY units dropped on links over the rows."""
     reference_shortfall_units: int
+    """The reference request minus the delivery (integer units of q)."""
     delivery_ratio: Fraction
+    """Delivered over the reference request (a fraction; 1 for no request)."""
     feasible: bool
+    """Whether every row delivered its whole reference request, without loss."""
 
 
 RowT = TypeVar("RowT")
@@ -584,10 +731,15 @@ class DeadCap(_ResultRecord):
     """
 
     destination: str
+    """The destination node name."""
     router: str
+    """The router node name."""
     forwarding_group: str
+    """The forwarding group (tree) name."""
     group: int
+    """The root group's index in the tree."""
     cap: Fraction
+    """The group's fixed cap: its share of the router's traffic (a fraction)."""
 
 
 @_record
@@ -595,7 +747,9 @@ class ForwardingFailure(_ResultRecord):
     """Native lossy forwarding found no fixed point for this case and state."""
 
     kind: ClassVar[Literal["loss_iteration"]] = "loss_iteration"
+    """The record kind, a fixed tag."""
     message: str
+    """The native error text."""
 
 
 @_record
@@ -726,27 +880,47 @@ MSDProof: TypeAlias = Literal[
 @_record
 class RangeRefusal(_ResultRecord):
     label: str
+    """The input or constraint label: where the value is declared."""
     reason: Literal["scaled_nonfinite", "native_units_range"]
+    """scaled_nonfinite or native_units_range."""
     message: str
-    binary64_hex: str | None
+    """The refusal text."""
+    binary64_hex: str | None = field(
+        metadata={"null_when": "the refused amount is not a binary64 value"}
+    )
+    """The refused binary64 value in hexadecimal."""
 
 
 @_record
 class MSDProbe(_ResultRecord):
     index: int
+    """The probe's position in the search history (0 first)."""
     alpha: ExactAlpha
+    """The probe's exact alpha."""
     outcome: Literal["feasible", "infeasible", "below_resolution", "range"]
-    totals: PlacementTotals | None
-    range_refusal: RangeRefusal | None
+    """feasible, infeasible, below_resolution (rounds to zero) or range (out of native range)."""
+    totals: PlacementTotals | None = field(
+        metadata={"null_when": "the probe was out of range"}
+    )
+    """The probe's totals."""
+    range_refusal: RangeRefusal | None = field(
+        metadata={"null_when": "the probe was in range"}
+    )
+    """Why the probe was out of range."""
 
 
 @_record
 class UpperCertificate(_ResultRecord):
     proof: Literal["fixed_program", "single_controller"]
+    """What proves the bracket."""
     lower: ExactAlpha
+    """The feasible lower alpha."""
     upper: ExactAlpha
+    """The infeasible upper alpha."""
     lower_probe_index: int
+    """The history index of the lower probe."""
     upper_probe_index: int
+    """The history index of the upper probe."""
 
 
 @_record
@@ -817,10 +991,15 @@ AnalysisResult: TypeAlias = (
 @_record
 class BuildGraphResult(_ResultRecord):
     kind: ClassVar[Literal["build_graph"]] = "build_graph"
+    """The record kind, a fixed tag."""
     add_reverse: bool
+    """Whether the exported graph has a reverse edge per link."""
     node_count: int
+    """Nodes in the exported graph."""
     link_count: int
+    """Edges in the exported graph (two per link with add_reverse)."""
     graph: Mapping[str, JSONValue]
+    """The node-link JSON of the network."""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "graph", frozen_attrs(self.graph, "BuildGraph.graph"))
@@ -829,32 +1008,55 @@ class BuildGraphResult(_ResultRecord):
 @_record
 class NetworkStatsResult(_ResultRecord):
     kind: ClassVar[Literal["network_stats"]] = "network_stats"
+    """The record kind, a fixed tag."""
     node_count: int
+    """Nodes counted."""
     link_count: int
+    """Links counted."""
     total_capacity: float
+    """The sum of link capacities."""
     mean_capacity: float
+    """The mean link capacity."""
     median_capacity: float
+    """The median link capacity."""
     min_capacity: float
+    """The smallest link capacity."""
     max_capacity: float
+    """The largest link capacity."""
     mean_cost: float
+    """The mean link cost."""
     median_cost: float
+    """The median link cost."""
     min_cost: float
+    """The smallest link cost."""
     max_cost: float
+    """The largest link cost."""
     mean_degree: float
+    """The mean node degree."""
     median_degree: float
+    """The median node degree."""
     min_degree: float
+    """The smallest node degree."""
     max_degree: float
+    """The largest node degree."""
 
 
 @_record
 class HardwareRow(_ResultRecord):
     path: str
+    """The hierarchy path of the row (empty for the root level)."""
     platform_capex: float
+    """Platform cost of the path's nodes."""
     platform_power_watts: float
+    """Platform power of the path's nodes, in watts."""
     optics_capex: float
+    """Optic cost of the path's link ends."""
     optics_power_watts: float
+    """Optic power of the path's link ends, in watts."""
     capex_total: float
+    """Platform and optic cost."""
     power_total_watts: float
+    """Platform and optic power, in watts."""
 
 
 @_record
@@ -895,11 +1097,17 @@ class StepResult(_ResultRecord):
 @_record
 class RunMetadata(_ResultRecord):
     schema_version: ClassVar[Literal["1.0"]] = "1.0"
+    """The results schema version."""
     netgraph_version: str
+    """The installed ngraph package version."""
     core_version: str
+    """The netgraph-core version."""
     core_extension_sha256: str
+    """The SHA-256 of the loaded native extension."""
     python_version: str
-    seed: int | None
+    """The Python version."""
+    seed: int | None = field(metadata={"null_when": "the scenario sets no seed"})
+    """The scenario's master seed."""
 
 
 @_record

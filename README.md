@@ -126,7 +126,7 @@ See [DSL Reference](https://networmix.github.io/NetGraph/reference/dsl/) and [Ex
 - **Declarative scenarios**: schema-validated YAML, reusable blueprints, a strict multigraph model
 - **Failure analysis**: weighted failure modes, risk groups, and analysis-time exclusions that leave the base topology untouched
 - **Routing models**: cost-only IP routing and capacity-aware traffic engineering
-- **Flow placement**: ECMP and WCMP splits, max-flow and demand placement
+- **Traffic placement**: ECMP and WCMP splits, maximum flow and demand placement
 - **Reproducible results**: seeded randomness and stable link ids
 - **C++ algorithms** with the GIL released, via [NetGraph-Core](https://github.com/networmix/NetGraph-Core)
 

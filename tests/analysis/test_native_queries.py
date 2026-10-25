@@ -221,7 +221,7 @@ def test_sensitivity_node_and_directed_masks_have_independent_expected_values():
     forward, reverse = topology.edges_by_link["a|t|0"]
     for mask, expected in (
         (eligibility(topology, excluded_nodes=["b"]), 3),
-        (eligibility(topology, excluded_edges=[forward]), 2),
+        (topology.graph.eligibility(excluded_edges=[forward]), 2),
     ):
         result = edge_sensitivity(
             context,
@@ -231,4 +231,87 @@ def test_sensitivity_node_and_directed_masks_have_independent_expected_values():
         )
         assert result.result.baseline.delivered == expected
         assert result.result.baseline.total_cost == (15 if expected == 3 else 6)
-    assert eligibility(topology, excluded_edges=[forward]).edge_allowed()[reverse]
+    assert topology.graph.eligibility(excluded_edges=[forward]).edge_allowed()[reverse]
+
+
+def test_deleting_a_zero_capacity_member_improves_a_fixed_offer():
+    # s->t over parallel cost-1 links of capacity 0 and 10; ECMP LOSSY at the fixed offer
+    # 10, q = 1. Baseline: 5 offered to each link, the zero link drops its 5, 5 delivered.
+    # Deleting the zero link puts all 10 on the other: reduction 5 - 10 = -5. Deleting the
+    # 10 link leaves nothing: reduction 5. Reverse edges carry nothing: reduction 0.
+    import io
+    import json
+
+    from ngraph.export import write_json
+
+    network = Network()
+    for name in ("s", "t"):
+        network.add_node(Node(name))
+    network.add_link(Link("s", "t", 0, 1))
+    network.add_link(Link("s", "t", 10, 1))
+    context = prepare_network(network)
+    config = ngc.FlowPolicyConfig(
+        routing=ngc.ShortestPaths(allocation=ngc.RouteAllocation.EQUAL),
+        admission=ngc.Admission.LOSSY,
+    )
+    analysis = edge_sensitivity(
+        context,
+        SensitivityQuery(Selector("^s$"), Selector("^t$"), config, offer=10, workers=1),
+    )
+    refs = context.topology.edge_refs
+    assert analysis.result.baseline.delivered == 5
+    assert {
+        (refs[e.edge].link, refs[e.edge].direction): e.delivery_reduction
+        for e in analysis.result.entries
+    } == {
+        ("s|t|0", "forward"): -5,
+        ("s|t|1", "forward"): 5,
+        ("s|t|0", "reverse"): 0,
+        ("s|t|1", "reverse"): 0,
+    }
+    output = io.StringIO()
+    write_json(analysis, output)
+    entries = json.loads(output.getvalue())["analysis"]["entries"]
+    assert [(e["edge"]["link"], e["delivery_reduction_units"]) for e in entries] == [
+        ("s|t|0", -5),
+        ("s|t|1", 5),
+    ]
+
+
+def test_an_exact_native_total_above_2_53_reaches_rows_and_json_as_integers():
+    # At q = 1/2: A->T twice (capacities 2^52 and 0.5, 2^53 and 1 units) and B->T 1 (2
+    # units). The unrestricted maximum flow from both sources saturates every link: A
+    # delivers 2^53 + 1, B 2, in all 2^53 + 3. Neither 2^53 + 1 nor 2^53 + 3 is a binary64
+    # value, so a per-source or total amount passed through a float would differ.
+    import io
+    import json
+
+    from ngraph.export import write_json
+
+    network = Network()
+    for name in ("A", "B", "T"):
+        network.add_node(Node(name))
+    network.add_link(Link("A", "T", 2**52, 1))
+    network.add_link(Link("A", "T", 0.5, 1))
+    network.add_link(Link("B", "T", 1, 1))
+    context = prepare_network(network, q=0.5)
+    analysis = capacity(
+        context,
+        CapacityQuery(
+            Selector("^[AB]$"), Selector("^T$"), workers=1, export_details=True
+        ),
+    )
+    (row,) = analysis.cases[0].states["converged"].rows
+    assert row.result.delivered == 2**53 + 3 and type(row.result.delivered) is int
+    names = context.topology.node_names
+    assert [(names[s.source], s.delivered) for s in row.result.by_source] == [
+        ("A", 2**53 + 1),
+        ("B", 2),
+    ]
+    output = io.StringIO()
+    write_json(analysis, output)
+    (wire,) = json.loads(output.getvalue())["analysis"]["cases"][0]["states"][
+        "converged"
+    ]["rows"]
+    assert wire["result"]["delivered_units"] == 2**53 + 3
+    assert [s["delivered_units"] for s in wire["result"]["by_source"]] == [2**53 + 1, 2]

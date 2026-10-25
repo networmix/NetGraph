@@ -109,6 +109,8 @@ Every selection mechanism evaluates conditions the same way.
 
 Each condition has three fields:
 
+<!-- example: fragment #/$defs/matchSpec -->
+
 ```yaml
 conditions:
   - attr: "role"           # Attribute name (supports dot-notation)
@@ -144,6 +146,8 @@ Operator semantics:
 - `"or"` (default in most contexts): Any condition must match
 - `"and"`: All conditions must match
 
+<!-- example: fragment #/$defs/nodeSelector -->
+
 ```yaml
 match:
   logic: "and"
@@ -163,6 +167,8 @@ Conditions evaluate against a flattened view of entity attributes:
 **5. Dot-Notation for Nested Attributes**
 
 Access nested attributes using dots:
+
+<!-- example: fragment #/$defs/matchSpec -->
 
 ```yaml
 conditions:
@@ -193,6 +199,8 @@ The `active_only` and `match.logic` defaults can be set explicitly per selector.
 
 ## Top-Level Keys
 
+<!-- example: unprepared -->
+
 ```yaml
 network: {}              # Network topology
 blueprints: {}           # Reusable network templates
@@ -203,8 +211,14 @@ demands: {}              # Traffic demand definitions
 failures: {}             # Failure simulation policies
 workflow: []             # Analysis execution steps
 seed: 42                 # Master seed for reproducibility (integer)
-routing: {}              # IGP domain and BGP-edge routers for the WCMP controller
-wcmp_controller: {}      # WCMP controller scope
+units: {resolution: auto, precision: 0.001}  # Bandwidth quantum q and precision target
+routes: {}               # Named explicit routes
+supports: {}             # Named forwarding supports (DAGs)
+weights: {}              # Named edge weights
+routing:                 # IGP domain and BGP-edge routers for the WCMP controller
+  igp_domain: {path: "^core"}
+  bgp_edge: {path: "^edge"}
+wcmp_controller: {scope: next_hop}  # WCMP controller scope
 forwarding_groups: {}    # Fixed group shares at programmed routers
 ```
 
@@ -219,6 +233,10 @@ forwarding_groups: {}    # Fixed group shares at programmed routers
 | `failures` | No | Failure policies for simulation |
 | `workflow` | No | Analysis workflow steps to execute |
 | `seed` | No | Master seed (integer) for reproducible random operations |
+| `units` | No | Bandwidth quantum `q` (`resolution`, `auto` by default) and `precision` target ([Units](#units-and-input-validation)) |
+| `routes` | No | Named explicit routes for `pinned` models |
+| `supports` | No | Named forwarding supports (DAGs of directed links) |
+| `weights` | No | Named edge-weight tables |
 | `routing` | With `wcmp_controller` | IGP domain and BGP-edge populations ([WCMP controller](#routing-domains-and-the-wcmp-controller)) |
 | `wcmp_controller` | No | Controller scope for `SHORTEST_PATHS_WCMP` demands |
 | `forwarding_groups` | No | Declared group trees at routers the controller programs (needs `wcmp_controller`) |
@@ -465,9 +483,11 @@ network:
 - Mixed expressions: `[1,3,5-7]` -> 1, 3, 5, 6, 7
 - Multiple brackets: Cartesian product of all brackets
 
+<!-- example: fragment #/properties/network/properties/nodes -->
+
 ```yaml
 # Multiple brackets produce cartesian product
-dc[1-2]/rack[a,b]:   # Creates: dc1/racka, dc1/rackb, dc2/racka, dc2/rackb
+dc[1-2]/rack[a,b]: {}   # Creates: dc1/racka, dc1/rackb, dc2/racka, dc2/rackb
 ```
 
 **Scope:** Bracket expansion applies to:
@@ -527,6 +547,8 @@ Use `$var` or `${var}` syntax with an `expand` block for template substitution. 
 
 **Example in links:**
 
+<!-- example: fragment #/properties/network -->
+
 ```yaml
 links:
   - source: "plane${p}/rack${r}"
@@ -549,6 +571,8 @@ links:
 ```
 
 **Variables in nested attributes:**
+
+<!-- example: fragment #/properties/network -->
 
 ```yaml
 links:
@@ -1009,6 +1033,8 @@ Risk group references are validated at scenario load time:
 
 **Undefined Reference Detection:** All risk group names referenced by nodes and links must exist in the `risk_groups` section. This catches typos and missing definitions early:
 
+<!-- example: refusal unknown risk groups 'PowerZone_A' -->
+
 ```yaml
 # This will fail validation
 network:
@@ -1023,6 +1049,8 @@ risk_groups:
 **Child Key Restrictions:** Nested `children` entries accept only `name`, `attrs`, and `children`. `membership`, `disabled`, and `generate` on a child entry fail schema validation at load time (and the parser raises `ValueError`), since only top-level groups are registered in `network.risk_groups` and these keys would otherwise be silently inert.
 
 **Circular Hierarchy Detection:** Parent-child relationships cannot form cycles:
+
+<!-- example: refusal risk group cycle: GroupA -> GroupB -> GroupA -->
 
 ```yaml
 # This will fail validation
@@ -1169,6 +1197,8 @@ An absent `id` becomes `<set>|<source declaration ordinal>`. Ordinals count sour
 
 Named routes are declared once and compiled on the prepared graph. A Pinned model references their names in declaration order, retaining duplicates and route weights.
 
+<!-- example: unprepared -->
+
 ```yaml
 routes:
   via_b:
@@ -1197,6 +1227,8 @@ Pure path routes use their declared nonnegative integer weights, default 1; weig
 
 `supports` and `weights` are separate named namespaces:
 
+<!-- example: unprepared -->
+
 ```yaml
 supports:
   through_b:
@@ -1214,6 +1246,8 @@ A support must be an acyclic directed graph without duplicate edges. Unlisted ex
 
 Other routing models use `type: shortest_paths`, `distributed_te` or `centralized_te`. For example:
 
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
 ```yaml
 model:
   admission: lossless
@@ -1226,12 +1260,14 @@ model:
     parallel_edges: true
 ```
 
-`distributed_te` requires `tunnel_count: {per_head: N}` and accepts `min_unreserved_bandwidth` in physical units plus `cost_ceiling: {type: absolute, value: C}` or `{type: stretch, value: "3/2"}`. Stretch values are exact integers or fraction strings. `centralized_te` requires `source_allocation: optimized` or `equal`, accepts an optional `tunnel_count` with `up_to`, and `prefer_headroom`. Native model applicability and integer/range restrictions are enforced at preparation.
+`distributed_te` requires `tunnel_count: {per_head: N}` and accepts `min_unreserved_bandwidth` in physical units plus `cost_ceiling: {type: absolute, value: C}` or `{type: stretch, value: "3/2"}`. Stretch values are exact: integers, fraction strings (`"3/2"`) or decimal strings (`"1.16"`), never rounded to a binary64 value; the ceiling is inclusive. `centralized_te` requires `source_allocation: optimized` or `equal`, accepts an optional `tunnel_count` with `up_to`, and `prefer_headroom`. Native model applicability and integer/range restrictions are enforced at preparation.
 
 ### Routing domains and the WCMP controller
 
 A WCMP controller programs every `SHORTEST_PATHS_WCMP` demand toward one BGP-edge router with one destination-wide
 weight table per demand set and destination:
+
+<!-- example: unprepared -->
 
 ```yaml
 routing:
@@ -1470,6 +1506,8 @@ failures:
 
 The ordered list of analysis steps:
 
+<!-- example: unprepared -->
+
 ```yaml
 workflow:
   - type: NetworkStats
@@ -1510,28 +1548,30 @@ At least one of `path`, `group_by`, or `match` must be specified in a selector o
 
 ### String Pattern Examples
 
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
 ```yaml
 # Exact match
-source: "spine-1"
+- source: "spine-1"
 
 # Prefix match
-source: "dc1/spine/"
+- source: "dc1/spine/"
 
 # Wildcard patterns
-source: "dc1/leaf.*"
+- source: "dc1/leaf.*"
 
 # Anchored patterns
-source: "^dc1/spine/switch-[1-3]$"
+- source: "^dc1/spine/switch-[1-3]$"
 
 # Alternation
-source: "^dc1/(spine|leaf)/.*$"
+- source: "^dc1/(spine|leaf)/.*$"
 ```
 
 ### Capturing Groups for Node Grouping
 
 Regex capturing groups create node groupings for analysis:
 
-```yaml
+```text
 # Single group: (dc\d+)
 # Creates groups: "dc1", "dc2", etc.
 
@@ -1549,15 +1589,17 @@ Regex capturing groups create node groupings for analysis:
 
 Use the `group_by` field to group nodes by an attribute value:
 
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
 ```yaml
 # Group by metro attribute
-source:
-  group_by: "metro"
+- source:
+    group_by: "metro"
 
 # Combine with path filtering
-source:
-  path: "^dc1/.*"
-  group_by: "role"
+- source:
+    path: "^dc1/.*"
+    group_by: "role"
 ```
 
 Notes:
@@ -1569,6 +1611,8 @@ Notes:
 ### Attribute-based Filtering
 
 Use the `match` field to filter nodes by attribute conditions:
+
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
 
 ```yaml
 source:
@@ -1590,16 +1634,18 @@ See [Condition Operators](#shared-evaluation-primitives) for the full list of su
 
 Use `active_only` to control whether disabled nodes are included:
 
+<!-- example: fragment #/properties/demands/additionalProperties/items -->
+
 ```yaml
 # Override default to include disabled nodes in demands
-source:
-  path: "^dc1/.*"
-  active_only: false    # Include disabled nodes (overrides demand default of true)
+- source:
+    path: "^dc1/.*"
+    active_only: false    # Include disabled nodes (overrides demand default of true)
 
 # Override default to exclude disabled nodes in links
-source:
-  path: "^dc1/.*"
-  active_only: true     # Exclude disabled nodes (overrides link default of false)
+- source:
+    path: "^dc1/.*"
+    active_only: true     # Exclude disabled nodes (overrides link default of false)
 ```
 
 **Context defaults** (see [Context-Aware Defaults](#context-aware-defaults)):
@@ -1611,6 +1657,8 @@ source:
 | Workflow | `true` | Analyze only active topology |
 
 ### Workflow Examples
+
+<!-- example: unprepared -->
 
 ```yaml
 workflow:

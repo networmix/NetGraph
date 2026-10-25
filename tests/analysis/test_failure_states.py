@@ -520,8 +520,8 @@ def test_an_ordered_list_records_a_loss_iteration_outcome_per_case_and_state():
 
 
 def test_a_baseline_outcome_aborts_only_when_a_replay_needs_its_programs():
-    # Two crossing tunnels with weights 1:2 at offer 3 are the contract's D-C2 in
-    # one demand: the baseline cycles. Preparation forwards the nominal volume 1
+    # Two crossing tunnels with weights 1:2 at offer 3 in one demand: lossy
+    # forwarding cycles in the baseline. Preparation forwards the nominal volume 1
     # (H gives it to the weight-2 route alone), so the cycle appears at alpha 3.
     # P-Q fails every tunnel in the other case.
     prep = crossing(("one", "two"), 1)
@@ -530,7 +530,7 @@ def test_a_baseline_outcome_aborts_only_when_a_replay_needs_its_programs():
     analysis = run(prep, links_failing("^P\\|Q$"), states=["converged"], alpha=3)
     assert analysis.cases[0].states["converged"].failure == ForwardingFailure(PERIOD_2)
     # Every tunnel crosses P-Q; H still reaches D (via R), so it keeps its share
-    # with no active route and loses it at the source (CONTRACT 8.4).
+    # with no active route and loses it at the source.
     failed = analysis.cases[1].states["converged"].rows[0].result
     assert (failed.delivered, failed.source_drops) == (0, 3)
     assert failed.termination == ngc.Termination.NO_ACTIVE_WEIGHT

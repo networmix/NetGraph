@@ -143,11 +143,29 @@ def test_native_option_integer_types_and_index_controls_keep_native_error_classe
         assert asked(result)["k"] == 1 and result.rows[0].cost == 3
 
 
+def test_a_reverse_only_mask_keeps_the_forward_direction_of_the_link():
+    # s1|b|0 (cost 1) and s1|b|1 (cost 2) are parallel. A caller's mask built from
+    # edges_by_link's reverse edge of s1|b|0 removes only b->s1 over that link: b->s1
+    # costs 2 (over s1|b|1), s1->b still costs 1; masking the forward edge is the mirror.
+    context = prepared()
+    topology = context.topology
+    forward, reverse = topology.edges_by_link["s1|b|0"]
+
+    def cost(source, target, edge):
+        mask = topology.graph.eligibility(excluded_edges=[edge])
+        options = ngc.SpfOptions(ngc.Direction.FORWARD, eligibility=mask)
+        query = PathQuery(Selector(source), Selector(target), options=options)
+        return paths(context, query).rows[0].cost
+
+    assert (cost("^b$", "^s1$", reverse), cost("^s1$", "^b$", reverse)) == (2, 1)
+    assert (cost("^b$", "^s1$", forward), cost("^s1$", "^b$", forward)) == (1, 2)
+
+
 def test_directed_mask_node_mask_limits_diagonal_overlap_and_legal_controls():
     context = prepared()
     topology = context.topology
     forward, reverse = topology.edges_by_link["s1|b|0"]
-    directed = eligibility(topology, excluded_edges=[forward])
+    directed = topology.graph.eligibility(excluded_edges=[forward])
     result = paths(
         context,
         PathQuery(

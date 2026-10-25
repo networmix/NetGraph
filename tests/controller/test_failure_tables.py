@@ -1023,3 +1023,41 @@ def test_dead_groups_in_a_simultaneous_list():
     live = z0(extra=[("B", "Z", 100, 2), ("Z", "t", 100)])
     (row,) = lossy_case(live, "^B\\|X$")
     assert (row.result.delivered, dropped(live, row)) == (60, {"S|B|0": 30})
+
+
+@pytest.mark.parametrize(
+    ("failed", "expected"),
+    [
+        # g1 (share 2) keeps its cap 120; its survivor A2 carries 100; stale loses A1's 60.
+        ("^S\\|A1$", [[280], [240], [280]]),
+        # g1 dead: its 120 dropped at S, nothing spilled to g2's 180.
+        ("^S\\|A[12]$", [[180], [180], [180]]),
+        # g2 (share 3) keeps 180; A4 carries 100; stale loses A3's 90.
+        ("^S\\|A3$", [[220], [210], [220]]),
+    ],
+)
+def test_unequal_group_shares_stay_caps_in_every_state(failed, expected):
+    # Router S, groups g1 share 2 {S-A1, S-A2} and g2 share 3 {S-A3, S-A4}, every link
+    # 100, LOSSY offer 300 (the fixed-program simultaneous question), q = 1. Nominal:
+    # g1 120 (60 + 60), g2 180 (90 + 90), all delivered.
+    trees = {
+        "s": tree(
+            "S",
+            (2, [(1, "S|A1|0"), (1, "S|A2|0")]),
+            (3, [(1, "S|A3|0"), (1, "S|A4|0")]),
+        )
+    }
+    prep = r30(trees=trees)
+    analysis = place(
+        prep,
+        PlacementQuery(
+            prep.demand_sets["d"],
+            failures=request("link", failed),
+            workers=1,
+            states=ALL,
+            interaction="simultaneous",
+        ),
+    )
+    assert delivered(analysis.cases[0].states["converged"]) == [300]
+    states = analysis.cases[1].states
+    assert [delivered(states[s]) for s in ALL] == expected

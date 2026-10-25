@@ -122,7 +122,7 @@ assert sum(case.case.occurrences for case in degraded.cases) == 20
 
 The baseline comes first; unique expanded physical patterns follow in first-observed order. Sampled empty patterns count toward the baseline's `occurrences`, without an extra baseline trial. A failed physical link excludes both directions. Risk-group membership uses one shared resolver, including unregistered descendants. Optional traces describe the first sampled cause of each pattern.
 
-`failure_cases(prepared, request)` exposes the same typed cases to custom analyses. Drawing occurs before worker execution. For capacity and placement, `workers="auto"` resolves to the CPU count (one fixed rule per analysis kind). Seven paired 1-versus-N measurements on the shipped callers selected N: NSF capacity and backbone placement save more time than the small cases spend on thread start-up. Sensitivity also resolves auto to the CPU count; the shipped scenarios have no sensitivity caller to screen. MSD remains serial. Explicit worker values must be positive integers. Query seeds override policy seeds. Each draw uses a fresh `random.Random(base_seed + draw_index)`.
+`failure_cases(prepared, request)` exposes the same typed cases to custom analyses. Drawing occurs before worker execution. For capacity, placement and sensitivity, `workers="auto"` resolves to the CPU count; results and errors are the same for any number of workers. MSD runs serially. Explicit worker values must be positive integers. Query seeds override policy seeds. Each draw uses a fresh `random.Random(base_seed + draw_index)`.
 
 ## Paths and sensitivity
 

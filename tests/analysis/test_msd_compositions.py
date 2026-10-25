@@ -156,6 +156,15 @@ def test_a_lossless_pool_in_msd_is_unproved_and_drops_nothing():
     assert any(isinstance(ref, SyntheticIngress) for ref in prep.topology.edge_refs)
 
 
+ARRAYS = ("edge_flows", "residual", "edge_reservations", "saturated_boundary_edges")
+WITH_ARRAYS = ngc.OutputOptions(
+    edge_flows=True,
+    residual=True,
+    edge_reservations=True,
+    saturated_boundary_edges=True,
+)
+
+
 def fields(result):
     plan = result.plan
     return (
@@ -183,6 +192,28 @@ def fields(result):
             for t in result.by_tunnel
         ],
         result.total_cost,
+        # The call's own amounts and change flags: a stale hold left by an earlier probe
+        # shows in the call fields even when the totals agree.
+        result.call_delivered,
+        result.call_undelivered,
+        result.delivery_delta,
+        list(result.call_edge_drops),
+        result.call_source_drops,
+        result.routes_changed,
+        result.weights_changed,
+        result.reservations_changed,
+        None
+        if result.marginal_cost_curve is None
+        else [(p.marginal_cost, p.units) for p in result.marginal_cost_curve],
+        None if result.min_cut is None else list(result.min_cut),
+        None if result.program is None else len(result.program.tunnels),
+        # Record counts and the requested native arrays.
+        len(result.by_source),
+        len(result.by_tunnel),
+        *(
+            None if (array := getattr(result, name)) is None else list(array)
+            for name in ARRAYS
+        ),
         None
         if plan is None
         else (
@@ -192,6 +223,13 @@ def fields(result):
             plan.max_lossless_offer,
             plan.total_tunnel_cost,
             plan.headroom_penalty,
+            plan.design_demand,
+            repr(plan.design_by_head),
+            repr(plan.heads_with_capacity),
+            plan.insufficient_resolution,
+            str(plan.max_fractional_bandwidth_per_tunnel),
+            plan.total_planned_bandwidth,
+            plan.total_reserved_bandwidth,
         ),
     )
 
@@ -236,7 +274,19 @@ def two_pools():
         ),
     ],
 )
-def test_every_probe_starts_from_an_empty_ledger(make, history, deliveries):
+def test_every_probe_starts_from_an_empty_ledger(
+    monkeypatch, make, history, deliveries
+):
+    # MSD asks no native arrays; here every probe asks the flows, residual capacity and
+    # reservations, so the retained rows can be compared with a fresh ledger's in full.
+    from ngraph.analysis import msd
+
+    apply = msd._apply_matrix
+    monkeypatch.setattr(
+        msd,
+        "_apply_matrix",
+        lambda ledger, owners, requests: apply(ledger, owners, requests, WITH_ARRAYS),
+    )
     prep = make()
     demands = prep.demand_sets["d"]
     result = maximum_supported_demand(
@@ -252,7 +302,16 @@ def test_every_probe_starts_from_an_empty_ledger(make, history, deliveries):
         alpha = result.history[index].alpha.value
         fresh = place(
             prep,
-            PlacementQuery(demands, alpha=alpha, states=("converged",), workers=1),
+            PlacementQuery(
+                demands,
+                alpha=alpha,
+                states=("converged",),
+                workers=1,
+                outputs=WITH_ARRAYS,
+            ),
+        )
+        assert all(
+            getattr(r.result, name) is not None for r in rows for name in ARRAYS[:3]
         )
         assert [fields(r.result) for r in rows] == [
             fields(r.result) for r in fresh.cases[0].states["converged"].rows

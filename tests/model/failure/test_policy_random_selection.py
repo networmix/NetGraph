@@ -81,3 +81,21 @@ class TestWeightedSamplingExtremeScales:
         assert set(counts) == {"a", "b", "c"}
         assert abs(counts["a"] / 6000 - 0.5) < 0.05
         assert counts["b"] > 0 and counts["c"] > 0
+
+
+def test_two_entity_frequencies_match_the_exact_bernoulli_enumeration():
+    # One Bernoulli trial per entity, p = 1/4, on nodes a and b, 16,000 draws. Exact
+    # pattern probabilities: none 9/16, {a} 3/16, {b} 3/16, both 1/16. Each frequency's
+    # standard error is at most sqrt(9/16 * 7/16 / 16000) < 0.0040; the bound is 4 of them.
+    # One draw shared by both entities would give none 3/4 and both 1/4 only.
+    network = Network(nodes={name: Node(name) for name in ("a", "b")})
+    cases = failure_cases(
+        prepare(Scenario(network)), FailureRequest(_random_policy(0.25), 16000, 11)
+    )
+    frequency = {
+        case.pattern.excluded_nodes: case.occurrences / 16000 for case in cases
+    }
+    exact = {(): 9 / 16, ("a",): 3 / 16, ("b",): 3 / 16, ("a", "b"): 1 / 16}
+    assert frequency.keys() == exact.keys()
+    for pattern, value in exact.items():
+        assert abs(frequency[pattern] - value) < 0.016, pattern

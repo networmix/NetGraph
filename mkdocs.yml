@@ -34,8 +34,11 @@ nav:
       - Workflow: reference/workflow.md
       - CLI: reference/cli.md
       - Schemas: reference/schemas.md
+      - Results: reference/results.md
       - API: reference/api.md
       - API Full: reference/api-full.md
 plugins:
   - search
 strict: true
+validation:
+  anchors: warn

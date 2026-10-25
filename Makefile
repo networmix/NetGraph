@@ -1,6 +1,6 @@
 # NetGraph development tasks. Run `make help` for the list.
 
-.PHONY: help venv clean-venv dev install check check-ci lint format test qt build clean check-dist publish-test publish info hooks check-python docs docs-serve docs-diagrams validate perf
+.PHONY: help venv clean-venv dev install check check-ci docs-check lint format test qt build clean check-dist publish-test publish info hooks check-python docs docs-serve docs-diagrams validate perf
 
 .DEFAULT_GOAL := help
 
@@ -50,6 +50,7 @@ help:
 	@echo ""
 	@echo "Documentation:"
 	@echo "  make docs          - Generate API documentation"
+	@echo "  make docs-check    - Check generated references, build docs strictly"
 	@echo "  make docs-serve    - Serve documentation locally"
 	@echo ""
 	@echo "Build & Package:"
@@ -117,10 +118,16 @@ check:
 	@$(MAKE) lint
 
 check-ci:
-	@echo "🔍 Running CI checks (non-mutating lint + schema validation + tests)..."
+	@echo "🔍 Running CI checks (non-mutating lint + schema validation + tests + docs)..."
 	@$(MAKE) lint
 	@$(MAKE) validate
 	@$(MAKE) test
+	@$(MAKE) docs-check
+
+docs-check:
+	@echo "📚 Checking the generated references and building the docs strictly..."
+	@$(PYTHON) dev/check_api_docs.py
+	@$(PYTHON) -m mkdocs build --strict
 
 lint:
 	@echo "🧹 Running linting checks (non-mutating)..."

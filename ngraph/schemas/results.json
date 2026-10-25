@@ -15,12 +15,14 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "query (the query's own alpha) or msd_step.",
           "enum": [
             "query",
             "msd_step"
           ]
         },
         "step": {
+          "description": "The step that supplies alpha. Null when the query gives its own alpha.",
           "anyOf": [
             {
               "type": "string"
@@ -79,9 +81,11 @@
       "type": "object",
       "properties": {
         "workers": {
+          "description": "The effective number of workers.",
           "type": "integer"
         },
         "sampling": {
+          "description": "The failure sampling metadata. Null when the analysis draws no failures.",
           "anyOf": [
             {
               "$ref": "#/$defs/SamplingMetadataJSON"
@@ -102,6 +106,7 @@
       "type": "object",
       "properties": {
         "add_reverse": {
+          "description": "Whether the exported graph has a reverse edge per link.",
           "type": "boolean"
         }
       },
@@ -114,11 +119,13 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "build_graph"
           ]
         },
         "parameters": {
+          "description": "The step's parameters.",
           "$ref": "#/$defs/BuildGraphParametersJSON"
         }
       },
@@ -132,20 +139,25 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "build_graph"
           ]
         },
         "add_reverse": {
+          "description": "Whether the exported graph has a reverse edge per link.",
           "type": "boolean"
         },
         "node_count": {
+          "description": "Nodes in the exported graph.",
           "type": "integer"
         },
         "link_count": {
+          "description": "Edges in the exported graph (two per link with add_reverse).",
           "type": "integer"
         },
         "graph": {
+          "description": "The node-link JSON of the network.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/JSONValue"
@@ -165,17 +177,21 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "capacity"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "outputs": {
+          "description": "The output selection that applies to the rows.",
           "$ref": "#/$defs/OutputSelectionJSON"
         },
         "question": {
+          "description": "The question this step or analysis asked.",
           "enum": [
             "lossless_bound",
             "fixed_offer_delivery",
@@ -183,6 +199,7 @@
           ]
         },
         "offer_source": {
+          "description": "Where the offer comes from: unlimited, explicit, the design demand, or the first hop.",
           "enum": [
             "unlimited",
             "explicit",
@@ -191,12 +208,14 @@
           ]
         },
         "cases": {
+          "description": "The baseline case first, then each distinct failure pattern.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CapacityCaseJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/CapacityQueryJSON"
         }
       },
@@ -402,9 +421,11 @@
       "type": "object",
       "properties": {
         "case": {
+          "description": "The failure case.",
           "$ref": "#/$defs/FailureCaseJSON"
         },
         "states": {
+          "description": "The capacity state of the case.",
           "$ref": "#/$defs/CapacityStatesJSON"
         }
       },
@@ -418,26 +439,32 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "capacity"
           ]
         },
         "source": {
+          "description": "The source selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "target": {
+          "description": "The target selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "mode": {
+          "description": "How sources and targets pair: combine or pairwise.",
           "enum": [
             "combine",
             "pairwise"
           ]
         },
         "model": {
+          "description": "The routing model and admission of the question.",
           "$ref": "#/$defs/ModelJSON"
         },
         "offer": {
+          "description": "The physical offer. Null when no offer is set.",
           "anyOf": [
             {
               "type": "number"
@@ -448,6 +475,7 @@
           ]
         },
         "design_demand": {
+          "description": "The physical design volume of tunnels. Null when no design volume is set.",
           "anyOf": [
             {
               "type": "number"
@@ -458,6 +486,7 @@
           ]
         },
         "failures": {
+          "description": "The failure request. Null when the question is the baseline only.",
           "anyOf": [
             {
               "$ref": "#/$defs/FailureRequestJSON"
@@ -484,20 +513,25 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "capacity"
           ]
         },
         "id": {
+          "description": "The row's stable identifier within its analysis.",
           "type": "string"
         },
         "endpoints": {
+          "description": "The physical source and destination node names of the row.",
           "$ref": "#/$defs/EndpointsJSON"
         },
         "result": {
+          "description": "The native placement result.",
           "$ref": "#/$defs/NativePlacementJSON"
         },
         "pool": {
+          "description": "The TE ingress pool the row's sources share. Null when the sources share no pool.",
           "anyOf": [
             {
               "$ref": "#/$defs/PoolMetadataJSON"
@@ -508,9 +542,11 @@
           ]
         },
         "cost_distribution": {
+          "description": "The requested cost report. Absent when the report was not requested or is not derivable.",
           "$ref": "#/$defs/CostReportJSON"
         },
         "unavailable_outputs": {
+          "description": "Requested outputs that the model cannot provide, with the reason. Absent when every requested output is provided.",
           "$ref": "#/$defs/UnavailableOutputsJSON"
         }
       },
@@ -527,6 +563,7 @@
       "type": "object",
       "properties": {
         "rows": {
+          "description": "The analysis rows, one per demand or endpoint pair.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -540,6 +577,7 @@
           }
         },
         "totals": {
+          "description": "Always null: capacity rows have no totals (each is its own question).",
           "type": "null"
         }
       },
@@ -553,6 +591,7 @@
       "type": "object",
       "properties": {
         "converged": {
+          "description": "The capacity question on the case's network.",
           "$ref": "#/$defs/CapacityStateJSON"
         }
       },
@@ -565,12 +604,14 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "absolute or stretch.",
           "enum": [
             "absolute",
             "stretch"
           ]
         },
         "absolute": {
+          "description": "The inclusive absolute cost ceiling. Null when the ceiling is a stretch.",
           "anyOf": [
             {
               "type": "integer"
@@ -581,6 +622,7 @@
           ]
         },
         "stretch": {
+          "description": "The inclusive stretch over the shortest cost (a fraction). Null when the ceiling is absolute.",
           "anyOf": [
             {
               "$ref": "#/$defs/FractionJSON"
@@ -602,9 +644,11 @@
       "type": "object",
       "properties": {
         "include_disabled": {
+          "description": "Whether disabled nodes and links are counted.",
           "type": "boolean"
         },
         "aggregation_level": {
+          "description": "The deepest hierarchy level reported.",
           "type": "integer"
         }
       },
@@ -618,11 +662,13 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "cost_power"
           ]
         },
         "parameters": {
+          "description": "The step's parameters.",
           "$ref": "#/$defs/CostPowerParametersJSON"
         }
       },
@@ -636,17 +682,21 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "cost_power"
           ]
         },
         "include_disabled": {
+          "description": "Whether disabled nodes and links are counted.",
           "type": "boolean"
         },
         "aggregation_level": {
+          "description": "The deepest hierarchy level reported.",
           "type": "integer"
         },
         "levels": {
+          "description": "Hardware totals per hierarchy depth.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HardwareLevelJSON"
@@ -682,11 +732,13 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "custom"
           ]
         },
         "parameters": {
+          "description": "The custom step's own JSON parameters.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/JSONValue"
@@ -703,18 +755,23 @@
       "type": "object",
       "properties": {
         "destination": {
+          "description": "The destination node name.",
           "type": "string"
         },
         "router": {
+          "description": "The router node name.",
           "type": "string"
         },
         "forwarding_group": {
+          "description": "The forwarding group (tree) name.",
           "type": "string"
         },
         "group": {
+          "description": "The root group's index in the tree.",
           "type": "integer"
         },
         "cap": {
+          "description": "The group's fixed cap: its share of the router's traffic (a fraction).",
           "$ref": "#/$defs/FractionJSON"
         }
       },
@@ -727,21 +784,59 @@
       ],
       "additionalProperties": false
     },
+    "DeclaredSourceWeightJSON": {
+      "description": "One node's weight as a weighted CentralizedTE question declares it (the input of the split, not a computed share; compare the controller table's SourceWeightJSON): a physical source by name, or a TE ingress pool's private head by its pool's identifier.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "The physical source node's name. Absent when the weight is on a pool's head.",
+          "type": "string"
+        },
+        "pool_id": {
+          "description": "The TE ingress pool whose private head carries the weight (as PoolHeadJSON names it). Absent when the weight is on a physical source.",
+          "type": "string"
+        },
+        "weight": {
+          "description": "Its declared weight (positive integer).",
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "weight"
+      ],
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "source"
+          ]
+        },
+        {
+          "required": [
+            "pool_id"
+          ]
+        }
+      ]
+    },
     "DeliveredByPathCostJSON": {
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "delivered_by_path_cost"
           ]
         },
         "cost_domain": {
+          "description": "physical_network, or analysis_graph when costs include the pool attachment's 1.",
           "enum": [
             "physical_network",
             "analysis_graph"
           ]
         },
         "bins": {
+          "description": "Delivered units per path cost, in ascending cost.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PathCostBinJSON"
@@ -759,30 +854,38 @@
       "type": "object",
       "properties": {
         "source": {
+          "description": "The source selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "target": {
+          "description": "The target selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "priority": {
+          "description": "The demand's priority (lower places first).",
           "type": "integer"
         },
         "id": {
+          "description": "The declared demand's identifier.",
           "type": "string"
         },
         "model": {
+          "description": "The routing model and admission of the question.",
           "$ref": "#/$defs/ModelJSON"
         },
         "physical_volume": {
+          "description": "The declared volume in physical units.",
           "type": "number"
         },
         "mode": {
+          "description": "How sources and targets pair: combine or pairwise.",
           "enum": [
             "combine",
             "pairwise"
           ]
         },
         "group_mode": {
+          "description": "How selector groups expand: flatten, per_group or group_pairwise.",
           "enum": [
             "flatten",
             "per_group",
@@ -806,9 +909,11 @@
       "type": "object",
       "properties": {
         "link": {
+          "description": "The physical link identifier.",
           "type": "string"
         },
         "direction": {
+          "description": "The direction of the physical link: forward (source to target) or reverse.",
           "enum": [
             "forward",
             "reverse"
@@ -825,12 +930,15 @@
       "type": "object",
       "properties": {
         "label": {
+          "description": "The discarded expansion leaf.",
           "type": "string"
         },
         "units": {
+          "description": "Its discarded units.",
           "type": "integer"
         },
         "reason": {
+          "description": "Why it was discarded: a self pair, filtered, or an empty selection.",
           "enum": [
             "self_pair",
             "filtered",
@@ -883,9 +991,11 @@
       "type": "object",
       "properties": {
         "edge": {
+          "description": "The directed physical link.",
           "$ref": "#/$defs/DirectedLinkJSON"
         },
         "units": {
+          "description": "The amount (integer units of q).",
           "type": "integer"
         }
       },
@@ -899,6 +1009,7 @@
       "type": "object",
       "properties": {
         "edge": {
+          "description": "The directed physical link, or a TE ingress pool's attachment.",
           "anyOf": [
             {
               "$ref": "#/$defs/DirectedLinkJSON"
@@ -909,6 +1020,7 @@
           ]
         },
         "value": {
+          "description": "The edge's weight.",
           "type": "integer"
         }
       },
@@ -922,12 +1034,14 @@
       "type": "object",
       "properties": {
         "sources": {
+          "description": "Source node names, sorted.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "destinations": {
+          "description": "Destination node names, sorted.",
           "type": "array",
           "items": {
             "type": "string"
@@ -944,13 +1058,16 @@
       "type": "object",
       "properties": {
         "value": {
+          "description": "Alpha as a binary64 value.",
           "type": "number",
           "exclusiveMinimum": 0
         },
         "numerator": {
+          "description": "Alpha's exact numerator.",
           "type": "integer"
         },
         "denominator": {
+          "description": "Alpha's exact denominator.",
           "type": "integer",
           "minimum": 1
         }
@@ -966,18 +1083,23 @@
       "type": "object",
       "properties": {
         "base_id": {
+          "description": "The declared demand's identifier, before expansion.",
           "type": "string"
         },
         "declared_units": {
+          "description": "The declared demand's units after one quantization of its scaled total.",
           "type": "integer"
         },
         "resolved_units": {
+          "description": "Units of its resolved leaves.",
           "type": "integer"
         },
         "discarded_units": {
+          "description": "Units of its discarded leaves.",
           "type": "integer"
         },
         "discards": {
+          "description": "Each discarded leaf with its reason.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DiscardedShareJSON"
@@ -997,21 +1119,26 @@
       "type": "object",
       "properties": {
         "id": {
+          "description": "The case identifier: baseline, or failure-NNNNNN in draw order.",
           "type": "string"
         },
         "kind": {
+          "description": "baseline or failure.",
           "enum": [
             "baseline",
             "failure"
           ]
         },
         "pattern": {
+          "description": "The canonical failure: excluded nodes and links.",
           "$ref": "#/$defs/FailurePatternJSON"
         },
         "occurrences": {
+          "description": "How many draws produced this pattern.",
           "type": "integer"
         },
         "trace": {
+          "description": "The first draw's trace of this pattern. Absent when failure traces are not requested, or no draw produced the pattern.",
           "$ref": "#/$defs/FailureTraceJSON"
         }
       },
@@ -1027,12 +1154,14 @@
       "type": "object",
       "properties": {
         "excluded_nodes": {
+          "description": "Failed nodes, sorted.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "excluded_links": {
+          "description": "Failed links (both directions), sorted.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1049,6 +1178,7 @@
       "type": "object",
       "properties": {
         "policy_name": {
+          "description": "The named failure policy. Null when the policy is inline.",
           "anyOf": [
             {
               "type": "string"
@@ -1059,6 +1189,7 @@
           ]
         },
         "inline_policy": {
+          "description": "An inline failure policy. Null when the policy is named.",
           "anyOf": [
             {
               "type": "object",
@@ -1072,9 +1203,11 @@
           ]
         },
         "iterations": {
+          "description": "The number of failure draws.",
           "type": "integer"
         },
         "seed": {
+          "description": "The draws' base seed. Null when the draws are unseeded.",
           "anyOf": [
             {
               "type": "integer"
@@ -1085,6 +1218,7 @@
           ]
         },
         "failure_trace": {
+          "description": "Whether the first draw of each pattern records its trace.",
           "type": "boolean"
         }
       },
@@ -1101,9 +1235,11 @@
       "type": "object",
       "properties": {
         "rule_index": {
+          "description": "The rule's index in its mode.",
           "type": "integer"
         },
         "scope": {
+          "description": "What the rule selects: node, link or risk_group.",
           "enum": [
             "node",
             "link",
@@ -1111,6 +1247,7 @@
           ]
         },
         "selected": {
+          "description": "The selected entities.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1128,9 +1265,11 @@
       "type": "object",
       "properties": {
         "draw_index": {
+          "description": "The draw that first produced the pattern.",
           "type": "integer"
         },
         "mode_index": {
+          "description": "The mode drawn. Null when the policy has no modes.",
           "anyOf": [
             {
               "type": "integer"
@@ -1141,24 +1280,28 @@
           ]
         },
         "mode_attrs": {
+          "description": "The drawn mode's attributes.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/JSONValue"
           }
         },
         "selections": {
+          "description": "What each rule selected.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FailureSelectionJSON"
           }
         },
         "expanded_nodes": {
+          "description": "Nodes the selections expand to.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "expanded_links": {
+          "description": "Links the selections expand to.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1179,11 +1322,13 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "loss_iteration"
           ]
         },
         "message": {
+          "description": "The native error text.",
           "type": "string"
         }
       },
@@ -1197,9 +1342,11 @@
       "type": "object",
       "properties": {
         "numerator": {
+          "description": "The fraction's numerator.",
           "type": "integer"
         },
         "denominator": {
+          "description": "The fraction's denominator (positive).",
           "type": "integer",
           "minimum": 1
         }
@@ -1214,9 +1361,11 @@
       "type": "object",
       "properties": {
         "level": {
+          "description": "The hierarchy depth of the rows.",
           "type": "integer"
         },
         "rows": {
+          "description": "One row per hierarchy path at this depth.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HardwareRowJSON"
@@ -1233,24 +1382,31 @@
       "type": "object",
       "properties": {
         "path": {
+          "description": "The hierarchy path of the row (empty for the root level).",
           "type": "string"
         },
         "platform_capex": {
+          "description": "Platform cost of the path's nodes.",
           "type": "number"
         },
         "platform_power_watts": {
+          "description": "Platform power of the path's nodes, in watts.",
           "type": "number"
         },
         "optics_capex": {
+          "description": "Optic cost of the path's link ends.",
           "type": "number"
         },
         "optics_power_watts": {
+          "description": "Optic power of the path's link ends, in watts.",
           "type": "number"
         },
         "capex_total": {
+          "description": "Platform and optic cost.",
           "type": "number"
         },
         "power_total_watts": {
+          "description": "Platform and optic power, in watts.",
           "type": "number"
         }
       },
@@ -1269,9 +1425,11 @@
       "type": "object",
       "properties": {
         "head": {
+          "description": "The tunnel head: a node name, or the pool head of a TE ingress pool.",
           "$ref": "#/$defs/SourceJSON"
         },
         "units": {
+          "description": "The head's share of the design volume (integer units of q).",
           "type": "integer"
         }
       },
@@ -1285,17 +1443,21 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "input"
           ]
         },
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "q_upper_bound": {
+          "description": "The largest q at which rounding this input is guaranteed within the precision: 2 times the precision times the input (rounding moves it half a unit at most).",
           "$ref": "#/$defs/FractionJSON"
         },
         "met": {
+          "description": "Whether the chosen q meets it.",
           "type": "boolean"
         }
       },
@@ -1311,9 +1473,11 @@
       "type": "object",
       "properties": {
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "kind": {
+          "description": "What the input is: a capacity, demand, offer, design or minimum unreserved bandwidth.",
           "enum": [
             "capacity",
             "demand",
@@ -1323,18 +1487,23 @@
           ]
         },
         "binary64_value": {
+          "description": "The physical input as given.",
           "type": "number"
         },
         "binary64_hex": {
+          "description": "The physical input in hexadecimal.",
           "type": "string"
         },
         "units": {
+          "description": "Its quantized value (integer units of q).",
           "type": "integer"
         },
         "error": {
+          "description": "The signed rounding error, units times q minus the input (physical, a fraction): positive when rounded up.",
           "$ref": "#/$defs/FractionJSON"
         },
         "relative_error": {
+          "description": "The signed relative error, the error divided by the input. Null when the input is zero.",
           "anyOf": [
             {
               "$ref": "#/$defs/FractionJSON"
@@ -1411,17 +1580,21 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "msd"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "outputs": {
+          "description": "The output selection of the best and probe rows.",
           "$ref": "#/$defs/OutputSelectionJSON"
         },
         "alpha_feasible": {
+          "description": "The largest tested feasible alpha. Null when no tested alpha was feasible.",
           "anyOf": [
             {
               "$ref": "#/$defs/ExactAlphaJSON"
@@ -1432,6 +1605,7 @@
           ]
         },
         "best_probe_index": {
+          "description": "The history index of the probe at alpha_feasible. Null when no tested alpha was feasible.",
           "anyOf": [
             {
               "type": "integer"
@@ -1442,12 +1616,15 @@
           ]
         },
         "monotone_proven": {
+          "description": "Whether feasibility (every demand fits) is proven downward closed in alpha for this question class: an alpha below a feasible one is feasible, so the search's bracket is sound. Delivery itself need not be monotone in alpha.",
           "type": "boolean"
         },
         "proof": {
+          "description": "The kind of proof behind the status (declared zero, fixed program, single controller, or unproved).",
           "$ref": "#/$defs/MSDProofJSON"
         },
         "upper_certificate": {
+          "description": "A proved bracket around the largest feasible alpha. Null when no bracket is proved.",
           "anyOf": [
             {
               "$ref": "#/$defs/UpperCertificateJSON"
@@ -1458,18 +1635,22 @@
           ]
         },
         "search_status": {
+          "description": "How the search ended.",
           "$ref": "#/$defs/MSDStatusJSON"
         },
         "stop_reason": {
+          "description": "Why the search stopped.",
           "$ref": "#/$defs/MSDStopReasonJSON"
         },
         "history": {
+          "description": "Every probe in the order tested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/MSDProbeJSON"
           }
         },
         "best_rows": {
+          "description": "The rows at alpha_feasible. Null when no tested alpha was feasible.",
           "anyOf": [
             {
               "type": "array",
@@ -1483,6 +1664,7 @@
           ]
         },
         "best_accounting": {
+          "description": "The accounting at alpha_feasible. Null when no tested alpha was feasible.",
           "anyOf": [
             {
               "type": "array",
@@ -1496,15 +1678,18 @@
           ]
         },
         "probe_rows": {
+          "description": "Rows of every probe. Absent when probe rows are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ProbeRowsJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/MSDQueryJSON"
         },
         "controller": {
+          "description": "The WCMP controller's tables of this demand set. Absent when no WCMP controller programs the set.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/TableReportJSON"
@@ -1832,12 +2017,15 @@
       "type": "object",
       "properties": {
         "index": {
+          "description": "The probe's position in the search history (0 first).",
           "type": "integer"
         },
         "alpha": {
+          "description": "The probe's exact alpha.",
           "$ref": "#/$defs/ExactAlphaJSON"
         },
         "outcome": {
+          "description": "feasible, infeasible, below_resolution (rounds to zero) or range (out of native range).",
           "enum": [
             "feasible",
             "infeasible",
@@ -1846,6 +2034,7 @@
           ]
         },
         "totals": {
+          "description": "The probe's totals. Null when the probe was out of range.",
           "anyOf": [
             {
               "$ref": "#/$defs/PlacementTotalsJSON"
@@ -1856,6 +2045,7 @@
           ]
         },
         "range_refusal": {
+          "description": "Why the probe was out of range. Null when the probe was in range.",
           "anyOf": [
             {
               "$ref": "#/$defs/RangeRefusalJSON"
@@ -1887,41 +2077,52 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "msd"
           ]
         },
         "demand_set": {
+          "description": "The demand set's name.",
           "type": "string"
         },
         "demands": {
+          "description": "The declared demands of the set, as they were asked.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DemandQuestionJSON"
           }
         },
         "alpha_start": {
+          "description": "The first alpha probed.",
           "type": "number"
         },
         "growth_factor": {
+          "description": "The factor between bracket probes.",
           "type": "number"
         },
         "alpha_min": {
+          "description": "The smallest alpha searched.",
           "type": "number"
         },
         "alpha_max": {
+          "description": "The largest alpha searched.",
           "type": "number"
         },
         "alpha_tolerance": {
+          "description": "The absolute width of the final alpha bracket at which bisection stops.",
           "type": "number"
         },
         "max_bracket_iters": {
+          "description": "The largest number of bracket probes.",
           "type": "integer"
         },
         "max_bisect_iters": {
+          "description": "The largest number of bisection probes.",
           "type": "integer"
         },
         "export_probe_rows": {
+          "description": "Whether every probe's rows are exported.",
           "type": "boolean"
         }
       },
@@ -1966,9 +2167,11 @@
       "type": "object",
       "properties": {
         "marginal_cost": {
+          "description": "The increase of the minimum total cost per additional unit.",
           "type": "integer"
         },
         "units": {
+          "description": "The units delivered at that marginal cost.",
           "type": "integer"
         }
       },
@@ -1982,17 +2185,20 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "marginal_curve"
           ]
         },
         "cost_domain": {
+          "description": "physical_network, or analysis_graph when costs include the pool attachment's 1.",
           "enum": [
             "physical_network",
             "analysis_graph"
           ]
         },
         "bins": {
+          "description": "The native marginal cost curve: each piece's marginal cost and units, in ascending cost.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/MarginalCostBinJSON"
@@ -2010,9 +2216,11 @@
       "type": "object",
       "properties": {
         "edge": {
+          "description": "The member: a directed link leaving the router.",
           "$ref": "#/$defs/DirectedLinkJSON"
         },
         "weight": {
+          "description": "Its integer weight (0 included).",
           "type": "integer"
         }
       },
@@ -2026,6 +2234,7 @@
       "type": "object",
       "properties": {
         "routing": {
+          "description": "The routing model.",
           "enum": [
             "shortest_paths",
             "distributed_te",
@@ -2034,12 +2243,14 @@
           ]
         },
         "admission": {
+          "description": "LOSSLESS (deliver whole or less) or LOSSY (send and drop where full).",
           "enum": [
             "lossless",
             "lossy"
           ]
         },
         "allocation": {
+          "description": "How a router splits over its members: equal, weighted or optimized. Null when it does not apply to the model.",
           "anyOf": [
             {
               "enum": [
@@ -2054,11 +2265,13 @@
           ]
         },
         "source_allocation": {
+          "description": "How sources share the demand: equal, weighted or optimized. Null when it does not apply to the model.",
           "anyOf": [
             {
               "enum": [
                 "equal",
-                "optimized"
+                "optimized",
+                "weighted"
               ]
             },
             {
@@ -2066,7 +2279,22 @@
             }
           ]
         },
+        "source_weights": {
+          "description": "Weighted sources (CentralizedTE without tunnels): the question's declared weights, each graph node with a nonzero weight in node order (a zero weight receives nothing; all zero gives an empty list); a TE ingress pool's private head is named by its pool. Null when the sources are not weighted.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DeclaredSourceWeightJSON"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "weight_basis": {
+          "description": "What weighted splits are proportional to. Null when it does not apply to the model.",
           "anyOf": [
             {
               "enum": [
@@ -2081,6 +2309,7 @@
           ]
         },
         "edge_weights": {
+          "description": "Explicit edge weights. Null when the model has none.",
           "anyOf": [
             {
               "type": "array",
@@ -2094,6 +2323,7 @@
           ]
         },
         "tie_break": {
+          "description": "How equal-cost choices are ordered (ShortestPaths and T1). Null when the model is another one, or the WCMP controller programs the demand.",
           "anyOf": [
             {
               "enum": [
@@ -2109,6 +2339,7 @@
           ]
         },
         "multipath": {
+          "description": "ShortestPaths: whether every equal-cost walk is used (false: one canonical path). Null when the model is not ShortestPaths, or the WCMP controller programs the demand.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2119,6 +2350,7 @@
           ]
         },
         "parallel_edges": {
+          "description": "ShortestPaths and T1: whether every parallel link is used (false: one per node pair). Null when the model is neither, or the WCMP controller programs the demand.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2129,6 +2361,7 @@
           ]
         },
         "tunnel_count": {
+          "description": "The tunnel count per head. Null when the model has no tunnels.",
           "anyOf": [
             {
               "$ref": "#/$defs/TunnelCountJSON"
@@ -2139,6 +2372,7 @@
           ]
         },
         "prefer_headroom": {
+          "description": "CentralizedTE: whether T2, after minimizing total tunnel cost, minimizes the plan's headroom penalty, based on occupied fractions of link capacity. Null when the model is not CentralizedTE.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2149,6 +2383,7 @@
           ]
         },
         "cost_ceiling": {
+          "description": "The tunnels' cost ceiling. Null when there is none.",
           "anyOf": [
             {
               "$ref": "#/$defs/CostCeilingJSON"
@@ -2159,6 +2394,7 @@
           ]
         },
         "min_unreserved_bandwidth_units": {
+          "description": "T1: a setup-search filter (integer units of q): a tunnel's search uses a link only when its unreserved capacity is at least both the tunnel's request and this minimum; nothing is kept free. Null when the model is not T1.",
           "anyOf": [
             {
               "type": "integer"
@@ -2169,6 +2405,7 @@
           ]
         },
         "route_names": {
+          "description": "The named routes of a pinned model. Null when the model is not pinned by named routes.",
           "anyOf": [
             {
               "type": "array",
@@ -2182,6 +2419,7 @@
           ]
         },
         "controller": {
+          "description": "The WCMP controller scope that programs the demand. Null when no controller programs it.",
           "anyOf": [
             {
               "enum": [
@@ -2196,9 +2434,11 @@
           ]
         },
         "supplied_support": {
+          "description": "Whether a CentralizedTE model was given its own support DAG.",
           "type": "boolean"
         },
         "supplied_program": {
+          "description": "Whether a pinned model was given a native program (its routes are not exported).",
           "type": "boolean"
         }
       },
@@ -2207,6 +2447,7 @@
         "admission",
         "allocation",
         "source_allocation",
+        "source_weights",
         "weight_basis",
         "edge_weights",
         "tie_break",
@@ -2221,21 +2462,49 @@
         "supplied_support",
         "supplied_program"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "source_allocation": {
+            "const": "weighted"
+          }
+        },
+        "required": [
+          "source_allocation"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source_weights": {
+            "type": "array"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "source_weights": {
+            "type": "null"
+          }
+        }
+      }
     },
     "NamedPathJSON": {
       "type": "object",
       "properties": {
         "source": {
+          "description": "The path's source node.",
           "type": "string"
         },
         "destination": {
+          "description": "The path's destination node.",
           "type": "string"
         },
         "cost": {
+          "description": "The path's cost.",
           "type": "integer"
         },
         "hops": {
+          "description": "The path's hops in order; each hop lists the parallel directed links it may use.",
           "type": "array",
           "items": {
             "type": "array",
@@ -2257,18 +2526,23 @@
       "type": "object",
       "properties": {
         "edge_flows": {
+          "description": "Request each row's per-link flows.",
           "type": "boolean"
         },
         "residual": {
+          "description": "Request each row's per-link residual capacity.",
           "type": "boolean"
         },
         "edge_reservations": {
+          "description": "Request each row's per-link tunnel holds.",
           "type": "boolean"
         },
         "saturated_boundary_edges": {
+          "description": "Request each row's saturated boundary links.",
           "type": "boolean"
         },
         "min_cut": {
+          "description": "Request the minimum cut where it is defined.",
           "type": "boolean"
         }
       },
@@ -2285,12 +2559,14 @@
       "type": "object",
       "properties": {
         "request_kind": {
+          "description": "Whether the request is finite or unlimited.",
           "enum": [
             "finite",
             "unlimited"
           ]
         },
         "requested_units": {
+          "description": "The request (integer units of q). Null when the request is unlimited.",
           "anyOf": [
             {
               "type": "integer"
@@ -2301,6 +2577,7 @@
           ]
         },
         "offered_units": {
+          "description": "LOSSY: the units sent into the network. Null when admission is LOSSLESS.",
           "anyOf": [
             {
               "type": "integer"
@@ -2311,9 +2588,11 @@
           ]
         },
         "delivered_units": {
+          "description": "The units delivered to the destinations.",
           "type": "integer"
         },
         "unadmitted_units": {
+          "description": "LOSSLESS: the request minus the delivery; LOSSY: 0. Null when the request is unlimited.",
           "anyOf": [
             {
               "type": "integer"
@@ -2324,12 +2603,15 @@
           ]
         },
         "source_drop_units": {
+          "description": "LOSSY: units lost at sources without a usable route; 0 when LOSSLESS.",
           "type": "integer"
         },
         "edge_drop_units": {
+          "description": "LOSSY: units dropped on links, in all; 0 when LOSSLESS.",
           "type": "integer"
         },
         "termination": {
+          "description": "The native call's outcome.",
           "enum": [
             "complete",
             "no_route",
@@ -2338,6 +2620,7 @@
           ]
         },
         "total_cost": {
+          "description": "The controllers only (CentralizedTE without tunnels, ShortestPaths with optimized allocation): the exact sum over links of cost times carried units. Null when the model is another one (T1, T2, pinned, other ShortestPaths).",
           "anyOf": [
             {
               "type": "integer"
@@ -2348,9 +2631,11 @@
           ]
         },
         "call_delivered_units": {
+          "description": "The units this call delivered. Absent when details are not requested.",
           "type": "integer"
         },
         "call_undelivered_units": {
+          "description": "The request minus this call's delivery. Null when the request is unlimited. Absent when details are not requested.",
           "anyOf": [
             {
               "type": "integer"
@@ -2361,39 +2646,47 @@
           ]
         },
         "delivery_delta_units": {
+          "description": "The delivery after the call minus before it. Absent when details are not requested.",
           "type": "integer"
         },
         "call_edge_drops": {
+          "description": "This call's drops on physical links. Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EdgeAmountJSON"
           }
         },
         "call_source_drop_units": {
+          "description": "This call's offered units lost at sources without a usable route. Absent when details are not requested.",
           "type": "integer"
         },
         "admitted_units": {
+          "description": "LOSSLESS: the units carried; LOSSY: the units offered. Absent when details are not requested.",
           "type": "integer"
         },
         "edge_drops": {
+          "description": "Drops on physical links, by directed link. Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EdgeAmountJSON"
           }
         },
         "by_source": {
+          "description": "One row per source, in source order (zero rows included). Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SourceFlowJSON"
           }
         },
         "by_tunnel": {
+          "description": "One row per tunnel of the program, in entry order. Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/TunnelFlowJSON"
           }
         },
         "plan": {
+          "description": "T1 and T2: the tunnel plan after the call. Null when the model is not T1 or T2. Absent when details are not requested, and in a tunnel-count row's result (the row records the plan).",
           "anyOf": [
             {
               "$ref": "#/$defs/TunnelPlanJSON"
@@ -2404,58 +2697,35 @@
           ]
         },
         "edge_flows": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/EdgeAmountJSON"
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The units each directed physical link carries. Absent when it was not requested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EdgeAmountJSON"
+          }
         },
         "residual": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/EdgeAmountJSON"
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Each directed physical link's residual capacity (integer units of q). Absent when it was not requested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EdgeAmountJSON"
+          }
         },
         "edge_reservations": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/EdgeAmountJSON"
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Each directed physical link's strict tunnel holds (integer units of q). Absent when it was not requested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EdgeAmountJSON"
+          }
         },
         "saturated_boundary_edges": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/DirectedLinkJSON"
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The saturated links at the sources' reachable boundary. Absent when it was not requested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DirectedLinkJSON"
+          }
         },
         "min_cut": {
+          "description": "The minimum cut closest to the sources, where one is defined (unrestricted optimized CentralizedTE at its maximum). Null when no cut is defined. Absent when it was not requested.",
           "anyOf": [
             {
               "type": "array",
@@ -2469,6 +2739,7 @@
           ]
         },
         "synthetic_ingress": {
+          "description": "Amounts on the private pool attachments (the synthetic ingress edges). Absent when the row has no TE ingress pool, or no native output is requested and details record no attachment drops.",
           "$ref": "#/$defs/SyntheticProjectionJSON"
         }
       },
@@ -2489,15 +2760,18 @@
       "type": "object",
       "properties": {
         "include_disabled": {
+          "description": "Whether disabled nodes and links are counted.",
           "type": "boolean"
         },
         "excluded_nodes": {
+          "description": "Nodes left out of the statistics.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "excluded_links": {
+          "description": "Links left out of the statistics.",
           "type": "array",
           "items": {
             "type": "string"
@@ -2515,11 +2789,13 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "network_stats"
           ]
         },
         "parameters": {
+          "description": "The step's parameters.",
           "$ref": "#/$defs/NetworkStatsParametersJSON"
         }
       },
@@ -2533,53 +2809,69 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "network_stats"
           ]
         },
         "node_count": {
+          "description": "Nodes counted.",
           "type": "integer"
         },
         "link_count": {
+          "description": "Links counted.",
           "type": "integer"
         },
         "total_capacity": {
+          "description": "The sum of link capacities.",
           "type": "number"
         },
         "mean_capacity": {
+          "description": "The mean link capacity.",
           "type": "number"
         },
         "median_capacity": {
+          "description": "The median link capacity.",
           "type": "number"
         },
         "min_capacity": {
+          "description": "The smallest link capacity.",
           "type": "number"
         },
         "max_capacity": {
+          "description": "The largest link capacity.",
           "type": "number"
         },
         "mean_cost": {
+          "description": "The mean link cost.",
           "type": "number"
         },
         "median_cost": {
+          "description": "The median link cost.",
           "type": "number"
         },
         "min_cost": {
+          "description": "The smallest link cost.",
           "type": "number"
         },
         "max_cost": {
+          "description": "The largest link cost.",
           "type": "number"
         },
         "mean_degree": {
+          "description": "The mean node degree.",
           "type": "number"
         },
         "median_degree": {
+          "description": "The median node degree.",
           "type": "number"
         },
         "min_degree": {
+          "description": "The smallest node degree.",
           "type": "number"
         },
         "max_degree": {
+          "description": "The largest node degree.",
           "type": "number"
         }
       },
@@ -2607,12 +2899,15 @@
       "type": "object",
       "properties": {
         "native": {
+          "description": "The native output flags.",
           "$ref": "#/$defs/NativeOutputsJSON"
         },
         "cost_distribution": {
+          "description": "Whether cost reports are exported.",
           "type": "boolean"
         },
         "details": {
+          "description": "Whether native per-source, per-tunnel, plan and call fields are exported.",
           "type": "boolean"
         }
       },
@@ -2627,35 +2922,42 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "paths"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "algorithm": {
+          "description": "The path search: spf (shortest paths) or ksp (k shortest paths).",
           "enum": [
             "spf",
             "ksp"
           ]
         },
         "mode": {
+          "description": "How sources and targets pair: combine or pairwise.",
           "enum": [
             "combine",
             "pairwise"
           ]
         },
         "costs_only": {
+          "description": "Only path costs, without the paths.",
           "type": "boolean"
         },
         "rows": {
+          "description": "The analysis rows, one per demand or endpoint pair.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PathRowJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/PathQueryJSON"
         }
       },
@@ -2673,12 +2975,15 @@
       "type": "object",
       "properties": {
         "cost": {
+          "description": "The path cost (analysis graph for a pool).",
           "type": "integer"
         },
         "physical_path_cost": {
+          "description": "The path cost without the pool attachment.",
           "type": "integer"
         },
         "delivered_units": {
+          "description": "The units delivered over paths of this cost.",
           "type": "integer"
         }
       },
@@ -2693,32 +2998,39 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "paths"
           ]
         },
         "source": {
+          "description": "The source selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "target": {
+          "description": "The target selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "mode": {
+          "description": "How sources and targets pair: combine or pairwise.",
           "enum": [
             "combine",
             "pairwise"
           ]
         },
         "algorithm": {
+          "description": "The path search: spf (shortest paths) or ksp (k shortest paths).",
           "enum": [
             "spf",
             "ksp"
           ]
         },
         "costs_only": {
+          "description": "Only path costs, without the paths.",
           "type": "boolean"
         },
         "max_paths": {
+          "description": "The largest number of paths per row. Null when every path is kept.",
           "anyOf": [
             {
               "type": "integer"
@@ -2729,6 +3041,7 @@
           ]
         },
         "split_parallel_edges": {
+          "description": "SPF: whether each parallel link is its own path. Null when the algorithm is KSP.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2739,6 +3052,7 @@
           ]
         },
         "k": {
+          "description": "KSP: the number of shortest paths. Null when the algorithm is SPF.",
           "anyOf": [
             {
               "type": "integer"
@@ -2749,6 +3063,7 @@
           ]
         },
         "cost_ceiling": {
+          "description": "KSP: the cost ceiling. Null when there is none or the algorithm is SPF.",
           "anyOf": [
             {
               "$ref": "#/$defs/CostCeilingJSON"
@@ -2759,6 +3074,7 @@
           ]
         },
         "tie_break": {
+          "description": "How equal-cost choices are ordered.",
           "enum": [
             "fewer_hops",
             "higher_capacity",
@@ -2767,6 +3083,7 @@
           ]
         },
         "multipath": {
+          "description": "SPF: whether every equal-cost walk is used. Null when the algorithm is KSP.",
           "anyOf": [
             {
               "type": "boolean"
@@ -2777,15 +3094,25 @@
           ]
         },
         "parallel_edges": {
+          "description": "Whether every parallel link is used (false: one per node pair).",
           "type": "boolean"
         },
         "excluded_nodes": {
+          "description": "Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.",
           "type": "array",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/PoolNodeJSON"
+              }
+            ]
           }
         },
         "excluded_edges": {
+          "description": "Directed links excluded from the question.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -2799,6 +3126,7 @@
           }
         },
         "residual_units": {
+          "description": "The supplied residual capacities the search used (SPF or KSP), one per edge of the prepared graph in edge order (pool attachments included; integer units of q). Null when no residual vector is supplied.",
           "anyOf": [
             {
               "type": "array",
@@ -2812,6 +3140,7 @@
           ]
         },
         "min_residual": {
+          "description": "SPF: when residual_units is supplied, a link is usable only when that residual is at least this many units; without the vector there is no residual filter (KSP's supplied vector uses a minimum of one unit). Null when the algorithm is KSP.",
           "anyOf": [
             {
               "type": "integer",
@@ -2874,9 +3203,6 @@
               "min_residual": {
                 "type": "null"
               },
-              "residual_units": {
-                "type": "null"
-              },
               "max_paths": {
                 "type": "null"
               },
@@ -2892,18 +3218,22 @@
       "type": "object",
       "properties": {
         "id": {
+          "description": "The row's stable identifier within its analysis.",
           "type": "string"
         },
         "endpoints": {
+          "description": "The physical source and destination node names of the row.",
           "$ref": "#/$defs/EndpointsJSON"
         },
         "kind": {
+          "description": "paths, or self for a source equal to its target.",
           "enum": [
             "paths",
             "self"
           ]
         },
         "cost": {
+          "description": "The shortest cost of the row. Null when the destination is unreachable.",
           "anyOf": [
             {
               "type": "integer"
@@ -2914,6 +3244,7 @@
           ]
         },
         "paths": {
+          "description": "The paths of this row. Absent when the query is costs-only.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/NamedPathJSON"
@@ -2932,35 +3263,43 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "placement"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "outputs": {
+          "description": "The output selection that applies to the rows.",
           "$ref": "#/$defs/OutputSelectionJSON"
         },
         "alpha": {
+          "description": "The exact scaling of the declared demands.",
           "$ref": "#/$defs/ExactAlphaJSON"
         },
         "accounting": {
+          "description": "Each declared demand's units: declared, resolved and discarded.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ExpansionAccountingJSON"
           }
         },
         "cases": {
+          "description": "The baseline case first, then each distinct failure pattern.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PlacementCaseJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/PlacementQueryJSON"
         },
         "controller": {
+          "description": "The WCMP controller's tables of this demand set. Absent when no WCMP controller programs the set.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/TableReportJSON"
@@ -3409,9 +3748,11 @@
       "type": "object",
       "properties": {
         "case": {
+          "description": "The failure case.",
           "$ref": "#/$defs/FailureCaseJSON"
         },
         "states": {
+          "description": "One entry per requested failure state.",
           "$ref": "#/$defs/PlacementStatesJSON"
         }
       },
@@ -3425,26 +3766,32 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "placement"
           ]
         },
         "demand_set": {
+          "description": "The demand set's name.",
           "type": "string"
         },
         "demands": {
+          "description": "The declared demands of the set, as they were asked.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DemandQuestionJSON"
           }
         },
         "alpha": {
+          "description": "The exact scaling of the declared demands.",
           "$ref": "#/$defs/ExactAlphaJSON"
         },
         "alpha_source": {
+          "description": "Where alpha comes from: the query, or an MSD step.",
           "$ref": "#/$defs/AlphaSourceJSON"
         },
         "failures": {
+          "description": "The failure request. Null when the question is the baseline only.",
           "anyOf": [
             {
               "$ref": "#/$defs/FailureRequestJSON"
@@ -3455,6 +3802,7 @@
           ]
         },
         "states": {
+          "description": "One entry per requested failure state.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
@@ -3467,6 +3815,7 @@
           }
         },
         "interaction": {
+          "description": "ordered (priority order) or simultaneous (one lossy fixed-program forwarding).",
           "enum": [
             "ordered",
             "simultaneous"
@@ -3489,29 +3838,37 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "placement"
           ]
         },
         "id": {
+          "description": "The row's stable identifier within its analysis.",
           "type": "string"
         },
         "base_id": {
+          "description": "The declared demand's identifier, before expansion.",
           "type": "string"
         },
         "endpoints": {
+          "description": "The physical source and destination node names of the row.",
           "$ref": "#/$defs/EndpointsJSON"
         },
         "reference_request_units": {
+          "description": "The scaled declared request (integer units of q), the denominator of the delivery ratio.",
           "type": "integer"
         },
         "reference_shortfall_units": {
+          "description": "The reference request minus the delivery (integer units of q).",
           "type": "integer"
         },
         "result": {
+          "description": "The native placement result.",
           "$ref": "#/$defs/NativePlacementJSON"
         },
         "pool": {
+          "description": "The TE ingress pool the row's sources share. Null when the sources share no pool.",
           "anyOf": [
             {
               "$ref": "#/$defs/PoolMetadataJSON"
@@ -3522,9 +3879,11 @@
           ]
         },
         "cost_distribution": {
+          "description": "The requested cost report. Absent when the report was not requested or is not derivable.",
           "$ref": "#/$defs/CostReportJSON"
         },
         "unavailable_outputs": {
+          "description": "Requested outputs that the model cannot provide, with the reason. Absent when every requested output is provided.",
           "$ref": "#/$defs/UnavailableOutputsJSON"
         }
       },
@@ -3544,12 +3903,14 @@
       "type": "object",
       "properties": {
         "rows": {
+          "description": "The analysis rows, one per demand or endpoint pair.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PlacementRowJSON"
           }
         },
         "totals": {
+          "description": "Exact totals over the state's rows. Null when the state's lossy forwarding found no fixed point (see failure).",
           "anyOf": [
             {
               "$ref": "#/$defs/PlacementTotalsJSON"
@@ -3560,9 +3921,11 @@
           ]
         },
         "failure": {
+          "description": "The case's lossy forwarding without a fixed point. Absent when forwarding reached a fixed point.",
           "$ref": "#/$defs/ForwardingFailureJSON"
         },
         "dead_caps": {
+          "description": "Declared root groups with no live member in this case, with their fixed caps. Absent when the WCMP controller's scope is not group, and in the stale state.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DeadCapJSON"
@@ -3579,12 +3942,15 @@
       "type": "object",
       "properties": {
         "converged": {
+          "description": "The demands computed again on the failed network. Absent when the query does not ask this state.",
           "$ref": "#/$defs/PlacementStateJSON"
         },
         "stale": {
+          "description": "The no-failure programs forwarded unchanged on the failed network. Absent when the query does not ask this state.",
           "$ref": "#/$defs/PlacementStateJSON"
         },
         "repair": {
+          "description": "The no-failure programs over their surviving routes. Absent when the query does not ask this state.",
           "$ref": "#/$defs/PlacementStateJSON"
         }
       },
@@ -3596,27 +3962,35 @@
       "type": "object",
       "properties": {
         "reference_request_units": {
+          "description": "The scaled declared requests over the rows (integer units of q).",
           "type": "integer"
         },
         "delivered_units": {
+          "description": "Units delivered over the rows.",
           "type": "integer"
         },
         "unadmitted_units": {
+          "description": "LOSSLESS units not admitted over the rows.",
           "type": "integer"
         },
         "source_drop_units": {
+          "description": "LOSSY units lost at sources over the rows.",
           "type": "integer"
         },
         "edge_drop_units": {
+          "description": "LOSSY units dropped on links over the rows.",
           "type": "integer"
         },
         "reference_shortfall_units": {
+          "description": "The reference request minus the delivery (integer units of q).",
           "type": "integer"
         },
         "delivery_ratio": {
+          "description": "Delivered over the reference request (a fraction; 1 for no request).",
           "$ref": "#/$defs/FractionJSON"
         },
         "feasible": {
+          "description": "Whether every row delivered its whole reference request, without loss.",
           "type": "boolean"
         }
       },
@@ -3636,9 +4010,11 @@
       "type": "object",
       "properties": {
         "pool_id": {
+          "description": "The pool's identifier.",
           "type": "string"
         },
         "physical_sources": {
+          "description": "The physical sources behind the pool head.",
           "type": "array",
           "items": {
             "type": "string"
@@ -3655,12 +4031,15 @@
       "type": "object",
       "properties": {
         "head": {
+          "description": "The pool head and its physical sources.",
           "$ref": "#/$defs/PoolHeadJSON"
         },
         "offer_limit_units": {
+          "description": "The prepared lossy offer budget of the pool (integer units of q).",
           "type": "integer"
         },
         "synthetic_ingress_cost": {
+          "description": "The cost of each pool attachment (1).",
           "enum": [
             1
           ]
@@ -3673,13 +4052,29 @@
       ],
       "additionalProperties": false
     },
+    "PoolNodeJSON": {
+      "description": "A TE ingress pool's private head node, by its pool's identifier.",
+      "type": "object",
+      "properties": {
+        "pool_id": {
+          "description": "The pool's identifier (as PoolHeadJSON names it).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pool_id"
+      ],
+      "additionalProperties": false
+    },
     "PrecisionMissJSON": {
       "type": "object",
       "properties": {
         "location": {
+          "description": "Where the miss was observed: step, case and probe.",
           "$ref": "#/$defs/ReportLocationJSON"
         },
         "constraints": {
+          "description": "The constraints the chosen q does not meet there.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -3696,12 +4091,15 @@
           }
         },
         "inexact_inputs": {
+          "description": "Inputs not exact at q there.",
           "type": "integer"
         },
         "zeroed_inputs": {
+          "description": "Positive inputs that quantize to zero there.",
           "type": "integer"
         },
         "examples": {
+          "description": "Example inputs that miss.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/InputQuantizationJSON"
@@ -3721,18 +4119,21 @@
       "type": "object",
       "properties": {
         "workflow_steps": {
+          "description": "The workflow steps prepared.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "workflow_demand_sets": {
+          "description": "The demand sets the workflow names.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "library_demand_sets": {
+          "description": "The demand sets the library caller named.",
           "type": "array",
           "items": {
             "type": "string"
@@ -3750,9 +4151,11 @@
       "type": "object",
       "properties": {
         "index": {
+          "description": "The probe's history index.",
           "type": "integer"
         },
         "rows": {
+          "description": "The probe's rows.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PlacementRowJSON"
@@ -3769,9 +4172,11 @@
       "type": "object",
       "properties": {
         "router": {
+          "description": "The programmed router.",
           "type": "string"
         },
         "members": {
+          "description": "Its members with their integer weights.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/MemberWeightJSON"
@@ -3788,6 +4193,7 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "What is bounded: a capacity sum, a cost sum, or one amount.",
           "enum": [
             "capacity_sum",
             "cost_sum",
@@ -3795,18 +4201,23 @@
           ]
         },
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "tested_q": {
+          "description": "The q tested.",
           "type": "number"
         },
         "units_value": {
+          "description": "The value at that q (integer units of q).",
           "type": "integer"
         },
         "exclusive_limit": {
+          "description": "The exclusive native limit (2^62).",
           "type": "integer"
         },
         "met": {
+          "description": "Whether the value is below the limit.",
           "type": "boolean"
         }
       },
@@ -3824,18 +4235,22 @@
       "type": "object",
       "properties": {
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "reason": {
+          "description": "scaled_nonfinite or native_units_range.",
           "enum": [
             "scaled_nonfinite",
             "native_units_range"
           ]
         },
         "message": {
+          "description": "The refusal text.",
           "type": "string"
         },
         "binary64_hex": {
+          "description": "The refused binary64 value in hexadecimal. Null when the refused amount is not a binary64 value.",
           "anyOf": [
             {
               "type": "string"
@@ -3858,6 +4273,7 @@
       "type": "object",
       "properties": {
         "step": {
+          "description": "The step. Null when the report is outside a workflow.",
           "anyOf": [
             {
               "type": "string"
@@ -3868,6 +4284,7 @@
           ]
         },
         "case_id": {
+          "description": "The case. Null when the report is outside failure cases.",
           "anyOf": [
             {
               "type": "string"
@@ -3878,6 +4295,7 @@
           ]
         },
         "probe_index": {
+          "description": "The MSD probe. Null when the report is outside MSD.",
           "anyOf": [
             {
               "type": "integer"
@@ -3899,15 +4317,18 @@
       "type": "object",
       "properties": {
         "metadata": {
+          "description": "The run's metadata: versions and the seed.",
           "$ref": "#/$defs/RunMetadataJSON"
         },
         "steps": {
+          "description": "The workflow steps in declaration order.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/StepResultJSON"
           }
         },
         "units_report": {
+          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },
@@ -3922,23 +4343,29 @@
       "type": "object",
       "properties": {
         "schema_version": {
+          "description": "The results schema version.",
           "enum": [
             "1.0"
           ]
         },
         "netgraph_version": {
+          "description": "The installed ngraph package version.",
           "type": "string"
         },
         "core_version": {
+          "description": "The netgraph-core version.",
           "type": "string"
         },
         "core_extension_sha256": {
+          "description": "The SHA-256 of the loaded native extension.",
           "type": "string"
         },
         "python_version": {
+          "description": "The Python version.",
           "type": "string"
         },
         "seed": {
+          "description": "The scenario's master seed. Null when the scenario sets no seed.",
           "anyOf": [
             {
               "type": "integer"
@@ -3963,19 +4390,23 @@
       "type": "object",
       "properties": {
         "random_rule_algorithm": {
+          "description": "The random-rule algorithm: one Bernoulli trial per entity.",
           "enum": [
             "per_entity_bernoulli"
           ]
         },
         "rng": {
+          "description": "The random number generator.",
           "enum": [
             "random.Random"
           ]
         },
         "python_version": {
+          "description": "The Python version that drew.",
           "type": "string"
         },
         "seed": {
+          "description": "The base seed. Null when the draws are unseeded.",
           "anyOf": [
             {
               "type": "integer"
@@ -3986,6 +4417,7 @@
           ]
         },
         "seed_source": {
+          "description": "Where the base seed comes from.",
           "enum": [
             "query",
             "step",
@@ -3995,21 +4427,25 @@
           ]
         },
         "draw_seed_rule": {
+          "description": "Draw i uses the base seed plus i.",
           "enum": [
             "base_plus_draw_index"
           ]
         },
         "entity_order": {
+          "description": "Entities are drawn in sorted identifier order.",
           "enum": [
             "sorted_identifier"
           ]
         },
         "rule_order": {
+          "description": "Rules are applied in declaration order.",
           "enum": [
             "declaration"
           ]
         },
         "iterations": {
+          "description": "The number of draws.",
           "type": "integer"
         }
       },
@@ -4030,6 +4466,7 @@
       "type": "object",
       "properties": {
         "path": {
+          "description": "The path pattern (a regular expression matched at the start of node names). Null when every node is selected.",
           "anyOf": [
             {
               "type": "string"
@@ -4040,6 +4477,7 @@
           ]
         },
         "group_by": {
+          "description": "A node attribute that groups the selection. Null when there is none.",
           "anyOf": [
             {
               "type": "string"
@@ -4050,6 +4488,7 @@
           ]
         },
         "match": {
+          "description": "Attribute conditions that filter the selection. Null when there are none.",
           "anyOf": [
             {
               "type": "object",
@@ -4063,6 +4502,7 @@
           ]
         },
         "active_only": {
+          "description": "Whether disabled nodes are left out. Null when the caller's default applies.",
           "anyOf": [
             {
               "type": "boolean"
@@ -4085,17 +4525,21 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "self"
           ]
         },
         "id": {
+          "description": "The row's stable identifier within its analysis.",
           "type": "string"
         },
         "node": {
+          "description": "The node that is both source and target.",
           "type": "string"
         },
         "capacity_units": {
+          "description": "Always 0: a node's capacity to itself is not a question.",
           "enum": [
             0
           ]
@@ -4113,26 +4557,32 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "sensitivity"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "outputs": {
+          "description": "The output selection that applies to the rows.",
           "$ref": "#/$defs/OutputSelectionJSON"
         },
         "endpoints": {
+          "description": "The physical source and destination node names of the row.",
           "$ref": "#/$defs/EndpointsJSON"
         },
         "question": {
+          "description": "The question this step or analysis asked.",
           "enum": [
             "lossless_bound",
             "fixed_offer_delivery"
           ]
         },
         "offer_source": {
+          "description": "Where the offer comes from: unlimited, explicit, the design demand, or the first hop.",
           "enum": [
             "unlimited",
             "explicit",
@@ -4140,15 +4590,18 @@
           ]
         },
         "baseline": {
+          "description": "The native result without deletions.",
           "$ref": "#/$defs/NativePlacementJSON"
         },
         "entries": {
+          "description": "Each directed link whose deletion changes delivery, with the reduction.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SensitivityEntryJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/SensitivityQueryJSON"
         }
       },
@@ -4286,9 +4739,11 @@
       "type": "object",
       "properties": {
         "edge": {
+          "description": "The directed physical link.",
           "$ref": "#/$defs/DirectedLinkJSON"
         },
         "delivery_reduction_units": {
+          "description": "Baseline delivery minus the delivery without this link (negative: deleting it helps).",
           "type": "integer"
         }
       },
@@ -4302,20 +4757,25 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "sensitivity"
           ]
         },
         "source": {
+          "description": "The source selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "target": {
+          "description": "The target selector.",
           "$ref": "#/$defs/SelectorJSON"
         },
         "model": {
+          "description": "The routing model and admission of the question.",
           "$ref": "#/$defs/ModelJSON"
         },
         "offer": {
+          "description": "The physical offer. Null when no offer is set.",
           "anyOf": [
             {
               "type": "number"
@@ -4326,6 +4786,7 @@
           ]
         },
         "design_demand": {
+          "description": "The physical design volume of tunnels. Null when no design volume is set.",
           "anyOf": [
             {
               "type": "number"
@@ -4336,12 +4797,21 @@
           ]
         },
         "excluded_nodes": {
+          "description": "Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.",
           "type": "array",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/PoolNodeJSON"
+              }
+            ]
           }
         },
         "excluded_edges": {
+          "description": "Directed links excluded from the question.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -4371,9 +4841,11 @@
       "type": "object",
       "properties": {
         "source": {
+          "description": "The source: a node name, or the pool head of a TE ingress pool.",
           "$ref": "#/$defs/SourceJSON"
         },
         "offered_units": {
+          "description": "LOSSY: the units this source sent. Null when admission is LOSSLESS.",
           "anyOf": [
             {
               "type": "integer"
@@ -4384,15 +4856,19 @@
           ]
         },
         "admitted_units": {
+          "description": "LOSSLESS: the units it delivers; LOSSY: offered.",
           "type": "integer"
         },
         "delivered_units": {
+          "description": "The units this source delivers.",
           "type": "integer"
         },
         "source_drop_units": {
+          "description": "LOSSY: units lost at sources without a usable route; 0 when LOSSLESS.",
           "type": "integer"
         },
         "total_edge_drop_units": {
+          "description": "LOSSY: this row's units dropped on links; 0 when LOSSLESS.",
           "type": "integer"
         }
       },
@@ -4420,12 +4896,15 @@
       "type": "object",
       "properties": {
         "source": {
+          "description": "The source node.",
           "type": "string"
         },
         "nominal_physical": {
+          "description": "Its nominal physical demand toward the destination (a fraction).",
           "$ref": "#/$defs/FractionJSON"
         },
         "weight": {
+          "description": "Its integer source weight.",
           "type": "integer"
         }
       },
@@ -4440,6 +4919,7 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "Where the split is: expansion, sources, a router or tunnels.",
           "enum": [
             "expansion",
             "source",
@@ -4448,25 +4928,31 @@
           ]
         },
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "incoming_physical": {
+          "description": "The physical amount split (a fraction).",
           "$ref": "#/$defs/FractionJSON"
         },
         "basis": {
+          "description": "declared (from the demands) or observed (from an analysis).",
           "enum": [
             "declared",
             "observed"
           ]
         },
         "members": {
+          "description": "The members the amount is split over.",
           "type": "integer",
           "minimum": 2
         },
         "q_upper_bound": {
+          "description": "The q bound this split records: the precision times the incoming amount divided by (members - 1). It bounds q, not the split's own error.",
           "$ref": "#/$defs/FractionJSON"
         },
         "met": {
+          "description": "Whether the chosen q meets it.",
           "type": "boolean"
         }
       },
@@ -4485,9 +4971,11 @@
       "type": "object",
       "properties": {
         "metadata": {
+          "description": "The export's metadata: versions.",
           "$ref": "#/$defs/RunMetadataJSON"
         },
         "analysis": {
+          "description": "The exported analysis.",
           "allOf": [
             {
               "$ref": "#/$defs/AnalysisJSON"
@@ -4500,6 +4988,7 @@
           ]
         },
         "units_report": {
+          "description": "The units report of the preparation: q, its reasons, rounding and misses.",
           "$ref": "#/$defs/UnitsReportJSON"
         }
       },
@@ -4566,15 +5055,19 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "The workflow step's name.",
           "type": "string"
         },
         "step_type": {
+          "description": "The step's class name.",
           "type": "string"
         },
         "execution_order": {
+          "description": "The step's position in the run (0 first).",
           "type": "integer"
         },
         "scenario_seed": {
+          "description": "The scenario's master seed. Null when the scenario sets no seed.",
           "anyOf": [
             {
               "type": "integer"
@@ -4585,6 +5078,7 @@
           ]
         },
         "step_seed": {
+          "description": "The step's effective seed. Null when the step has no effective seed.",
           "anyOf": [
             {
               "type": "integer"
@@ -4595,6 +5089,7 @@
           ]
         },
         "seed_source": {
+          "description": "Where the step's seed comes from.",
           "enum": [
             "explicit-step",
             "scenario-derived",
@@ -4602,6 +5097,7 @@
           ]
         },
         "result": {
+          "description": "The step's exported result. Null when a custom step returns no result, or its registered exporter writes null.",
           "anyOf": [
             {
               "anyOf": [
@@ -4619,6 +5115,7 @@
           ]
         },
         "question": {
+          "description": "The question the step asked.",
           "$ref": "#/$defs/StepQuestionJSON"
         }
       },
@@ -4973,9 +5470,11 @@
       "type": "object",
       "properties": {
         "edge": {
+          "description": "The pool attachment: its pool and source.",
           "$ref": "#/$defs/SyntheticIngressJSON"
         },
         "units": {
+          "description": "The amount (integer units of q).",
           "type": "integer"
         }
       },
@@ -4989,9 +5488,11 @@
       "type": "object",
       "properties": {
         "pool_id": {
+          "description": "The pool's identifier.",
           "type": "string"
         },
         "source": {
+          "description": "The physical source this attachment feeds.",
           "type": "string"
         }
       },
@@ -5005,49 +5506,49 @@
       "type": "object",
       "properties": {
         "call_edge_drops": {
+          "description": "This call's drops on pool attachments. Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
           }
         },
         "edge_drops": {
+          "description": "Drops on pool attachments. Absent when details are not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
           }
         },
         "edge_flows": {
+          "description": "The units each pool attachment carries. Absent when it was not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
           }
         },
         "residual": {
+          "description": "Each pool attachment's residual capacity (integer units of q). Absent when it was not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
           }
         },
         "edge_reservations": {
+          "description": "Each pool attachment's strict holds (integer units of q). Absent when it was not requested.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SyntheticAmountJSON"
           }
         },
         "saturated_boundary_edges": {
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/SyntheticIngressJSON"
-              }
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The saturated pool attachments at the boundary. Absent when it was not requested.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyntheticIngressJSON"
+          }
         },
         "min_cut": {
+          "description": "The pool attachments in the minimum cut. Null when no cut is defined. Absent when it was not requested.",
           "anyOf": [
             {
               "type": "array",
@@ -5068,15 +5569,18 @@
       "type": "object",
       "properties": {
         "destination": {
+          "description": "The destination of the table.",
           "type": "string"
         },
         "programmed": {
+          "description": "The routers the controller programs, with their member weights.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ProgrammedRouterJSON"
           }
         },
         "source_weights": {
+          "description": "all_routers: each source's nominal demand and weight. Null when the scope is not all_routers.",
           "anyOf": [
             {
               "type": "array",
@@ -5101,23 +5605,28 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "tunnel_counts"
           ]
         },
         "metadata": {
+          "description": "Run or analysis metadata.",
           "$ref": "#/$defs/AnalysisMetadataJSON"
         },
         "outputs": {
+          "description": "The output selection that applies to the rows.",
           "$ref": "#/$defs/OutputSelectionJSON"
         },
         "rows": {
+          "description": "One row per demand and tunnel count.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/TunnelCountRowJSON"
           }
         },
         "query": {
+          "description": "The analysis's typed query (a workflow step records it as the step's question instead). Absent when the analysis is a workflow step's result.",
           "$ref": "#/$defs/TunnelCountQueryJSON"
         }
       },
@@ -5257,9 +5766,11 @@
       "type": "object",
       "properties": {
         "per_head": {
+          "description": "Tunnels per head.",
           "type": "integer"
         },
         "up_to": {
+          "description": "Whether the count is a limit: every head gets one common count up to it, the smallest whose program carries the live heads' design shares (if none does, the count with the largest live-share score, then the smallest).",
           "type": "boolean"
         }
       },
@@ -5273,20 +5784,24 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "tunnel_counts"
           ]
         },
         "demand_set": {
+          "description": "The demand set's name.",
           "type": "string"
         },
         "demands": {
+          "description": "The declared demands of the set, as they were asked.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/DemandQuestionJSON"
           }
         },
         "counts": {
+          "description": "The tunnel counts asked, one row each per demand.",
           "type": "array",
           "items": {
             "type": "integer",
@@ -5295,6 +5810,7 @@
           }
         },
         "up_to": {
+          "description": "The up-to limit asked. Null when there is none.",
           "anyOf": [
             {
               "type": "integer",
@@ -5307,20 +5823,31 @@
           ]
         },
         "design_demand": {
+          "description": "The physical design volume of every demand.",
           "type": "number",
           "minimum": 0
         },
         "offer": {
+          "description": "The physical offer of every demand.",
           "type": "number",
           "minimum": 0
         },
         "excluded_nodes": {
+          "description": "Nodes excluded from the question: physical nodes by name, a TE ingress pool's private head by its pool.",
           "type": "array",
           "items": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/PoolNodeJSON"
+              }
+            ]
           }
         },
         "excluded_edges": {
+          "description": "Directed links excluded from the question.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -5351,23 +5878,29 @@
       "type": "object",
       "properties": {
         "id": {
+          "description": "The row's stable identifier within its analysis.",
           "type": "string"
         },
         "base_id": {
+          "description": "The declared demand's identifier, before expansion.",
           "type": "string"
         },
         "endpoints": {
+          "description": "The physical source and destination node names of the row.",
           "$ref": "#/$defs/EndpointsJSON"
         },
         "count": {
+          "description": "The tunnels per head of this row (an up-to row: its limit).",
           "type": "integer",
           "minimum": 1,
           "maximum": 10000
         },
         "up_to": {
+          "description": "Whether this row is the up-to row.",
           "type": "boolean"
         },
         "pool": {
+          "description": "The TE ingress pool the row's sources share. Null when the sources share no pool.",
           "anyOf": [
             {
               "$ref": "#/$defs/PoolMetadataJSON"
@@ -5378,17 +5911,21 @@
           ]
         },
         "lossless_at_design_units": {
+          "description": "The lossless delivery at the design volume: min(design, the plan's lossless maximum).",
           "type": "integer",
           "minimum": 0
         },
         "physical_tunnel_cost": {
+          "description": "For a TE ingress pool: the total tunnel cost without the pool attachments; else the total tunnel cost.",
           "type": "integer",
           "minimum": 0
         },
         "plan": {
+          "description": "The tunnel plan after the call.",
           "$ref": "#/$defs/TunnelPlanJSON"
         },
         "result": {
+          "description": "The native placement result.",
           "allOf": [
             {
               "$ref": "#/$defs/NativePlacementJSON"
@@ -5421,12 +5958,15 @@
       "type": "object",
       "properties": {
         "entry_id": {
+          "description": "The tunnel's entry identifier in the program.",
           "type": "integer"
         },
         "head": {
+          "description": "The tunnel head: a node name, or the pool head of a TE ingress pool.",
           "$ref": "#/$defs/SourceJSON"
         },
         "status": {
+          "description": "The tunnel's status in this forwarding (up, a setup failure, failed or blackholed).",
           "enum": [
             "up",
             "insufficient_bandwidth",
@@ -5436,12 +5976,15 @@
           ]
         },
         "assigned_units": {
+          "description": "The tunnel's share of the injections (LOSSY: sent to it; LOSSLESS: carried).",
           "type": "integer"
         },
         "delivered_units": {
+          "description": "The units this tunnel delivers.",
           "type": "integer"
         },
         "total_edge_drop_units": {
+          "description": "LOSSY: this row's units dropped on links; 0 when LOSSLESS.",
           "type": "integer"
         }
       },
@@ -5459,15 +6002,18 @@
       "type": "object",
       "properties": {
         "tunnels_per_head": {
+          "description": "Tunnels per head (an up-to count: the chosen count).",
           "type": "integer"
         },
         "design_kind": {
+          "description": "Whether the design volume is finite or unlimited.",
           "enum": [
             "finite",
             "unlimited"
           ]
         },
         "design_demand_units": {
+          "description": "The design volume D (integer units of q). Null when the design is unlimited.",
           "anyOf": [
             {
               "type": "integer"
@@ -5478,15 +6024,18 @@
           ]
         },
         "design_by_head": {
+          "description": "Each head's share of the design volume.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeadDesignJSON"
           }
         },
         "total_reserved_bandwidth_units": {
+          "description": "The strict holds of the up tunnels (integer units of q).",
           "type": "integer"
         },
         "heads_with_capacity": {
+          "description": "T2: the live heads, those that reach a destination over links with at least one free unit (this policy's own traffic released). Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "array",
@@ -5500,6 +6049,7 @@
           ]
         },
         "insufficient_resolution": {
+          "description": "T2: live heads exist but no whole unit per tunnel fits. Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "boolean"
@@ -5510,6 +6060,7 @@
           ]
         },
         "max_fractional_bandwidth_per_tunnel": {
+          "description": "T2: the exact fluid optimum per tunnel (a fraction). Null when the plan is T1's.",
           "anyOf": [
             {
               "$ref": "#/$defs/FractionJSON"
@@ -5520,6 +6071,7 @@
           ]
         },
         "max_bandwidth_per_tunnel_units": {
+          "description": "T2: the largest common whole-unit tunnel size U. Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "integer"
@@ -5530,6 +6082,7 @@
           ]
         },
         "planned_bandwidth_per_tunnel_units": {
+          "description": "T2: every tunnel's planned bandwidth u. Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "integer"
@@ -5540,6 +6093,7 @@
           ]
         },
         "total_planned_bandwidth_units": {
+          "description": "T2: the planned bandwidth over all tunnels. Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "integer"
@@ -5550,6 +6104,7 @@
           ]
         },
         "total_tunnel_cost": {
+          "description": "T2: the sum of link cost times tunnel count over the links (exact). Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "integer"
@@ -5560,6 +6115,7 @@
           ]
         },
         "headroom_penalty": {
+          "description": "T2 with prefer_headroom: the headroom penalty of the plan. Null when the plan is T1's or prefer_headroom is off.",
           "anyOf": [
             {
               "type": "integer"
@@ -5570,6 +6126,7 @@
           ]
         },
         "max_lossless_offer_units": {
+          "description": "T2: the program's lossless maximum offer F. Null when the plan is T1's.",
           "anyOf": [
             {
               "type": "integer"
@@ -5602,6 +6159,7 @@
       "type": "object",
       "properties": {
         "cost_distribution": {
+          "description": "Why the cost report is not derivable for this row. Absent when it is derivable or was not requested.",
           "$ref": "#/$defs/CostUnavailableReasonJSON"
         }
       },
@@ -5628,91 +6186,113 @@
       "type": "object",
       "properties": {
         "q": {
+          "description": "The bandwidth quantum: one unit is q physical units.",
           "type": "number"
         },
         "exponent": {
+          "description": "q as a power of two: q = 2^exponent.",
           "type": "integer"
         },
         "mode": {
+          "description": "auto (chosen by the recipe) or manual (declared).",
           "enum": [
             "auto",
             "manual"
           ]
         },
         "precision": {
+          "description": "The relative precision target.",
           "type": "number"
         },
         "target_met": {
+          "description": "Whether every declared input and split meets the precision at q.",
           "type": "boolean"
         },
         "input_convention": {
+          "description": "Physical inputs round half-up from their binary64 value.",
           "enum": [
             "promoted_binary64_half_up"
           ]
         },
         "display_convention": {
+          "description": "Units are authoritative; physical values are binary64 displays.",
           "enum": [
             "units_authoritative_binary64_display"
           ]
         },
         "scope": {
+          "description": "What the preparation covered.",
           "$ref": "#/$defs/PreparationScopeJSON"
         },
         "binding_constraints": {
+          "description": "The constraints that limited q.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/UnitConstraintJSON"
           }
         },
         "input_count": {
+          "description": "Physical inputs quantized.",
           "type": "integer"
         },
         "inexact_inputs": {
+          "description": "Inputs not exact at q.",
           "type": "integer"
         },
         "zeroed_inputs": {
+          "description": "Positive inputs that quantize to zero.",
           "type": "integer"
         },
         "inexact_examples": {
+          "description": "Example inexact inputs.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/InputQuantizationJSON"
           }
         },
         "zeroed_examples": {
+          "description": "Example zeroed inputs.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/InputQuantizationJSON"
           }
         },
         "max_absolute_input_error": {
+          "description": "The largest absolute input error (physical, a fraction).",
           "$ref": "#/$defs/FractionJSON"
         },
         "max_relative_input_error": {
+          "description": "The largest absolute relative input error (a fraction).",
           "$ref": "#/$defs/FractionJSON"
         },
         "augmented_capacity_sum_units": {
+          "description": "The graph's capacity sum with pool attachments (integer units of q).",
           "type": "integer"
         },
         "augmented_cost_sum": {
+          "description": "The graph's cost sum with pool attachments.",
           "type": "integer"
         },
         "nominal_split_count": {
+          "description": "Splits of the nominal (no-failure) demands.",
           "type": "integer"
         },
         "nominal_splits": {
+          "description": "Those splits with their bounds on q.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SplitConstraintJSON"
           }
         },
         "misses": {
+          "description": "Precision misses observed in analyses.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/PrecisionMissJSON"
           }
         },
         "weight_approximations": {
+          "description": "Controller weights apportioned because they reached 2^62.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/WeightApproximationJSON"
@@ -5749,14 +6329,17 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "unverified"
           ]
         },
         "label": {
+          "description": "The input or constraint label: where the value is declared.",
           "type": "string"
         },
         "reason": {
+          "description": "The split is inside a supplied native program NetGraph cannot inspect.",
           "enum": [
             "opaque_program"
           ]
@@ -5773,21 +6356,26 @@
       "type": "object",
       "properties": {
         "proof": {
+          "description": "What proves the bracket.",
           "enum": [
             "fixed_program",
             "single_controller"
           ]
         },
         "lower": {
+          "description": "The feasible lower alpha.",
           "$ref": "#/$defs/ExactAlphaJSON"
         },
         "upper": {
+          "description": "The infeasible upper alpha.",
           "$ref": "#/$defs/ExactAlphaJSON"
         },
         "lower_probe_index": {
+          "description": "The history index of the lower probe.",
           "type": "integer"
         },
         "upper_probe_index": {
+          "description": "The history index of the upper probe.",
           "type": "integer"
         }
       },
@@ -5804,14 +6392,17 @@
       "type": "object",
       "properties": {
         "kind": {
+          "description": "The record kind, a fixed tag.",
           "enum": [
             "weight_approximation"
           ]
         },
         "label": {
+          "description": "The router (controller.<set>.<t>.router.<r>) or all_routers source (controller.<set>.<t>.source.<s>) whose weights were apportioned.",
           "type": "string"
         },
         "max_relative_error": {
+          "description": "The largest relative error of the apportioned weights (a fraction).",
           "$ref": "#/$defs/FractionJSON"
         }
       },

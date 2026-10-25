@@ -321,6 +321,7 @@ def _model(prepared: PreparedScenario, config, declaration=None):
             "admission",
             "allocation",
             "source_allocation",
+            "source_weights",
             "weight_basis",
             "edge_weights",
             "tie_break",
@@ -376,6 +377,22 @@ def _model(prepared: PreparedScenario, config, declaration=None):
     elif isinstance(model, ngc.CentralizedTE):
         data["routing"] = "centralized_te"
         data["source_allocation"] = model.source_allocation.name.lower()
+        if model.source_allocation == ngc.SourceAllocation.WEIGHTED:
+            # What was asked: each graph node with a nonzero weight, in node order (a zero
+            # weight receives nothing, as an unlisted node does); a pool's private head is
+            # named by its pool, so no declared weight is dropped.
+            data["source_weights"] = [
+                {
+                    **(
+                        {"source": identity}
+                        if isinstance(identity := _node(topology, node), str)
+                        else identity
+                    ),
+                    "weight": int(weight),
+                }
+                for node, weight in enumerate(model.source_weights or ())
+                if weight
+            ]
         count = model.tunnel_count
         if count is not None:
             data["tunnel_count"] = {"per_head": count.per_head, "up_to": count.up_to}
@@ -461,10 +478,21 @@ def _demands(value, prepared):
     ]
 
 
+def _node(topology, node):
+    """A prepared-graph node by its public identity: its physical name, or a TE ingress
+    pool's private head by the pool's identifier (as results name the pool head)."""
+    if 0 <= node < len(topology.node_names):
+        return topology.node_names[node]
+    for pool_id, head in topology.pool_heads.items():
+        if head == node:
+            return {"pool_id": pool_id}
+    raise ValueError(f"graph node {node}: no physical or pool identity")
+
+
 def _excluded(topology, mask):
     nodes, edges = mask.node_allowed(), mask.edge_allowed()
     return (
-        [name for i, name in enumerate(topology.node_names) if not nodes[i]],
+        [_node(topology, i) for i in range(len(nodes)) if not nodes[i]],
         [_edge(ref) for i, ref in enumerate(topology.edge_refs) if not edges[i]],
     )
 

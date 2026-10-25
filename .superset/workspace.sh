@@ -19,6 +19,4 @@ if [[ "$mode" == setup ]]; then
     python -c 'import ngraph, netgraph_core; print("Workspace environment ready")'
 else
     make check-ci
-    python dev/check_api_docs.py
-    python -m mkdocs build --strict
 fi

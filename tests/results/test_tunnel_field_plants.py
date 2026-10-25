@@ -150,7 +150,7 @@ def oracle(kind):
             "headroom_penalty": penalty,
             "max_lossless_offer_units": 32,
         }
-    # Contract14.1: LOSSLESS records no sent offer, even for a finite request.
+    # LOSSLESS records no sent offer, even for a finite request.
     offered = None if kind == "pooled-t2" else offer
     expected = {
         "request_kind": "finite",

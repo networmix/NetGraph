@@ -18,7 +18,8 @@ import netgraph_core as ngc
 
 from ngraph.results import CaseState, FailureCase, ForwardingFailure
 
-# The two outcomes of native lossy forwarding (CONTRACT 9.4) a case can report.
+# Native lossy forwarding refuses with one of these texts when its iteration cycles or
+# does not settle; a failure case can report either as its outcome.
 LOSS_ITERATION = frozenset(
     (
         "lossy forwarding iteration entered a period-2 cycle",
@@ -57,7 +58,7 @@ class Baseline:
 
 
 def simultaneous_role(routing) -> str:
-    """How a model joins a SIMULTANEOUS list (CONTRACT 11.1).
+    """How a model joins a SIMULTANEOUS list.
 
     ``tunnels`` (T1, T2) are set up first and forwarded; a live
     ``controller`` cannot be LOSSY, so its prepared program is imported;

@@ -68,7 +68,7 @@ def make_asymmetric_diamond(
 
 @pytest.fixture
 def multi_tier_network() -> Network:
-    """Multi-tier cost network with large capacity.
+    """Multi-tier cost network with high capacity.
 
     Topology:
         A -> B (cap 30, cost 1) -> D (cap 30, cost 1)  [tier 1: cost 2]

@@ -71,3 +71,42 @@ def test_shipped_workflow_executes_and_exports(path, result_validator):
         step.name for step in value.steps
     ]
     assert wire["units_report"]["q"] == prepared.topology.q
+
+
+@pytest.mark.slow
+def test_square_mesh_cost_bins_follow_each_pair_route():
+    # square_mesh is K4, every cost 1; N1-N3 and N2-N4 have capacity 1, the others 2.
+    # At MSD's alpha each pair asks r <= 1 (one pair per direction on the capacity-1
+    # links). Baseline: every pair on its direct link, one bin at cost 1. With N1-N3
+    # failed, N1->N3 and N3->N1 split over their two 2-hop routes (cost 2), r/2 <= 0.5 beside
+    # the own pair's r <= 1 on capacity-2 links; every pair is delivered whole.
+    value = run(
+        prepare(Scenario.from_yaml(Path("scenarios/square_mesh.yaml").read_text()))
+    )
+    placement = next(s.result for s in value.steps if s.name == "tm_placement")
+
+    def bins(case):
+        rows = case.states["converged"].rows
+        assert len(rows) == 12
+        out = {}
+        for row in rows:
+            assert row.result.delivered == row.reference_request_units > 0
+            assert row.cost_distribution.kind == "delivered_by_path_cost"
+            pair = (row.endpoints.sources, row.endpoints.destinations)
+            out[pair] = (
+                [
+                    (b.cost, b.physical_path_cost, b.delivered_units)
+                    for b in row.cost_distribution.bins
+                ],
+                row.reference_request_units,
+            )
+        return out
+
+    baseline = bins(placement.cases[0])
+    assert all(found == [(1, 1, units)] for found, units in baseline.values())
+    (failed,) = [
+        c for c in placement.cases if c.case.pattern.excluded_links == ("N1|N3|0",)
+    ]
+    for (sources, destinations), (found, units) in bins(failed).items():
+        cost = 2 if {sources, destinations} == {("N1",), ("N3",)} else 1
+        assert found == [(cost, cost, units)], (sources, destinations)

@@ -210,3 +210,76 @@ def test_a_failed_weighted_dag_sibling_leaves_the_whole_amount_to_the_live_dag()
     placed, asked = failed_route_splits(routes, PinnedRoutes(("a", "dag")), supports)
     # Route a fails: the DAG gets 12 * 2/2, not 12 * 2/3, and splits it at s.
     assert placed == asked == {("router", Fraction(12), 2)}
+
+
+@pytest.mark.parametrize(
+    ("allocation", "router_members", "offered", "flows"),
+    [
+        # ECMP keeps the zero-capacity member: s splits 10 over two members, 5 each; the
+        # zero link drops its 5.
+        (ngc.RouteAllocation.EQUAL, 2, {"s|a|0": 5, "s|b|0": 5}, {"s|b|0": 5}),
+        # Capacity WCMP prunes it: no router split, all 10 offered to s->b (5 carried).
+        (ngc.RouteAllocation.WEIGHTED, None, {"s|b|0": 10}, {"s|b|0": 5}),
+    ],
+)
+def test_python_split_facts_and_native_offers_are_twins(
+    allocation, router_members, offered, flows
+):
+    # s->a capacity 0 and s->b 5 (then a->t, b->t 5, all cost 1); LOSSY offer 10, q = 1.
+    network = Network()
+    for name in ("s", "a", "b", "t"):
+        network.add_node(Node(name))
+    for source, target, value in (
+        ("s", "a", 0),
+        ("a", "t", 5),
+        ("s", "b", 5),
+        ("b", "t", 5),
+    ):
+        network.add_link(Link(source, target, value, 1))
+    routing = (
+        ngc.ShortestPaths(allocation=allocation)
+        if allocation == ngc.RouteAllocation.EQUAL
+        else ngc.ShortestPaths(
+            allocation=allocation, weight_basis=ngc.WeightBasis.CAPACITY
+        )
+    )
+    config = ngc.FlowPolicyConfig(routing=routing, admission=ngc.Admission.LOSSY)
+    demands = DemandSet(
+        "load", (DemandSpec(Selector("^s$"), Selector("^t$"), 10, config),)
+    )
+    prep = prepare(
+        Scenario(network, demand_sets={"load": demands}, units=UnitsSettings(1)),
+        demand_sets=("load",),
+    )
+    routers = [
+        (split.members, split.incoming_physical)
+        for split in prep.units_report.nominal_splits
+        if split.kind == "router"
+    ]
+    assert routers == (
+        [] if router_members is None else [(router_members, Fraction(10))]
+    )
+    analysis = place(
+        prep,
+        PlacementQuery(
+            prep.demand_sets["load"],
+            workers=1,
+            outputs=ngc.OutputOptions(edge_flows=True),
+        ),
+    )
+    (row,) = analysis.cases[0].states["converged"].rows
+    refs = prep.topology.edge_refs
+    carried = {
+        refs[e].link: int(v)
+        for e, v in enumerate(row.result.edge_flows)
+        if v and refs[e].link.startswith("s|")
+    }
+    dropped = {refs[e].link: units for e, units in row.result.edge_drops if units}
+    native_offered = {
+        link: carried.get(link, 0) + dropped.get(link, 0)
+        for link in carried.keys() | dropped.keys()
+    }
+    assert native_offered == offered and carried == flows
+    if router_members is not None:
+        # Python's equal share of the incoming 10 is what native offers each member.
+        assert set(native_offered.values()) == {10 // router_members}

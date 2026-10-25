@@ -75,7 +75,7 @@ def test_interaction_defaults_to_ordered_and_refuses_other_values():
 
 def test_one_list_shares_losses_where_the_ordered_list_gives_priority():
     # One link of 10, two ECMP demands of 10. Ordered: 10 and 0, and stale replays
-    # offers 10 and 0. Simultaneous: 5 and 5 (CONTRACT D-simultaneous), stale 5/5.
+    # offers 10 and 0. Simultaneous: one list shares the link, 5 and 5, stale 5/5.
     prep = prepared(
         [("S", "T", 10)],
         [
@@ -342,7 +342,7 @@ def signature(analysis):
 
 
 def test_permuting_the_submitted_participants_changes_nothing(monkeypatch):
-    # The common view (CONTRACT 11.2): residual-snapshot weights and availability ties
+    # The common view: residual-snapshot weights and availability ties
     # are read once for every participant; ties follow creation order, never the list.
     outputs = ngc.OutputOptions(edge_flows=True)
     for name, prep, failures in permutation_fixtures():
@@ -435,8 +435,9 @@ def ring(z_volume):
 
 
 def test_a_simultaneous_cycle_is_that_case_and_states_outcome():
-    # The D-C2 ring plus Z on its own link W-P: Z's load settles the baseline
-    # (A 0, B 1, Z 0); with W-P failed Z's traffic is dead and the ring cycles.
+    # Two crossing LOSSY routes (a, b) that cycle on their own, plus Z on its own
+    # link W-P: Z's load settles the baseline (A 0, B 1, Z 0); with W-P failed
+    # Z's traffic is dead and the two routes cycle.
     analysis = simultaneous(ring(2), links_failing("^W\\|P$"))
     assert delivered(analysis.cases[0].states["converged"]) == [0, 1, 0]
     for name in ("converged", "stale"):

@@ -250,7 +250,7 @@ def test_rows_project_every_field_once(details, edge_flows):
         expected_row(topology, row, details, edge_flows) for row in analysis.rows
     ]
     first = data["rows"][0]
-    # The pool row of PLAN 4.3: 1 + 100 delivered, the narrow link drops 499, the wide 400.
+    # The pool row: 1 + 100 delivered, the narrow link drops 499, the wide one 400.
     assert (first["count"], first["up_to"], first["result"]["delivered_units"]) == (
         2,
         False,

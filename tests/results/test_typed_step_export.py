@@ -403,3 +403,33 @@ def test_a_read_only_record_collection_is_not_a_json_result_or_question():
     assert Node("b", attrs=attrs).attrs is attrs
     with pytest.raises(ValueError, match="expected finite JSON data"):
         Node("c", attrs=prepare(Scenario(network)).scenario.network.nodes)
+
+
+def test_a_path_of_another_preparation_is_refused_at_export_with_a_control():
+    from ngraph.analysis.paths import PathQuery, paths
+    from ngraph.model.selectors import Selector
+
+    def prepared_line():
+        model = Network()
+        for name in ("a", "b"):
+            model.add_node(Node(name))
+        model.add_link(Link("a", "b", 1, 1))
+        return prepare(Scenario(model, units=UnitsSettings(1)))
+
+    one, two = prepared_line(), prepared_line()
+    query = PathQuery(Selector("^a$"), Selector("^b$"))
+    mine, theirs = paths(one, query), paths(two, query)
+    output = StringIO()
+    write_json(mine, output)
+    (row,) = json.loads(output.getvalue())["analysis"]["rows"]
+    assert [path["hops"] for path in row["paths"]] == [
+        [[{"link": "a|b|0", "direction": "forward"}]]
+    ]
+    (own,) = mine.rows
+    foreign = replace(mine, rows=(replace(own, paths=theirs.rows[0].paths),))
+    destination = StringIO()
+    with pytest.raises(
+        ValueError, match="^path export: path belongs to another graph$"
+    ):
+        write_json(foreign, destination)
+    assert destination.getvalue() == ""

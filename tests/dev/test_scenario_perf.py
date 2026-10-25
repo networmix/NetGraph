@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import threading
 from copy import deepcopy
 
 import pytest
@@ -194,27 +195,51 @@ def test_process_protocol_records_child_exit_and_timeout_with_success_control(
     clocks = iter((10.0, 11.0))
     monkeypatch.setattr(perf.time, "perf_counter", lambda: next(clocks))
     signals = []
-    monkeypatch.setattr(perf.os, "killpg", lambda *args: signals.append(args))
+    killed = threading.Event()
+    children = []
+
+    def killpg(pid, signal):
+        signals.append((pid, signal))
+        children[0].returncode = -15
+        killed.set()
+
+    monkeypatch.setattr(perf.os, "killpg", killpg)
+    monkeypatch.setattr(perf.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        perf.subprocess,
+        "check_output",
+        lambda argv, **kwargs: "python " + " ".join(children[0].argv[1:]),
+    )
+    timers = []
+
+    class Timer(threading.Timer):
+        # The watchdog's interval is the row timeout; a frozen child expires at once.
+        def __init__(self, interval, function):
+            timers.append(interval)
+            super().__init__(0 if outcome == "timeout" else interval, function)
+
+    monkeypatch.setattr(perf.threading, "Timer", Timer)
 
     class Process:
         pid = 12345
         returncode = None
 
         def __init__(self, argv, **kwargs):
-            self.waits = 0
+            self.argv = argv
+            children.append(self)
             assert kwargs["start_new_session"] is True
             assert "PYTHONPATH" not in kwargs["env"]
             assert "PYTHONHOME" not in kwargs["env"]
             assert "{patterns}" not in argv and row["patterns"] in argv
             perf.save(argv[2], report(manifest))
 
-        def wait(self, timeout):
-            self.waits += 1
-            if outcome == "timeout" and self.waits == 1:
-                raise subprocess.TimeoutExpired("frozen child", timeout)
-            self.returncode = (
-                0 if outcome == "ok" else -15 if outcome == "timeout" else 7
-            )
+        def wait(self, *args, **kwargs):
+            # The timing thread blocks in waitpid: no timeout argument, no polling.
+            assert not args and not kwargs
+            if outcome == "timeout":
+                assert killed.wait(5)
+            else:
+                self.returncode = 0 if outcome == "ok" else 7
             return self.returncode
 
     monkeypatch.setattr(perf.subprocess, "Popen", Process)
@@ -227,11 +252,18 @@ def test_process_protocol_records_child_exit_and_timeout_with_success_control(
         with pytest.raises(RuntimeError, match="Scenario child failed"):
             perf.child_run(row, "new", destination, 1000)
         assert bool(signals) == (outcome == "timeout")
+    assert timers == [row["timeout_seconds"]]
     process = json.loads((destination / "process.json").read_text())
     assert process["exit_code"] == (
         0 if outcome == "ok" else -15 if outcome == "timeout" else 7
     )
     assert process.get("timeout", False) == (outcome == "timeout")
+    assert process["wait_method"] == (
+        "blocking waitpid on timing thread; separate watchdog"
+    )
+    if outcome == "timeout":
+        assert process["watchdog_checked_pid"] == 12345
+        assert signals == [(12345, perf.signal.SIGTERM)]
 
 
 def test_window_deadline_refuses_before_starting_a_child(
@@ -247,7 +279,8 @@ def test_window_deadline_refuses_before_starting_a_child(
 
     monkeypatch.setattr(perf.subprocess, "Popen", forbidden)
     with pytest.raises(RuntimeError, match="does not fit"):
-        perf.child_run(manifest["rows"][0], "new", tmp_path / "deadline", 131)
+        # 100 + 30 s timeout + 5 s margin = 135 does not fit a deadline of 134.
+        perf.child_run(manifest["rows"][0], "new", tmp_path / "deadline", 134)
 
 
 def test_resume_reuses_only_completed_identical_rows(manifest, monkeypatch, tmp_path):
@@ -317,3 +350,79 @@ def test_historical_only_normalization_keeps_all_flow_values():
     assert perf.stdout_digest(json.dumps(a), rules) != perf.stdout_digest(
         json.dumps(b), rules
     )
+
+
+def test_the_watchdog_never_signals_a_process_it_does_not_own(monkeypatch):
+    # The child already left and its pid now runs another command: no signal is sent.
+    signals = []
+    monkeypatch.setattr(perf.os, "killpg", lambda *args: signals.append(args))
+    monkeypatch.setattr(perf.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(
+        perf.subprocess, "check_output", lambda argv, **kwargs: "/usr/bin/other command"
+    )
+    fired = threading.Event()
+
+    class Timer(threading.Timer):
+        def __init__(self, interval, function):
+            def run():
+                function()
+                fired.set()
+
+            super().__init__(0, run)
+
+    monkeypatch.setattr(perf.threading, "Timer", Timer)
+
+    class Process:
+        pid = 4321
+        returncode = None
+
+        def wait(self):
+            assert fired.wait(5)
+            self.returncode = 0
+            return 0
+
+    record = {}
+    code, _ = perf.blocking_wait(Process(), 30, ["python", "worker.py"], record)
+    assert code == 0 and not signals and "timeout" not in record
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [subprocess.TimeoutExpired(["ps"], 2), OSError("ps cannot start")],
+    ids=["ps-hangs", "ps-fails"],
+)
+def test_the_watchdog_still_ends_a_frozen_child_when_ps_hangs(monkeypatch, failure):
+    # ps neither answers nor fails cleanly; the child leads its own group, so it is ended.
+    signals = []
+    ended = threading.Event()
+
+    def killpg(pid, sig):
+        signals.append((pid, sig))
+        ended.set()
+
+    def ps(argv, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(perf.os, "killpg", killpg)
+    monkeypatch.setattr(perf.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(perf.subprocess, "check_output", ps)
+
+    class Timer(threading.Timer):
+        def __init__(self, interval, function):
+            super().__init__(0, function)
+
+    monkeypatch.setattr(perf.threading, "Timer", Timer)
+
+    class Process:
+        pid = 4321
+        returncode = None
+
+        def wait(self):
+            assert ended.wait(5)
+            self.returncode = -15
+            return -15
+
+    record = {}
+    code, _ = perf.blocking_wait(Process(), 30, ["python", "worker.py"], record)
+    assert code == -15 and signals == [(4321, perf.signal.SIGTERM)]
+    assert record["timeout"] is True and record["watchdog_checked_pid"] == 4321

@@ -186,8 +186,6 @@ def dag_bounds(
     graph = topology.graph
     edges = set()
     for dag in dags:
-        if dag.graph_uid() != graph.uid():
-            raise ValueError(f"{label}: precision DAG belongs to another graph")
         edges.update(int(edge) for edge in dag.via_edges())
     if allowed_edges is not None:
         edges.intersection_update(allowed_edges)

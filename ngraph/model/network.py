@@ -33,7 +33,9 @@ class DirectedLink:
     """One analysis direction of a stored physical link."""
 
     link: str
+    """The physical link identifier."""
     direction: Literal["forward", "reverse"]
+    """The direction of the physical link: forward (source to target) or reverse."""
 
     def __post_init__(self) -> None:
         if not isinstance(self.link, str) or not self.link:

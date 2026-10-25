@@ -18,7 +18,7 @@ from ngraph.results import SyntheticIngress
 from ngraph.utils.values import physical
 
 if TYPE_CHECKING:
-    from ngraph.model.demand import RouteSpec, SupportSpec, WeightSpec
+    from ngraph.model.demand import RouteSpec, WeightSpec
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,6 @@ class NamedRoutes:
     """Declared routes, supports and weights, and their native forms on one graph."""
 
     route_specs: Mapping[str, RouteSpec] = field(default_factory=_empty)
-    support_specs: Mapping[str, SupportSpec] = field(default_factory=_empty)
     weight_specs: Mapping[str, WeightSpec] = field(default_factory=_empty)
     routes: Mapping[str, ngc.RouteDefinition] = field(default_factory=_empty)
     supports: Mapping[str, ngc.PredecessorDAG] = field(default_factory=_empty)
@@ -191,10 +190,10 @@ def compile_topology(
 
 
 def eligibility(
-    topology: PreparedTopology, excluded_nodes=(), excluded_links=(), excluded_edges=()
+    topology: PreparedTopology, excluded_nodes=(), excluded_links=()
 ) -> ngc.Eligibility:
     """Intersect physical failures with declared disabled nodes and links."""
-    nodes, edges = [], list(excluded_edges)
+    nodes, edges = [], []
     for name in excluded_nodes:
         if name not in topology.node_id_by_name:
             raise ValueError(f"failure: unknown node {name}")

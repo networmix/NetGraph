@@ -415,3 +415,38 @@ class TestLossyExplicitRoutes:
             .result.delivered
             == 20
         )
+
+
+def test_pooled_sources_split_together_at_a_shared_router():
+    # U and V send one unit each into M, which has two parallel unit links to T (q = 1).
+    # One pooled context splits M's two units 1 and 1. Separate per-source contexts would
+    # each give their single unit to the first member (highest averages, (1, 0)), so
+    # M|T|0 would be asked for 2 and one unit lost.
+    network = network_of(
+        (("U", "M", 5, 1), ("V", "M", 5, 1), ("M", "T", 1, 1), ("M", "T", 1, 1))
+    )
+    prepared, state = matrix(network, (demand("^(U|V)$", "^T$", 2),), details=True)
+    (row,) = state.rows
+    assert row.result.delivered == 2
+    assert named_flows(prepared, row) == {
+        ("U|M|0", "forward"): 1,
+        ("V|M|0", "forward"): 1,
+        ("M|T|0", "forward"): 1,
+        ("M|T|1", "forward"): 1,
+    }
+
+
+@pytest.mark.parametrize(("dead", "expected"), [("A", 0), ("B", 1)])
+def test_a_reachable_zero_capacity_source_keeps_its_equal_share(dead, expected):
+    # A->T and B->T, cost 1, one of capacity 0, the other 10; one lossless ECMP demand of 2
+    # over the roster A, B (q = 1). Equal source shares by highest averages: unit 1 to A,
+    # unit 2 to B. Lossless admission takes the largest request delivered whole: with A
+    # dead, 1 already fails (0); with B dead, 1 succeeds and 2 fails (1). Leaving the dead
+    # source out of the roster would deliver 2 in both orders.
+    network = network_of(tuple((s, "T", 0 if s == dead else 10, 1) for s in ("A", "B")))
+    _, state = matrix(network, (demand("^[AB]$", "^T$", 2),))
+    (row,) = state.rows
+    assert row.result.delivered == expected
+    assert [source.delivered for source in row.result.by_source] == (
+        [0, 0] if dead == "A" else [1, 0]
+    )

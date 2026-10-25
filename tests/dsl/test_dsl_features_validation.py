@@ -351,3 +351,24 @@ demands:
             "      model:\n        routing: {type: shortest_paths, allocation: equal}",
         )
         assert len(Scenario.from_yaml(valid).demand_sets["test"].demands) == 1
+
+
+def test_a_centralized_te_support_key_is_refused_by_its_own_branch():
+    # The schema's oneOf prints the instance in its top message (which therefore names
+    # "support" whatever the cause), so the exact reason is read among the branch errors.
+    base = """
+network:
+  nodes: {A: {}, B: {}}
+  links:
+    - {source: A, target: B, capacity: 100, cost: 1}
+demands:
+  test:
+    - {source: A, target: B, volume: 1, model: {routing: ROUTING}}
+"""
+    good = "{type: centralized_te, source_allocation: optimized}"
+    assert Scenario.from_yaml(base.replace("ROUTING", good)).demand_sets["test"]
+    bad = "{type: centralized_te, source_allocation: optimized, support: x}"
+    with pytest.raises(jsonschema.ValidationError) as caught:
+        Scenario.from_yaml(base.replace("ROUTING", bad))
+    reasons = [error.message for error in caught.value.context]
+    assert "Additional properties are not allowed ('support' was unexpected)" in reasons

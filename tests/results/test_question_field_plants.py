@@ -41,6 +41,7 @@ MODEL_FIELDS = (
     "admission",
     "allocation",
     "source_allocation",
+    "source_weights",
     "weight_basis",
     "edge_weights",
     "tie_break",

@@ -1,0 +1,100 @@
+# Scenario 5: every owner-required feature in one run.
+# A WCMP controller in group scope programs router S toward T over four branches
+# (S-Ai-T, capacity 100 each) with two root groups of equal share {A1, A2} and {A3, A4};
+# beside it a TE demand with tunnels, an explicit-route demand, a failure policy,
+# hardware components, and every step type.
+seed: 42
+units: {resolution: 1}
+components:
+  chassis: {component_type: chassis, capex: 1000.0, power_watts: 100.0}
+  optic: {component_type: optic, capex: 10.0, power_watts: 1.0}
+network:
+  nodes:
+    S: {attrs: {hardware: {component: chassis}}}
+    A1: {}
+    A2: {}
+    A3: {}
+    A4: {}
+    T: {attrs: {hardware: {component: chassis}}}
+  links:
+    - {source: S, target: A1, capacity: 100, cost: 1, attrs: {hardware: {source: {component: optic}, target: {component: optic}}}}
+    - {source: S, target: A2, capacity: 100, cost: 1}
+    - {source: S, target: A3, capacity: 100, cost: 1}
+    - {source: S, target: A4, capacity: 100, cost: 1}
+    - {source: A1, target: T, capacity: 100, cost: 2}
+    - {source: A2, target: T, capacity: 100, cost: 2}
+    - {source: A3, target: T, capacity: 100, cost: 2}
+    - {source: A4, target: T, capacity: 100, cost: 2}
+routing:
+  igp_domain: {path: '^A[1-4]$'}
+  bgp_edge: {path: '^(S|T)$'}
+wcmp_controller: {scope: group}
+forwarding_groups:
+  s:
+    router: S
+    groups:
+      - children:
+          - {edge: {link: 'S|A1|0', direction: forward}, share: 1}
+          - {edge: {link: 'S|A2|0', direction: forward}, share: 1}
+      - children:
+          - {edge: {link: 'S|A3|0', direction: forward}, share: 1}
+          - {edge: {link: 'S|A4|0', direction: forward}, share: 1}
+routes:
+  via_a1: {head: S, nodes: [S, A1, T]}
+failures:
+  branch:
+    modes:
+      - weight: 1
+        rules: [{scope: link, mode: all, path: '^S\|A1$'}]
+      - weight: 1
+        rules: [{scope: link, mode: all, path: '^S\|A[12]$'}]
+demands:
+  wcmp:
+    - {id: r30, source: '^S$', target: '^T$', volume: 300, preset: SHORTEST_PATHS_WCMP}
+  te:
+    - {id: tunnels, source: '^S$', target: '^T$', volume: 0, preset: TE_ECMP_16_LSP}
+  pinned:
+    - id: lsp
+      source: '^S$'
+      target: '^T$'
+      volume: 10
+      model: {admission: lossless, routing: {type: pinned, routes: [via_a1]}}
+workflow:
+  - {type: NetworkStats, name: stats}
+  - {type: BuildGraph, name: build_graph}
+  - {type: CostPower, name: cost_power}
+  - {type: MaximumSupportedDemand, name: supported, demand_set: wcmp}
+  - type: TrafficMatrixPlacement
+    name: states
+    demand_set: wcmp
+    alpha_from_step: supported
+    failure_policy: branch
+    iterations: 20
+    failure_states: [converged, stale, repair]
+    workers: 1
+  - type: TrafficMatrixPlacement
+    name: simultaneous
+    demand_set: wcmp
+    failure_policy: branch
+    iterations: 20
+    failure_states: [converged, stale, repair]
+    interaction: simultaneous
+    workers: 1
+  - {type: TrafficMatrixPlacement, name: pinned_route, demand_set: pinned, workers: 1}
+  - type: TunnelCountAnalysis
+    name: counts
+    demand_set: te
+    counts: [2]
+    up_to: 4
+    design_demand: 100
+    offer: 400
+    workers: 1
+  - type: MaxFlow
+    name: capacity
+    source: '^S$'
+    target: '^T$'
+    preset: TE_MAXFLOW_UNLIM
+    failure_policy: branch
+    iterations: 20
+    workers: 1
+    outputs: {min_cut: true, cost_distribution: true}

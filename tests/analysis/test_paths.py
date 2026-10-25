@@ -396,3 +396,12 @@ class TestPreparedPathReuse:
         prepared = _prepare(_simple_path_network())
         assert prepared.topology.graph.num_nodes() == 3
         assert prepared.topology.graph.num_edges() == 6
+
+
+def test_a_path_query_takes_no_explicit_pairs():
+    from ngraph.analysis.paths import PathQuery
+    from ngraph.model.selectors import Selector
+
+    assert PathQuery(Selector("^a$"), Selector("^b$")).mode == "combine"
+    with pytest.raises(TypeError, match="unexpected keyword argument 'pairs'"):
+        PathQuery(Selector("^a$"), Selector("^b$"), pairs=(("a", "b"),))  # type: ignore[call-arg]

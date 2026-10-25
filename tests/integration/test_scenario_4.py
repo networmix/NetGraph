@@ -450,3 +450,40 @@ class TestScenario4:
         assert all(name.startswith("dc2_podb_rack2/") for name in disabled)
         for name in network_nodes:
             assert helper.graph.nodes[name]["disabled"] is (name in disabled)
+
+
+def test_static_ecmp_is_not_the_retired_residual_tiers():
+    # Two disjoint routes, s-a-t cost 2 and s-b-t cost 4, capacity 10 each, q = 1. Static
+    # ECMP and capacity WCMP use the shortest route only: 10. The residual ECMP tiers that
+    # 0.24.0's MaxFlow could ask filled the cost-2 route and then routed again on the
+    # residual: 20, which is the maximum flow; scenario_4's three
+    # static-ECMP steps ask the first question, never the second.
+    from ngraph.scenario import Scenario
+
+    steps = "\n".join(
+        f"  - {{type: MaxFlow, name: {preset.lower()}, source: ^s$, target: ^t$, "
+        f"preset: {preset}, workers: 1}}"
+        for preset in ("SHORTEST_PATHS_ECMP", "SHORTEST_PATHS_WCMP", "TE_MAXFLOW_UNLIM")
+    )
+    text = f"""
+units: {{resolution: 1}}
+network:
+  nodes: {{s: {{}}, a: {{}}, b: {{}}, t: {{}}}}
+  links:
+    - {{source: s, target: a, capacity: 10, cost: 1}}
+    - {{source: a, target: t, capacity: 10, cost: 1}}
+    - {{source: s, target: b, capacity: 10, cost: 2}}
+    - {{source: b, target: t, capacity: 10, cost: 2}}
+workflow:
+{steps}
+"""
+    result = run(prepare(Scenario.from_yaml(text)))
+    delivered = {
+        step.name: step.result.cases[0].states["converged"].rows[0].result.delivered
+        for step in result.steps
+    }
+    assert delivered == {
+        "shortest_paths_ecmp": 10,
+        "shortest_paths_wcmp": 10,
+        "te_maxflow_unlim": 20,
+    }

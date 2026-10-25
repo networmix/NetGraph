@@ -58,8 +58,8 @@ class TestSubstituteVars:
 
     def test_no_vars_passthrough(self) -> None:
         """String without variables passes through unchanged."""
-        result = substitute_vars("static_path", {})
-        assert result == "static_path"
+        result = substitute_vars("plain_text", {})
+        assert result == "plain_text"
 
     def test_missing_var_raises(self) -> None:
         """Missing variable raises KeyError."""

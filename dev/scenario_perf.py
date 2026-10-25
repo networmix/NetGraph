@@ -15,6 +15,7 @@ import os
 import signal
 import statistics
 import subprocess
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -172,13 +173,64 @@ def stdout_digest(text, rules):
     ).hexdigest()
 
 
+def blocking_wait(process, timeout, argv, record):
+    """Block in waitpid on the timing thread; a separate watchdog enforces bounds."""
+    done = threading.Event()
+
+    def owned_alive():
+        if process.returncode is not None:
+            return False
+        try:
+            command = subprocess.check_output(
+                ["ps", "-p", str(process.pid), "-o", "command="], text=True, timeout=2
+            ).strip()
+        except subprocess.CalledProcessError:
+            return False
+        except (subprocess.TimeoutExpired, OSError):
+            # A hung or failing ps proves nothing: the child still counts as ours while it
+            # leads its own process group, so a frozen child is still ended.
+            command = None
+        try:
+            leads_group = os.getpgid(process.pid) == process.pid
+        except ProcessLookupError:
+            return False
+        return leads_group and (command is None or command.endswith(" ".join(argv[1:])))
+
+    def expire():
+        if done.is_set() or not owned_alive():
+            return
+        record["timeout"] = True
+        record["watchdog_checked_pid"] = process.pid
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        if not done.wait(2) and owned_alive():
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    timer = threading.Timer(timeout, expire)
+    timer.daemon = True
+    timer.start()
+    try:
+        code = process.wait()  # No timeout: POSIX waitpid(0), no polling sleep.
+        exited_at = time.perf_counter()
+        return code, exited_at
+    finally:
+        done.set()
+        timer.cancel()
+        timer.join(timeout=3)
+
+
 def child_run(row, side_name, directory, deadline):
     side = row["sides"][side_name]
     directory.mkdir()
     before = machine_state()
     qualify(before)
     # A full declared timeout must fit. A deadline is never an implicit extension.
-    if time.time() + row["timeout_seconds"] + 2 >= deadline:
+    if time.time() + row["timeout_seconds"] + 5 >= deadline:
         raise RuntimeError("Another complete child does not fit the granted window")
     report_path = directory / "measurement.json"
     argv = [
@@ -203,18 +255,9 @@ def child_run(row, side_name, directory, deadline):
             start_new_session=True,
         )
         record["pid"] = process.pid
-        try:
-            code = process.wait(timeout=row["timeout_seconds"])
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGTERM)
-            try:
-                process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
-                process.wait(timeout=2)
-            record["timeout"] = True
-            code = process.returncode
-        record["whole_process_seconds"] = time.perf_counter() - started
+        code, exited_at = blocking_wait(process, row["timeout_seconds"], argv, record)
+        record["whole_process_seconds"] = exited_at - started
+        record["wait_method"] = "blocking waitpid on timing thread; separate watchdog"
         record["exit_code"] = code
         stdout.write(
             f"\nSUMMARY: child exit={code}; timeout={record.get('timeout', False)}\n"

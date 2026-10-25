@@ -1,6 +1,6 @@
-"""Validation of the 19 examples in the Claude skill's EXAMPLES.md.
+"""Scenarios written like the Claude skill's examples, each matching its "Expected:" line.
 
-Each example must parse and match the "Expected:" line in its docstring.
+The skill's own files live in the ``.claude/skills`` submodule; these are this suite's copies.
 """
 
 import pytest

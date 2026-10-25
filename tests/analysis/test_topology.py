@@ -60,7 +60,7 @@ def test_physical_failure_both_directions_and_directed_exclusion_control():
     forward, reverse = topology.edges_by_link["a|m|0"]
     physical = eligibility(topology, excluded_links=["a|m|0"]).edge_allowed()
     assert not physical[forward] and not physical[reverse]
-    directed = eligibility(topology, excluded_edges=[forward]).edge_allowed()
+    directed = topology.graph.eligibility(excluded_edges=[forward]).edge_allowed()
     assert not directed[forward] and directed[reverse]
     assert topology.disabled.edge_allowed().all()
 
@@ -102,3 +102,35 @@ def test_augmented_capacity_sum_refuses_even_when_each_entry_is_legal():
     assert int(compile_topology(n, 1).graph.edge_capacity_units().sum()) == 2**61
     with pytest.raises(ValueError, match="augmented capacity sum"):
         compile_topology(n, 1, pools={"p0": ("a", "b"), "p1": ("a",)})
+
+
+def test_pool_attachments_at_q_2_minus_13_are_finite_and_inside_the_range():
+    # At q = 2^-13 a capacity of 100 is 819,200 units. Each source's private ingress
+    # attachment is max(B_s, O_limit) = its outgoing capacity (ordered: no offer budget),
+    # cost 1. Graph sum: four directed link edges and two attachments of 819,200 =
+    # 4,915,200 < 2^62. The old cost-0 sentinel of 10^15 would be 8.192e18 > 2^62.
+    from ngraph import Scenario, prepare
+
+    text = """
+units: {resolution: 0.0001220703125}
+network:
+  nodes: {s1: {}, s2: {}, t: {}}
+  links:
+    - {source: s1, target: t, capacity: 100, cost: 1}
+    - {source: s2, target: t, capacity: 100, cost: 1}
+demands:
+  d:
+    - {source: ^(s1|s2)$, target: ^t$, volume: 150, mode: combine, preset: TE_ECMP_16_LSP}
+workflow:
+  - {type: TrafficMatrixPlacement, name: p, demand_set: d, workers: 1}
+"""
+    topology = prepare(Scenario.from_yaml(text)).topology
+    assert topology.q == 2**-13
+    caps, costs = topology.graph.edge_capacity_units(), topology.graph.edge_costs()
+    found = {
+        ref.source: (int(caps[i]), int(costs[i]))
+        for i, ref in enumerate(topology.edge_refs)
+        if isinstance(ref, SyntheticIngress)
+    }
+    assert found == {"s1": (819200, 1), "s2": (819200, 1)}
+    assert int(caps.sum()) == 4915200 < 2**62

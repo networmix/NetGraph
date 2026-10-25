@@ -5,7 +5,7 @@
 ```bash
 make dev           # Create venv, install package with dev deps and hooks
 make check         # Pre-commit with auto-fix, schema check, tests, then lint
-make check-ci      # Non-mutating lint, schema check, and tests (CI)
+make check-ci      # Non-mutating lint, schema check, tests and docs (CI)
 make test          # Run tests with coverage
 make docs          # Generate API documentation and diagram SVGs
 make docs-serve    # Serve docs locally
@@ -31,6 +31,13 @@ under `build/core-integration/`.
 **Automated**: Create GitHub release → auto-publishes to PyPI
 
 **Version**: Update `version = "x.y.z"` in `pyproject.toml` before publishing
+
+**Order with NetGraph-Core**: NetGraph installs `netgraph-core` from PyPI (CI does
+too), within the bound in `pyproject.toml` (`netgraph-core>=0.12.0,<0.13` for
+0.25). Publish the Core release first, then the NetGraph release that requires it.
+When an older NetGraph line is bounded below a new Core release (0.24.1 requires
+`netgraph-core>=0.10.0,<0.12`), publish that bound first and confirm that PyPI
+serves its metadata before the Core release it excludes.
 
 ## Key Development Files
 
@@ -95,10 +102,14 @@ python dev/scenario_perf.py aba manifest.json --output comparison.noindex \
 
 Calibration counts complete iterations needed for two seconds of work per
 side/row. Comparisons default to three old/new/old repetitions. Every child
-requires AC power and all three load averages below4 before and after, and its
-entire timeout must fit the window. Logs preserve commands, PID, exit/timeout,
+requires AC power and all three load averages below 4 before and after, and its
+entire timeout (plus a 5 s margin) must fit the window. The timing thread blocks
+in `waitpid` without a timeout, so the whole-process clock has no polling
+granularity; a separate watchdog thread ends a child at its timeout, and only a
+child it still owns (same process group and command line). Each process record
+names its `wait_method`. Logs preserve commands, PID, exit/timeout,
 state and both durations; inputs are hash-checked after each completed row.
-A ratio above1.03 requires a separate profile and disposition, not an automatic
+A ratio above 1.03 requires a separate profile and disposition, not an automatic
 pass. `--resume prior-output.noindex` reuses only completed rows with identical
 frozen inputs and measurement mode; failed rows run afresh in a new directory.
 

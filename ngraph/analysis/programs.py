@@ -201,7 +201,6 @@ def compile_named(topology, *, routes=None, supports=None, weights=None):
     )
     return NamedRoutes(
         MappingProxyType(route_specs),
-        MappingProxyType(dict(supports or {})),
         MappingProxyType(dict(weights or {})),
         MappingProxyType(
             {

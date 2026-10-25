@@ -226,3 +226,43 @@ def test_observation_miss_counts_its_active_capacity_inputs_too():
         for constraint in miss.constraints
         if constraint.kind == "input"
     } == {"demand.load|0.volume", "link.s|t|0.capacity"}
+
+
+def test_totals_above_2_53_are_summed_in_exact_units_not_physical_floats():
+    # At q = 1/2, volumes 2^52 and 0.5 are 2^53 and 1 units: the exact total is 2^53 + 1.
+    # Summed as physical floats first, 2^52 + 0.5 is a binary64 tie that rounds to even
+    # (2^52), which quantizes to 2^53.
+    import io
+    import json
+
+    from ngraph.export import write_json
+    from ngraph.scenario import run
+
+    text = """
+units: {resolution: 0.5}
+network:
+  nodes: {A: {}, B: {}, T: {}}
+  links:
+    - {source: A, target: T, capacity: 1, cost: 1}
+    - {source: B, target: T, capacity: 1, cost: 1}
+demands:
+  d:
+    - {source: ^A$, target: ^T$, volume: 4503599627370496}
+    - {source: ^B$, target: ^T$, volume: 0.5}
+workflow:
+  - {type: TrafficMatrixPlacement, name: p, demand_set: d, workers: 1}
+"""
+    prep = prepare(Scenario.from_yaml(text))
+    accounting = prep.demand_sets["d"].accounting
+    assert [a.declared_units for a in accounting] == [2**53, 1]
+    result = run(prep)
+    totals = result.steps[0].result.cases[0].states["converged"].totals
+    assert totals.reference_request_units == 2**53 + 1
+    assert type(totals.reference_request_units) is int
+    output = io.StringIO()
+    write_json(result, output)
+    exported = json.loads(output.getvalue())["steps"][0]["result"]
+    (state,) = exported["cases"][0]["states"].values()
+    assert state["totals"]["reference_request_units"] == 2**53 + 1
+    leaves = exported["accounting"]
+    assert [leaf["declared_units"] for leaf in leaves] == [2**53, 1]

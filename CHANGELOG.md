@@ -5,36 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.25.0] - 2026-10-25
 
 ### Added
 
 - Routing domains and a WCMP controller: `routing: {igp_domain, bgp_edge}` with `wcmp_controller: {scope}` programs every `SHORTEST_PATHS_WCMP` demand toward one BGP-edge router with one destination-wide weight table per demand set: `next_hop` (default) weights each source router's next hops by progressive filling, `group` uses declared `forwarding_groups` shares as fixed caps, `all_routers` programs every router from one flow whose sources send in proportion to the demands; other routers keep equal-cost splitting. Question models gain `controller` (the scope, or null), units reports gain `weight_approximations` (router and `all_routers` source weights whose exact integers reach 2^62 are apportioned over 2^62 - 1, each table entry with its exact largest relative error), and placement and MSD results report the tables under `controller` (`RoutingDomain`, `WCMPController`, `ForwardingGroup`, `ControllerGroup`, `GroupChild`). Other demands keep their native models.
-- Failure states for placement: each case of a `TrafficMatrixPlacement` (or `PlacementQuery`) reports the requested `failure_states` (Python `states`): `converged`, the demands computed again on the failed network with declared forwarding-group shares kept as fixed caps; `stale`, the programs of the network without failures forwarded unchanged, so traffic that reaches a failed element is lost there; and `repair`, only when requested, the surviving original routes. The default is `[converged]`. Demand sets programmed by the WCMP controller accept failure policies; a dead group's cap is reported under `dead_caps`, and a lossy forwarding without a fixed point under `failure`.
+- Failure states for placement: each case of a `TrafficMatrixPlacement` (or `PlacementQuery`) reports the requested `failure_states` (Python `states`): `converged`, the demands computed again on the failed network with declared forwarding-group shares kept as fixed caps; `stale`, the programs of the network without failures forwarded unchanged, so traffic that reaches a failed element is lost there; and `repair`, only when requested, the surviving original routes. The default is `[converged]`. Demand sets programmed by the WCMP controller accept failure policies; a dead group's cap is reported under `dead_caps`, and a lossy forwarding without a fixed point under `failure`. Group scope refuses `converged` and `repair` under a failure policy when it programs a router inside the IGP domain; `stale` works there.
 - `interaction: simultaneous` forwards every demand's program at once, sharing losses on common links, as a lossy fixed-program question; the default `ordered` places demands in priority order. A TE ingress pool in such a step gets an offer budget for its known request, reported as the row's `pool.offer_limit_units`.
 - `TunnelCountAnalysis` (YAML) and `tunnel_counts(prepared, TunnelCountQuery)`: for each tunnelled TE demand of a set and each tunnel count (plus an optional `up_to` row), one independent evaluation at one fixed `design_demand` and `offer` for every demand: the plan's tunnel sizes, chosen count, planned bandwidth, tunnel cost and headroom penalty, the largest lossless offer, `insufficient_resolution`, what the offer delivers and loses, and the lossless delivery at the design (`lossless_at_design_units`), with `physical_tunnel_cost` for TE ingress pools (`TunnelCountRow`, `TunnelCountAnalysis`). The named set's declared demands still take part in choosing the resolution; a TE ingress pool's offer budget covers the step's offer.
 - `ngraph.hardware`: `hardware_inventory`, `HardwareInventory`, `HardwareUse` and `link_active`, the hardware inventory and the enabled-link rule; `ngraph.workflow.base.step_name`, a step's run name; `ngraph.model.components.resolve_link_end`, one link end's hardware.
+- Every field of `ngraph/schemas/results.json` has a description, and the documentation has a generated reference of every result field (`docs/reference/results.md`).
 
 ### Changed
 
+- **BREAKING**: requires `netgraph-core` 0.12 (`>=0.12.0,<0.13`), the rebuilt engine on exact integer units; 0.24 runs on `netgraph-core` 0.10 and 0.11.
 - **BREAKING**: analyses run as `Scenario` → `prepare` → `run` on native NetGraph-Core results. `prepare` chooses one bandwidth unit and builds the graph once, without changing its input; `run(prepare(scenario))` returns a `RunResult`. Library questions are `capacity`, `place`, `paths`, `edge_sensitivity` and `maximum_supported_demand` with typed queries (`CapacityQuery`, `PlacementQuery`, `PathQuery`, `SensitivityQuery`, `MSDQuery`) and `FailureRequest` for failure cases.
 - **BREAKING**: domain records (nodes, links, risk groups, components, selectors, failure and demand declarations, built-in workflow steps) are immutable; edit through `Network` methods such as `replace_node` and `replace_link`, or `dataclasses.replace`. Constructors check values once: `attrs` and condition operands must be finite JSON and are stored read-only, physical amounts (including NumPy numbers) become floats, and other non-built-in scalars are refused.
 - **BREAKING**: results carry exact integer units and their quantum `q`, chosen from the top-level `units: {resolution, precision}` (`UnitsSettings`) and described by a `units_report`; each failure case holds one entry per state under `states` (capacity `converged`; placement its failure states, `converged` by default), and each row keeps the native result.
 - **BREAKING**: each analysis records its typed query as `query`, and each step result records it as its `question`.
 - **BREAKING**: custom workflow steps implement `run(StepContext) -> StepOutput`, read earlier results (read-only) through `context.prior_results`, state what preparation must bind with `needs()`, and register custom result types with `register_result_exporter`.
 - **BREAKING**: YAML demands and MaxFlow steps name a `preset` or a `model` instead of `flow_policy` and the MaxFlow flags `shortest_path`, `require_capacity` and `flow_placement`, and a MaxFlow step with neither still asks maximum flow (`TE_MAXFLOW_UNLIM`); explicit paths are named `routes`, `supports` and `weights` instead of demand `static_paths`. Step keys: `parallelism` is `workers`, `store_failure_patterns` is `failure_trace`, `include_flow_details` is `outputs.cost_distribution`, `include_min_cut` is `outputs.min_cut`, `include_used_edges` is replaced by `outputs.edge_flows`, MSD `resolution` is `alpha_tolerance`, and `alpha_from_field` is gone. Old spellings, non-diagonal overlapping endpoint sets and nonpositive costs are refused.
-- **BREAKING**: presets are native models. `TE_WCMP_UNLIM` is renamed `TE_MAXFLOW_UNLIM` (minimum-cost maximum flow, no residual tier loop); `SHORTEST_PATHS_WCMP` splits by link capacity on shortest paths; `SHORTEST_PATHS_MAXFLOW` is new; `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` over combined sources start at one private ingress head, reported as the row's `pool`. Equal splits place exact integer shares, so answers can differ from 0.24.0 by whole units.
+- **BREAKING**: presets are native models. `TE_WCMP_UNLIM` is renamed `TE_MAXFLOW_UNLIM` (minimum-cost maximum flow, no residual tier loop); `SHORTEST_PATHS_WCMP` splits by link capacity on shortest paths; `SHORTEST_PATHS_MAXFLOW` is new; `TE_ECMP_16_LSP` and `TE_ECMP_UP_TO_256_LSP` over combined sources start at one private ingress head, reported as the row's `pool`. Equal splits place exact integer shares, so answers can differ from 0.24 by whole units.
 - **BREAKING**: MSD returns the largest tested feasible alpha (`alpha_feasible`), its probe history and a `search_status` instead of raising "No feasible alpha found" (`none_feasible`); a probe whose traffic rounds to zero units is `below_resolution`, never feasible.
-- **BREAKING**: JSON is written by `write_json` (and the CLI) as compact exact rows; `outputs.details` adds native per-source, per-tunnel, plan and call fields, and cost reports, cuts and edge arrays are separate opt-in outputs. `ngraph/schemas/results.json` is generated from the result declarations.
-- Failure random rules draw one Bernoulli trial per matched entity on every supported Python, so random-rule draws on Python 3.12 and later differ from 0.24.0; choice-rule seeds are unchanged. Results record the runtime, seed and draw order.
+- **BREAKING**: JSON is written by `write_json` (and the CLI) as one compact line of exact rows (0.24 indented it; `jq .` reads it indented); `outputs.details` adds native per-source, per-tunnel, plan and call fields, and cost reports, cuts and edge arrays are separate opt-in outputs. `ngraph/schemas/results.json` is generated from the result declarations.
+- Failure random rules draw one Bernoulli trial per matched entity on every supported Python, so random-rule draws on Python 3.12 and later differ from 0.24; choice-rule seeds are unchanged. Results record the runtime, seed and draw order.
+- `workers: auto` (formerly `parallelism: auto`) uses every CPU for traffic-matrix placement too; 0.24 used one worker there unless the demand set used an LSP preset or Python was free-threaded.
+- Inputs are rounded to whole units of `q` before the native solve, so answers can differ from 0.24 within the precision target (default 0.1 %); the units report states every rounding and missed target.
+- Preparation refusals name what they refuse: the workflow step (`workflow step <name>: ...`, a step built in Python without a name by its class), the demand, link or node, and the YAML location; 0.24 messages did not name the workflow step.
 - Nested risk-group declarations that reuse a name must be identical; conflicting ones are refused with both paths.
 - `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
 - Step log lines and export type errors name the class by module (`ngraph.workflow.max_flow_step.MaxFlow`), since two public classes are named `TunnelCountAnalysis`.
-- JSON results (`write_json`, the CLI results file and `--stdout`) are written as one compact line with the same content and key order, roughly half the size or less; use `jq .` to read them indented.
 - `NetworkExplorer` and `CostPower` read one hardware inventory (`ngraph.hardware.hardware_inventory`), one row per node platform and link-end optic; their totals are unchanged.
 - Hardware is validated before any capacity or port check, and each refusal names its node or link end (`node n3: Hardware 'count' must be ...`); an input with an invalid count and an over-capacity node now reports the count.
 - `ngraph inspect` calls a link enabled only when it and both end nodes are enabled, in every figure, as `NetworkStats` does.
-- `ngraph inspect --detail` prints a step's output options by their fields (`OutputOptions(edge_flows=False, ...)`) instead of a native object address, so two runs print the same text, and lists each set's first demands by their selector labels (`^A -> ^B`) instead of the selectors' Python representation.
+- `ngraph inspect --detail` lists each set's first demands by their selector labels (`^A -> ^B`) instead of the selectors' Python representation.
 - `ngraph --help` and command-line errors no longer load the analysis engine.
 
 ### Removed
@@ -45,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: `MaxFlowResult`, `FlowEntry`, `FlowIterationResult`, `FlowSummary`, `CapacityEnvelope` and the result store `Results`; analyses return typed records holding native results.
 - **BREAKING**: `FlowPlacement`, `EdgeSelect`, `Mode`, `EdgeRef` and `Path`; use presets or native models, `DirectedLink` and `PathQuery`.
 - **BREAKING**: `from_networkx`, `to_networkx`, `NodeMap` and `EdgeMap`; `BuildGraph` exports node-link JSON.
+- **BREAKING**: the modules `ngraph.types`, `ngraph.lib` (with `ngraph.lib.nx`), `ngraph.model.flow`, `ngraph.model.path`, `ngraph.dsl.selectors` (`normalize_selector` is in `ngraph.model.selectors`), `ngraph.utils.ids`, `ngraph.analysis.context`, `ngraph.analysis.demand`, `ngraph.analysis.functions`, `ngraph.analysis.failure_manager` and `ngraph.analysis.static_paths`, and the submodules of `ngraph.results`, `ngraph.model.demand` and `ngraph.model.failure`, which are single modules now.
 - `FailurePolicySet`, `build_failure_policy` and `build_failure_policy_set`; use the `Scenario.failure_policies` mapping of `FailurePolicy` values.
 - `validate_risk_group_hierarchy` and `validate_risk_group_references`; `prepare` validates risk groups.
 - `NetworkExplorer.get_bom_by_path` and `get_bom_map`; use `get_bom` or a tree node's `stats.bom`.
@@ -53,12 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24.0 picked the last mode, or fell back to name order); other draws are unchanged.
+- Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24 picked the last mode, or fell back to name order); other draws are unchanged.
 - `ngraph inspect` previews selectors as analyses select: attribute conditions and `group_by` apply, and selectors sharing a path are listed apart (they were matched and merged as node-name patterns).
 - The `--profile` report's CPU time is the process CPU time of each step, all threads and native code included, and can exceed the wall time (it was the profiled wall time); the function table is labelled as cProfile time and the CPU-intensive advice no longer suggests parallelization.
 - A `hardware` value that is not a mapping, on a node, a link or a link end, is refused (before, a node's value crashed the explorer and was ignored by `CostPower`, a link's value was ignored by both, and a link end's value crashed both); `CostPower` refuses an invalid hardware `count` on a disabled link or a link to a disabled node, as it did on a disabled node; a count too large for a float is refused as an invalid count (`ValueError`, was `OverflowError`), whatever its number of digits.
 - The explorer counts both optic ends of a self-loop as used ports, so a node without the ports is refused.
-- A workflow step built in Python without a name labels its refusals with its own class name (a `TrafficMatrixPlacement` subclass used its parent's, and a `MaxFlow` selection refusal an empty name).
+
+## [0.24.1] - 2026-10-24
+
+### Fixed
+
+- `netgraph-core` is required below 0.12 (`>=0.10.0,<0.12`): netgraph-core 0.12 changes the engine API that NetGraph 0.24 calls, so an unbounded upgrade would break it. NetGraph 0.25 runs on netgraph-core 0.12
 
 ## [0.24.0] - 2026-10-02
 

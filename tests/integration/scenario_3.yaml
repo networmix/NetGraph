@@ -1,5 +1,5 @@
 # Test scenario 3: Complex 3-tier Clos network with nested blueprints
-# Tests advanced blueprint nesting, node/link rules, and max-flow analysis
+# Tests advanced blueprint nesting, node/link rules, and maximum-flow steps
 seed: 3003
 
 blueprints:

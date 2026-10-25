@@ -177,3 +177,62 @@ def test_publication_fault_cleanup_and_retry(boundary, warm, workers, monkeypatc
     for value in snapshots:
         assert value.edge_flows is not None and value.edge_reservations is not None
         assert sum(int(amount) for amount in value.edge_flows) == 2 * value.delivered
+
+
+def test_each_case_places_on_its_own_ledger_with_workers_equal_to_one(monkeypatch):
+    # Cases are independent questions: one private ledger per case and state, never one
+    # ledger reused across the cases a worker runs (results would not show it: every
+    # owner is removed after its case).
+    from ngraph.analysis import placement
+
+    network = network_of([("S", "T", 4, 1), ("S", "R", 4, 1), ("R", "T", 4, 1)])
+    prepared = prepare(
+        Scenario(
+            network,
+            demand_sets={
+                "load": DemandSet(
+                    "load", (DemandSpec(Selector("^S$"), Selector("^T$"), 6),)
+                )
+            },
+            units=UnitsSettings(1),
+        ),
+        demand_sets=("load",),
+    )
+    failures = FailureRequest(
+        FailurePolicy(
+            modes=[FailureMode(1, [FailureRule("link", mode="choice", count=1)])]
+        ),
+        30,
+        7,
+    )
+    real = ngc.FlowLedger
+    created = []
+    lock = Lock()
+
+    def ledger(graph):
+        value = real(graph)
+        with lock:
+            created.append((get_ident(), value))
+        return value
+
+    monkeypatch.setattr(placement.ngc, "FlowLedger", ledger)
+
+    def answers(workers):
+        created.clear()
+        result = place(
+            prepared,
+            PlacementQuery(
+                prepared.demand_sets["load"], failures=failures, workers=workers
+            ),
+        )
+        return result, [
+            (c.case.id, [r.result.delivered for r in c.states["converged"].rows])
+            for c in result.cases
+        ]
+
+    serial, serial_rows = answers(1)
+    assert len(serial.cases) == 4  # baseline and each of the three single-link failures
+    assert len(created) == 4 and len({id(v) for _, v in created}) == 4
+    parallel, parallel_rows = answers(3)
+    assert len(created) == 4 and len({id(v) for _, v in created}) == 4
+    assert parallel_rows == serial_rows

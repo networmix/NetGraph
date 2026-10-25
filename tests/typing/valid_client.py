@@ -27,8 +27,10 @@ from ngraph import (
     EdgeWeight,
     ExportContext,
     FailureCase,
+    FailureMode,
     FailurePolicy,
     FailureRequest,
+    FailureRule,
     FlowPolicyPreset,
     ForwardingGroup,
     GroupChild,
@@ -127,6 +129,84 @@ def populated(
             demand_sets=tuple(demand_sets),
         )
     )
+
+
+def populated_example() -> list[tuple[str, float]]:
+    """``populated`` with every constructor field given: each step's baseline delivery
+    in physical units (the automatic resolution chooses q)."""
+    from ngraph.model.components import Component
+    from ngraph.workflow.traffic_matrix_placement_step import TrafficMatrixPlacement
+
+    network = Network()
+    for name in ("S", "X1", "X2", "T"):
+        network.add_node(Node(name))
+    for target in ("X1", "X2"):
+        network.add_link(Link("S", target, capacity=10, cost=1))
+        network.add_link(Link(target, "T", capacity=10, cost=1))
+    via_x2 = (DirectedLink("S|X2|0", "forward"), DirectedLink("X2|T|0", "forward"))
+    tree = ForwardingGroup(
+        "S",
+        (
+            ControllerGroup((GroupChild(edge=DirectedLink("S|X1|0", "forward")),)),
+            ControllerGroup(
+                (GroupChild(edge=DirectedLink("S|X2|0", "forward")),), share="1/2"
+            ),
+        ),
+    )
+    controlled = DemandSpec(
+        Selector("^S$"),
+        Selector("^T$"),
+        9,
+        policy=FlowPolicyPreset.SHORTEST_PATHS_WCMP,
+        id="dc",
+    )
+    pinned = DemandSpec(
+        Selector("^S$"),
+        Selector("^T$"),
+        2,
+        policy=PinnedRoutes(("via_x1", "via_x2")),
+        id="lsp",
+    )
+    result = populated(
+        network,
+        (
+            TrafficMatrixPlacement(
+                name="controlled",
+                demand_set="wcmp",
+                failure_policy="any_link",
+                iterations=4,
+                workers=1,
+            ),
+            TrafficMatrixPlacement(name="pinned", demand_set="lsp", workers=1),
+        ),
+        {
+            "wcmp": DemandSet("wcmp", (controlled,)),
+            "lsp": DemandSet("lsp", (pinned,)),
+        },
+        {
+            "any_link": FailurePolicy(
+                modes=[FailureMode(1, [FailureRule("link", mode="choice", count=1)])]
+            )
+        },
+        ComponentsLibrary(components={"chassis": Component("chassis", capex=1)}),
+        {
+            "via_x1": RouteSpec("S", nodes=("S", "X1", "T")),
+            "via_x2": RouteSpec("S", support="x2"),
+        },
+        {"x2": SupportSpec(via_x2)},
+        {"unit": WeightSpec(tuple(EdgeWeight(edge, 1) for edge in via_x2))},
+        {"ingress": tree},
+        RoutingDomain(Selector("^X[12]$"), Selector("^(S|T)$")),
+        WCMPController("group"),
+    )
+    delivered: list[tuple[str, float]] = []
+    for step in result.steps:
+        analysis = step.result
+        assert isinstance(analysis, PlacementAnalysis)
+        totals = analysis.cases[0].states["converged"].totals
+        assert totals is not None
+        delivered.append((step.name, totals.delivered_units * result.topology.q))
+    return delivered
 
 
 def read_units(report: UnitsReport) -> float:

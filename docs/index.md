@@ -30,7 +30,7 @@ Two layers:
 ### Traffic Engineering
 
 - **Routing Modes**: IP routing (cost-only, fixed paths) and traffic engineering (capacity-aware) in one model.
-- **Flow Placement**: Strategies for ECMP (Equal-Cost Multi-Path) and WCMP (Weighted Cost Multi-Path).
+- **Traffic Placement**: Strategies for ECMP (Equal-Cost Multi-Path) and WCMP (Weighted Cost Multi-Path).
 - **Capacity Analysis**: Max-flow between node groups and traffic-matrix placement with selectable placement policies.
 
 ### Workflow & Integration
