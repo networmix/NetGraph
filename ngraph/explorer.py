@@ -489,7 +489,8 @@ class NetworkExplorer:
         """Record a node's hardware utilization and check it against limits.
 
         Compares attached link capacity with the platform capacity, and ports
-        used by the node's active link-end optics (declared count times ports)
+        used by the node's active link-end optics (declared count times ports
+        times the component's own count)
         with the ports available; a violation needs more than 1e-9 extra
         ports. The NodeUtilization snapshot is recorded before any error.
 
@@ -504,11 +505,15 @@ class NetworkExplorer:
             if use.active and use.component.ports > 0:
                 used_ports = physical(
                     used_ports
-                    + use.count * physical(use.component.ports, f"{label}.ports_used"),
+                    + use.count
+                    * physical(
+                        use.component.ports * use.component.count, f"{label}.ports_used"
+                    ),
                     f"{label}.ports_used",
                 )
         total_ports_available = physical(
-            physical(comp.ports, f"{label}.ports_available") * platform.count,
+            physical(comp.ports * comp.count, f"{label}.ports_available")
+            * platform.count,
             f"{label}.ports_available",
         )
         capacity_violation = attached_capacity > platform.capacity

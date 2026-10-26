@@ -50,7 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nested risk-group declarations that reuse a name must be identical; conflicting ones are refused with both paths.
 - `import ngraph` loads each module on first use; NetworkX loads only for `BuildGraph`.
 - Step log lines and export type errors name the class by module (`ngraph.workflow.max_flow_step.MaxFlow`).
-- `NetworkExplorer` and `CostPower` read one hardware inventory (`ngraph.hardware.hardware_inventory`), one row per node platform and link-end optic; their totals are unchanged.
+- `NetworkExplorer` and `CostPower` read one hardware inventory (`ngraph.hardware.hardware_inventory`), one row per node platform and link-end optic; their capex and power totals are unchanged.
 - Hardware is validated before any capacity or port check, and each refusal names its node or link end (`node n3: Hardware 'count' must be ...`); an input with an invalid count and an over-capacity node now reports the count.
 - `ngraph inspect` calls a link enabled only when it and both end nodes are enabled, in every figure, as `NetworkStats` does.
 - `ngraph inspect --detail` lists each set's first demands by their selector labels (`^A -> ^B`) instead of the selectors' Python representation.
@@ -76,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ordering conditions compare integers exactly; 0.24 compared floats, so `2**53 + 1 > 2**53` was false and integers above the float range crashed.
 - Hardware totals too large for a finite float are refused with the entity (node, link end or aggregate path) and field named; 0.24 wrote them as infinity: `Infinity` in the results file (not valid JSON) and `inf` in `ngraph inspect`.
+- Hardware component `count` multiplies both the ports available on a platform and the ports consumed by a link-end component, as it does for capacity, capex and power.
 - Weighted failure modes and weighted choices follow their weights when the total weight overflows or a weight is subnormal (0.24 picked the last mode, or fell back to name order); other draws are unchanged.
 - `ngraph inspect` previews selectors as analyses select: attribute conditions and `group_by` apply, and selectors sharing a path are listed apart (they were matched and merged as node-name patterns).
 - The `--profile` report's CPU time is the process CPU time of each step, all threads and native code included, and can exceed the wall time (it was the profiled wall time); the function table is labelled as cProfile time and the CPU-intensive advice no longer suggests parallelization.
