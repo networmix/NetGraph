@@ -4085,6 +4085,9 @@
                 "$ref": "#/$defs/SplitConstraintJSON"
               },
               {
+                "$ref": "#/$defs/TunnelResolutionConstraintJSON"
+              },
+              {
                 "$ref": "#/$defs/UnverifiedConstraintJSON"
               }
             ]
@@ -6155,6 +6158,54 @@
       ],
       "additionalProperties": false
     },
+    "TunnelResolutionConstraintJSON": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "The record kind, a fixed tag.",
+          "enum": [
+            "tunnel_resolution"
+          ]
+        },
+        "label": {
+          "description": "The demand or question whose native plan was observed.",
+          "type": "string"
+        },
+        "q": {
+          "description": "The bandwidth unit at which the plan was observed.",
+          "type": "number"
+        },
+        "heads": {
+          "description": "Every live head, in native node order: a physical node name or a structured TE ingress pool head.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/PoolHeadJSON"
+              }
+            ]
+          },
+          "minItems": 1
+        },
+        "met": {
+          "description": "Always false: the observed plan cannot give its live heads whole-unit tunnels.",
+          "enum": [
+            false
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "q",
+        "heads",
+        "met"
+      ],
+      "additionalProperties": false
+    },
     "UnavailableOutputsJSON": {
       "type": "object",
       "properties": {
@@ -6173,6 +6224,9 @@
         },
         {
           "$ref": "#/$defs/SplitConstraintJSON"
+        },
+        {
+          "$ref": "#/$defs/TunnelResolutionConstraintJSON"
         },
         {
           "$ref": "#/$defs/RangeConstraintJSON"
@@ -6205,7 +6259,7 @@
           "type": "number"
         },
         "target_met": {
-          "description": "Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded.",
+          "description": "Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded.",
           "type": "boolean"
         },
         "input_convention": {
@@ -6225,7 +6279,7 @@
           "$ref": "#/$defs/PreparationScopeJSON"
         },
         "binding_constraints": {
-          "description": "The constraints that limited q.",
+          "description": "The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/UnitConstraintJSON"

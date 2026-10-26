@@ -18,12 +18,12 @@ How an analysis ran: its effective number of workers and its failure sampling.
 ### ngraph.AnalysisResult
 
 ```python
-AnalysisResult = CapacityAnalysis
+AnalysisResult = (CapacityAnalysis
     | PlacementAnalysis
     | SensitivityAnalysis
     | PathAnalysis
     | MSDAnalysis
-    | TunnelCountAnalysis
+    | TunnelCountAnalysis)
 ```
 
 The result of any analysis: capacity, placement, sensitivity, paths, MSD or tunnel
@@ -1055,7 +1055,7 @@ it missed and its input rounding.
 **Attributes:**
 
 - `location` (ReportLocation)
-- `constraints` (tuple[InputConstraint | SplitConstraint | UnverifiedConstraint, ...])
+- `constraints` (tuple[InputConstraint | SplitConstraint | TunnelResolutionConstraint | UnverifiedConstraint, ...])
 - `inexact_inputs` (int)
 - `zeroed_inputs` (int)
 - `examples` (tuple[InputQuantization, ...])
@@ -1396,7 +1396,7 @@ What a custom step's ``run`` returns: its question and its result.
 ### ngraph.StepQuestion
 
 ```python
-StepQuestion = CapacityQuery
+StepQuestion = (CapacityQuery
         | PlacementQuery
         | SensitivityQuery
         | PathQuery
@@ -1405,7 +1405,7 @@ StepQuestion = CapacityQuery
         | BuildGraph
         | NetworkStats
         | CostPower
-        | Mapping[str, JSONValue]
+        | Mapping[str, JSONValue])
 ```
 
 A step's recorded question: an analysis's own query, a built-in domain step's
@@ -1500,10 +1500,26 @@ offer).
 - `lossless_at_design_units` (int)
 - `physical_tunnel_cost` (int)
 
+### ngraph.TunnelResolutionConstraint
+
+A native tunnel plan whose live heads cannot receive a whole unit per tunnel.
+
+**Attributes:**
+
+- `kind` (ClassVar[Literal['tunnel_resolution']]) = tunnel_resolution
+- `label` (str)
+- `q` (float)
+- `heads` (tuple[str | PoolHead, ...])
+- `met` (ClassVar[Literal[False]]) = False
+
 ### ngraph.UnitConstraint
 
 ```python
-UnitConstraint = InputConstraint | SplitConstraint | RangeConstraint | UnverifiedConstraint
+UnitConstraint = (InputConstraint
+    | SplitConstraint
+    | TunnelResolutionConstraint
+    | RangeConstraint
+    | UnverifiedConstraint)
 ```
 
 One precision or range constraint of a units report.

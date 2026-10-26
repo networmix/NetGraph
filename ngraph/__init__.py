@@ -110,6 +110,7 @@ if TYPE_CHECKING:
         SyntheticIngress,
         TunnelCountAnalysis,
         TunnelCountRow,
+        TunnelResolutionConstraint,
         UnitConstraint,
         UnitsReport,
         UnverifiedConstraint,
@@ -158,7 +159,7 @@ _MODULES = {
         "ResolvedDemand ResolvedDemandSet RunMetadata RunResult "
         "SamplingMetadata SelfPair SensitivityAnalysis "
         "SplitConstraint StepContext StepOutput StepQuestion "
-        "StepResult SyntheticIngress TunnelCountAnalysis TunnelCountRow "
+        "StepResult SyntheticIngress TunnelCountAnalysis TunnelCountRow TunnelResolutionConstraint "
         "UnitConstraint UnitsReport "
         "UnverifiedConstraint UpperCertificate"
     ),
@@ -292,6 +293,7 @@ __all__ = [
     "TunnelCountAnalysis",
     "TunnelCountQuery",
     "TunnelCountRow",
+    "TunnelResolutionConstraint",
     "UnitConstraint",
     "UnitsReport",
     "UnitsSettings",

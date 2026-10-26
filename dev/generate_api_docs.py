@@ -230,6 +230,11 @@ def _defined_value(module_name, name):
             continue
         if name in targets:
             text = ast.get_source_segment(source, node.value)
+            if text is not None and "\n" in text:
+                try:
+                    ast.parse(text, mode="eval")
+                except SyntaxError:
+                    text = f"({text})"
             following = body[index + 1] if index + 1 < len(body) else None
             doc = None
             if (

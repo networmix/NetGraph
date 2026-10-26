@@ -158,14 +158,14 @@ def count_splits(
     topology = prepared.topology
     precision = prepared.units_report.precision
     specs = query.specs
-    splits, opaque = [], []
+    splits, extra = [], []
     for index, demand in enumerate(query.demands.demands):
         model = _model(demand, label)
         facts = _Searched(
             topology, prepared._named, model, demand.endpoints, mask, demand.pool
         )
         for count, up_to in specs:
-            local, unverified = query_splits(
+            local, other = query_splits(
                 topology,
                 prepared._named,
                 _Question(
@@ -181,8 +181,8 @@ def count_splits(
                 result=None if results is None else results[(index, count, up_to)],
             )
             splits.extend(local)
-            opaque.extend(unverified)
-    return splits, opaque
+            extra.extend(other)
+    return splits, extra
 
 
 def tunnel_counts(
@@ -263,12 +263,12 @@ def tunnel_counts(
                     cost,
                 )
             )
-    splits, opaque = count_splits(prepared, query, label, mask, results)
+    splits, extra = count_splits(prepared, query, label, mask, results)
     samples, constraints = query_inputs(prepared, query, label)
     miss = precision_miss(
         ReportLocation(None, "baseline", None),
         samples,
-        (*constraints, *splits, *opaque),
+        (*constraints, *splits, *extra),
     )
     return TunnelCountAnalysis(
         prepared,

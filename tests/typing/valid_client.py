@@ -50,6 +50,7 @@ from ngraph import (
     PlacementAnalysis,
     PlacementQuery,
     PlacementRow,
+    PoolHead,
     RangeConstraint,
     ResolvedDemandSet,
     RouteSpec,
@@ -66,6 +67,7 @@ from ngraph import (
     SupportSpec,
     TunnelCountAnalysis,
     TunnelCountQuery,
+    TunnelResolutionConstraint,
     UnitsReport,
     UnitsSettings,
     UnverifiedConstraint,
@@ -235,6 +237,11 @@ def read_units(report: UnitsReport) -> float:
         elif isinstance(constraint, RangeConstraint):
             integer: int = constraint.units_value
             assert integer >= 0
+        elif isinstance(constraint, TunnelResolutionConstraint):
+            observed_q: float = constraint.q
+            heads: tuple[str | PoolHead, ...] = constraint.heads
+            unmet: Literal[False] = constraint.met
+            assert observed_q in (q, 2 * q) and heads and not unmet
         else:
             opaque: UnverifiedConstraint = constraint
             assert opaque.reason == "opaque_program"

@@ -67,6 +67,7 @@ from ngraph.results import (
     InputQuantization,
     PreparationScope,
     ResolvedDemandSet,
+    TunnelResolutionConstraint,
     UnitsReport,
     approximations,
 )
@@ -197,7 +198,7 @@ def _capacity_splits(prepared, step, name, needs, precision):
                 topology, query, native_pairs[:1], _options(topology, query, nothing), 1
             )
             return [], []
-        splits, unverified = [], []
+        splits, extra = [], []
         observations = evaluate(
             topology,
             query,
@@ -206,7 +207,7 @@ def _capacity_splits(prepared, step, name, needs, precision):
             1,
         )
         for (index, pair), result in zip(jobs, observations, strict=True):
-            local, opaque = query_splits(
+            local, other = query_splits(
                 topology,
                 prepared._named,
                 query,
@@ -219,8 +220,8 @@ def _capacity_splits(prepared, step, name, needs, precision):
                 result=result,
             )
             splits.extend(local)
-            unverified.extend(opaque)
-        return splits, unverified
+            extra.extend(other)
+        return splits, extra
     except (ValueError, TypeError) as exc:
         raise _labelled(step, exc) from exc
 
@@ -440,6 +441,7 @@ def prepare_scenario(
     )
     declared = (scenario.routes, scenario.supports, scenario.weights)
     membership = None
+    unresolved: dict[float, tuple[TunnelResolutionConstraint, ...]] = {}
 
     def candidate(q):
         nonlocal membership
@@ -499,23 +501,23 @@ def prepare_scenario(
             steps,
             setup,
         )
-        splits, unverified = [], []
+        splits, extra = [], []
         for demands in resolved.values():
-            local, opaque = _nominal_splits(prepared, demands, settings.precision)
+            local, other = _nominal_splits(prepared, demands, settings.precision)
             splits.extend(local)
-            unverified.extend(opaque)
+            extra.extend(other)
         for step, name, needs in capacities:
-            local, opaque = _capacity_splits(
+            local, other = _capacity_splits(
                 prepared, step, name, needs, settings.precision
             )
             splits.extend(local)
-            unverified.extend(opaque)
+            extra.extend(other)
         for step, name, needs in counting:
             # Count questions load only for scenarios that ask them.
             from ngraph.analysis.counts import count_splits
 
             try:
-                local, opaque = count_splits(
+                local, other = count_splits(
                     prepared,
                     needs.counts(prepared),
                     f"workflow.{name}",
@@ -524,8 +526,12 @@ def prepare_scenario(
             except (ValueError, TypeError) as exc:
                 raise _labelled(step, exc) from exc
             splits.extend(local)
-            unverified.extend(opaque)
-        report = with_splits(report, tuple(splits), tuple(unverified))
+            extra.extend(other)
+        report = with_splits(report, tuple(splits), tuple(extra))
+        if settings.resolution == "auto":
+            unresolved[q] = tuple(
+                c for c in extra if isinstance(c, TunnelResolutionConstraint)
+            )
         return replace(prepared, units_report=report), report.target_met
 
     prepared, finer_failure = choose_resolution(
@@ -536,6 +542,16 @@ def prepare_scenario(
         candidate,
         budget_excess,
     )
+    report = prepared.units_report
+    # A plan rejected at the next coarser unit explains the automatic choice.
+    coarser = unresolved.get(report.q * 2, ()) if report.target_met else ()
+    if coarser:
+        prepared = replace(
+            prepared,
+            units_report=replace(
+                report, binding_constraints=(*report.binding_constraints, *coarser)
+            ),
+        )
     if finer_failure is not None:
         report = prepared.units_report
         prepared = replace(

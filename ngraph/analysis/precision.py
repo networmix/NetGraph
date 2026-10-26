@@ -30,6 +30,7 @@ from ngraph.results import (
     ExpansionParent,
     PrecisionMiss,
     SplitConstraint,
+    TunnelResolutionConstraint,
     UnverifiedConstraint,
 )
 from ngraph.utils.values import integer, physical
@@ -264,6 +265,26 @@ def tunnel_members(model, heads, plan=None):
     return tuple((head, members) for head in heads if head in live)
 
 
+def _tunnel_resolution(topology, model, plan, label, pool):
+    """Observe a live T2 plan without inferring a bound for another rounded graph."""
+    if (
+        not isinstance(model, ngc.CentralizedTE)
+        or model.tunnel_count is None
+        or plan is None
+        or not plan.insufficient_resolution
+        or not plan.heads_with_capacity
+    ):
+        return ()
+    heads = []
+    for head in plan.heads_with_capacity:
+        if head < len(topology.node_names):
+            heads.append(topology.node_names[head])
+        else:
+            assert pool is not None and topology.pool_heads[pool.head.pool_id] == head
+            heads.append(pool.head)
+    return (TunnelResolutionConstraint(label, topology.q, tuple(heads)),)
+
+
 def _model_splits(
     topology,
     named,
@@ -275,6 +296,7 @@ def _model_splits(
     precision,
     table=None,
     plan=None,
+    pool=None,
 ):
     """Apply the split rules of one native model to one observed amount.
 
@@ -282,6 +304,7 @@ def _model_splits(
     sources, then by its destination table.
     """
     constraints = []
+    extra = _tunnel_resolution(topology, model, plan, label, pool)
 
     def add(kind, suffix, incoming, members):
         if incoming > 0 and members > 1:
@@ -298,7 +321,7 @@ def _model_splits(
     ):
         return constraints, (UnverifiedConstraint(label),)
     if amount <= 0:
-        return constraints, ()
+        return constraints, extra
     heads = facts.tunnel_heads
     if heads is not None:
         assert isinstance(model, (ngc.DistributedTE, ngc.CentralizedTE))
@@ -385,7 +408,7 @@ def _model_splits(
             assert weights is not None
             roster = [source for source in roster if weights[source] > 0]
         add("source", "sources", amount, len(roster))
-    return constraints, ()
+    return constraints, extra
 
 
 def _unique(constraints):
@@ -506,7 +529,7 @@ def placement_splits(
         demands.demands, results, record_sets, strict=True
     ):
         facts = _Placed(topology, named, demand, result, records, mask, before)
-        local, opaque = _model_splits(
+        local, other = _model_splits(
             topology,
             named,
             demand.config.routing,
@@ -523,9 +546,10 @@ def placement_splits(
             if controlled(demands.controller, parents[demand.base_id].policy)
             else None,
             plan=result.plan,
+            pool=demand.pool,
         )
         constraints.extend(local)
-        extra.extend(opaque)
+        extra.extend(other)
         # Service and reservation baselines are distinct; only carried flows
         # change the next ordered policy's RESIDUAL_SNAPSHOT weights.
         if before is not None and ordered:
@@ -756,8 +780,17 @@ def query_splits(
         facts = _Searched(topology, named, model, pair, mask, pool)
     declaration = getattr(query, "declaration", None)  # sensitivity has none
     plan = None if result is None else result.plan
-    constraints, opaque = _model_splits(
-        topology, named, model, declaration, label, amount, facts, precision, plan=plan
+    constraints, extra = _model_splits(
+        topology,
+        named,
+        model,
+        declaration,
+        label,
+        amount,
+        facts,
+        precision,
+        plan=plan,
+        pool=pool,
     )
     if observed:
         constraints = [replace(c, basis="observed") for c in constraints]
@@ -790,7 +823,7 @@ def query_splits(
                             precision,
                         )
                     )
-    return _unique(constraints), tuple(opaque)
+    return _unique(constraints), tuple(extra)
 
 
 def observed_inputs(prepared: PreparedScenario, inputs):
@@ -873,7 +906,7 @@ def placement_miss(
     ``tables`` are a failure case's controller tables by destination.
     """
     samples, constraints = observations
-    splits, opaque = placement_splits(
+    splits, extra = placement_splits(
         prepared.topology,
         prepared._named,
         demands,
@@ -885,7 +918,7 @@ def placement_miss(
         tables,
         ordered,
     )
-    return precision_miss(location, samples, (*constraints, *splits, *opaque))
+    return precision_miss(location, samples, (*constraints, *splits, *extra))
 
 
 def query_miss(
@@ -900,7 +933,7 @@ def query_miss(
     constraints = list(constraints)
     if query_has_splits(query):
         for pair, delivered, mask, label, pool, result in observations:
-            splits, opaque = query_splits(
+            splits, extra = query_splits(
                 prepared.topology,
                 prepared._named,
                 query,
@@ -912,5 +945,5 @@ def query_miss(
                 pool,
                 result=result,
             )
-            constraints.extend((*splits, *opaque))
+            constraints.extend((*splits, *extra))
     return precision_miss(location, samples, constraints)

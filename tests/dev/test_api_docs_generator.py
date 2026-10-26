@@ -4,6 +4,8 @@ import importlib.util
 import re
 from pathlib import Path
 
+import pytest
+
 _SPEC = importlib.util.spec_from_file_location(
     "generate_api_docs",
     Path(__file__).resolve().parents[2] / "dev" / "generate_api_docs.py",
@@ -166,6 +168,42 @@ def test_every_member_of_a_public_enum_is_listed():
                     assert f"- `{member.name}` = " in text, (name, member.name)
                 checked += 1
     assert checked >= 1
+
+
+def test_multiline_alias_definition_is_valid_python():
+    import ast
+
+    definition, _ = _MODULE._defined_value("ngraph", "UnitConstraint")
+    ast.parse("UnitConstraint = " + definition)
+    page = _entry_text(PAGE.read_text(), "ngraph.UnitConstraint")
+    block = re.search(r"```python\n(.*?)\n```", page, re.S)
+    assert block is not None
+    ast.parse(block[1])
+    with pytest.raises(SyntaxError):
+        ast.parse("UnitConstraint = A\n    | B")
+
+
+@pytest.mark.parametrize(
+    "definition,wrapped",
+    [("Literal[\n 'a', 'b'\n]", False), ("(A\n | B)", False), ("A\n    | B", True)],
+)
+def test_alias_parentheses_are_added_only_for_an_invalid_expression(
+    monkeypatch, definition, wrapped
+):
+    import ast
+
+    monkeypatch.setattr(
+        _MODULE.inspect,
+        "getsource",
+        lambda module: 'Alias = (A | B)\n"A public alias."\n',
+    )
+    monkeypatch.setattr(
+        _MODULE.ast, "get_source_segment", lambda source, node: definition
+    )
+    actual, doc = _MODULE._defined_value("ngraph.results", "Alias")
+    assert actual == (f"({definition})" if wrapped else definition)
+    assert doc == "A public alias."
+    ast.parse(actual, mode="eval")
 
 
 def test_the_checks_fail_on_a_missing_entry_and_on_an_extra_one(monkeypatch):

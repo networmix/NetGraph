@@ -490,6 +490,22 @@ class SplitConstraint(_ResultRecord):
 
 
 @_record
+class TunnelResolutionConstraint(_ResultRecord):
+    """A native tunnel plan whose live heads cannot receive a whole unit per tunnel."""
+
+    kind: ClassVar[Literal["tunnel_resolution"]] = "tunnel_resolution"
+    """The record kind, a fixed tag."""
+    label: str
+    """The demand or question whose native plan was observed."""
+    q: float
+    """The bandwidth unit at which the plan was observed."""
+    heads: tuple[str | PoolHead, ...] = field(metadata={"minItems": 1})
+    """Every live head, in native node order: a physical node name or a structured TE ingress pool head."""
+    met: ClassVar[Literal[False]] = False
+    """Always false: the observed plan cannot give its live heads whole-unit tunnels."""
+
+
+@_record
 class RangeConstraint(_ResultRecord):
     """A range limit: a value in units against its exclusive limit 2^62 at the tested q."""
 
@@ -520,7 +536,11 @@ class UnverifiedConstraint(_ResultRecord):
 
 
 UnitConstraint: TypeAlias = (
-    InputConstraint | SplitConstraint | RangeConstraint | UnverifiedConstraint
+    InputConstraint
+    | SplitConstraint
+    | TunnelResolutionConstraint
+    | RangeConstraint
+    | UnverifiedConstraint
 )
 """One precision or range constraint of a units report."""
 
@@ -533,7 +553,13 @@ class PrecisionMiss(_ResultRecord):
 
     location: ReportLocation
     """Where the miss was observed: step, case and probe."""
-    constraints: tuple[InputConstraint | SplitConstraint | UnverifiedConstraint, ...]
+    constraints: tuple[
+        InputConstraint
+        | SplitConstraint
+        | TunnelResolutionConstraint
+        | UnverifiedConstraint,
+        ...,
+    ]
     """The constraints the chosen q does not meet there."""
     inexact_inputs: int
     """Inputs not exact at q there."""
@@ -577,7 +603,7 @@ class UnitsReport(_ResultRecord):
     precision: float
     """The relative precision target."""
     target_met: bool
-    """Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded."""
+    """Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded."""
     input_convention: ClassVar[Literal["promoted_binary64_half_up"]] = (
         "promoted_binary64_half_up"
     )
@@ -589,7 +615,7 @@ class UnitsReport(_ResultRecord):
     scope: PreparationScope
     """What the preparation covered."""
     binding_constraints: tuple[UnitConstraint, ...]
-    """The constraints that limited q."""
+    """The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation."""
     input_count: int
     """Physical inputs converted to units."""
     inexact_inputs: int

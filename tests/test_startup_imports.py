@@ -137,7 +137,7 @@ def test_the_three_public_name_declarations_agree():
     mapped = set(ngraph._EXPORTS)
     exported = set(ngraph.__all__) - {"__version__"}
     assert typed == mapped == exported
-    assert len(exported) == 123
+    assert len(exported) == 124
 
 
 def test_command_line_help_loads_no_engine():

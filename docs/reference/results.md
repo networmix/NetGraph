@@ -750,7 +750,7 @@ One of: `"tolerance"` \| `"alpha_bound"` \| `"bracket_limit"` \| `"bisect_limit"
 | Field | Type | Description |
 | --- | --- | --- |
 | `location` | [ReportLocationJSON](#reportlocationjson) | Where the miss was observed: step, case and probe. |
-| `constraints` | list of [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson) | The constraints the chosen q does not meet there. |
+| `constraints` | list of [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [TunnelResolutionConstraintJSON](#tunnelresolutionconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson) | The constraints the chosen q does not meet there. |
 | `inexact_inputs` | integer | Inputs not exact at q there. |
 | `zeroed_inputs` | integer | Positive inputs that round to zero units there. |
 | `examples` | list of [InputQuantizationJSON](#inputquantizationjson) | Example inputs that miss. |
@@ -1060,6 +1060,16 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 | `headroom_penalty` | integer or null | T2 with prefer_headroom: the headroom penalty of the plan. Null when the plan is T1's or prefer_headroom is off. |
 | `max_lossless_offer_units` | integer or null | T2: the program's lossless maximum offer F. Null when the plan is T1's. |
 
+## TunnelResolutionConstraintJSON
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `kind` | `"tunnel_resolution"` | The record kind, a fixed tag. |
+| `label` | string | The demand or question whose native plan was observed. |
+| `q` | number | The bandwidth unit at which the plan was observed. |
+| `heads` | list of string or [PoolHeadJSON](#poolheadjson) | Every live head, in native node order: a physical node name or a structured TE ingress pool head. |
+| `met` | `false` | Always false: the observed plan cannot give its live heads whole-unit tunnels. |
+
 ## UnavailableOutputsJSON
 
 | Field | Type | Description |
@@ -1068,7 +1078,7 @@ One of: [CapacityQueryJSON](#capacityqueryjson) or [PlacementQueryJSON](#placeme
 
 ## UnitConstraintJSON
 
-One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [RangeConstraintJSON](#rangeconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson).
+One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#splitconstraintjson) or [TunnelResolutionConstraintJSON](#tunnelresolutionconstraintjson) or [RangeConstraintJSON](#rangeconstraintjson) or [UnverifiedConstraintJSON](#unverifiedconstraintjson).
 
 ## UnitsReportJSON
 
@@ -1078,11 +1088,11 @@ One of: [InputConstraintJSON](#inputconstraintjson) or [SplitConstraintJSON](#sp
 | `exponent` | integer | q as a power of two: q = 2^exponent. |
 | `mode` | `"auto"` \| `"manual"` | auto (chosen by the recipe) or manual (declared). |
 | `precision` | number | The relative precision target. |
-| `target_met` | boolean | Whether every declared input and split meets its precision bound at q. The bound is checked, not the rounding: false is possible with no input rounded. |
+| `target_met` | boolean | Whether every input and split meets its precision bound at q and every native tunnel plan observed at q has sufficient resolution for its live heads. Bounds are checked, not the rounding: false is possible with no input rounded. |
 | `input_convention` | `"promoted_binary64_half_up"` | Physical inputs round half-up from their binary64 value. |
 | `display_convention` | `"units_authoritative_binary64_display"` | Units are authoritative; physical values are binary64 displays. |
 | `scope` | [PreparationScopeJSON](#preparationscopejson) | What the preparation covered. |
-| `binding_constraints` | list of [UnitConstraintJSON](#unitconstraintjson) | The constraints that limited q. |
+| `binding_constraints` | list of [UnitConstraintJSON](#unitconstraintjson) | The constraints that limited q, including observed tunnel plans with insufficient resolution for their live heads: at q, or at 2q when automatic preparation rejected that coarser candidate and meets the target at q. Each tunnel record's q identifies its observation. |
 | `input_count` | integer | Physical inputs converted to units. |
 | `inexact_inputs` | integer | Inputs not exact at q. |
 | `zeroed_inputs` | integer | Positive inputs that round to zero units. |
