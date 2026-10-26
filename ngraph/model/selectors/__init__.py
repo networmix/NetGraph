@@ -9,10 +9,13 @@ YAML-facing selector normalization and match parsing live here, alongside the
 schema types they construct. DSL callers construct these typed values once.
 
 Usage:
-    from ngraph.model.selectors import Selector, select_nodes
-
-    selector = Selector(path="^dc1/.*")
-    groups = select_nodes(network, selector, default_active_only=True)
+    >>> from ngraph import Network, Node
+    >>> from ngraph.model.selectors import Selector, select_nodes
+    >>> network = Network()
+    >>> network.add_node(Node("dc1/leaf1"))
+    >>> selector = Selector(path="^dc1/.*")
+    >>> groups = select_nodes(network, selector, default_active_only=True)
+    >>> assert [node.name for node in groups["^dc1/.*"]] == ["dc1/leaf1"]
 """
 
 from .conditions import evaluate_condition, evaluate_conditions, resolve_attr_path

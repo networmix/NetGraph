@@ -17,8 +17,9 @@ class SeedManager:
     order or parallelism.
 
     Usage:
-        seed_mgr = SeedManager(42)
-        failure_seed = seed_mgr.derive_seed("failure_policy", "default")
+        >>> seed_mgr = SeedManager(42)
+        >>> seed_mgr.derive_seed("failure_policy", "default")
+        1402643835
     """
 
     def __init__(self, master_seed: Optional[int] = None) -> None:
@@ -46,9 +47,11 @@ class SeedManager:
             Derived seed in [0, 2**31 - 1], or None if no master seed is set.
 
         Example:
-            seed_mgr = SeedManager(42)
-            policy_seed = seed_mgr.derive_seed("failure_policy", "default")
-            worker_seed = seed_mgr.derive_seed("capacity_analysis", "worker", 3)
+            >>> seed_mgr = SeedManager(42)
+            >>> seed_mgr.derive_seed("capacity_analysis", "worker", 3)
+            2080417373
+            >>> SeedManager().derive_seed("capacity_analysis", "worker", 3) is None
+            True
         """
         if self.master_seed is None:
             return None

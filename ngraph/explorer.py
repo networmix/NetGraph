@@ -254,7 +254,16 @@ class NetworkExplorer:
     def _build_hierarchy_tree(self) -> TreeNode:
         """Build the tree by splitting node names on '/'.
 
-        Example: "dc1/plane1/ssw/ssw-1" => root/dc1/plane1/ssw/ssw-1
+        Example:
+            >>> from ngraph import Network, Node
+            >>> network = Network()
+            >>> network.add_node(Node("dc1/plane1/ssw/ssw-1"))
+            >>> node, path = NetworkExplorer.explore_network(network).root_node, []
+            >>> while node.children:
+            ...     [node] = node.children.values()
+            ...     path.append(node.name)
+            >>> "/".join(["root", *path])
+            'root/dc1/plane1/ssw/ssw-1'
         """
         root = TreeNode(name="root")
         for nd in self.network.nodes.values():

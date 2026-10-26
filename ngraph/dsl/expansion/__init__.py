@@ -4,15 +4,21 @@ Template expansion with $var and ${var} syntax, plus bracket pattern expansion
 for name generation.
 
 Usage:
-    from ngraph.dsl.expansion import expand_block, expand_name_patterns, ExpansionSpec
+    >>> from ngraph.dsl.expansion import expand_block, expand_name_patterns, ExpansionSpec
 
-    # Variable expansion with expand: block
-    spec = ExpansionSpec.from_dict({"expand": {"vars": {"dc": [1, 2, 3]}}})
-    for result in expand_block({"path": "dc${dc}/leaf"}, spec):
-        print(result)  # {"path": "dc1/leaf"}, {"path": "dc2/leaf"}, ...
+    Variable expansion with an ``expand`` block:
 
-    # Bracket expansion
-    names = expand_name_patterns("leaf[1-4]")  # ["leaf1", "leaf2", "leaf3", "leaf4"]
+    >>> spec = ExpansionSpec.from_dict({"expand": {"vars": {"dc": [1, 2, 3]}}})
+    >>> for result in expand_block({"path": "dc${dc}/leaf"}, spec):
+    ...     print(result)
+    {'path': 'dc1/leaf'}
+    {'path': 'dc2/leaf'}
+    {'path': 'dc3/leaf'}
+
+    Bracket expansion:
+
+    >>> expand_name_patterns("leaf[1-4]")
+    ['leaf1', 'leaf2', 'leaf3', 'leaf4']
 """
 
 from .brackets import expand_name_patterns, expand_risk_group_refs

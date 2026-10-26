@@ -99,7 +99,8 @@ def _format_duration(seconds: float) -> str:
     """Format seconds as a short ASCII duration for logs.
 
     Examples:
-        0.123 -> "123.0 ms"; 1.234 -> "1.23 s"; 75.2 -> "1m 15.2s".
+        >>> [_format_duration(seconds) for seconds in (0.123, 1.234, 75.2)]
+        ['123.0 ms', '1.23 s', '1m 15.2s']
     """
     if seconds < 1.0:
         return f"{seconds * 1000.0:.1f} ms"
@@ -113,8 +114,19 @@ def _format_duration(seconds: float) -> str:
 def _selector_label(selector: Selector) -> str:
     """Return a selector's preview label: its path (``*`` without one), then its other parts.
 
-    Examples: ``^A``; ``^A [match: role == edge or tier == 1]``;
-    ``^A [match: role exists]``; ``* [group_by: role]``; ``^A [active_only: false]``.
+    Examples:
+        >>> from ngraph import Condition, MatchSpec, Selector
+        >>> _selector_label(Selector(path="^A"))
+        '^A'
+        >>> either = MatchSpec((Condition("role", "==", "edge"), Condition("tier", "==", 1)))
+        >>> _selector_label(Selector(path="^A", match=either))
+        '^A [match: role == edge or tier == 1]'
+        >>> _selector_label(Selector(path="^A", match=MatchSpec((Condition("role", "exists"),))))
+        '^A [match: role exists]'
+        >>> _selector_label(Selector(group_by="role"))
+        '* [group_by: role]'
+        >>> _selector_label(Selector(path="^A", active_only=False))
+        '^A [active_only: false]'
     """
 
     def text(value: Any) -> str:

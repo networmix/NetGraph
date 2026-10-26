@@ -40,8 +40,8 @@ failures:
                 - {attr: role, op: "==", value: inter_site}
 demands:
   traffic:
-    - {id: service, source: ^site1/leaf/, target: ^site2/leaf/,
-       volume: 100, preset: SHORTEST_PATHS_ECMP}
+    - {source: ^site1/leaf/, target: ^site2/leaf/, volume: 100,
+       preset: SHORTEST_PATHS_ECMP}
 workflow:
   - {type: BuildGraph, name: topology}
   - type: MaxFlow
@@ -51,7 +51,6 @@ workflow:
     preset: SHORTEST_PATHS_ECMP
     failure_policy: inter_site_link
     iterations: 20
-    workers: auto
     outputs: {cost_distribution: true}
   - {type: TrafficMatrixPlacement, name: traffic, demand_set: traffic}
 ```
@@ -60,7 +59,7 @@ workflow:
 
 Blueprint expansion creates 12 nodes and 18 physical links, hence 36 directed export edges. Selectors name the leaf sets; a source's shortest route crosses one local spine, an inter-site link and a remote spine-to-leaf link, cost 1 + 10 + 1 = 12.
 
-`pattern: mesh` links every leaf to every spine of its site, and `one_to_one` pairs the spines across sites ([`network`](../reference/dsl.md#network-topology)). The failure rule's `match` keeps the links whose `role` is `inter_site` ([Selecting nodes](../reference/dsl.md#selecting-nodes)). `failure_policy`, `iterations` and `workers` run 20 draws on every CPU ([Keys common to analysis steps](../reference/workflow.md#keys-common-to-analysis-steps)), and `outputs` asks for the cost report ([Output selection](../reference/workflow.md#output-selection)).
+`pattern: mesh` links every leaf to every spine of its site, and `one_to_one` pairs the spines across sites ([`network`](../reference/dsl.md#network-topology)). The failure rule's `match` keeps the links whose `role` is `inter_site` ([Selecting nodes](../reference/dsl.md#selecting-nodes)). `failure_policy` and `iterations` run 20 draws ([Keys common to analysis steps](../reference/workflow.md#keys-common-to-analysis-steps)), and `outputs` asks for the cost report ([Output selection](../reference/workflow.md#output-selection)).
 
 ## Execute and inspect typed results
 
@@ -97,7 +96,7 @@ ngraph run clos.yaml --output results/
 ngraph run clos.yaml --keys equal_shortest_capacity --stdout --no-results
 ```
 
-The filtered export keeps that step's execution order, 1, ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)); its cases are described in [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
+The filtered export keeps that step's execution order, 1 ([Filtering Results by Step Names](../reference/cli.md#filtering-results-by-step-names)); its cases are described in [Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states).
 
 Change `preset` to `SHORTEST_PATHS_WCMP` for capacity-weighted shortest routing, `SHORTEST_PATHS_MAXFLOW` for optimized capacity on shortest paths, or `TE_MAXFLOW_UNLIM` for unrestricted optimized capacity. These are distinct models ([Routing models and admission](../concepts.md#routing-models-and-admission)); the symmetric baseline here is bounded by the same inter-site cut.
 

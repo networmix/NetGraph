@@ -33,7 +33,7 @@ Load and validate a scenario and print its structure without running the workflo
 
 **Syntax:**
 
-```bash
+```text
 ngraph [--verbose|--quiet] inspect <scenario_file> [options]
 ```
 
@@ -79,7 +79,7 @@ Run the workflow of a scenario file and write the results.
 
 **Syntax:**
 
-```bash
+```text
 ngraph [--verbose|--quiet] run <scenario_file> [options]
 ```
 
@@ -154,7 +154,7 @@ The report lists total elapsed time, time per step, steps taking more than 10% o
 The top-level fields are `metadata`, `units_report` and ordered `steps`. Each step contains its name, type, order, seed provenance, normalized question and typed result. For example, list the steps' questions and the bandwidth unit `q` with:
 
 ```bash
-jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}' results.json
+jq '{q: .units_report.q, steps: [.steps[] | {name, execution_order, question}]}' square_mesh.results.json
 ```
 
 Each step's result is described with the step in [Workflow Steps](workflow.md), and every field in [Results](results.md). Native bandwidth amounts are integer units of the run's `q`, which the units report records; [Results and their units](../concepts.md#results-and-their-units) lists the other kinds of numbers. Optional costs, cuts and edge arrays appear only when requested and applicable.

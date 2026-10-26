@@ -47,9 +47,12 @@ def join_paths(parent_path: str, rel_path: str) -> str:
     scope's root.
 
     Examples:
-        join_paths("", "/leaf") -> "leaf"
-        join_paths("pod1", "/leaf") -> "pod1/leaf"
-        join_paths("pod1", "leaf") -> "pod1/leaf"  (same result)
+        >>> join_paths("", "/leaf")
+        'leaf'
+        >>> join_paths("pod1", "/leaf")
+        'pod1/leaf'
+        >>> join_paths("pod1", "leaf")
+        'pod1/leaf'
 
     Args:
         parent_path: Parent path prefix (e.g., "pod1" when expanding a blueprint).

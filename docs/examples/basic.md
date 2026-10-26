@@ -65,10 +65,12 @@ assert row.cost_distribution.kind == "marginal_curve"
 assert [(piece.marginal_cost, piece.units)
         for piece in row.cost_distribution.bins] == [(2, 3), (4, 3)]
 assert row.result.delivered == 6
-assert len(row.result.min_cut) == 3
+assert [prepared.topology.edge_refs[edge].link for edge in row.result.min_cut] == [
+    "A|B|0", "A|B|1", "A|D|0",
+]
 ```
 
-The minimum-cost objective is 3×2 + 3×4 = 18. The cut contains the two A→B members and A→D, capacity 1 + 2 + 3 = 6. `export_cost_distribution=True` asks for the cost report, here the optimized question's marginal cost pieces, and `ngc.OutputOptions(min_cut=True)` for the cut; both are requested explicitly ([Results and their units](../concepts.md#results-and-their-units); [Results and export](../reference/api.md#results-and-export)).
+The minimum-cost objective is 3×2 + 3×4 = 18. The cut lists engine edge ids; `prepared.topology.edge_refs` names their links: the two A→B members and A→D, capacity 1 + 2 + 3 = 6. `export_cost_distribution=True` asks for the cost report, here the optimized question's marginal cost pieces, and `ngc.OutputOptions(min_cut=True)` for the cut; both are requested explicitly ([Results and their units](../concepts.md#results-and-their-units); [Results and export](../reference/api.md#results-and-export)).
 
 ## Sample failures on the same prepared graph
 
@@ -85,7 +87,7 @@ baseline, failed = result.cases
 assert baseline.states["converged"].rows[0].result.delivered == 6
 assert failed.states["converged"].rows[0].result.delivered == 3
 assert failed.case.pattern.excluded_nodes == ("B",)
-assert failed.case.occurrences == 3
+assert (baseline.case.occurrences, failed.case.occurrences) == (0, 3)
 ```
 
 `FailureRequest(policy, iterations=3, seed=42)` draws the policy three times. All three draws give one physical pattern, evaluated once, and the baseline has zero sampled occurrences ([Failures: patterns, cases and states](../concepts.md#failures-patterns-cases-and-states)).
@@ -113,7 +115,7 @@ from ngraph import DemandSet, DemandSpec, PlacementQuery, place, write_json
 from io import StringIO
 
 traffic = DemandSet("traffic", (
-    DemandSpec(source, target, volume=6, id="service"),
+    DemandSpec(source, target, volume=6),
 ))
 loaded = prepare(Scenario(network, demand_sets={"traffic": traffic},
                           units=UnitsSettings(resolution=1)),

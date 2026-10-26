@@ -1108,9 +1108,13 @@ def _apply_parameters(
     """Apply blueprint `params` overrides to one subgroup definition.
 
     Example:
-        If 'spine.count' = 6 is in params_overrides,
-        it sets 'count' = 6 for the 'spine' subgroup.
-        If 'spine.attrs.hw_type' = 'Dell', it sets subgroup_def['attrs']['hw_type'] = 'Dell'.
+        >>> overrides = {"spine.count": 6, "spine.attrs.hw_type": "Dell"}
+        >>> defined, _ = _apply_parameters(
+        ...     "spine", {"count": 4, "attrs": {}}, overrides,
+        ...     {key: "spine" for key in overrides}, {}, "pod1",
+        ... )
+        >>> defined
+        {'count': 6, 'attrs': {'hw_type': 'Dell'}}
 
     Args:
         subgroup_name (str): Name of the subgroup in the blueprint.

@@ -22,90 +22,76 @@ from ngraph import (
     capacity, prepare,
 )
 
-# Three nodes in a line
+# Three nodes in a line, joined by links of capacity 10
 network = Network()
-network.add_node(Node("A"))
-network.add_node(Node("B"))
-network.add_node(Node("C"))
-network.add_link(Link("A", "B", capacity=10.0, cost=1.0))
-network.add_link(Link("B", "C", capacity=10.0, cost=1.0))
+for name in ("A", "B", "C"):
+    network.add_node(Node(name))
+network.add_link(Link("A", "B", capacity=10))
+network.add_link(Link("B", "C", capacity=10))
 
 # Prepare the graph once, with a bandwidth unit q of 1.
 prepared = prepare(Scenario(network, units=UnitsSettings(resolution=1)))
 result = capacity(prepared, CapacityQuery(Selector("^A$"), Selector("^C$")))
 row = result.cases[0].states["converged"].rows[0]
-print(row.result.delivered)  # 10 integer units
+print(row.result.delivered)
 ```
 
-Native bandwidth results are whole units of one bandwidth unit `q`; `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)).
+<!-- example: output -->
+
+```text
+10
+```
+
+It prints 10: native bandwidth results are whole units of one bandwidth unit `q`, and `UnitsSettings(resolution=1)` sets `q` to 1 ([Units and the resolution q](https://networmix.github.io/NetGraph/concepts/#units-and-the-resolution-q)).
 
 ## Scenario DSL
 
 For reproducible analysis workflows, define topology, demands, and failure policies in YAML (this is `scenarios/readme_example.yml`):
 
 ```yaml
+# Two Clos sites built from one blueprint and joined spine to spine. The workflow finds
+# the largest tested feasible demand multiplier (alpha), then places the demands at that
+# alpha under 100 draws of one random link failure.
 seed: 42
 
-# Define reusable topology templates
+# A reusable topology template
 blueprints:
   Clos_Fabric:
     nodes:
-      spine: { count: 2, template: "spine{n}" }
-      leaf: { count: 4, template: "leaf{n}" }
+      spine: {count: 2, template: "spine{n}"}
+      leaf: {count: 4, template: "leaf{n}"}
     links:
-      - source: /leaf
-        target: /spine
-        pattern: mesh
-        capacity: 100
-        cost: 1
+      - {source: /leaf, target: /spine, pattern: mesh, capacity: 100}
 
-# Instantiate network from templates
+# Two instances of the template, linked spine to spine
 network:
   nodes:
-    site1: { blueprint: Clos_Fabric }
-    site2: { blueprint: Clos_Fabric }
+    site1: {blueprint: Clos_Fabric}
+    site2: {blueprint: Clos_Fabric}
   links:
-    - source: { path: site1/spine }
-      target: { path: site2/spine }
-      pattern: one_to_one
-      capacity: 50
-      cost: 10
+    - {source: site1/spine, target: site2/spine, pattern: one_to_one, capacity: 50}
 
-# Define failure policy for Monte Carlo analysis
+# One random link fails per draw
 failures:
   random_link:
     modes:
-      - weight: 1.0
+      - weight: 1
         rules:
-          - scope: link
-            mode: choice
-            count: 1
+          - {scope: link, mode: choice, count: 1}
 
-# Define traffic demands
+# Traffic from the leaves of site1 to the leaves of site2
 demands:
   global_traffic:
-    - source: ^site1/leaf/
-      target: ^site2/leaf/
-      volume: 100.0
-      mode: combine
-      preset: SHORTEST_PATHS_ECMP
+    - {source: ^site1/leaf/, target: ^site2/leaf/, volume: 100, preset: SHORTEST_PATHS_ECMP}
 
-# Analysis workflow: find max capacity, then test under failures
 workflow:
-  - type: NetworkStats
-    name: stats
-  - type: MaxFlow
-    name: site_capacity
-    source: ^site1/leaf/
-    target: ^site2/leaf/
-    mode: combine
   - type: MaximumSupportedDemand
     name: max_demand
     demand_set: global_traffic
   - type: TrafficMatrixPlacement
     name: placement_at_max
     demand_set: global_traffic
-    alpha_from_step: max_demand # Use its largest tested feasible alpha
+    alpha_from_step: max_demand  # its largest tested feasible alpha
     failure_policy: random_link
     iterations: 100
 ```
@@ -115,7 +101,7 @@ ngraph run scenarios/readme_example.yml --output results/
 jq '.steps[] | select(.name == "max_demand") | .result.alpha_feasible' results/readme_example.results.json
 ```
 
-A preset chooses routing and admission; `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router ([Routing models and admission](https://networmix.github.io/NetGraph/concepts/#routing-models-and-admission)). The scenario builds two Clos sites from one blueprint, searches for the largest tested feasible demand multiplier (alpha), then places the demands at that multiplier under 100 random single-link failures. [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains the presets such as `SHORTEST_PATHS_ECMP`, maximum supported demand and the numbers in the results; `run(prepare(scenario))` returns the same results in Python.
+A preset chooses routing and admission; `SHORTEST_PATHS_ECMP` splits whole units equally among equal-cost next hops at each router ([Routing models and admission](https://networmix.github.io/NetGraph/concepts/#routing-models-and-admission)). [How NetGraph computes](https://networmix.github.io/NetGraph/concepts/) explains the presets such as `SHORTEST_PATHS_ECMP`, maximum supported demand and the numbers in the results; `run(prepare(scenario))` returns the same results in Python.
 
 ## Capabilities
 

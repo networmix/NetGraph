@@ -1,6 +1,6 @@
 # Bundled Scenarios
 
-Four scenarios under `scenarios/` exercise the DSL, workflow steps and results export. They are starting points for your own models; `square_mesh.yaml` is the smallest.
+Four scenarios under `scenarios/` exercise the DSL, workflow steps and results export. They are starting points for your own models; each file's opening comment says what it demonstrates, and `square_mesh.yaml` is the smallest.
 
 ## How to run
 
@@ -39,12 +39,12 @@ ngraph run scenarios/square_mesh.yaml --keys msd_baseline --stdout
 
 ## `scenarios/readme_example.yml`
 
-- **Purpose**: The README's scenario: two Clos sites built from one blueprint, with capacity, MSD and placement under failures.
+- **Purpose**: The README's scenario: two Clos sites built from one blueprint, with MSD and placement under failures.
 - **Contents**:
 
   - Failure policy: one random link per draw (`failures.random_link`)
   - Demand set: site-to-site leaf traffic with ECMP (`global_traffic`)
-  - Workflow steps: `stats`, `site_capacity`, `max_demand`, `placement_at_max`
+  - Workflow steps: `max_demand`, `placement_at_max`
 
 Run:
 
@@ -55,12 +55,12 @@ ngraph run scenarios/readme_example.yml --output out
 
 ## `scenarios/backbone_clos.yml`
 
-- **Purpose**: Small Clos/metro fabric with hardware components, risk groups and a four-step workflow.
+- **Purpose**: A five-metro backbone of Clos and single-router PoPs with hardware components, generated risk groups and a four-step workflow.
 - **Contents**:
 
   - Uses `blueprints`, attribute-based link selectors, and hardware component attrs
   - Failure policy: weighted multi-mode (`failures.weighted_modes`)
-  - Demand set: inter-metro DC flows with unrestricted optimized TE
+  - Demand set: inter-metro DC flows with unrestricted optimized TE (`baseline_traffic_matrix`)
   - Workflow steps: `network_statistics`, `msd_baseline`, `tm_placement`, `cost_power`
 
 Run:
@@ -79,7 +79,7 @@ ngraph run scenarios/backbone_clos.yml --keys network_statistics tm_placement --
 - **Contents**:
 
   - Explicit nodes and links with capacities and costs; one risk group per circuit pair
-  - Failure policies: single-link and availability-based random failures
+  - Failure policies: one random link per draw (`failures.single_link_failure`) and random failures at 1992 availability (`failures.availability_1992`)
   - Workflow steps: `node_to_node_capacity_matrix_1`, `node_to_node_capacity_matrix_2`
 
 Run:
@@ -107,7 +107,8 @@ ngraph run scenarios/square_mesh.yaml --no-results --stdout --keys tm_placement 
   | jq -c '.steps[] | select(.name == "tm_placement") | .result.cases[]
            | {links: .case.pattern.excluded_links, n: .case.occurrences, ratio: .states.converged.totals.delivery_ratio}'
 
-# Pairwise capacity matrix: 676 source/destination pairs in the no-failure baseline
+# Pairwise capacity matrix: 676 rows in the no-failure baseline, one per ordered pair
+# of the 26 sites, each site paired with itself included
 ngraph run scenarios/nsfnet.yaml --no-results --stdout --keys node_to_node_capacity_matrix_1 \
   | jq '.steps[] | select(.name == "node_to_node_capacity_matrix_1") | .result.cases[0].states.converged.rows | length'
 

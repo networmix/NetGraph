@@ -35,13 +35,13 @@ Supply a native configuration to ask another routing question:
 ```python
 import netgraph_core as ngc
 
-equal = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths())
 weighted = ngc.FlowPolicyConfig(routing=ngc.ShortestPaths(
     allocation=ngc.RouteAllocation.WEIGHTED,
     weight_basis=ngc.WeightBasis.CAPACITY,
 ))
-query = CapacityQuery(Selector("^A$"), Selector("^C$"), config=equal)
-equal_result = capacity(prepared, query)
+query = CapacityQuery(Selector("^A$"), Selector("^C$"), config=weighted)
+row = capacity(prepared, query).cases[0].states["converged"].rows[0]
+assert row.result.delivered == 5
 ```
 
 The normalized question records the effective model, finite offer/design inputs and failure request. How each model routes and admits traffic: [Routing models and admission](../concepts.md#routing-models-and-admission). `offer` and `design_demand` are optional physical inputs; the result names the question asked ([MaxFlow](workflow.md#maxflow)). Native integer-valued configuration fields already contain units ([Results and their units](../concepts.md#results-and-their-units)).
@@ -52,7 +52,7 @@ The normalized question records the effective model, finite offer/design inputs 
 from ngraph import DemandSet, DemandSpec, PlacementQuery, place
 
 traffic = DemandSet("traffic", (
-    DemandSpec(Selector("^A$"), Selector("^C$"), volume=4, id="service"),
+    DemandSpec(Selector("^A$"), Selector("^C$"), volume=4),
 ))
 loaded = prepare(Scenario(network, demand_sets={"traffic": traffic},
                           units=UnitsSettings(resolution=1)),
@@ -87,7 +87,7 @@ te = ngc.FlowPolicyConfig(routing=ngc.CentralizedTE(
     tunnel_count=ngc.TunnelCount(1),
 ))
 tunnels = DemandSet("tunnels", (
-    DemandSpec(Selector("^A$"), Selector("^C$"), volume=0, policy=te, id="te"),
+    DemandSpec(Selector("^A$"), Selector("^C$"), volume=0, policy=te),
 ))
 counted = prepare(Scenario(network, demand_sets={"tunnels": tunnels},
                            units=UnitsSettings(resolution=1)),
@@ -112,7 +112,7 @@ policy = FailurePolicy(modes=[FailureMode(1, [
 ])])
 degraded = capacity(prepared, CapacityQuery(
     Selector("^A$"), Selector("^C$"),
-    failures=FailureRequest(policy, iterations=20, seed=42, failure_trace=True),
+    failures=FailureRequest(policy, iterations=20, seed=42),
     workers=2,
 ))
 assert sum(case.case.occurrences for case in degraded.cases) == 20

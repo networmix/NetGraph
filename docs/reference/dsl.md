@@ -1000,13 +1000,15 @@ risk_groups:
 **Storage model:** Children are nested within parents, not in the top-level dictionary:
 
 ```python
-# Top-level only
-scenario.network.risk_groups.keys()  # {'Region_West'}
+from ngraph import Scenario
 
-# Access children via parent
+scenario = Scenario.from_yaml("""
+risk_groups:
+  - {name: Region_West, children: [{name: Site_Seattle}, {name: Site_Portland}]}
+""")
+assert list(scenario.network.risk_groups) == ["Region_West"]
 region = scenario.network.risk_groups["Region_West"]
-for child in region.children:
-    print(child.name)  # Site_Seattle, Site_Portland
+assert [child.name for child in region.children] == ["Site_Seattle", "Site_Portland"]
 ```
 
 **String shorthand:** an entry that is a bare string defines a group with that name and no other fields: `- "Region_West"` is equivalent to `- name: "Region_West"`. The same shorthand works inside `children`.
@@ -1318,8 +1320,8 @@ demands:
       expand:
         vars:
           src_dc: ["dc1", "dc2"]
-          dst_dc: ["dc2", "dc3"]
-        mode: "cartesian"  # All combinations (default)
+          dst_dc: ["dc3", "dc4"]
+        mode: "cartesian"  # All 4 combinations (the default)
 
     - source: "^${dc}/leaf/.*"
       target: "^${dc}/spine/.*"
@@ -1328,7 +1330,7 @@ demands:
       expand:
         vars:
           dc: ["dc1", "dc2", "dc3"]
-        mode: "zip"        # Paired by index
+        mode: "zip"        # 3 demands, paired by index
 ```
 
 **Expansion Modes:**

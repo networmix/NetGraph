@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `--profile` report's CPU time is the process CPU time of each step, all threads and native code included, and can exceed the wall time (it was the profiled wall time); the function table is labelled as cProfile time and the CPU-intensive advice no longer suggests parallelization.
 - A `hardware` value that is not a mapping, on a node, a link or a link end, is refused (before, a node's value crashed the explorer and was ignored by `CostPower`, a link's value was ignored by both, and a link end's value crashed both); `CostPower` refuses an invalid hardware `count` on a disabled link or a link to a disabled node, as it did on a disabled node; a count too large for a float is refused as an invalid count (`ValueError`, was `OverflowError`), whatever its number of digits.
 - The explorer counts both optic ends of a self-loop as used ports, so a node without the ports is refused.
+- The bundled NSFNET scenario no longer declares the Denver–Salt Lake City circuit pair twice; that connection now has two circuits instead of four, correcting capacity results between those sites.
 
 ## [0.24.1] - 2026-10-24
 

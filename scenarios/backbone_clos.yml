@@ -1,3 +1,12 @@
+# A backbone of five metros with two PoPs each: a Clos fabric of 16 leaves and 4 spines
+# per PoP in three metros, one core router per PoP in the other two, and a DC region in
+# each Clos metro. Links join the PoPs of a metro, each DC to its metro's PoPs, and the
+# metros along corridors. Nodes and link ends carry hardware from the components library.
+# One risk group per adjacency (a corridor, a metro's PoP links, a metro's DC links) is
+# generated from the links' adjacency_id. The workflow reports network statistics, finds
+# the maximum supported demand of the DC-to-DC traffic matrix, places it at that
+# multiplier under 1000 draws of a weighted multi-mode failure policy with cost reports,
+# and totals capex and power per metro and per PoP.
 seed: 42
 blueprints:
   Clos_L16_S4:
@@ -7,7 +16,6 @@ blueprints:
         template: spine{n}
         attrs:
           role: spine
-          tier: spine
           hardware:
             component: SpineRouter
             count: 1
@@ -16,7 +24,6 @@ blueprints:
         template: leaf{n}
         attrs:
           role: leaf
-          tier: leaf
           hardware:
             component: LeafRouter
             count: 1
@@ -42,7 +49,6 @@ blueprints:
         template: dc
         attrs:
           role: dc
-    links: []
   SingleRouter:
     nodes:
       core:
@@ -53,7 +59,6 @@ blueprints:
           hardware:
             component: CoreRouter
             count: 1
-    links: []
 components:
   1600G-2xDR4:
     component_type: optic
@@ -63,7 +68,6 @@ components:
     power_watts_max: 28.0
     capacity: 1600.0
     ports: 1
-    attrs: {}
   800G-DR4:
     component_type: optic
     description: 800G DR4 pluggable optic
@@ -72,7 +76,6 @@ components:
     power_watts_max: 18.0
     capacity: 800.0
     ports: 1
-    attrs: {}
   800G-ZR+:
     component_type: optic
     description: 800G ZR+ pluggable optic
@@ -81,7 +84,6 @@ components:
     power_watts_max: 30.0
     capacity: 800.0
     ports: 1
-    attrs: {}
   CoreRouter:
     component_type: chassis
     description: 16 slot, 32x800G ports per slot, 512 ports total
@@ -90,8 +92,6 @@ components:
     power_watts_max: 29000.0
     capacity: 409600.0
     ports: 512
-    attrs:
-      role: core
   LeafRouter:
     component_type: chassis
     description: 64x800G ports, Q4D chipset
@@ -100,8 +100,6 @@ components:
     power_watts_max: 3000.0
     capacity: 51200.0
     ports: 64
-    attrs:
-      role: leaf
   SpineRouter:
     component_type: chassis
     description: 64x1600G ports, TH6 chipset
@@ -110,96 +108,48 @@ components:
     power_watts_max: 3000.0
     capacity: 102400.0
     ports: 64
-    attrs:
-      role: spine
 network:
   nodes:
     metro1/pop[1-2]:
       blueprint: Clos_L16_S4
       attrs:
         metro_name: new-york-jersey-city-newark
-        metro_name_orig: New York--Jersey City--Newark, NY--NJ
-        metro_id: "63217"
-        location_x: 1815314.3
-        location_y: 2173703.3
-        radius_km: 51.75
         node_type: pop
     metro1/dc[1-1]:
       blueprint: DCRegion
       attrs:
         metro_name: new-york-jersey-city-newark
-        metro_name_orig: New York--Jersey City--Newark, NY--NJ
-        metro_id: "63217"
-        location_x: 1815314.3
-        location_y: 2173703.3
-        radius_km: 51.75
         node_type: dc_region
-        mw_per_dc_region: 150.0
-        gbps_per_mw: 200.0
     metro2/pop[1-2]:
       blueprint: Clos_L16_S4
       attrs:
         metro_name: washington-arlington
-        metro_name_orig: Washington--Arlington, DC--VA--MD
-        metro_id: "92242"
-        location_x: 1602747.8
-        location_y: 1921533.9
-        radius_km: 32.67
         node_type: pop
     metro2/dc[1-1]:
       blueprint: DCRegion
       attrs:
         metro_name: washington-arlington
-        metro_name_orig: Washington--Arlington, DC--VA--MD
-        metro_id: "92242"
-        location_x: 1602747.8
-        location_y: 1921533.9
-        radius_km: 32.67
         node_type: dc_region
-        mw_per_dc_region: 150.0
-        gbps_per_mw: 200.0
     metro3/pop[1-2]:
       blueprint: SingleRouter
       attrs:
         metro_name: chicago
-        metro_name_orig: Chicago, IL--IN
-        metro_id: "16264"
-        location_x: 664412.8
-        location_y: 2133983.6
-        radius_km: 43.9
         node_type: pop
     metro4/pop[1-2]:
       blueprint: SingleRouter
       attrs:
         metro_name: atlanta
-        metro_name_orig: Atlanta, GA
-        metro_id: "03817"
-        location_x: 1056698.7
-        location_y: 1255491.7
-        radius_km: 44.95
         node_type: pop
     metro5/pop[1-2]:
       blueprint: Clos_L16_S4
       attrs:
         metro_name: columbus
-        metro_name_orig: Columbus, OH
-        metro_id: "19234"
-        location_x: 1097168.9
-        location_y: 1967599.1
-        radius_km: 20.63
         node_type: pop
     metro5/dc[1-1]:
       blueprint: DCRegion
       attrs:
         metro_name: columbus
-        metro_name_orig: Columbus, OH
-        metro_id: "19234"
-        location_x: 1097168.9
-        location_y: 1967599.1
-        radius_km: 20.63
         node_type: dc_region
-        mw_per_dc_region: 150.0
-        gbps_per_mw: 200.0
   links:
     - source:
         path: metro1/pop1
@@ -219,12 +169,8 @@ network:
       cost: 163
       attrs:
         link_type: intra_metro
-        source_metro: new-york-jersey-city-newark
-        target_metro: new-york-jersey-city-newark
         target_capacity: 22400.0
-        site_edge: metro1/pop1|metro1/pop2|intra_metro:new-york-jersey-city-newark:1-2
         adjacency_id: intra_metro:new-york-jersey-city-newark
-        distance_km: 163
         hardware:
           source:
             component: 800G-ZR+
@@ -254,12 +200,8 @@ network:
       cost: 1
       attrs:
         link_type: dc_to_pop
-        source_metro: new-york-jersey-city-newark
-        target_metro: new-york-jersey-city-newark
         target_capacity: 32000.0
-        site_edge: metro1/pop1|metro1/dc1|dc_to_pop:new-york-jersey-city-newark:1-1
         adjacency_id: dc_to_pop:new-york-jersey-city-newark
-        distance_km: 1
         hardware:
           source:
             component: 800G-ZR+
@@ -286,12 +228,8 @@ network:
       cost: 412
       attrs:
         link_type: inter_metro_corridor
-        source_metro: new-york-jersey-city-newark
-        target_metro: washington-arlington
         target_capacity: 12800.0
-        site_edge: metro1/pop1|metro2/pop1|inter_metro:1-2:1-1
         adjacency_id: inter_metro:1-2
-        distance_km: 412
         hardware:
           source:
             component: 800G-ZR+
@@ -318,12 +256,8 @@ network:
       cost: 977
       attrs:
         link_type: inter_metro_corridor
-        source_metro: new-york-jersey-city-newark
-        target_metro: columbus
         target_capacity: 12800.0
-        site_edge: metro1/pop1|metro5/pop1|inter_metro:1-5:1-1
         adjacency_id: inter_metro:1-5
-        distance_km: 977
         hardware:
           source:
             component: 800G-ZR+
@@ -342,12 +276,8 @@ network:
       cost: 163
       attrs:
         link_type: dc_to_pop
-        source_metro: new-york-jersey-city-newark
-        target_metro: new-york-jersey-city-newark
         target_capacity: 32000.0
-        site_edge: metro1/pop2|metro1/dc1|dc_to_pop:new-york-jersey-city-newark:1-2
         adjacency_id: dc_to_pop:new-york-jersey-city-newark
-        distance_km: 163
         hardware:
           source:
             component: 800G-ZR+
@@ -366,12 +296,8 @@ network:
       cost: 412
       attrs:
         link_type: inter_metro_corridor
-        source_metro: new-york-jersey-city-newark
-        target_metro: washington-arlington
         target_capacity: 12800.0
-        site_edge: metro1/pop2|metro2/pop2|inter_metro:1-2:2-2
         adjacency_id: inter_metro:1-2
-        distance_km: 412
         hardware:
           source:
             component: 800G-ZR+
@@ -390,12 +316,8 @@ network:
       cost: 977
       attrs:
         link_type: inter_metro_corridor
-        source_metro: new-york-jersey-city-newark
-        target_metro: columbus
         target_capacity: 12800.0
-        site_edge: metro1/pop2|metro5/pop2|inter_metro:1-5:2-2
         adjacency_id: inter_metro:1-5
-        distance_km: 977
         hardware:
           source:
             component: 800G-ZR+
@@ -421,12 +343,8 @@ network:
       cost: 103
       attrs:
         link_type: intra_metro
-        source_metro: washington-arlington
-        target_metro: washington-arlington
         target_capacity: 25600.0
-        site_edge: metro2/pop1|metro2/pop2|intra_metro:washington-arlington:1-2
         adjacency_id: intra_metro:washington-arlington
-        distance_km: 103
         hardware:
           source:
             component: 800G-ZR+
@@ -456,12 +374,8 @@ network:
       cost: 1
       attrs:
         link_type: dc_to_pop
-        source_metro: washington-arlington
-        target_metro: washington-arlington
         target_capacity: 38400.0
-        site_edge: metro2/pop1|metro2/dc1|dc_to_pop:washington-arlington:1-1
         adjacency_id: dc_to_pop:washington-arlington
-        distance_km: 1
         hardware:
           source:
             component: 800G-ZR+
@@ -488,12 +402,8 @@ network:
       cost: 1261
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: chicago
         target_capacity: 3200.0
-        site_edge: metro2/pop1|metro3/pop1|inter_metro:2-3:1-1
         adjacency_id: inter_metro:2-3
-        distance_km: 1261
         hardware:
           source:
             component: 800G-ZR+
@@ -520,12 +430,8 @@ network:
       cost: 1216
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: atlanta
         target_capacity: 3200.0
-        site_edge: metro2/pop1|metro4/pop1|inter_metro:2-4:1-1
         adjacency_id: inter_metro:2-4
-        distance_km: 1216
         hardware:
           source:
             component: 800G-ZR+
@@ -552,12 +458,8 @@ network:
       cost: 733
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: columbus
         target_capacity: 12800.0
-        site_edge: metro2/pop1|metro5/pop1|inter_metro:2-5:1-1
         adjacency_id: inter_metro:2-5
-        distance_km: 733
         hardware:
           source:
             component: 800G-ZR+
@@ -576,12 +478,8 @@ network:
       cost: 103
       attrs:
         link_type: dc_to_pop
-        source_metro: washington-arlington
-        target_metro: washington-arlington
         target_capacity: 38400.0
-        site_edge: metro2/pop2|metro2/dc1|dc_to_pop:washington-arlington:1-2
         adjacency_id: dc_to_pop:washington-arlington
-        distance_km: 103
         hardware:
           source:
             component: 800G-ZR+
@@ -600,12 +498,8 @@ network:
       cost: 1261
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: chicago
         target_capacity: 3200.0
-        site_edge: metro2/pop2|metro3/pop2|inter_metro:2-3:2-2
         adjacency_id: inter_metro:2-3
-        distance_km: 1261
         hardware:
           source:
             component: 800G-ZR+
@@ -624,12 +518,8 @@ network:
       cost: 1216
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: atlanta
         target_capacity: 3200.0
-        site_edge: metro2/pop2|metro4/pop2|inter_metro:2-4:2-2
         adjacency_id: inter_metro:2-4
-        distance_km: 1216
         hardware:
           source:
             component: 800G-ZR+
@@ -648,12 +538,8 @@ network:
       cost: 733
       attrs:
         link_type: inter_metro_corridor
-        source_metro: washington-arlington
-        target_metro: columbus
         target_capacity: 12800.0
-        site_edge: metro2/pop2|metro5/pop2|inter_metro:2-5:2-2
         adjacency_id: inter_metro:2-5
-        distance_km: 733
         hardware:
           source:
             component: 800G-ZR+
@@ -679,12 +565,8 @@ network:
       cost: 138
       attrs:
         link_type: intra_metro
-        source_metro: chicago
-        target_metro: chicago
         target_capacity: 12800.0
-        site_edge: metro3/pop1|metro3/pop2|intra_metro:chicago:1-2
         adjacency_id: intra_metro:chicago
-        distance_km: 138
         hardware:
           source:
             component: 800G-ZR+
@@ -711,12 +593,8 @@ network:
       cost: 658
       attrs:
         link_type: inter_metro_corridor
-        source_metro: chicago
-        target_metro: columbus
         target_capacity: 3200.0
-        site_edge: metro3/pop1|metro5/pop1|inter_metro:3-5:1-1
         adjacency_id: inter_metro:3-5
-        distance_km: 658
         hardware:
           source:
             component: 800G-ZR+
@@ -743,12 +621,8 @@ network:
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
-        source_metro: chicago
-        target_metro: atlanta
         target_capacity: 3200.0
-        site_edge: metro3/pop1|metro4/pop1|inter_metro:3-4:1-1
         adjacency_id: inter_metro:3-4
-        distance_km: 1302
         hardware:
           source:
             component: 800G-ZR+
@@ -767,12 +641,8 @@ network:
       cost: 658
       attrs:
         link_type: inter_metro_corridor
-        source_metro: chicago
-        target_metro: columbus
         target_capacity: 3200.0
-        site_edge: metro3/pop2|metro5/pop2|inter_metro:3-5:2-2
         adjacency_id: inter_metro:3-5
-        distance_km: 658
         hardware:
           source:
             component: 800G-ZR+
@@ -791,12 +661,8 @@ network:
       cost: 1302
       attrs:
         link_type: inter_metro_corridor
-        source_metro: chicago
-        target_metro: atlanta
         target_capacity: 3200.0
-        site_edge: metro3/pop2|metro4/pop2|inter_metro:3-4:2-2
         adjacency_id: inter_metro:3-4
-        distance_km: 1302
         hardware:
           source:
             component: 800G-ZR+
@@ -822,12 +688,8 @@ network:
       cost: 142
       attrs:
         link_type: intra_metro
-        source_metro: atlanta
-        target_metro: atlanta
         target_capacity: 12800.0
-        site_edge: metro4/pop1|metro4/pop2|intra_metro:atlanta:1-2
         adjacency_id: intra_metro:atlanta
-        distance_km: 142
         hardware:
           source:
             component: 800G-ZR+
@@ -854,12 +716,8 @@ network:
       cost: 1028
       attrs:
         link_type: inter_metro_corridor
-        source_metro: atlanta
-        target_metro: columbus
         target_capacity: 3200.0
-        site_edge: metro4/pop1|metro5/pop1|inter_metro:4-5:1-1
         adjacency_id: inter_metro:4-5
-        distance_km: 1028
         hardware:
           source:
             component: 800G-ZR+
@@ -878,12 +736,8 @@ network:
       cost: 1028
       attrs:
         link_type: inter_metro_corridor
-        source_metro: atlanta
-        target_metro: columbus
         target_capacity: 3200.0
-        site_edge: metro4/pop2|metro5/pop2|inter_metro:4-5:2-2
         adjacency_id: inter_metro:4-5
-        distance_km: 1028
         hardware:
           source:
             component: 800G-ZR+
@@ -909,12 +763,8 @@ network:
       cost: 65
       attrs:
         link_type: intra_metro
-        source_metro: columbus
-        target_metro: columbus
         target_capacity: 25600.0
-        site_edge: metro5/pop1|metro5/pop2|intra_metro:columbus:1-2
         adjacency_id: intra_metro:columbus
-        distance_km: 65
         hardware:
           source:
             component: 800G-ZR+
@@ -944,12 +794,8 @@ network:
       cost: 1
       attrs:
         link_type: dc_to_pop
-        source_metro: columbus
-        target_metro: columbus
         target_capacity: 38400.0
-        site_edge: metro5/pop1|metro5/dc1|dc_to_pop:columbus:1-1
         adjacency_id: dc_to_pop:columbus
-        distance_km: 1
         hardware:
           source:
             component: 800G-ZR+
@@ -968,12 +814,8 @@ network:
       cost: 65
       attrs:
         link_type: dc_to_pop
-        source_metro: columbus
-        target_metro: columbus
         target_capacity: 38400.0
-        site_edge: metro5/pop2|metro5/dc1|dc_to_pop:columbus:1-2
         adjacency_id: dc_to_pop:columbus
-        distance_km: 65
         hardware:
           source:
             component: 800G-ZR+
@@ -992,14 +834,13 @@ risk_groups:
 failures:
   weighted_modes:
     attrs:
-      description: "Balanced MC: SRLG + DC->PoP + node(maint) + intra-site fabric"
+      description: One risk group, three DC-to-PoP links, one PoP node, or four leaf-spine links
     modes:
       - weight: 0.3
         rules:
           - scope: risk_group
             mode: choice
             count: 1
-            weight_by: distance_km
       - weight: 0.35
         rules:
           - scope: link
@@ -1023,7 +864,6 @@ failures:
                   op: "!="
                   value: dc_region
               logic: and
-            weight_by: attached_capacity_gbps
       - weight: 0.1
         rules:
           - scope: link
@@ -1034,65 +874,37 @@ failures:
                 - attr: link_type
                   op: ==
                   value: leaf_spine
-                - attr: link_type
-                  op: ==
-                  value: intra_group
-                - attr: link_type
-                  op: ==
-                  value: inter_group
-                - attr: link_type
-                  op: ==
-                  value: internal_mesh
-              logic: or
 demands:
   baseline_traffic_matrix:
     - source: ^metro1/dc1/.*
       target: ^metro2/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 330
       preset: TE_MAXFLOW_UNLIM
     - source: ^metro2/dc1/.*
       target: ^metro1/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 330
       preset: TE_MAXFLOW_UNLIM
     - source: ^metro1/dc1/.*
       target: ^metro5/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 748
       preset: TE_MAXFLOW_UNLIM
     - source: ^metro5/dc1/.*
       target: ^metro1/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 748
       preset: TE_MAXFLOW_UNLIM
     - source: ^metro2/dc1/.*
       target: ^metro5/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 508
       preset: TE_MAXFLOW_UNLIM
     - source: ^metro5/dc1/.*
       target: ^metro2/dc1/.*
       mode: pairwise
-      priority: 0
       volume: 15000.0
-      attrs:
-        euclidean_km: 508
       preset: TE_MAXFLOW_UNLIM
 workflow:
   - type: NetworkStats
@@ -1100,21 +912,16 @@ workflow:
   - type: MaximumSupportedDemand
     name: msd_baseline
     demand_set: baseline_traffic_matrix
-    alpha_start: 1.0
-    growth_factor: 2.0
     alpha_min: 0.001
     alpha_max: 1000000.0
     alpha_tolerance: 0.05
     max_bracket_iters: 16
-    max_bisect_iters: 32
   - type: TrafficMatrixPlacement
     name: tm_placement
     seed: 42
     demand_set: baseline_traffic_matrix
     failure_policy: weighted_modes
     iterations: 1000
-    workers: auto
-    failure_trace: false
     outputs: {cost_distribution: true}
     alpha_from_step: msd_baseline
   - type: CostPower

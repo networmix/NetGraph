@@ -1,40 +1,60 @@
-"""The public Python examples execute against the installed native engine."""
+"""The documented examples execute against the installed native engine."""
 
+import contextlib
+import io
 import re
 from pathlib import Path
 
 import pytest
 import yaml
 
+from tests.docs.pages import GENERATED, fences, pages, workspace
 
-@pytest.mark.parametrize(
-    "relative",
-    [
+PYTHON_PAGES = tuple(
+    page
+    for page in pages()
+    if page not in GENERATED and any(f.lang == "python" for f in fences(page))
+)
+
+
+def test_every_page_with_python_examples_is_run():
+    assert set(PYTHON_PAGES) >= {
         "README.md",
         "docs/concepts.md",
-        "docs/reference/api.md",
         "docs/examples/basic.md",
         "docs/examples/clos-fabric.md",
         "docs/getting-started/tutorial.md",
-    ],
-)
-def test_documented_python_client(relative, tmp_path, monkeypatch):
-    root = Path(__file__).resolve().parents[2]
-    text = (root / relative).read_text()
-    if relative.endswith("tutorial.md"):
-        (tmp_path / "example.yaml").write_text(
-            re.findall(r"```yaml\n(.*?)```", text, re.DOTALL)[0]
-        )
-    if relative.endswith("clos-fabric.md"):
-        (tmp_path / "clos.yaml").write_text(
-            re.findall(r"```yaml\n(.*?)```", text, re.DOTALL)[0]
-        )
-    monkeypatch.chdir(tmp_path)
+        "docs/reference/api.md",
+        "docs/reference/dsl.md",
+        "docs/reference/schemas.md",
+    }
+
+
+@pytest.mark.parametrize("page", PYTHON_PAGES)
+def test_documented_python_client(page, tmp_path, monkeypatch):
+    """Each Python example runs in order, in a reader's working directory, and prints
+    exactly the output the page shows after it (nothing, if the page shows none)."""
+    monkeypatch.chdir(workspace(tmp_path))
     namespace = {"__name__": "__documented_client__"}
-    blocks = re.findall(r"```python\n(.*?)```", text, re.DOTALL)
-    assert blocks
-    for index, block in enumerate(blocks):
-        exec(compile(block, f"{relative}:python-block-{index}", "exec"), namespace)
+    found = fences(page)
+    for index, block in enumerate(found):
+        if block.lang != "python":
+            continue
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            exec(compile(block.text, f"{page}:{block.line}", "exec"), namespace)
+        shown = found[index + 1] if index + 1 < len(found) else None
+        expected = shown.text if shown is not None and shown.marker == "output" else ""
+        assert printed.getvalue() == expected, f"{page}:{block.line}"
+
+
+def test_every_shown_output_follows_a_python_example():
+    for page in pages():
+        found = fences(page)
+        for index, block in enumerate(found):
+            if block.marker == "output":
+                assert block.lang == "text" and index > 0, f"{page}:{block.line}"
+                assert found[index - 1].lang == "python", f"{page}:{block.line}"
 
 
 class UniqueKeyLoader(yaml.SafeLoader):

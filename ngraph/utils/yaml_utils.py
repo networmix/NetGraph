@@ -20,10 +20,7 @@ def normalize_yaml_dict_keys(data: Mapping[Any, V]) -> Dict[str, V]:
 
     Examples:
         >>> normalize_yaml_dict_keys({True: "value1", False: "value2", "normal": "value3"})
-        {"True": "value1", "False": "value2", "normal": "value3"}
-
-        >>> # In YAML: true:, yes:, on: all become Python True
-        >>> # In YAML: false:, no:, off: all become Python False
+        {'True': 'value1', 'False': 'value2', 'normal': 'value3'}
     """
     return {str(key): value for key, value in data.items()}
 

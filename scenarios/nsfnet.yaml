@@ -1,3 +1,8 @@
+# The NSFNET T3 backbone of 1992: 16 core sites joined by pairs of parallel circuits,
+# each pair in its own risk group, and 10 edge sites on single circuits. The workflow
+# computes the capacity between every pair of sites under two failure policies: one
+# random link per draw, and independent random link and node failures at the
+# availability of the time.
 seed: 5678
 network:
   name: NSFNET T3 (1992)
@@ -338,22 +343,6 @@ network:
         - RG_Cleveland_StLouis
       attrs:
         circuit: B
-    - source: Denver
-      target: SaltLakeCity
-      capacity: 45000.0
-      cost: 9
-      risk_groups:
-        - RG_Denver_SaltLakeCity
-      attrs:
-        circuit: A
-    - source: Denver
-      target: SaltLakeCity
-      capacity: 45000.0
-      cost: 9
-      risk_groups:
-        - RG_Denver_SaltLakeCity
-      attrs:
-        circuit: B
     - source: Chicago
       target: AnnArbor
       capacity: 45000.0
@@ -509,9 +498,6 @@ risk_groups:
   - name: RG_Denver_Lincoln
     attrs:
       description: Rockies DS-3 pair
-  - name: RG_Denver_SaltLakeCity
-    attrs:
-      description: Rockies DS-3 pair
   - name: RG_Greensboro_Atlanta
     attrs:
       description: Southern arc DS-3 pair
@@ -553,7 +539,6 @@ failures:
     attrs:
       description: |
         Approximates 1992 backbone reliability: each physical DS-3 has ~99.9 % monthly availability (p=0.001 failure), and each CNSS or ENSS router has ~99.95 % availability (p=0.0005 failure).
-    expand_groups: false
     modes:
       - weight: 1.0
         rules:
@@ -581,7 +566,6 @@ workflow:
     failure_policy: single_link_failure
     iterations: 1000
     workers: 8
-    preset: TE_MAXFLOW_UNLIM
     seed: 42
     failure_trace: true
     outputs: {cost_distribution: true, min_cut: true}
@@ -593,7 +577,6 @@ workflow:
     failure_policy: availability_1992
     iterations: 1000
     workers: 8
-    preset: TE_MAXFLOW_UNLIM
     seed: 42
     failure_trace: true
     outputs: {cost_distribution: true, min_cut: true}
